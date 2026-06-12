@@ -1,0 +1,135 @@
+# Internal Review: Week 2 Closeout Real API Drill
+
+## Scope
+
+This review covers the roadmap status update and the real HTTP Week 2 API drill.
+
+Changed contract surfaces:
+
+- `backend/scripts/week2_api_e2e.py`
+- `docs/roadmap_status.md`
+- `docs/roadmap_day_by_day_execution_plan.md`
+
+## Verifier Results
+
+### Senior engineering
+
+Finding: the first version of the Week 2 drill proved lifecycle routing but not every Week 2 checker family over HTTP.
+
+Resolution: expanded the drill to cover clean pass, missing required file, missing evidence pre-submit block, evidence integrity failure, weak confidentiality attestation, generated-output warning, forbidden path redaction, internal `task_setup_blocked`, and trusted checker retry.
+
+Verdict after fix: the branch stays within scope, adds no product behavior, and introduces no lifecycle state or review decision.
+
+### QA/test
+
+Findings:
+
+- the first drill did not assert that the full Week 2 durable checker set ran
+- the roadmap documented only the E2E script instead of the full Week 2 validation gate
+- the first script output lacked a compact scenario summary
+
+Resolution:
+
+- added `EXPECTED_DURABLE_CHECKERS` and clean-path checker-set assertions
+- added `EXPECTED_PRE_SUBMIT_CHECKERS` for pre-submit feedback
+- added negative and warning scenarios for evidence, integrity, confidentiality, generated-output warning, forbidden path, and task setup routes
+- documented the full Week 2 validation gate in roadmap status
+- added scenario summary output
+
+Targeted QA re-review confirmed the blockers are resolved. The remaining operational note was to ensure `backend/scripts/week2_api_e2e.py` is committed with the PR.
+
+### Security/auth
+
+Finding: the first drill could inherit any `WORKSTREAM_DATABASE_URL` and run migrations/write drill data against it.
+
+Resolution: added `assert_local_database_url()` before environment update, migrations, API startup, or writes. The drill now allows only local Postgres URLs for `workstream`, `workstream_test`, or `test_workstream`, unless an explicit non-local override is set.
+
+Security re-review confirmed:
+
+- non-local host is blocked
+- local host with non-local database name is blocked
+- non-Postgres URL is blocked
+- local Postgres `workstream` and `workstream_test` are allowed
+- Flow-token auth remains in use
+- demo worker-profile route remains local/test gated
+- worker redaction and reviewer denial are asserted
+- no production route or checker-read permission is widened
+
+### Product/ops
+
+Findings:
+
+- no blocking findings
+- the demo worker-profile helper is acceptable for v0.1 drills but should not be described as production worker onboarding
+- uppercase lifecycle labels must not drift into persisted token contracts
+
+Resolution: roadmap wording keeps Week 3 readiness explicit and does not overclaim reviewer checker visibility.
+
+## Validation
+
+Passed:
+
+```bash
+cd backend && .venv/bin/python -m ruff check app tests scripts
+```
+
+Passed:
+
+```bash
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week1_api_e2e.py
+```
+
+Passed:
+
+```bash
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
+```
+
+Scenario summary:
+
+```text
+clean=review_pending
+missing_file=needs_revision
+missing_evidence=pre_submit_blocked
+duplicate_artifact_integrity=needs_revision
+weak_attestation=needs_revision
+generated_output_warning=review_pending
+forbidden_path=needs_revision
+task_setup_blocked=auto_checking->review_pending
+```
+
+Passed:
+
+```bash
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
+```
+
+Result: `62 passed in 293.20s`.
+
+Passed:
+
+```bash
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
+```
+
+Result: `112 passed in 426.89s`.
+
+Passed:
+
+```bash
+cd backend && .venv/bin/docstr-coverage --config .docstr.yaml
+```
+
+Result: `100.0%`.
+
+Passed:
+
+- stale wording scan
+- Markdown relative link check
+- XLSX/sheets check: no local sheet exports present
+
+## Closure
+
+Valid findings addressed.
+
+Open sub-agent sessions: none.

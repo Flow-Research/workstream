@@ -219,7 +219,7 @@ Exit criteria:
 
 - at least one worker-fixable submission failure is blocked
 - at least one clean submission reaches `REVIEW_PENDING`
-- trial output documents which checker results would be visible to Week 3 reviewers through backend APIs
+- trial output documents project-manager/admin checker API visibility and worker redaction
 
 ## Week 3: Review And Revision
 

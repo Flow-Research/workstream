@@ -1,6 +1,6 @@
 # Workstream Roadmap Status
 
-Current phase: Week 2 checker framework implementation.
+Current phase: Week 3 review and revision preparation.
 
 ## Completed
 
@@ -39,6 +39,10 @@ Current phase: Week 2 checker framework implementation.
 - Week 2 checker framework scope specification.
 - Chunk 6 checker contract and records specification.
 - Chunk 7 checker runner, registry, structural checkers, durable checker records, and API tests.
+- Chunk 8 evidence, policy, forbidden-file, confidentiality, and generated-artifact checkers.
+- Chunk 9 automatic pre-review gate with checker-caused `needs_revision`, internal `task_setup_blocked`, trusted checker retry, and worker redaction.
+- Chunk 10 checker trial with five real API sample submissions, failure catalog, false-positive notes, missing-checker notes, and internal verifier evidence.
+- Week 2 real HTTP API drill through Flow-token auth, project/guide/task/submission lifecycle, pre-submit checks, automatic checker runs, checker-caused `needs_revision`, worker redaction, internal `task_setup_blocked`, and trusted checker retry.
 
 ## Review Tracks Closed
 
@@ -48,15 +52,23 @@ Current phase: Week 2 checker framework implementation.
 - Operations and review workflow.
 - Process-pattern baseline.
 - Adversarial quality.
+- Chunk 9 pre-review gate internal verifier pass.
+- Chunk 10 checker trial internal verifier pass.
 
-## Pending Before Week 2
+## Ready For Week 3
+
+- Review queue scope can start from `review_pending` tasks that already passed internal checkers.
+- Reviewer access must be object-level and tied to assigned review work; broad reviewer checker-run access is still intentionally deferred.
+- Week 3 must keep review decisions canonical: `accept`, `needs_revision`, and `reject`.
+- `needs_revision` from human review must carry `outcome_source = human_review` and a review decision id; checker-caused `needs_revision` keeps `outcome_source = auto_checker`.
+- Review findings, revision replay, and reviewer-quality metrics are the next backend contracts to lock.
+
+## Pending Before Pilot
 
 - Create the first pilot project guide from the template.
 - Create the first 5 pilot task records.
 - Confirm who owns product, engineering, review, operations, and payment reconciliation during the first build cycle.
 - Confirm the first v0.1 project guide uses the locked guide fields, task contract fields, evidence IDs, and contribution record flow.
-- Build evidence and policy checkers in Week 2.
-- Keep Week 2 backend/checker-framework only: expose checker results through APIs and dry-run/demo output, not product frontend pages.
 
 ## Week 1 Dry Run
 
@@ -69,6 +81,31 @@ WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:543
 The script runs migrations forward and exercises:
 
 `Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Submit -> Lock submission`
+
+## Week 2 Real API Drill
+
+Run from the backend directory against local Postgres:
+
+```bash
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
+```
+
+The script starts a real local API server, issues local Flow-compatible tokens, runs migrations forward, and exercises:
+
+`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> Submit -> Lock submission -> Automatic checker run -> review_pending | needs_revision | internal task_setup_blocked -> trusted checker retry`
+
+Week 2 closeout validation is not only this script. The full gate is:
+
+```bash
+.venv/bin/python -m ruff check app tests scripts
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week1_api_e2e.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
+.venv/bin/docstr-coverage --config .docstr.yaml
+```
+
+The closeout also requires stale wording scan, Markdown link check, and internal verifier evidence before PR.
 
 ## Operating Rule
 
