@@ -450,7 +450,6 @@ class TaskService:
             raise TaskTransitionBlocked("actor is not assigned to this task")
         if task.status not in {
             TASK_STATUS_IN_PROGRESS,
-            TASK_STATUS_SUBMITTED,
             TASK_STATUS_NEEDS_REVISION,
         }:
             raise TaskTransitionBlocked(

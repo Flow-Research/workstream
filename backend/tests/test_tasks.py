@@ -877,12 +877,27 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     v1_payload = complete_submission_payload()
+    v1_payload["artifact_hash_manifest"] = [
+        {
+            "artifact": "other.md",
+            "hash": "sha256:other-v1",
+            "size_bytes": 128,
+            "notes": "missing required file so v2 is a revision",
+        }
+    ]
     v1 = await task_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
         json=v1_payload,
     )
     assert v1.status_code == 201, v1.text
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    locked_v1 = await task_client.post(
+        f"/api/v1/submissions/{v1.json()['id']}/lock",
+        headers=auth_headers(),
+    )
+    assert locked_v1.status_code == 200, locked_v1.text
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     v2_payload = complete_submission_payload("sha256:package-v2")
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
 
@@ -898,7 +913,7 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     assert second["version"] == 2
     assert second["supersedes_submission_id"] == first["id"]
     assert first["package_hash"] == "sha256:package-v1"
-    assert first["artifact_hash_manifest"][0]["hash"] == "sha256:answer-v1"
+    assert first["artifact_hash_manifest"][0]["hash"] == "sha256:other-v1"
 
     listed = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/submissions",
@@ -1282,28 +1297,23 @@ async def test_lock_submission_requires_operator_and_latest_version(
         json=complete_submission_payload(),
     )
     assert v1.status_code == 201, v1.text
-    v2 = await task_client.post(
+    premature_v2 = await task_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
         json=complete_submission_payload("sha256:package-v2"),
     )
-    assert v2.status_code == 201, v2.text
+    assert premature_v2.status_code == 409
+    assert "in progress or needs revision" in premature_v2.json()["detail"]
 
     worker_lock = await task_client.post(
-        f"/api/v1/submissions/{v2.json()['id']}/lock",
+        f"/api/v1/submissions/{v1.json()['id']}/lock",
         headers=auth_headers(),
     )
     assert worker_lock.status_code == 403
 
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    stale_lock = await task_client.post(
-        f"/api/v1/submissions/{v1.json()['id']}/lock",
-        headers=auth_headers(),
-    )
-    assert stale_lock.status_code == 409
-
     locked = await task_client.post(
-        f"/api/v1/submissions/{v2.json()['id']}/lock",
+        f"/api/v1/submissions/{v1.json()['id']}/lock",
         headers=auth_headers(),
     )
     assert locked.status_code == 200, locked.text
@@ -1312,7 +1322,7 @@ async def test_lock_submission_requires_operator_and_latest_version(
     assert locked_body["evidence_items"][0]["locked_at"] == locked_body["locked_at"]
 
     second_lock = await task_client.post(
-        f"/api/v1/submissions/{v2.json()['id']}/lock",
+        f"/api/v1/submissions/{v1.json()['id']}/lock",
         headers=auth_headers(),
     )
     assert second_lock.status_code == 200, second_lock.text

@@ -502,7 +502,7 @@ The checker registry prevents project guide templates, checker policies, and imp
 
 `pre_review_gate` is a checker phase, not a task status. The v0.1 task status during this phase is `auto_checking`.
 
-## ReadinessCertificate
+## Future ReadinessCertificate
 
 Current status:
 
@@ -523,9 +523,9 @@ Fields:
 
 Purpose:
 
-The readiness certificate records the exact checker run and artifact hashes that allowed a submission to enter human review.
+If added later, the readiness certificate records the exact checker run and artifact hashes that allowed a submission to enter human review.
 
-If any submitted artifact changes, the certificate is invalidated and a new submission/checker run is required.
+For v0.1, the current `CheckerRun` is the readiness proof. If any submitted artifact changes, a new submission version and checker run are required.
 
 ## Review
 
@@ -645,7 +645,6 @@ Fields:
 - `worker_id`
 - `locked_guide_version`
 - `checker_run_id`
-- `readiness_certificate_id`
 - `artifact_hash_manifest`
 - `acceptance_evidence_refs`
 - `skill_tags`
@@ -788,7 +787,7 @@ Audit events are append-only.
 - disputed payments cannot become `paid` without a dispute resolution audit event
 - high-severity checker failures block review unless an admin override is recorded
 - a checker run must reference the exact submission version and artifact hashes it evaluated
-- a readiness certificate must reference the exact checker run that cleared the submission for review
+- the current checker run is the v0.1 readiness proof for the submission version that cleared automated checks
 - a review cannot accept a submission if the checker run belongs to a different submission version
 - every status transition creates an audit event
 - every needs-revision decision has at least one review finding

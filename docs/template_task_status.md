@@ -42,7 +42,7 @@
 
 Use only when a draft/imported task fails before `READY`.
 
-- gate: `project_activation | task_screening | submission_quality | pre_review_gate`
+- gate: `project_activation | task_screening | submission_quality`
 - reason code:
 - fix required:
 - source task id:
