@@ -959,10 +959,19 @@ async def test_locked_submission_can_only_be_replaced_by_new_version(
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    v1_payload = complete_submission_payload()
+    v1_payload["artifact_hash_manifest"] = [
+        {
+            "artifact": "other.md",
+            "hash": "sha256:other-v1",
+            "size_bytes": 128,
+            "notes": "missing required file so v1 needs revision",
+        }
+    ]
     v1 = await task_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
-        json=complete_submission_payload(),
+        json=v1_payload,
     )
     assert v1.status_code == 201, v1.text
 
@@ -993,7 +1002,7 @@ async def test_locked_submission_can_only_be_replaced_by_new_version(
     assert fetched_v1.status_code == 200, fetched_v1.text
     assert fetched_v1.json()["locked_at"] == locked_v1.json()["locked_at"]
     assert fetched_v1.json()["package_hash"] == "sha256:package-v1"
-    assert fetched_v1.json()["artifact_hash_manifest"][0]["hash"] == "sha256:answer-v1"
+    assert fetched_v1.json()["artifact_hash_manifest"][0]["hash"] == "sha256:other-v1"
 
 
 async def test_project_manager_cannot_submit_as_worker(

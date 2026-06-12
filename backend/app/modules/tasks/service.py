@@ -21,6 +21,7 @@ from app.modules.tasks.lifecycle import (
     TASK_STATUS_CLAIMED,
     TASK_STATUS_DRAFT,
     TASK_STATUS_IN_PROGRESS,
+    TASK_STATUS_NEEDS_REVISION,
     TASK_STATUS_READY,
     TASK_STATUS_SCREENING,
     TASK_STATUS_SUBMITTED,
@@ -55,6 +56,26 @@ TASK_SUBMIT_ROLES = {"worker"}
 TASK_START_ROLES = {"admin", "project_manager", "worker"}
 TASK_START_OPERATOR_ROLES = {"admin", "project_manager"}
 SUBMISSION_LOCK_ROLES = {"admin", "project_manager"}
+WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS = {
+    "assignment_id",
+    "locked_guide_version",
+    "locked_checker_policy_version",
+    "locked_review_policy_version",
+    "locked_revision_policy_version",
+    "locked_payment_policy_version",
+    "package_hash",
+    "source_type",
+    "submission_id",
+    "submission_version",
+    "supersedes_submission_id",
+    "worker_id",
+}
+WORKER_REDACTED_AUDIT_EVENTS = {
+    "pre_review_gate_started",
+    "pre_review_gate_passed",
+    "pre_review_gate_needs_revision",
+    "pre_review_gate_blocked",
+}
 
 
 class TaskServiceError(Exception):
@@ -109,6 +130,20 @@ class SubmissionVersionConflict(TaskServiceError):
     """Raised when concurrent submission version allocation conflicts."""
 
     status_code = 409
+
+
+class SubmissionCheckerGateError(TaskServiceError):
+    """Raised when automatic checker gate execution blocks submission locking."""
+
+    def __init__(self, message: str, status_code: int) -> None:
+        """Create a task-layer error preserving the checker gate status code.
+
+        Args:
+            message: Checker service error message safe for API responses.
+            status_code: HTTP status code chosen by the checker service.
+        """
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class TaskService:
@@ -413,8 +448,14 @@ class TaskService:
             raise TaskTransitionBlocked("task has no active assignment")
         if assignment.worker_id != actor.actor_id or task.assigned_to != actor.actor_id:
             raise TaskTransitionBlocked("actor is not assigned to this task")
-        if task.status not in {TASK_STATUS_IN_PROGRESS, TASK_STATUS_SUBMITTED}:
-            raise TaskTransitionBlocked("task must be in progress before first submission")
+        if task.status not in {
+            TASK_STATUS_IN_PROGRESS,
+            TASK_STATUS_SUBMITTED,
+            TASK_STATUS_NEEDS_REVISION,
+        }:
+            raise TaskTransitionBlocked(
+                "task must be in progress or needs revision before submission"
+            )
         self._ensure_locked_context(task)
         await self._validate_required_submission_fields(task, payload)
 
@@ -455,7 +496,7 @@ class TaskService:
         try:
             submission = await self._repo.add_submission(submission)
             event_payload = self._submission_audit_payload(submission)
-            if task.status == TASK_STATUS_IN_PROGRESS:
+            if task.status in {TASK_STATUS_IN_PROGRESS, TASK_STATUS_NEEDS_REVISION}:
                 await self._change_task_status(
                     actor,
                     task,
@@ -545,13 +586,13 @@ class TaskService:
         require_any_role(actor, SUBMISSION_LOCK_ROLES)
         submission = await self._get_submission(submission_id)
         task = await self._get_task(submission.task_id)
-        if task.status != TASK_STATUS_SUBMITTED:
-            raise TaskTransitionBlocked("task must be submitted before locking submission")
         latest_submission = await self._repo.get_latest_submission_for_task(task.id)
         if latest_submission is None or latest_submission.id != submission.id:
             raise TaskTransitionBlocked("only latest submission version can be locked")
         if submission.locked_at is not None:
             return SubmissionResponse.model_validate(submission)
+        if task.status != TASK_STATUS_SUBMITTED:
+            raise TaskTransitionBlocked("task must be submitted before locking submission")
 
         locked_at = datetime.now(UTC)
         submission.locked_at = locked_at
@@ -565,7 +606,18 @@ class TaskService:
             reason=None,
             event_payload=self._submission_audit_payload(submission),
         )
-        await self._session.commit()
+        from app.modules.checkers.service import CheckerService, CheckerServiceError
+
+        try:
+            await CheckerService(self._session).run_submission_checkers(
+                actor,
+                submission.id,
+                "submission locked pre-review gate",
+                trigger_source="submission_locked",
+            )
+        except CheckerServiceError as exc:
+            await self._session.rollback()
+            raise SubmissionCheckerGateError(str(exc), exc.status_code) from exc
         persisted = await self._repo.get_submission(submission.id)
         if persisted is None:
             raise SubmissionNotFound("submission not found")
@@ -589,7 +641,7 @@ class TaskService:
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
         events = await self._repo.list_audit_events("task", task.id)
-        return [self._audit_response(event) for event in events]
+        return [self._audit_response(actor, event) for event in events]
 
     async def _get_submission(self, submission_id: str) -> Submission:
         """Load a submission packet or raise a service error.
@@ -969,10 +1021,11 @@ class TaskService:
                 return
         raise TaskNotFound("task not found")
 
-    def _audit_response(self, event: AuditEvent) -> AuditEventResponse:
+    def _audit_response(self, actor: ActorContext, event: AuditEvent) -> AuditEventResponse:
         """Build a public audit response with claim snapshots redacted.
 
         Args:
+            actor: Verified actor reading the audit event.
             event: Persisted audit event.
 
         Returns:
@@ -980,6 +1033,14 @@ class TaskService:
         """
         response = AuditEventResponse.model_validate(event)
         response.claim_snapshot = {}
+        if not set(actor.roles).intersection(PROJECT_OPERATOR_ROLES):
+            response.event_payload = {
+                key: value
+                for key, value in response.event_payload.items()
+                if key in WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS
+            }
+            if response.event_type in WORKER_REDACTED_AUDIT_EVENTS:
+                response.reason = None
         return response
 
     def _ensure_transition_allowed(self, from_status: str, to_status: str) -> None:

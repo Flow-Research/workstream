@@ -181,13 +181,15 @@ Conditions of satisfaction:
 
 Automatically triggers internal post-submit checks after submission locking and calculates whether a checked submission moves to `REVIEW_PENDING`, user-facing `NEEDS_REVISION`, or an internal `task_setup_blocked` repair route.
 
+Detailed spec: [Chunk 9 Pre-Review Gate](spec_chunk_9_pre_review_gate.md).
+
 Conditions of satisfaction:
 
 - the gate uses the latest locked submission only
 - required checker list comes from locked project checker policy
 - blocking severities come from locked project checker policy
 - checker-caused revision does not create a human review decision
-- override requires actor, reason, and audit event
+- no override endpoint exists in this chunk; any future override requires actor, reason, and audit event
 
 ### Chunk 10: Checker Trial
 
@@ -198,6 +200,7 @@ Conditions of satisfaction:
 - at least one clean submission reaches `REVIEW_PENDING`
 - at least one worker-fixable submission failure is blocked
 - locked task setup failures and worker-fixable submission failures use distinct routing recommendations
+- trusted checker retry from internal blocked or retryable gate states is documented
 - checker failures are documented in a failure catalog
 - false-positive and missing-checker notes are recorded
 

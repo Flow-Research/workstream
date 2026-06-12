@@ -10,7 +10,6 @@ CLAIMED
 IN_PROGRESS
 SUBMITTED
 AUTO_CHECKING
-PRE_REVIEW_GATE
 REVIEW_PENDING
 NEEDS_REVISION
 ACCEPTED
@@ -106,16 +105,9 @@ Required before entering:
 
 ### AUTO_CHECKING
 
-Automated checks are running.
+Automated checks are running inside the pre-review gate.
 
-### PRE_REVIEW_GATE
-
-Optional project policy state for reviewer simulation, adversarial review, or readiness audit before a human reviewer receives the packet.
-
-Required before leaving:
-
-- simulation or review guard results recorded
-- no unresolved blocking readiness issue
+`pre_review_gate` is a checker phase and audit label, not a separate v0.1 task status. The persisted task remains `auto_checking` until checker routing moves it to `review_pending`, `needs_revision`, or the internal `task_setup_blocked` repair route.
 
 ### REVIEW_PENDING
 
@@ -134,13 +126,11 @@ The worker-facing state for fixable issues.
 This state can be entered from:
 
 - `AUTO_CHECKING`, when automated checker results contain worker-fixable blocking failures.
-- `PRE_REVIEW_GATE`, when pre-review policy finds worker-fixable blocking failures.
 - `REVIEW_PENDING`, when a human reviewer records a `needs_revision` decision.
 
 Required before entering:
 
 - from `AUTO_CHECKING`: checker run id, blocking checker results, worker-visible messages, and suggested fixes
-- from `PRE_REVIEW_GATE`: gate run id, worker-visible findings, and suggested fixes
 - from `REVIEW_PENDING`: review decision id and at least one structured review finding
 
 Before the worker resumes, Workstream prepares the next revision context. That preparation checks whether the active project guide or policy context changed since the prior submission was locked. Revision policy decides whether the next attempt keeps the prior context, rebases to the current active context, or is blocked for project-manager repair.
@@ -191,13 +181,10 @@ IN_PROGRESS -> SUBMITTED
 SUBMITTED -> AUTO_CHECKING
 AUTO_CHECKING -> REVIEW_PENDING
 AUTO_CHECKING -> NEEDS_REVISION
-AUTO_CHECKING -> PRE_REVIEW_GATE
-PRE_REVIEW_GATE -> REVIEW_PENDING
-PRE_REVIEW_GATE -> NEEDS_REVISION
 REVIEW_PENDING -> ACCEPTED
 REVIEW_PENDING -> NEEDS_REVISION
 REVIEW_PENDING -> REJECTED
-NEEDS_REVISION -> IN_PROGRESS
+NEEDS_REVISION -> SUBMITTED
 DRAFT -> CANCELLED
 SCREENING -> CANCELLED
 READY -> CANCELLED

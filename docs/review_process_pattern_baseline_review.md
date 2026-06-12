@@ -28,9 +28,9 @@ Suggested change: add an operations doc for project workspace conventions and ad
 
 Geranium and Sequoia patterns show review guard plus adversarial/reviewer simulation before calling work ready. Workstream has subagent review protocol but not a productized gate in the lifecycle.
 
-Suggested change: add `PRE_REVIEW_GATE` as an optional checker stage before `REVIEW_PENDING`, and add reviewer simulation to checker policy/project templates.
+Suggested change: add `pre_review_gate` as an optional checker phase before `REVIEW_PENDING`, and add reviewer simulation to checker policy/project templates.
 
-Update: Workstream now has a `SCREENING` lifecycle state and task readiness gate before `READY`. This captures the same reusable pattern without adding another post-submission state.
+Update: Workstream now has a `SCREENING` lifecycle state before `READY` and a post-submission `pre_review_gate` checker phase that runs while the persisted task status is `AUTO_CHECKING`. This captures the same reusable pattern without adding another post-submission task state.
 
 ### Medium: Lessons learned should be first-class
 

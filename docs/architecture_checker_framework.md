@@ -149,7 +149,7 @@ Ensures the submission has a stored preflight evidence record with checker resul
 
 Runs project-configured reviewer simulation, adversarial pass, or readiness guard before moving a submission to human review.
 
-This is optional by project policy, but recommended for high-value work.
+`pre_review_gate` is a checker phase. The persisted task status during this phase is `auto_checking`.
 
 ## Gate Mapping
 
@@ -178,7 +178,7 @@ Submission quality gate:
 - `check_prior_revision_closed`
 - `check_preflight_evidence`
 
-Pre-review gate:
+Pre-review gate phase:
 
 - `check_pre_review_gate`
 
@@ -214,7 +214,7 @@ Draft packet
 -> run required checkers
 -> store CheckerResult records
 -> calculate blocking status
--> if no blocking failures remain: issue ReadinessCertificate and move to REVIEW_PENDING
+-> if no blocking failures remain: store readiness proof on CheckerRun and move to REVIEW_PENDING
 -> if worker-fixable blocking failures exist: route to user-facing needs_revision with outcome_source = auto_checker
 -> if locked task setup is incomplete or unsafe: route to internal task_setup_blocked
 -> if checker infrastructure fails: keep in checker retry handling
@@ -228,21 +228,22 @@ If a checker crashes or cannot run because of platform infrastructure, the check
 
 If a checker finds missing locked guide or policy context, missing acceptance criteria, or another task setup defect that is not worker-fixable, the run uses `task_setup_blocked`. That route is internal to project managers and must not be shown to workers as a revision request.
 
-## Readiness Certificate
+## Readiness Proof
 
-When all blocking checks pass, the checker service issues a readiness certificate.
+When all blocking checks pass, the checker service stores readiness proof on the current checker run.
 
-The certificate records:
+The checker run records:
 
 - submission id
-- checker run id
 - checker policy version derived from the locked task context
 - artifact hash manifest
 - blocking failure count
 - warning count
-- issued timestamp
+- completion timestamp
 
 This gives reviewers a clear proof that they are reviewing the same packet that passed automated checks.
+
+A separate `ReadinessCertificate` record may be added later if reviewer routing needs a dedicated signed handoff object. v0.1 does not require that extra record.
 
 ## Checker Output Visibility
 

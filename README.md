@@ -50,6 +50,8 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [Week 2 Checker Framework Specification](docs/spec_week2_checker_framework.md)
 - [Chunk 6 Checker Contract And Records](docs/spec_chunk_6_checker_contract_records.md)
 - [Chunk 7 Checker Runner And Registry](docs/spec_chunk_7_checker_runner_registry.md)
+- [Chunk 8 Evidence And Policy Checkers](docs/spec_chunk_8_evidence_policy_checkers.md)
+- [Chunk 9 Pre-Review Gate](docs/spec_chunk_9_pre_review_gate.md)
 - [Day-by-Day Execution Plan](docs/roadmap_day_by_day_execution_plan.md)
 - [Implementation Backlog](docs/roadmap_implementation_backlog.md)
 - [Product Principles](docs/product_principles.md)

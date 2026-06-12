@@ -25,7 +25,7 @@ Task
     EvidenceItem
     CheckerRun
       CheckerResult
-    ReadinessCertificate
+    ReadinessCertificate (later optional)
     Review
       ReviewFinding
     RevisionReplay
@@ -302,7 +302,6 @@ Status:
 - in_progress
 - submitted
 - auto_checking
-- pre_review_gate
 - review_pending
 - needs_revision
 - accepted
@@ -501,7 +500,13 @@ Phase:
 
 The checker registry prevents project guide templates, checker policies, and implementation code from drifting into different checker names for the same rule.
 
+`pre_review_gate` is a checker phase, not a task status. The v0.1 task status during this phase is `auto_checking`.
+
 ## ReadinessCertificate
+
+Current status:
+
+Optional later record. v0.1 stores readiness proof on `CheckerRun`.
 
 Fields:
 

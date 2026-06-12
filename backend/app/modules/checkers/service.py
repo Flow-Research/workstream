@@ -28,7 +28,15 @@ from app.modules.checkers.schemas import (
     PreSubmitCheckResponse,
 )
 from app.modules.projects.repository import ProjectRepository
-from app.modules.tasks.lifecycle import TASK_STATUS_IN_PROGRESS, TASK_STATUS_SUBMITTED
+from app.modules.tasks.lifecycle import (
+    InvalidTaskTransition,
+    TASK_STATUS_AUTO_CHECKING,
+    TASK_STATUS_IN_PROGRESS,
+    TASK_STATUS_NEEDS_REVISION,
+    TASK_STATUS_REVIEW_PENDING,
+    TASK_STATUS_SUBMITTED,
+    ensure_allowed_transition,
+)
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import SubmissionCreate
@@ -39,6 +47,11 @@ CHECKER_READ_ROLES = {"admin", "project_manager", "worker"}
 ROUTING_ALLOW_REVIEW = "allow_review"
 ROUTING_NEEDS_REVISION = "needs_revision"
 ROUTING_CHECKER_RETRY = "checker_retry"
+CHECKER_RUN_ALLOWED_TASK_STATUSES = {
+    TASK_STATUS_SUBMITTED,
+    TASK_STATUS_AUTO_CHECKING,
+    TASK_STATUS_REVIEW_PENDING,
+}
 INTERNAL_ROUTING_RECOMMENDATIONS = {
     ROUTING_CHECKER_RETRY,
     ROUTING_TASK_SETUP_BLOCKED,
@@ -145,6 +158,7 @@ class CheckerService:
         actor: ActorContext,
         submission_id: str,
         trigger_reason: str,
+        trigger_source: str = "manual_checker_trigger",
     ) -> CheckerRunResponse:
         """Run registered checkers against one locked submission.
 
@@ -152,6 +166,7 @@ class CheckerService:
             actor: Trusted admin or project manager actor resolved from the Flow token.
             submission_id: Submission whose latest locked packet should be checked.
             trigger_reason: Audit reason for the manual v0.1 trigger.
+            trigger_source: Durable source label for the checker run.
 
         Returns:
             Persisted checker run response.
@@ -166,8 +181,8 @@ class CheckerService:
         task = await self._get_task_for_actor(actor, submission.task_id)
         if submission.locked_at is None:
             raise CheckerExecutionBlocked("submission must be locked before internal checkers run")
-        if task.status != TASK_STATUS_SUBMITTED:
-            raise CheckerExecutionBlocked("task must be submitted before internal checkers run")
+        if task.status not in CHECKER_RUN_ALLOWED_TASK_STATUSES:
+            raise CheckerExecutionBlocked("task must be submitted or in checker gate before checkers run")
         latest_submission = await self._task_repo.get_latest_submission_for_task(task.id)
         if latest_submission is None or latest_submission.id != submission.id:
             raise CheckerExecutionBlocked("only latest submission version can be checked")
@@ -205,6 +220,13 @@ class CheckerService:
         if current_run is not None:
             current_run.is_current_for_submission = False
         attempt_number = 1 if current_run is None else current_run.attempt_number + 1
+        await self._enter_auto_checking(
+            actor,
+            task,
+            submission,
+            trigger_reason,
+            trigger_source,
+        )
 
         context = CheckerContext(
             task=task,
@@ -224,6 +246,7 @@ class CheckerService:
             submission,
             attempt_number,
             trigger_reason,
+            trigger_source,
         )
         checker_run = self._build_checker_run(
             actor=actor,
@@ -233,9 +256,11 @@ class CheckerService:
             attempt_number=attempt_number,
             supersedes_checker_run_id=None if current_run is None else current_run.id,
             trigger_reason=trigger_reason,
+            trigger_source=trigger_source,
             audit_event_id=audit_event.id,
             now=now,
         )
+        await self._apply_pre_review_gate_result(actor, task, submission, checker_run)
         try:
             checker_run = await self._checker_repo.add_run(checker_run)
             await self._session.commit()
@@ -329,6 +354,7 @@ class CheckerService:
         attempt_number: int,
         supersedes_checker_run_id: str | None,
         trigger_reason: str,
+        trigger_source: str,
         audit_event_id: str,
         now: datetime,
     ) -> CheckerRun:
@@ -342,6 +368,7 @@ class CheckerService:
             attempt_number: Monotonic attempt number for the submission.
             supersedes_checker_run_id: Previous current run id when retrying.
             trigger_reason: Audit reason supplied by the trusted trigger actor.
+            trigger_source: Durable source label for the checker run.
             audit_event_id: Audit event id linked to the manual trigger.
             now: Timestamp for run start and completion.
 
@@ -358,7 +385,7 @@ class CheckerService:
             task_id=submission.task_id,
             submission_id=submission.id,
             submission_version=submission.version,
-            trigger_source="manual_checker_trigger",
+            trigger_source=trigger_source,
             status="completed",
             routing_recommendation=routing_recommendation,
             outcome_source=(
@@ -412,6 +439,190 @@ class CheckerService:
         ]
         return checker_run
 
+    async def _enter_auto_checking(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+        submission: Submission,
+        trigger_reason: str,
+        trigger_source: str,
+    ) -> None:
+        """Move a task into the internal checker gate when needed.
+
+        Args:
+            actor: Trusted actor that triggered the gate.
+            task: Task associated with the submission.
+            submission: Locked submission being checked.
+            trigger_reason: Audit reason for checker execution.
+            trigger_source: Durable source label for the checker run.
+        """
+        if task.status == TASK_STATUS_AUTO_CHECKING:
+            return
+        from_status = task.status
+        self._ensure_transition_allowed(from_status, TASK_STATUS_AUTO_CHECKING)
+        task.status = TASK_STATUS_AUTO_CHECKING
+        await self._write_gate_audit(
+            actor,
+            task,
+            submission,
+            event_type="pre_review_gate_started",
+            from_status=from_status,
+            to_status=TASK_STATUS_AUTO_CHECKING,
+            reason=trigger_reason,
+            event_payload={"trigger_source": trigger_source},
+        )
+
+    async def _apply_pre_review_gate_result(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+        submission: Submission,
+        checker_run: CheckerRun,
+    ) -> None:
+        """Apply task routing from a completed checker run.
+
+        Args:
+            actor: Trusted actor that triggered the checker run.
+            task: Task whose lifecycle is gated by checker results.
+            submission: Locked submission checked by the run.
+            checker_run: Completed checker run carrying the routing recommendation.
+        """
+        if checker_run.routing_recommendation == ROUTING_ALLOW_REVIEW:
+            await self._complete_gate_transition(
+                actor,
+                task,
+                submission,
+                checker_run,
+                TASK_STATUS_REVIEW_PENDING,
+                "pre_review_gate_passed",
+            )
+            return
+        if checker_run.routing_recommendation == ROUTING_NEEDS_REVISION:
+            await self._complete_gate_transition(
+                actor,
+                task,
+                submission,
+                checker_run,
+                TASK_STATUS_NEEDS_REVISION,
+                "pre_review_gate_needs_revision",
+            )
+            return
+        await self._write_gate_audit(
+            actor,
+            task,
+            submission,
+            event_type="pre_review_gate_blocked",
+            from_status=task.status,
+            to_status=task.status,
+            reason=checker_run.trigger_reason,
+            event_payload={
+                "checker_run_id": checker_run.id,
+                "routing_recommendation": checker_run.routing_recommendation,
+                "outcome_source": checker_run.outcome_source,
+                "trigger_source": checker_run.trigger_source,
+            },
+        )
+
+    async def _complete_gate_transition(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+        submission: Submission,
+        checker_run: CheckerRun,
+        to_status: str,
+        event_type: str,
+    ) -> None:
+        """Transition a task out of the checker gate.
+
+        Args:
+            actor: Trusted actor that triggered the checker run.
+            task: Task being transitioned.
+            submission: Locked submission checked by the run.
+            checker_run: Completed checker run driving the transition.
+            to_status: Target task status.
+            event_type: Audit event type for the gate result.
+        """
+        from_status = task.status
+        self._ensure_transition_allowed(from_status, to_status)
+        task.status = to_status
+        await self._write_gate_audit(
+            actor,
+            task,
+            submission,
+            event_type=event_type,
+            from_status=from_status,
+            to_status=to_status,
+            reason=checker_run.trigger_reason,
+            event_payload={
+                "checker_run_id": checker_run.id,
+                "routing_recommendation": checker_run.routing_recommendation,
+                "outcome_source": checker_run.outcome_source,
+                "trigger_source": checker_run.trigger_source,
+                "blocking_count": checker_run.blocking_count,
+                "warning_count": checker_run.warning_count,
+                "failed_count": checker_run.failed_count,
+            },
+        )
+
+    async def _write_gate_audit(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+        submission: Submission,
+        event_type: str,
+        from_status: str | None,
+        to_status: str | None,
+        reason: str | None,
+        event_payload: dict | None = None,
+    ) -> AuditEvent:
+        """Persist an audit event for pre-review gate routing.
+
+        Args:
+            actor: Trusted actor triggering the gate.
+            task: Task associated with the gate.
+            submission: Submission checked by the gate.
+            event_type: Audit event type.
+            from_status: Previous task status.
+            to_status: New task status or same status for internal blocks.
+            reason: Audit reason for the gate.
+            event_payload: Additional structured event data.
+
+        Returns:
+            Persisted audit event.
+        """
+        audit = actor.audit_context()
+        payload = {
+            "task_id": task.id,
+            "submission_id": submission.id,
+            "submission_version": submission.version,
+            "locked_guide_version": submission.locked_guide_version,
+            "locked_checker_policy_version": submission.locked_checker_policy_version,
+            "locked_review_policy_version": submission.locked_review_policy_version,
+            "locked_revision_policy_version": submission.locked_revision_policy_version,
+            "locked_payment_policy_version": submission.locked_payment_policy_version,
+        }
+        if event_payload:
+            payload.update(event_payload)
+        return await self._task_repo.add_audit_event(
+            AuditEvent(
+                id=str(uuid4()),
+                entity_type="task",
+                entity_id=task.id,
+                event_type=event_type,
+                from_status=from_status,
+                to_status=to_status,
+                actor_id=audit.actor_id,
+                external_subject=audit.external_subject,
+                external_issuer=audit.external_issuer,
+                actor_roles=list(audit.actor_roles),
+                claim_snapshot=audit.claim_snapshot,
+                auth_source=audit.auth_source,
+                is_dev_auth=audit.is_dev_auth,
+                reason=reason,
+                event_payload=payload,
+            )
+        )
+
     async def _write_checker_audit(
         self,
         actor: ActorContext,
@@ -419,6 +630,7 @@ class CheckerService:
         submission: Submission,
         attempt_number: int,
         trigger_reason: str,
+        trigger_source: str,
     ) -> AuditEvent:
         """Persist the audit event for a manual checker trigger.
 
@@ -428,6 +640,7 @@ class CheckerService:
             submission: Submission being checked.
             attempt_number: Checker attempt number for the submission.
             trigger_reason: Audit reason supplied by the trusted trigger actor.
+            trigger_source: Durable source label for the checker run.
 
         Returns:
             Persisted audit event linked from the checker run.
@@ -454,6 +667,7 @@ class CheckerService:
                     "submission_id": submission.id,
                     "submission_version": submission.version,
                     "attempt_number": attempt_number,
+                    "trigger_source": trigger_source,
                     "locked_guide_version": submission.locked_guide_version,
                     "locked_checker_policy_version": submission.locked_checker_policy_version,
                     "locked_review_policy_version": submission.locked_review_policy_version,
@@ -510,6 +724,22 @@ class CheckerService:
             )
             adjusted.append(replace(outcome, blocks_review=blocks_review))
         return adjusted
+
+    @staticmethod
+    def _ensure_transition_allowed(from_status: str, to_status: str) -> None:
+        """Validate checker-driven task transitions through the shared lifecycle guard.
+
+        Args:
+            from_status: Current task status.
+            to_status: Desired checker-gate task status.
+
+        Raises:
+            CheckerExecutionBlocked: If the transition is not implemented.
+        """
+        try:
+            ensure_allowed_transition(from_status, to_status)
+        except InvalidTaskTransition as exc:
+            raise CheckerExecutionBlocked(str(exc)) from exc
 
     def _run_response_for_actor(
         self,
