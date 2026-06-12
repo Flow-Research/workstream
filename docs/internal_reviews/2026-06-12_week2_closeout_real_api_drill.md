@@ -42,14 +42,14 @@ Targeted QA re-review confirmed the blockers are resolved. The remaining operati
 
 Finding: the first drill could inherit any `WORKSTREAM_DATABASE_URL` and run migrations/write drill data against it.
 
-Resolution: added `assert_local_database_url()` before environment update, migrations, API startup, or writes. The drill now allows only local Postgres URLs for `workstream`, `workstream_test`, or `test_workstream`, unless an explicit non-local override is set.
+Resolution: added `assert_local_database_url()` before environment update, migrations, API startup, or writes. The drill now allows only local `postgresql+asyncpg://` URLs for `workstream`, `workstream_test`, or `test_workstream`, unless an explicit non-local override is set.
 
 Security re-review confirmed:
 
 - non-local host is blocked
 - local host with non-local database name is blocked
 - non-Postgres URL is blocked
-- local Postgres `workstream` and `workstream_test` are allowed
+- local async Postgres URLs for `workstream` and `workstream_test` are allowed
 - Flow-token auth remains in use
 - demo worker-profile route remains local/test gated
 - worker redaction and reviewer denial are asserted
@@ -65,7 +65,36 @@ Findings:
 
 Resolution: roadmap wording keeps Week 3 readiness explicit and does not overclaim reviewer checker visibility.
 
+### CodeRabbit follow-up
+
+Findings:
+
+- the local database safety gate allowed plain `postgresql://` URLs even though the backend uses SQLAlchemy async engines
+- checker-set assertions only proved expected checkers were present, not that the contract had no unexpected extras
+- the drill read checker runs and task status immediately after submission lock, which made async background execution timing-sensitive
+
+Resolution:
+
+- tightened the database guard to local `postgresql+asyncpg://`
+- made durable, setup-defect, and pre-submit checker-set assertions exact
+- added polling for automatic checker-run creation, checker-run terminal status, and task status transitions
+
+Internal follow-up findings:
+
+- QA found that setup-defect checker runs and trusted checker retry responses also needed exact checker-set assertions
+- QA found that failed pre-submit responses needed the same exact pre-submit checker-set assertion as the clean pre-submit response
+- docs/product-ops found that the evidence still used broad local Postgres wording after the guard was narrowed to async Postgres
+
+Internal follow-up resolution:
+
+- added exact setup-defect checker-set assertions for the blocked run and trusted checker retry
+- added exact pre-submit checker-set assertions for failed missing-file and missing-evidence prechecks
+- narrowed the accepted local database scheme to the installed `postgresql+asyncpg` driver
+- tightened this evidence file to say local async Postgres instead of generic local Postgres
+
 ## Validation
+
+The following checks were rerun after the CodeRabbit follow-up edits and internal re-review fixes.
 
 Passed:
 

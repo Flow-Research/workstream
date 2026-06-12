@@ -47,6 +47,7 @@ EXPECTED_PRE_SUBMIT_CHECKERS = {
 }
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 LOCAL_DATABASE_NAMES = {"workstream", "workstream_test", "test_workstream"}
+ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
 NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
 STRONG_ATTESTATION = (
     "I attest this submission contains no confidential client data, credentials, "
@@ -74,17 +75,18 @@ def assert_local_database_url(database_url: str) -> None:
     """
     parsed = urlparse(database_url)
     database_name = parsed.path.lstrip("/")
-    is_local = (
-        parsed.scheme.startswith("postgresql")
+    is_local_async_postgres = (
+        parsed.scheme in ASYNC_POSTGRES_SCHEMES
         and parsed.hostname in LOCAL_DATABASE_HOSTS
         and database_name in LOCAL_DATABASE_NAMES
     )
     override = os.environ.get("WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE")
-    if is_local or override == NONLOCAL_DATABASE_OVERRIDE_VALUE:
+    if is_local_async_postgres or override == NONLOCAL_DATABASE_OVERRIDE_VALUE:
         return
     raise RuntimeError(
         "Refusing to run Week 2 API E2E against a non-local database. "
-        "Use localhost/127.0.0.1 with a local Workstream database, or set "
+        "Use an async Postgres URL such as postgresql+asyncpg:// on "
+        "localhost/127.0.0.1 with a local Workstream database, or set "
         f"WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE={NONLOCAL_DATABASE_OVERRIDE_VALUE}."
     )
 
@@ -147,9 +149,49 @@ def assert_default_checker_set(run: dict) -> None:
     Args:
         run: Checker run response payload.
     """
-    names = {result["checker_name"] for result in run["results"]}
-    missing = EXPECTED_DURABLE_CHECKERS.difference(names)
-    ensure(not missing, f"missing Week 2 durable checkers: {sorted(missing)}")
+    assert_checker_set(run["results"], EXPECTED_DURABLE_CHECKERS, "default durable")
+
+
+def assert_setup_checker_set(run: dict) -> None:
+    """Assert the setup-defect checker set ran exactly.
+
+    Args:
+        run: Checker run response payload.
+    """
+    assert_checker_set(
+        run["results"],
+        EXPECTED_DURABLE_CHECKERS | {"check_acceptance_criteria_present"},
+        "setup durable",
+    )
+
+
+def assert_checker_set(results: list[dict], expected: set[str], label: str) -> None:
+    """Assert a checker result list matches the expected checker contract.
+
+    Args:
+        results: Checker result payloads.
+        expected: Expected checker names.
+        label: Human-readable checker set label.
+    """
+    names = {result["checker_name"] for result in results}
+    missing = expected.difference(names)
+    unexpected = names.difference(expected)
+    ensure(
+        not missing and not unexpected,
+        (
+            f"{label} checker set drifted: "
+            f"missing={sorted(missing)} unexpected={sorted(unexpected)}"
+        ),
+    )
+
+
+def assert_pre_submit_checker_set(response: dict) -> None:
+    """Assert the Week 2 pre-submit checker set ran exactly.
+
+    Args:
+        response: Pre-submit checker response payload.
+    """
+    assert_checker_set(response["results"], EXPECTED_PRE_SUBMIT_CHECKERS, "pre-submit")
 
 
 def task_payload(run_id: str, suffix: str) -> dict:
@@ -407,16 +449,83 @@ async def submit_lock_and_get_run(
         f"/api/v1/submissions/{submission['id']}/lock",
         manager_token,
     )
-    runs = await request_json(
+    checker_run = await wait_for_submission_checker_run(
         client,
-        "GET",
-        f"/api/v1/submissions/{submission['id']}/checker-runs",
         manager_token,
+        submission["id"],
     )
-    ensure(isinstance(runs, list), "checker run list did not return a list")
-    ensure(len(runs) == 1, "automatic checker run was not created exactly once")
-    ensure(runs[0]["trigger_source"] == "submission_locked", "unexpected trigger source")
-    return submission, runs[0]
+    return submission, checker_run
+
+
+async def wait_for_submission_checker_run(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    submission_id: str,
+) -> dict:
+    """Wait for the automatic submission-locked checker run.
+
+    Args:
+        client: Real HTTP client.
+        manager_token: Project manager Flow token.
+        submission_id: Submission id whose checker run should exist.
+
+    Returns:
+        Completed checker run payload.
+    """
+    last_count = 0
+    for _ in range(50):
+        runs = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{submission_id}/checker-runs",
+            manager_token,
+        )
+        ensure(isinstance(runs, list), "checker run list did not return a list")
+        last_count = len(runs)
+        if len(runs) == 1 and runs[0]["trigger_source"] == "submission_locked":
+            return await wait_for_checker_run_terminal(
+                client,
+                manager_token,
+                runs[0]["id"],
+            )
+        await asyncio.sleep(0.2)
+    raise AssertionError(
+        "automatic checker run was not created exactly once: "
+        f"submission_id={submission_id} count={last_count}"
+    )
+
+
+async def wait_for_checker_run_terminal(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    checker_run_id: str,
+) -> dict:
+    """Wait for a checker run to reach a terminal status.
+
+    Args:
+        client: Real HTTP client.
+        manager_token: Project manager Flow token.
+        checker_run_id: Checker run id to poll.
+
+    Returns:
+        Terminal checker run payload.
+    """
+    terminal_statuses = {"completed", "failed"}
+    checker_run: dict | None = None
+    for _ in range(50):
+        checker_run = await request_json(
+            client,
+            "GET",
+            f"/api/v1/checker-runs/{checker_run_id}",
+            manager_token,
+        )
+        if checker_run["status"] in terminal_statuses:
+            return checker_run
+        await asyncio.sleep(0.2)
+    raise AssertionError(
+        "checker run did not reach terminal status: "
+        f"checker_run_id={checker_run_id} status={checker_run['status'] if checker_run else None}"
+    )
 
 
 async def assert_task_status(
@@ -433,8 +542,15 @@ async def assert_task_status(
         task_id: Task id to read.
         expected_status: Expected task status token.
     """
-    task = await request_json(client, "GET", f"/api/v1/tasks/{task_id}", manager_token)
-    ensure(task["status"] == expected_status, f"expected {expected_status}, got {task['status']}")
+    task: dict | None = None
+    for _ in range(50):
+        task = await request_json(client, "GET", f"/api/v1/tasks/{task_id}", manager_token)
+        if task["status"] == expected_status:
+            return
+        await asyncio.sleep(0.2)
+    raise AssertionError(
+        f"expected {expected_status}, got {task['status'] if task else None}"
+    )
 
 
 async def break_acceptance_criteria(task_id: str) -> None:
@@ -525,11 +641,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         ensure(clean_precheck["authoritative"] is False, "precheck must be non-authoritative")
         ensure(clean_precheck["eligible_to_submit"] is True, "clean precheck should pass")
-        clean_precheck_names = {result["checker_name"] for result in clean_precheck["results"]}
-        ensure(
-            EXPECTED_PRE_SUBMIT_CHECKERS.issubset(clean_precheck_names),
-            "pre-submit checker set drifted",
-        )
+        assert_pre_submit_checker_set(clean_precheck)
         clean_submission, clean_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
@@ -600,6 +712,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             revision_worker_token,
             {"submission": missing_file_payload},
         )
+        assert_pre_submit_checker_set(failed_precheck)
         ensure(failed_precheck["eligible_to_submit"] is False, "missing file precheck passed")
         first_submission, first_run = await submit_lock_and_get_run(
             client,
@@ -667,6 +780,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             missing_evidence_worker_token,
             {"submission": missing_evidence_payload},
         )
+        assert_pre_submit_checker_set(missing_evidence_precheck)
         ensure(
             missing_evidence_precheck["eligible_to_submit"] is False,
             "missing evidence precheck should block submission",
@@ -925,13 +1039,12 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/submissions/{setup_submission['id']}/lock",
             manager_token,
         )
-        setup_runs = await request_json(
+        setup_run = await wait_for_submission_checker_run(
             client,
-            "GET",
-            f"/api/v1/submissions/{setup_submission['id']}/checker-runs",
             manager_token,
+            setup_submission["id"],
         )
-        setup_run = setup_runs[0]
+        assert_setup_checker_set(setup_run)
         ensure(
             setup_run["routing_recommendation"] == "task_setup_blocked",
             "task setup defect did not use internal route",
@@ -960,6 +1073,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             manager_token,
             {"trigger_reason": "Week 2 API setup repair"},
         )
+        assert_setup_checker_set(retry)
         ensure(retry["attempt_number"] == 2, "trusted checker retry did not create attempt 2")
         ensure(
             retry["routing_recommendation"] == "allow_review",
