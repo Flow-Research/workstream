@@ -134,9 +134,9 @@ Week 2 is backend-first checker infrastructure. Checker output is exposed throug
 
 The core invariant is:
 
-`Draft packet -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> REVIEW_PENDING or NEEDS_REVISION`
+`Draft packet -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> review_pending or needs_revision`
 
-The checker framework does not accept or reject work. It may route worker-fixable checker failures to user-facing `NEEDS_REVISION`, but that does not create a human review decision. Internally the source is recorded as `auto_checker`.
+The checker framework does not accept or reject work. It may route worker-fixable checker failures to user-facing `needs_revision`, but that does not create a human review decision. Internally the source is recorded as `auto_checker`.
 
 ### Day 6: Checker Interface
 
@@ -169,9 +169,9 @@ Deliver:
 Exit criteria:
 
 - worker-fixable submission failures fail before review
-- high severity failures block `REVIEW_PENDING`
+- high severity failures block `review_pending`
 - checker runs bind to the exact submission id, submission version, package hash, and artifact hash manifest
-- worker-fixable checker failures route to user-facing `NEEDS_REVISION`
+- worker-fixable checker failures route to user-facing `needs_revision`
 
 ### Day 8: Evidence And Acceptance Checkers
 
@@ -211,7 +211,7 @@ Exit criteria:
 Deliver:
 
 - 5 sample submissions
-- checker failure catalog
+- [checker failure catalog](checker_trial_failure_catalog.md)
 - false-positive notes
 - missing-checker list
 
@@ -259,7 +259,7 @@ Exit criteria:
 
 Deliver:
 
-- `REVIEW_PENDING -> NEEDS_REVISION`
+- `review_pending -> needs_revision`
 - feedback history
 - task unlock for worker
 - resubmission requirements

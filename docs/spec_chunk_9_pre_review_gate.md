@@ -49,7 +49,7 @@ Route outcomes:
 - `allow_review`: task moves to `review_pending`
 - `needs_revision`: task moves to user-facing `needs_revision`
 - `task_setup_blocked`: task remains in `auto_checking` for project-manager repair
-- `checker_retry`: task remains in `auto_checking` until a trusted retry or repair happens
+- `checker_retry`: task remains in `auto_checking` until a trusted checker retry or repair happens
 
 `task_setup_blocked` and `checker_retry` are internal checker routing recommendations. They are not review decisions and they are not worker-facing task outcomes.
 

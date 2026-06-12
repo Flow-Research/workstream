@@ -179,7 +179,7 @@ Conditions of satisfaction:
 
 ### Chunk 9: Pre-Review Gate
 
-Automatically triggers internal post-submit checks after submission locking and calculates whether a checked submission moves to `REVIEW_PENDING`, user-facing `NEEDS_REVISION`, or an internal `task_setup_blocked` repair route.
+Automatically triggers internal post-submit checks after submission locking and calculates whether a checked submission moves to `REVIEW_PENDING`, user-facing `needs_revision`, or an internal `task_setup_blocked` repair route.
 
 Detailed spec: [Chunk 9 Pre-Review Gate](spec_chunk_9_pre_review_gate.md).
 
@@ -194,6 +194,8 @@ Conditions of satisfaction:
 ### Chunk 10: Checker Trial
 
 Runs real sample submissions through the checker framework.
+
+Detailed spec: [Chunk 10 Checker Trial](spec_chunk_10_checker_trial.md).
 
 Conditions of satisfaction:
 
