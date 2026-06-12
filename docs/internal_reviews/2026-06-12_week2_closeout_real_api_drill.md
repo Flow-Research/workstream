@@ -133,7 +133,7 @@ Passed:
 cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
 ```
 
-Result: `62 passed in 293.20s`.
+Result: `62 passed in 415.29s`.
 
 Passed:
 
@@ -141,7 +141,7 @@ Passed:
 cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
 ```
 
-Result: `112 passed in 426.89s`.
+Result: `112 passed in 565.34s`.
 
 Passed:
 
