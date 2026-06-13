@@ -83,8 +83,8 @@
 - implement `check_evidence_integrity`
 - implement `check_confidentiality_attestation`
 - implement `check_low_quality_generated_artifacts`
-- implement `check_ready_gate`
-- implement `check_preflight_evidence`
+- implement registered readiness checkers only after their contracts are locked
+- implement preflight evidence guards after the readiness/pre-review record shape is locked
 
 ### Review
 

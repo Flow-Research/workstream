@@ -42,7 +42,7 @@ Existing projects repeatedly preserve preflight/checker evidence. Workstream had
 
 Suggested change:
 
-Add preflight evidence template and checker support for `check_preflight_evidence`.
+Add a preflight evidence template and later checker support after the readiness/pre-review record shape is locked.
 
 Status: fixed in `docs/template_preflight_evidence.md` and `docs/architecture_checker_framework.md`.
 
@@ -81,4 +81,3 @@ Suggested change:
 Require each lesson to have an owner and target action.
 
 Status: fixed in `docs/operations_project_operating_manual.md`.
-

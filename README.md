@@ -119,10 +119,16 @@ Workstream uses Postgres locally and in CI. Start the local database with:
 docker compose up -d postgres
 ```
 
-The default local test URL is:
+The default local development URL is:
 
 ```text
 postgresql+asyncpg://workstream:workstream@localhost:5433/workstream
+```
+
+Destructive real API drills use the separate local test database:
+
+```text
+postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 ```
 
 ## Week 1 API Demo UI

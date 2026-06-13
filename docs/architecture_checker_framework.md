@@ -76,17 +76,9 @@ The checker framework is conservative. It blocks objective structural failures a
 
 ## Required Core Checkers
 
-### check_task_schema
-
-Validates task record fields required by the project guide.
-
-### check_project_guide_attached
-
-Ensures the task has a guide version attached.
-
 ### check_policy_context_present
 
-Ensures the task has locked checker, review, revision, and payment policy context, including base amount and currency where required.
+Ensures the task has locked guide, checker, review, revision, and payment policy context, including base amount and currency where required.
 
 ### check_submission_packet
 
@@ -129,42 +121,22 @@ Ensures the worker explicitly attests that the submission does not contain prohi
 
 Flags repeated low-quality generated patterns banned by the project guide, such as generic helper files, hidden-test leakage patterns, fabricated model files, placeholder evidence, or boilerplate reports that do not prove task-specific work.
 
-### check_prior_revision_closed
+Revision closure, task lifecycle movement, task readiness, and pre-review routing are enforced as lifecycle guards in v0.1. They must not be configured as checker policy names until a registered checker exists for that contract.
 
-For resubmissions, ensures prior review findings are addressed in a revision replay.
-
-### check_status_transition
-
-Validates that requested lifecycle movement is legal.
-
-### check_ready_gate
-
-Ensures the task has passed the project-specific release checklist before entering `READY`.
-
-### check_preflight_evidence
-
-Ensures the submission has a stored preflight evidence record with checker results, package references, artifact hashes, and review-readiness confirmation.
-
-### check_pre_review_gate
-
-Runs project-configured reviewer simulation, adversarial pass, or readiness guard before moving a submission to human review.
-
-`pre_review_gate` is a checker phase. The persisted task status during this phase is `auto_checking`.
+The pre-review gate is a checker execution phase. The persisted task status during this phase is `auto_checking`.
 
 ## Gate Mapping
 
 Project activation gate:
 
-- `check_project_guide_attached`
 - `check_policy_context_present`
 - project-specific guide completeness checks
 
 Task screening gate:
 
-- `check_task_schema`
+- `check_policy_context_present`
 - `check_acceptance_criteria_present`
-- `check_ready_gate`
-- `check_status_transition`
+- task lifecycle transition guards
 
 Submission quality gate:
 
@@ -175,12 +147,10 @@ Submission quality gate:
 - `check_forbidden_files`
 - `check_confidentiality_attestation`
 - `check_low_quality_generated_artifacts`
-- `check_prior_revision_closed`
-- `check_preflight_evidence`
 
 Pre-review gate phase:
 
-- `check_pre_review_gate`
+- project-configured registered checkers run against the locked submission and policy context
 
 The first two gates replace external origin qualification and task ingestion for v0.1. Origin qualification and webhook drop notifications are future adapter concerns.
 
@@ -222,7 +192,7 @@ Draft packet
 
 The checker run must bind to one immutable submission version. If the worker uploads a replacement file, the platform creates a new submission version and reruns checks.
 
-Checker failures are not human review decisions. They do not accept or reject work. Worker-fixable blocking failures can route the task to user-facing `NEEDS_REVISION`, with `outcome_source = auto_checker` and no review decision id. Human review can also produce `needs_revision` later, but that records `outcome_source = human_review` and a review decision id.
+Checker failures are not human review decisions. They do not `accept` or `reject` work. Worker-fixable blocking failures can route the task to user-facing `needs_revision`, with `outcome_source = auto_checker` and no review decision id. Human review can also produce `needs_revision` later, but that records `outcome_source = human_review` and a review decision id.
 
 If a checker crashes or cannot run because of platform infrastructure, the checker run remains failed as an infrastructure failure and the task does not move to human review. The retry or admin action is recorded in audit history.
 

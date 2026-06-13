@@ -96,7 +96,7 @@ Auth interfaces/adapters can be added in Chunk 2.
 - Alembic has an initial migration path
 - tests pass locally
 - stale wording scan passes
-- markdown link check passes
+- Markdown link check passes
 - senior engineering verifier passes
 - QA/test verifier passes
 - security/auth verifier passes

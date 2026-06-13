@@ -41,7 +41,7 @@ Current phase: Week 3 review and revision preparation.
 - Chunk 7 checker runner, registry, structural checkers, durable checker records, and API tests.
 - Chunk 8 evidence, policy, forbidden-file, confidentiality, and generated-artifact checkers.
 - Chunk 9 automatic pre-review gate with checker-caused `needs_revision`, internal `task_setup_blocked`, trusted checker retry, and worker redaction.
-- Chunk 10 checker trial with five real API sample submissions, failure catalog, false-positive notes, missing-checker notes, and internal verifier evidence.
+- Chunk 10 checker trial with the expanded real API sample matrix, failure catalog, false-positive notes, missing-checker notes, and internal verifier evidence.
 - Week 2 real HTTP API drill through Flow-token auth, project/guide/task/submission lifecycle, pre-submit checks, automatic checker runs, checker-caused `needs_revision`, worker redaction, internal `task_setup_blocked`, and trusted checker retry.
 
 ## Review Tracks Closed
@@ -75,7 +75,7 @@ Current phase: Week 3 review and revision preparation.
 Run from the backend directory against local Postgres:
 
 ```bash
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week1_dry_run.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_dry_run.py
 ```
 
 The script runs migrations forward and exercises:
@@ -87,21 +87,37 @@ The script runs migrations forward and exercises:
 Run from the backend directory against local Postgres:
 
 ```bash
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week2_api_e2e.py
 ```
 
 The script starts a real local API server, issues local Flow-compatible tokens, runs migrations forward, and exercises:
 
 `Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> Submit -> Lock submission -> Automatic checker run -> review_pending | needs_revision | internal task_setup_blocked -> trusted checker retry`
 
+## Deterministic Week 2 Closeout Gate
+
+The Week 2 closeout gate is deterministic and must fail on contract drift.
+
+Required invariants:
+
+- Week 1 and Week 2 real API drills run only against local `postgresql+asyncpg://` test databases named `workstream_test` or `test_workstream` unless an explicit write-risk override is supplied.
+- Pre-submit checker responses are non-authoritative and must not create submissions, checker runs, or lifecycle transitions.
+- Missing or unexpected pre-submit checker names fail the drill.
+- Missing or unexpected durable checker names fail the drill.
+- Submission locking returns `locked_at`, locks evidence rows, and is idempotent.
+- Automatic checker-run creation, checker terminal status, and task-status transitions are polled because execution is async-first.
+- Checker-run list visibility is checked for project manager, assigned worker, unassigned worker, and reviewer roles.
+- Trusted checker retry proves attempt ordering, supersession, and current-run flags.
+- Postgres invariants are checked after the real API flows for locked guide/policy context, evidence locks, checker results, checker counters, current-run uniqueness, and gate audit events.
+
 Week 2 closeout validation is not only this script. The full gate is:
 
 ```bash
 .venv/bin/python -m ruff check app tests scripts
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week1_api_e2e.py
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_api_e2e.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week2_api_e2e.py
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest -q
 .venv/bin/docstr-coverage --config .docstr.yaml
 ```
 

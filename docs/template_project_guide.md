@@ -106,12 +106,13 @@ Evidence must prove the submitted version, not an earlier local draft.
 
 Required checkers:
 
-- check_task_schema
-- check_project_guide_attached
+- check_acceptance_criteria_present
 - check_policy_context_present
 - check_submission_packet
 - check_evidence_present
 - check_evidence_integrity
+- check_required_files
+- check_forbidden_files
 - check_confidentiality_attestation
 - check_low_quality_generated_artifacts
 

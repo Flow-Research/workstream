@@ -104,7 +104,7 @@ The actor context created here becomes the input later services use for audit at
 - permission checks live outside routers
 - backend tests pass
 - stale wording scan passes
-- markdown link check passes
+- Markdown link check passes
 - senior engineering verifier passes
 - QA/test verifier passes
 - security/auth verifier passes

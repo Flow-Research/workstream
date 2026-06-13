@@ -17,7 +17,7 @@ This is still not the automatic pre-review gate. Chunk 9 owns automatic transiti
 
 ## Scope
 
-Note: Chunk 8 supersedes the temporary public checker names `check_artifact_manifest_integrity` and `check_evidence_references_present` with `check_evidence_integrity` and `check_evidence_present`. This Chunk 7 spec preserves the historical implementation point; current checker policies should use the Chunk 8 names.
+Note: Chunk 8 supersedes the temporary Chunk 7 artifact-manifest and evidence-reference checker names with `check_evidence_integrity` and `check_evidence_present`. This Chunk 7 spec preserves the historical implementation point; current checker policies must use the Chunk 8 names.
 
 - `checker_runs` and `checker_results` migration
 - SQLAlchemy checker models
@@ -30,8 +30,8 @@ Note: Chunk 8 supersedes the temporary public checker names `check_artifact_mani
 - first structural checkers:
   - `check_submission_packet`
   - `check_policy_context_present`
-  - `check_artifact_manifest_integrity`
-  - `check_evidence_references_present`
+  - temporary artifact-manifest integrity checker
+  - temporary evidence-reference checker
 - canonical artifact manifest hash helper
 - real Postgres-backed API and migration tests
 
@@ -83,14 +83,14 @@ Checker policy names must match registered checker names.
 
 If a locked checker policy references an unknown checker, Workstream rejects durable checker execution with a validation error and does not write fake checker results.
 
-The initial registered checker names are:
+The current registered checker names are:
 
 - `check_submission_packet`
 - `check_policy_context_present`
-- `check_artifact_manifest_integrity`
-- `check_evidence_references_present`
+- `check_evidence_integrity`
+- `check_evidence_present`
 
-These were the initial Chunk 7 names. Chunk 8 replaces the last two names in current policy-facing contracts.
+Chunk 8 replaces the temporary Chunk 7 artifact-manifest and evidence-reference checker names in current policy-facing contracts.
 
 ## Runner Behavior
 
@@ -176,5 +176,5 @@ Worker responses must not expose:
 Run from `backend/` against local Postgres:
 
 ```bash
-WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py -q
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py -q
 ```

@@ -14,14 +14,53 @@ import sys
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import select
 
+from app.db import session as db_session
+from app.modules.checkers.models import CheckerResult, CheckerRun
+from app.modules.projects.models import (
+    CheckerPolicy,
+    PaymentPolicy,
+    Project,
+    ProjectGuide,
+    RevisionPolicy,
+    ReviewPolicy,
+)
+from app.modules.tasks.models import (
+    AuditEvent,
+    EvidenceItem,
+    Submission,
+    TaskAssignment,
+    WorkstreamTask,
+)
+
+EXPECTED_DURABLE_CHECKERS = {
+    "check_submission_packet",
+    "check_policy_context_present",
+    "check_evidence_present",
+    "check_evidence_integrity",
+    "check_required_files",
+    "check_forbidden_files",
+    "check_confidentiality_attestation",
+    "check_low_quality_generated_artifacts",
+}
 DEFAULT_FLOW_ISSUER = "https://auth.flow.local/e2e"
 DEFAULT_FLOW_AUDIENCE = "workstream-api"
+LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
+LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
+ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
+NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
+STRONG_ATTESTATION = (
+    "I attest this submission contains no confidential client data, credentials, "
+    "secrets, tokens, passwords, API keys, private source material, source code, "
+    "copied platform artifacts, or copied platform content."
+)
 
 
 def base64url_json(payload: dict) -> str:
@@ -72,6 +111,9 @@ def issue_flow_token(
     issuer: str,
     audience: str,
     secret: str,
+    issued_at: datetime | None = None,
+    expires_at: datetime | None = None,
+    not_before: datetime | None = None,
 ) -> str:
     """Issue a local Flow-compatible signed token for one QA actor.
 
@@ -81,11 +123,14 @@ def issue_flow_token(
         issuer: Flow issuer claim.
         audience: Flow audience claim.
         secret: HMAC secret shared with the local Flow verifier.
+        issued_at: Optional issued-at timestamp override.
+        expires_at: Optional expiration timestamp override.
+        not_before: Optional not-before timestamp override.
 
     Returns:
         HMAC-signed bearer token consumed by ``FlowAuthVerifier``.
     """
-    now = datetime.now(UTC)
+    now = issued_at or datetime.now(UTC)
     header = base64url_json({"alg": "HS256", "typ": "JWT"})
     payload = base64url_json(
         {
@@ -96,8 +141,8 @@ def issue_flow_token(
             "name": subject.replace("-", " ").title(),
             "roles": roles,
             "iat": int(now.timestamp()),
-            "nbf": int((now - timedelta(seconds=5)).timestamp()),
-            "exp": int((now + timedelta(minutes=30)).timestamp()),
+            "nbf": int((not_before or (now - timedelta(seconds=5))).timestamp()),
+            "exp": int((expires_at or (now + timedelta(minutes=30))).timestamp()),
         }
     )
     signed_content = f"{header}.{payload}".encode()
@@ -158,7 +203,7 @@ def api_environment() -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault(
         "WORKSTREAM_DATABASE_URL",
-        "postgresql+asyncpg://workstream:workstream@localhost:5433/workstream",
+        "postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test",
     )
     flow_issuer, flow_audience, flow_secret = flow_settings(env)
     env["WORKSTREAM_E2E_FLOW_SECRET"] = flow_secret
@@ -284,6 +329,108 @@ async def request_json(
     return body
 
 
+async def wait_for_submission_checker_run(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    submission_id: str,
+) -> dict:
+    """Wait for exactly one automatic checker run after submission lock.
+
+    Args:
+        client: Real HTTP client.
+        manager_token: Project manager Flow token.
+        submission_id: Locked submission id.
+
+    Returns:
+        Completed checker run response.
+    """
+    last_count = 0
+    for _ in range(50):
+        runs = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{submission_id}/checker-runs",
+            manager_token,
+        )
+        ensure(isinstance(runs, list), "checker run list did not return a list")
+        last_count = len(runs)
+        if len(runs) == 1 and runs[0]["trigger_source"] == "submission_locked":
+            run = await request_json(
+                client,
+                "GET",
+                f"/api/v1/checker-runs/{runs[0]['id']}",
+                manager_token,
+            )
+            if run["status"] == "completed":
+                return run
+        await asyncio.sleep(0.2)
+    raise AssertionError(f"expected one automatic checker run, got {last_count}")
+
+
+async def wait_for_task_status(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    task_id: str,
+    expected_status: str,
+) -> dict:
+    """Wait for a task to reach an expected status through the API.
+
+    Args:
+        client: Real HTTP client.
+        manager_token: Project manager Flow token.
+        task_id: Task id to poll.
+        expected_status: Expected status token.
+
+    Returns:
+        Task response at the expected status.
+    """
+    task: dict | None = None
+    for _ in range(50):
+        task = await request_json(client, "GET", f"/api/v1/tasks/{task_id}", manager_token)
+        if task["status"] == expected_status:
+            return task
+        await asyncio.sleep(0.2)
+    raise AssertionError(
+        f"expected task status {expected_status}, got {task['status'] if task else None}"
+    )
+
+
+def ensure(condition: bool, message: str) -> None:
+    """Raise a normal assertion error when a system invariant is false.
+
+    Args:
+        condition: Invariant result.
+        message: Failure message.
+    """
+    if not condition:
+        raise AssertionError(message)
+
+
+def assert_local_database_url(database_url: str) -> None:
+    """Fail closed unless the E2E database URL is explicitly local.
+
+    Args:
+        database_url: SQLAlchemy async database URL resolved for the drill.
+    """
+    parsed = urlparse(database_url)
+    database_name = parsed.path.lstrip("/")
+    is_local_async_postgres = (
+        parsed.scheme in ASYNC_POSTGRES_SCHEMES
+        and parsed.hostname in LOCAL_DATABASE_HOSTS
+        and database_name in LOCAL_DATABASE_NAMES
+    )
+    override = os.environ.get("WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE")
+    if is_local_async_postgres or override == NONLOCAL_DATABASE_OVERRIDE_VALUE:
+        return
+    raise RuntimeError(
+        "Refusing to run Week 1 API E2E against a non-local database. "
+        "Use an async Postgres URL such as postgresql+asyncpg:// on "
+        "localhost/127.0.0.1 with a local test database named "
+        "workstream_test or test_workstream, or set "
+        f"WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE={NONLOCAL_DATABASE_OVERRIDE_VALUE}."
+    )
+
+
 def guide_payload(run_id: str) -> dict:
     """Build a complete project guide payload.
 
@@ -369,6 +516,13 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
         audience=flow_audience,
         secret=flow_secret,
     )
+    unassigned_worker_token = issue_flow_token(
+        f"real-api-unassigned-worker-{run_id}",
+        ["worker"],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
     reviewer_token = issue_flow_token(
         f"real-api-reviewer-{run_id}",
         ["reviewer"],
@@ -386,11 +540,47 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
         )[:-8]
         + "tampered"
     )
+    wrong_issuer_token = issue_flow_token(
+        f"real-api-wrong-issuer-{run_id}",
+        ["worker"],
+        issuer="https://auth.flow.local/wrong",
+        audience=flow_audience,
+        secret=flow_secret,
+    )
+    wrong_audience_token = issue_flow_token(
+        f"real-api-wrong-audience-{run_id}",
+        ["worker"],
+        issuer=flow_issuer,
+        audience="wrong-audience",
+        secret=flow_secret,
+    )
+    expired_token = issue_flow_token(
+        f"real-api-expired-{run_id}",
+        ["worker"],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+        issued_at=datetime.now(UTC) - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(minutes=30),
+    )
+    future_nbf_token = issue_flow_token(
+        f"real-api-future-nbf-{run_id}",
+        ["worker"],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+        not_before=datetime.now(UTC) + timedelta(minutes=30),
+    )
 
     async with httpx.AsyncClient(base_url=base_url, timeout=10) as client:
         await request_json(client, "GET", "/health")
         await request_json(client, "GET", "/api/v1/health")
+        await request_json(client, "GET", "/api/v1/auth/me", expected_status=401)
         await request_json(client, "GET", "/api/v1/auth/me", invalid_token, expected_status=401)
+        await request_json(client, "GET", "/api/v1/auth/me", wrong_issuer_token, expected_status=401)
+        await request_json(client, "GET", "/api/v1/auth/me", wrong_audience_token, expected_status=401)
+        await request_json(client, "GET", "/api/v1/auth/me", expired_token, expected_status=401)
+        await request_json(client, "GET", "/api/v1/auth/me", future_nbf_token, expected_status=401)
         manager = await request_json(client, "GET", "/api/v1/auth/me", manager_token)
         assert manager["auth_source"] == "flow"
         assert manager["is_dev_auth"] is False
@@ -435,7 +625,29 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert active["guide"]["version"] == "v1"
+        await request_json(
+            client,
+            "PATCH",
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
+            manager_token,
+            {"change_summary": "Illegal active guide edit"},
+            409,
+        )
         await request_json(client, "GET", f"/api/v1/projects/{project['id']}/active-guide", manager_token)
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/projects/{project['id']}/tasks",
+            worker_token,
+            {
+                "title": "Worker must not create task",
+                "description": "Unauthorized task create probe.",
+                "source_type": "manual",
+                "acceptance_criteria": "Must fail.",
+                "required_evidence": ["log"],
+            },
+            403,
+        )
 
         task = await request_json(
             client,
@@ -460,13 +672,23 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             201,
         )
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", manager_token)
-        await request_json(
+        screened = await request_json(
             client,
             "POST",
             f"/api/v1/tasks/{task['id']}/screen",
             manager_token,
             {"reason": "real API screening passed"},
         )
+        assert {
+            screened["locked_guide_version"],
+            screened["locked_checker_policy_version"],
+            screened["locked_review_policy_version"],
+            screened["locked_revision_policy_version"],
+            screened["locked_payment_policy_version"],
+        } == {"v1"}
+        assert screened["base_amount"] == "25.00"
+        assert screened["currency"] == "USD"
+        assert screened["payout_type"] == "fixed"
         await request_json(
             client,
             "POST",
@@ -490,12 +712,26 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
         assert worker_profile["status"] == "active"
         assert set(worker_profile["skill_tags"]) == {"stem", "proofs"}
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}",
+            unassigned_worker_token,
+            expected_status=200,
+        )
         claim = await request_json(
             client,
             "POST",
             f"/api/v1/tasks/{task['id']}/claim",
             worker_token,
             {"reason": "real worker claim"},
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}",
+            unassigned_worker_token,
+            expected_status=404,
         )
         await request_json(
             client,
@@ -521,7 +757,7 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
                         "notes": "real API artifact",
                     }
                 ],
-                "worker_attestation": "I confirm this packet follows the locked guide.",
+                "worker_attestation": STRONG_ATTESTATION,
                 "evidence_items": [
                     {
                         "type": "log",
@@ -535,9 +771,38 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             },
             201,
         )
-        assert submission["locked_guide_version"] == "v1"
+        assert {
+            submission["locked_guide_version"],
+            submission["locked_checker_policy_version"],
+            submission["locked_review_policy_version"],
+            submission["locked_revision_policy_version"],
+            submission["locked_payment_policy_version"],
+        } == {"v1"}
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{task['id']}/submissions",
+            manager_token,
+            {
+                "summary": "Manager cannot submit for worker.",
+                "package_hash": f"sha256:manager-package-{run_id}",
+                "artifact_hash_manifest": [
+                    {"artifact": "answer.md", "hash": f"sha256:manager-answer-{run_id}"}
+                ],
+                "worker_attestation": STRONG_ATTESTATION,
+                "evidence_items": [],
+            },
+            403,
+        )
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}/submissions", worker_token)
         await request_json(client, "GET", f"/api/v1/submissions/{submission['id']}", worker_token)
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{submission['id']}",
+            unassigned_worker_token,
+            expected_status=404,
+        )
         await request_json(
             client,
             "POST",
@@ -552,13 +817,44 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert locked["locked_at"] is not None
+        assert all(item["locked_at"] == locked["locked_at"] for item in locked["evidence_items"])
+        checker_run = await wait_for_submission_checker_run(client, manager_token, submission["id"])
+        assert checker_run["routing_recommendation"] == "allow_review"
+        assert {result["checker_name"] for result in checker_run["results"]} == EXPECTED_DURABLE_CHECKERS
+        await wait_for_task_status(client, manager_token, task["id"], "review_pending")
         audit_events = await request_json(
             client,
             "GET",
             f"/api/v1/tasks/{task['id']}/audit-events",
             manager_token,
         )
-        assert len(audit_events) >= 6
+        audit_transitions = {
+            (event["event_type"], event["from_status"], event["to_status"])
+            for event in audit_events
+        }
+        for expected_transition in {
+            ("task_created", None, "draft"),
+            ("task_status_changed", "draft", "screening"),
+            ("task_status_changed", "screening", "ready"),
+            ("task_status_changed", "ready", "claimed"),
+            ("task_status_changed", "claimed", "in_progress"),
+            ("submission_created", "in_progress", "submitted"),
+            ("submission_locked", "submitted", "submitted"),
+            ("pre_review_gate_started", "submitted", "auto_checking"),
+            ("pre_review_gate_passed", "auto_checking", "review_pending"),
+        }:
+            assert expected_transition in audit_transitions
+        worker_audit_events = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/audit-events",
+            worker_token,
+        )
+        assert all(event["claim_snapshot"] == {} for event in worker_audit_events)
+        assert all(
+            "artifact_hash_manifest" not in event["event_payload"]
+            for event in worker_audit_events
+        )
         await request_json(
             client,
             "GET",
@@ -566,6 +862,16 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             reviewer_token,
             expected_status=403,
         )
+
+    await assert_week1_database_invariants(
+        project_id=project["id"],
+        guide_id=guide["id"],
+        task_id=task["id"],
+        assignment_id=claim["assignment"]["id"],
+        submission_id=submission["id"],
+        worker_subject=worker_subject,
+        flow_issuer=flow_issuer,
+    )
 
     print("Week 1 real API e2e passed")
     print(f"project_id={project['id']}")
@@ -576,14 +882,159 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
     print(f"submission_locked_at={locked['locked_at']}")
 
 
+async def assert_week1_database_invariants(
+    *,
+    project_id: str,
+    guide_id: str,
+    task_id: str,
+    assignment_id: str,
+    submission_id: str,
+    worker_subject: str,
+    flow_issuer: str,
+) -> None:
+    """Verify Week 1 API calls produced the expected durable database state.
+
+    Args:
+        project_id: Created project id.
+        guide_id: Activated guide id.
+        task_id: Created task id.
+        assignment_id: Active assignment id.
+        submission_id: Locked submission id.
+        worker_subject: External Flow subject for the worker.
+        flow_issuer: External Flow issuer for the local token.
+    """
+    async with db_session.get_session_factory()() as session:
+        project = await session.get(Project, project_id)
+        guide = await session.get(ProjectGuide, guide_id)
+        task = await session.get(WorkstreamTask, task_id)
+        assignment = await session.get(TaskAssignment, assignment_id)
+        submission = await session.get(Submission, submission_id)
+
+        ensure(project is not None, "project was not persisted")
+        ensure(guide is not None, "guide was not persisted")
+        ensure(task is not None, "task was not persisted")
+        ensure(assignment is not None, "assignment was not persisted")
+        ensure(submission is not None, "submission was not persisted")
+
+        ensure(project.status == "active", f"project status drifted: {project.status}")
+        ensure(guide.status == "active", f"guide status drifted: {guide.status}")
+        ensure(guide.version == "v1", f"guide version drifted: {guide.version}")
+        ensure(guide.approved_by is not None, "active guide missing approver")
+        ensure(guide.effective_at is not None, "active guide missing effective_at")
+
+        for model, label in [
+            (CheckerPolicy, "checker policy"),
+            (ReviewPolicy, "review policy"),
+            (RevisionPolicy, "revision policy"),
+            (PaymentPolicy, "payment policy"),
+        ]:
+            policy = await session.scalar(
+                select(model).where(model.project_id == project_id, model.guide_version == "v1")
+            )
+            ensure(policy is not None, f"{label} missing for active guide")
+
+        locked_versions = {
+            task.locked_guide_version,
+            task.locked_checker_policy_version,
+            task.locked_review_policy_version,
+            task.locked_revision_policy_version,
+            task.locked_payment_policy_version,
+        }
+        ensure(locked_versions == {"v1"}, f"task locked versions drifted: {locked_versions}")
+        ensure(task.status == "review_pending", f"task status drifted: {task.status}")
+        ensure(task.assigned_to == assignment.worker_id, "task assignment pointer drifted")
+        ensure(assignment.status == "active", f"assignment status drifted: {assignment.status}")
+        ensure(assignment.accepted_at is not None, "assignment missing accepted_at")
+
+        ensure(submission.version == 1, f"submission version drifted: {submission.version}")
+        ensure(submission.status == "submitted", f"submission status drifted: {submission.status}")
+        ensure(submission.locked_at is not None, "submission was not locked")
+        ensure(submission.worker_id == assignment.worker_id, "submission worker drifted")
+        ensure(submission.supersedes_submission_id is None, "first submission supersedes another")
+        submission_versions = {
+            submission.locked_guide_version,
+            submission.locked_checker_policy_version,
+            submission.locked_review_policy_version,
+            submission.locked_revision_policy_version,
+            submission.locked_payment_policy_version,
+        }
+        ensure(submission_versions == {"v1"}, f"submission locked versions drifted: {submission_versions}")
+
+        evidence_items = (
+            await session.scalars(
+                select(EvidenceItem).where(EvidenceItem.submission_id == submission_id)
+            )
+        ).all()
+        ensure(len(evidence_items) == 1, f"expected 1 evidence item, got {len(evidence_items)}")
+        ensure(evidence_items[0].locked_at is not None, "evidence item was not locked")
+
+        checker_runs = (
+            await session.scalars(
+                select(CheckerRun).where(CheckerRun.submission_id == submission_id)
+            )
+        ).all()
+        ensure(len(checker_runs) == 1, f"expected 1 checker run, got {len(checker_runs)}")
+        checker_run = checker_runs[0]
+        ensure(checker_run.trigger_source == "submission_locked", "checker trigger source drifted")
+        ensure(checker_run.status == "completed", f"checker status drifted: {checker_run.status}")
+        ensure(checker_run.routing_recommendation == "allow_review", "checker route drifted")
+        ensure(checker_run.is_current_for_submission is True, "checker run is not current")
+        ensure(checker_run.attempt_number == 1, "first checker attempt number drifted")
+        ensure(checker_run.locked_guide_version == submission.locked_guide_version, "checker guide lock drifted")
+        ensure(checker_run.package_hash == submission.package_hash, "checker package hash drifted")
+
+        results = (
+            await session.scalars(
+                select(CheckerResult).where(CheckerResult.checker_run_id == checker_run.id)
+            )
+        ).all()
+        result_names = [result.checker_name for result in results]
+        duplicate_names = {
+            checker_name for checker_name in result_names if result_names.count(checker_name) > 1
+        }
+        ensure(not duplicate_names, f"duplicate checker results persisted: {duplicate_names}")
+        ensure(
+            set(result_names) == EXPECTED_DURABLE_CHECKERS,
+            f"checker result set drifted: {result_names}",
+        )
+        ensure(checker_run.passed_count == len(results), "checker passed count drifted")
+        ensure(checker_run.warning_count == 0, "unexpected checker warnings")
+        ensure(checker_run.failed_count == 0, "unexpected checker failures")
+        ensure(checker_run.blocking_count == 0, "unexpected checker blockers")
+
+        audit_events = (
+            await session.scalars(
+                select(AuditEvent).where(AuditEvent.entity_type == "task", AuditEvent.entity_id == task_id)
+            )
+        ).all()
+        event_types = [event.event_type for event in audit_events]
+        for required_event in [
+            "task_created",
+            "task_status_changed",
+            "submission_created",
+            "submission_locked",
+            "pre_review_gate_started",
+            "pre_review_gate_passed",
+        ]:
+            ensure(required_event in event_types, f"audit event missing: {required_event}")
+        ensure(
+            any(event.external_subject == worker_subject for event in audit_events),
+            "worker subject missing from task audit trail",
+        )
+        ensure(
+            all(event.external_issuer == flow_issuer for event in audit_events),
+            "audit issuer drifted",
+        )
+
+    print("PASS Week 1 database invariants")
+
+
 async def main(env: dict[str, str]) -> None:
     """Start the API server and exercise every Week 1 API.
 
     Args:
         env: Environment variables for the API server.
     """
-    from app.db import session as db_session
-
     await db_session.dispose_engine()
 
     port = find_free_port()
@@ -603,6 +1054,7 @@ async def main(env: dict[str, str]) -> None:
 
 if __name__ == "__main__":
     api_env = api_environment()
+    assert_local_database_url(api_env["WORKSTREAM_DATABASE_URL"])
     os.environ.update(api_env)
     command.upgrade(alembic_config(), "head")
     asyncio.run(main(api_env))

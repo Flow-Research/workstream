@@ -33,7 +33,7 @@ Chunk 8 does not prove artifact content safety, confidentiality truth, absence o
 - external object-store content reads
 - antivirus, secret-scanning engines, or external static-analysis adapters
 - model-based reviewer simulation
-- `check_preflight_evidence`, which needs the later readiness/pre-review record shape before it can be enforced correctly
+- preflight evidence checker support, which needs the later readiness/pre-review record shape before it can be enforced correctly
 
 ## Naming Contract
 
@@ -49,10 +49,7 @@ Canonical Chunk 8 checker names:
 - `check_confidentiality_attestation`
 - `check_low_quality_generated_artifacts`
 
-Chunk 8 performs a hard rename of Chunk 7's temporary public checker names:
-
-- replace `check_evidence_references_present` with `check_evidence_present`
-- replace `check_artifact_manifest_integrity` with `check_evidence_integrity`
+Chunk 8 performs a hard rename of Chunk 7's temporary public evidence-reference and artifact-manifest checker names to `check_evidence_present` and `check_evidence_integrity`.
 
 The old names are not aliases. If a checker policy still references the old names after Chunk 8, durable checker execution must reject the policy as invalid instead of silently mapping it.
 
@@ -304,8 +301,8 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 
 ## Verification
 
-Run from `backend/` against local Postgres:
+Run from `backend/` against local async Postgres:
 
 ```bash
-.venv/bin/python -m pytest tests/test_checkers.py -q
+WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py -q
 ```

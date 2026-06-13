@@ -1219,9 +1219,8 @@ async def test_stale_locked_submission_cannot_receive_checker_run(
     "old_checker_name",
     ["check_evidence_references_present", "check_artifact_manifest_integrity"],
 )
-async def test_old_checker_name_blocks_durable_run_without_alias(
+async def test_old_checker_name_blocks_guide_activation_without_alias(
     checker_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
     old_checker_name: str,
 ) -> None:
     project_response = await checker_client.post(
@@ -1248,21 +1247,8 @@ async def test_old_checker_name_blocks_durable_run_without_alias(
         f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
         headers=auth_headers(),
     )
-    assert activation_response.status_code == 200, activation_response.text
-    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
-    created = await checker_client.post(
-        f"/api/v1/tasks/{started_task['id']}/submissions",
-        headers=auth_headers(),
-        json=complete_submission_payload(),
-    )
-    assert created.status_code == 201, created.text
-    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
-    locked = await checker_client.post(
-        f"/api/v1/submissions/{created.json()['id']}/lock",
-        headers=auth_headers(),
-    )
-    assert locked.status_code == 422, locked.text
-    assert "unregistered checker policy names" in locked.json()["detail"]
+    assert activation_response.status_code == 422, activation_response.text
+    assert "unregistered checker policy names" in activation_response.json()["detail"]
 
     async with db_session.get_session_factory()() as session:
         rows = (await session.execute(CheckerRun.__table__.select())).all()

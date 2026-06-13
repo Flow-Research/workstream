@@ -160,15 +160,17 @@ const Gates = () => {
       note:"Configuration enforces guide attachment at project creation — you physically cannot publish a project without a guide. The ingestion gate validates the task contract, not guide existence."
     },
     { id:"g3",num:"03",title:"Submission Quality",sub:"Runtime — after a worker submits",color:c.amber,tag:"SUBMISSION GATE",
-      desc:"Checkers run against the specific project guide governing that task — not generic rules. The guide is the rule set. High-severity failures return the packet to the worker before it ever reaches a reviewer.",
+      desc:"Checkers run against the specific project guide governing that task — not generic rules. The guide is the rule set. Blocking checker policy failures return the packet to the worker before it ever reaches a reviewer.",
       checks:[
-        "check_task_schema — submission packet matches required structure",
-        "check_submission_packet — all required fields present and non-empty",
-        "check_required_files — all files listed in guide requirements are attached",
+        "check_acceptance_criteria_present — task includes reviewable acceptance criteria",
+        "check_policy_context_present — locked guide and policy context is present",
+        "check_submission_packet — submission packet matches required structure",
+        "check_evidence_present — evidence references are present",
         "check_evidence_integrity — EvidenceManifest present, artifact hashes validate",
+        "check_required_files — all files listed in guide requirements are attached",
         "check_forbidden_files — no disqualified file types or content",
-        "check_low_quality_generated_artifacts v1 — basic quality signal on submitted output",
-        "check_project_guide_attached — submission is consistent with the governing guide version",
+        "check_confidentiality_attestation — worker attestation covers confidential data and credentials",
+        "check_low_quality_generated_artifacts — basic quality signal on submitted output",
       ],
       dropLabel:"Checker failure response to worker",
       dropFields:[
@@ -422,8 +424,8 @@ const LifecycleSection = () => {
     { id:"OWNER_REVIEW", color:c.accent, layer:"Control",      desc:"HUMAN GATE. Owner reviews agent output. Can approve, send back to IN_PROGRESS for retry, or reject. Nothing reaches verification without owner sign-off.", highlight:true },
     { id:"SUBMITTED",    color:c.accent, layer:"Control",      desc:"Owner approves and signs submission. EvidenceManifest attached. Packet sent to verification." },
     { id:"UNDER_REVIEW", color:c.green,  layer:"Verification", desc:"Verification engine or external evaluator reviews against the project guide rubric." },
-    { id:"COMPLETED",    color:c.green,  layer:"Terminal",     desc:"Accepted. Settlement triggered. Reputation updated positively for owner and agent." },
-    { id:"REJECTED",     color:c.red,    layer:"Terminal",     desc:"Rejected. Reputation hit on both owner and agent. Partial or no payment per policy." },
+    { id:"COMPLETED",    color:c.green,  layer:"Terminal",     desc:"Accepted work. Settlement triggered. Reputation updated positively for owner and agent." },
+    { id:"rejected_work",color:c.red,    layer:"Terminal",     desc:"Rejected work. Reputation hit on both owner and agent. Partial or no payment per policy." },
     { id:"EXPIRED",      color:c.muted,  layer:"Terminal",     desc:"Deadline passed. Funds returned to client. Reputation impact based on stage reached." },
   ];
   const layerColors = { Source:c.blue,Normalization:c.teal,Execution:c.purple,Control:c.accent,Verification:c.green,Terminal:c.muted };
@@ -460,12 +462,12 @@ const LifecycleSection = () => {
               <p style={{ margin:0,fontFamily:"monospace",fontSize:12,color:c.muted,lineHeight:1.7 }}>{s.desc}</p>
               {s.id==="OWNER_REVIEW" && (
                 <p style={{ margin:"8px 0 0",fontFamily:"monospace",fontSize:11,color:c.accent }}>
-                  Sending back to IN_PROGRESS has no external consequence. Once submitted and rejected — both owner and agent take the reputation hit. The human gate is the point of no return.
+                  Sending back to IN_PROGRESS has no external consequence. Once submitted and rejected by policy, both owner and agent take the reputation hit. The human gate is the point of no return.
                 </p>
               )}
             </div>
           )}
-          {i<states.length-1 && !["COMPLETED","REJECTED"].includes(s.id) && (
+          {i<states.length-1 && !["COMPLETED","rejected_work"].includes(s.id) && (
             <div style={{ display:"flex",justifyContent:"center",height:12,alignItems:"center",opacity:.3 }}>
               <div style={{ width:1,height:"100%",background:c.borderLight }} />
             </div>

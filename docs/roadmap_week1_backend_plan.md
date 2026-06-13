@@ -99,7 +99,7 @@ Conditions of satisfaction:
 - roadmap says Workstream verifies Flow auth tokens instead of managing auth directly
 - roadmap defines the review protocol for each implementation chunk
 - roadmap defines the required test gates for backend implementation chunks
-- stale wording and markdown link checks pass
+- stale wording and Markdown link checks pass
 
 Verifier agents:
 

@@ -122,7 +122,7 @@ def complete_guide_payload(version: str = "v1") -> dict:
         "unacceptable_work_policy": "Copied or unverifiable work.",
         "change_summary": f"Initial {version}",
         "checker_policy": {
-            "required_checkers": ["check_task_schema"],
+            "required_checkers": ["check_policy_context_present"],
             "warning_checkers": [],
             "blocking_severities": ["high"],
         },
@@ -331,6 +331,40 @@ async def test_revision_policy_requires_deadline(project_client: AsyncClient) ->
     assert "revision_deadline_hours" in detail["loc"]
 
 
+async def test_activation_rejects_unregistered_checker_names(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    payload = complete_guide_payload()
+    payload["checker_policy"]["required_checkers"] = ["missing_checker"]
+    guide = await create_guide(project_client, project["id"], payload)
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "unregistered checker policy names" in response.json()["detail"]
+
+
+async def test_activation_rejects_unsupported_revision_resubmission_states(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    payload = complete_guide_payload()
+    payload["revision_policy"]["allowed_resubmission_states"] = ["random_state"]
+    guide = await create_guide(project_client, project["id"], payload)
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "invalid resubmission states" in response.json()["detail"]
+
+
 async def test_guide_activation_and_active_guide_retrieval(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -348,7 +382,9 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.status_code == 200, active.text
     assert active.json()["guide"]["status"] == "active"
     assert active.json()["guide"]["version"] == "v1"
-    assert active.json()["checker_policy"]["required_checkers"] == ["check_task_schema"]
+    assert active.json()["checker_policy"]["required_checkers"] == [
+        "check_policy_context_present"
+    ]
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
     assert active.json()["payment_policy"]["base_amount"] == "25.00"

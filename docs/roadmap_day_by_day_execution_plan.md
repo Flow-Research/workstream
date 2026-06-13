@@ -134,7 +134,7 @@ Week 2 is backend-first checker infrastructure. Checker output is exposed throug
 
 The core invariant is:
 
-`Draft packet -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> review_pending or needs_revision`
+`Draft packet -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> review_pending | needs_revision | internal task_setup_blocked -> trusted checker retry when repaired`
 
 The checker framework does not accept or reject work. It may route worker-fixable checker failures to user-facing `needs_revision`, but that does not create a human review decision. Internally the source is recorded as `auto_checker`.
 
@@ -160,16 +160,15 @@ Exit criteria:
 
 Deliver:
 
-- `check_project_guide_attached`
-- `check_task_schema`
+- `check_policy_context_present`
 - `check_submission_packet`
 - `check_required_files`
-- `check_status_transition`
+- `check_forbidden_files`
 
 Exit criteria:
 
 - worker-fixable submission failures fail before review
-- high severity failures block `review_pending`
+- locked checker policy blocking failures block `review_pending`
 - checker runs bind to the exact submission id, submission version, package hash, and artifact hash manifest
 - worker-fixable checker failures route to user-facing `needs_revision`
 
@@ -198,19 +197,19 @@ Deliver:
 - `CheckerPolicy`
 - project-required checker list
 - blocking severity settings
-- admin override with reason
+- trusted checker retry with reason after internal setup repair
 
 Exit criteria:
 
 - two projects can require different checkers
-- override creates audit record
+- trusted checker retry creates audit record
 - project-required checker policy is read from the locked task context, not from mutable worker input
 
 ### Day 10: Checker Trial
 
 Deliver:
 
-- 5 sample submissions
+- expanded sample matrix
 - [checker failure catalog](checker_trial_failure_catalog.md)
 - false-positive notes
 - missing-checker list
@@ -315,8 +314,8 @@ Deliver:
 
 Exit criteria:
 
-- `ACCEPTED` creates a contribution record
-- `ACCEPTED` creates pending payment record
+- accepted work creates a contribution record
+- accepted work creates pending payment record
 - paid payment status requires payment reference
 
 ### Day 17: Reputation Ledger

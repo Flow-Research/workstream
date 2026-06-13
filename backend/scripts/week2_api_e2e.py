@@ -12,9 +12,11 @@ from uuid import uuid4
 
 import httpx
 from alembic import command
+from sqlalchemy import select
 
 from app.db import session as db_session
-from app.modules.tasks.models import WorkstreamTask
+from app.modules.checkers.models import CheckerResult, CheckerRun
+from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, WorkstreamTask
 from week1_api_e2e import (
     alembic_config,
     api_environment,
@@ -46,7 +48,7 @@ EXPECTED_PRE_SUBMIT_CHECKERS = {
     "check_confidentiality_attestation",
 }
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
-LOCAL_DATABASE_NAMES = {"workstream", "workstream_test", "test_workstream"}
+LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
 ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
 NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
 STRONG_ATTESTATION = (
@@ -86,7 +88,8 @@ def assert_local_database_url(database_url: str) -> None:
     raise RuntimeError(
         "Refusing to run Week 2 API E2E against a non-local database. "
         "Use an async Postgres URL such as postgresql+asyncpg:// on "
-        "localhost/127.0.0.1 with a local Workstream database, or set "
+        "localhost/127.0.0.1 with a local test database named "
+        "workstream_test or test_workstream, or set "
         f"WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE={NONLOCAL_DATABASE_OVERRIDE_VALUE}."
     )
 
@@ -173,9 +176,12 @@ def assert_checker_set(results: list[dict], expected: set[str], label: str) -> N
         expected: Expected checker names.
         label: Human-readable checker set label.
     """
-    names = {result["checker_name"] for result in results}
-    missing = expected.difference(names)
-    unexpected = names.difference(expected)
+    names = [result["checker_name"] for result in results]
+    duplicate_names = {checker_name for checker_name in names if names.count(checker_name) > 1}
+    ensure(not duplicate_names, f"{label} checker set has duplicate results: {duplicate_names}")
+    name_set = set(names)
+    missing = expected.difference(name_set)
+    unexpected = name_set.difference(expected)
     ensure(
         not missing and not unexpected,
         (
@@ -422,7 +428,7 @@ async def submit_lock_and_get_run(
     worker_token: str,
     task_id: str,
     payload: dict,
-) -> tuple[dict, dict]:
+) -> tuple[dict, dict, dict]:
     """Submit a packet, lock it, and return the automatic checker run.
 
     Args:
@@ -433,7 +439,7 @@ async def submit_lock_and_get_run(
         payload: Submission packet payload.
 
     Returns:
-        Created submission and automatic checker run payload.
+        Created submission, locked submission, and automatic checker run payload.
     """
     submission = await request_json(
         client,
@@ -443,18 +449,75 @@ async def submit_lock_and_get_run(
         payload,
         201,
     )
-    await request_json(
+    locked = await request_json(
         client,
         "POST",
         f"/api/v1/submissions/{submission['id']}/lock",
         manager_token,
     )
+    assert_locked_submission_response(locked)
     checker_run = await wait_for_submission_checker_run(
         client,
         manager_token,
         submission["id"],
     )
-    return submission, checker_run
+    return submission, locked, checker_run
+
+
+def assert_locked_submission_response(submission: dict) -> None:
+    """Assert a locked submission response has complete locked context.
+
+    Args:
+        submission: Locked submission response payload.
+    """
+    ensure(submission["locked_at"] is not None, "locked submission missing locked_at")
+    locked_versions = {
+        submission["locked_guide_version"],
+        submission["locked_checker_policy_version"],
+        submission["locked_review_policy_version"],
+        submission["locked_revision_policy_version"],
+        submission["locked_payment_policy_version"],
+    }
+    ensure(locked_versions == {"v1"}, f"locked context drifted: {locked_versions}")
+    ensure(
+        all(item["locked_at"] == submission["locked_at"] for item in submission["evidence_items"]),
+        "evidence item locked_at does not match submission locked_at",
+    )
+
+
+async def assert_lock_idempotency(
+    client: httpx.AsyncClient,
+    *,
+    manager_token: str,
+    submission_id: str,
+    expected_locked_at: str,
+    expected_checker_run_id: str,
+) -> None:
+    """Assert locking an already locked submission does not create another run.
+
+    Args:
+        client: Real HTTP client.
+        manager_token: Project manager Flow token.
+        submission_id: Submission id to relock.
+        expected_locked_at: Original lock timestamp.
+        expected_checker_run_id: Original automatic checker run id.
+    """
+    relocked = await request_json(
+        client,
+        "POST",
+        f"/api/v1/submissions/{submission_id}/lock",
+        manager_token,
+    )
+    ensure(relocked["locked_at"] == expected_locked_at, "idempotent lock changed locked_at")
+    runs = await request_json(
+        client,
+        "GET",
+        f"/api/v1/submissions/{submission_id}/checker-runs",
+        manager_token,
+    )
+    ensure(len(runs) == 1, f"idempotent lock created extra checker runs: {len(runs)}")
+    ensure(runs[0]["id"] == expected_checker_run_id, "idempotent lock changed checker run")
+    ensure(runs[0]["attempt_number"] == 1, "idempotent lock changed attempt number")
 
 
 async def wait_for_submission_checker_run(
@@ -581,6 +644,176 @@ async def repair_acceptance_criteria(task_id: str) -> None:
         await session.commit()
 
 
+async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
+    """Verify Week 2 API scenarios produced exact durable database state.
+
+    Args:
+        scenarios: Scenario expectations captured from real API responses.
+    """
+    async with db_session.get_session_factory()() as session:
+        for scenario in scenarios:
+            task = await session.get(WorkstreamTask, scenario["task_id"])
+            submission = await session.get(Submission, scenario["submission_id"])
+            checker_run = await session.get(CheckerRun, scenario["checker_run_id"])
+            ensure(task is not None, f"{scenario['name']} task missing")
+            ensure(submission is not None, f"{scenario['name']} submission missing")
+            ensure(checker_run is not None, f"{scenario['name']} checker run missing")
+
+            ensure(
+                task.status == scenario["expected_task_status"],
+                f"{scenario['name']} task status drifted: {task.status}",
+            )
+            task_versions = {
+                task.locked_guide_version,
+                task.locked_checker_policy_version,
+                task.locked_review_policy_version,
+                task.locked_revision_policy_version,
+                task.locked_payment_policy_version,
+            }
+            ensure(task_versions == {"v1"}, f"{scenario['name']} task context drifted")
+            submission_versions = {
+                submission.locked_guide_version,
+                submission.locked_checker_policy_version,
+                submission.locked_review_policy_version,
+                submission.locked_revision_policy_version,
+                submission.locked_payment_policy_version,
+            }
+            ensure(
+                submission_versions == task_versions,
+                f"{scenario['name']} submission context drifted",
+            )
+            ensure(submission.locked_at is not None, f"{scenario['name']} submission not locked")
+            ensure(
+                submission.locked_at.isoformat().replace("+00:00", "Z")
+                == scenario["locked_at"],
+                f"{scenario['name']} locked_at response/database drifted",
+            )
+            evidence_items = (
+                await session.scalars(
+                    select(EvidenceItem).where(EvidenceItem.submission_id == submission.id)
+                )
+            ).all()
+            ensure(evidence_items, f"{scenario['name']} evidence items missing")
+            ensure(
+                all(item.locked_at == submission.locked_at for item in evidence_items),
+                f"{scenario['name']} evidence lock drifted",
+            )
+
+            ensure(
+                checker_run.routing_recommendation == scenario["expected_route"],
+                f"{scenario['name']} checker route drifted",
+            )
+            ensure(checker_run.status == "completed", f"{scenario['name']} checker incomplete")
+            ensure(
+                checker_run.trigger_source == scenario["expected_trigger_source"],
+                f"{scenario['name']} checker trigger drifted",
+            )
+            ensure(
+                checker_run.attempt_number == scenario["expected_attempt"],
+                f"{scenario['name']} checker attempt drifted",
+            )
+            ensure(
+                checker_run.is_current_for_submission is scenario["expected_current"],
+                f"{scenario['name']} current-run flag drifted",
+            )
+            ensure(
+                checker_run.submission_version == submission.version,
+                f"{scenario['name']} submission version drifted on checker run",
+            )
+            ensure(
+                checker_run.package_hash == submission.package_hash,
+                f"{scenario['name']} package hash drifted on checker run",
+            )
+            run_versions = {
+                checker_run.locked_guide_version,
+                checker_run.locked_checker_policy_version,
+                checker_run.locked_review_policy_version,
+                checker_run.locked_revision_policy_version,
+                checker_run.locked_payment_policy_version,
+            }
+            ensure(run_versions == submission_versions, f"{scenario['name']} checker context drifted")
+
+            results = (
+                await session.scalars(
+                    select(CheckerResult).where(CheckerResult.checker_run_id == checker_run.id)
+                )
+            ).all()
+            result_names = [result.checker_name for result in results]
+            duplicate_names = {
+                checker_name for checker_name in result_names if result_names.count(checker_name) > 1
+            }
+            ensure(
+                not duplicate_names,
+                f"{scenario['name']} duplicate checker results persisted: {duplicate_names}",
+            )
+            ensure(
+                set(result_names) == scenario["expected_checkers"],
+                f"{scenario['name']} checker set drifted: {result_names}",
+            )
+            ensure(
+                checker_run.passed_count
+                == sum(1 for result in results if result.status == "passed"),
+                f"{scenario['name']} passed count drifted",
+            )
+            ensure(
+                checker_run.warning_count
+                == sum(1 for result in results if result.status == "warning"),
+                f"{scenario['name']} warning count drifted",
+            )
+            ensure(
+                checker_run.failed_count
+                == sum(1 for result in results if result.status == "failed"),
+                f"{scenario['name']} failed count drifted",
+            )
+            ensure(
+                checker_run.blocking_count
+                == sum(1 for result in results if result.blocks_review),
+                f"{scenario['name']} blocking count drifted",
+            )
+
+            runs = (
+                await session.scalars(
+                    select(CheckerRun)
+                    .where(CheckerRun.submission_id == submission.id)
+                    .order_by(CheckerRun.attempt_number.asc())
+                )
+            ).all()
+            ensure(
+                [run.attempt_number for run in runs] == scenario["expected_attempts"],
+                f"{scenario['name']} checker attempts drifted",
+            )
+            ensure(
+                sum(1 for run in runs if run.is_current_for_submission) == 1,
+                f"{scenario['name']} current-run uniqueness drifted",
+            )
+            ensure(
+                [run.id for run in runs if run.is_current_for_submission][0]
+                == scenario["expected_current_run_id"],
+                f"{scenario['name']} current run id drifted",
+            )
+
+            task_events = (
+                await session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_type == "task",
+                        AuditEvent.entity_id == task.id,
+                    )
+                )
+            ).all()
+            ensure(
+                any(
+                    event.event_type == scenario["expected_gate_event"]
+                    and event.event_payload.get("checker_run_id") == checker_run.id
+                    and event.event_payload.get("trigger_source")
+                    == scenario["expected_trigger_source"]
+                    for event in task_events
+                ),
+                f"{scenario['name']} gate audit event missing matching trigger/run payload",
+            )
+
+    print("PASS Week 2 database invariants")
+
+
 async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
     """Run real Week 2 checker flows over HTTP.
 
@@ -600,6 +833,13 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
     reviewer_token = token_for(
         f"week2-reviewer-{run_id}",
         ["reviewer"],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
+    unassigned_worker_token = token_for(
+        f"week2-worker-unassigned-{run_id}",
+        ["worker"],
         issuer=flow_issuer,
         audience=flow_audience,
         secret=flow_secret,
@@ -642,7 +882,15 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         ensure(clean_precheck["authoritative"] is False, "precheck must be non-authoritative")
         ensure(clean_precheck["eligible_to_submit"] is True, "clean precheck should pass")
         assert_pre_submit_checker_set(clean_precheck)
-        clean_submission, clean_run = await submit_lock_and_get_run(
+        await assert_task_status(client, manager_token, clean_task["id"], "in_progress")
+        clean_precheck_submissions = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{clean_task['id']}/submissions",
+            clean_worker_token,
+        )
+        ensure(clean_precheck_submissions == [], "clean precheck created a submission")
+        clean_submission, clean_locked, clean_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=clean_worker_token,
@@ -652,6 +900,13 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         assert_default_checker_set(clean_run)
         ensure(clean_run["routing_recommendation"] == "allow_review", "clean run was blocked")
         ensure(clean_run["blocking_count"] == 0, "clean run had blocking checker results")
+        await assert_lock_idempotency(
+            client,
+            manager_token=manager_token,
+            submission_id=clean_submission["id"],
+            expected_locked_at=clean_locked["locked_at"],
+            expected_checker_run_id=clean_run["id"],
+        )
         await assert_task_status(client, manager_token, clean_task["id"], "review_pending")
         worker_clean_run = await request_json(
             client,
@@ -664,12 +919,44 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             "worker clean route mismatch",
         )
         ensure(worker_clean_run["artifact_hash_manifest"] == [], "worker saw artifact manifest")
+        manager_clean_runs = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{clean_submission['id']}/checker-runs",
+            manager_token,
+        )
+        ensure(len(manager_clean_runs) == 1, "manager checker-run list count drifted")
+        worker_clean_runs = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{clean_submission['id']}/checker-runs",
+            clean_worker_token,
+        )
+        ensure(len(worker_clean_runs) == 1, "worker checker-run list count drifted")
+        ensure(
+            worker_clean_runs[0]["artifact_hash_manifest"] == [],
+            "worker checker-run list exposed artifact manifest",
+        )
         await request_json(
             client,
             "GET",
             f"/api/v1/checker-runs/{clean_run['id']}",
             reviewer_token,
             expected_status=403,
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{clean_submission['id']}/checker-runs",
+            reviewer_token,
+            expected_status=403,
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{clean_submission['id']}/checker-runs",
+            unassigned_worker_token,
+            expected_status=404,
         )
 
         revision_worker_subject = f"week2-worker-revision-{run_id}"
@@ -714,7 +1001,15 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         assert_pre_submit_checker_set(failed_precheck)
         ensure(failed_precheck["eligible_to_submit"] is False, "missing file precheck passed")
-        first_submission, first_run = await submit_lock_and_get_run(
+        await assert_task_status(client, manager_token, revision_task["id"], "in_progress")
+        revision_precheck_submissions = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{revision_task['id']}/submissions",
+            revision_worker_token,
+        )
+        ensure(revision_precheck_submissions == [], "failed precheck created a submission")
+        first_submission, first_locked, first_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=revision_worker_token,
@@ -734,7 +1029,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         required_file_result = checker_result(worker_revision_run, "check_required_files")
         ensure(bool(required_file_result["worker_message"]), "required-file worker message missing")
         ensure(required_file_result["metadata"] == {}, "worker saw required-file metadata")
-        second_submission, second_run = await submit_lock_and_get_run(
+        second_submission, second_locked, second_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=revision_worker_token,
@@ -785,6 +1080,14 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             missing_evidence_precheck["eligible_to_submit"] is False,
             "missing evidence precheck should block submission",
         )
+        await assert_task_status(client, manager_token, missing_evidence_task["id"], "in_progress")
+        missing_evidence_submissions = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{missing_evidence_task['id']}/submissions",
+            missing_evidence_worker_token,
+        )
+        ensure(missing_evidence_submissions == [], "missing evidence precheck created a submission")
         missing_evidence_precheck_result = next(
             result
             for result in missing_evidence_precheck["results"]
@@ -836,7 +1139,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "notes": "duplicate artifact",
             }
         )
-        _, integrity_run = await submit_lock_and_get_run(
+        integrity_submission, integrity_locked, integrity_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=integrity_worker_token,
@@ -879,7 +1182,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         weak_attestation_payload = submission_payload(run_id, "attestation")
         weak_attestation_payload["worker_attestation"] = "ok"
-        _, attestation_run = await submit_lock_and_get_run(
+        attestation_submission, attestation_locked, attestation_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=attestation_worker_token,
@@ -923,7 +1226,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         warning_payload = submission_payload(run_id, "warning")
         warning_payload["summary"] = "Completed with a placeholder note that must be reviewed."
-        _, warning_run = await submit_lock_and_get_run(
+        warning_submission, warning_locked, warning_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=warning_worker_token,
@@ -972,7 +1275,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "notes": "must be blocked",
             }
         )
-        _, forbidden_run = await submit_lock_and_get_run(
+        forbidden_submission, forbidden_locked, forbidden_run = await submit_lock_and_get_run(
             client,
             manager_token=manager_token,
             worker_token=forbidden_worker_token,
@@ -1033,12 +1336,13 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             201,
         )
         await break_acceptance_criteria(setup_task["id"])
-        await request_json(
+        setup_locked = await request_json(
             client,
             "POST",
             f"/api/v1/submissions/{setup_submission['id']}/lock",
             manager_token,
         )
+        assert_locked_submission_response(setup_locked)
         setup_run = await wait_for_submission_checker_run(
             client,
             manager_token,
@@ -1083,7 +1387,187 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             retry["supersedes_checker_run_id"] == setup_run["id"],
             "trusted checker retry did not supersede blocked run",
         )
+        setup_runs_after_retry = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{setup_submission['id']}/checker-runs",
+            manager_token,
+        )
+        ensure(len(setup_runs_after_retry) == 2, "trusted checker retry run count drifted")
+        setup_runs_by_attempt = {
+            run["attempt_number"]: run for run in setup_runs_after_retry
+        }
+        ensure(
+            sorted(setup_runs_by_attempt) == [1, 2],
+            f"trusted checker retry attempts drifted: {sorted(setup_runs_by_attempt)}",
+        )
+        ensure(
+            setup_runs_by_attempt[1]["is_current_for_submission"] is False,
+            "superseded checker run still current",
+        )
+        ensure(
+            setup_runs_by_attempt[2]["is_current_for_submission"] is True,
+            "retry checker run is not current",
+        )
+        ensure(
+            setup_runs_by_attempt[1]["trigger_source"] == "submission_locked",
+            "first setup checker trigger source drifted",
+        )
+        ensure(
+            setup_runs_by_attempt[2]["trigger_source"] == "manual_checker_trigger",
+            "retry checker trigger source drifted",
+        )
         await assert_task_status(client, manager_token, setup_task["id"], "review_pending")
+
+    setup_checker_set = EXPECTED_DURABLE_CHECKERS | {"check_acceptance_criteria_present"}
+    await assert_week2_database_invariants(
+        [
+            {
+                "name": "clean",
+                "task_id": clean_task["id"],
+                "submission_id": clean_submission["id"],
+                "checker_run_id": clean_run["id"],
+                "locked_at": clean_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": clean_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_passed",
+            },
+            {
+                "name": "missing_file_v1",
+                "task_id": revision_task["id"],
+                "submission_id": first_submission["id"],
+                "checker_run_id": first_run["id"],
+                "locked_at": first_locked["locked_at"],
+                "expected_route": "needs_revision",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": first_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_needs_revision",
+            },
+            {
+                "name": "revision_v2",
+                "task_id": revision_task["id"],
+                "submission_id": second_submission["id"],
+                "checker_run_id": second_run["id"],
+                "locked_at": second_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": second_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_passed",
+            },
+            {
+                "name": "integrity",
+                "task_id": integrity_task["id"],
+                "submission_id": integrity_submission["id"],
+                "checker_run_id": integrity_run["id"],
+                "locked_at": integrity_locked["locked_at"],
+                "expected_route": "needs_revision",
+                "expected_task_status": "needs_revision",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": integrity_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_needs_revision",
+            },
+            {
+                "name": "attestation",
+                "task_id": attestation_task["id"],
+                "submission_id": attestation_submission["id"],
+                "checker_run_id": attestation_run["id"],
+                "locked_at": attestation_locked["locked_at"],
+                "expected_route": "needs_revision",
+                "expected_task_status": "needs_revision",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": attestation_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_needs_revision",
+            },
+            {
+                "name": "warning",
+                "task_id": warning_task["id"],
+                "submission_id": warning_submission["id"],
+                "checker_run_id": warning_run["id"],
+                "locked_at": warning_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": warning_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_passed",
+            },
+            {
+                "name": "forbidden",
+                "task_id": forbidden_task["id"],
+                "submission_id": forbidden_submission["id"],
+                "checker_run_id": forbidden_run["id"],
+                "locked_at": forbidden_locked["locked_at"],
+                "expected_route": "needs_revision",
+                "expected_task_status": "needs_revision",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": forbidden_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_needs_revision",
+            },
+            {
+                "name": "setup_blocked",
+                "task_id": setup_task["id"],
+                "submission_id": setup_submission["id"],
+                "checker_run_id": setup_run["id"],
+                "locked_at": setup_locked["locked_at"],
+                "expected_route": "task_setup_blocked",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1, 2],
+                "expected_current": False,
+                "expected_current_run_id": retry["id"],
+                "expected_checkers": setup_checker_set,
+                "expected_gate_event": "pre_review_gate_blocked",
+            },
+            {
+                "name": "setup_retry",
+                "task_id": setup_task["id"],
+                "submission_id": setup_submission["id"],
+                "checker_run_id": retry["id"],
+                "locked_at": setup_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_task_status": "review_pending",
+                "expected_trigger_source": "manual_checker_trigger",
+                "expected_attempt": 2,
+                "expected_attempts": [1, 2],
+                "expected_current": True,
+                "expected_current_run_id": retry["id"],
+                "expected_checkers": setup_checker_set,
+                "expected_gate_event": "pre_review_gate_passed",
+            },
+        ]
+    )
 
     print("Week 2 real API e2e passed")
     print("scenario_summary:")

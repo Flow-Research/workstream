@@ -18,19 +18,17 @@ Medium and low severities are visible to reviewers unless this policy overrides 
 
 | Checker | Severity | Blocks Review | Purpose |
 | --- | --- | --- | --- |
-| `check_project_guide_attached` | high | yes | Task must use a versioned project guide. |
-| `check_task_schema` | high | yes | Task must include required project fields. |
 | `check_acceptance_criteria_present` | high | yes | Task must include reviewable acceptance criteria. |
-| `check_ready_gate` | high | yes | Task must pass screening before release. |
 | `check_policy_context_present` | high | yes | Task must have locked checker, review, revision, and payment policy context. |
 | `check_submission_packet` | high | yes | Submission must include required packet fields. |
+| `check_required_files` | high | yes | Submission must include files required by the task. |
+| `check_forbidden_files` | high | yes | Submission must not include forbidden file paths. |
 | `check_evidence_present` | high | yes | Submission must include audit evidence. |
 | `check_evidence_integrity` | high | yes | Evidence and checker runs must bind to submitted artifacts. |
-| `check_prior_revision_closed` | high | yes | Resubmission must map prior findings to fixes. |
-| `check_forbidden_files` | high | yes | Submission must not include prohibited files or data. |
-| `check_confidentiality_attestation` | high | yes | Worker must attest no prohibited confidential material is present. |
-| `check_low_quality_generated_artifacts` | medium | no | Flags project-banned generated or boilerplate patterns. |
-| `check_preflight_evidence` | high | yes | Submission must include preflight evidence before review. |
+| `check_confidentiality_attestation` | high | yes | Worker attestation must address confidentiality and credential handling. |
+| `check_low_quality_generated_artifacts` | low | no | Low-quality generated artifact signals create warning results by default. |
+
+Revision closure, readiness, and lifecycle movement are lifecycle guards in v0.1. Do not add them as checker policy names unless they are present in the registered checker list.
 
 ## Checker Registry Fields
 

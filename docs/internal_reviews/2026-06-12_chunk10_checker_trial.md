@@ -73,7 +73,7 @@ cd backend && .venv/bin/python -m ruff check app tests scripts
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py::test_chunk10_checker_trial_runs_sample_submissions_through_real_api -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py::test_chunk10_checker_trial_runs_sample_submissions_through_real_api -q
 ```
 
 Result: `1 passed in 23.20s`.
@@ -81,7 +81,7 @@ Result: `1 passed in 23.20s`.
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py -q
 ```
 
 Result: `23 passed in 150.27s`.
@@ -89,7 +89,7 @@ Result: `23 passed in 150.27s`.
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_tasks.py tests/test_checkers.py -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_tasks.py tests/test_checkers.py -q
 ```
 
 Result: `62 passed in 406.92s`.
@@ -97,7 +97,7 @@ Result: `62 passed in 406.92s`.
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest -q
 ```
 
 Result: `112 passed in 695.21s`.

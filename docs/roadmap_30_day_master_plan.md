@@ -39,7 +39,7 @@ Future settlement rails such as ERC-8004, ERC-8183, x402, and OmniClaw remain ar
 Every feature must support the core lifecycle:
 
 ```text
-DRAFT -> SCREENING -> READY -> CLAIMED -> IN_PROGRESS -> SUBMITTED -> AUTO_CHECKING -> REVIEW_PENDING -> NEEDS_REVISION | ACCEPTED | REJECTED
+DRAFT -> SCREENING -> READY -> CLAIMED -> IN_PROGRESS -> SUBMITTED -> AUTO_CHECKING -> REVIEW_PENDING -> needs_revision | accepted work | rejected work
 ```
 
 `pre_review_gate` is the checker/audit phase that runs while the persisted task status is `AUTO_CHECKING`.
@@ -161,15 +161,17 @@ Deliverables:
 
 Required first checkers:
 
-- `check_task_schema`
-- `check_required_files`
+- `check_acceptance_criteria_present`
+- `check_policy_context_present`
 - `check_submission_packet`
 - `check_evidence_present`
-- `check_acceptance_criteria_present`
-- `check_status_transition`
-- `check_prior_revision_closed`
-- `check_policy_context_present`
+- `check_evidence_integrity`
+- `check_required_files`
 - `check_forbidden_files`
+- `check_confidentiality_attestation`
+- `check_low_quality_generated_artifacts`
+
+Task lifecycle transitions and revision closure are enforced as lifecycle guards until they have registered checker contracts.
 
 Day 6:
 
@@ -195,14 +197,14 @@ Day 9:
 
 Day 10:
 
-- run five internal sample submissions through the checker framework
+- run the expanded internal sample matrix through the checker framework
 - document false positives and missing checks
 
 Week 2 acceptance bar:
 
 - every submitted task runs checks
 - checker output is stored permanently
-- high-severity failures block human review and can route to user-facing `NEEDS_REVISION` without creating a human review decision
+- blocking checker policy failures block human review and can route to user-facing `needs_revision` without creating a human review decision
 - backend contracts expose the exact checker results before Week 3 reviewer UI work begins
 
 ## Week 3: Review And Revision Engine
@@ -238,7 +240,7 @@ Day 12:
 
 Day 13:
 
-- implement NEEDS_REVISION flow
+- implement `needs_revision` flow
 - store feedback history
 - force resubmission to reference prior feedback
 
@@ -258,7 +260,7 @@ Day 15:
 Week 3 acceptance bar:
 
 - reviewers cannot issue vague decisions without findings
-- every NEEDS_REVISION has concrete fix requirements
+- every `needs_revision` has concrete fix requirements
 - every resubmission must close prior feedback
 - accept, needs_revision, and reject decisions are auditable
 

@@ -117,7 +117,7 @@ Required before entering:
 
 - checker run exists for the exact submission version
 - checker run references the same artifact hashes as the submission packet
-- no high-severity checker failure is open
+- no unresolved blocking checker failure is open under the locked checker policy
 
 ### NEEDS_REVISION
 
@@ -144,7 +144,7 @@ The submission is accepted.
 Required before entering:
 
 - accepted review decision
-- no unresolved high-severity checker failure
+- no unresolved blocking checker failure under the locked checker policy
 - evidence present
 - reviewer cited evidence supporting acceptance
 - no unresolved high or medium prior revision finding

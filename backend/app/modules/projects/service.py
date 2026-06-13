@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import require_any_role
+from app.modules.checkers.runner import UnknownChecker, default_checker_registry
 from app.modules.projects.models import (
     CheckerPolicy,
     PaymentPolicy,
@@ -39,6 +40,7 @@ from app.schemas.auth import ActorContext
 
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
+ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
 
 
 class ProjectServiceError(Exception):
@@ -419,6 +421,13 @@ class ProjectService:
             raise GuideActivationBlocked("guide evidence policy is required before activation")
         if checker_policy is None or not checker_policy.required_checkers:
             raise GuideActivationBlocked("checker policy with required checkers is required")
+        checker_names = set(checker_policy.required_checkers or []).union(
+            checker_policy.warning_checkers or []
+        )
+        try:
+            default_checker_registry().require_registered(checker_names)
+        except UnknownChecker as exc:
+            raise GuideActivationBlocked(str(exc)) from exc
         if review_policy is None or not review_policy.allowed_decisions:
             raise GuideActivationBlocked("review policy with allowed decisions is required")
         if not set(review_policy.allowed_decisions).issubset(ALLOWED_REVIEW_DECISIONS):
@@ -431,6 +440,10 @@ class ProjectService:
             or not revision_policy.allowed_resubmission_states
         ):
             raise GuideActivationBlocked("revision policy is incomplete")
+        if not set(revision_policy.allowed_resubmission_states).issubset(
+            ALLOWED_REVISION_RESUBMISSION_STATES
+        ):
+            raise GuideActivationBlocked("revision policy contains invalid resubmission states")
         if payment_policy is None:
             raise GuideActivationBlocked("payment policy is required")
         if (

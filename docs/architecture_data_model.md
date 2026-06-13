@@ -170,7 +170,7 @@ Example:
 ```json
 {
   "required_checkers": [
-    "check_task_schema",
+    "check_policy_context_present",
     "check_submission_packet",
     "check_evidence_present"
   ],

@@ -42,7 +42,7 @@ Targeted QA re-review confirmed the blockers are resolved. The remaining operati
 
 Finding: the first drill could inherit any `WORKSTREAM_DATABASE_URL` and run migrations/write drill data against it.
 
-Resolution: added `assert_local_database_url()` before environment update, migrations, API startup, or writes. The drill now allows only local `postgresql+asyncpg://` URLs for `workstream`, `workstream_test`, or `test_workstream`, unless an explicit non-local override is set.
+Resolution: added `assert_local_database_url()` before environment update, migrations, API startup, or writes. The drill now allows only local `postgresql+asyncpg://` URLs for `workstream_test` or `test_workstream`, unless an explicit write-risk override is set.
 
 Security re-review confirmed:
 
@@ -105,13 +105,13 @@ cd backend && .venv/bin/python -m ruff check app tests scripts
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week1_api_e2e.py
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_api_e2e.py
 ```
 
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python scripts/week2_api_e2e.py
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week2_api_e2e.py
 ```
 
 Scenario summary:
@@ -130,7 +130,7 @@ task_setup_blocked=auto_checking->review_pending
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_checkers.py tests/test_tasks.py -q
 ```
 
 Result: `62 passed in 415.29s`.
@@ -138,7 +138,7 @@ Result: `62 passed in 415.29s`.
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream .venv/bin/python -m pytest -q
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest -q
 ```
 
 Result: `112 passed in 565.34s`.
