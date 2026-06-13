@@ -14,19 +14,19 @@ jobs:
       postgres:
         image: public.ecr.aws/docker/library/postgres:16
         env:
-          POSTGRES_DB: workstream
+          POSTGRES_DB: workstream_test
           POSTGRES_USER: workstream
           POSTGRES_PASSWORD: workstream
         ports:
           - 5433:5432
         options: >-
-          --health-cmd "pg_isready -U workstream -d workstream"
+          --health-cmd "pg_isready -U workstream -d workstream_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
     env:
-      WORKSTREAM_TEST_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream
+      WORKSTREAM_TEST_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -62,5 +62,5 @@ jobs:
       - name: Week 1 real API e2e
         working-directory: backend
         env:
-          WORKSTREAM_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream
+          WORKSTREAM_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
         run: python scripts/week1_api_e2e.py

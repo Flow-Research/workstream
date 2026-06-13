@@ -12,6 +12,7 @@ This review covers the deterministic Week 1 and Week 2 hardening pass:
 - revision policy state validation
 - checker result and audit invariant checks
 - local Postgres test database guard
+- backend CI database alignment with the E2E guard
 - checker-policy documentation cleanup
 
 ## Reviewer Tracks
@@ -63,6 +64,13 @@ Resolution:
 - Docker Compose now creates `workstream_test` on fresh local Postgres volumes
 - Flow token negative probes, role visibility, worker redaction, and checker policy activation hardening remain covered by real API drills and tests
 
+CI follow-up:
+
+- backend CI initially still pointed the Week 1 real API drill at `/workstream`
+- the hardened E2E guard correctly refused that non-test database name
+- backend CI now creates, health-checks, and uses `/workstream_test`
+- QA/test and security/auth CI-fix reviewer passes reported no blocking findings
+
 ### Product/Ops
 
 Result: valid findings addressed. Final bounded re-review reported no blocking findings.
@@ -92,7 +100,7 @@ Resolution:
 
 The first reviewer pass completed for all required tracks and produced the findings above.
 
-Later broad follow-up reviewer sessions became stale after repeated waits. Root-cause checks showed the sub-agent service and repo access were healthy; the broad diff-review prompts were too large. The final required reviewer tracks were rerun one at a time with bounded file scopes on `gpt-5.5` high reasoning. QA/test, security/auth, product/ops, and senior engineering completed and reported no blocking findings after fixes. Product/ops was rerun again after the proposal checker-list cleanup and reported no blocking findings.
+Later broad follow-up reviewer sessions became stale after repeated waits. Root-cause checks showed the sub-agent service and repo access were healthy; the broad diff-review prompts were too large. The final required reviewer tracks were rerun one at a time with bounded file scopes on `gpt-5.5` high reasoning. QA/test, security/auth, product/ops, and senior engineering completed and reported no blocking findings after fixes. Product/ops was rerun again after the proposal checker-list cleanup and reported no blocking findings. QA/test and security/auth were also rerun on the backend CI database fix and reported no blocking findings.
 
 Open sub-agent sessions: none.
 
