@@ -71,13 +71,14 @@ CodeRabbit follow-up findings:
 CI follow-up finding:
 
 - Backend CI failed two no-local-auth route tests because the FastAPI route list now includes an internal route-like object without a `path` attribute.
+- A second backend CI run showed the first fix still depended on direct `app.routes` expansion. Fresh CI installed FastAPI `0.137.1`, where included routers are represented as wrappers in `app.routes`, while local validation had FastAPI `0.136.3`, where routes were directly expanded.
 
 Resolutions:
 
 - Day 5 exit criteria now list all four blocked consequences: no submission row, no submission version, no `SUBMITTED` transition, and no submission-created audit event.
 - HTML mini-flow arrows now use `-&gt;`.
 - Lifecycle guard wording now lives in a dedicated `Design Boundaries` section.
-- The no-local-auth tests now inspect only route objects with concrete paths while preserving the forbidden-route assertions.
+- The no-local-auth tests now combine `app.openapi()["paths"]`, direct route paths, and FastAPI included-router effective contexts. This preserves the forbidden-route assertions across FastAPI `0.136.3` and `0.137.1` while still covering hidden application routes when FastAPI exposes them through route contexts.
 
 Follow-up reviewer results:
 
@@ -144,6 +145,14 @@ Passed:
 
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_app.py tests/test_auth.py -q
+```
+
+Result: `23 passed`.
+
+Passed against a clean PR worktree with a fresh dependency install:
+
+```bash
+cd /tmp/workstream-pr22-clean/backend && .venv/bin/python -m pytest tests/test_app.py tests/test_auth.py -q
 ```
 
 Result: `23 passed`.

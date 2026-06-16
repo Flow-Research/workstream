@@ -11,6 +11,19 @@ from app.interfaces.auth import AuthVerificationError
 from app.main import create_app
 
 
+def _application_paths(app) -> set[str]:
+    """Return concrete application paths across FastAPI router representations."""
+    paths = set(app.openapi()["paths"])
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if path:
+            paths.add(path)
+        route_contexts = getattr(route, "effective_route_contexts", None)
+        if route_contexts is not None:
+            paths.update(context.path for context in route_contexts())
+    return paths
+
+
 @pytest.fixture(autouse=True)
 def clear_settings_cache() -> None:
     get_settings.cache_clear()
@@ -208,7 +221,7 @@ async def test_permission_policy_rejects_missing_role() -> None:
 
 async def test_no_local_login_password_or_session_routes() -> None:
     app = create_app()
-    paths = {path.lower() for route in app.routes if (path := getattr(route, "path", None))}
+    paths = {path.lower() for path in _application_paths(app)}
     forbidden_segments = {
         "login",
         "signup",
