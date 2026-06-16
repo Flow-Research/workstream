@@ -208,7 +208,7 @@ async def test_permission_policy_rejects_missing_role() -> None:
 
 async def test_no_local_login_password_or_session_routes() -> None:
     app = create_app()
-    paths = {route.path.lower() for route in app.routes}
+    paths = {path.lower() for route in app.routes if (path := getattr(route, "path", None))}
     forbidden_segments = {
         "login",
         "signup",

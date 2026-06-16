@@ -14,6 +14,10 @@ This template governs durable internal checker runs after a submission is create
 
 It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveSubmissionArtifactPolicy`.
 
+## Design Boundaries
+
+Revision closure, readiness, and lifecycle movement are lifecycle guards in v0.1. Do not add them as checker policy names unless they are present in the registered checker list.
+
 ## Blocking Rule
 
 High-severity failed checks block human review.
@@ -40,8 +44,6 @@ Task setup checks:
 | Checker | Severity | Blocks Review | Owner |
 | --- | --- | --- | --- |
 | `check_acceptance_criteria_present` | high | yes | Project manager repair, not worker revision. |
-
-Revision closure, readiness, and lifecycle movement are lifecycle guards in v0.1. Do not add them as checker policy names unless they are present in the registered checker list.
 
 ## Pre-Submit Boundary
 

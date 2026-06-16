@@ -125,7 +125,7 @@ Exit criteria:
 
 - submit v1 packet
 - worker does not provide submission version, guide version, submission artifact policy version, pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, or payment policy version
-- blocking pre-submit failures create no submission row
+- blocking pre-submit failures create no submission row, no submission version, no `SUBMITTED` transition, and no submission-created audit event
 - task moves to `SUBMITTED`
 - package/evidence records are immutable after checker run starts
 - replacing any artifact creates v2 instead of mutating v1

@@ -60,6 +60,34 @@ Final result: no blocking findings after re-review.
 
 ## Validation
 
+## Follow-Up Review
+
+CodeRabbit follow-up findings:
+
+- Day 5 exit criteria named only no submission row for blocking pre-submit failures.
+- HTML mini-flow arrows used unescaped `>` characters.
+- Lifecycle guard wording in the checker policy template was too easy to miss.
+
+CI follow-up finding:
+
+- Backend CI failed two no-local-auth route tests because the FastAPI route list now includes an internal route-like object without a `path` attribute.
+
+Resolutions:
+
+- Day 5 exit criteria now list all four blocked consequences: no submission row, no submission version, no `SUBMITTED` transition, and no submission-created audit event.
+- HTML mini-flow arrows now use `-&gt;`.
+- Lifecycle guard wording now lives in a dedicated `Design Boundaries` section.
+- The no-local-auth tests now inspect only route objects with concrete paths while preserving the forbidden-route assertions.
+
+Follow-up reviewer results:
+
+- senior engineering: no blocking findings
+- QA/test: no blocking findings
+- security/auth: no blocking findings
+- product/ops: no blocking findings
+
+## Validation
+
 Passed:
 
 ```bash
@@ -103,6 +131,22 @@ PY
 ```
 
 Result: `Markdown links OK`.
+
+Passed:
+
+```bash
+cd backend && .venv/bin/python -m ruff check tests/test_app.py tests/test_auth.py
+```
+
+Result: `All checks passed!`
+
+Passed:
+
+```bash
+cd backend && .venv/bin/python -m pytest tests/test_app.py tests/test_auth.py -q
+```
+
+Result: `23 passed`.
 
 Passed:
 

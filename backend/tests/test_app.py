@@ -39,7 +39,7 @@ async def test_versioned_health_endpoint() -> None:
 
 async def test_no_local_auth_routes() -> None:
     app = create_app()
-    paths = {route.path for route in app.routes}
+    paths = {path for route in app.routes if (path := getattr(route, "path", None))}
     forbidden_segments = {"login", "signup", "register", "password", "password-reset"}
 
     assert not any(
