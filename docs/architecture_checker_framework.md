@@ -55,6 +55,7 @@ Phase:
 
 - project_activation
 - task_screening
+- pre_submit_intake
 - submission_quality
 - pre_review_gate
 - lifecycle_transition
@@ -70,7 +71,9 @@ Default:
 - medium-severity `failed` result creates reviewer warning
 - low-severity `failed` result creates informational note
 
-Project guides can override this by declaring stricter policies.
+Approved machine policies can declare stricter blocking behavior. `SubmissionArtifactPolicy` and generated `PreSubmitCheckerPolicy` govern pre-submit artifact rules. `PostSubmitCheckerPolicy` governs durable post-submit checker blocking.
+
+Project policy cannot weaken Workstream default submission artifact rules. Workstream defaults are applied before project policy. A project policy that attempts to require a forbidden artifact, remove hash requirements, allow credential-bearing storage references, or downgrade blocking defaults is a project setup defect.
 
 The checker framework is conservative. It blocks objective structural failures and warns on judgment-heavy issues. Human reviewers own final quality judgment.
 
@@ -98,11 +101,11 @@ Ensures a task has rubric or acceptance criteria.
 
 ### check_required_files
 
-Validates project-specific required files.
+Validates required submission artifacts from the effective submission artifact policy.
 
 ### check_forbidden_files
 
-Blocks known forbidden files, secrets, private keys, copied internal data, or files forbidden by the project guide.
+Blocks known forbidden artifacts, secrets, private keys, copied internal data, or artifacts forbidden by the effective submission artifact policy.
 
 Default forbidden patterns include:
 
@@ -110,7 +113,7 @@ Default forbidden patterns include:
 - API tokens
 - `.env`
 - copied confidential client/source files
-- generated low-quality helper artifacts banned by the project guide
+- generated low-quality helper artifacts banned by project submission artifact policy
 - files not allowed in the submission packet
 
 ### check_confidentiality_attestation
@@ -119,7 +122,7 @@ Ensures the worker explicitly attests that the submission does not contain prohi
 
 ### check_low_quality_generated_artifacts
 
-Flags repeated low-quality generated patterns banned by the project guide, such as generic helper files, hidden-test leakage patterns, fabricated model files, placeholder evidence, or boilerplate reports that do not prove task-specific work.
+Flags repeated low-quality generated patterns banned by project submission artifact policy, such as generic helper files, hidden-test leakage patterns, fabricated model files, placeholder evidence, or boilerplate reports that do not prove task-specific work.
 
 Revision closure, task lifecycle movement, task readiness, and pre-review routing are enforced as lifecycle guards in v0.1. They must not be configured as checker policy names until a registered checker exists for that contract.
 
@@ -152,6 +155,40 @@ Pre-review gate phase:
 
 - project-configured registered checkers run against the locked submission and policy context
 
+## Submission Artifact Policy And Pre-Submit Generation
+
+Pre-submit intake is generated from policy. It is not manually supplied by the worker.
+
+The deterministic chain is:
+
+```text
+ProjectGuide
+-> ProjectSubmissionArtifactPolicy
+-> EffectiveSubmissionArtifactPolicy
+-> PreSubmitCheckerPolicy
+-> pre-submit intake checks
+-> Submission row only when blocking checks pass
+```
+
+`ProjectGuide` is human-facing. `SubmissionArtifactPolicy` is machine-readable and approved by a project admin. Workstream combines that policy with the non-bypassable Workstream default submission artifact policy.
+
+Workstream default submission artifact rules require:
+
+- summary
+- artifact hash manifest
+- worker attestation
+- safe relative artifact paths
+- production artifact hashes shaped as `sha256:<64 lowercase hex>`
+- validated `local://`, `s3://`, or `r2://` storage references
+- no credentials, signed URLs, query strings, raw local filesystem paths, or token-bearing references
+- no default forbidden artifacts such as `.env`, `.git`, private keys, credentials, secrets, tokens, `.pem`, `.key`, or `node_modules`
+
+Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
+
+The generated `PreSubmitCheckerPolicy` runs before Workstream creates a submission. Blocking failures prevent submission creation and return worker-safe fixes. Pre-submit results do not create durable `CheckerRun` records and do not move a task to `review_pending`.
+
+Pre-submit checks are authoritative for intake. Post-submit checker runs are authoritative for review readiness.
+
 The first two gates replace external origin qualification and task ingestion for v0.1. Origin qualification and webhook drop notifications are future adapter concerns.
 
 ## Project-Specific Checkers
@@ -176,11 +213,14 @@ Examples:
 
 ```text
 Draft packet
--> run pre-submit static checks
--> submit packet
+-> load locked task context
+-> compute EffectiveSubmissionArtifactPolicy
+-> generate PreSubmitCheckerPolicy
+-> run pre-submit intake checks
+-> create Submission only when blocking pre-submit checks pass
 -> lock submission
 -> create CheckerRun
--> load project CheckerPolicy
+-> load locked PostSubmitCheckerPolicy
 -> run required checkers
 -> store CheckerResult records
 -> calculate blocking status
@@ -205,7 +245,7 @@ When all blocking checks pass, the checker service stores readiness proof on the
 The checker run records:
 
 - submission id
-- checker policy version derived from the locked task context
+- post-submit checker policy version derived from the locked task context
 - artifact hash manifest
 - blocking failure count
 - warning count

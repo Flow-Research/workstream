@@ -60,7 +60,7 @@ Task records store:
 
 - project id
 - locked guide version
-- locked checker policy version
+- locked post-submit checker policy version
 - locked review policy version
 - locked revision policy version
 - locked payment policy version

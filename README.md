@@ -14,6 +14,8 @@ The first 30 days are focused on building serious internal infrastructure that c
 
 ```text
 Project Guide
+-> Submission Artifact Policy
+-> Pre-Submit Checker Policy
 -> Task Queue
 -> Task Record
 -> Submission Packet
@@ -31,10 +33,12 @@ Project Guide
 Different projects speak different domain languages, but serious task evaluation and contribution systems share the same lifecycle:
 
 - every project has a guide
+- every project has an approved submission artifact policy
 - every task belongs to a project
 - every project has a base amount or payment policy
 - every task has acceptance criteria
-- every submission has evidence
+- every submission has required artifacts, evidence references, hashes, and worker attestation
+- every invalid submission packet is blocked before submission creation
 - every submission passes automated checks before human review
 - every review creates a decision
 - every revision must close prior feedback
@@ -50,7 +54,7 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [Week 2 Checker Framework Specification](docs/spec_week2_checker_framework.md)
 - [Chunk 6 Checker Contract And Records](docs/spec_chunk_6_checker_contract_records.md)
 - [Chunk 7 Checker Runner And Registry](docs/spec_chunk_7_checker_runner_registry.md)
-- [Chunk 8 Evidence And Policy Checkers](docs/spec_chunk_8_evidence_policy_checkers.md)
+- [Chunk 8 Submission Artifact And Policy Checkers](docs/spec_chunk_8_submission_artifact_policy_checkers.md)
 - [Chunk 9 Pre-Review Gate](docs/spec_chunk_9_pre_review_gate.md)
 - [Chunk 10 Checker Trial](docs/spec_chunk_10_checker_trial.md)
 - [Day-by-Day Execution Plan](docs/roadmap_day_by_day_execution_plan.md)
@@ -90,9 +94,10 @@ Workstream turns that operating knowledge into reusable infrastructure.
 ## Templates
 
 - [Project Guide Template](docs/template_project_guide.md)
+- [Submission Artifact Policy Template](docs/template_submission_artifact_policy.md)
 - [Checker Policy Template](docs/template_checker_policy.md)
 - [Task Template](docs/template_task.md)
-- [Preflight Evidence Template](docs/template_preflight_evidence.md)
+- [Review Readiness Evidence Template](docs/template_preflight_evidence.md)
 - [Submission Packet Template](docs/template_submission_packet.md)
 - [Review Packet Template](docs/template_review_packet.md)
 - [Task Status Template](docs/template_task_status.md)
@@ -110,6 +115,7 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [ADR 0008: Files Use An Object-Storage Abstraction](docs/decision_0008_object_storage_abstraction.md)
 - [ADR 0009: Review Decisions Are Canonical](docs/decision_0009_review_decisions_are_canonical.md)
 - [ADR 0010: Revision Context Rebase Is Controlled By Policy](docs/decision_0010_revision_context_rebase.md)
+- [ADR 0011: Submission Artifact Policy Drives Pre-Submit Intake](docs/decision_0011_submission_artifact_policy_drives_pre_submit.md)
 
 ## Local Backend Database
 

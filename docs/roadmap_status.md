@@ -101,7 +101,7 @@ The Week 2 closeout gate is deterministic and must fail on contract drift.
 Required invariants:
 
 - Week 1 and Week 2 real API drills run only against local `postgresql+asyncpg://` test databases named `workstream_test` or `test_workstream` unless an explicit write-risk override is supplied.
-- Pre-submit checker responses are non-authoritative and must not create submissions, checker runs, or lifecycle transitions.
+- Pre-submit checker responses are authoritative for submission intake and must not create submissions, checker runs, or lifecycle transitions when blocking failures exist.
 - Missing or unexpected pre-submit checker names fail the drill.
 - Missing or unexpected durable checker names fail the drill.
 - Submission locking returns `locked_at`, locks evidence rows, and is idempotent.

@@ -1,4 +1,4 @@
-# Checker Policy Template
+# Post-Submit Checker Policy Template
 
 ## Project
 
@@ -8,6 +8,12 @@
 
 `v1`
 
+## Scope
+
+This template governs durable internal checker runs after a submission is created, locked, and ready for the pre-review gate.
+
+It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveSubmissionArtifactPolicy`.
+
 ## Blocking Rule
 
 High-severity failed checks block human review.
@@ -16,9 +22,10 @@ Medium and low severities are visible to reviewers unless this policy overrides 
 
 ## Required Checkers
 
+Task setup and post-submit checks must stay separated from worker-fixable submission intake checks.
+
 | Checker | Severity | Blocks Review | Purpose |
 | --- | --- | --- | --- |
-| `check_acceptance_criteria_present` | high | yes | Task must include reviewable acceptance criteria. |
 | `check_policy_context_present` | high | yes | Task must have locked checker, review, revision, and payment policy context. |
 | `check_submission_packet` | high | yes | Submission must include required packet fields. |
 | `check_required_files` | high | yes | Submission must include files required by the task. |
@@ -28,7 +35,25 @@ Medium and low severities are visible to reviewers unless this policy overrides 
 | `check_confidentiality_attestation` | high | yes | Worker attestation must address confidentiality and credential handling. |
 | `check_low_quality_generated_artifacts` | low | no | Low-quality generated artifact signals create warning results by default. |
 
+Task setup checks:
+
+| Checker | Severity | Blocks Review | Owner |
+| --- | --- | --- | --- |
+| `check_acceptance_criteria_present` | high | yes | Project manager repair, not worker revision. |
+
 Revision closure, readiness, and lifecycle movement are lifecycle guards in v0.1. Do not add them as checker policy names unless they are present in the registered checker list.
+
+## Pre-Submit Boundary
+
+Pre-submit checker policy is generated from:
+
+```text
+EffectiveSubmissionArtifactPolicy =
+  WorkstreamDefaultSubmissionArtifactPolicy
+  + ProjectSubmissionArtifactPolicy
+```
+
+Blocking pre-submit failures prevent submission creation and do not create durable `CheckerRun` records.
 
 ## Checker Registry Fields
 

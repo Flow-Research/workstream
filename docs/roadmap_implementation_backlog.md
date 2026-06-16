@@ -37,11 +37,12 @@
 - require guide approval before activation
 - lock guide and policy versions on every task
 - configure base amount and currency
-- configure checker policy
+- configure submission artifact policy
+- generate pre-submit checker policy
+- configure post-submit checker policy
 - configure review policy
 - configure revision policy
 - configure pre-review gate policy
-- configure evidence policy
 - configure payment policy, including payment dispute policy
 - configure lessons-learned promotion rule
 
@@ -84,7 +85,7 @@
 - implement `check_confidentiality_attestation`
 - implement `check_low_quality_generated_artifacts`
 - implement registered readiness checkers only after their contracts are locked
-- implement preflight evidence guards after the readiness/pre-review record shape is locked
+- implement generated pre-submit intake guards from the effective submission artifact policy
 
 ### Review
 

@@ -9,12 +9,13 @@ Every project has:
 - active guide
 - queue owner
 - reviewer owner
-- checker policy
+- submission artifact policy
+- generated pre-submit checker policy
+- post-submit checker policy
 - review policy
 - revision policy
 - payment policy
 - review guard
-- preflight evidence requirements
 - lessons learned log
 
 ## Project Setup Checklist
@@ -28,24 +29,24 @@ Before releasing tasks:
 - currency configured
 - allowed task types listed
 - required task fields listed
-- required submission fields listed
-- checker policy attached
+- submission artifact policy approved
+- generated pre-submit checker policy created from the effective submission artifact policy
+- post-submit checker policy attached
 - review policy attached
 - revision policy attached
 - payment policy attached
 - reviewer pool assigned
 - review guard created from the project guide
-- preflight evidence requirements defined
 
 ## v0.1 Quality Gates
 
 ### Project Activation Gate
 
-A project cannot become active unless guide, checker policy, review policy, revision policy, evidence policy, and payment policy are present.
+A project cannot become active unless guide, submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy are present.
 
 ### Task Screening Gate
 
-A task cannot move to `READY` until the task contract is complete, the guide version is locked, evidence requirements are clear, checker/review/revision/payment policy versions are locked, and a release decision is recorded.
+A task cannot move to `READY` until the task contract is complete, the guide version is locked, submission artifact requirements are clear, checker/review/revision/payment policy versions are locked, and a release decision is recorded.
 
 ### Submission Quality Gate
 
@@ -94,7 +95,10 @@ Before accepting a submission packet:
 - output package or reference exists
 - evidence exists
 - revision replay exists when task was previously `NEEDS_REVISION`
-- preflight evidence record can be generated
+- effective submission artifact policy is loaded
+- generated pre-submit checker policy runs
+- blocking pre-submit failures return worker-safe fixes
+- no submission row is created until blocking pre-submit checks pass
 
 ## Reviewer Simulation Gate
 

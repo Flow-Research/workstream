@@ -7,17 +7,18 @@ The first user flows prove that Workstream can run real work from intake to acce
 1. Admin creates project.
 2. Admin adds guide.
 3. Admin sets base amount.
-4. Admin selects required submission fields.
-5. Admin enables checker policy.
-6. Admin enables review policy.
-7. Admin enables revision policy.
-8. Admin enables payment policy.
-9. Project becomes active.
+4. Admin approves submission artifact policy.
+5. Workstream generates pre-submit checker policy.
+6. Admin enables post-submit checker policy.
+7. Admin enables review policy.
+8. Admin enables revision policy.
+9. Admin enables payment policy.
+10. Project becomes active.
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, checker policy, review policy, revision policy, and payment policy.
-- Checker, review, revision, and payment policies are visible on the project page.
+- Project cannot become active without guide, base amount, submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy.
+- Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
 ## Flow 2: Operator Creates A Task
 
@@ -25,14 +26,14 @@ Acceptance:
 2. Operator creates task with title, description, expected output, acceptance criteria, base amount, deadline, and difficulty.
 3. Workstream validates task against project guide.
 4. Task enters `SCREENING`.
-5. Screening confirms guide version, task contract, evidence requirements, checker policy, review policy, revision policy, payment policy, and reviewability.
+5. Screening confirms guide version, task contract, submission artifact requirements, checker policy, review policy, revision policy, payment policy, and reviewability.
 6. Task enters `READY`.
 
 Acceptance:
 
 - Missing required fields block `SCREENING`.
 - Missing required fields block `READY`.
-- Task shows project guide, required files, checker policy, review policy, revision policy, and payment policy.
+- Task shows project guide, required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
 
 ## Flow 3: Worker Submits Work
 
@@ -40,12 +41,15 @@ Acceptance:
 2. Worker attaches output files or links.
 3. Worker attaches evidence.
 4. Worker writes submission notes.
-5. Worker submits packet.
-6. Task enters `AUTO_CHECKING`.
+5. Workstream runs pre-submit checks generated from the effective submission artifact policy.
+6. Blocking pre-submit failures return worker-safe fixes and create no submission.
+7. When blocking pre-submit checks pass, Worker submits packet.
+8. Task enters `SUBMITTED`.
 
 Acceptance:
 
-- Submission cannot be created without required evidence.
+- Submission cannot be created when blocking pre-submit checks fail.
+- Submission cannot be created without required artifacts, evidence references, hashes, and worker attestation defined by the effective submission artifact policy.
 - Submission packet is immutable after checks start.
 
 ## Flow 4: Automated Checks Run

@@ -48,7 +48,7 @@ Required before leaving:
 
 ### SCREENING
 
-The task is structurally prepared but not yet released. This is the pre-release quality gate used to catch weak guides, vague acceptance criteria, missing evidence requirements, bad payment policy, missing checker policy, missing review policy, or missing revision policy before workers see the task.
+The task is structurally prepared but not yet released. This is the pre-release quality gate used to catch weak guides, vague acceptance criteria, missing submission artifact requirements, bad payment policy, missing generated pre-submit checker policy, missing post-submit checker policy, missing review policy, or missing revision policy before workers see the task.
 
 Required before entering:
 
@@ -72,7 +72,9 @@ Required before entering:
 
 - task schema valid
 - project guide active
-- checker policy present
+- SubmissionArtifactPolicy approved
+- generated PreSubmitCheckerPolicy available
+- PostSubmitCheckerPolicy present
 - review policy present
 - revision policy present
 - payment policy present
@@ -97,11 +99,15 @@ Required before entering:
 - submission summary
 - package or output reference
 - evidence items
-- stable evidence ids
+- effective submission artifact policy loaded
+- generated pre-submit checker policy executed
+- no blocking pre-submit failures
 - immutable submission version
-- content hash for every uploaded artifact where possible
-- evidence references bound to submitted artifact hashes where possible
+- content hash for every uploaded artifact
+- evidence references bound to submitted artifact hashes
 - worker attestation that the packet does not include prohibited or confidential material
+
+Workstream assigns the immutable submission version server-side. The worker does not provide submission version, evidence ids, checker results, checker run ids, or guide/policy versions.
 
 ### AUTO_CHECKING
 
@@ -117,7 +123,7 @@ Required before entering:
 
 - checker run exists for the exact submission version
 - checker run references the same artifact hashes as the submission packet
-- no unresolved blocking checker failure is open under the locked checker policy
+- no unresolved blocking checker failure is open under the locked post-submit checker policy
 
 ### NEEDS_REVISION
 
@@ -144,7 +150,7 @@ The submission is accepted.
 Required before entering:
 
 - accepted review decision
-- no unresolved blocking checker failure under the locked checker policy
+- no unresolved blocking checker failure under the locked post-submit checker policy
 - evidence present
 - reviewer cited evidence supporting acceptance
 - no unresolved high or medium prior revision finding

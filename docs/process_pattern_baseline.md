@@ -96,7 +96,7 @@ Packets preserve:
 Repeated strong projects keep:
 
 - verification logs
-- preflight evidence
+- review-readiness evidence
 - workflow lessons
 - status histories
 - review rounds
@@ -111,7 +111,7 @@ Workstream must support:
 - queue lanes derived from status
 - project-specific review guards
 - automated checker policies
-- preflight evidence before review
+- review-readiness evidence before review
 - submission and review packet records
 - revision replay tied to prior findings
 - contribution records created from accepted evidence-backed work

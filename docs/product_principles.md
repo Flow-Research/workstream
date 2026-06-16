@@ -19,9 +19,11 @@ Workstream is source-agnostic, but v0.1 stays manual-first. External origin adap
 
 ## 2. Project Rules Are First-Class
 
-Every project has its own guide, quality bar, checker policy, review policy, revision policy, and payment policy.
+Every project has its own guide, quality bar, submission artifact policy, checker policy, review policy, revision policy, and payment policy.
 
-The platform does not rely on memory or chat messages to enforce rules. If a rule matters, it belongs in the project guide, checker policy, review policy, revision policy, payment policy, or task template.
+Workstream combines the approved submission artifact policy with non-bypassable default artifact rules and generates the pre-submit checker policy.
+
+The platform does not rely on memory or chat messages to enforce rules. If a rule matters, it belongs in the project guide, submission artifact policy, checker policy, review policy, revision policy, payment policy, or task template.
 
 When a guide or policy changes while work is already in progress, prior submitted attempts remain tied to their locked context. If the task returns for revision, revision policy decides whether the next attempt rebases to the latest active context, and the worker must see what changed.
 
@@ -38,6 +40,8 @@ Guide -> Task -> Submission -> Checker -> Review -> Revision/Acceptance -> Payme
 Human reviewers do not spend time on submissions that fail basic gates.
 
 High-severity checker failures block review. Medium and low severity issues are visible to reviewers and can influence decisions.
+
+Blocking pre-submit checker failures block submission creation before a submission version exists.
 
 ## 5. Human Judgment Remains Critical
 

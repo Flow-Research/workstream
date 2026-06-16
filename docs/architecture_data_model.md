@@ -13,7 +13,10 @@ Actor
 
 Project
   ProjectGuide
-  CheckerPolicy
+  SubmissionArtifactPolicy
+  EffectiveSubmissionArtifactPolicy
+  PreSubmitCheckerPolicy
+  PostSubmitCheckerPolicy
   ReviewPolicy
   RevisionPolicy
   PaymentPolicy
@@ -127,7 +130,7 @@ Fields:
 - `version`
 - `content_markdown`
 - `required_task_fields`
-- `required_submission_fields`
+- `required_submission_fields` (legacy display summary)
 - `task_instructions`
 - `output_requirements`
 - `acceptance_criteria`
@@ -138,7 +141,6 @@ Fields:
 - `difficulty_scale`
 - `estimated_time_policy`
 - `common_rejection_reasons`
-- `evidence_policy`
 - `unacceptable_work_policy`
 - `approved_by`
 - `effective_at`
@@ -147,13 +149,126 @@ Fields:
 - `created_at`
 - `superseded_at`
 
-The guide is versioned. Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before workers see the task.
+The guide is versioned and human-facing. It contains project instructions, quality bar, examples, rubric, common rejection reasons, and links or summaries for approved policies. It may be markdown, an imported document, or a URL-backed guide.
+
+Runtime enforcement uses machine-readable policies attached to the guide version. Workstream does not parse guide prose at submission time to decide which artifact checks to run.
+
+Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before workers see the task.
 
 When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
 
-Material changes require a new guide version. Material changes include acceptance criteria, rejection criteria, reviewer rubric, output requirements, evidence policy, checker policy, review policy, revision policy, and payment policy.
+Material changes require a new guide version or policy version. Material changes include acceptance criteria, rejection criteria, reviewer rubric, output requirements, submission artifact policy, pre-submit checker generation rules, post-submit checker policy, review policy, revision policy, and payment policy.
 
-## CheckerPolicy
+Implementation note: the current v0.1 database has `ProjectGuide.evidence_policy`. That field is a transitional storage location for submission artifact requirements. The architecture source of truth is `SubmissionArtifactPolicy`.
+
+Implementation note: `ProjectGuide.required_submission_fields` is a legacy display summary. Submission validity is enforced by `EffectiveSubmissionArtifactPolicy`, not by project guide fields.
+
+## SubmissionArtifactPolicy
+
+Fields:
+
+- `id`
+- `project_id`
+- `guide_version`
+- `version`
+- `required_artifacts`
+- `required_evidence`
+- `artifact_manifest_required`
+- `artifact_hash_required`
+- `artifact_hash_algorithm`
+- `allowed_storage_schemes`
+- `forbidden_artifacts`
+- `required_attestation_terms`
+- `packaging_rules`
+- `created_by`
+- `approved_by`
+- `created_at`
+
+Example:
+
+```json
+{
+  "version": "v1",
+  "required_artifacts": [
+    "submission.zip",
+    "task.toml",
+    "static_guard.txt",
+    "review_packet.md"
+  ],
+  "required_evidence": [
+    "oracle_test.log",
+    "starter_m1_test.log"
+  ],
+  "artifact_manifest_required": true,
+  "artifact_hash_required": true,
+  "artifact_hash_algorithm": "sha256",
+  "allowed_storage_schemes": ["local", "s3", "r2"],
+  "forbidden_artifacts": ["secrets/**", ".env"],
+  "packaging_rules": {
+    "archive_required": true
+  }
+}
+```
+
+Project admins approve this policy. Workers do not supply it.
+
+Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
+
+## EffectiveSubmissionArtifactPolicy
+
+Generated server-side from:
+
+```text
+WorkstreamDefaultSubmissionArtifactPolicy
++ ProjectSubmissionArtifactPolicy
+```
+
+Fields:
+
+- `project_id`
+- `guide_version`
+- `policy_hash`
+- `required_artifacts`
+- `required_evidence`
+- `artifact_manifest_required`
+- `artifact_hash_required`
+- `artifact_hash_algorithm`
+- `allowed_storage_schemes`
+- `forbidden_artifacts`
+- `required_attestation_terms`
+- `generated_at`
+
+This policy is deterministic. It preserves Workstream defaults first and adds project-approved requirements. Duplicate rules collapse by canonical key. Any project rule that conflicts with Workstream defaults is a project setup defect.
+
+## PreSubmitCheckerPolicy
+
+Generated server-side from `EffectiveSubmissionArtifactPolicy`.
+
+Fields:
+
+- `project_id`
+- `guide_version`
+- `policy_hash`
+- `checker_names`
+- `checker_configs`
+- `blocking_severities`
+- `generated_at`
+
+The generated checker order is deterministic:
+
+1. packet shape
+2. artifact manifest presence
+3. artifact hash validation
+4. storage reference safety
+5. forbidden artifact blocking
+6. required artifact presence
+7. evidence requirement presence
+8. worker attestation validation
+9. low-quality artifact warnings
+
+Blocking pre-submit failures prevent submission creation. A failed blocking pre-submit check creates no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+
+## PostSubmitCheckerPolicy
 
 Fields:
 
@@ -177,6 +292,8 @@ Example:
   "blocking_severities": ["high"]
 }
 ```
+
+Post-submit checker policy governs durable internal checker runs after a submission is locked. It does not replace the generated pre-submit checker policy.
 
 ## ReviewPolicy
 
@@ -264,7 +381,10 @@ Fields:
 - `id`
 - `project_id`
 - `locked_guide_version`
-- `locked_checker_policy_version`
+- `locked_submission_artifact_policy_version`
+- `locked_effective_submission_artifact_policy_hash`
+- `locked_pre_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -285,8 +405,8 @@ Fields:
 - `status`
 - `acceptance_criteria`
 - `rejection_criteria`
-- `required_files`
-- `required_evidence`
+- `required_files` (derived snapshot)
+- `required_evidence` (derived snapshot)
 - `deadline_at`
 - `created_by`
 - `assigned_to`
@@ -316,7 +436,9 @@ Source type:
 
 External origin adapters are later work. When added, they normalize into this task shape instead of creating a separate task lifecycle.
 
-The task id points to the locked task contract. That contract includes the guide version, checker policy version, review policy version, revision policy version, payment policy version, acceptance criteria, required evidence, required files, base payout, and skill tags. Workers submit against the task id; they do not restate policy versions.
+The task id points to the locked task contract. That contract includes the guide version, submission artifact policy version, effective submission artifact policy hash, generated pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, payment policy version, acceptance criteria, derived required artifacts and evidence references, base payout, and skill tags. Workers submit against the task id; they do not restate policy versions.
+
+Implementation note: current v0.1 code uses `locked_checker_policy_version` for the post-submit checker policy version. The architecture target splits this into `locked_post_submit_checker_policy_version` and explicit submission artifact/pre-submit provenance fields.
 
 ## Assignment
 
@@ -346,7 +468,10 @@ Fields:
 - `artifact_hash_manifest`
 - `worker_attestation`
 - `locked_guide_version`
-- `locked_checker_policy_version`
+- `locked_submission_artifact_policy_version`
+- `locked_effective_submission_artifact_policy_hash`
+- `locked_pre_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -354,7 +479,9 @@ Fields:
 - `locked_at`
 - `supersedes_submission_id`
 
-The worker submission packet supplies the task id, summary, outputs, artifact hashes, evidence ids, submission version, and worker attestation. Workstream stamps the locked guide and policy versions from trusted task/project state. The worker does not provide guide, checker policy, review policy, revision policy, or payment policy versions.
+The worker submission packet supplies the task id, summary, outputs, artifact hashes, evidence references, and worker attestation. Workstream assigns the submission version, creates evidence ids, and stamps locked guide, submission artifact, pre-submit checker, post-submit checker, review, revision, and payment policy provenance from trusted task/project state. The worker does not provide submission version, evidence ids, checker results, checker run ids, guide versions, submission artifact policy versions, post-submit checker policy versions, review policy versions, revision policy versions, or payment policy versions.
+
+Implementation note: current v0.1 code uses `locked_checker_policy_version` on submissions for post-submit checker policy provenance. The architecture target adds explicit submission artifact and pre-submit policy provenance.
 
 Status:
 
@@ -410,7 +537,7 @@ Fields:
 - `completed_at`
 - `runner_version`
 - `locked_guide_version`
-- `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -612,8 +739,12 @@ Fields:
 - `next_submission_version`
 - `prior_locked_guide_version`
 - `next_locked_guide_version`
-- `prior_locked_checker_policy_version`
-- `next_locked_checker_policy_version`
+- `prior_locked_submission_artifact_policy_version`
+- `next_locked_submission_artifact_policy_version`
+- `prior_locked_pre_submit_checker_policy_hash`
+- `next_locked_pre_submit_checker_policy_hash`
+- `prior_locked_post_submit_checker_policy_version`
+- `next_locked_post_submit_checker_policy_version`
 - `prior_locked_review_policy_version`
 - `next_locked_review_policy_version`
 - `prior_locked_revision_policy_version`

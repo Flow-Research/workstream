@@ -64,14 +64,14 @@ If a worker submits a new version after `needs_revision`, older locked versions 
 The automatic run uses the policy context already stamped on the locked submission:
 
 - locked guide version
-- locked checker policy version
+- locked post-submit checker policy version
 - locked review policy version
 - locked revision policy version
 - locked payment policy version
 
 The worker does not provide or restate these policy versions.
 
-The checker service loads required checker names and blocking severities from the locked checker policy. Unregistered checker names are policy errors and block the lock/gate path with a structured API error.
+The checker service loads required checker names and blocking severities from the locked post-submit checker policy. Unregistered checker names are policy errors and block the lock/gate path with a structured API error.
 
 ## Revision Boundary
 

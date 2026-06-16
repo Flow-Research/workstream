@@ -12,8 +12,10 @@ The canonical v0.1 scope remains narrower:
 
 ```text
 Project guide
+-> submission artifact policy
 -> task screening
 -> task queue
+-> pre-submit checker policy
 -> submission packet
 -> automated checks
 -> pre-review gate
@@ -51,25 +53,33 @@ External origin qualification and task ingestion map to project activation and t
 
 ### Project Guide Structure
 
-Every project guide must define:
+Every project guide is human-facing. It must explain:
 
 - purpose
 - task types
 - task instructions
-- output requirements
 - acceptance criteria
 - rejection criteria
 - reviewer rubric
-- forbidden actions and artifacts
-- required evidence
 - required skills
 - difficulty scale
 - estimated time policy
-- payment policy
-- checker policy
+- common rejection reasons
+
+Every active guide version must also have approved machine-readable policies:
+
+- submission artifact policy
+- generated pre-submit checker policy
+- post-submit checker policy
 - review policy
 - revision policy
-- common rejection reasons
+- payment policy
+
+The guide may summarize or link to those policies, but the policies are the enforcement source.
+
+`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream generates `PreSubmitCheckerPolicy` from that effective policy.
+
+Blocking pre-submit failures prevent submission creation. They return worker-safe fixes and create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 
@@ -84,7 +94,7 @@ Every task must carry enough information to make claiming, checking, reviewing, 
 - task type
 - required output
 - acceptance criteria
-- required evidence
+- required artifacts and evidence references derived from the effective submission artifact policy
 - difficulty
 - skill tags
 - estimated time when known
@@ -136,6 +146,10 @@ Use these names consistently:
 
 - `check_acceptance_criteria_present`
 - `ContributionRecord`
+- `SubmissionArtifactPolicy`
+- `EffectiveSubmissionArtifactPolicy`
+- `PreSubmitCheckerPolicy`
+- `PostSubmitCheckerPolicy`
 - `Project activation gate`
 - `Task screening gate`
 - `Submission quality gate`

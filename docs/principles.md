@@ -16,22 +16,28 @@ Operators and agents may do the actual work outside Workstream. Workstream owns 
 
 The first product is task evaluation and contribution infrastructure, not an execution IDE.
 
-## 2. Project Guides Are Law
+## 2. Project Guides And Policies Are Law
 
-Each project has a guide that defines the rules for that project. A guide specifies:
+Each project has a human-facing guide and approved machine-readable policies.
+
+The guide explains:
 
 - task types
 - base amount
 - quality bar
-- required files
 - submission format
-- checker policy
+- common rejection reasons
+
+The policies enforce:
+
+- submission artifact policy
+- generated pre-submit checker policy
+- post-submit checker policy
 - review policy
 - revision policy
 - payment policy
-- common rejection reasons
 
-If a rule matters, it belongs in the guide, checker policy, review policy, revision policy, payment policy, or task template.
+If a rule matters, it belongs in the guide, submission artifact policy, checker policy, review policy, revision policy, payment policy, or task template.
 
 Out-of-band guidance is not enforceable until it is moved into those contracts or into a checker that is governed by those contracts.
 
@@ -48,6 +54,8 @@ Human reviewers do not spend time discovering basic package failures. Workstream
 - known low-quality signatures
 
 High-severity failures block review.
+
+Blocking pre-submit failures block submission creation before a submission version exists.
 
 ## 4. Human Review Provides Judgment
 

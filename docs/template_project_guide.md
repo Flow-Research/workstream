@@ -49,7 +49,7 @@ Define exactly what the submitter must do, step by step.
 
 ## Output Requirements
 
-Define the required format, files, fields, package structure, and paste-ready or upload-ready standard.
+Describe the output form in human-readable language. The enforced artifact list, hash rules, storage rules, and forbidden artifact rules live in the approved `SubmissionArtifactPolicy`.
 
 ## Acceptance Criteria
 
@@ -65,7 +65,7 @@ Define how reviewers evaluate quality. Workers see the same rubric they submit a
 
 ## Forbidden Actions And Artifacts
 
-Define prohibited behavior, files, tools, copied material, generated artifacts, confidential data, or evidence patterns.
+Define prohibited behavior, tools, copied material, generated artifacts, confidential data, or evidence patterns in human-readable language. Enforced artifact restrictions live in the approved `SubmissionArtifactPolicy`.
 
 ## Required Task Fields
 
@@ -87,47 +87,36 @@ Define prohibited behavior, files, tools, copied material, generated artifacts, 
 - evidence
 - revision replay when applicable
 - worker attestation
-- artifact hashes where possible
+- artifact hash manifest
 
-## Evidence Policy
+Workstream assigns submission version server-side after blocking pre-submit checks pass. The worker does not provide a submission version or any guide/policy version.
 
-Define acceptable evidence:
+## Submission Expectations Summary
 
+Summarize what workers must submit in plain language:
+
+- required artifacts:
+- required evidence references:
+- required package or archive:
 - required logs:
-- required screenshots:
-- required package hashes:
-- required test/check outputs:
-- external links allowed:
 - evidence that is not sufficient:
 
-Evidence must prove the submitted version, not an earlier local draft.
+This section is a human-readable summary. The enforcement source is the approved `SubmissionArtifactPolicy`.
 
-## Checker Policy
+## Linked Policy Context
 
-Required checkers:
+Every active guide version must have:
 
-- check_acceptance_criteria_present
-- check_policy_context_present
-- check_submission_packet
-- check_evidence_present
-- check_evidence_integrity
-- check_required_files
-- check_forbidden_files
-- check_confidentiality_attestation
-- check_low_quality_generated_artifacts
+- SubmissionArtifactPolicy:
+- generated PreSubmitCheckerPolicy:
+- PostSubmitCheckerPolicy:
+- ReviewPolicy:
+- RevisionPolicy:
+- PaymentPolicy:
 
-Blocking severities:
+Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 
-- high
-
-Project-specific checkers:
-
-- `<checker name>`:
-  - severity:
-  - blocks review:
-  - failure message:
-
-Known checker blind spots:
+## Known Checker Blind Spots
 
 - `<blind spot>`:
   - manual reviewer instruction:

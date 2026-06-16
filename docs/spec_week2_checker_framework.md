@@ -37,7 +37,7 @@ The checker framework protects reviewer time by proving that the latest locked s
 ## Core Invariant
 
 ```text
-Draft packet -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
+Draft packet -> EffectiveSubmissionArtifactPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
 ```
 
 A task cannot reach `REVIEW_PENDING` unless the latest locked submission has a completed checker run for the exact submission version and artifact context.
@@ -52,7 +52,7 @@ The checker binding includes:
 - `package_hash`
 - `artifact_hash_manifest`
 - locked project guide version
-- locked checker policy version
+- locked post-submit checker policy version
 - locked review policy version
 - locked revision policy version
 - locked payment policy version
@@ -61,7 +61,7 @@ The checker binding includes:
 
 Workstream has two checker moments.
 
-Pre-submit static checks run before the packet is finalized. They give immediate feedback on packet shape and obvious policy issues:
+Pre-submit static checks run before Workstream creates a submission. They are generated from the effective submission artifact policy and give immediate feedback on packet shape and policy issues:
 
 - required field presence
 - package hash presence
@@ -71,7 +71,9 @@ Pre-submit static checks run before the packet is finalized. They give immediate
 - storage reference safety
 - task assignment and state compatibility
 
-Pre-submit failures do not create review decisions and do not need to create durable post-submit checker runs.
+Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+
+Pre-submit failures do not create review decisions and do not create durable post-submit checker runs.
 
 Post-submit internal checks run after a submission is created and locked. These checks are the source of truth for review gating. They run from Workstream-owned services, use locked task guide and policy context, and persist durable checker runs/results.
 
@@ -164,11 +166,11 @@ Conditions of satisfaction:
 - failed structural checks produce stored checker results
 - worker-fixable submission failures and locked task setup failures are blocked before human review with distinct routing recommendations
 
-### Chunk 8: Evidence And Policy Checkers
+### Chunk 8: Submission Artifact And Policy Checkers
 
-Adds evidence, integrity, acceptance criteria, policy context, forbidden file, confidentiality, and generated-artifact checks.
+Adds submission artifact, evidence, integrity, acceptance criteria, policy context, forbidden file, confidentiality, and generated-artifact checks.
 
-Detailed spec: [Chunk 8 Evidence And Policy Checkers](spec_chunk_8_evidence_policy_checkers.md).
+Detailed spec: [Chunk 8 Submission Artifact And Policy Checkers](spec_chunk_8_submission_artifact_policy_checkers.md).
 
 Conditions of satisfaction:
 
@@ -186,8 +188,8 @@ Detailed spec: [Chunk 9 Pre-Review Gate](spec_chunk_9_pre_review_gate.md).
 Conditions of satisfaction:
 
 - the gate uses the latest locked submission only
-- required checker list comes from locked project checker policy
-- blocking severities come from locked project checker policy
+- required checker list comes from locked post-submit checker policy
+- blocking severities come from locked post-submit checker policy
 - checker-caused revision does not create a human review decision
 - no override endpoint exists in this chunk; any future override requires actor, reason, and audit event
 

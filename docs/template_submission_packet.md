@@ -10,7 +10,7 @@
 
 ## Submission Version
 
-`v1`
+Assigned by Workstream after blocking pre-submit checks pass. The worker does not provide this value.
 
 ## Summary
 
@@ -26,25 +26,29 @@ List files, links, packages, or deliverables.
 - artifact hash manifest:
 - generated at:
 
-Workstream derives the locked project guide version, checker policy version, review policy version, revision policy version, and payment policy version from the task and server-side project policy records. The worker does not provide those versions in the submission packet.
+Workstream derives the locked project guide version, submission artifact policy version, generated pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, and payment policy version from the task and server-side project policy records. The worker does not provide those versions in the submission packet.
+
+Workstream runs generated pre-submit checks before creating the submission. Blocking failures return worker-safe fixes and create no submission row, no submission version, and no submission-created audit event.
 
 ## Artifact Hash Manifest
 
 | Artifact | Hash | Size | Notes |
 | --- | --- | ---: | --- |
-| `<path-or-uri>` | `<sha256-or-reference>` | `<bytes>` | `<notes>` |
+| `<relative-artifact-path>` | `sha256:<64 lowercase hex>` | `<bytes>` | `<notes>` |
 
 ## Evidence
 
-| Evidence ID | Type | Hash Or Reference | Bound Artifact Hash | Checker Run ID | Proves Which Artifact Or Claim |
-| --- | --- | --- | --- | --- | --- |
-| `<evidence id>` | `<type>` | `<hash-or-reference>` | `<artifact hash>` | `<checker run id>` | `<claim>` |
+| Type | Label | URI Or Reference | Hash | Proves Which Artifact Or Claim |
+| --- | --- | --- | --- | --- |
+| `<type>` | `<label>` | `<local/s3/r2 object reference>` | `sha256:<64 lowercase hex>` | `<claim>` |
 
 When relevant, include the command, environment, dataset/version, or generation settings that produced the evidence.
 
-## Checker Notes
+Workstream assigns evidence IDs at persistence time. Checker run IDs are created only after post-submit internal checks run.
 
-Any known checker considerations.
+## Draft Checker Notes
+
+Any known worker-facing context that helps explain the packet. The worker does not provide checker outcomes, severities, policy versions, or pass/fail statuses.
 
 ## Revision Replay
 

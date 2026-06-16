@@ -4,7 +4,7 @@
 
 Build the Workstream v0.1 project and guide foundation.
 
-This chunk creates the first domain module for projects, versioned project guides, checker policies, review policies, revision policies, and payment policies. It implements the backend rules needed before tasks can lock a guide and policy context.
+This chunk creates the first domain module for projects, versioned project guides, submission artifact policy, checker policies, review policies, revision policies, and payment policies. It implements the backend rules needed before tasks can lock a guide and policy context.
 
 ## Non-Scope
 
@@ -41,22 +41,26 @@ Revision workflow execution is not in this chunk, but revision policy is in scop
 
 ## Data Model Impact
 
-Adds:
+Architecture target:
 
 - `projects`
 - `project_guides`
+- `submission_artifact_policies`
 - `checker_policies`
 - `review_policies`
 - `revision_policies`
 - `payment_policies`
+
+Current v0.1 implementation note: the first project-guide foundation stores submission artifact requirements in `ProjectGuide.evidence_policy`. That is transitional and maps to `SubmissionArtifactPolicy` until the dedicated table/API migration is implemented.
 
 The guide version is the join key for the guide-specific policies.
 
 Project guide activation requires:
 
 - guide is still draft
-- evidence policy exists
-- checker policy exists for the guide version
+- submission artifact policy exists for the guide version
+- generated pre-submit checker policy exists for the guide version
+- post-submit checker policy exists for the guide version
 - review policy exists for the guide version
 - revision policy exists for the guide version
 - payment policy exists for the guide version
@@ -77,7 +81,23 @@ The v0.1 contract records:
 - states that allow resubmission
 - reviewer reassignment rule
 
-Activation requires a revision policy before the guide can become active. The active guide response returns revision policy beside checker policy, review policy, and payment policy so future task records can lock the full policy context. The Non-Scope section keeps only revision workflow execution out of this chunk, not revision policy itself.
+Activation requires a revision policy before the guide can become active. The active guide response returns revision policy beside submission artifact policy, checker policy, review policy, and payment policy so future task records can lock the full policy context. The Non-Scope section keeps only revision workflow execution out of this chunk, not revision policy itself.
+
+## Submission Artifact Policy
+
+Submission artifact policy is a first-class guide-version policy. It defines what a worker must submit before Workstream creates a submission packet.
+
+The architecture contract is:
+
+```text
+EffectiveSubmissionArtifactPolicy =
+  WorkstreamDefaultSubmissionArtifactPolicy
+  + ProjectSubmissionArtifactPolicy
+```
+
+Workstream generates pre-submit checker policy from the effective submission artifact policy. Blocking pre-submit failures prevent submission creation.
+
+Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is transitional and maps to submission artifact requirements until the dedicated policy table/API is implemented.
 
 ## API Impact
 
@@ -110,11 +130,16 @@ The active guide response becomes the future source for task-owned locked guide 
 - migration upgrade/downgrade works
 - project can be created
 - draft guide can be created
-- guide activation is blocked when evidence policy is missing
+- guide activation is blocked when submission artifact policy is missing
 - guide activation is blocked when checker/review/revision/payment policies are missing
 - guide activation is blocked when revision policy is missing
 - guide activation is blocked when revision policy is incomplete
 - guide activation is blocked when payment policy is incomplete
+- guide activation or policy approval is blocked when project submission artifact policy removes Workstream hash requirements
+- guide activation or policy approval is blocked when project submission artifact policy permits unsafe storage references
+- guide activation or policy approval is blocked when project submission artifact policy requires default-forbidden artifacts
+- guide activation or policy approval is blocked when project submission artifact policy downgrades Workstream blocking defaults
+- generated effective submission artifact policy always contains Workstream defaults
 - guide activation succeeds with complete guide and policies
 - active guide can be retrieved for task creation
 - editing a draft guide works

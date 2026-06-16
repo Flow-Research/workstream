@@ -101,7 +101,9 @@ Owns:
 - project metadata
 - guide
 - base payout
-- checker policy
+- submission artifact policy
+- generated pre-submit checker policy
+- post-submit checker policy
 - review policy
 - revision policy
 - payment policy

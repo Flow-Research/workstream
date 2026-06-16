@@ -1,8 +1,8 @@
-# Chunk 8: Evidence And Policy Checkers
+# Chunk 8: Submission Artifact And Policy Checkers
 
 ## Purpose
 
-Chunk 8 expands the checker registry from the first structural runner into the first policy-aware submission quality gate.
+Chunk 8 expands the checker registry from the first structural runner into the first policy-aware submission artifact gate.
 
 The goal is not to judge final work quality. The goal is to verify that required structural signals are present before Workstream can later move a locked submission toward human review.
 
@@ -11,8 +11,8 @@ Chunk 8 does not prove artifact content safety, confidentiality truth, absence o
 ## Scope
 
 - canonical checker names for evidence and policy checks
-- evidence presence checks
-- evidence and artifact integrity checks
+- submission artifact and evidence presence checks
+- submission artifact and evidence integrity checks
 - task acceptance-criteria checks
 - required-file checks
 - forbidden-file checks
@@ -33,7 +33,7 @@ Chunk 8 does not prove artifact content safety, confidentiality truth, absence o
 - external object-store content reads
 - antivirus, secret-scanning engines, or external static-analysis adapters
 - model-based reviewer simulation
-- preflight evidence checker support, which needs the later readiness/pre-review record shape before it can be enforced correctly
+- dedicated readiness-certificate evidence handoff, which needs the later readiness/pre-review record shape before it can be enforced correctly
 
 ## Naming Contract
 
@@ -80,19 +80,17 @@ The checker validates:
 - artifact manifest can be canonicalized
 - artifact names are unique
 - artifact hashes are present
-- artifact hashes use the Chunk 8 structural hash token shape
+- production artifact hashes use `sha256:<64 lowercase hex>`
 - evidence items with local/R2/S3 object references include hashes
 - evidence items with `type = external_reference` may omit `uri` and `hash` in Chunk 8
 
 This checker does not download object-store content in Chunk 8. Content-addressed object verification remains an object-storage adapter concern for a later chunk.
 
-Chunk 8 structural hash token shape:
+Local test fixture hash token exception:
 
-- accepted: `sha256:<non-empty-token>`
-- prefix is case-sensitive
-- token after `sha256:` must be non-empty after trimming whitespace
-- the token may be a real 64-character SHA-256 hex digest or a deterministic local test token
-- Chunk 8 does not require 64-character lowercase hex because existing v0.1 fixtures use deterministic placeholder hash tokens
+- production accepts `sha256:<64 lowercase hex>` only
+- explicit local test fixtures may use deterministic `sha256:<non-empty-token>` placeholders
+- placeholder tokens are not valid production submission proof
 
 ### `check_acceptance_criteria_present`
 
@@ -110,12 +108,14 @@ This is a locked task setup failure, not worker-fixable submission work. Worker-
 
 ### `check_required_files`
 
-Fails when the task requires files that are not represented in the artifact manifest.
+Fails when required artifacts are not represented in the artifact manifest.
 
 The checker reads:
 
-- `task.required_files`
+- `EffectiveSubmissionArtifactPolicy.required_artifacts`, or a server-locked task snapshot derived from it
 - `submission.artifact_hash_manifest[*].artifact`
+
+`task.required_files` is legacy/transitional storage. It is not the policy source of truth once `SubmissionArtifactPolicy` is implemented.
 
 Matching is exact after path normalization. Chunk 8 does not implement glob matching.
 
@@ -134,7 +134,7 @@ Path normalization rules:
 
 Fails when artifact names or evidence object references include known forbidden path patterns.
 
-Default forbidden patterns:
+Workstream default forbidden patterns:
 
 - `.env`
 - `.pem`
@@ -192,7 +192,7 @@ If a future project needs generated-artifact signals to block review, that must 
 
 ## Pre-Submit Versus Durable Runs
 
-Pre-submit feedback runs only checks that can give immediate draft-packet feedback without creating durable records:
+Pre-submit feedback runs checks generated from the effective submission artifact policy. These checks run before Workstream creates a submission row:
 
 - `check_submission_packet`
 - `check_evidence_present`
@@ -201,6 +201,17 @@ Pre-submit feedback runs only checks that can give immediate draft-packet feedba
 - `check_forbidden_files`
 - `check_confidentiality_attestation`
 - `check_low_quality_generated_artifacts`
+
+The effective submission artifact policy is:
+
+```text
+WorkstreamDefaultSubmissionArtifactPolicy
++ ProjectSubmissionArtifactPolicy
+```
+
+Workstream defaults are non-bypassable. Project policy can add required artifacts, evidence requirements, stricter forbidden patterns, and packaging rules, but it cannot remove hash requirements, allow unsafe storage references, require forbidden files, or downgrade blocking defaults.
+
+Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
 
 Durable post-submit checker runs run the canonical default submission-quality checks plus locked checker-policy names:
 
@@ -215,7 +226,7 @@ Durable post-submit checker runs run the canonical default submission-quality ch
 - additional locked `required_checkers`
 - additional locked `warning_checkers`
 
-`check_acceptance_criteria_present` is registered in Chunk 8, but it is a locked task setup checker. It is not part of the default durable submission-quality list. If a locked checker policy requires it and it fails, the run must use task setup routing, not worker revision routing.
+`check_acceptance_criteria_present` is registered in Chunk 8, but it is a locked task setup checker. It is not part of the default durable submission-quality list. If a locked post-submit checker policy requires it and it fails, the run must use task setup routing, not worker revision routing.
 
 ## Routing Boundary
 
@@ -285,7 +296,9 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 
 - canonical Chunk 8 checker names are registered
 - stale Chunk 7 temporary checker names are removed from public docs/templates/tests
-- pre-submit feedback runs only the explicit pre-submit checker matrix without durable records
+- pre-submit feedback is generated from the effective submission artifact policy and runs without durable checker records
+- blocking pre-submit failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
+- Workstream default submission artifact rules cannot be weakened by project policy
 - durable checker runs persist Chunk 8 checker results
 - missing required evidence blocks review routing
 - missing required files block review routing

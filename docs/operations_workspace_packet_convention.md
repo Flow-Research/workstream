@@ -8,19 +8,18 @@ Workstream does not need to own the execution workspace, but it must define what
 
 ## Project-Level Convention
 
-Every project defines:
+Every project defines an approved `SubmissionArtifactPolicy`:
 
 ```text
-required_task_files
-required_submission_files
-required_evidence_files
+required_artifacts
+required_evidence
 allowed_artifact_types
 forbidden_artifact_types
+artifact_hash_manifest_format
+storage_reference_format
 paste_ready_or_upload_ready_format
 review_packet_format
 revision_packet_format
-evidence_id_format
-artifact_hash_manifest_format
 ```
 
 ## Recommended Task Packet Shape
@@ -55,9 +54,9 @@ A packet is not ready unless:
 - acceptance criteria are present
 - required output artifacts are attached
 - evidence is attached
-- evidence has stable ids
-- evidence ids bind to artifact hashes where possible
-- checker results are attached or runnable
+- artifact hashes are present
+- evidence references bind to artifact hashes
+- generated pre-submit checks pass before submission creation
 - prior feedback is linked when resubmitting
 - status is current
 
@@ -65,7 +64,7 @@ A packet is not ready unless:
 
 Some projects need final work in a paste-ready form. Others need a zip, artifact bundle, markdown packet, or review file.
 
-The project guide must define which form is canonical.
+The project guide explains the canonical form to humans. The approved `SubmissionArtifactPolicy` enforces the artifact, evidence, hash, and packaging rules.
 
 ## Why This Matters
 

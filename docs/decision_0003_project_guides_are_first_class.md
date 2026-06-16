@@ -14,36 +14,49 @@ If project rules live only in chat or loose markdown, operators and reviewers wi
 
 Every active Workstream project must have a versioned project guide attached to its configuration.
 
+The project guide is the human-facing project source of truth. It may be markdown, an imported document, or a URL-backed guide. Workers and reviewers use it to understand the project purpose, quality bar, instructions, examples, reviewer rubric, and common rejection reasons.
+
+Runtime enforcement uses approved machine-readable policies attached to the guide version. Workstream must not reread guide prose at submission time and guess what to enforce.
+
 The guide drives:
 
 - task requirements
-- checker policy
+- submission artifact policy
+- pre-submit checker policy generated from the effective submission artifact policy
+- post-submit checker policy
 - review policy
 - revision policy
 - payment policy
 - common rejection reasons
 
-The checker, review, revision, and payment policies are guide-version policies. They must be tied to the project guide version they govern, not only to the project.
+The submission artifact, checker, review, revision, and payment policies are guide-version policies. They must be tied to the project guide version they govern, not only to the project.
 
 Project guide activation requires the guide plus its required policy context before work can lock against it:
 
-- checker policy
+- submission artifact policy
+- generated pre-submit checker policy
+- post-submit checker policy
 - review policy
 - revision policy
 - payment policy
+
+The project-admin-approved submission artifact policy defines what workers must submit. Workstream combines it with non-bypassable Workstream default artifact rules to create the effective submission artifact policy. Workstream then generates the pre-submit checker policy from that effective policy.
+
+Blocking pre-submit failures prevent submission creation. They do not create durable post-submit checker runs and they do not create human review decisions.
 
 Revision policy is not optional. It defines the revision loop contract, including revision limits, revision deadlines, allowed resubmission states, and automatic rejection behavior after the limit.
 
 Guide and policy changes do not silently mutate submitted attempts. A submitted attempt stays tied to the guide and policy versions stamped on that submission. When a task enters `NEEDS_REVISION`, revision policy controls whether the next attempt keeps the prior context or rebases to the latest active guide and policy context.
 
-Rules that affect acceptance must be encoded in the project guide, checker policy, review policy, revision policy, payment policy, task template, or checker implementation. Chat messages and informal notices are not enforceable rules until they are moved into those contracts.
+Rules that affect acceptance judgment may be encoded in the human-facing project guide, review policy, revision policy, payment policy, task template, or checker implementation. Rules that affect submission intake must be encoded in `SubmissionArtifactPolicy` and the generated `PreSubmitCheckerPolicy`. Chat messages and informal notices are not enforceable rules until they are moved into those contracts.
 
 ## Consequences
 
 Positive:
 
 - rules become inspectable
-- checkers can be mapped to guide requirements
+- submission intake becomes deterministic
+- checkers can be mapped to approved policy requirements
 - reviewers have a consistent source of truth
 - revision loops have explicit limits and deadlines
 - project templates become reusable

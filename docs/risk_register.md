@@ -16,7 +16,7 @@ Project rules scattered across chat, memory, screenshots, or informal notes will
 
 Mitigation:
 
-- every rule belongs in project guide, checker policy, review policy, revision policy, or payment policy
+- every rule belongs in project guide, submission artifact policy, checker policy, review policy, revision policy, or payment policy
 - daily lessons learned become document updates
 - out-of-band guidance has no acceptance force until it becomes a guide, policy, template, or checker contract update
 - revision context preparation shows workers any guide or policy changes before resubmission
@@ -116,10 +116,10 @@ Workers may attach evidence that does not prove the work.
 
 Mitigation:
 
-- hash outputs where possible
+- require artifact hashes for uploaded artifacts and storage-backed evidence
 - require checker logs or reproducible artifacts
 - require stable evidence IDs
-- bind evidence IDs to submitted artifact hashes where possible
+- bind evidence IDs to submitted artifact hashes
 - require reviewer citations to exact evidence IDs on acceptance
 - reviewer must cite evidence in accept decision
 - bind checker runs to immutable submission versions

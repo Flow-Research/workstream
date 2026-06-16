@@ -192,13 +192,15 @@ Scope:
 
 - project model
 - project guide model
-- checker policy model
+- submission artifact policy model
+- generated pre-submit checker policy model
+- post-submit checker policy model
 - review policy model
 - revision policy model
 - payment policy model
 - guide versioning fields
 - active guide lock behavior
-- base payout and evidence policy fields
+- base payout and submission artifact policy fields
 
 Non-scope:
 
@@ -210,7 +212,7 @@ Conditions of satisfaction:
 
 - project can be created
 - guide version can be created as draft
-- guide version can be activated only when required policy fields exist
+- guide version can be activated only when required submission artifact, checker, review, revision, and payment policy fields exist
 - active guide can be retrieved for task creation
 - editing a draft guide does not mutate historical task context
 - migrations and model tests pass

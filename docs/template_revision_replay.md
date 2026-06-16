@@ -19,8 +19,12 @@ Worker-visible fields:
 | context rebased | yes or no |
 | prior guide version | `<guide version>` |
 | next guide version | `<guide version>` |
-| prior checker policy version | `<checker policy version>` |
-| next checker policy version | `<checker policy version>` |
+| prior submission artifact policy version | `<submission artifact policy version>` |
+| next submission artifact policy version | `<submission artifact policy version>` |
+| prior pre-submit checker policy hash | `<pre-submit checker policy hash>` |
+| next pre-submit checker policy hash | `<pre-submit checker policy hash>` |
+| prior post-submit checker policy version | `<post-submit checker policy version>` |
+| next post-submit checker policy version | `<post-submit checker policy version>` |
 | prior review policy version | `<review policy version>` |
 | next review policy version | `<review policy version>` |
 | prior revision policy version | `<revision policy version>` |

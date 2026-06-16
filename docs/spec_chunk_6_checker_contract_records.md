@@ -4,7 +4,7 @@
 
 Chunk 6 creates the durable checker run and checker result contract for Week 2.
 
-This chunk does not run the full checker framework yet. It defines the durable post-submit checker records, the pre-submit feedback response contract, schemas, service boundaries, and read APIs that later chunks use for static checks, internal auto checks, and review gating.
+This chunk does not run the full checker framework yet. It defines the durable post-submit checker records, the pre-submit intake feedback response contract, schemas, service boundaries, and read APIs that later chunks use for static checks, internal auto checks, and review gating.
 
 ## Scope
 
@@ -15,7 +15,7 @@ This chunk does not run the full checker framework yet. It defines the durable p
 - trigger source fields
 - routing recommendation fields
 - source tracking for checker-caused `needs_revision`
-- pre-submit feedback response contract
+- pre-submit intake feedback response contract
 - backend read APIs for checker runs and results
 - internal service method for creating checker runs/results
 - migration and ORM metadata
@@ -56,7 +56,7 @@ This chunk does not run the full checker framework yet. It defines the durable p
 - `supersedes_checker_run_id`
 - `is_current_for_submission`
 - `locked_guide_version`
-- `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -155,7 +155,7 @@ The run snapshots:
 - `artifact_hash_manifest`
 - deterministic `artifact_manifest_hash`
 - locked project guide version
-- locked checker policy version
+- locked post-submit checker policy version
 - locked review policy version
 - locked revision policy version
 - locked payment policy version
@@ -187,9 +187,11 @@ Normalization rules:
 - equivalent manifests with different JSON key order or entry order must produce the same hash
 - any changed artifact hash, size, path, or notes must produce a different hash
 
-## Pre-Submit Feedback Contract
+## Pre-Submit Intake Feedback Contract
 
-Pre-submit static checks run before a submission is finalized. They return immediate API feedback without creating an authoritative post-submit checker run.
+Pre-submit checks run before a submission is created. They are authoritative for submission intake and return immediate API feedback without creating an authoritative post-submit checker run.
+
+Workstream generates pre-submit checker policy server-side from the effective submission artifact policy for the task. Workers submit only draft packet fields. They cannot choose checker names, policy versions, blocking rules, severities, results, or outcomes.
 
 Response fields:
 
@@ -207,7 +209,9 @@ Response fields:
 - `created_at`
 - `expires_at`
 
-Pre-submit feedback may bind to `task_id`, draft packet fields, package hash, and artifact manifest shape. It does not require a locked `submission_id`, locked submission version, or locked policy context.
+Pre-submit feedback binds to `task_id`, the task's locked guide version, the approved submission artifact policy context, draft packet fields, package hash, and artifact manifest shape. It does not require a locked `submission_id` or locked submission version because those do not exist before submission creation.
+
+Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
 
 Pre-submit results are not authoritative for `REVIEW_PENDING` and cannot create `NEEDS_REVISION`. Only post-submit runs against locked submissions can produce routing recommendations for `REVIEW_PENDING` or user-facing `needs_revision`.
 
@@ -244,7 +248,7 @@ Checker read and trigger APIs use the existing external Flow authentication boun
 
 Public APIs must not create, update, or delete durable checker results.
 
-Durable `CheckerRun` and `CheckerResult` records are written only by Workstream-owned checker services using server-derived checker output. External Flow actors may request allowed pre-submit checks or authorized retry triggers in later chunks, but they must never provide result status, severity, `blocks_review`, metadata, routing recommendation, locked policy context, or pass/fail payloads.
+Durable `CheckerRun` and `CheckerResult` records are written only by Workstream-owned checker services using server-derived checker output. External Flow actors may request allowed pre-submit checks or authorized retry triggers in later chunks, but they must never provide checker names, result status, severity, `blocks_review`, metadata, routing recommendation, locked policy context, or pass/fail payloads.
 
 Any future trigger endpoint creates only a run request. The checker service computes and persists all results.
 

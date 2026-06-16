@@ -1,4 +1,8 @@
-# Preflight Evidence Template
+# Review Readiness Evidence Template
+
+This template is for post-submit review readiness evidence after a submission exists and checker runs have produced durable records.
+
+It is not the pre-submit intake contract. Pre-submit intake is generated from `EffectiveSubmissionArtifactPolicy` and blocks submission creation before a submission id, evidence id, or checker run id exists.
 
 ## Task
 
@@ -12,13 +16,13 @@
 
 `<guide version>`
 
-## Locked Checker Policy Version
+## Locked Post-Submit Checker Policy Version
 
-`<checker policy version>`
+`<post-submit checker policy version>`
 
 These values come from Workstream's task context and checker run records. They are not worker-provided submission fields.
 
-## Preflight Summary
+## Readiness Summary
 
 State what was checked before review.
 

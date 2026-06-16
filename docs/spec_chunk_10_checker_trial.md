@@ -59,7 +59,7 @@ task_setup_blocked
 - at least one worker-fixable submission failure reaches `needs_revision`
 - missing or unexpected pre-submit checker names fail the closeout drill
 - missing or unexpected durable checker names fail the closeout drill
-- the setup-defect checker set includes `check_acceptance_criteria_present` exactly when the locked checker policy requires it
+- the setup-defect checker set includes `check_acceptance_criteria_present` exactly when the locked post-submit checker policy requires it
 - locked task setup failures and worker-fixable failures use distinct routing recommendations
 - worker-visible responses do not expose internal `task_setup_blocked` routing
 - trusted checker retry from an internal blocked gate is covered
