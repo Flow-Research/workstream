@@ -43,4 +43,3 @@ across Jarvis, OmniCoreAgent, and other Flow projects.
 - Whether this bootstrap structure is the permanent Workstream engineering loop.
 - Whether later projects should adopt the same structure directly or through a
   packaged Codex plugin.
-

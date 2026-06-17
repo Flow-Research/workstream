@@ -1,5 +1,8 @@
 # PR Trust Bundle
 
+Canonical source for trust-bundle structure. Keep `.github/pull_request_template.md`
+in sync with this template.
+
 ## Chunk
 
 `<CHUNK_ID>` — `<TITLE>`
@@ -110,7 +113,7 @@ Result summary:
 
 ## Remaining risks
 
-Low/Informational risks only.
+Summarize any remaining risks and their accepted owner.
 
 ## Follow-up work
 

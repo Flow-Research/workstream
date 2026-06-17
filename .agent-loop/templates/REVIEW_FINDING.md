@@ -28,6 +28,10 @@ Smallest defensible fix.
 
 Yes / No
 
-## Resolution
+## Engineering Resolution
 
-Fixed / Deferred / Accepted / Rejected with reason
+fixed / accepted_risk / deferred_with_owner / not_valid
+
+Use engineering review-finding resolutions here. Do not use Workstream product
+review decision tokens (`accept`, `needs_revision`, `reject`) for engineering
+loop findings.

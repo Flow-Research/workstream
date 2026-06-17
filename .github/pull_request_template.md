@@ -1,5 +1,8 @@
 # Workstream PR Trust Bundle
 
+This PR template mirrors `.agent-loop/templates/PR_TRUST_BUNDLE.md`; keep both
+in sync when the trust-bundle structure changes.
+
 ## Chunk
 
 `<chunk-id>` - `<title>`
@@ -21,13 +24,13 @@ Link the initiative and chunk contract:
 
 ## Alternatives Rejected
 
-- 
+-
 
 ## Scope Control
 
 ### Allowed Files Changed
 
-- 
+-
 
 ### Files Outside Contract
 
@@ -54,17 +57,17 @@ Link the initiative and chunk contract:
 
 ## Acceptance Criteria Proof
 
-- [ ] 
+- [ ]
 
 ## Test Delta
 
 ### Tests Added
 
-- 
+-
 
 ### Tests Modified
 
-- 
+-
 
 ### Tests Removed Or Skipped
 
@@ -108,7 +111,7 @@ Link the initiative and chunk contract:
 
 Please inspect:
 
-- 
+-
 
 ## Human Merge Ownership
 

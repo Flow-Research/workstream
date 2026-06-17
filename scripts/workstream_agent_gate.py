@@ -18,14 +18,17 @@ from pathlib import Path
 RISKY_PATTERNS = re.compile(
     r"(auth|permission|policy|payment|payout|billing|invoice|ledger|audit|"
     r"secret|token|session|tenant|pii|migration|schema|deploy|workflow|ci|"
-    r"security|review|revision|checker|submission|reputation|contribution)",
+    r"security|review|revision|checker|submission|reputation|contribution|"
+    r"alembic|database)",
     re.IGNORECASE,
 )
 
 CI_PATTERNS = re.compile(
     r"(^|/)(\.github/workflows/|circleci|gitlab-ci|jenkins|buildkite|"
     r"package\.json|pnpm-lock\.yaml|package-lock\.json|yarn\.lock|Makefile|"
-    r"coverage|eslint|tsconfig|pytest|vitest|jest)",
+    r"coverage|eslint|tsconfig|pytest|vitest|jest|pyproject\.toml|uv\.lock|"
+    r"poetry\.lock|requirements.*|alembic\.ini|backend/alembic/|"
+    r"docker-compose\.ya?ml|Dockerfile)",
     re.IGNORECASE,
 )
 TEST_PATTERNS = re.compile(r"(test|spec|__tests__|\.test\.|\.spec\.)", re.IGNORECASE)
@@ -70,6 +73,19 @@ def add_unique(paths: list[str], output: str) -> None:
             paths.append(path)
 
 
+def ref_exists(ref: str) -> bool:
+    """Return whether a git ref exists."""
+    return bool(maybe_run(["git", "rev-parse", "--verify", ref]))
+
+
+def first_existing_ref(*refs: str) -> str | None:
+    """Return the first git ref that exists."""
+    for ref in refs:
+        if ref_exists(ref):
+            return ref
+    return None
+
+
 def changed_files(base: str, head: str) -> list[str]:
     """Return changed file paths, including local dirty-tree paths."""
     paths: list[str] = []
@@ -87,19 +103,13 @@ def numstat(base: str, head: str) -> tuple[int, int, list[tuple[str, int, int]]]
         maybe_run(["git", "diff", "--numstat", "--cached"]),
         maybe_run(["git", "diff", "--numstat"]),
     ]
-    total_add = 0
-    total_del = 0
-    rows = []
-    seen_paths: set[str] = set()
+    rows_by_path: dict[str, tuple[int, int]] = {}
     for output in outputs:
         for line in output.splitlines():
             parts = line.split("\t")
             if len(parts) != 3:
                 continue
             add, delete, path = parts
-            if path in seen_paths:
-                continue
-            seen_paths.add(path)
             try:
                 a = int(add)
             except ValueError:
@@ -108,17 +118,17 @@ def numstat(base: str, head: str) -> tuple[int, int, list[tuple[str, int, int]]]
                 d = int(delete)
             except ValueError:
                 d = 0
-            total_add += a
-            total_del += d
-            rows.append((path, a, d))
+            previous_add, previous_del = rows_by_path.get(path, (0, 0))
+            rows_by_path[path] = (previous_add + a, previous_del + d)
 
     for path in maybe_run(["git", "ls-files", "--others", "--exclude-standard"]).splitlines():
-        if not path or path in seen_paths:
+        if not path or path in rows_by_path:
             continue
-        seen_paths.add(path)
         added = count_text_lines(path)
-        total_add += added
-        rows.append((path, added, 0))
+        rows_by_path[path] = (added, 0)
+    rows = [(path, added, deleted) for path, (added, deleted) in rows_by_path.items()]
+    total_add = sum(added for _, added, _ in rows)
+    total_del = sum(deleted for _, _, deleted in rows)
     return total_add, total_del, rows
 
 
@@ -155,8 +165,30 @@ def diff_text(base: str, head: str, paths: list[str] | None = None) -> str:
 
 def analyze(base: str, head: str, max_l1_lines: int = 500) -> dict:
     """Analyze a diff for Workstream reviewability and gate-integrity risk."""
-    files = changed_files(base, head)
-    adds, dels, _rows = numstat(base, head)
+    resolved_base = base if ref_exists(base) else first_existing_ref("origin/main", "main")
+    if resolved_base is None:
+        return {
+            "result": "REVIEW_REQUIRED",
+            "files_changed": 0,
+            "lines_added": 0,
+            "lines_deleted": 0,
+            "total_changed_lines": 0,
+            "risky_files": [],
+            "ci_files": [],
+            "test_files": [],
+            "findings": [
+                asdict(
+                    Finding(
+                        "High",
+                        "BASE_REF_UNRESOLVED",
+                        "Could not resolve a valid git base ref for analysis.",
+                    )
+                )
+            ],
+        }
+
+    files = changed_files(resolved_base, head)
+    adds, dels, _rows = numstat(resolved_base, head)
     total = adds + dels
 
     findings: list[Finding] = []
@@ -211,7 +243,7 @@ def analyze(base: str, head: str, max_l1_lines: int = 500) -> dict:
         )
 
     weakening_scan_paths = sorted(set(ci_files + test_files))
-    weakening_text = diff_text(base, head, weakening_scan_paths) if weakening_scan_paths else ""
+    weakening_text = diff_text(resolved_base, head, weakening_scan_paths) if weakening_scan_paths else ""
     weakening_matches = sorted(set(m.group(0) for m in WEAKENING_PATTERNS.finditer(weakening_text)))
     if weakening_matches:
         findings.append(

@@ -36,4 +36,3 @@ LLM prompts and tool inputs
 - Can a stale guide or policy context be used silently?
 - Can secrets or tokens leak through logs, errors, artifacts, or review bundles?
 - Can test/demo auth become production auth by misconfiguration?
-

@@ -42,4 +42,3 @@ Intent
 
 The stop step is intentional. Codex must not begin the next chunk unless the
 user explicitly asks for it.
-

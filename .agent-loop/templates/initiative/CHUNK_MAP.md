@@ -9,27 +9,9 @@
 
 ## Chunks
 
-### <ID>-01: <TITLE>
+Duplicate this block for each planned chunk.
 
-Goal:
-
-Risk:
-
-Depends on:
-
-Allowed files:
-
-Not allowed:
-
-Acceptance criteria:
-
-Required reviewers:
-
-Human review focus:
-
----
-
-### <ID>-02: <TITLE>
+### <CHUNK_ID>: <TITLE>
 
 Goal:
 

@@ -1,4 +1,4 @@
-# Review Policy
+# Engineering Review Policy
 
 AI review is a sensor, not a verdict. Human merge ownership remains required.
 
@@ -41,4 +41,3 @@ Add focused reviewers when relevant:
 
 Critical and High findings block the PR. Medium findings require a human
 decision. Low and Informational findings may be deferred when documented.
-

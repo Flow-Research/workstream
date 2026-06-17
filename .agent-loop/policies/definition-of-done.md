@@ -31,7 +31,9 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 ## Review
 
 - Required internal reviewer agents completed.
-- Critical and High findings are fixed.
+- External review findings from CodeRabbit, GitHub review, or CI are reviewed.
+- Critical and High internal or external findings are fixed or explicitly waived
+  by the human owner.
 - Medium findings have a human decision or documented follow-up.
 - No sub-agent sessions remain open.
 
@@ -39,4 +41,3 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 
 - The user explicitly approves merge for the specific PR.
 - Codex stops after the chunk and does not start the next chunk automatically.
-

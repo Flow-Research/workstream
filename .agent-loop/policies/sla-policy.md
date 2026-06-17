@@ -22,4 +22,3 @@ improvements.
 Nice-to-have cleanup, optional docs polish, or non-urgent reports.
 
 This bootstrap chunk is P1 because it governs how all future chunks are built.
-

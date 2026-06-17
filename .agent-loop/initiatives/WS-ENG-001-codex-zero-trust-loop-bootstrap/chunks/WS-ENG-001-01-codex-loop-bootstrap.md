@@ -71,7 +71,7 @@ python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format
 python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
-PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_agent_gates.py
+python3 scripts/test_agent_gates.py
 ```
 
 `workstream_agent_gate.py` is a static sensor. It reports reviewability and gate-integrity risk, including local staged, unstaged, and untracked files. The blocking CI control for reviewer coverage is `check_internal_review_evidence.py`.

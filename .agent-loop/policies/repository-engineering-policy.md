@@ -1,4 +1,4 @@
-# Workstream Project Policy
+# Workstream Repository Engineering Policy
 
 ## Project Identity
 
@@ -45,4 +45,3 @@ pytest -q
 - Keep PRs chunk-sized.
 - Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
 - Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
-

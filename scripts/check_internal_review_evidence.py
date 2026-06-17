@@ -1,4 +1,4 @@
-"""Require internal reviewer evidence when PRs change Workstream contracts."""
+"""Require internal reviewer evidence for engineering-loop and code changes."""
 
 from __future__ import annotations
 
@@ -16,11 +16,18 @@ RELEVANT_PREFIXES = (
     ".github/workflows/",
     "AGENTS.md",
     "README.md",
+    "backend/alembic/",
     "backend/app/",
     "backend/tests/",
     "docs/",
     "scripts/",
 )
+RELEVANT_EXACT_PATHS = {
+    "backend/alembic.ini",
+    "backend/pyproject.toml",
+    "demos/week1_api_demo_ui/package-lock.json",
+    "demos/week1_api_demo_ui/package.json",
+}
 IGNORED_PREFIXES = (
     "docs/internal_reviews/",
     "docs/diagrams/rendered/",
@@ -37,6 +44,7 @@ REQUIRED_STATEMENTS = {
 }
 ACTIVE_CHUNK_ENV = "INTERNAL_REVIEW_CHUNK_ID"
 CHUNK_FILE_PATTERN = re.compile(r"(?P<chunk>[A-Z]+-[A-Z]+-\d+-\d+)")
+ACCEPTED_BLOCKING_VALUES = {"none", "none remaining", "n/a", "no"}
 
 
 def git(*args: str) -> str:
@@ -63,6 +71,22 @@ def git_ok(*args: str) -> bool:
     return result.returncode == 0
 
 
+def resolve_base_ref() -> str:
+    """Resolve the base ref used to compare review-relevant changes."""
+    base_ref = os.environ.get("INTERNAL_REVIEW_BASE_REF") or os.environ.get("GITHUB_BASE_REF")
+    if base_ref:
+        candidates = (f"origin/{base_ref}", base_ref)
+        for candidate in candidates:
+            if git_ok("rev-parse", "--verify", candidate):
+                return candidate
+        raise RuntimeError(f"could not resolve configured base ref {base_ref!r}")
+
+    for candidate in ("origin/main", "main"):
+        if git_ok("rev-parse", "--verify", candidate):
+            return candidate
+    raise RuntimeError("could not resolve default base ref origin/main or main")
+
+
 def changed_files() -> list[str]:
     """Return files changed by this PR or local branch."""
     paths: list[str] = []
@@ -72,20 +96,8 @@ def changed_files() -> list[str]:
             if line and line not in paths:
                 paths.append(line)
 
-    base_ref = os.environ.get("INTERNAL_REVIEW_BASE_REF") or os.environ.get("GITHUB_BASE_REF")
-    if base_ref:
-        candidates = [f"origin/{base_ref}", base_ref]
-        for candidate in candidates:
-            try:
-                add(git("diff", "--name-only", f"{candidate}...HEAD"))
-                break
-            except subprocess.CalledProcessError:
-                continue
-    else:
-        for candidate in ("origin/main", "main"):
-            if git_ok("rev-parse", "--verify", candidate):
-                add(git("diff", "--name-only", f"{candidate}...HEAD"))
-                break
+    base_ref = resolve_base_ref()
+    add(git("diff", "--name-only", f"{base_ref}...HEAD"))
 
     add(git("diff", "--name-only", "--cached"))
     add(git("diff", "--name-only"))
@@ -99,7 +111,7 @@ def is_relevant(path: str) -> bool:
         return False
     if path.startswith(IGNORED_PREFIXES):
         return False
-    return path.startswith(RELEVANT_PREFIXES)
+    return path.startswith(RELEVANT_PREFIXES) or path in RELEVANT_EXACT_PATHS
 
 
 def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
@@ -132,11 +144,46 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
     return tuple(required)
 
 
-def validate_evidence(path: Path, required_tracks: tuple[str, ...]) -> list[str]:
+def reviewer_rows(text: str) -> dict[str, tuple[str, str]]:
+    """Return reviewer table rows keyed by reviewer name."""
+    rows: dict[str, tuple[str, str]] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "---" in stripped:
+            continue
+        cells = [cell.strip().lower() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 3 or cells[0] == "reviewer":
+            continue
+        rows[cells[0]] = (cells[1], cells[2])
+    return rows
+
+
+def validate_reviewer_rows(text: str, required_tracks: tuple[str, ...]) -> list[str]:
+    """Validate reviewer result rows for required tracks."""
+    rows = reviewer_rows(text)
+    missing: list[str] = []
+    for track in required_tracks:
+        row = rows.get(track)
+        if row is None:
+            missing.append(f"reviewer result row: {track}")
+            continue
+        result, blocking = row
+        if "pass" not in result or "pending" in result or "fail" in result:
+            missing.append(f"{track} reviewer result must be pass")
+        if blocking not in ACCEPTED_BLOCKING_VALUES:
+            missing.append(f"{track} blocking findings must be none")
+    return missing
+
+
+def validate_evidence(
+    path: Path,
+    required_tracks: tuple[str, ...],
+    chunk_ids: list[str] | None = None,
+) -> list[str]:
     """Validate one internal review evidence file."""
     text = path.read_text(encoding="utf-8").lower()
     missing = [track for track in required_tracks if track not in text]
-    chunk_ids = required_chunk_ids(changed_files())
+    chunk_ids = list(chunk_ids) if chunk_ids is not None else required_chunk_ids(changed_files())
     env_chunk_id = os.environ.get(ACTIVE_CHUNK_ENV, "").strip().lower()
     if env_chunk_id:
         chunk_ids.append(env_chunk_id)
@@ -145,6 +192,7 @@ def validate_evidence(path: Path, required_tracks: tuple[str, ...]) -> list[str]
     for label, expected_value in REQUIRED_STATEMENTS.items():
         if f"{label}: {expected_value}" not in text:
             missing.append(f"{label}: {expected_value}")
+    missing.extend(validate_reviewer_rows(text, required_tracks))
     return missing
 
 
@@ -163,8 +211,12 @@ def required_chunk_ids(paths: list[str]) -> list[str]:
 
 
 def main() -> int:
-    """Check that changed contract files include complete review evidence."""
-    changed = changed_files()
+    """Check that changed engineering files include complete review evidence."""
+    try:
+        changed = changed_files()
+    except RuntimeError as exc:
+        print(f"Internal review evidence gate failed closed: {exc}", file=sys.stderr)
+        return 1
     relevant = [path for path in changed if is_relevant(path)]
     if not relevant:
         print("No internal review evidence required for this change.")
@@ -183,7 +235,8 @@ def main() -> int:
 
     if not evidence_paths:
         print(
-            "Internal review evidence is required for Workstream contract changes.\n"
+            "Internal review evidence is required for engineering-loop, process, "
+            "or implementation changes.\n"
             "Add a changed docs/internal_reviews/*.md file or "
             ".agent-loop/initiatives/<initiative>/reviews/*.md file with these "
             f"reviewer tracks before opening the PR: {', '.join(required_tracks)}.",
@@ -192,8 +245,16 @@ def main() -> int:
         return 1
 
     failures: list[str] = []
+    chunk_ids = required_chunk_ids(changed)
     for path in evidence_paths:
-        missing = validate_evidence(path, required_tracks)
+        if not path.is_file():
+            failures.append(f"{path}: missing evidence file in HEAD (deleted or renamed)")
+            continue
+        try:
+            missing = validate_evidence(path, required_tracks, chunk_ids)
+        except (OSError, UnicodeDecodeError) as exc:
+            failures.append(f"{path}: unreadable evidence file ({exc.__class__.__name__})")
+            continue
         if missing:
             failures.append(f"{path}: missing {', '.join(missing)}")
 

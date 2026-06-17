@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
 
-FORBIDDEN = (
-    "task-" "production control plane",
-    "Garden " "roadmap",
-    "Claude " "Code",
-    "claude " "code",
-    "auto" "merge",
+FORBIDDEN_PATTERNS = (
+    re.compile(r"task-production control plane", re.IGNORECASE),
+    re.compile(r"garden roadmap", re.IGNORECASE),
+    re.compile(r"claude code", re.IGNORECASE),
+    re.compile(r"auto[\s-]?merge", re.IGNORECASE),
 )
 SKIP_DIRS = {
     ".git",
@@ -23,8 +23,10 @@ SKIP_DIRS = {
     "sheets",
 }
 SKIP_FILES = {
-    "AGENTS.md",
     "scripts/check_stale_workstream_wording.py",
+}
+ALLOWLISTED_LINES = {
+    "AGENTS.md": ("Do not use old names such as",),
 }
 
 
@@ -54,9 +56,17 @@ def read_text(path: Path) -> str | None:
     if b"\x00" in data:
         return None
     try:
-        return data.decode("utf-8")
+        text = data.decode("utf-8")
     except UnicodeDecodeError:
         return None
+    allowed_prefixes = ALLOWLISTED_LINES.get(path.as_posix(), ())
+    if allowed_prefixes:
+        return "\n".join(
+            line
+            for line in text.splitlines()
+            if not any(allowed_prefix in line for allowed_prefix in allowed_prefixes)
+        )
+    return text
 
 
 def main() -> int:
@@ -66,9 +76,9 @@ def main() -> int:
         text = read_text(path)
         if text is None:
             continue
-        for term in FORBIDDEN:
-            if term in text:
-                failures.append(f"{path}: contains stale wording {term!r}")
+        for pattern in FORBIDDEN_PATTERNS:
+            if pattern.search(text):
+                failures.append(f"{path}: contains stale wording /{pattern.pattern}/i")
 
     if failures:
         print("Stale wording check failed:", file=sys.stderr)

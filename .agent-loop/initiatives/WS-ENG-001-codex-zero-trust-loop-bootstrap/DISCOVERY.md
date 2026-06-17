@@ -5,7 +5,8 @@
 - `AGENTS.md` already defines Workstream-specific rules, stack locks, internal
   reviewer requirements, and done criteria.
 - `scripts/check_internal_review_evidence.py` already blocks PRs that touch
-  relevant Workstream contract files without `docs/internal_reviews/*.md`.
+  engineering-loop, process, and implementation files without
+  `docs/internal_reviews/*.md`.
 - `.github/workflows/backend.yml` already runs the internal review evidence gate
   before backend install, lint, docstring coverage, tests, and Week 1 real API e2e.
 - `.github/workflows/agent-gates.yml` is added as a process-only PR gate so loop,

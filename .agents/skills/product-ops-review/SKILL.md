@@ -37,4 +37,3 @@ Payment/reputation risks:
 Naming or wording drift:
 Required fixes:
 ```
-

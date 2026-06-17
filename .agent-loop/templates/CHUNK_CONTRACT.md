@@ -52,15 +52,23 @@ P0 / P1 / P2 / P3
 
 ## Required reviewers
 
+Mandatory:
+
 - [ ] senior engineering
 - [ ] QA/test
 - [ ] security/auth
 - [ ] product/ops
-- [ ] architecture
-- [ ] CI integrity
-- [ ] docs
-- [ ] reuse/dedup
-- [ ] test delta
+
+Conditional:
+
+- [ ] architecture, when the chunk touches architecture, `.agent-loop/`,
+  `.agents/`, `.codex/`, backend application code, or migrations
+- [ ] CI integrity, when the chunk touches workflows, scripts, package files, or
+  test/build configuration
+- [ ] docs, when the chunk touches Markdown, docs, README, AGENTS, or loop docs
+- [ ] reuse/dedup, when the chunk touches skills, agents, backend app code, or
+  scripts
+- [ ] test delta, when the chunk touches tests or test-like files
 
 ## Human review focus
 

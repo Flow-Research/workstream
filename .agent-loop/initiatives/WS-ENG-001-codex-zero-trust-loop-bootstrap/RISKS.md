@@ -7,4 +7,4 @@
 | CI gate creates friction for docs-only work | Medium | Gate reports as sensor; internal evidence gate remains targeted to relevant paths. |
 | Future agents still forget subagent review | High | Encode in `AGENTS.md`, `.agent-loop/policies`, PR template, CI evidence gate, and reviewer configs. |
 | Agents merge without explicit approval | Critical | Encode no-merge rule in `AGENTS.md`, merge policy, PR template, and trust bundle. |
-
+| Changed-file discovery drifts across gate scripts | Low | Current tests cover the duplicated logic; extract a shared helper in a later cleanup chunk if drift appears. |

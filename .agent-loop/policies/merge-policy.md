@@ -13,6 +13,7 @@
 
 Before merge, the human reviewer should be able to say:
 
+- I verified that the user explicitly approved this specific PR for merge.
 - I understand the intent.
 - I understand the chunk boundary.
 - I reviewed the evidence.
@@ -21,4 +22,3 @@ Before merge, the human reviewer should be able to say:
 - I reviewed internal and external reviewer findings.
 - I can explain what changed and why.
 - I accept the remaining risks.
-

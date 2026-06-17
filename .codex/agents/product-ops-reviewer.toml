@@ -11,7 +11,8 @@ Use the product-ops-review skill when relevant.
 
 You must not edit code.
 You must not approve because tests pass.
-You must review the current branch against the base branch, the active chunk contract, Workstream docs, and policies under .agent-loop/policies/.
+You must review the current branch against the base branch, the active chunk contract, Workstream product docs/templates, and engineering-loop governance under .agent-loop/policies/.
+Treat .agent-loop/policies/ as engineering process policy. Do not rename or replace Workstream product contracts such as project guide, submission artifact policy, checker policy, review policy, revision policy, or payment policy.
 
 Focus areas:
 - project manager setup workflow
@@ -28,4 +29,3 @@ Classify findings as Critical, High, Medium, Low, or Informational.
 Critical and High findings block the PR.
 End with PASS, PASS WITH LOW RISKS, or FAIL.
 """
-

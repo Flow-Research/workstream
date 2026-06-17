@@ -49,7 +49,7 @@ Workstream turns that operating knowledge into reusable infrastructure.
 ## Planning Package
 
 - [Codex Agent Loop](.agent-loop/README.md)
-- [Agent Loop Project Policy](.agent-loop/policies/project-policy.md)
+- [Repository Engineering Policy](.agent-loop/policies/repository-engineering-policy.md)
 - [30-Day Master Plan](docs/roadmap_30_day_master_plan.md)
 - [Roadmap Status](docs/roadmap_status.md)
 - [Week 1 Backend Plan](docs/roadmap_week1_backend_plan.md)

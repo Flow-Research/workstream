@@ -1,4 +1,4 @@
-# Human Review Policy
+# Human Merge Review Policy
 
 Humans do not need to read every generated line at equal depth, but humans own
 load-bearing decisions.
@@ -24,4 +24,3 @@ load-bearing decisions.
 7. Decide merge, send back, or abandon.
 
 Do not merge code or process changes you cannot explain.
-

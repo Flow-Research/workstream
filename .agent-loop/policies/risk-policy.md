@@ -17,4 +17,3 @@ auth authentication authorization permission role token secret payment payout bi
 
 Any naming with product, security, lifecycle, or payment impact must use precise
 subsystem- or actor-specific terms. Vague names require reviewer discussion.
-

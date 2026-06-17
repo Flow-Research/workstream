@@ -65,7 +65,12 @@ def main() -> int:
     missing: list[str] = []
     paths = changed_markdown_files()
     for path in paths:
-        text = path.read_text(encoding="utf-8")
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
         for match in LINK_PATTERN.finditer(text):
             target = local_target(match.group(1))
             if target is None:

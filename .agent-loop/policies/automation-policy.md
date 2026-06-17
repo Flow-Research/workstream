@@ -25,4 +25,3 @@ Automation may not begin the next L1 chunk without explicit user approval.
 - automated merge
 
 Restricted automation requires an approved chunk contract and reviewer coverage.
-
