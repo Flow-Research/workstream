@@ -52,6 +52,17 @@ valid findings addressed: yes
 - Backend migration/config review bypass: fixed by adding Alembic, backend tooling, and demo package files to review routing and static sensor coverage.
 - `AGENTS.md` stale-wording blind spot: fixed by scanning `AGENTS.md` except the explicit old-name warning line.
 - PR trust-bundle duplication risk: fixed by marking `.agent-loop/templates/PR_TRUST_BUNDLE.md` as canonical and `.github/pull_request_template.md` as a synchronized mirror.
+- Late CodeRabbit nitpicks on test monkeypatch restoration and stale-wording assertion order: fixed with `try/finally` restore blocks and set comparison.
+- Late CodeRabbit nitpick on docs-review Medium findings: fixed by requiring Medium findings to appear in PASS WITH LOW RISKS or FAIL outcomes.
+- Late CodeRabbit nitpick on product wording scope: fixed by defining borderline product wording cases as human-owned decisions.
+
+## Follow-Up Review Wave
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| QA/test | PASS | None | Verified patched globals restore through assertion failures and stale-wording assertion is order-independent. |
+| docs/product-ops | PASS | None | Verified Medium-finding and product wording scope wording does not blur Workstream runtime with the Codex engineering loop. |
+| senior engineering | PASS | None | Verified the four late CodeRabbit nitpicks are handled without scope creep or brittle tests. |
 
 ## Commands Run
 
@@ -63,6 +74,8 @@ python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_internal_review_evidence.py
 git diff --check origin/main
 python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format json
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_agent_gates.py
+git diff --check
 ```
 
 ## Remaining Risks

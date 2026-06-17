@@ -80,30 +80,31 @@ def test_evidence_requires_completed_yes_statements() -> None:
     gate.changed_files = lambda: []
     required = ("senior engineering", "qa/test")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        weak = Path(tmpdir) / "weak.md"
-        weak.write_text(
-            "| Reviewer | Result | Blocking findings |\n"
-            "|---|---:|---|\n"
-            "| senior engineering | PASS | None |\n"
-            "| qa/test | PASS | None |\n"
-            "open sub-agent sessions: none\nvalid findings addressed: no\n",
-            encoding="utf-8",
-        )
-        assert "valid findings addressed: yes" in gate.validate_evidence(weak, required)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            weak = Path(tmpdir) / "weak.md"
+            weak.write_text(
+                "| Reviewer | Result | Blocking findings |\n"
+                "|---|---:|---|\n"
+                "| senior engineering | PASS | None |\n"
+                "| qa/test | PASS | None |\n"
+                "open sub-agent sessions: none\nvalid findings addressed: no\n",
+                encoding="utf-8",
+            )
+            assert "valid findings addressed: yes" in gate.validate_evidence(weak, required)
 
-        strong = Path(tmpdir) / "strong.md"
-        strong.write_text(
-            "| Reviewer | Result | Blocking findings |\n"
-            "|---|---:|---|\n"
-            "| senior engineering | PASS | None |\n"
-            "| qa/test | PASS | None |\n"
-            "open sub-agent sessions: none\nvalid findings addressed: yes\n",
-            encoding="utf-8",
-        )
-        assert gate.validate_evidence(strong, required) == []
-
-    gate.changed_files = original_changed_files
+            strong = Path(tmpdir) / "strong.md"
+            strong.write_text(
+                "| Reviewer | Result | Blocking findings |\n"
+                "|---|---:|---|\n"
+                "| senior engineering | PASS | None |\n"
+                "| qa/test | PASS | None |\n"
+                "open sub-agent sessions: none\nvalid findings addressed: yes\n",
+                encoding="utf-8",
+            )
+            assert gate.validate_evidence(strong, required) == []
+    finally:
+        gate.changed_files = original_changed_files
 
 
 def test_evidence_must_reference_changed_chunk() -> None:
@@ -116,28 +117,29 @@ def test_evidence_must_reference_changed_chunk() -> None:
     ]
     required = ("senior engineering",)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        evidence = Path(tmpdir) / "review.md"
-        evidence.write_text(
-            "| Reviewer | Result | Blocking findings |\n"
-            "|---|---:|---|\n"
-            "| senior engineering | PASS | None |\n"
-            "open sub-agent sessions: none\nvalid findings addressed: yes\n",
-            encoding="utf-8",
-        )
-        assert "chunk id: one of ws-eng-001-01" in gate.validate_evidence(evidence, required)
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            evidence = Path(tmpdir) / "review.md"
+            evidence.write_text(
+                "| Reviewer | Result | Blocking findings |\n"
+                "|---|---:|---|\n"
+                "| senior engineering | PASS | None |\n"
+                "open sub-agent sessions: none\nvalid findings addressed: yes\n",
+                encoding="utf-8",
+            )
+            assert "chunk id: one of ws-eng-001-01" in gate.validate_evidence(evidence, required)
 
-        evidence.write_text(
-            "WS-ENG-001-01\n"
-            "| Reviewer | Result | Blocking findings |\n"
-            "|---|---:|---|\n"
-            "| senior engineering | PASS | None |\n"
-            "open sub-agent sessions: none\nvalid findings addressed: yes\n",
-            encoding="utf-8",
-        )
-        assert gate.validate_evidence(evidence, required) == []
-
-    gate.changed_files = original_changed_files
+            evidence.write_text(
+                "WS-ENG-001-01\n"
+                "| Reviewer | Result | Blocking findings |\n"
+                "|---|---:|---|\n"
+                "| senior engineering | PASS | None |\n"
+                "open sub-agent sessions: none\nvalid findings addressed: yes\n",
+                encoding="utf-8",
+            )
+            assert gate.validate_evidence(evidence, required) == []
+    finally:
+        gate.changed_files = original_changed_files
 
 
 def test_evidence_rejects_pending_or_blocking_reviewer_rows() -> None:
@@ -147,21 +149,22 @@ def test_evidence_rejects_pending_or_blocking_reviewer_rows() -> None:
     gate.changed_files = lambda: []
     required = ("senior engineering", "qa/test")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        evidence = Path(tmpdir) / "review.md"
-        evidence.write_text(
-            "| Reviewer | Result | Blocking findings |\n"
-            "|---|---:|---|\n"
-            "| senior engineering | PASS | None |\n"
-            "| qa/test | Pending | High finding |\n"
-            "open sub-agent sessions: none\nvalid findings addressed: yes\n",
-            encoding="utf-8",
-        )
-        missing = gate.validate_evidence(evidence, required)
-        assert "qa/test reviewer result must be pass" in missing
-        assert "qa/test blocking findings must be none" in missing
-
-    gate.changed_files = original_changed_files
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            evidence = Path(tmpdir) / "review.md"
+            evidence.write_text(
+                "| Reviewer | Result | Blocking findings |\n"
+                "|---|---:|---|\n"
+                "| senior engineering | PASS | None |\n"
+                "| qa/test | Pending | High finding |\n"
+                "open sub-agent sessions: none\nvalid findings addressed: yes\n",
+                encoding="utf-8",
+            )
+            missing = gate.validate_evidence(evidence, required)
+            assert "qa/test reviewer result must be pass" in missing
+            assert "qa/test blocking findings must be none" in missing
+    finally:
+        gate.changed_files = original_changed_files
 
 
 def test_evidence_main_fails_closed_on_unresolved_base_ref() -> None:
@@ -214,12 +217,13 @@ def test_static_sensor_requires_resolved_base_ref() -> None:
     sensor.ref_exists = lambda ref: False
     sensor.first_existing_ref = lambda *refs: None
 
-    report = sensor.analyze("missing-base", "HEAD")
-    assert report["result"] == "REVIEW_REQUIRED"
-    assert report["findings"][0]["code"] == "BASE_REF_UNRESOLVED"
-
-    sensor.ref_exists = original_ref_exists
-    sensor.first_existing_ref = original_first_existing_ref
+    try:
+        report = sensor.analyze("missing-base", "HEAD")
+        assert report["result"] == "REVIEW_REQUIRED"
+        assert report["findings"][0]["code"] == "BASE_REF_UNRESOLVED"
+    finally:
+        sensor.ref_exists = original_ref_exists
+        sensor.first_existing_ref = original_first_existing_ref
 
 
 def test_static_sensor_accumulates_numstat_for_duplicate_paths() -> None:
@@ -240,13 +244,13 @@ def test_static_sensor_accumulates_numstat_for_duplicate_paths() -> None:
         return ""
 
     sensor.maybe_run = fake_maybe_run
-
-    added, deleted, rows = sensor.numstat("origin/main", "HEAD")
-    assert added == 6
-    assert deleted == 5
-    assert rows == [("scripts/workstream_agent_gate.py", 6, 5)]
-
-    sensor.maybe_run = original_maybe_run
+    try:
+        added, deleted, rows = sensor.numstat("origin/main", "HEAD")
+        assert added == 6
+        assert deleted == 5
+        assert rows == [("scripts/workstream_agent_gate.py", 6, 5)]
+    finally:
+        sensor.maybe_run = original_maybe_run
 
 
 def test_static_sensor_flags_backend_config_as_ci_surface() -> None:
@@ -277,16 +281,16 @@ def test_markdown_link_checker_collects_base_cached_dirty_and_untracked() -> Non
 
     checker.subprocess.check_output = fake_check_output
     checker.subprocess.run = lambda *args, **kwargs: SimpleNamespace(returncode=0)
-
-    assert [str(path) for path in checker.changed_markdown_files()] == [
-        "README.md",
-        ".agent-loop/README.md",
-        "docs/glossary.md",
-        "new.md",
-    ]
-
-    checker.subprocess.check_output = original_check_output
-    checker.subprocess.run = original_run
+    try:
+        assert [str(path) for path in checker.changed_markdown_files()] == [
+            "README.md",
+            ".agent-loop/README.md",
+            "docs/glossary.md",
+            "new.md",
+        ]
+    finally:
+        checker.subprocess.check_output = original_check_output
+        checker.subprocess.run = original_run
 
 
 def test_stale_wording_patterns_catch_variants() -> None:
@@ -301,12 +305,12 @@ def test_stale_wording_patterns_catch_variants() -> None:
         ]
     )
     matches = [pattern.pattern for pattern in stale.FORBIDDEN_PATTERNS if pattern.search(sample)]
-    assert matches == [
+    assert set(matches) == {
         "task-" + "production control plane",
         "garden " + "roadmap",
         "claude " + "code",
         "auto[\\s-]?merge",
-    ]
+    }
 
 
 def main() -> int:

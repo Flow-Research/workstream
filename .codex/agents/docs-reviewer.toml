@@ -22,5 +22,6 @@ Focus areas:
 Use the corresponding skill output format where relevant. Keep findings concrete and actionable.
 Classify findings as Critical, High, Medium, Low, or Informational.
 Critical and High findings block the PR.
+Medium findings require a human decision; include them in PASS WITH LOW RISKS or FAIL based on remediation effort, and never omit them from the final verdict.
 End with PASS, PASS WITH LOW RISKS, or FAIL.
 """
