@@ -11,6 +11,13 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 ## Working Rules
 
 - Keep wording consistent with `README.md`, `docs/glossary.md`, and `docs/architecture_lockdown.md`.
+- Treat this repository's engineering loop as a Codex-native zero-trust loop:
+  `Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> Implementation -> Evidence -> Internal Review -> PR -> Human Checkpoint -> Memory Update -> Stop`.
+- Keep the engineering loop separate from the Workstream product lifecycle. Workstream product review decisions remain `accept`, `needs_revision`, and `reject`; internal engineering reviewer findings are process evidence, not product decisions.
+- Codex-discoverable repository skills live under `.agents/skills/`.
+- Codex custom reviewer agents live under `.codex/agents/`.
+- Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
+- Do not add Claude-specific files unless the user explicitly asks for cross-tool support.
 - Do not use old names such as "task-production control plane" or "Garden roadmap".
 - Spreadsheet exports live locally under ignored `sheets/`; do not commit them.
 - Do not add extra sheets to local `sheets/workstream_roadmap.xlsx`; the workbook must contain one sheet only: `WorkStream RoadMap`.
@@ -31,11 +38,16 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Postgres is the record database.
 - Local filesystem storage is acceptable only behind an object-storage abstraction compatible with R2/S3-style storage.
 - Do not expand into blockchain settlement, marketplace, external source adapters, automated routing, or agent workspace until the internal loop is proven.
+- Every non-trivial task starts with the smallest applicable loop artifact: an initiative plan for large work, or a chunk contract for bounded work.
+- Do not implement a chunk until its allowed files, not-allowed changes, acceptance criteria, risk class, verification commands, and required reviewers are explicit.
+- Do not begin the next chunk automatically after finishing the current chunk.
 - Every implementation or specification chunk must receive internal sub-agent review before external PR review is treated as sufficient.
 - Required internal reviewer tracks are senior engineering, QA/test, security/auth, and product/ops unless the chunk is explicitly unrelated to that track.
+- For architecture, CI/workflow, docs, or reuse-sensitive chunks, add the matching reviewer track from `.codex/agents/`.
 - Do not report a chunk complete while reviewer agents are still running. Wait for them, address valid findings, and close any open sub-agent sessions.
 - CodeRabbit, CI, and GitHub review are external checks. They supplement internal reviewer agents; they do not replace them.
 - Do not open, push, or ask for review on a PR until required internal reviewer tracks have run for the chunk, all valid findings are addressed or documented, and no sub-agent sessions remain open.
+- Do not merge a PR unless the user explicitly approves that specific PR for merge.
 
 ## Done Criteria
 
@@ -48,3 +60,4 @@ Before reporting completion:
 - update related docs/templates and local sheet exports together when the roadmap changes
 - run required internal sub-agent reviewers for the chunk and resolve or explicitly document every valid finding
 - confirm no sub-agent sessions remain open
+- update `.agent-loop/` initiative status, review log, and memory when the chunk materially changes the engineering process

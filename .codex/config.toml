@@ -1,0 +1,10 @@
+# Project-local Codex configuration for Workstream zero-trust loop engineering.
+#
+# This file is intentionally small. Codex only loads project-local `.codex/`
+# config after the repository is trusted. Custom reviewer agents are defined as
+# standalone TOML files under `.codex/agents/`.
+
+[agents]
+max_threads = 6
+max_depth = 1
+job_max_runtime_seconds = 1800

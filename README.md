@@ -48,6 +48,8 @@ Workstream turns that operating knowledge into reusable infrastructure.
 
 ## Planning Package
 
+- [Codex Agent Loop](.agent-loop/README.md)
+- [Agent Loop Project Policy](.agent-loop/policies/project-policy.md)
 - [30-Day Master Plan](docs/roadmap_30_day_master_plan.md)
 - [Roadmap Status](docs/roadmap_status.md)
 - [Week 1 Backend Plan](docs/roadmap_week1_backend_plan.md)
@@ -116,6 +118,32 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [ADR 0009: Review Decisions Are Canonical](docs/decision_0009_review_decisions_are_canonical.md)
 - [ADR 0010: Revision Context Rebase Is Controlled By Policy](docs/decision_0010_revision_context_rebase.md)
 - [ADR 0011: Submission Artifact Policy Drives Pre-Submit Intake](docs/decision_0011_submission_artifact_policy_drives_pre_submit.md)
+
+## Engineering Loop
+
+Workstream is built with a Codex-native zero-trust engineering loop:
+
+```text
+Intent
+-> Discovery
+-> Plan
+-> Chunk Map
+-> Chunk Contract
+-> Implementation
+-> Evidence
+-> Internal Review
+-> PR
+-> Human Checkpoint
+-> Memory Update
+-> Stop
+```
+
+Codex-discoverable skills live in `.agents/skills/`. Codex custom reviewer
+agents live in `.codex/agents/`. Durable engineering memory, policies, chunk
+contracts, reviews, and status live in `.agent-loop/`.
+
+This engineering loop is separate from Workstream product state. It governs how
+the repository is changed; it does not define runtime task or review records.
 
 ## Local Backend Database
 

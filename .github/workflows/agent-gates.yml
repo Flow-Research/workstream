@@ -1,0 +1,33 @@
+name: Agent Gates
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  agent-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Static agent sensor
+        run: python3 scripts/workstream_agent_gate.py --base origin/${{ github.base_ref }} --head HEAD --format markdown
+
+      - name: Markdown link check
+        run: python3 scripts/check_markdown_links.py
+
+      - name: Stale wording check
+        run: python3 scripts/check_stale_workstream_wording.py
+
+      - name: Agent gate regression tests
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_agent_gates.py
+
+      - name: Internal review evidence gate
+        run: python3 scripts/check_internal_review_evidence.py
