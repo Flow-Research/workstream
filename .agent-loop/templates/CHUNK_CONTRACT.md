@@ -52,7 +52,14 @@ P0 / P1 / P2 / P3
 
 ## Required reviewers
 
-Mandatory:
+Every listed reviewer must end with one exact result value:
+
+- `PASS`
+- `PASS AFTER FIXES`
+- `PASS WITH LOW RISKS`
+- `N/A - with approved reason`
+
+Baseline:
 
 - [ ] senior engineering
 - [ ] QA/test
@@ -69,6 +76,10 @@ Conditional:
 - [ ] reuse/dedup, when the chunk touches skills, agents, backend app code, or
   scripts
 - [ ] test delta, when the chunk touches tests or test-like files
+
+Use `N/A - with approved reason` only when the reviewer track is explicitly
+unrelated to the chunk. Security and architecture cannot be marked N/A when the
+chunk touches their surfaces.
 
 ## Human review focus
 

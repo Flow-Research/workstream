@@ -6,8 +6,16 @@ import os
 import re
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
+ALLOWED_POST_REVIEW_PREFIXES = (
+    ".agent-loop/initiatives/",
+    "docs/internal_reviews/",
+)
+ALLOWED_POST_REVIEW_EXACT_PATHS = {
+    ".agent-loop/LOOP_STATE.md",
+}
 RELEVANT_PREFIXES = (
     ".agent-loop/",
     ".agents/",
@@ -19,6 +27,7 @@ RELEVANT_PREFIXES = (
     "backend/alembic/",
     "backend/app/",
     "backend/tests/",
+    "demos/week1_api_demo_ui/",
     "docs/",
     "scripts/",
 )
@@ -38,13 +47,34 @@ BASE_REQUIRED_TRACKS = (
     "security/auth",
     "product/ops",
 )
+KNOWN_REVIEWER_TRACKS = BASE_REQUIRED_TRACKS + (
+    "architecture",
+    "ci integrity",
+    "docs",
+    "reuse/dedup",
+    "test delta",
+)
 REQUIRED_STATEMENTS = {
     "open sub-agent sessions": "none",
     "valid findings addressed": "yes",
 }
 ACTIVE_CHUNK_ENV = "INTERNAL_REVIEW_CHUNK_ID"
 CHUNK_FILE_PATTERN = re.compile(r"(?P<chunk>[A-Z]+-[A-Z]+-\d+-\d+)")
+REVIEWED_SHA_PATTERN = re.compile(r"^reviewed code sha:\s*`?([0-9a-f]{40})`?$", re.IGNORECASE | re.MULTILINE)
+PROVENANCE_VALUE_PATTERN = re.compile(r"^(reviewed at|reviewer run ids):[ \t]*(.+)$", re.IGNORECASE | re.MULTILINE)
+UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d+)?z$")
 ACCEPTED_BLOCKING_VALUES = {"none", "none remaining", "n/a", "no"}
+ACCEPTED_PASS_RESULTS = {"pass", "pass after fixes", "pass with low risks"}
+ACCEPTED_NA_RESULT = "n/a - with approved reason"
+REQUIRED_PROVENANCE_LABELS = ("reviewed code sha:", "reviewed at:", "reviewer run ids:")
+PROVENANCE_PLACEHOLDER_FRAGMENTS = (
+    "<",
+    ">",
+    "utc timestamp",
+    "agent ids",
+    "ci run ids",
+    "local reviewer run references",
+)
 
 
 def git(*args: str) -> str:
@@ -129,7 +159,13 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
             "backend/pyproject.toml",
             "demos/week1_api_demo_ui/package-lock.json",
             "demos/week1_api_demo_ui/package.json",
-        }:
+        } or (
+            path.startswith("demos/week1_api_demo_ui/")
+            and (
+                Path(path).name in {"vite.config.ts", "vite.config.js"}
+                or Path(path).name.startswith("tsconfig")
+            )
+        ):
             add("ci integrity")
         if path.endswith(".md") or path.startswith(("docs/", ".agent-loop/", ".agents/")) or path in {
             "AGENTS.md",
@@ -138,40 +174,186 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
             add("docs")
         if path.startswith((".agents/skills/", ".codex/agents/", "backend/app/", "scripts/")):
             add("reuse/dedup")
-        if path.startswith("backend/tests/") or "/tests/" in path or Path(path).name.startswith("test_"):
+        if (
+            path.startswith(("backend/tests/", "demos/week1_api_demo_ui/"))
+            or "/tests/" in path
+            or Path(path).name.startswith("test_")
+        ):
             add("test delta")
 
     return tuple(required)
 
 
-def reviewer_rows(text: str) -> dict[str, tuple[str, str]]:
+def reviewer_rows(text: str) -> dict[str, tuple[str, str, str]]:
     """Return reviewer table rows keyed by reviewer name."""
-    rows: dict[str, tuple[str, str]] = {}
+    rows: dict[str, tuple[str, str, str]] = {}
+    in_reviewer_table = False
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped.startswith("|") or "---" in stripped:
+        if not stripped.startswith("|"):
+            in_reviewer_table = False
             continue
         cells = [cell.strip().lower() for cell in stripped.strip("|").split("|")]
-        if len(cells) < 3 or cells[0] == "reviewer":
+        if len(cells) < 3:
             continue
-        rows[cells[0]] = (cells[1], cells[2])
+        if cells[:3] == ["reviewer", "result", "blocking findings"]:
+            in_reviewer_table = True
+            continue
+        if not in_reviewer_table or "---" in stripped:
+            continue
+        if cells[0] not in KNOWN_REVIEWER_TRACKS:
+            in_reviewer_table = False
+            continue
+        notes = cells[3] if len(cells) > 3 else ""
+        rows[cells[0]] = (cells[1], cells[2], notes)
     return rows
+
+
+def normalize_result(result: str) -> str:
+    """Normalize a reviewer result token for exact comparison."""
+    return result.replace("—", "-").replace("–", "-").strip().lower()
 
 
 def validate_reviewer_rows(text: str, required_tracks: tuple[str, ...]) -> list[str]:
     """Validate reviewer result rows for required tracks."""
     rows = reviewer_rows(text)
     missing: list[str] = []
+    allowed_results = ACCEPTED_PASS_RESULTS | {ACCEPTED_NA_RESULT}
+    for track, (result, _blocking, notes) in rows.items():
+        normalized = normalize_result(result)
+        if normalized not in allowed_results:
+            missing.append(
+                f"{track} reviewer result must be one of: "
+                f"{', '.join(sorted(allowed_results))}"
+            )
+        if normalized == ACCEPTED_NA_RESULT and not provenance_text_value(notes):
+            missing.append(f"{track} n/a result requires notes")
     for track in required_tracks:
         row = rows.get(track)
         if row is None:
             missing.append(f"reviewer result row: {track}")
             continue
-        result, blocking = row
-        if "pass" not in result or "pending" in result or "fail" in result:
-            missing.append(f"{track} reviewer result must be pass")
+        result, blocking, notes = row
+        normalized = normalize_result(result)
+        if normalized in ACCEPTED_PASS_RESULTS:
+            pass
+        elif normalized == ACCEPTED_NA_RESULT:
+            missing.append(f"{track} reviewer result cannot be n/a when required")
         if blocking not in ACCEPTED_BLOCKING_VALUES:
             missing.append(f"{track} blocking findings must be none")
+    return missing
+
+
+def reviewed_sha(text: str) -> str | None:
+    """Return the reviewed code SHA recorded in evidence text."""
+    match = REVIEWED_SHA_PATTERN.search(text)
+    if match:
+        return match.group(1).lower()
+    return None
+
+
+def provenance_value(text: str, label: str) -> str:
+    """Return a non-empty provenance value by label."""
+    for match in PROVENANCE_VALUE_PATTERN.finditer(text):
+        if match.group(1).lower() == label:
+            value = provenance_text_value(match.group(2))
+            if label == "reviewed at" and not is_utc_timestamp(value):
+                return ""
+            if value:
+                return value
+    return ""
+
+
+def provenance_text_value(value: str) -> str:
+    """Return a non-placeholder provenance value."""
+    cleaned = value.strip().strip("`")
+    normalized = cleaned.lower()
+    if not cleaned or normalized in {"-", "n/a", "none", "pending"}:
+        return ""
+    if any(fragment in normalized for fragment in PROVENANCE_PLACEHOLDER_FRAGMENTS):
+        return ""
+    return cleaned
+
+
+def is_utc_timestamp(value: str) -> bool:
+    """Return whether value is a concrete UTC timestamp."""
+    if not UTC_TIMESTAMP_PATTERN.match(value.lower()):
+        return False
+    try:
+        datetime.fromisoformat(value.lower().replace("z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
+def review_target_sha() -> str:
+    """Return the PR head SHA when available, otherwise local HEAD."""
+    for key in ("INTERNAL_REVIEW_HEAD_SHA", "PR_HEAD_SHA", "GITHUB_HEAD_SHA"):
+        value = os.environ.get(key, "").strip().lower()
+        if value:
+            return value
+    return git("rev-parse", "HEAD").lower()
+
+
+def dirty_after_review_paths() -> list[str]:
+    """Return staged, unstaged, and untracked paths not committed after review."""
+    paths: list[str] = []
+
+    def add(output: str) -> None:
+        for path in output.splitlines():
+            if path and path not in paths:
+                paths.append(path)
+
+    add(git("diff", "--name-only", "--cached"))
+    add(git("diff", "--name-only"))
+    add(git("ls-files", "--others", "--exclude-standard"))
+    return paths
+
+
+def is_allowed_after_review_path(path: str) -> bool:
+    """Return whether a path may change after the reviewed SHA."""
+    if path in ALLOWED_POST_REVIEW_EXACT_PATHS:
+        return True
+    if path.startswith("docs/internal_reviews/"):
+        return True
+    if path.startswith(ALLOWED_POST_REVIEW_PREFIXES) and (
+        "/reviews/" in path or path.endswith("/STATUS.md")
+    ):
+        return True
+    return False
+
+
+def validate_reviewed_revision(text: str) -> list[str]:
+    """Validate that evidence is bound to the current reviewed revision."""
+    missing: list[str] = []
+    if "reviewed code sha:" not in text:
+        missing.append("reviewed code sha")
+    if not provenance_value(text, "reviewed at"):
+        missing.append("reviewed at")
+    if not provenance_value(text, "reviewer run ids"):
+        missing.append("reviewer run ids")
+
+    sha = reviewed_sha(text)
+    if sha is None:
+        missing.append("reviewed code sha: <40-character sha>")
+        return missing
+    if not git_ok("rev-parse", "--verify", f"{sha}^{{commit}}"):
+        missing.append(f"reviewed code sha does not resolve: {sha}")
+        return missing
+
+    target_sha = review_target_sha()
+    if not git_ok("rev-parse", "--verify", f"{target_sha}^{{commit}}"):
+        missing.append(f"review target sha does not resolve: {target_sha}")
+        return missing
+
+    changed_after_review = git("diff", "--name-only", f"{sha}..{target_sha}").splitlines()
+    changed_after_review.extend(dirty_after_review_paths())
+    invalid = [path for path in changed_after_review if not is_allowed_after_review_path(path)]
+    if invalid:
+        missing.append(
+            "reviewed code sha is stale; non-evidence files changed after review: "
+            + ", ".join(invalid[:20])
+        )
     return missing
 
 
@@ -179,6 +361,7 @@ def validate_evidence(
     path: Path,
     required_tracks: tuple[str, ...],
     chunk_ids: list[str] | None = None,
+    enforce_reviewed_revision: bool = True,
 ) -> list[str]:
     """Validate one internal review evidence file."""
     text = path.read_text(encoding="utf-8").lower()
@@ -193,6 +376,8 @@ def validate_evidence(
         if f"{label}: {expected_value}" not in text:
             missing.append(f"{label}: {expected_value}")
     missing.extend(validate_reviewer_rows(text, required_tracks))
+    if enforce_reviewed_revision:
+        missing.extend(validate_reviewed_revision(text))
     return missing
 
 

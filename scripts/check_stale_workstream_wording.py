@@ -10,8 +10,10 @@ from pathlib import Path
 FORBIDDEN_PATTERNS = (
     re.compile(r"task-production control plane", re.IGNORECASE),
     re.compile(r"garden roadmap", re.IGNORECASE),
-    re.compile(r"claude code", re.IGNORECASE),
-    re.compile(r"auto[\s-]?merge", re.IGNORECASE),
+)
+FORBIDDEN_PATH_PATTERNS = (
+    re.compile(r"(^|/)\.claude(/|$)", re.IGNORECASE),
+    re.compile(r"(^|/)claude\.md$", re.IGNORECASE),
 )
 SKIP_DIRS = {
     ".git",
@@ -47,6 +49,17 @@ def tracked_and_new_files() -> list[Path]:
     return paths
 
 
+def forbidden_path_failures(paths: list[Path]) -> list[str]:
+    """Return failures for forbidden tool-specific files or directories."""
+    failures: list[str] = []
+    for path in paths:
+        raw_path = path.as_posix()
+        for pattern in FORBIDDEN_PATH_PATTERNS:
+            if pattern.search(raw_path):
+                failures.append(f"{raw_path}: forbidden Codex-incompatible path /{pattern.pattern}/i")
+    return failures
+
+
 def read_text(path: Path) -> str | None:
     """Read text files and ignore binary or unreadable files."""
     try:
@@ -71,8 +84,9 @@ def read_text(path: Path) -> str | None:
 
 def main() -> int:
     """Run the stale wording check."""
-    failures: list[str] = []
-    for path in tracked_and_new_files():
+    paths = tracked_and_new_files()
+    failures: list[str] = forbidden_path_failures(paths)
+    for path in paths:
         text = read_text(path)
         if text is None:
             continue

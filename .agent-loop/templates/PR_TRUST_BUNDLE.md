@@ -98,18 +98,28 @@ Result summary:
 
 ## Reviewer results
 
-| Reviewer | Result | Blocking findings |
-|---|---:|---|
-| senior engineering | Pending | |
-| QA/test | Pending | |
-| security/auth | Pending | |
-| product/ops | Pending | |
-| architecture | Pending / N/A | |
-| CI integrity | Pending / N/A | |
-| docs | Pending / N/A | |
-| reuse/dedup | Pending / N/A | |
-| test delta | Pending / N/A | |
-| external reviewer | Pending | |
+Allowed result values: `PASS`, `PASS AFTER FIXES`, `PASS WITH LOW RISKS`, or
+`N/A - with approved reason`. Any `N/A - with approved reason` row must include
+the reason in `Notes`.
+
+Reviewed code SHA:
+
+Reviewed at:
+
+Reviewer run IDs:
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | Pending | | |
+| QA/test | Pending | | |
+| security/auth | Pending | | |
+| product/ops | Pending | | |
+| architecture | Pending / N/A - with approved reason | | |
+| CI integrity | Pending / N/A - with approved reason | | |
+| docs | Pending / N/A - with approved reason | | |
+| reuse/dedup | Pending / N/A - with approved reason | | |
+| test delta | Pending / N/A - with approved reason | | |
+| external reviewer | Pending | | |
 
 ## Remaining risks
 

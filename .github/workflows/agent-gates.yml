@@ -32,4 +32,6 @@ jobs:
         run: python3 scripts/test_agent_gates.py
 
       - name: Internal review evidence gate
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/check_internal_review_evidence.py

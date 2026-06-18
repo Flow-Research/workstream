@@ -60,10 +60,22 @@ def test_backend_config_paths_require_review_evidence() -> None:
     assert gate.is_relevant("backend/alembic.ini")
     assert gate.is_relevant("backend/pyproject.toml")
     assert gate.is_relevant("demos/week1_api_demo_ui/package.json")
+    assert gate.is_relevant("demos/week1_api_demo_ui/src/App.tsx")
 
-    tracks = gate.required_tracks_for(["backend/alembic/versions/0001_init.py", "backend/pyproject.toml"])
-    assert "architecture" in tracks
-    assert "ci integrity" in tracks
+    backend_tracks = gate.required_tracks_for(["backend/alembic/versions/0001_init.py"])
+    assert "architecture" in backend_tracks
+    assert "ci integrity" not in backend_tracks
+
+    backend_config_tracks = gate.required_tracks_for(["backend/pyproject.toml"])
+    assert "ci integrity" in backend_config_tracks
+
+    demo_source_tracks = gate.required_tracks_for(["demos/week1_api_demo_ui/src/App.tsx"])
+    assert "test delta" in demo_source_tracks
+    assert "ci integrity" not in demo_source_tracks
+
+    demo_config_tracks = gate.required_tracks_for(["demos/week1_api_demo_ui/vite.config.ts"])
+    assert "test delta" in demo_config_tracks
+    assert "ci integrity" in demo_config_tracks
 
 
 def test_review_evidence_files_are_not_relevant_changes() -> None:
@@ -91,7 +103,11 @@ def test_evidence_requires_completed_yes_statements() -> None:
                 "open sub-agent sessions: none\nvalid findings addressed: no\n",
                 encoding="utf-8",
             )
-            assert "valid findings addressed: yes" in gate.validate_evidence(weak, required)
+            assert "valid findings addressed: yes" in gate.validate_evidence(
+                weak,
+                required,
+                enforce_reviewed_revision=False,
+            )
 
             strong = Path(tmpdir) / "strong.md"
             strong.write_text(
@@ -102,7 +118,7 @@ def test_evidence_requires_completed_yes_statements() -> None:
                 "open sub-agent sessions: none\nvalid findings addressed: yes\n",
                 encoding="utf-8",
             )
-            assert gate.validate_evidence(strong, required) == []
+            assert gate.validate_evidence(strong, required, enforce_reviewed_revision=False) == []
     finally:
         gate.changed_files = original_changed_files
 
@@ -127,7 +143,11 @@ def test_evidence_must_reference_changed_chunk() -> None:
                 "open sub-agent sessions: none\nvalid findings addressed: yes\n",
                 encoding="utf-8",
             )
-            assert "chunk id: one of ws-eng-001-01" in gate.validate_evidence(evidence, required)
+            assert "chunk id: one of ws-eng-001-01" in gate.validate_evidence(
+                evidence,
+                required,
+                enforce_reviewed_revision=False,
+            )
 
             evidence.write_text(
                 "WS-ENG-001-01\n"
@@ -137,7 +157,7 @@ def test_evidence_must_reference_changed_chunk() -> None:
                 "open sub-agent sessions: none\nvalid findings addressed: yes\n",
                 encoding="utf-8",
             )
-            assert gate.validate_evidence(evidence, required) == []
+            assert gate.validate_evidence(evidence, required, enforce_reviewed_revision=False) == []
     finally:
         gate.changed_files = original_changed_files
 
@@ -160,11 +180,237 @@ def test_evidence_rejects_pending_or_blocking_reviewer_rows() -> None:
                 "open sub-agent sessions: none\nvalid findings addressed: yes\n",
                 encoding="utf-8",
             )
-            missing = gate.validate_evidence(evidence, required)
-            assert "qa/test reviewer result must be pass" in missing
+            missing = gate.validate_evidence(evidence, required, enforce_reviewed_revision=False)
+            assert any("qa/test reviewer result must be one of" in item for item in missing)
             assert "qa/test blocking findings must be none" in missing
     finally:
         gate.changed_files = original_changed_files
+
+
+def test_evidence_accepts_exact_pass_and_approved_na_results() -> None:
+    """Reviewer result values are exact, with explicit N/A reason support."""
+    gate = load_module("review_gate_exact_results", "scripts/check_internal_review_evidence.py")
+    required = ("senior engineering",)
+    text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| senior engineering | PASS WITH LOW RISKS | None | checked |\n"
+        "| qa/test | N/A - with approved reason | None | explicitly unrelated because docs only |\n"
+    )
+    assert gate.validate_reviewer_rows(text.lower(), required) == []
+
+    bad_text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| senior engineering | bypass | None | malformed |\n"
+    )
+    missing = gate.validate_reviewer_rows(bad_text.lower(), required)
+    assert any("senior engineering reviewer result must be one of" in item for item in missing)
+
+    optional_bad_text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| senior engineering | PASS | None | checked |\n"
+        "| docs | Pending / N/A - with approved reason | None | |\n"
+        "| ci integrity | N/A | None | |\n"
+    )
+    missing = gate.validate_reviewer_rows(optional_bad_text.lower(), required)
+    assert any("docs reviewer result must be one of" in item for item in missing)
+    assert any("ci integrity reviewer result must be one of" in item for item in missing)
+
+    unrelated_table_text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| senior engineering | PASS | None | checked |\n"
+        "| Finding | Severity | Status |\n"
+        "|---|---:|---|\n"
+        "| F-001 | high | closed |\n"
+    )
+    assert gate.validate_reviewer_rows(unrelated_table_text.lower(), required) == []
+
+    missing_note_text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| senior engineering | PASS | None | checked |\n"
+        "| docs | N/A - with approved reason | None | pending |\n"
+    )
+    missing = gate.validate_reviewer_rows(missing_note_text.lower(), required)
+    assert "docs n/a result requires notes" in missing
+
+
+def test_evidence_rejects_na_for_required_tracks() -> None:
+    """Required reviewer tracks must pass and cannot be bypassed with N/A."""
+    gate = load_module("review_gate_required_na", "scripts/check_internal_review_evidence.py")
+    required = ("security/auth", "architecture")
+    text = (
+        "| Reviewer | Result | Blocking findings | Notes |\n"
+        "|---|---:|---|---|\n"
+        "| security/auth | N/A - with approved reason | None | claimed unrelated |\n"
+        "| architecture | N/A - with approved reason | None | claimed unrelated |\n"
+    )
+    missing = gate.validate_reviewer_rows(text.lower(), required)
+    assert "security/auth reviewer result cannot be n/a when required" in missing
+    assert "architecture reviewer result cannot be n/a when required" in missing
+
+
+def test_evidence_reviewed_revision_allows_only_evidence_status_changes() -> None:
+    """Evidence must be bound to a reviewed SHA and only status files may follow."""
+    gate = load_module("review_gate_revision_binding", "scripts/check_internal_review_evidence.py")
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    reviewed = "a" * 40
+
+    def fake_git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return "b" * 40
+        if args == ("diff", "--name-only", f"{reviewed}..{'b' * 40}"):
+            return (
+                ".agent-loop/LOOP_STATE.md\n"
+                ".agent-loop/initiatives/example/reviews/review.md\n"
+                "docs/internal_reviews/review.md"
+            )
+        if args in {
+            ("diff", "--name-only", "--cached"),
+            ("diff", "--name-only"),
+            ("ls-files", "--others", "--exclude-standard"),
+        }:
+            return ""
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    try:
+        text = (
+            f"Reviewed code SHA: {reviewed}\n"
+            "Reviewed at: 2026-06-18T00:00:00Z\n"
+            "Reviewer run IDs: local\n"
+        ).lower()
+        assert gate.validate_reviewed_revision(text) == []
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
+
+
+def test_evidence_reviewed_revision_rejects_late_implementation_changes() -> None:
+    """Implementation changes after the reviewed SHA invalidate evidence."""
+    gate = load_module("review_gate_revision_rejects_late_changes", "scripts/check_internal_review_evidence.py")
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    reviewed = "a" * 40
+
+    def fake_git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return "b" * 40
+        if args == ("diff", "--name-only", f"{reviewed}..{'b' * 40}"):
+            return "scripts/check_internal_review_evidence.py"
+        if args in {
+            ("diff", "--name-only", "--cached"),
+            ("diff", "--name-only"),
+            ("ls-files", "--others", "--exclude-standard"),
+        }:
+            return ""
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    try:
+        text = (
+            f"Reviewed code SHA: {reviewed}\n"
+            "Reviewed at: 2026-06-18T00:00:00Z\n"
+            "Reviewer run IDs: local\n"
+        ).lower()
+        missing = gate.validate_reviewed_revision(text)
+        assert any("reviewed code sha is stale" in item for item in missing)
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
+
+
+def test_evidence_reviewed_revision_rejects_dirty_tree_changes() -> None:
+    """Staged, unstaged, and untracked implementation changes invalidate evidence."""
+    gate = load_module("review_gate_revision_rejects_dirty", "scripts/check_internal_review_evidence.py")
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    reviewed = "a" * 40
+
+    def fake_git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return reviewed
+        if args == ("diff", "--name-only", f"{reviewed}..{reviewed}"):
+            return ""
+        if args == ("diff", "--name-only", "--cached"):
+            return "scripts/staged_change.py"
+        if args == ("diff", "--name-only"):
+            return "scripts/check_internal_review_evidence.py"
+        if args == ("ls-files", "--others", "--exclude-standard"):
+            return "scripts/untracked_change.py"
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    try:
+        text = (
+            f"Reviewed code SHA: {reviewed}\n"
+            "Reviewed at: 2026-06-18T00:00:00Z\n"
+            "Reviewer run IDs: local\n"
+        ).lower()
+        missing = gate.validate_reviewed_revision(text)
+        assert any("reviewed code sha is stale" in item for item in missing)
+        stale = next(item for item in missing if "reviewed code sha is stale" in item)
+        assert "scripts/staged_change.py" in stale
+        assert "scripts/check_internal_review_evidence.py" in stale
+        assert "scripts/untracked_change.py" in stale
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
+
+
+def test_evidence_reviewed_revision_rejects_invalid_provenance() -> None:
+    """Reviewed at and reviewer run IDs must contain concrete values."""
+    gate = load_module("review_gate_revision_blank_provenance", "scripts/check_internal_review_evidence.py")
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    reviewed = "a" * 40
+
+    def fake_git(*args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return reviewed
+        if args == ("diff", "--name-only", f"{reviewed}..{reviewed}"):
+            return ""
+        if args in {
+            ("diff", "--name-only", "--cached"),
+            ("diff", "--name-only"),
+            ("ls-files", "--others", "--exclude-standard"),
+        }:
+            return ""
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    try:
+        text = f"Reviewed code SHA: {reviewed}\nReviewed at:\nReviewer run IDs:\n".lower()
+        missing = gate.validate_reviewed_revision(text)
+        assert "reviewed at" in missing
+        assert "reviewer run ids" in missing
+
+        placeholder_text = (
+            f"Reviewed code SHA: `{reviewed}`\n"
+            "Reviewed at: `<UTC timestamp>`\n"
+            "Reviewer run IDs: `<agent ids, CI run IDs, or local reviewer run references>`\n"
+        ).lower()
+        missing = gate.validate_reviewed_revision(placeholder_text)
+        assert "reviewed at" in missing
+        assert "reviewer run ids" in missing
+
+        bad_timestamp_text = (
+            f"Reviewed code SHA: {reviewed}\n"
+            "Reviewed at: 2026-06-18 00:00:00\n"
+            "Reviewer run IDs: 019eda06-0848-7131-8895-48f8ea720fb9\n"
+        ).lower()
+        assert "reviewed at" in gate.validate_reviewed_revision(bad_timestamp_text)
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
 
 
 def test_evidence_main_fails_closed_on_unresolved_base_ref() -> None:
@@ -183,6 +429,77 @@ def test_evidence_main_fails_closed_on_unresolved_base_ref() -> None:
             os.environ.pop("INTERNAL_REVIEW_BASE_REF", None)
         else:
             os.environ["INTERNAL_REVIEW_BASE_REF"] = original_env
+
+
+def test_evidence_main_passes_with_complete_evidence_and_pr_head() -> None:
+    """The full evidence gate passes when evidence is complete and bound to PR_HEAD_SHA."""
+    gate = load_module("review_gate_main_complete", "scripts/check_internal_review_evidence.py")
+    original_env = {
+        "INTERNAL_REVIEW_BASE_REF": os.environ.get("INTERNAL_REVIEW_BASE_REF"),
+        "INTERNAL_REVIEW_CHUNK_ID": os.environ.get("INTERNAL_REVIEW_CHUNK_ID"),
+        "PR_HEAD_SHA": os.environ.get("PR_HEAD_SHA"),
+    }
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    original_changed_files = gate.changed_files
+    reviewed = "a" * 40
+    local_head = "b" * 40
+    evidence = ROOT / "docs/internal_reviews/test_agent_gate_complete_evidence.md"
+
+    def fake_git(*args: str) -> str:
+        if args == ("merge-base", "--is-ancestor", "origin/main", "HEAD"):
+            return ""
+        if args == ("rev-parse", "HEAD"):
+            return local_head
+        if args == ("diff", "--name-only", f"{reviewed}..{reviewed}"):
+            return ""
+        if args in {
+            ("diff", "--name-only", "--cached"),
+            ("diff", "--name-only"),
+            ("ls-files", "--others", "--exclude-standard"),
+        }:
+            return ""
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    gate.changed_files = lambda: [
+        "scripts/check_internal_review_evidence.py",
+        "docs/internal_reviews/test_agent_gate_complete_evidence.md",
+    ]
+    try:
+        os.environ.pop("INTERNAL_REVIEW_BASE_REF", None)
+        os.environ["INTERNAL_REVIEW_CHUNK_ID"] = "WS-ENG-001-01"
+        os.environ["PR_HEAD_SHA"] = reviewed
+        evidence.write_text(
+            "WS-ENG-001-01\n"
+            "open sub-agent sessions: none\n"
+            "valid findings addressed: yes\n"
+            f"Reviewed code SHA: {reviewed}\n"
+            "Reviewed at: 2026-06-18T00:00:00Z\n"
+            "Reviewer run IDs: 019eda83-6476-7230-895b-1877790c407b\n"
+            "| Reviewer | Result | Blocking findings | Notes |\n"
+            "|---|---:|---|---|\n"
+            "| senior engineering | PASS | None | checked |\n"
+            "| qa/test | PASS WITH LOW RISKS | None | checked |\n"
+            "| security/auth | PASS | None | checked |\n"
+            "| product/ops | PASS | None | checked |\n"
+            "| ci integrity | PASS | None | checked |\n"
+            "| reuse/dedup | PASS | None | checked |\n",
+            encoding="utf-8",
+        )
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            assert gate.main() == 0
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
+        gate.changed_files = original_changed_files
+        evidence.unlink(missing_ok=True)
+        for key, value in original_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def test_evidence_main_reports_missing_evidence_file() -> None:
@@ -299,18 +616,18 @@ def test_stale_wording_patterns_catch_variants() -> None:
     sample = "\n".join(
         [
             "Garden " + "Roadmap",
-            "AUTO-" + "MERGE",
-            "claude " + "code",
             "task-" + "production control plane",
+            "This repository does not use auto-" + "merge.",
+            "Claude " + "Code support is not configured here.",
         ]
     )
     matches = [pattern.pattern for pattern in stale.FORBIDDEN_PATTERNS if pattern.search(sample)]
     assert set(matches) == {
         "task-" + "production control plane",
         "garden " + "roadmap",
-        "claude " + "code",
-        "auto[\\s-]?merge",
     }
+    failures = stale.forbidden_path_failures([Path(".claude/settings.json"), Path("CLAUDE.md")])
+    assert len(failures) == 2
 
 
 def main() -> int:
@@ -322,7 +639,14 @@ def main() -> int:
         test_evidence_requires_completed_yes_statements,
         test_evidence_must_reference_changed_chunk,
         test_evidence_rejects_pending_or_blocking_reviewer_rows,
+        test_evidence_accepts_exact_pass_and_approved_na_results,
+        test_evidence_rejects_na_for_required_tracks,
+        test_evidence_reviewed_revision_allows_only_evidence_status_changes,
+        test_evidence_reviewed_revision_rejects_late_implementation_changes,
+        test_evidence_reviewed_revision_rejects_dirty_tree_changes,
+        test_evidence_reviewed_revision_rejects_invalid_provenance,
         test_evidence_main_fails_closed_on_unresolved_base_ref,
+        test_evidence_main_passes_with_complete_evidence_and_pr_head,
         test_evidence_main_reports_missing_evidence_file,
         test_static_sensor_counts_untracked_text_lines,
         test_static_sensor_requires_resolved_base_ref,

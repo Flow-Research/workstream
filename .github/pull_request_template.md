@@ -75,17 +75,27 @@ Link the initiative and chunk contract:
 
 ## Internal Reviewer Results
 
-| Reviewer | Result | Blocking Findings |
-|---|---:|---|
-| Senior engineering | Pending | |
-| QA/test | Pending | |
-| Security/auth | Pending | |
-| Product/ops | Pending | |
-| Architecture | Pending / N/A | |
-| CI integrity | Pending / N/A | |
-| Docs | Pending / N/A | |
-| Reuse/dedup | Pending / N/A | |
-| Test delta | Pending / N/A | |
+Allowed result values: `PASS`, `PASS AFTER FIXES`, `PASS WITH LOW RISKS`, or
+`N/A - with approved reason`. Any `N/A - with approved reason` row must include
+the reason in `Notes`.
+
+Reviewed code SHA:
+
+Reviewed at:
+
+Reviewer run IDs:
+
+| Reviewer | Result | Blocking Findings | Notes |
+|---|---:|---|---|
+| Senior engineering | Pending | | |
+| QA/test | Pending | | |
+| Security/auth | Pending | | |
+| Product/ops | Pending | | |
+| Architecture | Pending / N/A - with approved reason | | |
+| CI integrity | Pending / N/A - with approved reason | | |
+| Docs | Pending / N/A - with approved reason | | |
+| Reuse/dedup | Pending / N/A - with approved reason | | |
+| Test delta | Pending / N/A - with approved reason | | |
 
 ## External Review
 
