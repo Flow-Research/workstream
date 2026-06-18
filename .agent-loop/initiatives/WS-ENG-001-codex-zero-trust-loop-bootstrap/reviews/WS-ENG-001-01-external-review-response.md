@@ -37,7 +37,7 @@ this external review response file.
 | Human review | Internal review evidence was not bound to a reviewed revision. | High | Fixed | Requires reviewed code SHA, reviewed-at timestamp, reviewer run IDs, PR head SHA validation, and stale reviewed-SHA invalidation for non-evidence changes. |
 | Human review | Reviewer routing and exact result handling needed hardening. | Medium | Fixed | Added demo UI route coverage, exact reviewer result parsing, N/A reason enforcement, and narrower stale-wording scope. |
 | Human review | External review feedback was mixed into internal evidence. | High | Fixed | Added this external response artifact, updated templates/protocol/skill wording, and kept internal evidence focused on sub-agent review. |
-| GitHub checks | Agent Gates, Backend, and Week 1 demo UI checks must pass. | High | Fixed | All checks passed after the previous push; this final push is ready for rerun. |
+| GitHub checks | Agent Gates, Backend, and Week 1 demo UI checks must pass. | High | Fixed | All checks passed after the final push. |
 
 ## Fix Plan
 
@@ -61,11 +61,11 @@ python3 -m py_compile scripts/check_internal_review_evidence.py scripts/workstre
 git diff --check f3ed9af..6042c44
 ```
 
-Expected final GitHub state after push:
+Final GitHub state after push:
 
 ```text
 agent-gates: pass
 backend test: pass
 week1 demo UI: pass
-CodeRabbit: pass or no actionable comments
+CodeRabbit: pass, review skipped on final artifact-only push
 ```
