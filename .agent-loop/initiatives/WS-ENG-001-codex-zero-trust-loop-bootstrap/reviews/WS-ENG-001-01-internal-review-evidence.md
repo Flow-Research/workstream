@@ -10,13 +10,15 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 72ca31c6ed9ceeb47791ad42f0290d899b4b0685
+Reviewed code SHA: b22b940ee50956c9c7bfd0e681ffac727b6ff82c
 
-Reviewed at: 2026-06-18T13:24:53Z
+Reviewed at: 2026-06-18T19:28:12Z
 
-Reviewer run IDs: 019eda60-2c45-77c3-9bb6-b4ec3ee4c4ab, 019eda61-d983-7670-914b-68833e416fff, 019eda64-37f6-7c80-9c3f-d3b511105b2f, 019eda67-4e47-75b0-979a-4e00717acab8, 019eda83-6476-7230-895b-1877790c407b, 019eda84-f4a8-74b2-b837-eb76c35db5f1, 019eda86-e2dc-7362-89ca-433555cd6b6e, 019eda89-96c8-7c61-bd50-9f32d4c2afb4, 019edab3-b1df-7042-b367-94c232933e58, 019edac8-782a-7062-9bf3-f00481e3f0da, 019edadb-47c3-7243-9a27-e476ef67ba3c
+Reviewer run IDs: 019edbb9-9998-7db1-8060-06bfad8b85ae, 019edbbb-b2aa-7583-9cdc-db03a280135a, 019edbbe-d103-7493-a972-8efcb4c277c9, 019edbc2-c418-7fa3-851c-32a06a69644e, 019edbef-dd1d-7a12-825d-5ac49b123716, 019edc29-f00b-7641-90b4-2e11188a47b3
 
 After this reviewed SHA, only evidence and status files changed.
+
+External review response: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-external-review-response.md`
 
 ## Reviewer Results
 
@@ -30,7 +32,7 @@ After this reviewed SHA, only evidence and status files changed.
 | ci integrity | PASS AFTER FIXES | None remaining | Added workflow permissions, pinned checkout, Markdown/stale checks, regression tests, dirty-tree handling, stricter evidence validation, reviewed-SHA binding, and PR_HEAD_SHA wiring. |
 | docs | PASS | None | Verified renamed policy links, Markdown links, stale wording scan, and product/engineering-loop terminology separation. |
 | reuse/dedup | PASS AFTER FIXES | None remaining | Resolved PR trust-bundle drift, reviewer-output drift, sequencing conflict, reuse/dedup routing, and product/engineering policy wording drift. |
-| test delta | PASS | None | `scripts/test_agent_gates.py` now runs without pytest and covers the CodeRabbit/internal reviewer hardening findings. |
+| test delta | PASS | None | `scripts/test_agent_gates.py` now runs without pytest and covers internal gate hardening findings. |
 
 ## Valid Findings Addressed
 
@@ -49,25 +51,15 @@ After this reviewed SHA, only evidence and status files changed.
 - Gate sequencing conflict: fixed by distinguishing deterministic proof checks before fanout from internal review evidence validation after fanout.
 - Reuse/dedup routing inconsistency: fixed in routing and budget policies.
 - New `agent-gates` workflow rationale unclear: documented as a process-only PR gate for loop/docs/Codex-surface changes.
-- CodeRabbit command-injection finding: fixed by moving `github.base_ref` into `BASE_REF` and quoting it in the workflow command.
-- CodeRabbit missing/deleted evidence-file finding: fixed with structured missing/unreadable evidence failures and regression coverage.
-- CodeRabbit Markdown unreadable/deleted file finding: fixed by skipping unreadable or deleted changed Markdown files.
-- CodeRabbit stale-wording matcher finding: fixed with case-insensitive regex patterns for known stale terms.
-- CodeRabbit static-sensor base-ref finding: fixed by resolving base refs before diff analysis and reporting `BASE_REF_UNRESOLVED` when no valid ref exists.
-- CodeRabbit `numstat` undercount finding: fixed by accumulating additions/deletions per path across committed, staged, and dirty diffs.
-- CodeRabbit template nitpicks: fixed conditional reviewer wording, repeatable chunk-map template, flexible remaining-risk template, external review Definition of Done criteria, and explicit merge-approval checklist item.
 - Product/engineering boundary risk: fixed by renaming generic engineering-loop policy files to `engineering-review-policy.md`, `human-merge-review-policy.md`, and `repository-engineering-policy.md`, and by clarifying reviewer TOML instructions.
 - Internal evidence gate fail-open on configured base refs: fixed by failing closed when `GITHUB_BASE_REF` or `INTERNAL_REVIEW_BASE_REF` cannot resolve.
 - Internal evidence gate row validation gap: fixed by requiring reviewer table rows to pass and have no blocking findings.
 - Backend migration/config review bypass: fixed by adding Alembic, backend tooling, and demo package files to review routing and static sensor coverage.
 - `AGENTS.md` stale-wording blind spot: fixed by scanning `AGENTS.md` except the explicit old-name warning line.
 - PR trust-bundle duplication risk: fixed by marking `.agent-loop/templates/PR_TRUST_BUNDLE.md` as canonical and `.github/pull_request_template.md` as a synchronized mirror.
-- Late CodeRabbit nitpicks on test monkeypatch restoration and stale-wording assertion order: fixed with `try/finally` restore blocks and set comparison.
-- Late CodeRabbit nitpick on docs-review Medium findings: fixed by requiring Medium findings to appear in PASS WITH LOW RISKS or FAIL outcomes.
-- Late CodeRabbit nitpick on product wording scope: fixed by defining borderline product wording cases as human-owned decisions.
-- Request-changes review on unbound evidence provenance: fixed by requiring reviewed code SHA, reviewed-at timestamp, reviewer run IDs, PR head SHA validation, and stale reviewed-SHA invalidation for non-evidence changes.
-- Reviewer routing/check precision findings: fixed by routing demo UI source paths, requiring exact reviewer result values, enforcing N/A notes, and narrowing stale wording checks to obsolete Workstream names plus forbidden Codex-incompatible paths.
-- Follow-up internal reviewer findings: fixed placeholder provenance acceptance, template/runtime post-review path mismatch, optional reviewer-row validation, unrelated Markdown table false positives, and PR_HEAD_SHA success-path coverage.
+- Internal reviewer findings on evidence provenance: fixed by requiring reviewed code SHA, reviewed-at timestamp, reviewer run IDs, PR head SHA validation, and stale reviewed-SHA invalidation for non-evidence changes.
+- Internal reviewer findings on reviewer routing/check precision: fixed by routing demo UI source paths, requiring exact reviewer result values, enforcing N/A notes, and narrowing stale wording checks to obsolete Workstream names plus forbidden Codex-incompatible paths.
+- Internal reviewer findings on gate parsing and artifact separation: fixed placeholder provenance acceptance, template/runtime post-review path mismatch, optional reviewer-row validation, unrelated Markdown table false positives, PR_HEAD_SHA success-path coverage, and external-review response separation.
 
 ## Follow-Up Review Wave
 
@@ -79,6 +71,10 @@ After this reviewed SHA, only evidence and status files changed.
 | final security/auth | PASS | None | Verified PR_HEAD_SHA binding, provenance validation, N/A bypass prevention, post-review path controls, stale wording path enforcement, and no auth/runtime leakage. |
 | final product/ops/docs | PASS | None | Verified product/runtime separation and template/runtime consistency; stale evidence required this final evidence/status commit. |
 | final parser hardening | PASS | None | Verified adjacent unrelated Markdown tables no longer create false reviewer rows and optional reviewer rows are exact-result validated. |
+| artifact separation senior engineering | PASS WITH LOW RISKS | None | Verified external review response files do not satisfy internal evidence and templates/protocol separate review layers. |
+| artifact separation QA/test | PASS WITH LOW RISKS | None | Verified complete internal evidence plus external response passes, external-only response fails for code changes, and missing evidence uses internal-evidence filename convention. |
+| artifact separation security/auth | PASS | None | Verified fail-closed behavior remains and no product/auth/runtime behavior changed. |
+| artifact separation product/ops/docs | PASS WITH LOW RISKS | None | Verified human review path now separates internal sub-agent evidence from external CodeRabbit/GitHub response artifacts. |
 
 ## Commands Run
 
@@ -94,6 +90,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/test_agent_gates.py
 git diff --check
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+git diff --check f3ed9af..6042c44
 ```
 
 ## Remaining Risks

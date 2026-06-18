@@ -6,7 +6,7 @@
 - Active chunk: `WS-ENG-001-01`
 - Branch: `codex/aztle-codex-bootstrap`
 - Status: PR #23 open; internal review complete; external review addressed; CI ready for final rerun; awaiting human merge decision
-- Reviewed code SHA: `72ca31c6ed9ceeb47791ad42f0290d899b4b0685`
+- Reviewed code SHA: `b22b940ee50956c9c7bfd0e681ffac727b6ff82c`
 - Current gate: human merge checkpoint
 - Next chunk: inactive
 
@@ -26,5 +26,6 @@ product behavior, database schema, API behavior, or frontend behavior.
 - Internal reviewer tracks complete.
 - Valid findings addressed.
 - Open sub-agent sessions: none.
-- Review evidence: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-internal-review-evidence.md`
+- Internal review evidence: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-internal-review-evidence.md`
+- External review response: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-external-review-response.md`
 - Final post-review repository changes are limited to evidence/status files.
