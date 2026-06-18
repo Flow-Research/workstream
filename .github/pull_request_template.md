@@ -99,6 +99,10 @@ Reviewer run IDs:
 
 ## External Review
 
+External review response file:
+
+- `.agent-loop/initiatives/<initiative>/reviews/<chunk-id>-external-review-response.md`
+
 | Source | Status | Notes |
 |---|---:|---|
 | CodeRabbit | Pending | |

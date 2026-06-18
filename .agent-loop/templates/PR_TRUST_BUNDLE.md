@@ -91,6 +91,10 @@ Result summary:
 
 ## External review
 
+External review response file:
+
+- `.agent-loop/initiatives/<initiative>/reviews/<chunk-id>-external-review-response.md`
+
 | Source | Status | Notes |
 |---|---:|---|
 | CodeRabbit | Pending | |
@@ -119,7 +123,6 @@ Reviewer run IDs:
 | docs | Pending / N/A - with approved reason | | |
 | reuse/dedup | Pending / N/A - with approved reason | | |
 | test delta | Pending / N/A - with approved reason | | |
-| external reviewer | Pending | | |
 
 ## Remaining risks
 

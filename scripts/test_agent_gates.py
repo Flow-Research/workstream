@@ -83,6 +83,12 @@ def test_review_evidence_files_are_not_relevant_changes() -> None:
     gate = load_module("review_gate_relevance", "scripts/check_internal_review_evidence.py")
     assert not gate.is_relevant(".agent-loop/initiatives/example/reviews/review.md")
     assert not gate.is_relevant("docs/internal_reviews/example.md")
+    assert gate.is_internal_review_evidence_path(
+        ".agent-loop/initiatives/example/reviews/example-internal-review-evidence.md"
+    )
+    assert not gate.is_internal_review_evidence_path(
+        ".agent-loop/initiatives/example/reviews/example-external-review-response.md"
+    )
 
 
 def test_evidence_requires_completed_yes_statements() -> None:
@@ -466,6 +472,7 @@ def test_evidence_main_passes_with_complete_evidence_and_pr_head() -> None:
     gate.changed_files = lambda: [
         "scripts/check_internal_review_evidence.py",
         "docs/internal_reviews/test_agent_gate_complete_evidence.md",
+        ".agent-loop/initiatives/example/reviews/example-external-review-response.md",
     ]
     try:
         os.environ.pop("INTERNAL_REVIEW_BASE_REF", None)
@@ -502,13 +509,60 @@ def test_evidence_main_passes_with_complete_evidence_and_pr_head() -> None:
                 os.environ[key] = value
 
 
+def test_evidence_main_rejects_external_response_without_internal_evidence() -> None:
+    """External review responses do not satisfy required internal evidence."""
+    gate = load_module("review_gate_external_response_only", "scripts/check_internal_review_evidence.py")
+    original_env = os.environ.get("INTERNAL_REVIEW_BASE_REF")
+    original_git = gate.git
+    original_git_ok = gate.git_ok
+    original_changed_files = gate.changed_files
+    external_response = (
+        ROOT
+        / ".agent-loop/initiatives/test-agent-gate/"
+        "reviews/test-agent-gate-external-review-response.md"
+    )
+
+    def fake_git(*args: str) -> str:
+        if args == ("merge-base", "--is-ancestor", "origin/main", "HEAD"):
+            return ""
+        return ""
+
+    gate.git = fake_git
+    gate.git_ok = lambda *args: True
+    gate.changed_files = lambda: [
+        "scripts/check_internal_review_evidence.py",
+        ".agent-loop/initiatives/test-agent-gate/"
+        "reviews/test-agent-gate-external-review-response.md",
+    ]
+    try:
+        os.environ.pop("INTERNAL_REVIEW_BASE_REF", None)
+        external_response.parent.mkdir(parents=True, exist_ok=True)
+        external_response.write_text(
+            "# External Review Response\n\n## Source\n\nCodeRabbit\n",
+            encoding="utf-8",
+        )
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            assert gate.main() == 1
+    finally:
+        gate.git = original_git
+        gate.git_ok = original_git_ok
+        gate.changed_files = original_changed_files
+        external_response.unlink(missing_ok=True)
+        external_response.parent.rmdir()
+        external_response.parent.parent.rmdir()
+        if original_env is None:
+            os.environ.pop("INTERNAL_REVIEW_BASE_REF", None)
+        else:
+            os.environ["INTERNAL_REVIEW_BASE_REF"] = original_env
+
+
 def test_evidence_main_reports_missing_evidence_file() -> None:
     """Changed evidence paths that no longer exist produce structured failure."""
     gate = load_module("review_gate_missing_evidence_file", "scripts/check_internal_review_evidence.py")
     original_changed_files = gate.changed_files
     gate.changed_files = lambda: [
         "scripts/workstream_agent_gate.py",
-        ".agent-loop/initiatives/example/reviews/deleted.md",
+        ".agent-loop/initiatives/example/reviews/deleted-internal-review-evidence.md",
     ]
     try:
         with contextlib.redirect_stderr(io.StringIO()):
@@ -647,6 +701,7 @@ def main() -> int:
         test_evidence_reviewed_revision_rejects_invalid_provenance,
         test_evidence_main_fails_closed_on_unresolved_base_ref,
         test_evidence_main_passes_with_complete_evidence_and_pr_head,
+        test_evidence_main_rejects_external_response_without_internal_evidence,
         test_evidence_main_reports_missing_evidence_file,
         test_static_sensor_counts_untracked_text_lines,
         test_static_sensor_requires_resolved_base_ref,
