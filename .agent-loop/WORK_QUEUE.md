@@ -4,7 +4,13 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-ENG-001-01` | Codex-native zero-trust loop bootstrap | L1 | In progress |
+| None | No active chunk | - | Inactive |
+
+## Completed
+
+| Chunk | Title | Risk | Status |
+|---|---|---:|---|
+| `WS-ENG-001-01` | Codex-native zero-trust loop bootstrap | L1 | Merged through PR #23 on 2026-06-20 |
 
 ## Proposed Next
 

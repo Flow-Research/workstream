@@ -2,12 +2,13 @@
 
 ## Current State
 
-- Active initiative: `WS-ENG-001-codex-zero-trust-loop-bootstrap`
-- Active chunk: `WS-ENG-001-01`
-- Branch: `codex/aztle-codex-bootstrap`
-- Status: PR #23 open; internal review complete; external review addressed; CI ready for final rerun; awaiting human merge decision
+- Active initiative: none
+- Active chunk: none
+- Branch: `main`
+- Status: `WS-ENG-001-01` merged through PR #23 on 2026-06-20; memory updated; no active chunk
+- Merge commit: `b9fe19b96109e9786e1d6d89488abfbe68a05d4a`
 - Reviewed code SHA: `b22b940ee50956c9c7bfd0e681ffac727b6ff82c`
-- Current gate: human merge checkpoint
+- Current gate: stopped after merge memory update
 - Next chunk: inactive
 
 ## Operating Rule
@@ -28,4 +29,4 @@ product behavior, database schema, API behavior, or frontend behavior.
 - Open sub-agent sessions: none.
 - Internal review evidence: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-internal-review-evidence.md`
 - External review response: `.agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/reviews/WS-ENG-001-01-external-review-response.md`
-- Final post-review repository changes are limited to evidence/status files.
+- PR #23 merged into `main` on 2026-06-20.

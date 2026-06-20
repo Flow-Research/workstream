@@ -684,6 +684,74 @@ def test_stale_wording_patterns_catch_variants() -> None:
     assert len(failures) == 2
 
 
+def test_loop_memory_state_rejects_pre_merge_status() -> None:
+    """Main loop memory must not keep pre-merge checkpoint language."""
+    checker = load_module("loop_memory_state_rejects", "scripts/check_loop_memory_state.py")
+    original_root = checker.ROOT
+    original_status_files = checker.INITIATIVE_STATUS_FILES
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / ".agent-loop/initiatives/example").mkdir(parents=True)
+        (root / ".agent-loop/LOOP_STATE.md").write_text(
+            "Status: PR #23 open; awaiting human merge decision\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/WORK_QUEUE.md").write_text(
+            "| `WS-ENG-001-01` | Bootstrap | L1 | In progress |\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/REVIEW_LOG.md").write_text(
+            "Status: internal reviewer fanout complete.\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/initiatives/example/STATUS.md").write_text(
+            "Current gate: human merge checkpoint\n",
+            encoding="utf-8",
+        )
+        checker.ROOT = root
+        checker.INITIATIVE_STATUS_FILES = (".agent-loop/initiatives/example/STATUS.md",)
+        try:
+            with contextlib.redirect_stderr(io.StringIO()):
+                assert checker.main() == 1
+        finally:
+            checker.ROOT = original_root
+            checker.INITIATIVE_STATUS_FILES = original_status_files
+
+
+def test_loop_memory_state_accepts_merged_fixture() -> None:
+    """Merged loop memory fixtures should pass the main-only guard."""
+    checker = load_module("loop_memory_state_accepts", "scripts/check_loop_memory_state.py")
+    original_root = checker.ROOT
+    original_status_files = checker.INITIATIVE_STATUS_FILES
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / ".agent-loop/initiatives/example").mkdir(parents=True)
+        (root / ".agent-loop/LOOP_STATE.md").write_text(
+            "Status: `WS-ENG-001-01` merged through PR #23; no active chunk\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/WORK_QUEUE.md").write_text(
+            "| None | No active chunk | - | Inactive |\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/REVIEW_LOG.md").write_text(
+            "Status: merged through PR #23.\n",
+            encoding="utf-8",
+        )
+        (root / ".agent-loop/initiatives/example/STATUS.md").write_text(
+            "Current gate: stopped after merge memory update\n",
+            encoding="utf-8",
+        )
+        checker.ROOT = root
+        checker.INITIATIVE_STATUS_FILES = (".agent-loop/initiatives/example/STATUS.md",)
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                assert checker.main() == 0
+        finally:
+            checker.ROOT = original_root
+            checker.INITIATIVE_STATUS_FILES = original_status_files
+
+
 def main() -> int:
     """Run all local test functions."""
     tests = [
@@ -709,6 +777,8 @@ def main() -> int:
         test_static_sensor_flags_backend_config_as_ci_surface,
         test_markdown_link_checker_collects_base_cached_dirty_and_untracked,
         test_stale_wording_patterns_catch_variants,
+        test_loop_memory_state_rejects_pre_merge_status,
+        test_loop_memory_state_accepts_merged_fixture,
     ]
     for test in tests:
         test()
