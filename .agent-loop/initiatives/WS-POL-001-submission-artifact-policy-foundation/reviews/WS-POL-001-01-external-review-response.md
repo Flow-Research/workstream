@@ -25,6 +25,8 @@ valid, in scope, and fixed without changing the product contract.
 | CodeRabbit | `WS-POL-001-03` acceptance criteria repeated "Blocking pre-submit failure creates no..." across consecutive lines. | Low | Fixed | Consolidated the four no-side-effect guarantees into one sentence while preserving every distinct requirement. |
 | GitHub checks | Agent Gates, Backend, Week 1 API Demo UI, and CodeRabbit status must pass. | High | Passed | All GitHub checks passed after the final push. |
 | CodeRabbit manual trigger | Manual `@coderabbitai review` was requested after the rate-limit window. | Informational | Complete | CodeRabbit replied "Review finished" and noted incremental review does not re-review already reviewed commits unless automatic reviews are paused. No new actionable findings were posted. |
+| Human review | Project owners should not author `SubmissionArtifactPolicy`; Workstream should derive it from project material and require `admin` or `project_manager` approval. | High | Fixed | Updated planning artifacts, ADRs, glossary, architecture docs, specs, templates, operating manual, current data flow, and first user flows. |
+| Human review | Pre-submit failures should not use review decisions and should show pass/fail details like the Snorkel-style static checker experience. | High | Fixed | Standardized `pre_submission_checker_failed` with structured pass/fail/warning details and explicit exclusion of `accept`, `needs_revision`, and `reject`. |
 
 ## Fix Plan
 
