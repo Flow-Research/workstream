@@ -21,6 +21,10 @@ Make submission intake policy-driven:
 ProjectGuide = human-facing instructions
 SubmissionArtifactPolicy = machine-readable intake contract
 
+Project owner material
+-> Workstream-derived ProjectSubmissionArtifactPolicy
+-> approval by admin or project_manager
+
 WorkstreamDefaultSubmissionArtifactPolicy
 + ProjectSubmissionArtifactPolicy
 = EffectiveSubmissionArtifactPolicy
@@ -29,9 +33,20 @@ EffectiveSubmissionArtifactPolicy
 -> generated PreSubmitCheckerPolicy
 ```
 
-Workers submit draft packet fields. Workstream decides required artifacts,
-evidence, hashes, storage reference rules, forbidden artifacts, and blocking
-pre-submit feedback from the effective policy.
+Project owners provide project material: guide text or documentation links,
+task inputs, expected outputs, examples, acceptance criteria, rejection
+criteria, review rubric, skill expectations, base payout or payment policy
+inputs, confidentiality constraints, and plain-language artifact expectations.
+They do not author Workstream's machine-readable submission policy schema
+directly.
+
+Workstream derives the project submission artifact policy from that material,
+using internal agent assistance where useful. A Workstream actor with the
+`admin` or `project_manager` role reviews and approves the derived policy
+before guide activation. Workers submit draft
+packet fields. Workstream decides required artifacts, evidence, hashes, storage
+reference rules, forbidden artifacts, and blocking pre-submit feedback from the
+effective policy.
 
 ## Why Now
 
@@ -53,6 +68,9 @@ boundary will become confusing.
 After this initiative:
 
 - `SubmissionArtifactPolicy` is a first-class backend object.
+- `SubmissionArtifactPolicy` is Workstream-derived from project material and
+  approved by `admin` or `project_manager`, not authored directly by the
+  project owner.
 - Workstream default submission artifact rules are defined in code.
 - Project submission artifact policy cannot weaken Workstream defaults.
 - Effective submission artifact policy is computed deterministically.
@@ -86,10 +104,15 @@ simple. Stored review decision values remain exactly `accept`,
 `needs_revision`, and `reject`; display labels may render those as accepted,
 needs revision, and rejected where appropriate.
 
+Pre-submit feedback is not review. A blocking pre-submit result is presented as
+`pre_submission_checker_failed` with structured pass/fail/warning details. It
+does not create a submission and must not use review decision values.
+
 ## Human Judgment Required
 
 - Approve the chunk sequence before implementation.
 - Approve the exact Workstream default submission artifact rules.
+- Approve the required project-owner intake material for v0.1 project setup.
 - Approve naming for new persisted fields and policy version/hash fields.
 - Approve any migration strategy that changes existing transitional fields.
 

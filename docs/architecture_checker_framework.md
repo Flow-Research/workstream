@@ -170,7 +170,10 @@ ProjectGuide
 -> Submission row only when blocking checks pass
 ```
 
-`ProjectGuide` is human-facing. `SubmissionArtifactPolicy` is machine-readable and approved by a project admin. Workstream combines that policy with the non-bypassable Workstream default submission artifact policy.
+`ProjectGuide` is human-facing. `SubmissionArtifactPolicy` is machine-readable,
+derived by Workstream from project owner material, and approved by a Workstream
+actor with the `admin` or `project_manager` role. Workstream combines that
+policy with the non-bypassable Workstream default submission artifact policy.
 
 Workstream default submission artifact rules require:
 
@@ -185,7 +188,12 @@ Workstream default submission artifact rules require:
 
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
-The generated `PreSubmitCheckerPolicy` runs before Workstream creates a submission. Blocking failures prevent submission creation and return worker-safe fixes. Pre-submit results do not create durable `CheckerRun` records and do not move a task to `review_pending`.
+The generated `PreSubmitCheckerPolicy` runs before Workstream creates a
+submission. Blocking failures prevent submission creation and return
+`pre_submission_checker_failed` with structured pass/fail/warning details.
+Pre-submit results do not create durable `CheckerRun` records, do not move a
+task to `review_pending`, and do not return review decision values: `accept`,
+`needs_revision`, or `reject`.
 
 Pre-submit checks are authoritative for intake. Post-submit checker runs are authoritative for review readiness.
 

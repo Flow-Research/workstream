@@ -8,6 +8,10 @@ Flow's task evaluation and contribution infrastructure: the system for project g
 
 A configured work program with its own human-facing guide, submission artifact policy, checker policies, review policy, revision policy, payment policy, and queue.
 
+## Project Owner
+
+The external or internal organization that provides project setup material in plain language: project purpose, guide material, examples, expected outputs, acceptance criteria, rejection criteria, review rubric, required skills, confidentiality constraints, base payout or payment policy inputs, and artifact expectations. The project owner does not author Workstream's machine-readable policy schema directly.
+
 ## Source
 
 Where a task came from. In v0.1, sources are manual creation, controlled markdown import, or controlled CSV import.
@@ -22,7 +26,7 @@ The human-facing operating guide for a project. It contains the project instruct
 
 ## Submission Artifact Policy
 
-The project-admin-approved machine-readable contract for what a worker must submit. It defines required artifacts, evidence requirements, artifact hash requirements, allowed storage reference forms, forbidden artifacts, attestation requirements, and project-specific packaging rules. It can add or tighten requirements, but it cannot weaken Workstream's default submission artifact rules.
+The Workstream-derived, admin-or-project-manager-approved machine-readable contract for what a worker must submit. It is derived from project owner material, reviewed by a Workstream actor with the `admin` or `project_manager` role, and attached to a project guide version. It defines required artifacts, evidence requirements, artifact hash requirements, allowed storage reference forms, forbidden artifacts, attestation requirements, and project-specific packaging rules. It can add or tighten requirements, but it cannot weaken Workstream's default submission artifact rules.
 
 ## Effective Submission Artifact Policy
 
@@ -30,7 +34,11 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated checker matrix produced from the effective submission artifact policy. It runs before Workstream creates a submission row or submission version. Blocking failures return worker-safe fixes and prevent submission creation.
+The server-generated checker matrix produced from the effective submission artifact policy. It runs before Workstream creates a submission row or submission version. Blocking failures return `pre_submission_checker_failed` with structured pass/fail/warning details, prevent submission creation, and do not return review decision values: `accept`, `needs_revision`, or `reject`.
+
+## pre_submission_checker_failed
+
+The worker-facing pre-submit failure code returned before a submission exists. It includes structured pass/fail/warning details and is not a review decision. It must not be stored as `accept`, `needs_revision`, or `reject`.
 
 ## Task
 

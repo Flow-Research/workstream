@@ -7,6 +7,9 @@
   checker splitting unless explicitly approved.
 - Every implementation chunk must use Postgres-backed tests.
 - Worker-facing outcomes remain simple; internal route names stay internal.
+- Project owners provide setup material in plain language; Workstream derives
+  machine-readable submission artifact policy and actors with the `admin` or
+  `project_manager` role approve it.
 
 ## Chunks
 
@@ -52,6 +55,8 @@ Acceptance criteria:
 
 - Dedicated submission artifact policy model/table exists.
 - Project policy is scoped to project id + guide version.
+- Project policy records are Workstream-derived and approved by `admin` or
+  `project_manager`, not direct project owner-authored schema.
 - Workstream default policy is represented in code.
 - Effective policy merge rejects attempts to weaken defaults.
 - Guide activation requires valid submission artifact policy.
@@ -64,8 +69,9 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-Policy field names, default rule set, migration strategy, and whether
-`evidence_policy` remains a temporary compatibility alias.
+Policy ownership, project-owner intake checklist, policy field names, default
+rule set, migration strategy, and whether `evidence_policy` remains a temporary
+compatibility alias.
 
 ### WS-POL-001-02: Generated PreSubmitCheckerPolicy
 
@@ -154,6 +160,8 @@ Acceptance criteria:
 
 - Blocking pre-submit failure creates no submission row, submission version,
   submitted transition, or durable checker run.
+- Blocking pre-submit failure returns `pre_submission_checker_failed` with
+  structured pass/fail/warning details, not review decision values.
 - Passing pre-submit creates a submission stamped with locked policy context.
 
 Required reviewers:
@@ -163,7 +171,8 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-No-row/no-version/no-transition guarantee and worker-safe feedback.
+No-row/no-version/no-transition guarantee and `pre_submission_checker_failed`
+feedback shape.
 
 ### WS-POL-001-04: PostSubmitCheckerPolicy Split
 

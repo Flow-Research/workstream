@@ -71,9 +71,14 @@ Pre-submit static checks run before Workstream creates a submission. They are ge
 - storage reference safety
 - task assignment and state compatibility
 
-Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. They return
+`pre_submission_checker_failed` with structured pass/fail/warning details,
+create no submission row, no submission version, no task transition to
+`submitted`, and no submission-created audit event.
 
-Pre-submit failures do not create review decisions and do not create durable post-submit checker runs.
+Pre-submit failures do not create review decisions, do not return `accept`,
+`needs_revision`, or `reject`, and do not create durable post-submit checker
+runs.
 
 Post-submit internal checks run after a submission is created and locked. These checks are the source of truth for review gating. They run from Workstream-owned services, use locked task guide and policy context, and persist durable checker runs/results.
 

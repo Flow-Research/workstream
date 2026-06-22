@@ -16,7 +16,18 @@ Workstream also needs platform-owned default submission safety rules that no pro
 
 Every active project guide version must have an approved `SubmissionArtifactPolicy`.
 
-`SubmissionArtifactPolicy` is the project-admin-approved machine-readable contract for worker submissions. It defines:
+Project owners provide project setup material in plain language: project purpose,
+guide material, task examples, expected outputs, acceptance criteria, rejection
+criteria, review rubric, required skills, confidentiality constraints, base
+payout or payment policy inputs, and artifact expectations. They do not author
+Workstream's machine-readable policy schema directly.
+
+Workstream derives `ProjectSubmissionArtifactPolicy` from that material, using
+internal agent assistance where useful. A Workstream actor with the `admin` or
+`project_manager` role must review and approve the derived policy before guide
+activation.
+
+`SubmissionArtifactPolicy` is the Workstream-derived, admin-or-project-manager-approved machine-readable contract for worker submissions. It defines:
 
 - required artifacts
 - required evidence references
@@ -30,6 +41,11 @@ Every active project guide version must have an approved `SubmissionArtifactPoli
 Workstream owns a default submission artifact policy. Every project inherits it.
 
 Project policy can add stricter requirements, but it cannot remove, weaken, downgrade, or bypass Workstream defaults.
+
+Approval provenance is part of the policy contract. A policy record must make
+approval testable with source/provenance state such as derivation source,
+approval status, approver actor, approval timestamp, and approved policy
+version/hash.
 
 The runtime contract is:
 
@@ -49,7 +65,9 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
 - no submission version is assigned
 - no task transition to `submitted` occurs
 - no submission-created audit event is written
-- the response returns worker-safe checker feedback
+- the response returns `pre_submission_checker_failed`
+- the response includes structured pass/fail/warning details
+- the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
 Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a locked submission.
 

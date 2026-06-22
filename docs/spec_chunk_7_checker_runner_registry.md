@@ -138,7 +138,11 @@ For worker-fixable blocking structural failures after submission lock, the run r
 
 Chunk 7 records the recommendation only. Chunk 9 applies the lifecycle transition.
 
-Blocking pre-submit failures occur before durable checker runs exist. They prevent submission creation and return worker-safe fixes instead of recording `needs_revision`.
+Blocking pre-submit failures occur before durable checker runs exist. They
+prevent submission creation and return `pre_submission_checker_failed` with
+structured pass/fail/warning details instead of recording `needs_revision`.
+They do not return review decision values: `accept`, `needs_revision`, or
+`reject`.
 
 ## Artifact Manifest Hash
 
@@ -174,7 +178,7 @@ Worker responses must not expose:
 - checker ORM models are registered in Alembic metadata
 - partial unique index allows one current run per submission
 - pre-submit check returns feedback without durable checker rows
-- blocking pre-submit failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
+- blocking pre-submit failures return `pre_submission_checker_failed`, include structured pass/fail/warning details, create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
 - durable checker run works through real authenticated API calls
 - `check_submission_packet` runs against real submission data
 - duplicate artifact manifests persist worker-visible checker failures

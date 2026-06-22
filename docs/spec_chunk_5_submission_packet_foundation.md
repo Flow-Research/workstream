@@ -163,7 +163,7 @@ Chunk 5 writes task audit events with submission identifiers in `event_payload`.
 - worker-provided guide or policy version fields are rejected by the API schema
 - worker-provided submission version fields are rejected by the API schema
 - worker-provided checker names, checker outcomes, evidence ids, and checker run ids are rejected by the API schema
-- blocking pre-submit failures return structured worker-safe feedback and create no submission row, no submission version, no task transition to `SUBMITTED`, and no submission-created audit event
+- blocking pre-submit failures return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission row, no submission version, no task transition to `SUBMITTED`, and no submission-created audit event
 - Workstream stamps locked guide and policy versions from task context
 - task moves to `SUBMITTED`
 - submitted packet can be locked before checker execution

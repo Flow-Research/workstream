@@ -28,7 +28,11 @@ List files, links, packages, or deliverables.
 
 Workstream derives the locked project guide version, submission artifact policy version, generated pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, and payment policy version from the task and server-side project policy records. The worker does not provide those versions in the submission packet.
 
-Workstream runs generated pre-submit checks before creating the submission. Blocking failures return worker-safe fixes and create no submission row, no submission version, and no submission-created audit event.
+Workstream runs generated pre-submit checks before creating the submission.
+Blocking failures return `pre_submission_checker_failed` with structured
+pass/fail/warning details, create no submission row, no submission version, and
+no submission-created audit event, and do not return review decision values:
+`accept`, `needs_revision`, or `reject`.
 
 ## Artifact Hash Manifest
 

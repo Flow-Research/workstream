@@ -8,7 +8,8 @@ Workstream does not need to own the execution workspace, but it must define what
 
 ## Project-Level Convention
 
-Every project defines an approved `SubmissionArtifactPolicy`:
+Every project has an approved `SubmissionArtifactPolicy` derived by Workstream
+from project owner material:
 
 ```text
 required_artifacts
@@ -64,7 +65,7 @@ A packet is not ready unless:
 
 Some projects need final work in a paste-ready form. Others need a zip, artifact bundle, markdown packet, or review file.
 
-The project guide explains the canonical form to humans. The approved `SubmissionArtifactPolicy` enforces the artifact, evidence, hash, and packaging rules.
+The project guide explains the canonical form to humans. The approved `SubmissionArtifactPolicy` enforces the artifact, evidence, hash, and packaging rules. Project owners do not author this machine policy schema directly.
 
 ## Why This Matters
 

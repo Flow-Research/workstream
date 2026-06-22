@@ -55,7 +55,10 @@ EffectiveSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Blocking pre-submit failures prevent submission creation and do not create durable `CheckerRun` records.
+Blocking pre-submit failures prevent submission creation, return
+`pre_submission_checker_failed` with structured pass/fail/warning details, do
+not create durable `CheckerRun` records, and do not return review decision
+values: `accept`, `needs_revision`, or `reject`.
 
 ## Checker Registry Fields
 

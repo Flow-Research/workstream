@@ -25,6 +25,12 @@ The backend is still transitional:
 - Post-submit durable checks use registered checker names and locked checker
   policy.
 
+The product ownership boundary is also not explicit enough yet. Project owners
+should provide guide material, task examples, rubrics, payment inputs, and
+plain-language artifact expectations. Workstream should derive the
+machine-readable project submission artifact policy from that material, then
+require approval by `admin` or `project_manager` before guide activation.
+
 ## Relevant Files/Modules
 
 | Path | Purpose | Notes |
@@ -66,6 +72,7 @@ The backend is still transitional:
 | Risk | Why it matters | Suggested handling |
 |---|---|---|
 | Policy/source drift | Guide prose, task fields, and checker policy can disagree. | Introduce policy objects first, then migrate runtime reads in later chunks. |
+| Project owner-authored schema burden | Asking project owners to write Workstream policy schema creates setup errors and unfair worker failures. | Workstream derives policy from project material and requires approval by `admin` or `project_manager`. |
 | Weakening defaults | Project policy could accidentally remove Workstream safety rules. | Implement non-bypassable default merge validation. |
 | Big-bang rewrite | Changing project, task, submission, and checker runtime together is risky. | Split into reviewable chunks. |
 | Version/hash ambiguity | Pre-submit policy is generated, so versioning needs careful naming. | Human review field names before migration. |
@@ -76,6 +83,7 @@ The backend is still transitional:
 | Question | Why it matters | Needed before chunk? |
 |---|---|---|
 | Exact default artifact rules | Defines non-bypassable Workstream intake behavior. | Yes, before implementation chunk 1 completes. |
+| Exact project-owner intake checklist | Defines what a company must provide so Workstream can derive policy. | Yes, before implementation chunk 1 completes. |
 | Whether `evidence_policy` stays as backward-compatible alias | Affects API compatibility and migration scope. | Yes, before migration chunk. |
 | Exact policy version/hash field names | Prevents future schema drift. | Yes, before schema migration. |
 | Whether generated `PreSubmitCheckerPolicy` is persisted or derived on read | Affects data model and audit proof. | Yes, before chunk 2. |

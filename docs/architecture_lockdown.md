@@ -77,9 +77,16 @@ Every active guide version must also have approved machine-readable policies:
 
 The guide may summarize or link to those policies, but the policies are the enforcement source.
 
+Project owners provide setup material in plain language. Workstream derives
+`ProjectSubmissionArtifactPolicy` from that material, and a Workstream actor
+with the `admin` or `project_manager` role approves it before guide activation.
+
 `SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream generates `PreSubmitCheckerPolicy` from that effective policy.
 
-Blocking pre-submit failures prevent submission creation. They return worker-safe fixes and create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. They return
+`pre_submission_checker_failed` with structured pass/fail/warning details and
+create no submission row, no submission version, no task transition to
+`submitted`, and no submission-created audit event.
 
 Tasks lock to the active guide version at creation or screening time before entering `READY`. Material guide changes require a new guide version.
 
@@ -150,6 +157,7 @@ Use these names consistently:
 - `EffectiveSubmissionArtifactPolicy`
 - `PreSubmitCheckerPolicy`
 - `PostSubmitCheckerPolicy`
+- `pre_submission_checker_failed`
 - `Project activation gate`
 - `Task screening gate`
 - `Submission quality gate`

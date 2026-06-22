@@ -12,6 +12,38 @@
 
 `v1`
 
+## Source Material
+
+Project owners provide setup material in plain language. Workstream derives this
+policy from that material; project owners do not author the machine-readable
+schema directly.
+
+Required project-owner intake material:
+
+- project purpose:
+- guide material or documentation references:
+- task inputs:
+- expected outputs:
+- examples of good submissions:
+- examples of bad submissions:
+- acceptance criteria:
+- rejection criteria:
+- review rubric:
+- required skills:
+- confidentiality constraints:
+- base payout or payment policy inputs:
+- artifact expectations:
+
+## Approval Provenance
+
+- derivation source: `manual | workstream_agent | import_adapter`
+- source material refs:
+- approval status: `draft | approved | superseded`
+- approved policy hash:
+- approved by role: `admin | project_manager`
+- approved by actor:
+- approved at:
+
 ## Workstream Default Rules
 
 Every project inherits Workstream default submission artifact rules. Project policy can add stricter requirements, but it cannot remove, weaken, downgrade, or bypass these defaults.
@@ -97,6 +129,10 @@ WorkstreamDefaultSubmissionArtifactPolicy
 
 Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
 
+Blocking failures return `pre_submission_checker_failed` with structured
+pass/fail/warning details. They do not return review decision values:
+`accept`, `needs_revision`, or `reject`.
+
 Expected generated checks:
 
 - packet shape
@@ -112,6 +148,7 @@ Expected generated checks:
 ## Approval
 
 - created by:
-- approved by:
+- approved by role: `admin | project_manager`
+- approved by actor:
 - effective at:
 - change summary:

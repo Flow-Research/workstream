@@ -211,9 +211,16 @@ Response fields:
 
 Pre-submit feedback binds to `task_id`, the task's locked guide version, the approved submission artifact policy context, draft packet fields, package hash, and artifact manifest shape. It does not require a locked `submission_id` or locked submission version because those do not exist before submission creation.
 
-Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. They return
+`pre_submission_checker_failed` with structured pass/fail/warning details,
+create no submission row, no submission version, no task transition to
+`submitted`, and no submission-created audit event.
 
-Pre-submit results are not authoritative for `REVIEW_PENDING` and cannot create `NEEDS_REVISION`. Only post-submit runs against locked submissions can produce routing recommendations for `REVIEW_PENDING` or user-facing `needs_revision`.
+Pre-submit results are not authoritative for `REVIEW_PENDING`, cannot create
+`NEEDS_REVISION`, and do not return review decision values: `accept`,
+`needs_revision`, or `reject`. Only post-submit runs against locked submissions
+can produce routing recommendations for `REVIEW_PENDING` or user-facing
+`needs_revision`.
 
 ## User-Facing Revision Rule
 

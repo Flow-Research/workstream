@@ -40,7 +40,7 @@ Project guide activation requires the guide plus its required policy context bef
 - revision policy
 - payment policy
 
-The project-admin-approved submission artifact policy defines what workers must submit. Workstream combines it with non-bypassable Workstream default artifact rules to create the effective submission artifact policy. Workstream then generates the pre-submit checker policy from that effective policy.
+The Workstream-derived submission artifact policy defines what workers must submit. Project owners provide plain-language setup material; a Workstream actor with the `admin` or `project_manager` role approves the machine policy. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective submission artifact policy. Workstream then generates the pre-submit checker policy from that effective policy.
 
 Blocking pre-submit failures prevent submission creation. They do not create durable post-submit checker runs and they do not create human review decisions.
 

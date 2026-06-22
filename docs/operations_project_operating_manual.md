@@ -29,7 +29,8 @@ Before releasing tasks:
 - currency configured
 - allowed task types listed
 - required task fields listed
-- submission artifact policy approved
+- project owner setup material captured
+- submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
 - generated pre-submit checker policy created from the effective submission artifact policy
 - post-submit checker policy attached
 - review policy attached
@@ -42,7 +43,7 @@ Before releasing tasks:
 
 ### Project Activation Gate
 
-A project cannot become active unless guide, submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy are present.
+A project cannot become active unless guide, approved submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy are present.
 
 ### Task Screening Gate
 
@@ -97,7 +98,7 @@ Before accepting a submission packet:
 - revision replay exists when task was previously `NEEDS_REVISION`
 - effective submission artifact policy is loaded
 - generated pre-submit checker policy runs
-- blocking pre-submit failures return worker-safe fixes
+- blocking pre-submit failures return `pre_submission_checker_failed` with structured pass/fail/warning details
 - no submission row is created until blocking pre-submit checks pass
 
 ## Reviewer Simulation Gate

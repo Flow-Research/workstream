@@ -16,6 +16,12 @@ The code still uses transitional `evidence_policy`, `required_files`, and
 effective policy, Workstream needs a real policy object and non-bypassable
 default policy validation.
 
+Project owners must not be asked to author the Workstream policy schema
+directly. They provide project setup material in plain language; Workstream
+derives project submission artifact policy from that material, and a project
+actor with the `admin` or `project_manager` role approves it before guide
+activation.
+
 ## Approved Plan Reference
 
 - INTENT: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/INTENT.md`
@@ -60,7 +66,8 @@ human review implementation
 
 - Routers only translate HTTP requests/responses and map domain errors.
 - Services own policy merge rules, Workstream default validation, guide
-  activation checks, and permission-aware orchestration.
+  activation checks, Workstream-owned policy derivation boundaries, and
+  permission-aware orchestration.
 - Repositories only persist and query policy records.
 - Schemas only define API input/output contracts and validation shape.
 
@@ -71,6 +78,13 @@ human review implementation
 - [ ] Policy rows have a composite foreign key to `project_guides(project_id, version)`.
 - [ ] Pydantic input/output schemas exist for project submission artifact policy.
 - [ ] Project service can create/update the policy with a draft guide.
+- [ ] Project policy records include approval provenance showing the approved
+      machine policy was reviewed by `admin` or `project_manager`.
+- [ ] Approval provenance includes derivation source, source material refs,
+      approval status, approver role, approver actor, approval timestamp, and
+      approved policy version or hash.
+- [ ] Guide activation fails when no approved project submission artifact policy
+      exists for the guide version.
 - [ ] Guide activation requires valid submission artifact policy.
 - [ ] Workstream default submission artifact policy is represented in code.
 - [ ] Workstream default policy requires `sha256:<64 lowercase hex>` artifact hashes where production hashes are required.
@@ -119,6 +133,8 @@ Conditional:
 ## Human Review Focus
 
 - Are the policy field names precise enough?
+- Is the project-owner intake checklist precise enough for Workstream to derive
+  policy without making project owners author internal schema?
 - Are Workstream default rules complete enough for v0.1?
 - Should `evidence_policy` remain a compatibility alias during migration?
 - Should generated pre-submit policy be persisted in chunk 2 or derived on read?

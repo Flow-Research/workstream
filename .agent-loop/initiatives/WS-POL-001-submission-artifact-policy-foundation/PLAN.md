@@ -18,7 +18,7 @@ ProjectGuide
   human-facing instructions
 
 ProjectSubmissionArtifactPolicy
-  project-admin-approved machine-readable intake rules
+  Workstream-derived, admin-or-project-manager-approved machine-readable intake rules
 
 WorkstreamDefaultSubmissionArtifactPolicy
   platform-owned, non-bypassable safety rules
@@ -33,9 +33,18 @@ PostSubmitCheckerPolicy
   durable checker rules for locked submission review readiness
 ```
 
-Pre-submit checks run before submission creation and do not create durable
-checker records. Post-submit/internal checks run after submission lock and do
-create durable checker records.
+Project owners provide human-facing setup material. Workstream derives the
+machine-readable project submission artifact policy from that material, then a
+Workstream actor with the `admin` or `project_manager` role approves it.
+Pre-submit checks run before submission
+creation and do not create durable checker records. Post-submit/internal checks
+run after submission lock and do create durable checker records.
+
+If no approved project submission artifact policy exists for the active guide,
+guide activation fails and tasks using that guide cannot enter the ready worker
+pipeline. The system must surface setup failure internally as task/project setup
+incomplete rather than letting workers discover missing intake rules at submit
+time.
 
 ## Alternatives Considered
 
@@ -56,6 +65,13 @@ Rejected because pre-submit should be generated from the effective submission
 artifact policy. Workers and project admins should not choose blocking checker
 internals directly for intake.
 
+### Make project owners author `SubmissionArtifactPolicy` directly
+
+Rejected because project owners should provide domain material, not internal
+Workstream schema. Workstream owns derivation of the machine-readable contract,
+and actors with the `admin` or `project_manager` role approve it before the
+project can accept ready tasks.
+
 ### Combine pre-submit and post-submit checker policy
 
 Rejected because pre-submit answers whether a packet can be submitted at all,
@@ -64,8 +80,11 @@ while post-submit answers whether a locked submission can move to human review.
 ## Boundaries Preserved
 
 - Auth/session: still only verifies external Flow authentication tokens.
-- Permission/policy: project managers/admins own project policy setup; workers
-  do not provide policy versions or checker names.
+- Permission/policy: actors with the `admin` or `project_manager` role approve
+  project policy setup; workers do not provide policy versions or checker names.
+- Project-owner boundary: project owners provide guide material,
+  examples, rubrics, payment inputs, and artifact expectations in plain
+  language; Workstream turns that material into approved policy.
 - Payment/execution: no payment or contribution records in this initiative.
 - Persistence/data: schema changes land through Alembic and async SQLAlchemy.
 - Presentation/API: backend-first; no frontend implementation.
@@ -74,17 +93,20 @@ while post-submit answers whether a locked submission can move to human review.
 ## Rollout/Migration Strategy
 
 1. Add dedicated policy model/API while keeping transitional fields readable.
-2. Compute effective policy in service code and validate defaults cannot weaken.
-3. Generate pre-submit checker policy from effective policy.
-4. Migrate submission creation to effective policy.
-5. Split post-submit checker policy naming/provenance.
-6. Retire or alias transitional `evidence_policy`, `required_files`, and
+2. Add the Workstream-owned derivation/approval boundary for project policy.
+3. Compute effective policy in service code and validate defaults cannot weaken.
+4. Generate pre-submit checker policy from effective policy.
+5. Migrate submission creation to effective policy.
+6. Split post-submit checker policy naming/provenance.
+7. Retire or alias transitional `evidence_policy`, `required_files`, and
    `required_evidence` usage after tests prove the new path.
 
 ## Verification Strategy
 
 - Unit-level policy merge tests for default + project policy.
 - Postgres-backed API tests for project policy creation and guide activation.
+- Tests proving a guide cannot activate without an approved project submission
+  artifact policy.
 - Submission API tests proving blocking pre-submit failure creates no submission
   row, version, task transition, durable checker run, or submission-created audit.
 - Real API drill proving clean pass and `needs_revision` resubmission.

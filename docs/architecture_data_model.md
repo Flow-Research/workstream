@@ -153,6 +153,10 @@ The guide is versioned and human-facing. It contains project instructions, quali
 
 Runtime enforcement uses machine-readable policies attached to the guide version. Workstream does not parse guide prose at submission time to decide which artifact checks to run.
 
+Project owners provide setup material in plain language. Workstream derives
+machine-readable project policy from that material, then a Workstream actor with
+the `admin` or `project_manager` role approves it before the guide can activate.
+
 Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before workers see the task.
 
 When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
@@ -181,7 +185,13 @@ Fields:
 - `required_attestation_terms`
 - `packaging_rules`
 - `created_by`
+- `derivation_source`
+- `source_material_refs`
+- `approval_status`
+- `approved_policy_hash`
+- `approved_by_role`
 - `approved_by`
+- `approved_at`
 - `created_at`
 
 Example:
@@ -204,13 +214,20 @@ Example:
   "artifact_hash_algorithm": "sha256",
   "allowed_storage_schemes": ["local", "s3", "r2"],
   "forbidden_artifacts": ["secrets/**", ".env"],
+  "derivation_source": "workstream_agent",
+  "source_material_refs": ["project-guide:v1"],
+  "approval_status": "approved",
+  "approved_by": "flow-project-manager",
+  "approved_at": "2026-06-22T12:00:00Z",
   "packaging_rules": {
     "archive_required": true
   }
 }
 ```
 
-Project admins approve this policy. Workers do not supply it.
+Workstream derives this policy from project owner material. A Workstream actor
+with the `admin` or `project_manager` role approves it. Workers do not supply
+it.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 
@@ -266,7 +283,11 @@ The generated checker order is deterministic:
 8. worker attestation validation
 9. low-quality artifact warnings
 
-Blocking pre-submit failures prevent submission creation. A failed blocking pre-submit check creates no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. A failed blocking
+pre-submit check returns `pre_submission_checker_failed` with structured
+pass/fail/warning details, creates no submission row, no submission version, no
+task transition to `submitted`, and no submission-created audit event. It does
+not return review decision values.
 
 ## PostSubmitCheckerPolicy
 

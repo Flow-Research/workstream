@@ -470,8 +470,8 @@
 
             <article class="step">
               <span class="num">2</span>
-              <h3>Project guide is drafted</h3>
-              <p>The project manager creates the human-facing project guide, submission artifact policy, and all policy context needed before tasks can run.</p>
+              <h3>Project guide and policy are prepared</h3>
+              <p>The project owner provides guide material and artifact expectations. Workstream derives the submission artifact policy, then an admin or project_manager approves it before tasks can run.</p>
               <div class="data">
                 <code>Project</code>
                 <code>ProjectGuide v1</code>
@@ -482,7 +482,7 @@
             <article class="step">
               <span class="num">3</span>
               <h3>Guide activation locks contract</h3>
-              <p>Activation validates submission artifact policy, generated pre-submit policy, registered post-submit checker names, review decisions, revision states, and payment policy.</p>
+              <p>Activation validates approved submission artifact policy, generated pre-submit policy, registered post-submit checker names, review decisions, revision states, and payment policy.</p>
               <div class="data">
                 <code>status=active</code>
                 <code>one active guide</code>
@@ -514,7 +514,7 @@
             <article class="step">
               <span class="num">6</span>
               <h3>Pre-submit intake checks run</h3>
-              <p>Workstream runs generated pre-submit checks from the effective submission artifact policy before creating a submission row.</p>
+              <p>Workstream runs generated pre-submit checks from the effective submission artifact policy before creating a submission row. Blocking failures return pre_submission_checker_failed with pass/fail/warning details.</p>
               <div class="data">
                 <code>no submission yet</code>
                 <code>no checker run yet</code>

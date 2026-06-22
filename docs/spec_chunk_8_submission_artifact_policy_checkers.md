@@ -211,7 +211,11 @@ WorkstreamDefaultSubmissionArtifactPolicy
 
 Workstream defaults are non-bypassable. Project policy can add required artifacts, evidence requirements, stricter forbidden patterns, and packaging rules, but it cannot remove hash requirements, allow unsafe storage references, require forbidden files, or downgrade blocking defaults.
 
-Blocking pre-submit failures prevent submission creation. They create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. They return
+`pre_submission_checker_failed` with structured pass/fail/warning details,
+create no submission row, no submission version, no task transition to
+`submitted`, and no submission-created audit event. They do not return review
+decision values: `accept`, `needs_revision`, or `reject`.
 
 Durable post-submit checker runs run the canonical default submission-quality checks plus locked checker-policy names:
 
@@ -297,7 +301,7 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 - canonical Chunk 8 checker names are registered
 - stale Chunk 7 temporary checker names are removed from public docs/templates/tests
 - pre-submit feedback is generated from the effective submission artifact policy and runs without durable checker records
-- blocking pre-submit failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
+- blocking pre-submit failures return `pre_submission_checker_failed`, include structured pass/fail/warning details, create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
 - Workstream default submission artifact rules cannot be weakened by project policy
 - durable checker runs persist Chunk 8 checker results
 - missing required evidence blocks review routing
