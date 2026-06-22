@@ -152,10 +152,8 @@ frontend
 
 Acceptance criteria:
 
-- Blocking pre-submit failure creates no submission row.
-- Blocking pre-submit failure creates no submission version.
-- Blocking pre-submit failure creates no submitted transition.
-- Blocking pre-submit failure creates no durable checker run.
+- Blocking pre-submit failure creates no submission row, submission version,
+  submitted transition, or durable checker run.
 - Passing pre-submit creates a submission stamped with locked policy context.
 
 Required reviewers:
