@@ -23,7 +23,8 @@ valid, in scope, and fixed without changing the product contract.
 | Source | Finding | Severity | Status | Response |
 |---|---|---:|---:|---|
 | CodeRabbit | `WS-POL-001-03` acceptance criteria repeated "Blocking pre-submit failure creates no..." across consecutive lines. | Low | Fixed | Consolidated the four no-side-effect guarantees into one sentence while preserving every distinct requirement. |
-| GitHub checks | Agent Gates, Backend, Week 1 API Demo UI, and CodeRabbit status must pass. | High | Passing before fix; rerun pending after final push | Local gates passed before this evidence update. GitHub checks will rerun after push. |
+| GitHub checks | Agent Gates, Backend, Week 1 API Demo UI, and CodeRabbit status must pass. | High | Passed | All GitHub checks passed after the final push. |
+| CodeRabbit manual trigger | Manual `@coderabbitai review` was requested after the rate-limit window. | Informational | Complete | CodeRabbit replied "Review finished" and noted incremental review does not re-review already reviewed commits unless automatic reviews are paused. No new actionable findings were posted. |
 
 ## Fix Plan
 
@@ -48,4 +49,14 @@ python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 git diff --check
+```
+
+Final GitHub state after push:
+
+```text
+agent-gates: pass
+backend test: pass
+week1 demo UI: pass
+CodeRabbit status: pass
+CodeRabbit manual trigger: review finished, no new actionable findings posted
 ```
