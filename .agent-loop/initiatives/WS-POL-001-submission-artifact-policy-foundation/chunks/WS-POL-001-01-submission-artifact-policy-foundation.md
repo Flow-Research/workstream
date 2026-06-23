@@ -114,7 +114,10 @@ human review implementation
 - [ ] Effective submission artifact policy hash is persisted for the guide version.
 - [ ] Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to the guide version.
 - [ ] Transitional `evidence_policy`, `required_files`, and `required_evidence` are replaced, not kept as compatibility aliases.
-- [ ] Postgres-backed FastAPI/API tests cover create/update/activation/default-weakening/guide-sufficiency/source-ref-sanitization/pre-submit-policy-locking cases.
+- [ ] Postgres-backed FastAPI/API tests cover create/update, blocking activation
+      from guide sufficiency gaps, `admin`/`project_manager` warning
+      acknowledgement, approval provenance fields, default weakening,
+      source-ref sanitization, and pre-submit policy locking.
 
 ## Verification Commands
 

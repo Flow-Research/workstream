@@ -270,8 +270,10 @@ Acceptance criteria:
 Verification:
 
 - Postgres-backed checker tests cover pre-submit feedback without durable
-  `CheckerRun`, post-submit `CheckerRun` creation against locked
-  `PostSubmitCheckerPolicy`, and worker-facing response filtering.
+  `CheckerRun` and post-submit `CheckerRun` creation against locked
+  `PostSubmitCheckerPolicy`.
+- Postgres-backed FastAPI/API tests cover post-submit policy locking and
+  worker-facing response filtering.
 
 Required reviewers:
 
