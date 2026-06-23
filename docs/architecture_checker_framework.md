@@ -163,6 +163,7 @@ The deterministic chain is:
 
 ```text
 ProjectGuide
+-> GuideSufficiencyReport
 -> ProjectSubmissionArtifactPolicy
 -> EffectiveSubmissionArtifactPolicy
 -> PreSubmitCheckerPolicy
@@ -170,10 +171,17 @@ ProjectGuide
 -> Submission row only when blocking checks pass
 ```
 
-`ProjectGuide` is human-facing. `SubmissionArtifactPolicy` is machine-readable,
-derived by Workstream from project owner material, and approved by a Workstream
-actor with the `admin` or `project_manager` role. Workstream combines that
-policy with the non-bypassable Workstream default submission artifact policy.
+`ProjectGuide` is open-ended human-facing project material. Workstream first
+persists a `GuideSufficiencyReport`. Blocking guide gaps stop activation and
+create clarification requests for the project owner. Warnings require
+acknowledgement by `admin` or `project_manager`.
+
+`SubmissionArtifactPolicy` is machine-readable, derived by Workstream from
+project guide material after sufficiency passes or warnings are acknowledged,
+and approved by a Workstream actor with the `admin` or `project_manager` role.
+The project owner does not approve this internal policy. Workstream combines
+that policy with the non-bypassable Workstream default submission artifact
+policy.
 
 Workstream default submission artifact rules require:
 
@@ -188,8 +196,9 @@ Workstream default submission artifact rules require:
 
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
-The generated `PreSubmitCheckerPolicy` runs before Workstream creates a
-submission. Blocking failures prevent submission creation and return
+The generated `PreSubmitCheckerPolicy` is persisted, hashed, and locked to the
+project guide version before workers submit packets. It runs before Workstream
+creates a submission. Blocking failures prevent submission creation and return
 `pre_submission_checker_failed` with structured pass/fail/warning details.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,

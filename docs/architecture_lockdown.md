@@ -77,11 +77,14 @@ Every active guide version must also have approved machine-readable policies:
 
 The guide may summarize or link to those policies, but the policies are the enforcement source.
 
-Project owners provide setup material in plain language. Workstream derives
+Project owners provide open-ended project material and business terms.
+Workstream evaluates guide sufficiency, derives
 `ProjectSubmissionArtifactPolicy` from that material, and a Workstream actor
-with the `admin` or `project_manager` role approves it before guide activation.
+with the `admin` or `project_manager` role approves the internal policy bundle
+before guide activation. Project owners do not approve Workstream's internal
+submission policy schema.
 
-`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream generates `PreSubmitCheckerPolicy` from that effective policy.
+`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that effective policy.
 
 Blocking pre-submit failures prevent submission creation. They return
 `pre_submission_checker_failed` with structured pass/fail/warning details and

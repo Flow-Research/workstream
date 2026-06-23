@@ -116,10 +116,11 @@ Every active guide version must have:
 
 Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 
-Project owners provide this guide material and artifact expectations in
-plain language. Workstream derives `ProjectSubmissionArtifactPolicy` from that
-material, and a Workstream actor with the `admin` or `project_manager` role
-approves it before guide activation.
+Project owners provide open-ended guide material and business terms in plain
+language. Workstream evaluates guide sufficiency, derives
+`ProjectSubmissionArtifactPolicy` from that material, and a Workstream actor
+with the `admin` or `project_manager` role approves the internal policy bundle
+before guide activation.
 
 ## Known Checker Blind Spots
 

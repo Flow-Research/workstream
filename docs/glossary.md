@@ -10,7 +10,11 @@ A configured work program with its own human-facing guide, submission artifact p
 
 ## Project Owner
 
-The external or internal organization that provides project setup material in plain language: project purpose, guide material, examples, expected outputs, acceptance criteria, rejection criteria, review rubric, required skills, confidentiality constraints, base payout or payment policy inputs, and artifact expectations. The project owner does not author Workstream's machine-readable policy schema directly.
+The external or internal organization that provides open-ended project material
+and business terms. That material can be markdown, URL-backed documentation,
+repository docs, examples, rubrics, task instructions, base payout or payment
+policy inputs, or other project-specific source material. The project owner
+does not author or approve Workstream's machine-readable internal policy schema.
 
 ## Source
 
@@ -24,9 +28,24 @@ A future external task source that can submit tasks into Workstream through an a
 
 The human-facing operating guide for a project. It contains the project instructions, quality bar, task examples, reviewer rubric, common rejection reasons, and links or summaries for the approved policies. A project guide may be markdown, an imported document, or a URL-backed guide, but runtime enforcement uses approved machine-readable policies attached to the guide version.
 
+## Guide Sufficiency Report
+
+The Workstream-owned record produced by `ProjectGuideSufficiencyAgent` for a
+project guide version. It records whether the guide passed, is blocked by gaps,
+or passed with warnings that an `admin` or `project_manager` must acknowledge
+before activation.
+
 ## Submission Artifact Policy
 
-The Workstream-derived, admin-or-project-manager-approved machine-readable contract for what a worker must submit. It is derived from project owner material, reviewed by a Workstream actor with the `admin` or `project_manager` role, and attached to a project guide version. It defines required artifacts, evidence requirements, artifact hash requirements, allowed storage reference forms, forbidden artifacts, attestation requirements, and project-specific packaging rules. It can add or tighten requirements, but it cannot weaken Workstream's default submission artifact rules.
+The Workstream-derived, admin-or-project-manager-approved machine-readable
+contract for what a worker must submit. It is derived from open-ended project
+guide material after guide sufficiency passes or warnings are acknowledged,
+reviewed by a Workstream actor with the `admin` or `project_manager` role, and
+attached to a project guide version. It defines required artifacts, evidence
+requirements, artifact hash requirements, allowed storage reference forms,
+forbidden artifacts, attestation requirements, and project-specific packaging
+rules. It can add or tighten requirements, but it cannot weaken Workstream's
+default submission artifact rules.
 
 ## Effective Submission Artifact Policy
 
@@ -34,7 +53,7 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated checker matrix produced from the effective submission artifact policy. It runs before Workstream creates a submission row or submission version. Blocking failures return `pre_submission_checker_failed` with structured pass/fail/warning details, prevent submission creation, and do not return review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated checker matrix produced from the effective submission artifact policy, persisted with a hash, and locked to the project guide version. It runs before Workstream creates a submission row or submission version. Blocking failures return `pre_submission_checker_failed` with structured pass/fail/warning details, prevent submission creation, and do not return review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 

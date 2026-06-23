@@ -9,8 +9,9 @@ The architecture docs already lock the target model:
 
 ```text
 SubmissionArtifactPolicy
+-> GuideSufficiencyReport
 -> EffectiveSubmissionArtifactPolicy
--> generated PreSubmitCheckerPolicy
+-> persisted and locked PreSubmitCheckerPolicy
 -> pre-submit checks before submission creation
 -> post-submit/internal checks after submission lock
 ```
@@ -25,11 +26,10 @@ The backend is still transitional:
 - Post-submit durable checks use registered checker names and locked checker
   policy.
 
-The product ownership boundary is also not explicit enough yet. Project owners
-should provide guide material, task examples, rubrics, payment inputs, and
-plain-language artifact expectations. Workstream should derive the
-machine-readable project submission artifact policy from that material, then
-require approval by `admin` or `project_manager` before guide activation.
+The product ownership boundary is now locked. Project owners provide open-ended
+project guide material and business terms. Workstream runs asynchronous internal
+agents to evaluate guide sufficiency and derive machine-readable policy. The
+project owner does not approve Workstream's internal policy controls.
 
 ## Relevant Files/Modules
 
@@ -82,11 +82,9 @@ require approval by `admin` or `project_manager` before guide activation.
 
 | Question | Why it matters | Needed before chunk? |
 |---|---|---|
-| Exact default artifact rules | Defines non-bypassable Workstream intake behavior. | Yes, before implementation chunk 1 completes. |
-| Exact project-owner intake checklist | Defines what a company must provide so Workstream can derive policy. | Yes, before implementation chunk 1 completes. |
-| Whether `evidence_policy` stays as backward-compatible alias | Affects API compatibility and migration scope. | Yes, before migration chunk. |
-| Exact policy version/hash field names | Prevents future schema drift. | Yes, before schema migration. |
-| Whether generated `PreSubmitCheckerPolicy` is persisted or derived on read | Affects data model and audit proof. | Yes, before chunk 2. |
+| Exact guide sufficiency report fields | Defines what the sufficiency agent proves before activation. | Yes, before implementation chunk 1 completes. |
+| Exact policy provenance field names | Prevents future schema drift. | Yes, before schema migration. |
+| Exact async agent execution shape | Affects background job orchestration. | No; chunk 1 can model records/contracts first. |
 
 ## Existing Conventions To Preserve
 

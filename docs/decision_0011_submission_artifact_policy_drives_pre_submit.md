@@ -6,7 +6,10 @@ Accepted
 
 ## Context
 
-Project guides are human-facing. They explain the project, task expectations, examples, reviewer rubric, and quality bar.
+Project guides are human-facing. They explain the project, task expectations,
+examples, reviewer rubric, and quality bar. A guide can be markdown, imported
+documentation, URL-backed docs, repository docs, examples, rubrics, task
+instructions, or other project-specific source material.
 
 Submission intake needs a deterministic machine contract. If artifact requirements live only as guide prose, each project can drift into a different interpretation of what a valid submission packet must contain.
 
@@ -14,18 +17,27 @@ Workstream also needs platform-owned default submission safety rules that no pro
 
 ## Decision
 
-Every active project guide version must have an approved `SubmissionArtifactPolicy`.
+Every active project guide version must have a complete guide-policy bundle:
 
-Project owners provide project setup material in plain language: project purpose,
-guide material, task examples, expected outputs, acceptance criteria, rejection
-criteria, review rubric, required skills, confidentiality constraints, base
-payout or payment policy inputs, and artifact expectations. They do not author
-Workstream's machine-readable policy schema directly.
+- passing or acknowledged `GuideSufficiencyReport`
+- approved `ProjectSubmissionArtifactPolicy`
+- persisted `EffectiveSubmissionArtifactPolicy` hash
+- persisted generated `PreSubmitCheckerPolicy` snapshot/hash
 
-Workstream derives `ProjectSubmissionArtifactPolicy` from that material, using
-internal agent assistance where useful. A Workstream actor with the `admin` or
-`project_manager` role must review and approve the derived policy before guide
-activation.
+Project owners provide open-ended project material in plain language. Workstream
+must not force every project owner through one universal intake checklist.
+
+`ProjectGuideSufficiencyAgent` evaluates whether the guide is sufficient for
+submitters, reviewers, and Workstream quality control. Blocking guide gaps stop
+activation and create clarification requests back to the project owner. Warnings
+remain visible to Workstream actors with the `admin` or `project_manager` role
+and must be acknowledged before activation.
+
+`SubmissionArtifactPolicyDerivationAgent` derives
+`ProjectSubmissionArtifactPolicy` from the guide material after sufficiency
+passes or warnings are acknowledged. The project owner does not approve this
+internal policy. A Workstream actor with the `admin` or `project_manager` role
+reviews and approves the derived policy before guide activation.
 
 `SubmissionArtifactPolicy` is the Workstream-derived, admin-or-project-manager-approved machine-readable contract for worker submissions. It defines:
 
@@ -55,9 +67,13 @@ EffectiveSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Workstream generates `PreSubmitCheckerPolicy` from the effective submission artifact policy.
+Workstream generates and persists `PreSubmitCheckerPolicy` from the effective
+submission artifact policy.
 
-`PreSubmitCheckerPolicy` is not manually edited by workers and is not supplied by clients. Workers submit only draft packet fields. They do not choose checker names, policy versions, blocking rules, severities, or outcomes.
+`PreSubmitCheckerPolicy` is locked to the project guide version. It is not
+derived on read, manually edited by workers, or supplied by clients. Workers
+submit only draft packet fields. They do not choose checker names, policy
+versions, blocking rules, severities, or outcomes.
 
 Blocking pre-submit failures prevent submission creation. When blocking pre-submit checks fail:
 
@@ -110,6 +126,8 @@ Positive:
 
 Tradeoff:
 
-- project setup must approve one more explicit policy object
-- existing `evidence_policy`, `required_files`, and `required_evidence` wording must be migrated toward `SubmissionArtifactPolicy`
+- project setup must approve one more explicit Workstream-owned policy bundle
+- existing `evidence_policy`, `required_files`, and `required_evidence` wording
+  must be replaced by `SubmissionArtifactPolicy`; no v0.1 compatibility alias
+  is required
 - post-submit checker policy must remain separate from generated pre-submit checker policy

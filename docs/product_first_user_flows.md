@@ -5,21 +5,25 @@ The first user flows prove that Workstream can run real work from intake to acce
 ## Flow 1: Admin Creates A Project
 
 1. Admin creates project.
-2. Project owner provides guide material, examples, expected outputs, review rubric, artifact expectations, and payment policy inputs.
+2. Project owner provides open-ended guide material and business terms.
 3. Admin or project_manager adds the guide.
-4. Workstream derives project submission artifact policy from the project owner material.
-5. Admin or project_manager reviews and approves the submission artifact policy.
-6. Workstream generates pre-submit checker policy.
-7. Admin or project_manager enables post-submit checker policy.
-8. Admin or project_manager enables review policy.
-9. Admin or project_manager enables revision policy.
-10. Admin or project_manager enables payment policy.
-11. Project becomes active.
+4. Workstream runs `ProjectGuideSufficiencyAgent` against the guide version.
+5. Blocking sufficiency gaps create clarification requests for the project owner.
+6. Admin or project_manager acknowledges non-blocking sufficiency warnings.
+7. Workstream runs `SubmissionArtifactPolicyDerivationAgent`.
+8. Admin or project_manager reviews and approves the derived submission artifact policy.
+9. Workstream persists the effective submission artifact policy hash.
+10. Workstream persists the generated pre-submit checker policy snapshot/hash.
+11. Admin or project_manager enables post-submit checker policy.
+12. Admin or project_manager enables review policy.
+13. Admin or project_manager enables revision policy.
+14. Admin or project_manager enables payment policy.
+15. Project becomes active.
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy.
-- Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author the machine policy schema directly.
+- Project cannot become active without guide, base amount, passed or acknowledged guide sufficiency report, submission artifact policy, effective submission artifact policy hash, generated pre-submit checker policy snapshot/hash, post-submit checker policy, review policy, revision policy, and payment policy.
+- Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
 ## Flow 2: Operator Creates A Task

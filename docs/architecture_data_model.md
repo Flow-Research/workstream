@@ -13,6 +13,7 @@ Actor
 
 Project
   ProjectGuide
+  GuideSufficiencyReport
   SubmissionArtifactPolicy
   EffectiveSubmissionArtifactPolicy
   PreSubmitCheckerPolicy
@@ -149,13 +150,20 @@ Fields:
 - `created_at`
 - `superseded_at`
 
-The guide is versioned and human-facing. It contains project instructions, quality bar, examples, rubric, common rejection reasons, and links or summaries for approved policies. It may be markdown, an imported document, or a URL-backed guide.
+The guide is versioned and human-facing. It contains project instructions,
+quality bar, examples, rubric, common rejection reasons, and links or summaries
+for approved policies. It may be markdown, an imported document, URL-backed
+docs, repository docs, examples, rubrics, task instructions, or other
+project-specific source material.
 
 Runtime enforcement uses machine-readable policies attached to the guide version. Workstream does not parse guide prose at submission time to decide which artifact checks to run.
 
-Project owners provide setup material in plain language. Workstream derives
-machine-readable project policy from that material, then a Workstream actor with
-the `admin` or `project_manager` role approves it before the guide can activate.
+Project owners provide open-ended setup material and business terms. Workstream
+does not force every project owner through one universal intake checklist.
+Workstream evaluates guide sufficiency, derives machine-readable project policy,
+and owns the internal controls. A Workstream actor with the `admin` or
+`project_manager` role approves the guide-policy bundle before the guide can
+activate.
 
 Every task records the guide version active at creation or screening time before the task enters `READY`. Later source adapters must also lock the guide version during normalization before workers see the task.
 
@@ -163,9 +171,46 @@ When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy co
 
 Material changes require a new guide version or policy version. Material changes include acceptance criteria, rejection criteria, reviewer rubric, output requirements, submission artifact policy, pre-submit checker generation rules, post-submit checker policy, review policy, revision policy, and payment policy.
 
-Implementation note: the current v0.1 database has `ProjectGuide.evidence_policy`. That field is a transitional storage location for submission artifact requirements. The architecture source of truth is `SubmissionArtifactPolicy`.
+Implementation note: the current v0.1 database has `ProjectGuide.evidence_policy`.
+That field is old construction state. The architecture source of truth is
+`SubmissionArtifactPolicy`, and the replacement path does not require a
+compatibility alias.
 
 Implementation note: `ProjectGuide.required_submission_fields` is a legacy display summary. Submission validity is enforced by `EffectiveSubmissionArtifactPolicy`, not by project guide fields.
+
+## GuideSufficiencyReport
+
+Fields:
+
+- `id`
+- `project_id`
+- `guide_version`
+- `status`
+- `findings`
+- `source_material_refs`
+- `agent_name`
+- `agent_version`
+- `created_at`
+- `acknowledged_by_role`
+- `acknowledged_by`
+- `acknowledged_at`
+
+Status:
+
+- `passed`
+- `blocked`
+- `passed_with_warnings`
+
+Finding severity:
+
+- `blocking_gap`
+- `warning`
+- `info`
+
+`ProjectGuideSufficiencyAgent` creates this report asynchronously for a guide
+version. Blocking gaps stop guide activation and create clarification requests
+for the project owner. Warnings can be acknowledged only by a Workstream actor
+with the `admin` or `project_manager` role before activation.
 
 ## SubmissionArtifactPolicy
 
@@ -185,7 +230,9 @@ Fields:
 - `required_attestation_terms`
 - `packaging_rules`
 - `created_by`
-- `derivation_source`
+- `sufficiency_report_id`
+- `derivation_agent_name`
+- `derivation_agent_version`
 - `source_material_refs`
 - `approval_status`
 - `approved_policy_hash`
@@ -214,7 +261,9 @@ Example:
   "artifact_hash_algorithm": "sha256",
   "allowed_storage_schemes": ["local", "s3", "r2"],
   "forbidden_artifacts": ["secrets/**", ".env"],
-  "derivation_source": "workstream_agent",
+  "sufficiency_report_id": "guide-sufficiency:v1",
+  "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
+  "derivation_agent_version": "v1",
   "source_material_refs": ["project-guide:v1"],
   "approval_status": "approved",
   "approved_by": "flow-project-manager",
@@ -225,9 +274,10 @@ Example:
 }
 ```
 
-Workstream derives this policy from project owner material. A Workstream actor
-with the `admin` or `project_manager` role approves it. Workers do not supply
-it.
+Workstream derives this policy from project guide material after guide
+sufficiency passes or warnings are acknowledged. A Workstream actor with the
+`admin` or `project_manager` role approves it. Project owners and workers do not
+supply or approve this internal policy schema.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 
@@ -242,9 +292,12 @@ WorkstreamDefaultSubmissionArtifactPolicy
 
 Fields:
 
+- `id`
 - `project_id`
 - `guide_version`
+- `version`
 - `policy_hash`
+- `source_project_policy_hash`
 - `required_artifacts`
 - `required_evidence`
 - `artifact_manifest_required`
@@ -253,22 +306,28 @@ Fields:
 - `allowed_storage_schemes`
 - `forbidden_artifacts`
 - `required_attestation_terms`
+- `generated_from`
 - `generated_at`
 
 This policy is deterministic. It preserves Workstream defaults first and adds project-approved requirements. Duplicate rules collapse by canonical key. Any project rule that conflicts with Workstream defaults is a project setup defect.
 
 ## PreSubmitCheckerPolicy
 
-Generated server-side from `EffectiveSubmissionArtifactPolicy`.
+Generated server-side from `EffectiveSubmissionArtifactPolicy`, then persisted
+and locked to the project guide version.
 
 Fields:
 
+- `id`
 - `project_id`
 - `guide_version`
+- `version`
 - `policy_hash`
+- `effective_submission_artifact_policy_hash`
 - `checker_names`
 - `checker_configs`
 - `blocking_severities`
+- `generated_from_policy_version`
 - `generated_at`
 
 The generated checker order is deterministic:

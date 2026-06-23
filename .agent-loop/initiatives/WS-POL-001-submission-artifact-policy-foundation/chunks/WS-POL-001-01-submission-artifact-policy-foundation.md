@@ -1,4 +1,4 @@
-# Chunk Contract: WS-POL-001-01 - Submission Artifact Policy Foundation
+# Chunk Contract: WS-POL-001-01 - Guide Policy Bundle Foundation
 
 ## Parent Initiative
 
@@ -6,21 +6,24 @@ WS-POL-001 - Submission Artifact Policy Foundation
 
 ## Goal
 
-Add first-class backend support for `SubmissionArtifactPolicy` without rewiring
-submission creation or durable checker execution yet.
+Add first-class backend support for guide sufficiency reports,
+`SubmissionArtifactPolicy`, effective policy hashes, and persisted generated
+`PreSubmitCheckerPolicy` snapshots without rewiring submission creation or
+durable checker execution yet.
 
 ## Why This Chunk Exists
 
 The code still uses transitional `evidence_policy`, `required_files`, and
-`required_evidence` fields. Before pre-submit checks can be generated from an
-effective policy, Workstream needs a real policy object and non-bypassable
-default policy validation.
+`required_evidence` fields. Those fields are not compatibility contracts. They
+must be replaced by the guide-policy bundle path before submission intake can be
+deterministic.
 
 Project owners must not be asked to author the Workstream policy schema
-directly. They provide project setup material in plain language; Workstream
-derives project submission artifact policy from that material, and a project
-actor with the `admin` or `project_manager` role approves it before guide
-activation.
+directly. They provide open-ended project guide material. Workstream records
+guide sufficiency, derives project submission artifact policy, persists the
+effective policy hash, persists the generated pre-submit checker policy
+snapshot/hash, and a Workstream actor with the `admin` or `project_manager` role
+approves the bundle before guide activation.
 
 ## Approved Plan Reference
 
@@ -66,14 +69,22 @@ human review implementation
 
 - Routers only translate HTTP requests/responses and map domain errors.
 - Services own policy merge rules, Workstream default validation, guide
-  activation checks, Workstream-owned policy derivation boundaries, and
-  permission-aware orchestration.
+  sufficiency gating, guide activation checks, Workstream-owned policy
+  derivation boundaries, and permission-aware orchestration.
 - Repositories only persist and query policy records.
 - Schemas only define API input/output contracts and validation shape.
+- Full async agent execution is not part of this chunk. This chunk models the
+  records/contracts and activation guard those agents will use.
 
 ## Acceptance Criteria
 
 - [ ] Dedicated `SubmissionArtifactPolicy` model/table exists.
+- [ ] Dedicated `GuideSufficiencyReport` model/table exists.
+- [ ] Guide sufficiency report records `passed`, `blocked`, or
+      `passed_with_warnings`.
+- [ ] Blocking guide sufficiency findings prevent guide activation.
+- [ ] Warning guide sufficiency findings require `admin` or `project_manager`
+      acknowledgement before guide activation.
 - [ ] Policy rows are scoped by `project_id` and `guide_version`.
 - [ ] Policy rows have a composite foreign key to `project_guides(project_id, version)`.
 - [ ] Pydantic input/output schemas exist for project submission artifact policy.
@@ -91,8 +102,10 @@ human review implementation
 - [ ] Workstream default policy rejects raw signed URLs, query strings, local filesystem paths, credential-bearing references, and token-bearing storage references before persistence.
 - [ ] Workstream default policy blocks default-forbidden secret/token artifacts even when a project policy lists them as required.
 - [ ] Effective policy merge rejects project policy that weakens defaults.
-- [ ] Existing `evidence_policy` transitional behavior is not silently broken.
-- [ ] Postgres-backed tests cover create/update/activation/default-weakening cases.
+- [ ] Effective submission artifact policy hash is persisted for the guide version.
+- [ ] Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to the guide version.
+- [ ] Transitional `evidence_policy`, `required_files`, and `required_evidence` are replaced, not kept as compatibility aliases.
+- [ ] Postgres-backed tests cover create/update/activation/default-weakening/guide-sufficiency/pre-submit-policy-locking cases.
 
 ## Verification Commands
 
@@ -132,12 +145,10 @@ Conditional:
 
 ## Human Review Focus
 
-- Are the policy field names precise enough?
-- Is the project-owner intake checklist precise enough for Workstream to derive
-  policy without making project owners author internal schema?
-- Are Workstream default rules complete enough for v0.1?
-- Should `evidence_policy` remain a compatibility alias during migration?
-- Should generated pre-submit policy be persisted in chunk 2 or derived on read?
+- Are the guide sufficiency report fields precise enough?
+- Are the persisted provenance field names precise enough?
+- Does this chunk stay limited to records/contracts/activation guard, leaving
+  full async agent execution for the next chunk?
 
 ## Stop Conditions
 
@@ -145,8 +156,8 @@ Stop and escalate if:
 
 - implementation needs to touch task/submission/checker runtime in this chunk
 - policy version/hash naming is unclear
-- default artifact rules need product decision
-- migration requires destructive data changes
+- guide sufficiency severity naming is unclear
+- migration requires preserving old transitional fields as compatibility aliases
 - CI/test weakening is required to pass
 - same blocker remains after 2 repair attempts
 - secrets or production data are needed

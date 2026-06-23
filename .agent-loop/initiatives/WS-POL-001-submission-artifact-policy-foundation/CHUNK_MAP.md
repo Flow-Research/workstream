@@ -7,18 +7,20 @@
   checker splitting unless explicitly approved.
 - Every implementation chunk must use Postgres-backed tests.
 - Worker-facing outcomes remain simple; internal route names stay internal.
-- Project owners provide setup material in plain language; Workstream derives
-  machine-readable submission artifact policy and actors with the `admin` or
-  `project_manager` role approve it.
+- Project guides are open-ended project material. Workstream uses async
+  `ProjectGuideSufficiencyAgent` and
+  `SubmissionArtifactPolicyDerivationAgent` outputs to create the locked policy
+  bundle.
 
 ## Chunks
 
-### WS-POL-001-01: Submission Artifact Policy Foundation
+### WS-POL-001-01: Guide Policy Bundle Foundation
 
 Goal:
 
-Add first-class `SubmissionArtifactPolicy` backend records and schemas, define
-Workstream default submission artifact rules in code, and validate that project
+Add first-class guide sufficiency, `SubmissionArtifactPolicy`, effective policy,
+and persisted `PreSubmitCheckerPolicy` backend records and schemas. Define
+Workstream default submission artifact rules in code and validate that project
 policy cannot weaken defaults.
 
 Risk:
@@ -49,18 +51,28 @@ backend/app/modules/submissions/**
 .github/workflows/**
 frontend or demos
 payment/reputation/blockchain code
+full async agent execution runtime
 ```
 
 Acceptance criteria:
 
 - Dedicated submission artifact policy model/table exists.
+- Dedicated guide sufficiency report model/table exists.
+- Guide sufficiency report supports `passed`, `blocked`, and
+  `passed_with_warnings`.
 - Project policy is scoped to project id + guide version.
 - Project policy records are Workstream-derived and approved by `admin` or
   `project_manager`, not direct project owner-authored schema.
 - Workstream default policy is represented in code.
 - Effective policy merge rejects attempts to weaken defaults.
-- Guide activation requires valid submission artifact policy.
-- Existing `evidence_policy` transitional behavior is not silently broken.
+- Effective submission artifact policy hash is persisted for the guide version.
+- Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to
+  the guide version.
+- Guide activation requires passing or acknowledged guide sufficiency, approved
+  submission artifact policy, effective policy hash, and persisted generated
+  pre-submit checker policy.
+- Transitional `evidence_policy`, `required_files`, and `required_evidence` are
+  replaced, not preserved as compatibility aliases.
 
 Required reviewers:
 
@@ -69,16 +81,16 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-Policy ownership, project-owner intake checklist, policy field names, default
-rule set, migration strategy, and whether `evidence_policy` remains a temporary
-compatibility alias.
+Guide sufficiency report fields, persisted provenance field names, and keeping
+Chunk 1 limited to records/contracts/activation guards.
 
-### WS-POL-001-02: Generated PreSubmitCheckerPolicy
+### WS-POL-001-02: Async Guide Analysis And Policy Derivation
 
 Goal:
 
-Generate pre-submit checker policy from effective submission artifact policy and
-expose it only as server-owned policy context.
+Run `ProjectGuideSufficiencyAgent` and
+`SubmissionArtifactPolicyDerivationAgent` asynchronously against open-ended
+project guide material.
 
 Risk:
 
@@ -108,10 +120,16 @@ payment/reputation/blockchain code
 
 Acceptance criteria:
 
-- Pre-submit checker policy is generated, not client-supplied.
-- Generated policy contains Workstream defaults plus project additions.
-- Generated policy names match registered pre-submit checker behavior.
-- Workers cannot provide checker names, severities, versions, or outcomes.
+- `ProjectGuideSufficiencyAgent` runs async and produces a persisted
+  sufficiency report for a guide version.
+- Blocking guide gaps stop activation and create project-owner clarification
+  requests.
+- Warnings can be acknowledged only by `admin` or `project_manager`.
+- `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
+  or warnings are acknowledged.
+- Derived policy cannot weaken Workstream defaults.
+- Workers and project owners cannot provide checker names, severities,
+  versions, or outcomes.
 
 Required reviewers:
 
@@ -120,7 +138,8 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-Generated policy persistence/derivation choice and exact naming.
+Async job boundaries, sufficiency severity behavior, and clarification request
+shape.
 
 ### WS-POL-001-03: Submission Creation Uses Effective Policy
 

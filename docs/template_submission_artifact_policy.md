@@ -14,29 +14,36 @@
 
 ## Source Material
 
-Project owners provide setup material in plain language. Workstream derives this
-policy from that material; project owners do not author the machine-readable
-schema directly.
+Project owners provide open-ended project material and business terms.
+Workstream derives this policy from that material after guide sufficiency passes
+or warnings are acknowledged. Project owners do not author or approve the
+machine-readable Workstream policy schema directly.
 
-Required project-owner intake material:
+Source material refs:
 
-- project purpose:
-- guide material or documentation references:
-- task inputs:
-- expected outputs:
-- examples of good submissions:
-- examples of bad submissions:
-- acceptance criteria:
-- rejection criteria:
-- review rubric:
-- required skills:
-- confidentiality constraints:
-- base payout or payment policy inputs:
-- artifact expectations:
+- project guide version:
+- imported document refs:
+- URL-backed documentation refs:
+- repository documentation refs:
+- task example refs:
+- rubric refs:
+- business term refs:
+
+## Guide Sufficiency
+
+- sufficiency report id:
+- sufficiency status: `passed | blocked | passed_with_warnings`
+- finding severities used: `blocking_gap | warning | info`
+- warnings acknowledged by role: `admin | project_manager`
+- warnings acknowledged by actor:
+- warnings acknowledged at:
 
 ## Approval Provenance
 
 - derivation source: `manual | workstream_agent | import_adapter`
+- derivation agent name:
+- derivation agent version:
+- sufficiency report id:
 - source material refs:
 - approval status: `draft | approved | superseded`
 - approved policy hash:
@@ -128,6 +135,13 @@ WorkstreamDefaultSubmissionArtifactPolicy
 ```
 
 Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+
+Generated policy lock:
+
+- generated pre-submit checker policy version:
+- generated pre-submit checker policy hash:
+- effective submission artifact policy hash:
+- locked guide version:
 
 Blocking failures return `pre_submission_checker_failed` with structured
 pass/fail/warning details. They do not return review decision values:

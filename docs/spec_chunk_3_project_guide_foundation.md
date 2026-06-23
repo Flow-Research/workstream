@@ -45,21 +45,26 @@ Architecture target:
 
 - `projects`
 - `project_guides`
+- `guide_sufficiency_reports`
 - `submission_artifact_policies`
+- `effective_submission_artifact_policies`
+- `pre_submit_checker_policies`
 - `checker_policies`
 - `review_policies`
 - `revision_policies`
 - `payment_policies`
 
-Current v0.1 implementation note: the first project-guide foundation stores submission artifact requirements in `ProjectGuide.evidence_policy`. That is transitional and maps to `SubmissionArtifactPolicy` until the dedicated table/API migration is implemented.
+Current v0.1 implementation note: the first project-guide foundation stores submission artifact requirements in `ProjectGuide.evidence_policy`. That is old construction state. The target replacement is `SubmissionArtifactPolicy`; no compatibility alias is required.
 
 The guide version is the join key for the guide-specific policies.
 
 Project guide activation requires:
 
 - guide is still draft
+- guide sufficiency report is passed or warnings are acknowledged by `admin` or `project_manager`
 - submission artifact policy exists for the guide version
-- generated pre-submit checker policy exists for the guide version
+- effective submission artifact policy hash exists for the guide version
+- generated pre-submit checker policy snapshot/hash exists for the guide version
 - post-submit checker policy exists for the guide version
 - review policy exists for the guide version
 - revision policy exists for the guide version
@@ -95,9 +100,9 @@ EffectiveSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Workstream generates pre-submit checker policy from the effective submission artifact policy. Blocking pre-submit failures prevent submission creation.
+Workstream generates, persists, hashes, and locks pre-submit checker policy from the effective submission artifact policy. Blocking pre-submit failures prevent submission creation.
 
-Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is transitional and maps to submission artifact requirements until the dedicated policy table/API is implemented.
+Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is old construction state and is replaced by the dedicated policy table/API path.
 
 ## API Impact
 

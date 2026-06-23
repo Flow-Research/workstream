@@ -72,8 +72,10 @@ Required before entering:
 
 - task schema valid
 - project guide active
+- GuideSufficiencyReport passed or warnings acknowledged
 - SubmissionArtifactPolicy approved
-- generated PreSubmitCheckerPolicy available
+- EffectiveSubmissionArtifactPolicy hash persisted
+- generated PreSubmitCheckerPolicy persisted and locked
 - PostSubmitCheckerPolicy present
 - review policy present
 - revision policy present
