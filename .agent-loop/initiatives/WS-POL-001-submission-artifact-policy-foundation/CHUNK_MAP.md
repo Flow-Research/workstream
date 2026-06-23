@@ -164,6 +164,11 @@ Verification:
   source-ref rejection, and default weakening rejection.
 - Background execution tests prove jobs are async and idempotent for a guide
   version.
+- Compiler tests prove allowed primitive emission, unknown primitive rejection,
+  byte-stable same-input same-compiler-version bundle hashing, hash binding to
+  `effective_submission_artifact_policy_hash`, and client/worker inability to
+  supply checker names, severities, versions, outcomes, compiler version, or
+  compiled bundles.
 
 Required reviewers:
 
@@ -301,6 +306,10 @@ Follow-up:
 - A future frontend/demo chunk must prove any UI or demo surface that renders
   pre-submit results uses pass/fail/warning language instead of review decision
   terminology before ADR 0011 is marked fully implemented.
+- A future executable-checker extension chunk, if ever approved, must prove
+  static validation, generated tests, sandbox policy checks, no network, no
+  shell, no secrets, no database access, and `admin` or `project_manager`
+  approval of the exact locked code hash after those checks pass.
 
 ### WS-POL-001-05: Revision Resubmission And Real API Drill
 

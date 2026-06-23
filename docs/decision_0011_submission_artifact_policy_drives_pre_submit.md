@@ -101,7 +101,8 @@ Project-specific executable checker code is not part of the default path. If a
 future project requires logic that cannot fit the constrained checker
 specification, the extension path must require static validation, generated
 tests, sandboxed execution, no network, no shell, no secrets, no database access,
-explicit human approval, and a locked code hash.
+`admin` or `project_manager` approval of the exact code hash after those checks
+pass, and a locked code hash.
 
 Blocking pre-submit failures prevent submission creation. When blocking pre-submit checks fail:
 

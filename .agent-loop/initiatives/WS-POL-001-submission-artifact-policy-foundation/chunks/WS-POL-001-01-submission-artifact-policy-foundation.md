@@ -127,6 +127,10 @@ human review implementation
       from guide sufficiency gaps, `admin`/`project_manager` warning
       acknowledgement, approval provenance fields, default weakening,
       source-ref sanitization, and pre-submit policy locking.
+- [ ] Tests prove primitive allowlisting, unknown primitive rejection,
+      canonical compiled bundle hashing, hash binding to
+      `effective_submission_artifact_policy_hash`, immutable compiled bundle
+      behavior, and absence of executable code fields in the default path.
 
 ## Verification Commands
 

@@ -224,7 +224,8 @@ logic using approved primitives such as:
 Project-specific executable checker code is a future extension path, not the
 default. That extension path must require static validation, generated tests,
 sandboxed execution, no network, no shell, no secrets, no database access,
-explicit human approval, and a locked code hash.
+`admin` or `project_manager` approval of the exact code hash after those checks
+pass, and a locked code hash.
 
 Pre-submit checks are authoritative for intake. Post-submit checker runs are authoritative for review readiness.
 
