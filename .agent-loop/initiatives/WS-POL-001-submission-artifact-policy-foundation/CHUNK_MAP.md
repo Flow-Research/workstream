@@ -265,6 +265,8 @@ Acceptance criteria:
 - Pre-submit policy provenance and post-submit policy provenance are distinct.
 - Durable checker runs use locked post-submit checker policy.
 - Pre-submit feedback does not create durable checker records.
+- Pre-submit feedback persistence cannot store review decision fields, or
+  enforces review decision fields empty when a shared shape is unavoidable.
 - API responses do not expose internal-only routes to workers.
 
 Verification:
@@ -272,6 +274,8 @@ Verification:
 - Postgres-backed checker tests cover pre-submit feedback without durable
   `CheckerRun` and post-submit `CheckerRun` creation against locked
   `PostSubmitCheckerPolicy`.
+- Postgres-backed schema/persistence tests prove pre-submit feedback cannot
+  store review decision values.
 - Postgres-backed FastAPI/API tests cover post-submit policy locking and
   worker-facing response filtering.
 
@@ -283,6 +287,12 @@ reuse/dedup, test delta.
 Human review focus:
 
 Field naming and migration safety.
+
+Follow-up:
+
+- A future frontend/demo chunk must prove any UI or demo surface that renders
+  pre-submit results uses pass/fail/warning language instead of review decision
+  terminology before ADR 0011 is marked fully implemented.
 
 ### WS-POL-001-05: Revision Resubmission And Real API Drill
 

@@ -111,7 +111,9 @@ points before they can be marked complete:
 Chunk `WS-POL-001-03` must prove the API response and no-row/no-version/no-task
 transition behavior. Chunk `WS-POL-001-04` must prove post-submit checker
 records remain separate from pre-submit feedback and that worker-facing
-responses do not expose internal-only routes.
+responses do not expose internal-only routes. If any UI or demo surface renders
+pre-submit results, a later frontend/demo chunk must prove the same wording
+separation before this ADR can be closed as fully implemented.
 
 ## Default Workstream Submission Artifact Rules
 
