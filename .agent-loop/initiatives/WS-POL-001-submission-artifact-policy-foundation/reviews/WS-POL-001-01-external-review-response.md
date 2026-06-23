@@ -10,38 +10,26 @@ https://github.com/Flow-Research/workstream/pull/26
 
 ## Source
 
-CodeRabbit and GitHub checks.
+CodeRabbit, GitHub checks, and human PR review.
 
 ## Summary
 
-External review feedback was handled separately from internal sub-agent evidence.
-CodeRabbit reported one readability nitpick in the chunk map. The finding was
-valid, in scope, and fixed without changing the product contract.
+External review feedback is tracked separately from internal sub-agent evidence.
+Internal sub-agent results live in
+`WS-POL-001-01-internal-review-evidence.md`.
 
 ## External Findings
 
 | Source | Finding | Severity | Status | Response |
 |---|---|---:|---:|---|
-| CodeRabbit | `WS-POL-001-03` acceptance criteria repeated "Blocking pre-submit failure creates no..." across consecutive lines. | Low | Fixed | Consolidated the four no-side-effect guarantees into one sentence while preserving every distinct requirement. |
-| GitHub checks | Agent Gates, Backend, Week 1 API Demo UI, and CodeRabbit status must pass. | High | Passed | All GitHub checks passed after the final push. |
-| CodeRabbit manual trigger | Manual `@coderabbitai review` was requested after the rate-limit window. | Informational | Complete | CodeRabbit replied "Review finished" and noted incremental review does not re-review already reviewed commits unless automatic reviews are paused. No new actionable findings were posted. |
-| Human review | Project owners should not author `SubmissionArtifactPolicy`; Workstream should derive it from project material and require `admin` or `project_manager` approval. | High | Fixed | Updated planning artifacts, ADRs, glossary, architecture docs, specs, templates, operating manual, current data flow, and first user flows. |
-| Human review | Pre-submit failures should not use review decisions and should show pass/fail details like the Snorkel-style static checker experience. | High | Fixed | Standardized `pre_submission_checker_failed` with structured pass/fail/warning details and explicit exclusion of `accept`, `needs_revision`, and `reject`. |
+| CodeRabbit | `WS-POL-001-03` acceptance criteria repeated no-side-effect wording. | Low | Fixed | Consolidated the no-row, no-version, no-transition, and no-durable-checker-run guarantee without weakening it. |
+| Human review | Project owners must not author or approve Workstream internal `SubmissionArtifactPolicy`; Workstream derives it from open-ended project material and `admin` or `project_manager` approves the internal bundle. | High | Fixed | Updated planning artifacts, ADRs, glossary, architecture docs, specs, templates, operating manual, data flow, and first user flows. |
+| Human review | Project-guide material is open-ended, not a fixed checklist; Workstream must run sufficiency and derivation agents internally. | High | Fixed | Added `ProjectGuideSufficiencyAgent`, `GuideSufficiencyReport`, and `SubmissionArtifactPolicyDerivationAgent` to the plan, ADR, data model, lifecycle, templates, and chunk map. |
+| Human review | `PreSubmitCheckerPolicy` must be persisted and locked to the guide version, not derived on read. | High | Fixed | Updated plan, ADRs, data model, lifecycle, checker flow, and chunk contracts to require persisted snapshot/hash and locked effective policy hash. |
+| Human review | Pre-submit failures should not use review decisions and should show pass/fail/warning details like the Snorkel-style static checker experience. | High | Fixed | Standardized `pre_submission_checker_failed` with structured pass/fail/warning details and explicit exclusion of `accept`, `needs_revision`, and `reject`. |
+| Human review | Current planning PR must be mergeable before implementation starts. | High | Fixed | Updated status, chunk map, chunk contract, proof obligations, and review evidence while keeping backend implementation inactive. |
 
-## Fix Plan
-
-- Keep the external CodeRabbit response in this `*-external-review-response.md`
-  artifact.
-- Keep internal sub-agent review evidence in
-  `WS-POL-001-01-internal-review-evidence.md`.
-- Apply only the wording consolidation requested by CodeRabbit.
-- Re-run affected internal reviewer tracks before pushing.
-
-## Out-of-Scope Items To Defer
-
-None.
-
-## Evidence After Fixes
+## Commands To Re-Run After Push
 
 ```bash
 gh pr view 26 --json number,title,state,isDraft,url,reviewDecision,reviews,comments,statusCheckRollup
@@ -53,12 +41,6 @@ python3 scripts/check_stale_workstream_wording.py
 git diff --check
 ```
 
-Final GitHub state after push:
+## Remaining External Review
 
-```text
-agent-gates: pass
-backend test: pass
-week1 demo UI: pass
-CodeRabbit status: pass
-CodeRabbit manual trigger: review finished, no new actionable findings posted
-```
+Await fresh GitHub checks and CodeRabbit review after this evidence refresh is pushed.
