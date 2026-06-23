@@ -28,6 +28,7 @@ Internal sub-agent results live in
 | Human review | `PreSubmitCheckerPolicy` must be persisted and locked to the guide version, not derived on read. | High | Fixed | Updated plan, ADRs, data model, lifecycle, checker flow, and chunk contracts to require persisted snapshot/hash and locked effective policy hash. |
 | Human review | Pre-submit failures should not use review decisions and should show pass/fail/warning details like the Snorkel-style static checker experience. | High | Fixed | Standardized `pre_submission_checker_failed` with structured pass/fail/warning details and explicit exclusion of `accept`, `needs_revision`, and `reject`. |
 | Human review | Current planning PR must be mergeable before implementation starts. | High | Fixed | Updated status, chunk map, chunk contract, proof obligations, and review evidence while keeping backend implementation inactive. |
+| CodeRabbit | ADR 0011 described pre-submit/review-decision separation but did not state how implementation must prove enforcement. | Major | Fixed | Added an implementation enforcement contract to ADR 0011. It explicitly says this PR is planning-only and lists the API, UI/demo, persistence, database, and chunk-level proof required before implementation chunks can close. |
 
 ## Commands To Re-Run After Push
 

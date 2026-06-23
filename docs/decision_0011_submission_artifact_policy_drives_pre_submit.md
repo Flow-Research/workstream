@@ -87,6 +87,32 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
 
 Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a locked submission.
 
+## Implementation Enforcement Contract
+
+This ADR defines the required product contract. This planning PR does not claim
+the backend implementation already enforces it.
+
+The implementation chunks that close this ADR must prove these enforcement
+points before they can be marked complete:
+
+- API response schemas for `pre_submission_checker_failed` must exclude review
+  decision fields and values such as `accept`, `needs_revision`, and `reject`.
+- Worker-facing UI or demo surfaces that render pre-submit results must use
+  pre-submit pass/fail/warning language, not human review decision terminology.
+- Pre-submit intake feedback must not be persisted as human review decisions or
+  durable post-submit checker results.
+- Database schemas or persistence services for pre-submit feedback must not
+  store review decision columns for pre-submit outcomes; if a shared shape is
+  unavoidable, review-decision fields must be nullable and enforced empty for
+  pre-submit records.
+- Post-submit checker records and future human review records remain the only
+  places that can route toward `needs_revision` as a task outcome.
+
+Chunk `WS-POL-001-03` must prove the API response and no-row/no-version/no-task
+transition behavior. Chunk `WS-POL-001-04` must prove post-submit checker
+records remain separate from pre-submit feedback and that worker-facing
+responses do not expose internal-only routes.
+
 ## Default Workstream Submission Artifact Rules
 
 Every submission must include:
