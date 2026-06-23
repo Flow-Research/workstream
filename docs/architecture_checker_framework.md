@@ -166,6 +166,8 @@ ProjectGuide
 -> GuideSufficiencyReport
 -> ProjectSubmissionArtifactPolicy
 -> EffectiveSubmissionArtifactPolicy
+-> constrained PreSubmitCheckerSpec
+-> trusted Workstream checker compiler
 -> PreSubmitCheckerPolicy
 -> pre-submit intake checks
 -> Submission row only when blocking checks pass
@@ -203,6 +205,26 @@ creates a submission. Blocking failures prevent submission creation and return
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
+
+The `SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
+specification. It does not produce unrestricted checker code. Workstream's
+trusted checker compiler turns that specification into deterministic checker
+logic using approved primitives such as:
+
+- `require_file`
+- `allow_extension`
+- `forbid_extension`
+- `require_manifest_field`
+- `validate_json_schema`
+- `check_directory_structure`
+- `require_minimum_evidence`
+- `verify_hash`
+- `limit_file_size`
+
+Project-specific executable checker code is a future extension path, not the
+default. That extension path must require static validation, generated tests,
+sandboxed execution, no network, no shell, no secrets, no database access,
+explicit human approval, and a locked code hash.
 
 Pre-submit checks are authoritative for intake. Post-submit checker runs are authoritative for review readiness.
 

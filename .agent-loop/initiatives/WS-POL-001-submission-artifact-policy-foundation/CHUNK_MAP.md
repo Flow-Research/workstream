@@ -14,6 +14,9 @@
 - Project owner material is untrusted input. Implementation chunks must reject
   unsafe source refs and prevent guide text or imported docs from granting tool
   authority or weakening Workstream defaults.
+- Agents derive constrained policy and checker specifications. Workstream
+  compiles deterministic checker bundles. Unrestricted generated checker code
+  is not the default path.
 
 ## Chunks
 
@@ -71,6 +74,8 @@ Acceptance criteria:
 - Effective submission artifact policy hash is persisted for the guide version.
 - Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to
   the guide version.
+- Generated `PreSubmitCheckerPolicy` is a compiled deterministic checker bundle
+  from approved primitives, not unrestricted generated code.
 - Guide activation requires passing or acknowledged guide sufficiency, approved
   submission artifact policy, effective policy hash, and persisted generated
   pre-submit checker policy.
@@ -143,6 +148,9 @@ Acceptance criteria:
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
   or warnings are acknowledged.
 - Derived policy cannot weaken Workstream defaults.
+- Derived checker specification uses only approved Workstream primitives.
+- Trusted checker compiler produces deterministic `PreSubmitCheckerPolicy`
+  snapshot/hash from the approved specification.
 - Malicious guide text, embedded prompt-injection instructions, and unsafe
   source refs cannot influence agent authority, fetch behavior, or default
   policy strength.

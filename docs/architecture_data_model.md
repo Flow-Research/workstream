@@ -326,11 +326,21 @@ Fields:
 - `version`
 - `policy_hash`
 - `effective_submission_artifact_policy_hash`
+- `checker_spec`
+- `compiler_version`
+- `compiled_bundle_hash`
+- `compiled_bundle`
 - `checker_names`
 - `checker_configs`
 - `blocking_severities`
 - `generated_from_policy_version`
 - `generated_at`
+
+`checker_spec` is a constrained machine-readable specification using
+Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
+bundle produced by the trusted Workstream checker compiler. It is stored as a
+structured snapshot, not arbitrary executable code. `compiled_bundle_hash`
+binds the exact compiled logic to `effective_submission_artifact_policy_hash`.
 
 The generated checker order is deterministic:
 

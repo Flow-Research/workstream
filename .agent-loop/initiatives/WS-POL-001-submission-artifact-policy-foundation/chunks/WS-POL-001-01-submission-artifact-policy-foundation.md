@@ -25,6 +25,11 @@ effective policy hash, persists the generated pre-submit checker policy
 snapshot/hash, and a Workstream actor with the `admin` or `project_manager` role
 approves the bundle before guide activation.
 
+The generated pre-submit checker policy is deterministic compiled policy, not
+unrestricted generated checker code. Agents derive constrained checker
+specifications; Workstream's trusted compiler produces the locked checker
+bundle.
+
 Project owner material is untrusted input. Guide text, URLs, repository docs,
 examples, and imported documents cannot grant tool authority, override
 Workstream rules, or weaken default checks. Source refs must be sanitized before
@@ -113,6 +118,10 @@ human review implementation
 - [ ] Effective policy merge rejects project policy that weakens defaults.
 - [ ] Effective submission artifact policy hash is persisted for the guide version.
 - [ ] Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to the guide version.
+- [ ] Generated `PreSubmitCheckerPolicy` stores a constrained checker spec,
+      compiler version, compiled bundle hash, and immutable compiled bundle.
+- [ ] Generated checker bundle uses approved primitives rather than unrestricted
+      generated code.
 - [ ] Transitional `evidence_policy`, `required_files`, and `required_evidence` are replaced, not kept as compatibility aliases.
 - [ ] Postgres-backed FastAPI/API tests cover create/update, blocking activation
       from guide sufficiency gaps, `admin`/`project_manager` warning

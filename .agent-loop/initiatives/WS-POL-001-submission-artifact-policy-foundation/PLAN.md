@@ -58,6 +58,13 @@ checks run before submission creation and do not create durable checker records.
 Post-submit/internal checks run after submission lock and do create durable
 checker records.
 
+The derivation agent does not generate unrestricted executable checker code.
+It produces a constrained checker specification using Workstream-approved
+primitives. Workstream's trusted checker compiler turns that specification into
+the deterministic `PreSubmitCheckerPolicy` bundle. Runtime checks execute the
+locked compiled bundle against staged artifact hashes or future content
+identifiers.
+
 If no passing or acknowledged guide sufficiency report, approved project
 submission artifact policy, effective policy hash, and persisted generated
 pre-submit checker policy exist for the guide version, guide activation fails
@@ -112,6 +119,9 @@ while post-submit answers whether a locked submission can move to human review.
 - Project-owner boundary: project owners provide open-ended guide material and
   business terms; Workstream evaluates sufficiency, derives policy, and owns
   internal controls.
+- Checker-code boundary: agents derive constrained checker specifications;
+  Workstream compiles deterministic checker bundles. Unrestricted generated
+  checker code is not the default path.
 - Source-material security: project-owner docs, URLs, examples, and repository
   docs are untrusted input; embedded tool instructions, prompt-injection text,
   credential-bearing refs, signed URLs, query-bearing refs, and local filesystem

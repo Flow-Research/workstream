@@ -34,6 +34,8 @@ WorkstreamDefaultSubmissionArtifactPolicy
 = EffectiveSubmissionArtifactPolicy
 
 EffectiveSubmissionArtifactPolicy
+-> constrained pre-submit checker specification
+-> trusted Workstream checker compiler
 -> persisted and locked PreSubmitCheckerPolicy
 ```
 
@@ -65,6 +67,11 @@ guide-policy bundle. Workers submit draft packet fields. Workstream decides
 required artifacts, evidence, hashes, storage reference rules, forbidden
 artifacts, and blocking pre-submit feedback from the locked effective policy.
 
+The derivation agent produces a constrained artifact-intake contract and checker
+specification. Workstream compiles that specification into deterministic checker
+logic. Runtime submission evaluation is performed by the locked checker bundle,
+not by an agent.
+
 ## Why Now
 
 Week 1 and Week 2 established the core backend loop:
@@ -95,6 +102,8 @@ After this initiative:
 - Effective submission artifact policy is computed deterministically.
 - Generated pre-submit checker policy is persisted and locked to the project
   guide version.
+- Generated pre-submit checker policy is produced by Workstream's trusted
+  compiler from approved checker primitives, not by unrestricted generated code.
 - Submission creation uses the generated pre-submit policy before a submission
   row is created.
 - Post-submit/internal checker policy remains separate.

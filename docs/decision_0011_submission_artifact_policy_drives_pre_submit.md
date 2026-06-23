@@ -39,6 +39,11 @@ passes or warnings are acknowledged. The project owner does not approve this
 internal policy. A Workstream actor with the `admin` or `project_manager` role
 reviews and approves the derived policy before guide activation.
 
+The derivation agent does not generate unrestricted executable checker code as
+the default path. It produces a machine-readable artifact-intake contract and a
+constrained pre-submit checker specification using Workstream-approved
+primitives.
+
 `SubmissionArtifactPolicy` is the Workstream-derived, admin-or-project-manager-approved machine-readable contract for worker submissions. It defines:
 
 - required artifacts
@@ -67,13 +72,36 @@ EffectiveSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Workstream generates and persists `PreSubmitCheckerPolicy` from the effective
-submission artifact policy.
+Workstream's trusted checker compiler generates and persists
+`PreSubmitCheckerPolicy` from the effective submission artifact policy and the
+approved checker specification.
 
 `PreSubmitCheckerPolicy` is locked to the project guide version. It is not
 derived on read, manually edited by workers, or supplied by clients. Workers
 submit only draft packet fields. They do not choose checker names, policy
 versions, blocking rules, severities, or outcomes.
+
+The compiled `PreSubmitCheckerPolicy` is deterministic checker logic, not an
+agent judgment loop. Runtime checks execute the locked compiled checker bundle
+against exact staged artifact hashes or future content identifiers.
+
+Approved pre-submit checker primitives include:
+
+- `require_file`
+- `allow_extension`
+- `forbid_extension`
+- `require_manifest_field`
+- `validate_json_schema`
+- `check_directory_structure`
+- `require_minimum_evidence`
+- `verify_hash`
+- `limit_file_size`
+
+Project-specific executable checker code is not part of the default path. If a
+future project requires logic that cannot fit the constrained checker
+specification, the extension path must require static validation, generated
+tests, sandboxed execution, no network, no shell, no secrets, no database access,
+explicit human approval, and a locked code hash.
 
 Blocking pre-submit failures prevent submission creation. When blocking pre-submit checks fail:
 
