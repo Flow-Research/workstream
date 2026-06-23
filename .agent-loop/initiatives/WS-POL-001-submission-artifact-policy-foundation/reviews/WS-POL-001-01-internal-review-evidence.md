@@ -10,13 +10,13 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 141ad11e42e96bf98d5c24fb77442d681d6698b1
+Reviewed code SHA: 0498bbe66468891c8285bb22b1365fee699c2f05
 
-Reviewed at: 2026-06-23T13:14:19Z
+Reviewed at: 2026-06-23T16:39:43Z
 
-Reviewer run IDs: 019ef3df-a4ae-71f0-b50c-dbd99e65af6c, 019ef3e0-cc78-7583-abd8-826f77b6d435, 019ef3e2-d1fc-7642-b079-561bf61b3d07, 019ef3e5-1e10-78f2-b272-f06200c50334, 019ef3e7-6f3d-7730-a2fd-adc55e496811, 019ef3ea-b44c-7741-9ced-b05bb6a5e5d2, 019ef432-a806-75c1-96ac-11c93eea2f9c, 019ef45d-540a-71e1-9531-19277d5450ed, 019ef45f-a5fa-7721-b9ae-aa39b1f6778e, 019ef462-b086-7923-a03e-78c298316f73, 019ef466-2433-7bf3-9335-069cfa5b5838, 019ef46a-171d-7b42-9795-773132754ff0, 019ef46e-dcea-7423-aa46-47a27b098c85
+Reviewer run IDs: 019ef3df-a4ae-71f0-b50c-dbd99e65af6c, 019ef3e0-cc78-7583-abd8-826f77b6d435, 019ef3e2-d1fc-7642-b079-561bf61b3d07, 019ef3e5-1e10-78f2-b272-f06200c50334, 019ef3e7-6f3d-7730-a2fd-adc55e496811, 019ef3ea-b44c-7741-9ced-b05bb6a5e5d2, 019ef432-a806-75c1-96ac-11c93eea2f9c, 019ef45d-540a-71e1-9531-19277d5450ed, 019ef45f-a5fa-7721-b9ae-aa39b1f6778e, 019ef462-b086-7923-a03e-78c298316f73, 019ef466-2433-7bf3-9335-069cfa5b5838, 019ef46a-171d-7b42-9795-773132754ff0, 019ef46e-dcea-7423-aa46-47a27b098c85, 019ef51b-8491-7192-a868-f2cbc1c56079, 019ef51d-cc5d-7d40-b5e6-0966c546e465, 019ef520-eea1-71c0-919a-63d24728ff32, 019ef523-f173-7e71-8685-902518610fda, 019ef52a-1da8-7df2-9428-c96b1b0cc164
 
-After reviewed SHA `141ad11e42e96bf98d5c24fb77442d681d6698b1`, only review evidence artifacts changed.
+After reviewed SHA `0498bbe66468891c8285bb22b1365fee699c2f05`, only review evidence artifacts changed.
 
 ## Reviewer Results
 
@@ -35,6 +35,11 @@ After reviewed SHA `141ad11e42e96bf98d5c24fb77442d681d6698b1`, only review evide
 | focused product/ops | PASS | None | Confirmed worker-facing pre-submit language remains separate from review decisions. |
 | focused architecture | PASS AFTER FIXES | None remaining | Confirmed boundaries and requested stale evidence refresh. Fixed by this evidence update. |
 | focused docs | PASS WITH LOW RISKS | None | Confirmed ADR and external-review wording are clear and do not overclaim implementation. |
+| checker compiler architecture | PASS | None | Confirmed agents derive constrained specs and Workstream owns deterministic compiled checker bundles. |
+| checker compiler security/auth | PASS WITH LOW RISKS | None | Requested `admin` or `project_manager` approval of exact future extension code hash after validation and sandbox checks. Fixed. |
+| checker compiler QA/test | PASS AFTER FIXES | None remaining | Requested proof for primitive allowlisting, unknown primitive rejection, canonical hash binding, immutable bundle behavior, no executable code fields by default, and future extension gate. Fixed. |
+| checker compiler product/ops | PASS WITH LOW RISKS | None | Confirmed the workflow preserves setup-agent assistance, deterministic runtime checking, and admin/project_manager approval. |
+| checker compiler docs | PASS AFTER FIXES | None remaining | Confirmed wording consistency and requested evidence refresh. Fixed by this evidence update. |
 
 ## Valid Findings Addressed
 
@@ -51,6 +56,10 @@ After reviewed SHA `141ad11e42e96bf98d5c24fb77442d681d6698b1`, only review evide
 - Added ADR 0011 implementation enforcement contract without claiming the backend already enforces it.
 - Assigned UI/demo wording proof to a later frontend/demo chunk before ADR closure.
 - Added Chunk 4 schema/persistence proof that pre-submit feedback cannot store review decision values.
+- Locked the default pre-submit path to constrained checker specifications and Workstream-compiled deterministic checker bundles, not unrestricted generated checker code.
+- Added data model fields for `checker_spec`, `compiler_version`, `compiled_bundle_hash`, and immutable `compiled_bundle`.
+- Added proof obligations for primitive allowlisting, unknown primitive rejection, canonical compiled bundle hashing, hash binding to `effective_submission_artifact_policy_hash`, immutable compiled bundle behavior, and absence of executable code fields by default.
+- Tightened future executable-checker extension requirements to require static validation, generated tests, sandbox policy checks, no network, no shell, no secrets, no database access, and `admin` or `project_manager` approval of the exact locked code hash after those checks pass.
 
 ## Commands Run
 
