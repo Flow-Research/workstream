@@ -62,7 +62,7 @@ Project guide activation requires:
 
 - guide is still draft
 - guide sufficiency report is passed or warnings are acknowledged by `admin` or `project_manager`
-- submission artifact policy exists for the guide version
+- Workstream-derived submission artifact policy is approved for the guide version with `admin` or `project_manager` approval provenance
 - effective submission artifact policy hash exists for the guide version
 - generated pre-submit checker policy snapshot/hash exists for the guide version
 - post-submit checker policy exists for the guide version

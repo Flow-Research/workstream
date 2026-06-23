@@ -231,8 +231,8 @@ Examples:
 ```text
 Draft packet
 -> load locked task context
--> compute EffectiveSubmissionArtifactPolicy
--> generate PreSubmitCheckerPolicy
+-> load locked EffectiveSubmissionArtifactPolicy hash
+-> load locked PreSubmitCheckerPolicy snapshot/hash
 -> run pre-submit intake checks
 -> create Submission only when blocking pre-submit checks pass
 -> lock submission

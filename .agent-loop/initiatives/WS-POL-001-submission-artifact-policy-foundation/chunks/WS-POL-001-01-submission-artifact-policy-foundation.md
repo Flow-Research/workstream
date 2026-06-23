@@ -25,6 +25,11 @@ effective policy hash, persists the generated pre-submit checker policy
 snapshot/hash, and a Workstream actor with the `admin` or `project_manager` role
 approves the bundle before guide activation.
 
+Project owner material is untrusted input. Guide text, URLs, repository docs,
+examples, and imported documents cannot grant tool authority, override
+Workstream rules, or weaken default checks. Source refs must be sanitized before
+persistence.
+
 ## Approved Plan Reference
 
 - INTENT: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/INTENT.md`
@@ -85,6 +90,10 @@ human review implementation
 - [ ] Blocking guide sufficiency findings prevent guide activation.
 - [ ] Warning guide sufficiency findings require `admin` or `project_manager`
       acknowledgement before guide activation.
+- [ ] Project-owner source refs are sanitized and reject signed URLs,
+      query-bearing refs, credential-bearing refs, and local filesystem paths.
+- [ ] Embedded instructions in guide material cannot grant tool authority or
+      weaken Workstream default policy.
 - [ ] Policy rows are scoped by `project_id` and `guide_version`.
 - [ ] Policy rows have a composite foreign key to `project_guides(project_id, version)`.
 - [ ] Pydantic input/output schemas exist for project submission artifact policy.
@@ -105,7 +114,7 @@ human review implementation
 - [ ] Effective submission artifact policy hash is persisted for the guide version.
 - [ ] Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to the guide version.
 - [ ] Transitional `evidence_policy`, `required_files`, and `required_evidence` are replaced, not kept as compatibility aliases.
-- [ ] Postgres-backed tests cover create/update/activation/default-weakening/guide-sufficiency/pre-submit-policy-locking cases.
+- [ ] Postgres-backed FastAPI/API tests cover create/update/activation/default-weakening/guide-sufficiency/source-ref-sanitization/pre-submit-policy-locking cases.
 
 ## Verification Commands
 

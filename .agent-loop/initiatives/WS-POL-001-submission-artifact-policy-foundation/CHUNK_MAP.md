@@ -11,6 +11,9 @@
   `ProjectGuideSufficiencyAgent` and
   `SubmissionArtifactPolicyDerivationAgent` outputs to create the locked policy
   bundle.
+- Project owner material is untrusted input. Implementation chunks must reject
+  unsafe source refs and prevent guide text or imported docs from granting tool
+  authority or weakening Workstream defaults.
 
 ## Chunks
 
@@ -71,8 +74,20 @@ Acceptance criteria:
 - Guide activation requires passing or acknowledged guide sufficiency, approved
   submission artifact policy, effective policy hash, and persisted generated
   pre-submit checker policy.
+- Project-owner source refs are sanitized and cannot contain signed URLs,
+  query-bearing refs, credential-bearing refs, or local filesystem paths.
+- Embedded instructions in guide material cannot grant tool authority or weaken
+  Workstream default policy.
 - Transitional `evidence_policy`, `required_files`, and `required_evidence` are
   replaced, not preserved as compatibility aliases.
+
+Verification:
+
+- Postgres-backed FastAPI/API tests cover policy create/update, guide
+  sufficiency activation blocking, warning acknowledgement, default weakening
+  rejection, source-ref sanitization, and pre-submit policy locking.
+- Unit/service tests may cover deterministic merge helpers, but API-visible
+  behavior must be proven through the FastAPI path.
 
 Required reviewers:
 
@@ -128,8 +143,19 @@ Acceptance criteria:
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
   or warnings are acknowledged.
 - Derived policy cannot weaken Workstream defaults.
+- Malicious guide text, embedded prompt-injection instructions, and unsafe
+  source refs cannot influence agent authority, fetch behavior, or default
+  policy strength.
 - Workers and project owners cannot provide checker names, severities,
   versions, or outcomes.
+
+Verification:
+
+- Postgres-backed async tests cover sufficiency report creation, blocking
+  clarification requests, warning acknowledgement, derivation job output, unsafe
+  source-ref rejection, and default weakening rejection.
+- Background execution tests prove jobs are async and idempotent for a guide
+  version.
 
 Required reviewers:
 
@@ -183,6 +209,12 @@ Acceptance criteria:
   structured pass/fail/warning details, not review decision values.
 - Passing pre-submit creates a submission stamped with locked policy context.
 
+Verification:
+
+- Postgres-backed FastAPI/API tests cover clean submission, blocking pre-submit
+  failure, no-row/no-version/no-transition/no-durable-checker side effects, and
+  stamped locked policy context.
+
 Required reviewers:
 
 senior engineering, QA/test, security/auth, product/ops, architecture, docs,
@@ -234,6 +266,12 @@ Acceptance criteria:
 - Durable checker runs use locked post-submit checker policy.
 - Pre-submit feedback does not create durable checker records.
 - API responses do not expose internal-only routes to workers.
+
+Verification:
+
+- Postgres-backed checker tests cover pre-submit feedback without durable
+  `CheckerRun`, post-submit `CheckerRun` creation against locked
+  `PostSubmitCheckerPolicy`, and worker-facing response filtering.
 
 Required reviewers:
 
@@ -288,6 +326,14 @@ Acceptance criteria:
   human-review-caused `needs_revision`.
 - Real API drill covers clean pass, blocking pre-submit, post-submit
   `needs_revision`, and fixed resubmission.
+
+Verification:
+
+- Real API drill runs against Postgres and covers clean pass, blocking
+  pre-submit failure, post-submit checker-caused `needs_revision`, fixed
+  resubmission, immutable older submissions, and locked policy context.
+- Postgres-backed tests prove replacement submission versioning and
+  `outcome_source` separation.
 
 Required reviewers:
 

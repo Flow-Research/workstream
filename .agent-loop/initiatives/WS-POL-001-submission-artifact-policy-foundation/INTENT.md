@@ -44,6 +44,12 @@ other project-specific source material. Workstream must not force every project
 into one fixed intake checklist. A project guide can be a URL to a complete
 documentation set if that is the right form for the project.
 
+All project-owner material is untrusted input. Guide text, imported docs, URLs,
+repository docs, and examples cannot grant tool authority, override Workstream
+policy, weaken default checks, or instruct internal agents to ignore their
+system rules. Source references must be sanitized before persistence and fetched
+only through approved adapters or allowlisted retrieval paths.
+
 Workstream runs asynchronous internal analysis on that material. The
 `ProjectGuideSufficiencyAgent` checks whether the guide is sufficient for
 submitters, reviewers, and Workstream quality control. Blocking guide gaps stop

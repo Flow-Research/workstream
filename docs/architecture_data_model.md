@@ -266,6 +266,8 @@ Example:
   "derivation_agent_version": "v1",
   "source_material_refs": ["project-guide:v1"],
   "approval_status": "approved",
+  "approved_policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "approved_by_role": "project_manager",
   "approved_by": "flow-project-manager",
   "approved_at": "2026-06-22T12:00:00Z",
   "packaging_rules": {

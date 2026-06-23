@@ -107,7 +107,9 @@ This section is a human-readable summary. The enforcement source is the approved
 
 Every active guide version must have:
 
+- GuideSufficiencyReport:
 - SubmissionArtifactPolicy:
+- EffectiveSubmissionArtifactPolicy hash:
 - generated PreSubmitCheckerPolicy:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:

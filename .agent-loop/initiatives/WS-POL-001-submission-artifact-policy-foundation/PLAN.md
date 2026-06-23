@@ -43,6 +43,12 @@ shape asynchronously. Blocking gaps stop activation and create clarification
 requests for the project owner. Warnings can be accepted only by a Workstream
 actor with the `admin` or `project_manager` role.
 
+Project owner material is always treated as untrusted data. Internal agents must
+not execute embedded instructions from guide text, URLs, repository docs, or
+examples. Fetching source material must use approved adapters or allowlisted
+retrieval paths, reject signed URLs, query-bearing refs, credential-bearing refs,
+and local filesystem paths, and persist only sanitized source refs.
+
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
 actor with the `admin` or `project_manager` role approves the derived policy.
@@ -106,6 +112,10 @@ while post-submit answers whether a locked submission can move to human review.
 - Project-owner boundary: project owners provide open-ended guide material and
   business terms; Workstream evaluates sufficiency, derives policy, and owns
   internal controls.
+- Source-material security: project-owner docs, URLs, examples, and repository
+  docs are untrusted input; embedded tool instructions, prompt-injection text,
+  credential-bearing refs, signed URLs, query-bearing refs, and local filesystem
+  paths cannot become policy authority.
 - Payment/execution: no payment or contribution records in this initiative.
 - Persistence/data: schema changes land through Alembic and async SQLAlchemy.
 - Presentation/API: backend-first; no frontend implementation.
@@ -133,6 +143,8 @@ while post-submit answers whether a locked submission can move to human review.
 - Tests proving a guide cannot activate without passing or acknowledged guide
   sufficiency, approved project submission artifact policy, effective policy
   hash, and persisted generated pre-submit checker policy.
+- Tests proving malicious or credential-bearing source material cannot weaken
+  Workstream defaults, grant tool authority, or persist unsafe source refs.
 - Submission API tests proving blocking pre-submit failure creates no submission
   row, version, task transition, durable checker run, or submission-created audit.
 - Real API drill proving clean pass and `needs_revision` resubmission.

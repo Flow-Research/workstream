@@ -68,7 +68,9 @@ Every project guide is human-facing. It must explain:
 
 Every active guide version must also have approved machine-readable policies:
 
+- guide sufficiency report
 - submission artifact policy
+- effective submission artifact policy hash
 - generated pre-submit checker policy
 - post-submit checker policy
 - review policy
@@ -84,7 +86,7 @@ with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation. Project owners do not approve Workstream's internal
 submission policy schema.
 
-`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that effective policy.
+`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream persists the effective policy hash, then generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that effective policy.
 
 Blocking pre-submit failures prevent submission creation. They return
 `pre_submission_checker_failed` with structured pass/fail/warning details and

@@ -9,7 +9,9 @@ Every project has:
 - active guide
 - queue owner
 - reviewer owner
+- guide sufficiency report
 - submission artifact policy
+- effective submission artifact policy hash
 - generated pre-submit checker policy
 - post-submit checker policy
 - review policy
@@ -30,7 +32,9 @@ Before releasing tasks:
 - allowed task types listed
 - required task fields listed
 - project owner setup material captured
+- guide sufficiency report passed or warnings acknowledged by `admin` or `project_manager`
 - submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
+- effective submission artifact policy hash persisted
 - generated pre-submit checker policy created from the effective submission artifact policy
 - post-submit checker policy attached
 - review policy attached
@@ -43,7 +47,11 @@ Before releasing tasks:
 
 ### Project Activation Gate
 
-A project cannot become active unless guide, approved submission artifact policy, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, and payment policy are present.
+A project cannot become active unless guide, passed or acknowledged guide
+sufficiency report, approved submission artifact policy, persisted effective
+submission artifact policy hash, generated pre-submit checker policy,
+post-submit checker policy, review policy, revision policy, and payment policy
+are present.
 
 ### Task Screening Gate
 

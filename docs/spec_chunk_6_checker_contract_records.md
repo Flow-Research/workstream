@@ -191,7 +191,10 @@ Normalization rules:
 
 Pre-submit checks run before a submission is created. They are authoritative for submission intake and return immediate API feedback without creating an authoritative post-submit checker run.
 
-Workstream generates pre-submit checker policy server-side from the effective submission artifact policy for the task. Workers submit only draft packet fields. They cannot choose checker names, policy versions, blocking rules, severities, results, or outcomes.
+Workstream loads the locked generated pre-submit checker policy snapshot/hash
+for the task's guide version. Workers submit only draft packet fields. They
+cannot choose checker names, policy versions, blocking rules, severities,
+results, or outcomes.
 
 Response fields:
 
