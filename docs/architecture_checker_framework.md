@@ -201,7 +201,9 @@ Project policy adds required artifacts, evidence requirements, stricter forbidde
 The generated `PreSubmitCheckerPolicy` is persisted, hashed, and locked to the
 project guide version before workers submit packets. It runs before Workstream
 creates a submission. Blocking failures prevent submission creation and return
-`pre_submission_checker_failed` with structured pass/fail/warning details.
+`PreSubmitCheckResponse` with `status="failed"`,
+`eligible_to_submit=false`, `failure_code="pre_submission_checker_failed"`,
+and structured pass/fail/warning details.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.

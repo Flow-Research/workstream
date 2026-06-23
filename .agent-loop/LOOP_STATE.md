@@ -5,10 +5,10 @@
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: `WS-POL-001-01` - Submission Artifact Policy Foundation
 - Branch: `codex/submission-artifact-policy-loop-plan`
-- Status: intent, discovery, plan, chunk map, and first chunk contract drafted; implementation has not started
+- Status: planning review requested; implementation has not started
 - Merge commit: none for this initiative
-- Reviewed code SHA: pending refresh after latest internal-review fixes
-- Current gate: internal review evidence refresh before human review of plan and first chunk contract; backend implementation is not approved
+- Reviewed code SHA: `0498bbe66468891c8285bb22b1365fee699c2f05`
+- Current gate: human planning approval pending; backend implementation is not approved
 - Next chunk: inactive until `WS-POL-001-01` is approved and completed
 
 ## Operating Rule
@@ -30,4 +30,5 @@ behavior.
 - PR #23 merged into `main` on 2026-06-20.
 - PR #24 updated post-merge loop memory on `main`.
 - PR #25 added Terminal Benchmark example material under `examples/`.
-- Current planning branch has internal review evidence at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-internal-review-evidence.md`; evidence is being refreshed for the latest reviewed revision.
+- Current planning branch has internal review evidence at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-internal-review-evidence.md`.
+- External review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-external-review-response.md`.
