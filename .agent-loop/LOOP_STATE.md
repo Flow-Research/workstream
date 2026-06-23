@@ -7,7 +7,7 @@
 - Branch: `codex/submission-artifact-policy-loop-plan`
 - Status: planning review requested; implementation has not started
 - Merge commit: none for this initiative
-- Reviewed code SHA: `0498bbe66468891c8285bb22b1365fee699c2f05`
+- Reviewed code SHA: `3c577ab4215d7f8fce9e2bf2d817f4fc270eb6c8`
 - Current gate: human planning approval pending; backend implementation is not approved
 - Next chunk: inactive until `WS-POL-001-01` is approved and completed
 

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-Planning review is requested, CI has passed, and latest external review feedback has been addressed.
+Planning review is requested, and latest external review feedback has been addressed.
 Implementation has not started.
 
 ## Active Chunk

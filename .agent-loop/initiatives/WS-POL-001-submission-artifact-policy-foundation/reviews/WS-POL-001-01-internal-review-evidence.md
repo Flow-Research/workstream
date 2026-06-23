@@ -10,13 +10,13 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 0498bbe66468891c8285bb22b1365fee699c2f05
+Reviewed code SHA: 3c577ab4215d7f8fce9e2bf2d817f4fc270eb6c8
 
-Reviewed at: 2026-06-23T16:39:43Z
+Reviewed at: 2026-06-23T19:08:10Z
 
-Reviewer run IDs: 019ef3df-a4ae-71f0-b50c-dbd99e65af6c, 019ef3e0-cc78-7583-abd8-826f77b6d435, 019ef3e2-d1fc-7642-b079-561bf61b3d07, 019ef3e5-1e10-78f2-b272-f06200c50334, 019ef3e7-6f3d-7730-a2fd-adc55e496811, 019ef3ea-b44c-7741-9ced-b05bb6a5e5d2, 019ef432-a806-75c1-96ac-11c93eea2f9c, 019ef45d-540a-71e1-9531-19277d5450ed, 019ef45f-a5fa-7721-b9ae-aa39b1f6778e, 019ef462-b086-7923-a03e-78c298316f73, 019ef466-2433-7bf3-9335-069cfa5b5838, 019ef46a-171d-7b42-9795-773132754ff0, 019ef46e-dcea-7423-aa46-47a27b098c85, 019ef51b-8491-7192-a868-f2cbc1c56079, 019ef51d-cc5d-7d40-b5e6-0966c546e465, 019ef520-eea1-71c0-919a-63d24728ff32, 019ef523-f173-7e71-8685-902518610fda, 019ef52a-1da8-7df2-9428-c96b1b0cc164
+Reviewer run IDs: 019ef3df-a4ae-71f0-b50c-dbd99e65af6c, 019ef3e0-cc78-7583-abd8-826f77b6d435, 019ef3e2-d1fc-7642-b079-561bf61b3d07, 019ef3e5-1e10-78f2-b272-f06200c50334, 019ef3e7-6f3d-7730-a2fd-adc55e496811, 019ef3ea-b44c-7741-9ced-b05bb6a5e5d2, 019ef432-a806-75c1-96ac-11c93eea2f9c, 019ef45d-540a-71e1-9531-19277d5450ed, 019ef45f-a5fa-7721-b9ae-aa39b1f6778e, 019ef462-b086-7923-a03e-78c298316f73, 019ef466-2433-7bf3-9335-069cfa5b5838, 019ef46a-171d-7b42-9795-773132754ff0, 019ef46e-dcea-7423-aa46-47a27b098c85, 019ef51b-8491-7192-a868-f2cbc1c56079, 019ef51d-cc5d-7d40-b5e6-0966c546e465, 019ef520-eea1-71c0-919a-63d24728ff32, 019ef523-f173-7e71-8685-902518610fda, 019ef52a-1da8-7df2-9428-c96b1b0cc164, 019ef5c5-db38-76a1-8617-4572f7ebc7a2, 019ef5c7-2666-7e73-9147-4544265a3818, 019ef5c9-2749-75b2-819d-d7018f2b0e12, 019ef5cb-cc57-7151-b2ec-0f0d49ed0fb1
 
-After reviewed SHA `0498bbe66468891c8285bb22b1365fee699c2f05`, only review evidence artifacts changed.
+After reviewed SHA `3c577ab4215d7f8fce9e2bf2d817f4fc270eb6c8`, only review evidence and loop status artifacts changed.
 
 ## Reviewer Results
 
@@ -40,6 +40,10 @@ After reviewed SHA `0498bbe66468891c8285bb22b1365fee699c2f05`, only review evide
 | checker compiler QA/test | PASS AFTER FIXES | None remaining | Requested proof for primitive allowlisting, unknown primitive rejection, canonical hash binding, immutable bundle behavior, no executable code fields by default, and future extension gate. Fixed. |
 | checker compiler product/ops | PASS WITH LOW RISKS | None | Confirmed the workflow preserves setup-agent assistance, deterministic runtime checking, and admin/project_manager approval. |
 | checker compiler docs | PASS AFTER FIXES | None remaining | Confirmed wording consistency and requested evidence refresh. Fixed by this evidence update. |
+| response-contract senior engineering | PASS AFTER FIXES | None remaining | Requested external review response wording to match the corrected `PreSubmitCheckResponse` shape. Fixed. |
+| response-contract QA/test | PASS AFTER FIXES | None remaining | Verified the architecture doc matches `backend/app/modules/checkers/schemas.py` and requested evidence refresh. Fixed. |
+| response-contract security/auth | PASS AFTER FIXES | None remaining | Confirmed pre-submit failure remains separate from review decisions and requested evidence refresh. Fixed. |
+| response-contract product/ops | PASS AFTER FIXES | None remaining | Confirmed operator-facing wording is clear and requested external review artifact cleanup plus evidence refresh. Fixed. |
 
 ## Valid Findings Addressed
 
@@ -60,6 +64,8 @@ After reviewed SHA `0498bbe66468891c8285bb22b1365fee699c2f05`, only review evide
 - Added data model fields for `checker_spec`, `compiler_version`, `compiled_bundle_hash`, and immutable `compiled_bundle`.
 - Added proof obligations for primitive allowlisting, unknown primitive rejection, canonical compiled bundle hashing, hash binding to `effective_submission_artifact_policy_hash`, immutable compiled bundle behavior, and absence of executable code fields by default.
 - Tightened future executable-checker extension requirements to require static validation, generated tests, sandbox policy checks, no network, no shell, no secrets, no database access, and `admin` or `project_manager` approval of the exact locked code hash after those checks pass.
+- Corrected the checker framework response wording to match the current `PreSubmitCheckResponse` schema: `status`, `eligible_to_submit`, and `results`, with `pre_submission_checker_failed` treated as the user-facing failure condition rather than a response field.
+- Corrected the external review response artifact so CodeRabbit feedback is tracked separately from internal review evidence and does not claim a nonexistent `failure_code` field in pre-submit responses.
 
 ## Commands Run
 
