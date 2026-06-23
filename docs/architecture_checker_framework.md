@@ -202,8 +202,9 @@ The generated `PreSubmitCheckerPolicy` is persisted, hashed, and locked to the
 project guide version before workers submit packets. It runs before Workstream
 creates a submission. Blocking failures prevent submission creation and return
 `PreSubmitCheckResponse` with `status="failed"`,
-`eligible_to_submit=false`, `failure_code="pre_submission_checker_failed"`,
-and structured pass/fail/warning details.
+`eligible_to_submit=false`, and structured pass/fail/warning details in
+`results`. The user-facing failure condition is
+`pre_submission_checker_failed`; it is not a review decision value.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
