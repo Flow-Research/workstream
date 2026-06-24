@@ -85,7 +85,7 @@ with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation. Project owners do not approve Workstream's internal
 submission policy schema.
 
-`SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`, derives and canonicalizes `ProjectPreSubmitCheckerSpec`, then combines `EffectiveProjectSubmissionArtifactPolicy` with `ApprovedTaskArtifactBinding` to create `EffectiveTaskSubmissionArtifactPolicy`. Workstream persists the effective task policy hash, then generates, persists, hashes, and locks the task-level `PreSubmitCheckerPolicy` from that task policy and approved project checker spec.
+`SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`. Workstream then generates, persists, hashes, and locks project `PreSubmitCheckerPolicy` from that effective project policy. Tasks lock the applicable guide snapshot, effective project policy hash, and pre-submit checker policy hash before entering the worker pipeline.
 
 Blocking pre-submit failures prevent submission creation. Preflight failures
 return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
@@ -107,7 +107,7 @@ Every task must carry enough information to make claiming, checking, reviewing, 
 - task type
 - required output
 - acceptance criteria
-- required artifacts and evidence references derived from the effective task submission artifact policy
+- required artifacts and evidence references derived from the locked project pre-submit checker policy
 - difficulty
 - skill tags
 - estimated time when known
@@ -161,9 +161,6 @@ Use these names consistently:
 - `ContributionRecord`
 - `SubmissionArtifactPolicy`
 - `EffectiveProjectSubmissionArtifactPolicy`
-- `ProjectPreSubmitCheckerSpec`
-- `ApprovedTaskArtifactBinding`
-- `EffectiveTaskSubmissionArtifactPolicy`
 - `PreSubmitCheckerPolicy`
 - `PostSubmitCheckerPolicy`
 - `pre_submission_checker_failed`

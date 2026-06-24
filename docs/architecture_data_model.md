@@ -18,7 +18,7 @@ Project
   GuideSufficiencyReport
   SubmissionArtifactPolicy
   EffectiveProjectSubmissionArtifactPolicy
-  ProjectPreSubmitCheckerSpec
+  PreSubmitCheckerPolicy
   PostSubmitCheckerPolicy
   ReviewPolicy
   RevisionPolicy
@@ -26,9 +26,6 @@ Project
   ProjectLesson
 
 Task
-  ApprovedTaskArtifactBinding
-  EffectiveTaskSubmissionArtifactPolicy
-  PreSubmitCheckerPolicy
   Assignment
   Submission
     EvidenceItem
@@ -181,7 +178,7 @@ That field is old construction state. The architecture source of truth is
 `SubmissionArtifactPolicy`, and the replacement path does not require a
 compatibility alias.
 
-Implementation note: `ProjectGuide.required_submission_fields` is a legacy display summary. Submission validity is enforced by `EffectiveTaskSubmissionArtifactPolicy`, not by project guide fields.
+Implementation note: `ProjectGuide.required_submission_fields` is a legacy display summary. Submission validity is enforced by the locked `PreSubmitCheckerPolicy` generated from `EffectiveProjectSubmissionArtifactPolicy`, not by project guide fields.
 
 ## GuideSourceSnapshot
 
@@ -436,135 +433,19 @@ project setup as a policy conflict. It is not deferred to worker submission.
 Approved and superseded effective policies are immutable. Recomputing the
 effective policy after guide/source/policy changes creates a new row and hash.
 
-## ProjectPreSubmitCheckerSpec
-
-Fields:
-
-- `id`
-- `project_id`
-- `guide_version`
-- `source_snapshot_id`
-- `source_snapshot_hash`
-- `effective_project_policy_hash`
-- `version`
-- `lifecycle_status`
-- `canonical_spec`
-- `canonical_spec_hash`
-- `compiler_version`
-- `generated_from_policy_version`
-- `generated_at`
-- `approved_by_role`
-- `approved_by`
-- `approved_at`
-- `supersedes_spec_id`
-
-`ProjectPreSubmitCheckerSpec` is the project-level constrained checker
-specification produced from the approved project submission artifact policy. It
-uses only Workstream-approved primitives. The trusted compiler validates and
-canonicalizes this specification during project setup, but it does not persist a
-project-level `PreSubmitCheckerPolicy` row. The final executable
-`PreSubmitCheckerPolicy` is task-level and is created only after task artifact
-binding produces `EffectiveTaskSubmissionArtifactPolicy`.
-
-## ApprovedTaskArtifactBinding
-
-Fields:
-
-- `id`
-- `task_id`
-- `project_id`
-- `guide_version`
-- `source_snapshot_id`
-- `source_snapshot_hash`
-- `effective_project_policy_hash`
-- `artifact_profile`
-- `required_paths`
-- `required_evidence`
-- `additional_packaging_rules`
-- `additional_forbidden_artifacts`
-- `lifecycle_status`
-- `approved_by_role`
-- `approved_by`
-- `approved_at`
-- `created_at`
-- `supersedes_binding_id`
-
-`ApprovedTaskArtifactBinding` turns a project-level policy into a concrete
-task-level intake contract. A project can contain many task types, so Workstream
-must not assume every task under one guide submits the same artifacts. The
-binding selects an approved artifact profile and supplies constrained
-parameters, for example:
-
-```json
-{
-  "artifact_profile": "coding_task",
-  "required_paths": ["src/parser.py", "tests/test_parser.py"]
-}
-```
-
-Task bindings can add or tighten requirements. They cannot weaken Workstream
-defaults or the effective project policy.
-
-## EffectiveTaskSubmissionArtifactPolicy
-
-Generated server-side from:
-
-```text
-EffectiveProjectSubmissionArtifactPolicy
-+ ApprovedTaskArtifactBinding
-```
-
-Fields:
-
-- `id`
-- `task_id`
-- `project_id`
-- `guide_version`
-- `source_snapshot_id`
-- `source_snapshot_hash`
-- `version`
-- `lifecycle_status`
-- `policy_hash`
-- `effective_project_policy_hash`
-- `approved_task_artifact_binding_id`
-- `required_artifacts`
-- `required_evidence`
-- `artifact_manifest_required`
-- `artifact_hash_required`
-- `artifact_hash_algorithm`
-- `maximum_file_size_bytes`
-- `maximum_package_size_bytes`
-- `allowed_storage_schemes`
-- `forbidden_artifacts`
-- `required_attestation_terms`
-- `packaging_rules`
-- `generated_at`
-- `supersedes_policy_id`
-
-This policy is locked when the task enters `SCREENING` or `READY`. Submission
-pre-check and submission creation use this task policy hash, not project guide
-prose and not transitional task fields.
-
 ## PreSubmitCheckerPolicy
 
-Generated server-side from `EffectiveTaskSubmissionArtifactPolicy` and the
-approved `ProjectPreSubmitCheckerSpec`, then persisted and locked to the task
-policy hash before the task enters the worker pipeline.
-
 Fields:
 
 - `id`
-- `task_id`
 - `project_id`
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
+- `effective_project_policy_hash`
 - `version`
 - `lifecycle_status`
 - `policy_hash`
-- `effective_task_submission_artifact_policy_hash`
-- `project_pre_submit_checker_spec_id`
-- `project_pre_submit_checker_spec_hash`
 - `checker_spec`
 - `compiler_version`
 - `compiled_bundle_hash`
@@ -574,18 +455,29 @@ Fields:
 - `blocking_severities` (derived index projection)
 - `generated_from_policy_version`
 - `generated_at`
+- `approved_by_role`
+- `approved_by`
+- `approved_at`
 - `supersedes_policy_id`
 
-`checker_spec` is the task-applied constrained machine-readable specification
-using Workstream-approved primitives. It is derived from the approved
-`ProjectPreSubmitCheckerSpec` and task policy binding. `compiled_bundle` is the
-immutable JSON checker bundle produced by the trusted Workstream checker
-compiler and is the canonical source of truth. It is stored as a structured
-snapshot, not arbitrary executable code. `compiled_bundle_hash` binds the exact
-compiled logic to `effective_task_submission_artifact_policy_hash` and
-`project_pre_submit_checker_spec_hash`. `checker_names`,
+Generated server-side from `EffectiveProjectSubmissionArtifactPolicy`, then
+persisted and locked for the project guide version before tasks enter the
+worker pipeline. Most tasks under the same project guide reuse the same
+pre-submit checker bundle. The task stores the locked project checker hash; it
+does not own a newly derived policy or newly compiled checker.
+
+`checker_spec` is the constrained machine-readable specification using
+Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
+bundle produced by the trusted Workstream checker compiler and is the canonical
+source of truth. It is stored as a structured snapshot, not arbitrary executable
+code. `compiled_bundle_hash` binds the exact compiled logic to
+`effective_project_policy_hash`. `checker_names`,
 `checker_configs`, and `blocking_severities` are derived index projections only;
 they must be regenerated from `compiled_bundle` and must not disagree with it.
+
+Task-specific values, such as expected output path or task id, are constrained
+runtime parameters consumed by the locked checker bundle. They are not new
+policy derivation and do not create a new checker bundle.
 
 Approved and superseded checker policy rows are immutable. Changing policy or
 compiler output creates a new row with `supersedes_policy_id`.
@@ -735,8 +627,6 @@ Fields:
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`
-- `locked_task_artifact_binding_id`
-- `locked_effective_task_submission_artifact_policy_hash`
 - `locked_pre_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
@@ -792,11 +682,11 @@ External origin adapters are later work. When added, they normalize into this ta
 
 The task id points to the locked task contract. That contract includes the guide
 version, guide source snapshot hash, project submission artifact policy version,
-effective project policy hash, approved task artifact binding, effective task
-policy hash, generated pre-submit checker policy hash, post-submit checker
-policy version, review policy version, revision policy version, payment policy
-version, acceptance criteria, derived display summaries, base payout, and skill
-tags. Workers submit against the task id; they do not restate policy versions.
+effective project policy hash, generated pre-submit checker policy hash,
+post-submit checker policy version, review policy version, revision policy
+version, payment policy version, acceptance criteria, derived display summaries,
+base payout, and skill tags. Workers submit against the task id; they do not
+restate policy versions.
 
 Implementation note: current v0.1 code uses `locked_checker_policy_version` for the post-submit checker policy version. The architecture target splits this into `locked_post_submit_checker_policy_version` and explicit submission artifact/pre-submit provenance fields.
 
@@ -832,8 +722,6 @@ Fields:
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`
-- `locked_task_artifact_binding_id`
-- `locked_effective_task_submission_artifact_policy_hash`
 - `locked_pre_submit_checker_policy_hash`
 - `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
@@ -846,11 +734,11 @@ Fields:
 The worker submission packet supplies the task id, summary, outputs, artifact
 hashes, evidence references, and worker attestation. Workstream assigns the
 submission version, creates evidence ids, and stamps locked guide source,
-submission artifact, effective task policy, pre-submit checker, post-submit
+submission artifact, effective project policy, pre-submit checker, post-submit
 checker, review, revision, and payment policy provenance from trusted
 task/project state. The worker does not provide submission version, evidence
 ids, checker results, checker run ids, guide versions, source snapshots,
-submission artifact policy versions, task policy hashes, post-submit checker
+submission artifact policy versions, policy hashes, post-submit checker
 policy versions, review policy versions, revision policy versions, or payment
 policy versions.
 

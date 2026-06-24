@@ -26,8 +26,6 @@ Every active project guide version must have a complete guide-policy bundle:
 
 Before a task can enter the worker pipeline, it must also have:
 
-- approved `ApprovedTaskArtifactBinding`
-- persisted `EffectiveTaskSubmissionArtifactPolicy` hash
 - persisted generated `PreSubmitCheckerPolicy` snapshot/hash
 
 Project owners provide open-ended project material in plain language. Workstream
@@ -99,30 +97,32 @@ EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
   + ProjectSubmissionArtifactPolicy
 
-EffectiveTaskSubmissionArtifactPolicy =
-  EffectiveProjectSubmissionArtifactPolicy
-  + ApprovedTaskArtifactBinding
+PreSubmitCheckerPolicy =
+  trusted compiler output from EffectiveProjectSubmissionArtifactPolicy
 ```
 
-`SubmissionArtifactPolicyDerivationAgent` produces
-`ProjectPreSubmitCheckerSpec` at project setup time. Workstream's trusted
-checker compiler validates and canonicalizes that project checker specification
-but does not persist a project-level `PreSubmitCheckerPolicy` row. After task
-binding, the compiler combines the approved task binding, effective task policy,
-and approved project checker specification, then persists the final task-level
+`SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
+specification at project setup time. Workstream's trusted checker compiler
+validates that specification and persists the project-level
 `PreSubmitCheckerPolicy`.
 
 Project policies define project-wide artifact intake rules for a guide
-snapshot. Tasks can still have different required outputs. `ApprovedTaskArtifactBinding`
-selects an approved artifact profile and constrained task parameters. It can
-add or tighten requirements, never weaken platform defaults or the effective
-project policy. The resulting effective task policy hash is locked when the
-task enters `SCREENING` or `READY`.
+snapshot. The dominant operating model is one project guide, one effective
+project policy, and one project pre-submit checker bundle reused by every task
+under that guide version. `ProjectGuideSufficiencyAgent` is responsible for
+checking that the guide and derived policy cover the project's task set. If the
+guide does not cover the tasks, activation is blocked and the guide is improved
+or the work is split into another project/guide. Workstream does not hide guide
+coverage problems by generating new task-specific policies.
 
-`PreSubmitCheckerPolicy` is locked to the effective task policy hash. It is not
-derived on read, manually edited by workers, or supplied by clients. Workers
+`PreSubmitCheckerPolicy` is locked to the effective project policy hash. It is
+not derived on read, manually edited by workers, or supplied by clients. Workers
 submit only draft packet fields. They do not choose checker names, policy
-versions, blocking rules, severities, or outcomes.
+versions, blocking rules, severities, or outcomes. Each task stores locked
+references to the applicable guide snapshot, effective project policy hash, and
+pre-submit checker policy hash before entering the worker pipeline. Task-specific
+values are constrained runtime parameters consumed by the shared checker, not
+new checker generation.
 
 The compiled `PreSubmitCheckerPolicy` is deterministic checker logic, not an
 agent judgment loop. Runtime checks execute the locked compiled checker bundle
@@ -267,9 +267,9 @@ approved   -> immutable
 superseded -> immutable
 ```
 
-Changing an approved policy, effective policy, task binding, or compiled checker
-bundle creates a new row with a `supersedes_*` reference. Approved rows are
-never edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
+Changing an approved policy, effective policy, or compiled checker bundle
+creates a new row with a `supersedes_*` reference. Approved rows are never
+edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
 canonical JSON source of truth and `compiled_bundle_hash` is the hash of that
 canonical JSON. `checker_names`, `checker_configs`, and `blocking_severities`
 are derived index projections only.

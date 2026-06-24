@@ -101,11 +101,12 @@ Ensures a task has rubric or acceptance criteria.
 
 ### check_required_files
 
-Validates required submission artifacts from the effective task submission artifact policy.
+Validates required submission artifacts from the locked project pre-submit
+checker policy.
 
 ### check_forbidden_files
 
-Blocks known forbidden artifacts, secrets, private keys, copied internal data, or artifacts forbidden by the effective task submission artifact policy.
+Blocks known forbidden artifacts, secrets, private keys, copied internal data, or artifacts forbidden by the locked project pre-submit checker policy.
 
 Default forbidden patterns include:
 
@@ -167,9 +168,6 @@ ProjectGuide
 -> GuideSufficiencyReport
 -> ProjectSubmissionArtifactPolicy
 -> EffectiveProjectSubmissionArtifactPolicy
--> ProjectPreSubmitCheckerSpec
--> ApprovedTaskArtifactBinding
--> EffectiveTaskSubmissionArtifactPolicy
 -> trusted Workstream checker compiler
 -> PreSubmitCheckerPolicy
 -> pre-submit intake checks
@@ -201,8 +199,9 @@ Workstream default submission artifact rules require:
 
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
-The generated `PreSubmitCheckerPolicy` is persisted, hashed, and locked to the
-effective task submission artifact policy before workers submit packets. It
+The generated project `PreSubmitCheckerPolicy` is persisted, hashed, and locked
+to the effective project submission artifact policy before tasks enter the
+worker pipeline. Tasks lock references to that shared project checker hash. It
 runs before Workstream creates a submission. Preflight failures return
 `PreSubmitCheckResponse` with `status="failed"`,
 `eligible_to_submit=false`, and structured pass/fail/warning details in
@@ -212,13 +211,11 @@ Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 
-The `SubmissionArtifactPolicyDerivationAgent` produces
-`ProjectPreSubmitCheckerSpec`, a constrained project-level checker
-specification. It does not produce unrestricted checker code and does not create
-a project-level `PreSubmitCheckerPolicy` row. Workstream's trusted checker
-compiler validates and canonicalizes the project spec during setup, then later
-combines it with task binding and effective task policy to produce deterministic
-task-level checker logic using approved primitives such as:
+The `SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
+specification. It does not produce unrestricted checker code. Workstream's
+trusted checker compiler validates that project spec during setup, then
+persists deterministic project-level checker logic using approved primitives
+such as:
 
 - `require_file`
 - `allow_extension`
@@ -263,7 +260,7 @@ Examples:
 ```text
 Draft packet
 -> load locked task context
--> load locked EffectiveTaskSubmissionArtifactPolicy hash
+-> load locked EffectiveProjectSubmissionArtifactPolicy hash
 -> load locked PreSubmitCheckerPolicy snapshot/hash
 -> run pre-submit intake checks
 -> create Submission only when blocking pre-submit checks pass

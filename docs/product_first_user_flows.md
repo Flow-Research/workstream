@@ -31,14 +31,14 @@ Acceptance:
 2. Operator creates task with title, description, expected output, acceptance criteria, base amount, deadline, and difficulty.
 3. Workstream validates task against project guide.
 4. Task enters `SCREENING`.
-5. Screening confirms guide source snapshot, task contract, approved task artifact binding, effective task submission artifact policy hash, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
+5. Screening confirms guide source snapshot, task contract, effective project submission artifact policy hash, generated project pre-submit checker policy, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
 6. Task enters `READY`.
 
 Acceptance:
 
 - Missing required fields block `SCREENING`.
 - Missing required fields block `READY`.
-- Task shows project guide, task-specific required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
+- Task shows project guide, required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
 
 ## Flow 3: Worker Submits Work
 
@@ -46,7 +46,7 @@ Acceptance:
 2. Worker attaches output files or links.
 3. Worker attaches evidence.
 4. Worker writes submission notes.
-5. Workstream runs pre-submit checks generated from the effective task submission artifact policy.
+5. Workstream runs pre-submit checks generated from the effective project submission artifact policy.
 6. Preflight failures return `PreSubmitCheckResponse`; blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission.
 7. When blocking pre-submit checks pass, Worker submits packet.
 8. Task enters `SUBMITTED`.
@@ -55,7 +55,7 @@ Acceptance:
 
 - Submission cannot be created when blocking pre-submit checks fail.
 - Blocking pre-submit failures are not review decisions and never return `accept`, `needs_revision`, or `reject`.
-- Submission cannot be created without required artifacts, evidence references, hashes, and worker attestation defined by the effective task submission artifact policy.
+- Submission cannot be created without required artifacts, evidence references, hashes, and worker attestation defined by the locked project pre-submit checker policy.
 - Submission packet is immutable after checks start.
 
 ## Flow 4: Automated Checks Run

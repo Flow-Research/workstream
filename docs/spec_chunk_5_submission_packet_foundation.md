@@ -125,13 +125,13 @@ Locks a submission packet before checker execution. Locking makes the packet imm
 
 - a worker can submit only when assigned to the task
 - first submission requires task status `IN_PROGRESS`
-- Workstream loads the locked effective task submission artifact policy hash before creating a submission
+- Workstream loads the locked effective project submission artifact policy hash before creating a submission
 - Workstream loads the locked generated pre-submit checker policy snapshot/hash before creating a submission
 - blocking pre-submit failures prevent submission creation
 - when blocking pre-submit fails, no submission row is created, no submission version is assigned, no task transition to `SUBMITTED` occurs, and no submission-created audit event is written
 - first submission moves the task to `SUBMITTED`
 - later replacement submissions are allowed while the task is still `SUBMITTED`
-- submission packet content must satisfy the effective task submission artifact policy
+- submission packet content must satisfy the locked project pre-submit checker policy
 - every submission creation writes a task audit event
 - the audit event includes submission id, submission version, worker id, package hash, and artifact hash manifest
 - locking a submission writes a task audit event

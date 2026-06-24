@@ -143,7 +143,7 @@ human review implementation
       pointer.
 - [ ] Legacy `evidence_policy`, `required_files`, and `required_evidence` are
       not treated as compatibility aliases. Runtime replacement of task fields
-      happens in the task binding and submission migration chunk.
+      happens in the task locked-context and submission migration chunk.
 - [ ] Postgres-backed FastAPI/API tests cover create/update, blocking activation
       from guide sufficiency gaps, `admin`/`project_manager` warning
       acknowledgement, approval provenance fields, default weakening,
@@ -192,7 +192,7 @@ Conditional:
 - Are the guide source snapshot fields precise enough?
 - Are the persisted provenance field names precise enough?
 - Does this chunk stay limited to records/contracts/activation guard, leaving
-  full async agent execution, trusted compiler behavior, task binding, and
+  full async agent execution, trusted compiler behavior, task locked context, and
   submission runtime migration for later chunks?
 
 ## Stop Conditions

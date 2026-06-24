@@ -12,7 +12,7 @@
 
 This template governs durable internal checker runs after a submission is created, locked, and ready for the pre-review gate.
 
-It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveTaskSubmissionArtifactPolicy`.
+It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveProjectSubmissionArtifactPolicy`.
 
 ## Design Boundaries
 
@@ -54,9 +54,8 @@ EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
   + ProjectSubmissionArtifactPolicy
 
-EffectiveTaskSubmissionArtifactPolicy =
-  EffectiveProjectSubmissionArtifactPolicy
-  + ApprovedTaskArtifactBinding
+PreSubmitCheckerPolicy =
+  trusted compiler output from EffectiveProjectSubmissionArtifactPolicy
 ```
 
 Preflight failures return `PreSubmitCheckResponse(status="failed",

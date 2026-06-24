@@ -100,7 +100,7 @@ EffectiveProjectSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Task screening later combines the effective project policy with an approved task artifact binding to produce `EffectiveTaskSubmissionArtifactPolicy`. Workstream generates, persists, hashes, and locks task pre-submit checker policy from that task policy. Blocking pre-submit failures prevent submission creation.
+Workstream generates, persists, hashes, and locks project `PreSubmitCheckerPolicy` from the effective project policy. Tasks later lock the applicable guide snapshot, effective project policy hash, and pre-submit checker policy hash. Blocking pre-submit failures prevent submission creation.
 
 Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is old construction state and is replaced by the dedicated policy table/API path.
 

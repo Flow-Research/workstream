@@ -18,11 +18,11 @@ ProjectSubmissionArtifactPolicy
 EffectiveProjectSubmissionArtifactPolicy
 ```
 
-Every task then locks a task-specific intake bundle:
+Every task then locks the project intake context:
 
 ```text
-ApprovedTaskArtifactBinding
-EffectiveTaskSubmissionArtifactPolicy
+GuideSourceSnapshot
+EffectiveProjectSubmissionArtifactPolicy
 PreSubmitCheckerPolicy
 required_artifacts
 required_evidence

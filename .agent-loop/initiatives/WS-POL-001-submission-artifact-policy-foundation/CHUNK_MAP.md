@@ -17,8 +17,8 @@
 - Agents derive constrained policy and checker specifications. Workstream
   compiles deterministic checker bundles. Unrestricted generated checker code
   is not the default path.
-- Reports, derived policies, acknowledgements, effective policies, task
-  bindings, and checker bundles bind to immutable `GuideSourceSnapshot`
+- Reports, derived policies, acknowledgements, effective policies, task locked
+  references, and checker bundles bind to immutable `GuideSourceSnapshot`
   bundle id/hash, not only to `guide_version`.
 
 ## Chunks
@@ -124,8 +124,8 @@ Chunk 1 limited to records/contracts/activation guards.
 Goal:
 
 Run `ProjectGuideSufficiencyAgent`,
-`SubmissionArtifactPolicyDerivationAgent`, and project checker-spec
-canonicalization asynchronously against immutable guide-source snapshots.
+`SubmissionArtifactPolicyDerivationAgent`, and project pre-submit
+checker compilation asynchronously against immutable guide-source snapshots.
 
 Risk:
 
@@ -163,12 +163,12 @@ Acceptance criteria:
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
   or warnings are acknowledged.
 - Derived policy cannot weaken Workstream defaults.
-- `SubmissionArtifactPolicyDerivationAgent` produces
-  `ProjectPreSubmitCheckerSpec` using only approved Workstream primitives.
-- Trusted checker compiler validates and canonicalizes the project checker
-  specification, producing a stable project checker spec hash. Chunk 2 does not
-  persist a project-level `PreSubmitCheckerPolicy` row.
-- Derived report, project policy, effective project policy, and project checker spec
+- `SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
+  specification using only approved Workstream primitives.
+- Trusted checker compiler validates the specification and persists a
+  deterministic project `PreSubmitCheckerPolicy` bundle and hash. The default
+  path compiles once per project guide version, not once per task.
+- Derived report, project policy, effective project policy, and pre-submit checker bundle
   are invalidated by a new guide source snapshot.
 - Malicious guide text, embedded prompt-injection instructions, and unsafe
   source refs cannot influence agent authority, fetch behavior, or default
@@ -184,10 +184,10 @@ Verification:
 - Background execution tests prove jobs are async and idempotent for a guide
   source snapshot.
 - Compiler tests prove allowed primitive emission, unknown primitive rejection,
-  byte-stable same-input same-compiler-version project spec hashing, hash
-  binding to `effective_project_submission_artifact_policy_hash`, and
-  client/worker inability to supply checker names, severities, versions,
-  outcomes, compiler version, or project checker specs.
+  byte-stable same-input same-compiler-version bundle hashing, hash binding to
+  `effective_project_submission_artifact_policy_hash`, and client/worker
+  inability to supply checker names, severities, versions, outcomes, compiler
+  version, or compiled bundles.
 
 Required reviewers:
 
@@ -199,13 +199,13 @@ Human review focus:
 Async job boundaries, sufficiency severity behavior, and clarification request
 shape.
 
-### WS-POL-001-03: Task Policy Binding And Submission Creation
+### WS-POL-001-03: Task Locked Context And Submission Creation
 
 Goal:
 
-Add approved task artifact bindings, compute effective task submission artifact
-policy, generate the task-level pre-submit checker bundle, and move submission
-creation from transitional task fields to that locked task policy.
+Lock each task to the applicable guide snapshot, effective project policy hash,
+and project pre-submit checker bundle. Move submission creation from
+transitional task fields to that locked context.
 
 Risk:
 
@@ -237,17 +237,13 @@ frontend
 
 Acceptance criteria:
 
-- `ApprovedTaskArtifactBinding` exists and selects an approved artifact profile
-  plus constrained task parameters.
-- Task bindings can add or tighten requirements, but cannot weaken platform
-  defaults or the effective project policy.
-- `EffectiveTaskSubmissionArtifactPolicy` is generated from effective project
-  policy plus task binding and locked before `SCREENING` or `READY`.
-- Chunk 3 combines the approved task binding, effective task policy, and
-  approved `ProjectPreSubmitCheckerSpec`.
-- Task-level generated `PreSubmitCheckerPolicy` is persisted with
-  `compiled_bundle` as canonical JSON source of truth and `compiled_bundle_hash`
-  as its canonical hash.
+- Tasks lock `guide_source_snapshot_id`, `guide_source_snapshot_hash`,
+  `effective_project_submission_artifact_policy_hash`,
+  and `pre_submit_checker_policy_hash` before `SCREENING` or `READY`.
+- Most tasks in a project share the same `PreSubmitCheckerPolicy`; tasks do not
+  run policy derivation or checker compilation by default.
+- Task-specific values are constrained parameters consumed by the locked
+  checker bundle, not a newly generated checker policy.
 - Transitional `required_files` and `required_evidence` are replaced for
   submission runtime and are not compatibility aliases.
 - Blocking pre-submit failure creates no submission row, submission version,
@@ -264,8 +260,8 @@ Verification:
 - Postgres-backed FastAPI/API tests cover clean submission, blocking pre-submit
   failure, no-row/no-version/no-transition/no-durable-checker side effects, and
   stamped locked policy context.
-- Postgres-backed task tests cover task binding merge, weakening rejection,
-  task policy hash locking, and removal of transitional task-field authority.
+- Postgres-backed task tests cover locked context stamping, shared checker reuse
+  across multiple tasks, and removal of transitional task-field authority.
 
 Required reviewers:
 
@@ -274,8 +270,8 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-Task-specific artifact binding, no-row/no-version/no-transition guarantee, and
-preflight-versus-submission-create failure shape.
+Task locked context, shared checker reuse, no-row/no-version/no-transition
+guarantee, and preflight-versus-submission-create failure shape.
 
 ### WS-POL-001-04: PostSubmitCheckerPolicy Split
 

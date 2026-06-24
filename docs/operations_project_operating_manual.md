@@ -37,8 +37,8 @@ Before releasing tasks:
 - guide sufficiency report passed or warnings acknowledged by `admin` or `project_manager`
 - submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
 - effective project submission artifact policy hash persisted
-- task artifact binding and effective task submission artifact policy are created before each task enters `READY`
-- generated pre-submit checker policy is created from the effective task submission artifact policy
+- generated project pre-submit checker policy is created from the effective project submission artifact policy
+- each task locks the guide snapshot, effective project policy hash, and pre-submit checker policy hash before entering `READY`
 - post-submit checker policy attached
 - review policy attached
 - revision policy attached
@@ -54,8 +54,8 @@ A project cannot become active unless guide, passed or acknowledged guide
 sufficiency report, approved submission artifact policy, persisted effective
 project submission artifact policy hash, post-submit checker policy, review
 policy, revision policy, and payment policy are present. A task cannot enter
-`READY` until it also has an approved task artifact binding, effective task
-submission artifact policy hash, and task-level pre-submit checker policy.
+`READY` until it also locks the effective project submission artifact policy
+hash and project pre-submit checker policy hash.
 
 ### Task Screening Gate
 
@@ -108,7 +108,7 @@ Before accepting a submission packet:
 - output package or reference exists
 - evidence exists
 - revision replay exists when task was previously `NEEDS_REVISION`
-- effective task submission artifact policy is loaded
+- effective project submission artifact policy is loaded
 - generated pre-submit checker policy runs
 - preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
 - blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details

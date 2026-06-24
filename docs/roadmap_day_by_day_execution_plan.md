@@ -68,7 +68,7 @@ Exit criteria:
 - retrieve the active guide version for a task
 - edit a draft guide without changing historical task guide versions
 - block activation of a guide missing guide source snapshot, submission artifact policy, effective project policy hash, post-submit checker, review, revision, or payment policy
-- block task readiness when approved task artifact binding, effective task policy hash, or task-level pre-submit checker policy is missing
+- block task readiness when locked guide snapshot, effective project policy hash, or project pre-submit checker policy hash is missing
 - migrations and model tests define the expected invariants
 
 ### Day 3: Task Queue
@@ -199,7 +199,7 @@ Deliver:
 
 - generated `PreSubmitCheckerPolicy`
 - `PostSubmitCheckerPolicy`
-- effective task submission artifact policy merge
+- project pre-submit checker policy generation
 - project-required checker list
 - blocking severity settings
 - trusted checker retry with reason after internal setup repair

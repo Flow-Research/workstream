@@ -19,19 +19,16 @@
   `ProjectSubmissionArtifactPolicy` after guide sufficiency passes.
 - `SubmissionArtifactPolicyDerivationAgent` produces constrained policy and
   checker specifications, not unrestricted executable checker code.
-- `SubmissionArtifactPolicyDerivationAgent` produces
-  `ProjectPreSubmitCheckerSpec` during project setup.
 - Workstream derives `ProjectSubmissionArtifactPolicy` from project material,
   with internal agent assistance allowed, then requires approval by `admin` or
   `project_manager` before guide activation.
 - Workstream default submission artifact rules are non-bypassable.
 - `EffectiveProjectSubmissionArtifactPolicy` is default plus project policy.
-- `EffectiveTaskSubmissionArtifactPolicy` is effective project policy plus an
-  approved task artifact binding.
 - Workstream's trusted checker compiler turns the constrained checker
-  specification into deterministic task-level `PreSubmitCheckerPolicy` only
-  after task binding produces the effective task policy hash. There is no
-  project-level `PreSubmitCheckerPolicy` row.
+  specification into deterministic project-scoped `PreSubmitCheckerPolicy`.
+- Tasks lock the applicable guide snapshot, effective project policy hash,
+  and pre-submit checker policy hash. Tasks do not rerun derivation or compile
+  unique checker bundles by default.
 - Pre-submit checks block before submission creation.
 - Preflight feedback is `PreSubmitCheckResponse`; blocked submission-create
   attempts return `pre_submission_checker_failed` with structured

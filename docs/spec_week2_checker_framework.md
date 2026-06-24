@@ -37,7 +37,7 @@ The checker framework protects reviewer time by proving that the latest locked s
 ## Core Invariant
 
 ```text
-Draft packet -> EffectiveTaskSubmissionArtifactPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
+Draft packet -> project PreSubmitCheckerPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
 ```
 
 A task cannot reach `REVIEW_PENDING` unless the latest locked submission has a completed checker run for the exact submission version and artifact context.
@@ -61,7 +61,7 @@ The checker binding includes:
 
 Workstream has two checker moments.
 
-Pre-submit static checks run before Workstream creates a submission. They are generated from the effective task submission artifact policy and give immediate feedback on packet shape and policy issues:
+Pre-submit static checks run before Workstream creates a submission. They are generated from the effective project submission artifact policy and give immediate feedback on packet shape and policy issues:
 
 - required field presence
 - package hash presence

@@ -27,7 +27,6 @@ Project owner material
 -> ProjectGuideSufficiencyAgent
 -> SubmissionArtifactPolicyDerivationAgent
 -> Workstream-derived ProjectSubmissionArtifactPolicy
--> ProjectPreSubmitCheckerSpec
 -> approval by admin or project_manager
 
 WorkstreamDefaultSubmissionArtifactPolicy
@@ -35,13 +34,13 @@ WorkstreamDefaultSubmissionArtifactPolicy
 = EffectiveProjectSubmissionArtifactPolicy
 
 EffectiveProjectSubmissionArtifactPolicy
-+ ApprovedTaskArtifactBinding
-= EffectiveTaskSubmissionArtifactPolicy
-
-EffectiveTaskSubmissionArtifactPolicy
--> approved ProjectPreSubmitCheckerSpec
 -> trusted Workstream checker compiler
--> persisted and locked PreSubmitCheckerPolicy
+-> persisted project PreSubmitCheckerPolicy
+
+Task
+-> locks guide snapshot
+-> locks effective project policy hash
+-> locks PreSubmitCheckerPolicy hash
 ```
 
 Project owners provide open-ended project material: markdown, URLs, full
@@ -65,18 +64,26 @@ remain visible to the Workstream `admin` or `project_manager` and must be
 acknowledged before activation.
 
 After sufficiency passes, the `SubmissionArtifactPolicyDerivationAgent` derives
-the machine-readable project submission artifact policy and
-`ProjectPreSubmitCheckerSpec`. The project owner does not approve this internal
-policy. A Workstream actor with the `admin` or `project_manager` role approves
-the derived policy and activates the guide-policy bundle. Workers submit draft
+the machine-readable project submission artifact policy and constrained checker
+specification. The project owner does not approve this internal policy. A
+Workstream actor with the `admin` or `project_manager` role approves the
+derived policy and activates the guide-policy bundle. Workers submit draft
 packet fields. Workstream decides required artifacts, evidence, hashes, storage
 reference rules, forbidden artifacts, and blocking pre-submit feedback from the
-locked effective policy.
+locked effective policy and compiled project checker bundle.
 
 The derivation agent produces a constrained artifact-intake contract and checker
 specification. Workstream compiles that specification into deterministic checker
 logic. Runtime submission evaluation is performed by the locked checker bundle,
 not by an agent.
+
+Most tasks in a project reuse the same compiled checker bundle. A task locks the
+policy/checker context that governs it; it does not get a freshly derived policy
+or freshly compiled checker. If the sufficiency agent finds that the guide does
+not cover the project's task set, activation is blocked and the guide is
+improved or the work is split into another project/guide. Small task-specific
+values are constrained parameters fed into the same locked checker bundle, not
+new checker generation.
 
 ## Why Now
 
@@ -108,14 +115,10 @@ After this initiative:
 - Workstream default submission artifact rules are defined in code.
 - Project submission artifact policy cannot weaken Workstream defaults.
 - Effective project submission artifact policy is computed deterministically.
-- Approved task artifact bindings produce task-specific effective submission
-  artifact policy hashes.
-- Generated pre-submit checker policy is persisted and locked to the effective
-  task policy hash.
-- `ProjectPreSubmitCheckerSpec` is produced during project setup, then
-  Workstream's trusted compiler produces the final task-level generated
-  pre-submit checker policy from approved checker primitives, not by
-  unrestricted generated code.
+- Generated pre-submit checker policy is persisted at project scope and tasks
+  lock its hash before entering the worker pipeline.
+- Workstream's trusted compiler produces the project pre-submit checker
+  policy from approved checker primitives, not by unrestricted generated code.
 - Submission creation uses the generated pre-submit policy before a submission
   row is created.
 - Post-submit/internal checker policy remains separate.

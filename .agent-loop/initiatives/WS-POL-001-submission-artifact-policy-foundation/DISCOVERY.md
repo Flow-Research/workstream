@@ -11,9 +11,8 @@ The architecture docs already lock the target model:
 SubmissionArtifactPolicy
 -> GuideSufficiencyReport
 -> EffectiveProjectSubmissionArtifactPolicy
--> ApprovedTaskArtifactBinding
--> EffectiveTaskSubmissionArtifactPolicy
--> persisted and locked PreSubmitCheckerPolicy
+-> persisted project PreSubmitCheckerPolicy
+-> tasks lock project policy/checker references
 -> pre-submit checks before submission creation
 -> post-submit/internal checks after submission lock
 ```

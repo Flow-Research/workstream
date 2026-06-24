@@ -54,23 +54,11 @@ version before Workstream merges it with default submission artifact policy.
 
 ## Effective Project Submission Artifact Policy
 
-The deterministic merge of Workstream's default submission artifact policy and the project-approved submission artifact policy. Workstream computes this effective project policy before task-specific binding.
-
-## Project Pre-Submit Checker Spec
-
-The constrained project-level checker specification derived from the approved
-project submission artifact policy. Workstream validates and canonicalizes this
-spec during project setup. It is not a `PreSubmitCheckerPolicy` row.
-
-## Effective Task Submission Artifact Policy
-
-The deterministic merge of the effective project submission artifact policy and
-an approved task artifact binding. Workstream locks this task policy before
-generating the task-level pre-submit checker policy.
+The deterministic merge of Workstream's default submission artifact policy and the project-approved submission artifact policy. Workstream computes this effective project policy before generating the project pre-submit checker policy.
 
 ## Pre-Submit Checker Policy
 
-The server-generated task-level checker matrix produced from the effective task submission artifact policy and approved project checker spec, persisted with a hash, and locked before a task enters the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a hash, and locked by tasks before they enter the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 
@@ -94,7 +82,7 @@ An automated rule that validates a task or submission before human review.
 
 ## Checker Policy
 
-The set of required and warning checks for a project phase. Pre-submit checker policy is generated from the effective task submission artifact policy. Post-submit checker policy governs durable internal checker runs after a submission is locked.
+The set of required and warning checks for a project phase. Pre-submit checker policy is generated from the effective project submission artifact policy. Post-submit checker policy governs durable internal checker runs after a submission is locked.
 
 ## Human Review
 

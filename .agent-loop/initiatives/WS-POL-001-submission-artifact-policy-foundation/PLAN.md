@@ -33,14 +33,8 @@ ProjectSubmissionArtifactPolicy
 EffectiveProjectSubmissionArtifactPolicy
   deterministic merge of default + project policy
 
-ApprovedTaskArtifactBinding
-  Workstream-approved task-specific artifact profile and constrained parameters
-
-EffectiveTaskSubmissionArtifactPolicy
-  deterministic merge of effective project policy + approved task binding
-
 PreSubmitCheckerPolicy
-  persisted and locked task-level checker rules for draft packet intake
+  persisted project checker rules for draft packet intake
 
 PostSubmitCheckerPolicy
   durable checker rules for locked submission review readiness
@@ -67,32 +61,31 @@ locators as durable source identity.
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
 actor with the `admin` or `project_manager` role approves the derived policy.
-Workstream then computes the effective project policy and later combines it
-with approved task-specific artifact bindings to produce an
-`EffectiveTaskSubmissionArtifactPolicy` locked before a task enters
-`SCREENING` or `READY`. The generated task-level `PreSubmitCheckerPolicy`
-snapshot/hash is locked to that effective task policy. Pre-submit checks run
-before submission creation and do not create durable checker records.
+Workstream then computes the effective project policy. The generated
+`PreSubmitCheckerPolicy` snapshot/hash is scoped to the project guide version.
+Tasks lock references to the exact guide snapshot, effective project policy
+hash, and pre-submit checker policy hash before entering `SCREENING` or
+`READY`.
+Pre-submit checks run before submission creation and do not create durable
+checker records.
 Post-submit/internal checks run after submission lock and do create durable
 checker records.
 
 The derivation agent does not generate unrestricted executable checker code.
 It produces a constrained checker specification using Workstream-approved
 primitives. Workstream's trusted checker compiler turns that specification into
-a canonical `ProjectPreSubmitCheckerSpec` during project setup. The final
-task-level compiler step combines that approved project checker specification
-with the approved task binding and effective task policy, then persists the
-deterministic `PreSubmitCheckerPolicy` bundle. Runtime checks execute the locked
-compiled bundle against staged artifact hashes or future content identifiers.
+a deterministic project `PreSubmitCheckerPolicy` bundle during project setup.
+Runtime checks execute the locked compiled bundle against staged artifact hashes
+or future content identifiers plus the task's constrained parameters. Tasks do
+not rerun the derivation agent or compile a new checker bundle for each task.
 
 If no immutable guide-source snapshot, passing or acknowledged guide sufficiency
 report, approved project submission artifact policy, and effective project
 policy hash exist for the guide snapshot and guide version, guide activation
-fails. If no approved task artifact binding, effective task policy hash, and
-task-level pre-submit checker bundle exist, the task cannot enter the ready
-worker pipeline. The system must surface setup failure internally as
-task/project setup incomplete rather than letting workers discover missing
-intake rules at submit time.
+fails. If the applicable project pre-submit checker bundle is
+missing, a task cannot enter the ready worker pipeline. The system must surface
+setup failure internally as task/project setup incomplete rather than letting
+workers discover missing intake rules at submit time.
 
 Reports, derived policies, acknowledgements, effective policies, and checker
 bundles bind to the exact `GuideSourceSnapshot` id/hash, not only to
@@ -174,23 +167,23 @@ while post-submit answers whether a locked submission can move to human review.
 4. Compute effective project policy in service code and validate defaults cannot weaken.
 5. Add async guide sufficiency, policy derivation execution, and trusted checker
    compiler behavior.
-6. Add approved task artifact bindings and effective task policy locking.
+6. Add task locked-context fields for guide snapshot, effective project policy,
+   and generated pre-submit checker bundle.
 7. Migrate submission creation from transitional task fields to the locked task
-   policy and generated pre-submit checker bundle.
+   context and generated project pre-submit checker bundle.
 8. Split post-submit checker policy naming/provenance.
 
 ## Verification Strategy
 
-- Unit-level policy merge tests for default + project policy and effective
-  project policy + task artifact binding.
+- Unit-level policy merge tests for default + project policy.
 - Postgres-backed API tests for guide sufficiency report, project policy
   creation, immutable source snapshots, effective project policy persistence,
   and guide activation.
 - Tests proving a guide cannot activate without passing or acknowledged guide
   sufficiency bound to the current source snapshot, approved project submission
   artifact policy, and effective project policy hash.
-- Tests proving a task cannot enter `READY` without an approved task artifact
-  binding, effective task policy hash, and generated pre-submit checker bundle.
+- Tests proving a task cannot enter `READY` without locked guide snapshot,
+  effective project policy hash, and generated pre-submit checker bundle.
 - Tests proving malicious or credential-bearing source material cannot weaken
   Workstream defaults, grant tool authority, or persist unsafe source refs.
 - Submission API tests proving blocking pre-submit failure creates no submission
@@ -218,5 +211,5 @@ CI integrity is required only for chunks that touch workflows or test tooling.
 Start with guide/source/policy bundle foundation. Do not start submission
 runtime rewiring until immutable guide-source snapshots, guide sufficiency
 reports, project policy objects, defaults, effective project policy hash,
-approved task artifact bindings, effective task policy hash, generated
-pre-submit checker bundle, and activation/ready guards are accepted.
+generated pre-submit checker bundle, task locked-context fields, and
+activation/ready guards are accepted.

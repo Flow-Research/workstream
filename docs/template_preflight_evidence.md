@@ -2,7 +2,7 @@
 
 This template is for post-submit review readiness evidence after a submission exists and checker runs have produced durable records.
 
-It is not the pre-submit intake contract. Pre-submit intake is generated from `EffectiveTaskSubmissionArtifactPolicy` and blocks submission creation before a submission id, evidence id, or checker run id exists.
+It is not the pre-submit intake contract. Pre-submit intake is generated from the project `PreSubmitCheckerPolicy` and blocks submission creation before a submission id, evidence id, or checker run id exists.
 
 ## Task
 

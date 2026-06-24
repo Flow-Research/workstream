@@ -483,7 +483,7 @@
             <article class="step">
               <span class="num">3</span>
               <h3>Guide activation locks contract</h3>
-              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project policy hash, registered post-submit checker names, review policy allowed decisions, revision states, and payment policy. Task readiness later validates the approved task artifact binding, effective task policy hash, and task-level pre-submit policy.</p>
+              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project policy hash, project pre-submit checker policy, registered post-submit checker names, review policy allowed decisions, revision states, and payment policy. Task readiness later validates that the task locks the applicable guide snapshot, effective project policy hash, and pre-submit checker policy hash.</p>
               <div class="data">
                 <code>status=active</code>
                 <code>one active guide</code>
@@ -515,7 +515,7 @@
             <article class="step">
               <span class="num">6</span>
               <h3>Pre-submit intake checks run</h3>
-              <p>Workstream runs generated pre-submit checks from the effective task submission artifact policy before creating a submission row. Preflight failures return PreSubmitCheckResponse details. Blocked submission-create attempts return pre_submission_checker_failed with pass/fail/warning details.</p>
+              <p>Workstream runs generated pre-submit checks from the locked project pre-submit checker policy before creating a submission row. Preflight failures return PreSubmitCheckResponse details. Blocked submission-create attempts return pre_submission_checker_failed with pass/fail/warning details.</p>
               <div class="data">
                 <code>no submission yet</code>
                 <code>no checker run yet</code>
@@ -591,11 +591,11 @@
           <div class="records">
             <div class="record">
               <strong>Project + Guide</strong>
-              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, ProjectPreSubmitCheckerSpec, post-submit checker policy, review policy, revision policy, payment policy.</span>
+              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, project PreSubmitCheckerPolicy, post-submit checker policy, review policy, revision policy, payment policy.</span>
             </div>
             <div class="record">
               <strong>Task Queue</strong>
-              <span>WorkstreamTask, approved task artifact binding, effective task policy, task-level PreSubmitCheckerPolicy, TaskAssignment, status transitions.</span>
+              <span>WorkstreamTask, locked guide snapshot, locked effective project policy hash, locked pre-submit checker policy hash, TaskAssignment, status transitions.</span>
             </div>
             <div class="record">
               <strong>Submission Packet</strong>

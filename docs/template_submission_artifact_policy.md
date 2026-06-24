@@ -153,20 +153,13 @@ Required attestation topics:
 - credentials and secret exclusion
 - human accountability for agent-assisted work
 
-## Project Pre-Submit Checker Specification
-
-Workstream derives and canonicalizes a project-level
-`ProjectPreSubmitCheckerSpec` from the approved project policy. This is a
-constrained specification using approved primitives, not executable checker
-code and not a project-level `PreSubmitCheckerPolicy` row.
-
 ## Generated Pre-Submit Checker Policy
 
-Workstream generates task-level `PreSubmitCheckerPolicy` from:
+Workstream generates project-level `PreSubmitCheckerPolicy` from:
 
 ```text
-EffectiveTaskSubmissionArtifactPolicy
-+ ProjectPreSubmitCheckerSpec
+EffectiveProjectSubmissionArtifactPolicy
++ constrained checker specification
 ```
 
 Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
@@ -175,8 +168,11 @@ Generated policy lock:
 
 - generated pre-submit checker policy version:
 - generated pre-submit checker policy hash:
-- effective task submission artifact policy hash:
+- effective project submission artifact policy hash:
 - locked guide version:
+
+Tasks lock this project checker hash before entering the worker pipeline. Tasks
+do not derive or compile their own checker by default.
 
 Blocked submission-create attempts return `pre_submission_checker_failed` with
 structured pass/fail/warning details.

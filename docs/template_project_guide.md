@@ -118,9 +118,9 @@ Every active guide version must have:
 
 Each task later locks:
 
-- ApprovedTaskArtifactBinding:
-- EffectiveTaskSubmissionArtifactPolicy hash:
-- generated PreSubmitCheckerPolicy:
+- GuideSourceSnapshot id/hash:
+- EffectiveProjectSubmissionArtifactPolicy hash:
+- generated PreSubmitCheckerPolicy hash:
 
 Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 

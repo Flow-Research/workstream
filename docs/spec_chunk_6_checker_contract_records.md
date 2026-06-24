@@ -213,7 +213,7 @@ Response fields:
 - `expires_at`
 
 Pre-submit feedback binds to `task_id`, the task's locked guide source snapshot,
-approved task artifact binding, effective task submission artifact policy hash,
+effective project submission artifact policy hash, pre-submit checker policy hash,
 draft packet fields, package hash, and artifact manifest shape. It does not
 require a locked `submission_id` or locked submission version because those do
 not exist before submission creation.
