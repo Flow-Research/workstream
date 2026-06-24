@@ -14,12 +14,11 @@ Actor
 Project
   ProjectGuide
   GuideSourceSnapshot
+  GuideSourceSnapshotItem
   GuideSufficiencyReport
   SubmissionArtifactPolicy
   EffectiveProjectSubmissionArtifactPolicy
-  ApprovedTaskArtifactBinding
-  EffectiveTaskSubmissionArtifactPolicy
-  PreSubmitCheckerPolicy
+  ProjectPreSubmitCheckerSpec
   PostSubmitCheckerPolicy
   ReviewPolicy
   RevisionPolicy
@@ -27,6 +26,9 @@ Project
   ProjectLesson
 
 Task
+  ApprovedTaskArtifactBinding
+  EffectiveTaskSubmissionArtifactPolicy
+  PreSubmitCheckerPolicy
   Assignment
   Submission
     EvidenceItem
@@ -189,19 +191,42 @@ Fields:
 - `project_id`
 - `guide_id`
 - `guide_version`
-- `source_ref`
-- `ingestion_adapter`
-- `content_hash`
-- `content_cid` (future Flow Node binding)
+- `manifest_json`
+- `bundle_hash`
 - `captured_at`
 - `created_by`
 
-`GuideSourceSnapshot` is the immutable source binding for guide material. It
-captures the exact guide/source bytes Workstream evaluated. A guide can point at
-markdown, imported documents, URL-backed docs, repository docs, examples, or
-rubric material, but downstream records do not trust a mutable URL or mutable
-draft guide body. They bind to `source_snapshot_id` and
-`source_snapshot_hash`.
+`GuideSourceSnapshot` is the immutable bundle binding for guide material. It
+captures the exact guide/source material Workstream evaluated as a canonical
+manifest. A guide can point at markdown, imported documents, URL-backed docs,
+repository docs, examples, or rubric material, but downstream records do not
+trust a mutable URL or mutable draft guide body. They bind to
+`source_snapshot_id` and a server-derived `source_snapshot_hash` copied from
+`GuideSourceSnapshot.bundle_hash`.
+
+`bundle_hash` is the canonical hash of the manifest plus every included source
+item hash. Changing any included document, example, rubric, repository doc, or
+inline guide body creates a new snapshot and bundle hash.
+
+## GuideSourceSnapshotItem
+
+Fields:
+
+- `id`
+- `source_snapshot_id`
+- `source_kind`
+- `durable_ref`
+- `ingestion_adapter`
+- `content_hash`
+- `content_cid` (future Flow Node binding)
+- `media_type`
+- `captured_at`
+
+`GuideSourceSnapshotItem` records each material item included in the guide
+bundle. `source_kind` distinguishes inline markdown, URL-backed documentation,
+repository docs, examples, rubrics, imported files, and other approved source
+types. `durable_ref` is opaque and sanitized; it is not the temporary fetch
+locator.
 
 URL-backed guide ingestion is split into two identities:
 
@@ -217,6 +242,9 @@ durable source identity.
 Any guide or source-material change creates a new source snapshot. That
 invalidates prior sufficiency reports, derived policies, effective policies,
 checker bundles, acknowledgements, and approvals for activation.
+A new guide-source snapshot invalidates prior setup records for new activation
+and unlocked tasks only. Tasks already locked to an earlier snapshot retain
+that policy context unless an explicit audited rebase occurs.
 
 ## GuideSufficiencyReport
 
@@ -254,6 +282,9 @@ version. Blocking gaps stop guide activation and create clarification requests
 for the project owner. Warnings can be acknowledged only by a Workstream actor
 with the `admin` or `project_manager` role before activation.
 
+`source_snapshot_hash` is server-derived from the referenced
+`GuideSourceSnapshot.bundle_hash`. Clients cannot supply a conflicting hash.
+
 ## SubmissionArtifactPolicy
 
 Fields:
@@ -264,12 +295,14 @@ Fields:
 - `source_snapshot_id`
 - `source_snapshot_hash`
 - `version`
-- `status`
+- `lifecycle_status`
 - `required_artifacts`
 - `required_evidence`
 - `artifact_manifest_required`
 - `artifact_hash_required`
 - `artifact_hash_algorithm`
+- `maximum_file_size_bytes`
+- `maximum_package_size_bytes`
 - `allowed_storage_schemes`
 - `forbidden_artifacts`
 - `required_attestation_terms`
@@ -279,7 +312,6 @@ Fields:
 - `derivation_agent_name`
 - `derivation_agent_version`
 - `source_material_refs`
-- `approval_status`
 - `approved_policy_hash`
 - `approved_by_role`
 - `approved_by`
@@ -305,13 +337,15 @@ Example:
   "artifact_manifest_required": true,
   "artifact_hash_required": true,
   "artifact_hash_algorithm": "sha256",
+  "maximum_file_size_bytes": 52428800,
+  "maximum_package_size_bytes": 104857600,
   "allowed_storage_schemes": ["local", "s3", "r2"],
   "forbidden_artifacts": ["secrets/**", ".env"],
   "sufficiency_report_id": "guide-sufficiency:v1",
   "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
   "derivation_agent_version": "v1",
   "source_material_refs": ["project-guide:v1"],
-  "approval_status": "approved",
+  "lifecycle_status": "approved",
   "approved_policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "approved_by_role": "project_manager",
   "approved_by": "flow-project-manager",
@@ -328,6 +362,10 @@ sufficiency passes or warnings are acknowledged. A Workstream actor with the
 supply or approve this internal policy schema.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
+`artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project and
+task policies cannot change it.
+`source_snapshot_hash` is server-derived from the referenced snapshot bundle
+hash.
 
 Policy rows are append-only after approval:
 
@@ -357,7 +395,7 @@ Fields:
 - `source_snapshot_id`
 - `source_snapshot_hash`
 - `version`
-- `status`
+- `lifecycle_status`
 - `policy_hash`
 - `source_project_policy_hash`
 - `required_artifacts`
@@ -365,6 +403,8 @@ Fields:
 - `artifact_manifest_required`
 - `artifact_hash_required`
 - `artifact_hash_algorithm`
+- `maximum_file_size_bytes`
+- `maximum_package_size_bytes`
 - `allowed_storage_schemes`
 - `forbidden_artifacts`
 - `required_attestation_terms`
@@ -385,9 +425,9 @@ The merge contract is executable per field:
 | `artifact_manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
-| `artifact_hash_algorithm` | platform-locked value or intersection of allowed algorithms |
-| `maximum_file_size` | minimum non-null limit |
-| `maximum_package_size` | minimum non-null limit |
+| `artifact_hash_algorithm` | platform-locked `sha256`; project/task policy cannot change it |
+| `maximum_file_size_bytes` | minimum non-null limit |
+| `maximum_package_size_bytes` | minimum non-null limit |
 | `packaging_rules` | restrictive merge; conflicts block activation |
 
 A required artifact or evidence rule matching a forbidden artifact rule blocks
@@ -395,6 +435,36 @@ project setup as a policy conflict. It is not deferred to worker submission.
 
 Approved and superseded effective policies are immutable. Recomputing the
 effective policy after guide/source/policy changes creates a new row and hash.
+
+## ProjectPreSubmitCheckerSpec
+
+Fields:
+
+- `id`
+- `project_id`
+- `guide_version`
+- `source_snapshot_id`
+- `source_snapshot_hash`
+- `effective_project_policy_hash`
+- `version`
+- `lifecycle_status`
+- `canonical_spec`
+- `canonical_spec_hash`
+- `compiler_version`
+- `generated_from_policy_version`
+- `generated_at`
+- `approved_by_role`
+- `approved_by`
+- `approved_at`
+- `supersedes_spec_id`
+
+`ProjectPreSubmitCheckerSpec` is the project-level constrained checker
+specification produced from the approved project submission artifact policy. It
+uses only Workstream-approved primitives. The trusted compiler validates and
+canonicalizes this specification during project setup, but it does not persist a
+project-level `PreSubmitCheckerPolicy` row. The final executable
+`PreSubmitCheckerPolicy` is task-level and is created only after task artifact
+binding produces `EffectiveTaskSubmissionArtifactPolicy`.
 
 ## ApprovedTaskArtifactBinding
 
@@ -412,7 +482,7 @@ Fields:
 - `required_evidence`
 - `additional_packaging_rules`
 - `additional_forbidden_artifacts`
-- `approval_status`
+- `lifecycle_status`
 - `approved_by_role`
 - `approved_by`
 - `approved_at`
@@ -453,7 +523,7 @@ Fields:
 - `source_snapshot_id`
 - `source_snapshot_hash`
 - `version`
-- `status`
+- `lifecycle_status`
 - `policy_hash`
 - `effective_project_policy_hash`
 - `approved_task_artifact_binding_id`
@@ -462,6 +532,8 @@ Fields:
 - `artifact_manifest_required`
 - `artifact_hash_required`
 - `artifact_hash_algorithm`
+- `maximum_file_size_bytes`
+- `maximum_package_size_bytes`
 - `allowed_storage_schemes`
 - `forbidden_artifacts`
 - `required_attestation_terms`
@@ -475,9 +547,9 @@ prose and not transitional task fields.
 
 ## PreSubmitCheckerPolicy
 
-Generated server-side from `EffectiveTaskSubmissionArtifactPolicy`, then
-persisted and locked to the task policy hash before the task enters the worker
-pipeline.
+Generated server-side from `EffectiveTaskSubmissionArtifactPolicy` and the
+approved `ProjectPreSubmitCheckerSpec`, then persisted and locked to the task
+policy hash before the task enters the worker pipeline.
 
 Fields:
 
@@ -488,9 +560,11 @@ Fields:
 - `source_snapshot_id`
 - `source_snapshot_hash`
 - `version`
-- `status`
+- `lifecycle_status`
 - `policy_hash`
 - `effective_task_submission_artifact_policy_hash`
+- `project_pre_submit_checker_spec_id`
+- `project_pre_submit_checker_spec_hash`
 - `checker_spec`
 - `compiler_version`
 - `compiled_bundle_hash`
@@ -502,12 +576,14 @@ Fields:
 - `generated_at`
 - `supersedes_policy_id`
 
-`checker_spec` is a constrained machine-readable specification using
-Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
-bundle produced by the trusted Workstream checker compiler and is the canonical
-source of truth. It is stored as a structured snapshot, not arbitrary executable
-code. `compiled_bundle_hash` binds the exact compiled logic to
-`effective_task_submission_artifact_policy_hash`. `checker_names`,
+`checker_spec` is the task-applied constrained machine-readable specification
+using Workstream-approved primitives. It is derived from the approved
+`ProjectPreSubmitCheckerSpec` and task policy binding. `compiled_bundle` is the
+immutable JSON checker bundle produced by the trusted Workstream checker
+compiler and is the canonical source of truth. It is stored as a structured
+snapshot, not arbitrary executable code. `compiled_bundle_hash` binds the exact
+compiled logic to `effective_task_submission_artifact_policy_hash` and
+`project_pre_submit_checker_spec_hash`. `checker_names`,
 `checker_configs`, and `blocking_severities` are derived index projections only;
 they must be regenerated from `compiled_bundle` and must not disagree with it.
 

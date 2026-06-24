@@ -22,11 +22,15 @@ machine-readable Workstream policy schema directly.
 Source snapshot:
 
 - guide source snapshot id:
-- guide source snapshot hash:
-- ingestion adapter:
-- durable source ref:
-- content cid: `<future Flow Node CID when available>`
+- guide source snapshot bundle hash:
+- manifest json:
 - captured at:
+
+Source snapshot items:
+
+| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type |
+| --- | --- | --- | --- | --- | --- |
+| `<inline_markdown | url_doc | repository_doc | example | rubric | imported_file>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` |
 
 Temporary fetch locators are adapter inputs only. Durable source refs must not
 store query strings, signed URLs, credentials, token-bearing refs, local
@@ -48,8 +52,8 @@ filesystem paths, or private storage paths.
 - derivation agent version:
 - sufficiency report id:
 - source snapshot id:
-- source snapshot hash:
-- approval status: `draft | approved | superseded`
+- source snapshot bundle hash:
+- lifecycle status: `draft | approved | superseded`
 - approved policy hash:
 - approved by role: `admin | project_manager`
 - approved by actor:
@@ -108,8 +112,9 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 | manifest required | logical OR |
 | hash required | logical OR |
 | allowed storage schemes | intersection |
-| hash algorithm | platform-locked value or intersection |
-| maximum file/package size | minimum non-null limit |
+| hash algorithm | platform-locked `sha256`; project/task policy cannot change it |
+| maximum file size bytes | minimum non-null limit |
+| maximum package size bytes | minimum non-null limit |
 | packaging rules | restrictive merge; conflicts block setup |
 
 ## Project Required Artifacts
@@ -130,8 +135,8 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 - accepted package format:
 - required root files:
 - required directory structure:
-- maximum artifact size:
-- maximum package size:
+- maximum file size bytes:
+- maximum package size bytes:
 
 ## Project Forbidden Artifacts
 
@@ -148,14 +153,20 @@ Required attestation topics:
 - credentials and secret exclusion
 - human accountability for agent-assisted work
 
+## Project Pre-Submit Checker Specification
+
+Workstream derives and canonicalizes a project-level
+`ProjectPreSubmitCheckerSpec` from the approved project policy. This is a
+constrained specification using approved primitives, not executable checker
+code and not a project-level `PreSubmitCheckerPolicy` row.
+
 ## Generated Pre-Submit Checker Policy
 
 Workstream generates task-level `PreSubmitCheckerPolicy` from:
 
 ```text
-WorkstreamDefaultSubmissionArtifactPolicy
-+ ProjectSubmissionArtifactPolicy
-+ ApprovedTaskArtifactBinding
+EffectiveTaskSubmissionArtifactPolicy
++ ProjectPreSubmitCheckerSpec
 ```
 
 Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.

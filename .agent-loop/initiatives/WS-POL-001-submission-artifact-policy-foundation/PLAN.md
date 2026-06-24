@@ -19,7 +19,7 @@ ProjectGuide
   open-ended human-facing project material
 
 GuideSourceSnapshot
-  immutable capture of the exact guide/source bytes Workstream evaluated
+  immutable bundle manifest for the exact guide/source material Workstream evaluated
 
 GuideSufficiencyReport
   Workstream-owned assessment of whether the guide is sufficient
@@ -40,7 +40,7 @@ EffectiveTaskSubmissionArtifactPolicy
   deterministic merge of effective project policy + approved task binding
 
 PreSubmitCheckerPolicy
-  persisted and locked checker rules for draft packet intake
+  persisted and locked task-level checker rules for draft packet intake
 
 PostSubmitCheckerPolicy
   durable checker rules for locked submission review readiness
@@ -59,9 +59,10 @@ retrieval paths. Temporary fetch locators can include ordinary URL query
 parameters when an approved adapter needs them, but signed URLs,
 credential-bearing refs, token-bearing refs, and local filesystem paths are
 rejected. Workstream persists only immutable `GuideSourceSnapshot` records with
-opaque sanitized source refs, content hash, optional future content id, adapter
-name, and capture timestamp. It never persists signed URLs, credentials, or
-token-bearing locators as durable source identity.
+canonical manifests, bundle hashes, opaque sanitized source refs, per-item
+content hashes, optional future content ids, adapter names, and capture
+timestamps. It never persists signed URLs, credentials, or token-bearing
+locators as durable source identity.
 
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
@@ -69,18 +70,20 @@ actor with the `admin` or `project_manager` role approves the derived policy.
 Workstream then computes the effective project policy and later combines it
 with approved task-specific artifact bindings to produce an
 `EffectiveTaskSubmissionArtifactPolicy` locked before a task enters
-`SCREENING` or `READY`. The generated `PreSubmitCheckerPolicy` snapshot/hash is
-locked to that effective task policy. Pre-submit checks run before submission
-creation and do not create durable checker records.
+`SCREENING` or `READY`. The generated task-level `PreSubmitCheckerPolicy`
+snapshot/hash is locked to that effective task policy. Pre-submit checks run
+before submission creation and do not create durable checker records.
 Post-submit/internal checks run after submission lock and do create durable
 checker records.
 
 The derivation agent does not generate unrestricted executable checker code.
 It produces a constrained checker specification using Workstream-approved
 primitives. Workstream's trusted checker compiler turns that specification into
-the deterministic `PreSubmitCheckerPolicy` bundle. Runtime checks execute the
-locked compiled bundle against staged artifact hashes or future content
-identifiers.
+a canonical `ProjectPreSubmitCheckerSpec` during project setup. The final
+task-level compiler step combines that approved project checker specification
+with the approved task binding and effective task policy, then persists the
+deterministic `PreSubmitCheckerPolicy` bundle. Runtime checks execute the locked
+compiled bundle against staged artifact hashes or future content identifiers.
 
 If no immutable guide-source snapshot, passing or acknowledged guide sufficiency
 report, approved project submission artifact policy, and effective project
@@ -96,6 +99,9 @@ bundles bind to the exact `GuideSourceSnapshot` id/hash, not only to
 `guide_version`. Any guide or source-material change creates a new snapshot and
 invalidates prior sufficiency reports, derived project policies, effective
 policies, checker bundles, acknowledgements, and approvals for activation.
+A new guide-source snapshot invalidates prior setup records for new activation
+and unlocked tasks only. Tasks already locked to an earlier snapshot retain
+that policy context unless an explicit audited rebase occurs.
 
 ## Alternatives Considered
 

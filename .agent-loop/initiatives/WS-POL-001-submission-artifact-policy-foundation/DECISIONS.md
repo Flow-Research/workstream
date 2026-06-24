@@ -19,6 +19,8 @@
   `ProjectSubmissionArtifactPolicy` after guide sufficiency passes.
 - `SubmissionArtifactPolicyDerivationAgent` produces constrained policy and
   checker specifications, not unrestricted executable checker code.
+- `SubmissionArtifactPolicyDerivationAgent` produces
+  `ProjectPreSubmitCheckerSpec` during project setup.
 - Workstream derives `ProjectSubmissionArtifactPolicy` from project material,
   with internal agent assistance allowed, then requires approval by `admin` or
   `project_manager` before guide activation.
@@ -27,8 +29,9 @@
 - `EffectiveTaskSubmissionArtifactPolicy` is effective project policy plus an
   approved task artifact binding.
 - Workstream's trusted checker compiler turns the constrained checker
-  specification into deterministic `PreSubmitCheckerPolicy`, persisted and
-  locked to the effective task policy hash.
+  specification into deterministic task-level `PreSubmitCheckerPolicy` only
+  after task binding produces the effective task policy hash. There is no
+  project-level `PreSubmitCheckerPolicy` row.
 - Pre-submit checks block before submission creation.
 - Preflight feedback is `PreSubmitCheckResponse`; blocked submission-create
   attempts return `pre_submission_checker_failed` with structured
@@ -47,7 +50,8 @@
   artifact blocking, required artifact presence, required evidence presence,
   worker attestation validation, and low-quality/generated artifact warnings.
 - Workstream default hard rules require production hashes shaped as
-  `sha256:<64 lowercase hex>`, safe relative artifact paths, no absolute paths,
+  `sha256:<64 lowercase hex>` with `sha256` as the platform-locked artifact
+  hash algorithm, safe relative artifact paths, no absolute paths,
   no traversal paths, no raw signed URLs, no query-string storage refs, no local
   filesystem paths, no credential/token-bearing refs, and no default-forbidden
   artifacts such as `.env`, `.git`, private keys, secrets, tokens, and

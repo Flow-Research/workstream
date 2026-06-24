@@ -19,7 +19,7 @@
   is not the default path.
 - Reports, derived policies, acknowledgements, effective policies, task
   bindings, and checker bundles bind to immutable `GuideSourceSnapshot`
-  id/hash, not only to `guide_version`.
+  bundle id/hash, not only to `guide_version`.
 
 ## Chunks
 
@@ -67,13 +67,15 @@ full async agent execution runtime
 Acceptance criteria:
 
 - Dedicated submission artifact policy model/table exists.
-- Dedicated immutable guide source snapshot model/table exists.
+- Dedicated immutable guide source snapshot bundle model/table exists.
+- Dedicated guide source snapshot item model/table exists, or the snapshot
+  table stores an equivalent canonical manifest for every source item.
 - Dedicated guide sufficiency report model/table exists.
 - Guide sufficiency report supports `passed`, `blocked`, and
   `passed_with_warnings`.
 - Project policy is scoped to project id + guide version.
 - Guide sufficiency report, project policy, and effective project policy bind to
-  `source_snapshot_id` and `source_snapshot_hash`.
+  `source_snapshot_id` and server-derived `source_snapshot_hash`.
 - Project policy records are Workstream-derived and approved by `admin` or
   `project_manager`, not direct project owner-authored schema.
 - Workstream default policy is represented in code.
@@ -88,7 +90,7 @@ Acceptance criteria:
 - Guide activation requires passing or acknowledged guide sufficiency, approved
   submission artifact policy, and effective project policy hash bound to the
   current guide source snapshot.
-- Project-owner source refs persist as sanitized snapshot refs and cannot store
+- Project-owner source refs persist as sanitized snapshot item refs and cannot store
   signed URLs, credential-bearing refs, token-bearing refs, or local filesystem
   paths. Approved adapters can use ordinary URL query parameters only as
   temporary fetch locators.
@@ -122,8 +124,8 @@ Chunk 1 limited to records/contracts/activation guards.
 Goal:
 
 Run `ProjectGuideSufficiencyAgent`,
-`SubmissionArtifactPolicyDerivationAgent`, and the trusted checker compiler
-asynchronously against immutable guide-source snapshots.
+`SubmissionArtifactPolicyDerivationAgent`, and project checker-spec
+canonicalization asynchronously against immutable guide-source snapshots.
 
 Risk:
 
@@ -161,10 +163,12 @@ Acceptance criteria:
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
   or warnings are acknowledged.
 - Derived policy cannot weaken Workstream defaults.
-- Derived checker specification uses only approved Workstream primitives.
-- Trusted checker compiler produces deterministic `PreSubmitCheckerPolicy`
-  project-level contract snapshot/hash from the approved specification.
-- Derived report, project policy, effective project policy, and compiler output
+- `SubmissionArtifactPolicyDerivationAgent` produces
+  `ProjectPreSubmitCheckerSpec` using only approved Workstream primitives.
+- Trusted checker compiler validates and canonicalizes the project checker
+  specification, producing a stable project checker spec hash. Chunk 2 does not
+  persist a project-level `PreSubmitCheckerPolicy` row.
+- Derived report, project policy, effective project policy, and project checker spec
   are invalidated by a new guide source snapshot.
 - Malicious guide text, embedded prompt-injection instructions, and unsafe
   source refs cannot influence agent authority, fetch behavior, or default
@@ -180,10 +184,10 @@ Verification:
 - Background execution tests prove jobs are async and idempotent for a guide
   source snapshot.
 - Compiler tests prove allowed primitive emission, unknown primitive rejection,
-  byte-stable same-input same-compiler-version bundle hashing, hash binding to
-  `effective_project_submission_artifact_policy_hash`, and client/worker inability to
-  supply checker names, severities, versions, outcomes, compiler version, or
-  compiled bundles.
+  byte-stable same-input same-compiler-version project spec hashing, hash
+  binding to `effective_project_submission_artifact_policy_hash`, and
+  client/worker inability to supply checker names, severities, versions,
+  outcomes, compiler version, or project checker specs.
 
 Required reviewers:
 
@@ -239,6 +243,8 @@ Acceptance criteria:
   defaults or the effective project policy.
 - `EffectiveTaskSubmissionArtifactPolicy` is generated from effective project
   policy plus task binding and locked before `SCREENING` or `READY`.
+- Chunk 3 combines the approved task binding, effective task policy, and
+  approved `ProjectPreSubmitCheckerSpec`.
 - Task-level generated `PreSubmitCheckerPolicy` is persisted with
   `compiled_bundle` as canonical JSON source of truth and `compiled_bundle_hash`
   as its canonical hash.

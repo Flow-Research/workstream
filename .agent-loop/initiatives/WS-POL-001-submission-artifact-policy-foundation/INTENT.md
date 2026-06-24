@@ -27,6 +27,7 @@ Project owner material
 -> ProjectGuideSufficiencyAgent
 -> SubmissionArtifactPolicyDerivationAgent
 -> Workstream-derived ProjectSubmissionArtifactPolicy
+-> ProjectPreSubmitCheckerSpec
 -> approval by admin or project_manager
 
 WorkstreamDefaultSubmissionArtifactPolicy
@@ -38,7 +39,7 @@ EffectiveProjectSubmissionArtifactPolicy
 = EffectiveTaskSubmissionArtifactPolicy
 
 EffectiveTaskSubmissionArtifactPolicy
--> constrained pre-submit checker specification
+-> approved ProjectPreSubmitCheckerSpec
 -> trusted Workstream checker compiler
 -> persisted and locked PreSubmitCheckerPolicy
 ```
@@ -64,12 +65,13 @@ remain visible to the Workstream `admin` or `project_manager` and must be
 acknowledged before activation.
 
 After sufficiency passes, the `SubmissionArtifactPolicyDerivationAgent` derives
-the machine-readable project submission artifact policy. The project owner does
-not approve this internal policy. A Workstream actor with the `admin` or
-`project_manager` role approves the derived policy and activates the
-guide-policy bundle. Workers submit draft packet fields. Workstream decides
-required artifacts, evidence, hashes, storage reference rules, forbidden
-artifacts, and blocking pre-submit feedback from the locked effective policy.
+the machine-readable project submission artifact policy and
+`ProjectPreSubmitCheckerSpec`. The project owner does not approve this internal
+policy. A Workstream actor with the `admin` or `project_manager` role approves
+the derived policy and activates the guide-policy bundle. Workers submit draft
+packet fields. Workstream decides required artifacts, evidence, hashes, storage
+reference rules, forbidden artifacts, and blocking pre-submit feedback from the
+locked effective policy.
 
 The derivation agent produces a constrained artifact-intake contract and checker
 specification. Workstream compiles that specification into deterministic checker
@@ -100,7 +102,7 @@ After this initiative:
   approved by `admin` or `project_manager`, not authored directly by the
   project owner.
 - `GuideSourceSnapshot` is a first-class immutable record for the exact guide
-  material Workstream evaluated.
+  material bundle Workstream evaluated.
 - `GuideSufficiencyReport` is a first-class record tied to a guide source
   snapshot.
 - Workstream default submission artifact rules are defined in code.
@@ -110,8 +112,10 @@ After this initiative:
   artifact policy hashes.
 - Generated pre-submit checker policy is persisted and locked to the effective
   task policy hash.
-- Generated pre-submit checker policy is produced by Workstream's trusted
-  compiler from approved checker primitives, not by unrestricted generated code.
+- `ProjectPreSubmitCheckerSpec` is produced during project setup, then
+  Workstream's trusted compiler produces the final task-level generated
+  pre-submit checker policy from approved checker primitives, not by
+  unrestricted generated code.
 - Submission creation uses the generated pre-submit policy before a submission
   row is created.
 - Post-submit/internal checker policy remains separate.

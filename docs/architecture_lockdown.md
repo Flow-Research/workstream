@@ -85,7 +85,7 @@ with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation. Project owners do not approve Workstream's internal
 submission policy schema.
 
-`SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective project policy, then combines that with an approved task artifact binding to create the effective task submission artifact policy. Workstream persists the effective task policy hash, then generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that task policy.
+`SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create `EffectiveProjectSubmissionArtifactPolicy`, derives and canonicalizes `ProjectPreSubmitCheckerSpec`, then combines `EffectiveProjectSubmissionArtifactPolicy` with `ApprovedTaskArtifactBinding` to create `EffectiveTaskSubmissionArtifactPolicy`. Workstream persists the effective task policy hash, then generates, persists, hashes, and locks the task-level `PreSubmitCheckerPolicy` from that task policy and approved project checker spec.
 
 Blocking pre-submit failures prevent submission creation. Preflight failures
 return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
@@ -161,6 +161,7 @@ Use these names consistently:
 - `ContributionRecord`
 - `SubmissionArtifactPolicy`
 - `EffectiveProjectSubmissionArtifactPolicy`
+- `ProjectPreSubmitCheckerSpec`
 - `ApprovedTaskArtifactBinding`
 - `EffectiveTaskSubmissionArtifactPolicy`
 - `PreSubmitCheckerPolicy`

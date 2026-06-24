@@ -19,7 +19,7 @@ Workstream also needs platform-owned default submission safety rules that no pro
 
 Every active project guide version must have a complete guide-policy bundle:
 
-- immutable `GuideSourceSnapshot` for the exact guide/source bytes evaluated
+- immutable `GuideSourceSnapshot` bundle for the exact guide/source material evaluated
 - passing or acknowledged `GuideSufficiencyReport`
 - approved `ProjectSubmissionArtifactPolicy`
 - persisted `EffectiveProjectSubmissionArtifactPolicy` hash
@@ -35,10 +35,17 @@ must not force every project owner through one universal intake checklist.
 
 Workstream binds all downstream setup records to the exact guide source
 snapshot, not only to `guide_version`. `GuideSourceSnapshot` records include the
-guide id, source ref, ingestion adapter, content hash, optional future content
-id, and capture timestamp. A guide or source-material change creates a new
-snapshot and invalidates prior sufficiency reports, derived policies, effective
-policies, checker bundles, acknowledgements, and approvals for activation.
+guide id, canonical manifest JSON, bundle hash, and capture timestamp. Snapshot
+items record source kind, sanitized durable ref, ingestion adapter, content
+hash, optional future content id, media type, and capture timestamp. The bundle
+hash is the canonical hash of the manifest and every included source item.
+Changing any included document, example, rubric, repository doc, or inline guide
+body creates a new snapshot and invalidates prior sufficiency reports, derived
+policies, effective policies, checker specs, checker bundles,
+acknowledgements, and approvals for activation.
+A new guide-source snapshot invalidates prior setup records for new activation
+and unlocked tasks only. Tasks already locked to an earlier snapshot retain
+that policy context unless an explicit audited rebase occurs.
 
 URL-backed guide ingestion separates the temporary fetch locator from durable
 source identity. Approved retrieval adapters can fetch legitimate documentation
@@ -70,6 +77,7 @@ primitives.
 - required evidence references
 - artifact manifest rules
 - artifact hash rules
+- maximum file and package size rules
 - allowed storage reference forms
 - forbidden artifacts
 - worker attestation requirements
@@ -81,7 +89,7 @@ Project policy can add stricter requirements, but it cannot remove, weaken, down
 
 Approval provenance is part of the policy contract. A policy record must make
 approval testable with source/provenance state such as derivation source,
-approval status, approver actor, approval timestamp, and approved policy
+`lifecycle_status`, approver actor, approval timestamp, and approved policy
 version/hash.
 
 The runtime contract is:
@@ -96,9 +104,13 @@ EffectiveTaskSubmissionArtifactPolicy =
   + ApprovedTaskArtifactBinding
 ```
 
-Workstream's trusted checker compiler generates and persists
-`PreSubmitCheckerPolicy` from the effective task submission artifact policy and
-the approved checker specification.
+`SubmissionArtifactPolicyDerivationAgent` produces
+`ProjectPreSubmitCheckerSpec` at project setup time. Workstream's trusted
+checker compiler validates and canonicalizes that project checker specification
+but does not persist a project-level `PreSubmitCheckerPolicy` row. After task
+binding, the compiler combines the approved task binding, effective task policy,
+and approved project checker specification, then persists the final task-level
+`PreSubmitCheckerPolicy`.
 
 Project policies define project-wide artifact intake rules for a guide
 snapshot. Tasks can still have different required outputs. `ApprovedTaskArtifactBinding`
@@ -239,9 +251,9 @@ The effective policy merge is deterministic:
 | `artifact_manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
-| `artifact_hash_algorithm` | platform-locked value or intersection of allowed algorithms |
-| `maximum_file_size` | minimum non-null limit |
-| `maximum_package_size` | minimum non-null limit |
+| `artifact_hash_algorithm` | platform-locked `sha256`; project/task policy cannot change it |
+| `maximum_file_size_bytes` | minimum non-null limit |
+| `maximum_package_size_bytes` | minimum non-null limit |
 | `packaging_rules` | restrictive merge; conflicts block activation |
 
 Conflicts block setup before workers see tasks. A project-required artifact that

@@ -52,13 +52,25 @@ default submission artifact rules.
 The project-specific `SubmissionArtifactPolicy` attached to one project guide
 version before Workstream merges it with default submission artifact policy.
 
-## Effective Submission Artifact Policy
+## Effective Project Submission Artifact Policy
 
 The deterministic merge of Workstream's default submission artifact policy and the project-approved submission artifact policy. Workstream computes this effective project policy before task-specific binding.
 
+## Project Pre-Submit Checker Spec
+
+The constrained project-level checker specification derived from the approved
+project submission artifact policy. Workstream validates and canonicalizes this
+spec during project setup. It is not a `PreSubmitCheckerPolicy` row.
+
+## Effective Task Submission Artifact Policy
+
+The deterministic merge of the effective project submission artifact policy and
+an approved task artifact binding. Workstream locks this task policy before
+generating the task-level pre-submit checker policy.
+
 ## Pre-Submit Checker Policy
 
-The server-generated checker matrix produced from the effective task submission artifact policy, persisted with a hash, and locked before a task enters the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated task-level checker matrix produced from the effective task submission artifact policy and approved project checker spec, persisted with a hash, and locked before a task enters the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 

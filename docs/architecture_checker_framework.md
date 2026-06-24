@@ -167,9 +167,9 @@ ProjectGuide
 -> GuideSufficiencyReport
 -> ProjectSubmissionArtifactPolicy
 -> EffectiveProjectSubmissionArtifactPolicy
+-> ProjectPreSubmitCheckerSpec
 -> ApprovedTaskArtifactBinding
 -> EffectiveTaskSubmissionArtifactPolicy
--> constrained PreSubmitCheckerSpec
 -> trusted Workstream checker compiler
 -> PreSubmitCheckerPolicy
 -> pre-submit intake checks
@@ -212,10 +212,13 @@ Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 
-The `SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
-specification. It does not produce unrestricted checker code. Workstream's
-trusted checker compiler turns that specification into deterministic checker
-logic using approved primitives such as:
+The `SubmissionArtifactPolicyDerivationAgent` produces
+`ProjectPreSubmitCheckerSpec`, a constrained project-level checker
+specification. It does not produce unrestricted checker code and does not create
+a project-level `PreSubmitCheckerPolicy` row. Workstream's trusted checker
+compiler validates and canonicalizes the project spec during setup, then later
+combines it with task binding and effective task policy to produce deterministic
+task-level checker logic using approved primitives such as:
 
 - `require_file`
 - `allow_extension`

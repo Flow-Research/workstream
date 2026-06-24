@@ -34,7 +34,8 @@ Project owner material is untrusted input. Guide text, URLs, repository docs,
 examples, and imported documents cannot grant tool authority, override
 Workstream rules, or weaken default checks. Approved adapters can use temporary
 fetch locators for source ingestion, but durable source identity must be an
-immutable `GuideSourceSnapshot` with sanitized source ref and content hash.
+immutable `GuideSourceSnapshot` bundle with a canonical manifest, sanitized
+source item refs, and per-item content hashes.
 
 ## Approved Plan Reference
 
@@ -92,16 +93,18 @@ human review implementation
 ## Acceptance Criteria
 
 - [ ] Dedicated `SubmissionArtifactPolicy` model/table exists.
-- [ ] Dedicated immutable `GuideSourceSnapshot` model/table exists.
+- [ ] Dedicated immutable `GuideSourceSnapshot` bundle model/table exists.
+- [ ] Dedicated `GuideSourceSnapshotItem` model/table exists, or the snapshot
+      stores an equivalent canonical manifest for every source item.
 - [ ] Dedicated `GuideSufficiencyReport` model/table exists.
 - [ ] Guide sufficiency report records `passed`, `blocked`, or
       `passed_with_warnings`.
-- [ ] Guide sufficiency report binds to `source_snapshot_id` and
-      `source_snapshot_hash`.
+- [ ] Guide sufficiency report binds to `source_snapshot_id` and server-derived
+      `source_snapshot_hash` from `GuideSourceSnapshot.bundle_hash`.
 - [ ] Blocking guide sufficiency findings prevent guide activation.
 - [ ] Warning guide sufficiency findings require `admin` or `project_manager`
       acknowledgement before guide activation.
-- [ ] Durable source snapshot refs are sanitized and reject signed URLs,
+- [ ] Durable source snapshot item refs are sanitized and reject signed URLs,
       credential-bearing refs, token-bearing refs, and local filesystem paths.
 - [ ] Approved retrieval adapters can use ordinary URL query parameters only as
       temporary fetch locators and never persist them as durable source
@@ -110,13 +113,14 @@ human review implementation
       weaken Workstream default policy.
 - [ ] Policy rows are scoped by `project_id` and `guide_version`.
 - [ ] Policy rows have a composite foreign key to `project_guides(project_id, version)`.
-- [ ] Policy rows bind to `source_snapshot_id` and `source_snapshot_hash`.
+- [ ] Policy rows bind to `source_snapshot_id` and server-derived
+      `source_snapshot_hash` from `GuideSourceSnapshot.bundle_hash`.
 - [ ] Pydantic input/output schemas exist for project submission artifact policy.
 - [ ] Project service can create/update the policy with a draft guide.
 - [ ] Project policy records include approval provenance showing the approved
       machine policy was reviewed by `admin` or `project_manager`.
 - [ ] Approval provenance includes derivation source, source material refs,
-      approval status, approver role, approver actor, approval timestamp, and
+      lifecycle status, approver role, approver actor, approval timestamp, and
       approved policy version or hash.
 - [ ] Guide activation fails when no approved project submission artifact policy
       exists for the guide version.
