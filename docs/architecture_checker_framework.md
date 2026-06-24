@@ -101,11 +101,11 @@ Ensures a task has rubric or acceptance criteria.
 
 ### check_required_files
 
-Validates required submission artifacts from the effective submission artifact policy.
+Validates required submission artifacts from the effective task submission artifact policy.
 
 ### check_forbidden_files
 
-Blocks known forbidden artifacts, secrets, private keys, copied internal data, or artifacts forbidden by the effective submission artifact policy.
+Blocks known forbidden artifacts, secrets, private keys, copied internal data, or artifacts forbidden by the effective task submission artifact policy.
 
 Default forbidden patterns include:
 
@@ -163,9 +163,12 @@ The deterministic chain is:
 
 ```text
 ProjectGuide
+-> GuideSourceSnapshot
 -> GuideSufficiencyReport
 -> ProjectSubmissionArtifactPolicy
--> EffectiveSubmissionArtifactPolicy
+-> EffectiveProjectSubmissionArtifactPolicy
+-> ApprovedTaskArtifactBinding
+-> EffectiveTaskSubmissionArtifactPolicy
 -> constrained PreSubmitCheckerSpec
 -> trusted Workstream checker compiler
 -> PreSubmitCheckerPolicy
@@ -199,11 +202,11 @@ Workstream default submission artifact rules require:
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
 The generated `PreSubmitCheckerPolicy` is persisted, hashed, and locked to the
-project guide version before workers submit packets. It runs before Workstream
-creates a submission. Blocking failures prevent submission creation and return
+effective task submission artifact policy before workers submit packets. It
+runs before Workstream creates a submission. Preflight failures return
 `PreSubmitCheckResponse` with `status="failed"`,
 `eligible_to_submit=false`, and structured pass/fail/warning details in
-`results`. The user-facing failure condition is
+`results`. Blocked submission-create attempts use the user-facing error code
 `pre_submission_checker_failed`; it is not a review decision value.
 Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
@@ -257,7 +260,7 @@ Examples:
 ```text
 Draft packet
 -> load locked task context
--> load locked EffectiveSubmissionArtifactPolicy hash
+-> load locked EffectiveTaskSubmissionArtifactPolicy hash
 -> load locked PreSubmitCheckerPolicy snapshot/hash
 -> run pre-submit intake checks
 -> create Submission only when blocking pre-submit checks pass

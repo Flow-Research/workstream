@@ -212,12 +212,18 @@ Response fields:
 - `created_at`
 - `expires_at`
 
-Pre-submit feedback binds to `task_id`, the task's locked guide version, the approved submission artifact policy context, draft packet fields, package hash, and artifact manifest shape. It does not require a locked `submission_id` or locked submission version because those do not exist before submission creation.
+Pre-submit feedback binds to `task_id`, the task's locked guide source snapshot,
+approved task artifact binding, effective task submission artifact policy hash,
+draft packet fields, package hash, and artifact manifest shape. It does not
+require a locked `submission_id` or locked submission version because those do
+not exist before submission creation.
 
-Blocking pre-submit failures prevent submission creation. They return
-`pre_submission_checker_failed` with structured pass/fail/warning details,
-create no submission row, no submission version, no task transition to
-`submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. Preflight failures
+return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
+results=[...])`. Blocked submission-create attempts return
+`DomainError(code="pre_submission_checker_failed")` with structured
+pass/fail/warning details, create no submission row, no submission version, no
+task transition to `submitted`, and no submission-created audit event.
 
 Pre-submit results are not authoritative for `REVIEW_PENDING`, cannot create
 `NEEDS_REVISION`, and do not return review decision values: `accept`,

@@ -12,17 +12,16 @@ The first user flows prove that Workstream can run real work from intake to acce
 6. Admin or project_manager acknowledges non-blocking sufficiency warnings.
 7. Workstream runs `SubmissionArtifactPolicyDerivationAgent`.
 8. Admin or project_manager reviews and approves the derived submission artifact policy.
-9. Workstream persists the effective submission artifact policy hash.
-10. Workstream persists the generated pre-submit checker policy snapshot/hash.
-11. Admin or project_manager enables post-submit checker policy.
-12. Admin or project_manager enables review policy.
-13. Admin or project_manager enables revision policy.
-14. Admin or project_manager enables payment policy.
-15. Project becomes active.
+9. Workstream persists the effective project submission artifact policy hash.
+10. Admin or project_manager enables post-submit checker policy.
+11. Admin or project_manager enables review policy.
+12. Admin or project_manager enables revision policy.
+13. Admin or project_manager enables payment policy.
+14. Project becomes active.
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, passed or acknowledged guide sufficiency report, submission artifact policy, effective submission artifact policy hash, generated pre-submit checker policy snapshot/hash, post-submit checker policy, review policy, revision policy, and payment policy.
+- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
 - Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
@@ -32,14 +31,14 @@ Acceptance:
 2. Operator creates task with title, description, expected output, acceptance criteria, base amount, deadline, and difficulty.
 3. Workstream validates task against project guide.
 4. Task enters `SCREENING`.
-5. Screening confirms guide version, task contract, submission artifact requirements, checker policy, review policy, revision policy, payment policy, and reviewability.
+5. Screening confirms guide source snapshot, task contract, approved task artifact binding, effective task submission artifact policy hash, generated pre-submit checker policy, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
 6. Task enters `READY`.
 
 Acceptance:
 
 - Missing required fields block `SCREENING`.
 - Missing required fields block `READY`.
-- Task shows project guide, required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
+- Task shows project guide, task-specific required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
 
 ## Flow 3: Worker Submits Work
 
@@ -47,8 +46,8 @@ Acceptance:
 2. Worker attaches output files or links.
 3. Worker attaches evidence.
 4. Worker writes submission notes.
-5. Workstream runs pre-submit checks generated from the effective submission artifact policy.
-6. Blocking pre-submit failures return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission.
+5. Workstream runs pre-submit checks generated from the effective task submission artifact policy.
+6. Preflight failures return `PreSubmitCheckResponse`; blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission.
 7. When blocking pre-submit checks pass, Worker submits packet.
 8. Task enters `SUBMITTED`.
 
@@ -56,7 +55,7 @@ Acceptance:
 
 - Submission cannot be created when blocking pre-submit checks fail.
 - Blocking pre-submit failures are not review decisions and never return `accept`, `needs_revision`, or `reject`.
-- Submission cannot be created without required artifacts, evidence references, hashes, and worker attestation defined by the effective submission artifact policy.
+- Submission cannot be created without required artifacts, evidence references, hashes, and worker attestation defined by the effective task submission artifact policy.
 - Submission packet is immutable after checks start.
 
 ## Flow 4: Automated Checks Run

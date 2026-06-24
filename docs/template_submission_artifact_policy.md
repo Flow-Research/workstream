@@ -19,15 +19,18 @@ Workstream derives this policy from that material after guide sufficiency passes
 or warnings are acknowledged. Project owners do not author or approve the
 machine-readable Workstream policy schema directly.
 
-Source material refs:
+Source snapshot:
 
-- project guide version:
-- imported document refs:
-- URL-backed documentation refs:
-- repository documentation refs:
-- task example refs:
-- rubric refs:
-- business term refs:
+- guide source snapshot id:
+- guide source snapshot hash:
+- ingestion adapter:
+- durable source ref:
+- content cid: `<future Flow Node CID when available>`
+- captured at:
+
+Temporary fetch locators are adapter inputs only. Durable source refs must not
+store query strings, signed URLs, credentials, token-bearing refs, local
+filesystem paths, or private storage paths.
 
 ## Guide Sufficiency
 
@@ -44,7 +47,8 @@ Source material refs:
 - derivation agent name:
 - derivation agent version:
 - sufficiency report id:
-- source material refs:
+- source snapshot id:
+- source snapshot hash:
 - approval status: `draft | approved | superseded`
 - approved policy hash:
 - approved by role: `admin | project_manager`
@@ -93,6 +97,21 @@ Default forbidden artifacts:
 
 A project-required artifact that matches a Workstream default forbidden rule remains blocked. That conflict is a project setup defect.
 
+## Effective Policy Merge Rules
+
+| Field | Merge Rule |
+| --- | --- |
+| required artifacts | union by canonical artifact key |
+| required evidence | union by canonical evidence key |
+| forbidden artifacts | union |
+| attestation terms | union |
+| manifest required | logical OR |
+| hash required | logical OR |
+| allowed storage schemes | intersection |
+| hash algorithm | platform-locked value or intersection |
+| maximum file/package size | minimum non-null limit |
+| packaging rules | restrictive merge; conflicts block setup |
+
 ## Project Required Artifacts
 
 | Artifact | Required | Hash Required | Notes |
@@ -131,11 +150,12 @@ Required attestation topics:
 
 ## Generated Pre-Submit Checker Policy
 
-Workstream generates `PreSubmitCheckerPolicy` from:
+Workstream generates task-level `PreSubmitCheckerPolicy` from:
 
 ```text
 WorkstreamDefaultSubmissionArtifactPolicy
 + ProjectSubmissionArtifactPolicy
++ ApprovedTaskArtifactBinding
 ```
 
 Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
@@ -144,12 +164,14 @@ Generated policy lock:
 
 - generated pre-submit checker policy version:
 - generated pre-submit checker policy hash:
-- effective submission artifact policy hash:
+- effective task submission artifact policy hash:
 - locked guide version:
 
-Blocking failures return `pre_submission_checker_failed` with structured
-pass/fail/warning details. They do not return review decision values:
-`accept`, `needs_revision`, or `reject`.
+Blocked submission-create attempts return `pre_submission_checker_failed` with
+structured pass/fail/warning details.
+The preflight endpoint returns `PreSubmitCheckResponse` with `status`,
+`eligible_to_submit`, and `results`. Neither path returns review decision
+values: `accept`, `needs_revision`, or `reject`.
 
 Expected generated checks:
 
@@ -170,3 +192,6 @@ Expected generated checks:
 - approved by actor:
 - effective at:
 - change summary:
+- supersedes policy id:
+
+Approved and superseded policies are immutable. Changes create a new revision.

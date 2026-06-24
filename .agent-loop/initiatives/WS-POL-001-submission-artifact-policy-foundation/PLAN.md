@@ -18,6 +18,9 @@ The product model is:
 ProjectGuide
   open-ended human-facing project material
 
+GuideSourceSnapshot
+  immutable capture of the exact guide/source bytes Workstream evaluated
+
 GuideSufficiencyReport
   Workstream-owned assessment of whether the guide is sufficient
 
@@ -27,8 +30,14 @@ WorkstreamDefaultSubmissionArtifactPolicy
 ProjectSubmissionArtifactPolicy
   Workstream-derived, admin-or-project-manager-approved machine-readable intake rules
 
-EffectiveSubmissionArtifactPolicy
+EffectiveProjectSubmissionArtifactPolicy
   deterministic merge of default + project policy
+
+ApprovedTaskArtifactBinding
+  Workstream-approved task-specific artifact profile and constrained parameters
+
+EffectiveTaskSubmissionArtifactPolicy
+  deterministic merge of effective project policy + approved task binding
 
 PreSubmitCheckerPolicy
   persisted and locked checker rules for draft packet intake
@@ -46,15 +55,23 @@ actor with the `admin` or `project_manager` role.
 Project owner material is always treated as untrusted data. Internal agents must
 not execute embedded instructions from guide text, URLs, repository docs, or
 examples. Fetching source material must use approved adapters or allowlisted
-retrieval paths, reject signed URLs, query-bearing refs, credential-bearing refs,
-and local filesystem paths, and persist only sanitized source refs.
+retrieval paths. Temporary fetch locators can include ordinary URL query
+parameters when an approved adapter needs them, but signed URLs,
+credential-bearing refs, token-bearing refs, and local filesystem paths are
+rejected. Workstream persists only immutable `GuideSourceSnapshot` records with
+opaque sanitized source refs, content hash, optional future content id, adapter
+name, and capture timestamp. It never persists signed URLs, credentials, or
+token-bearing locators as durable source identity.
 
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
 actor with the `admin` or `project_manager` role approves the derived policy.
-Workstream then computes the effective policy and persists the generated
-`PreSubmitCheckerPolicy` snapshot/hash locked to the guide version. Pre-submit
-checks run before submission creation and do not create durable checker records.
+Workstream then computes the effective project policy and later combines it
+with approved task-specific artifact bindings to produce an
+`EffectiveTaskSubmissionArtifactPolicy` locked before a task enters
+`SCREENING` or `READY`. The generated `PreSubmitCheckerPolicy` snapshot/hash is
+locked to that effective task policy. Pre-submit checks run before submission
+creation and do not create durable checker records.
 Post-submit/internal checks run after submission lock and do create durable
 checker records.
 
@@ -65,12 +82,20 @@ the deterministic `PreSubmitCheckerPolicy` bundle. Runtime checks execute the
 locked compiled bundle against staged artifact hashes or future content
 identifiers.
 
-If no passing or acknowledged guide sufficiency report, approved project
-submission artifact policy, effective policy hash, and persisted generated
-pre-submit checker policy exist for the guide version, guide activation fails
-and tasks using that guide cannot enter the ready worker pipeline. The system
-must surface setup failure internally as task/project setup incomplete rather
-than letting workers discover missing intake rules at submit time.
+If no immutable guide-source snapshot, passing or acknowledged guide sufficiency
+report, approved project submission artifact policy, and effective project
+policy hash exist for the guide snapshot and guide version, guide activation
+fails. If no approved task artifact binding, effective task policy hash, and
+task-level pre-submit checker bundle exist, the task cannot enter the ready
+worker pipeline. The system must surface setup failure internally as
+task/project setup incomplete rather than letting workers discover missing
+intake rules at submit time.
+
+Reports, derived policies, acknowledgements, effective policies, and checker
+bundles bind to the exact `GuideSourceSnapshot` id/hash, not only to
+`guide_version`. Any guide or source-material change creates a new snapshot and
+invalidates prior sufficiency reports, derived project policies, effective
+policies, checker bundles, acknowledgements, and approvals for activation.
 
 ## Alternatives Considered
 
@@ -79,7 +104,7 @@ than letting workers discover missing intake rules at submit time.
 Rejected because it leaves too much room for project drift and unfair worker
 feedback.
 
-### Use project guide `evidence_policy` as the long-term object
+### Keep legacy `ProjectGuide.evidence_policy` as the long-term object
 
 Rejected because the name is too narrow. The policy governs artifacts, hashes,
 storage references, packaging, forbidden files, and attestation, not only
@@ -124,8 +149,10 @@ while post-submit answers whether a locked submission can move to human review.
   checker code is not the default path.
 - Source-material security: project-owner docs, URLs, examples, and repository
   docs are untrusted input; embedded tool instructions, prompt-injection text,
-  credential-bearing refs, signed URLs, query-bearing refs, and local filesystem
-  paths cannot become policy authority.
+  credential-bearing refs, signed URLs, token-bearing refs, and local filesystem
+  paths cannot become policy authority. Ordinary URL query parameters are
+  allowed only as temporary inputs to approved retrieval adapters and are not
+  persisted as durable source identity.
 - Payment/execution: no payment or contribution records in this initiative.
 - Persistence/data: schema changes land through Alembic and async SQLAlchemy.
 - Presentation/API: backend-first; no frontend implementation.
@@ -133,26 +160,31 @@ while post-submit answers whether a locked submission can move to human review.
 
 ## Rollout/Migration Strategy
 
-1. Add dedicated guide sufficiency, submission artifact policy, effective
-   policy, and pre-submit policy records.
+1. Add dedicated guide source snapshot, guide sufficiency, submission artifact
+   policy, and effective project policy records.
 2. Replace transitional `evidence_policy`, `required_files`, and
    `required_evidence` usage; no v0.1 compatibility alias is required.
 3. Add the Workstream-owned derivation/approval boundary for project policy.
-4. Compute effective policy in service code and validate defaults cannot weaken.
-5. Persist generated pre-submit checker policy snapshot/hash for the guide
-   version.
-6. Add async guide sufficiency and policy derivation execution.
-7. Migrate submission creation to the locked generated pre-submit policy.
+4. Compute effective project policy in service code and validate defaults cannot weaken.
+5. Add async guide sufficiency, policy derivation execution, and trusted checker
+   compiler behavior.
+6. Add approved task artifact bindings and effective task policy locking.
+7. Migrate submission creation from transitional task fields to the locked task
+   policy and generated pre-submit checker bundle.
 8. Split post-submit checker policy naming/provenance.
 
 ## Verification Strategy
 
-- Unit-level policy merge tests for default + project policy.
+- Unit-level policy merge tests for default + project policy and effective
+  project policy + task artifact binding.
 - Postgres-backed API tests for guide sufficiency report, project policy
-  creation, generated pre-submit policy persistence, and guide activation.
+  creation, immutable source snapshots, effective project policy persistence,
+  and guide activation.
 - Tests proving a guide cannot activate without passing or acknowledged guide
-  sufficiency, approved project submission artifact policy, effective policy
-  hash, and persisted generated pre-submit checker policy.
+  sufficiency bound to the current source snapshot, approved project submission
+  artifact policy, and effective project policy hash.
+- Tests proving a task cannot enter `READY` without an approved task artifact
+  binding, effective task policy hash, and generated pre-submit checker bundle.
 - Tests proving malicious or credential-bearing source material cannot weaken
   Workstream defaults, grant tool authority, or persist unsafe source refs.
 - Submission API tests proving blocking pre-submit failure creates no submission
@@ -177,7 +209,8 @@ CI integrity is required only for chunks that touch workflows or test tooling.
 
 ## Sequencing
 
-Start with guide/policy bundle foundation. Do not start submission runtime
-rewiring until the guide sufficiency report, project policy object, defaults,
-effective policy hash, persisted generated pre-submit checker policy, and
-activation guards are accepted.
+Start with guide/source/policy bundle foundation. Do not start submission
+runtime rewiring until immutable guide-source snapshots, guide sufficiency
+reports, project policy objects, defaults, effective project policy hash,
+approved task artifact bindings, effective task policy hash, generated
+pre-submit checker bundle, and activation/ready guards are accepted.

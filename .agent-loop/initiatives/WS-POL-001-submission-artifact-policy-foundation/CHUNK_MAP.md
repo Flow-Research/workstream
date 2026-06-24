@@ -17,6 +17,9 @@
 - Agents derive constrained policy and checker specifications. Workstream
   compiles deterministic checker bundles. Unrestricted generated checker code
   is not the default path.
+- Reports, derived policies, acknowledgements, effective policies, task
+  bindings, and checker bundles bind to immutable `GuideSourceSnapshot`
+  id/hash, not only to `guide_version`.
 
 ## Chunks
 
@@ -24,10 +27,11 @@
 
 Goal:
 
-Add first-class guide sufficiency, `SubmissionArtifactPolicy`, effective policy,
-and persisted `PreSubmitCheckerPolicy` backend records and schemas. Define
-Workstream default submission artifact rules in code and validate that project
-policy cannot weaken defaults.
+Add first-class guide-source snapshot, guide sufficiency,
+`SubmissionArtifactPolicy`, effective project policy, and activation guard
+backend records and schemas. Define Workstream default submission artifact rules
+and the deterministic project-policy merge contract. Do not move task runtime or
+checker compiler behavior yet.
 
 Risk:
 
@@ -63,34 +67,43 @@ full async agent execution runtime
 Acceptance criteria:
 
 - Dedicated submission artifact policy model/table exists.
+- Dedicated immutable guide source snapshot model/table exists.
 - Dedicated guide sufficiency report model/table exists.
 - Guide sufficiency report supports `passed`, `blocked`, and
   `passed_with_warnings`.
 - Project policy is scoped to project id + guide version.
+- Guide sufficiency report, project policy, and effective project policy bind to
+  `source_snapshot_id` and `source_snapshot_hash`.
 - Project policy records are Workstream-derived and approved by `admin` or
   `project_manager`, not direct project owner-authored schema.
 - Workstream default policy is represented in code.
-- Effective policy merge rejects attempts to weaken defaults.
+- Deterministic merge rules are represented in code for union, intersection,
+  logical OR, minimum limit, platform-locked hash algorithm, and restrictive
+  packaging merges.
+- Effective project policy merge rejects attempts to weaken defaults.
+- Required artifacts or evidence that match forbidden rules block project setup.
 - Effective submission artifact policy hash is persisted for the guide version.
-- Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to
-  the guide version.
-- Generated `PreSubmitCheckerPolicy` is a compiled deterministic checker bundle
-  from approved primitives, not unrestricted generated code.
+- Approved and superseded policy rows are immutable; changes create a new
+  revision with a supersedes pointer.
 - Guide activation requires passing or acknowledged guide sufficiency, approved
-  submission artifact policy, effective policy hash, and persisted generated
-  pre-submit checker policy.
-- Project-owner source refs are sanitized and cannot contain signed URLs,
-  query-bearing refs, credential-bearing refs, or local filesystem paths.
+  submission artifact policy, and effective project policy hash bound to the
+  current guide source snapshot.
+- Project-owner source refs persist as sanitized snapshot refs and cannot store
+  signed URLs, credential-bearing refs, token-bearing refs, or local filesystem
+  paths. Approved adapters can use ordinary URL query parameters only as
+  temporary fetch locators.
 - Embedded instructions in guide material cannot grant tool authority or weaken
   Workstream default policy.
-- Transitional `evidence_policy`, `required_files`, and `required_evidence` are
-  replaced, not preserved as compatibility aliases.
+- Legacy `evidence_policy`, `required_files`, and `required_evidence` are not
+  treated as compatibility contracts. Runtime removal happens in the task
+  binding and submission migration chunks.
 
 Verification:
 
 - Postgres-backed FastAPI/API tests cover policy create/update, guide
   sufficiency activation blocking, warning acknowledgement, default weakening
-  rejection, source-ref sanitization, and pre-submit policy locking.
+  rejection, source snapshot binding, source-ref sanitization, append-only
+  approved rows, and effective project policy hash persistence.
 - Unit/service tests may cover deterministic merge helpers, but API-visible
   behavior must be proven through the FastAPI path.
 
@@ -108,9 +121,9 @@ Chunk 1 limited to records/contracts/activation guards.
 
 Goal:
 
-Run `ProjectGuideSufficiencyAgent` and
-`SubmissionArtifactPolicyDerivationAgent` asynchronously against open-ended
-project guide material.
+Run `ProjectGuideSufficiencyAgent`,
+`SubmissionArtifactPolicyDerivationAgent`, and the trusted checker compiler
+asynchronously against immutable guide-source snapshots.
 
 Risk:
 
@@ -141,7 +154,7 @@ payment/reputation/blockchain code
 Acceptance criteria:
 
 - `ProjectGuideSufficiencyAgent` runs async and produces a persisted
-  sufficiency report for a guide version.
+  sufficiency report for a guide source snapshot.
 - Blocking guide gaps stop activation and create project-owner clarification
   requests.
 - Warnings can be acknowledged only by `admin` or `project_manager`.
@@ -150,7 +163,9 @@ Acceptance criteria:
 - Derived policy cannot weaken Workstream defaults.
 - Derived checker specification uses only approved Workstream primitives.
 - Trusted checker compiler produces deterministic `PreSubmitCheckerPolicy`
-  snapshot/hash from the approved specification.
+  project-level contract snapshot/hash from the approved specification.
+- Derived report, project policy, effective project policy, and compiler output
+  are invalidated by a new guide source snapshot.
 - Malicious guide text, embedded prompt-injection instructions, and unsafe
   source refs cannot influence agent authority, fetch behavior, or default
   policy strength.
@@ -163,10 +178,10 @@ Verification:
   clarification requests, warning acknowledgement, derivation job output, unsafe
   source-ref rejection, and default weakening rejection.
 - Background execution tests prove jobs are async and idempotent for a guide
-  version.
+  source snapshot.
 - Compiler tests prove allowed primitive emission, unknown primitive rejection,
   byte-stable same-input same-compiler-version bundle hashing, hash binding to
-  `effective_submission_artifact_policy_hash`, and client/worker inability to
+  `effective_project_submission_artifact_policy_hash`, and client/worker inability to
   supply checker names, severities, versions, outcomes, compiler version, or
   compiled bundles.
 
@@ -180,12 +195,13 @@ Human review focus:
 Async job boundaries, sufficiency severity behavior, and clarification request
 shape.
 
-### WS-POL-001-03: Submission Creation Uses Effective Policy
+### WS-POL-001-03: Task Policy Binding And Submission Creation
 
 Goal:
 
-Move submission creation pre-submit gate from transitional task fields to the
-effective submission artifact policy and generated pre-submit checker policy.
+Add approved task artifact bindings, compute effective task submission artifact
+policy, generate the task-level pre-submit checker bundle, and move submission
+creation from transitional task fields to that locked task policy.
 
 Risk:
 
@@ -198,6 +214,7 @@ Depends on:
 Allowed files:
 
 ```text
+backend/alembic/versions/**
 backend/app/modules/tasks/**
 backend/app/modules/checkers/**
 backend/tests/test_submissions.py
@@ -216,10 +233,24 @@ frontend
 
 Acceptance criteria:
 
+- `ApprovedTaskArtifactBinding` exists and selects an approved artifact profile
+  plus constrained task parameters.
+- Task bindings can add or tighten requirements, but cannot weaken platform
+  defaults or the effective project policy.
+- `EffectiveTaskSubmissionArtifactPolicy` is generated from effective project
+  policy plus task binding and locked before `SCREENING` or `READY`.
+- Task-level generated `PreSubmitCheckerPolicy` is persisted with
+  `compiled_bundle` as canonical JSON source of truth and `compiled_bundle_hash`
+  as its canonical hash.
+- Transitional `required_files` and `required_evidence` are replaced for
+  submission runtime and are not compatibility aliases.
 - Blocking pre-submit failure creates no submission row, submission version,
   submitted transition, or durable checker run.
-- Blocking pre-submit failure returns `pre_submission_checker_failed` with
-  structured pass/fail/warning details, not review decision values.
+- `POST /tasks/{id}/submission-precheck` returns `200 PreSubmitCheckResponse`
+  with `status`, `eligible_to_submit`, and `results`.
+- `POST /tasks/{id}/submissions` returns
+  `422 DomainError(code="pre_submission_checker_failed")` with structured
+  pass/fail/warning details when blocking pre-submit fails.
 - Passing pre-submit creates a submission stamped with locked policy context.
 
 Verification:
@@ -227,6 +258,8 @@ Verification:
 - Postgres-backed FastAPI/API tests cover clean submission, blocking pre-submit
   failure, no-row/no-version/no-transition/no-durable-checker side effects, and
   stamped locked policy context.
+- Postgres-backed task tests cover task binding merge, weakening rejection,
+  task policy hash locking, and removal of transitional task-field authority.
 
 Required reviewers:
 
@@ -235,8 +268,8 @@ reuse/dedup, test delta.
 
 Human review focus:
 
-No-row/no-version/no-transition guarantee and `pre_submission_checker_failed`
-feedback shape.
+Task-specific artifact binding, no-row/no-version/no-transition guarantee, and
+preflight-versus-submission-create failure shape.
 
 ### WS-POL-001-04: PostSubmitCheckerPolicy Split
 

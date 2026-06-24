@@ -22,7 +22,8 @@ The guide drives:
 
 - task requirements
 - submission artifact policy
-- pre-submit checker policy generated from the effective submission artifact policy
+- guide source snapshot and effective project submission artifact policy
+- task pre-submit checker policy generated from the effective task submission artifact policy
 - post-submit checker policy
 - review policy
 - revision policy
@@ -33,16 +34,16 @@ The submission artifact, checker, review, revision, and payment policies are gui
 
 Project guide activation requires the guide plus its required policy context before work can lock against it:
 
+- guide source snapshot
 - guide sufficiency report
 - submission artifact policy
-- effective submission artifact policy hash
-- generated pre-submit checker policy
+- effective project submission artifact policy hash
 - post-submit checker policy
 - review policy
 - revision policy
 - payment policy
 
-The Workstream-derived submission artifact policy defines what workers must submit. Project owners provide open-ended project material and business terms. Workstream evaluates guide sufficiency, derives the machine policy, and a Workstream actor with the `admin` or `project_manager` role approves the internal policy bundle. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective submission artifact policy. Workstream then generates, persists, hashes, and locks the pre-submit checker policy from that effective policy.
+The Workstream-derived submission artifact policy defines project-level intake rules. Project owners provide open-ended project material and business terms. Workstream captures an immutable guide source snapshot, evaluates guide sufficiency, derives the machine policy, and a Workstream actor with the `admin` or `project_manager` role approves the internal policy bundle. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective project policy. Task screening later combines that effective project policy with an approved task artifact binding to create the effective task policy and generated pre-submit checker policy.
 
 Blocking pre-submit failures prevent submission creation. They do not create durable post-submit checker runs and they do not create human review decisions.
 

@@ -70,8 +70,7 @@ Every active guide version must also have approved machine-readable policies:
 
 - guide sufficiency report
 - submission artifact policy
-- effective submission artifact policy hash
-- generated pre-submit checker policy
+- effective project submission artifact policy hash
 - post-submit checker policy
 - review policy
 - revision policy
@@ -86,9 +85,11 @@ with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation. Project owners do not approve Workstream's internal
 submission policy schema.
 
-`SubmissionArtifactPolicy` defines what a worker must submit. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective submission artifact policy. Workstream persists the effective policy hash, then generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that effective policy.
+`SubmissionArtifactPolicy` defines project-level intake rules. Workstream combines it with the non-bypassable Workstream default submission artifact policy to create the effective project policy, then combines that with an approved task artifact binding to create the effective task submission artifact policy. Workstream persists the effective task policy hash, then generates, persists, hashes, and locks `PreSubmitCheckerPolicy` from that task policy.
 
-Blocking pre-submit failures prevent submission creation. They return
+Blocking pre-submit failures prevent submission creation. Preflight failures
+return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
+results=[...])`. Blocked submission-create attempts return
 `pre_submission_checker_failed` with structured pass/fail/warning details and
 create no submission row, no submission version, no task transition to
 `submitted`, and no submission-created audit event.
@@ -106,7 +107,7 @@ Every task must carry enough information to make claiming, checking, reviewing, 
 - task type
 - required output
 - acceptance criteria
-- required artifacts and evidence references derived from the effective submission artifact policy
+- required artifacts and evidence references derived from the effective task submission artifact policy
 - difficulty
 - skill tags
 - estimated time when known
@@ -159,7 +160,9 @@ Use these names consistently:
 - `check_acceptance_criteria_present`
 - `ContributionRecord`
 - `SubmissionArtifactPolicy`
-- `EffectiveSubmissionArtifactPolicy`
+- `EffectiveProjectSubmissionArtifactPolicy`
+- `ApprovedTaskArtifactBinding`
+- `EffectiveTaskSubmissionArtifactPolicy`
 - `PreSubmitCheckerPolicy`
 - `PostSubmitCheckerPolicy`
 - `pre_submission_checker_failed`

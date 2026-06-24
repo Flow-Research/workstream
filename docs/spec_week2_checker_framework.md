@@ -37,7 +37,7 @@ The checker framework protects reviewer time by proving that the latest locked s
 ## Core Invariant
 
 ```text
-Draft packet -> EffectiveSubmissionArtifactPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
+Draft packet -> EffectiveTaskSubmissionArtifactPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
 ```
 
 A task cannot reach `REVIEW_PENDING` unless the latest locked submission has a completed checker run for the exact submission version and artifact context.
@@ -61,7 +61,7 @@ The checker binding includes:
 
 Workstream has two checker moments.
 
-Pre-submit static checks run before Workstream creates a submission. They are generated from the effective submission artifact policy and give immediate feedback on packet shape and policy issues:
+Pre-submit static checks run before Workstream creates a submission. They are generated from the effective task submission artifact policy and give immediate feedback on packet shape and policy issues:
 
 - required field presence
 - package hash presence
@@ -71,10 +71,12 @@ Pre-submit static checks run before Workstream creates a submission. They are ge
 - storage reference safety
 - task assignment and state compatibility
 
-Blocking pre-submit failures prevent submission creation. They return
-`pre_submission_checker_failed` with structured pass/fail/warning details,
-create no submission row, no submission version, no task transition to
-`submitted`, and no submission-created audit event.
+Blocking pre-submit failures prevent submission creation. Preflight failures
+return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
+results=[...])`. Blocked submission-create attempts return
+`DomainError(code="pre_submission_checker_failed")` with structured
+pass/fail/warning details, create no submission row, no submission version, no
+task transition to `submitted`, and no submission-created audit event.
 
 Pre-submit failures do not create review decisions, do not return `accept`,
 `needs_revision`, or `reject`, and do not create durable post-submit checker

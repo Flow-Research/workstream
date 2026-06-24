@@ -6,10 +6,11 @@ WS-POL-001 - Submission Artifact Policy Foundation
 
 ## Goal
 
-Add first-class backend support for guide sufficiency reports,
-`SubmissionArtifactPolicy`, effective policy hashes, and persisted generated
-`PreSubmitCheckerPolicy` snapshots without rewiring submission creation or
-durable checker execution yet.
+Add first-class backend support for immutable guide-source snapshots, guide
+sufficiency reports, `SubmissionArtifactPolicy`, effective project policy
+hashes, append-only approval lifecycle, and activation guards without rewiring
+submission creation, task runtime, checker compiler behavior, or durable checker
+execution yet.
 
 ## Why This Chunk Exists
 
@@ -20,20 +21,20 @@ deterministic.
 
 Project owners must not be asked to author the Workstream policy schema
 directly. They provide open-ended project guide material. Workstream records
-guide sufficiency, derives project submission artifact policy, persists the
-effective policy hash, persists the generated pre-submit checker policy
-snapshot/hash, and a Workstream actor with the `admin` or `project_manager` role
-approves the bundle before guide activation.
+guide-source snapshots, guide sufficiency, project submission artifact policy,
+effective project policy hash, and a Workstream actor with the `admin` or
+`project_manager` role approves the bundle before guide activation.
 
 The generated pre-submit checker policy is deterministic compiled policy, not
-unrestricted generated checker code. Agents derive constrained checker
-specifications; Workstream's trusted compiler produces the locked checker
-bundle.
+unrestricted generated checker code. This first chunk defines the record
+contract and activation dependency; the async derivation and trusted compiler
+behavior land in the next chunk.
 
 Project owner material is untrusted input. Guide text, URLs, repository docs,
 examples, and imported documents cannot grant tool authority, override
-Workstream rules, or weaken default checks. Source refs must be sanitized before
-persistence.
+Workstream rules, or weaken default checks. Approved adapters can use temporary
+fetch locators for source ingestion, but durable source identity must be an
+immutable `GuideSourceSnapshot` with sanitized source ref and content hash.
 
 ## Approved Plan Reference
 
@@ -85,22 +86,31 @@ human review implementation
 - Schemas only define API input/output contracts and validation shape.
 - Full async agent execution is not part of this chunk. This chunk models the
   records/contracts and activation guard those agents will use.
+- Trusted checker compiler behavior is not part of this chunk. This chunk
+  models the persisted fields and invariants later compiler output must satisfy.
 
 ## Acceptance Criteria
 
 - [ ] Dedicated `SubmissionArtifactPolicy` model/table exists.
+- [ ] Dedicated immutable `GuideSourceSnapshot` model/table exists.
 - [ ] Dedicated `GuideSufficiencyReport` model/table exists.
 - [ ] Guide sufficiency report records `passed`, `blocked`, or
       `passed_with_warnings`.
+- [ ] Guide sufficiency report binds to `source_snapshot_id` and
+      `source_snapshot_hash`.
 - [ ] Blocking guide sufficiency findings prevent guide activation.
 - [ ] Warning guide sufficiency findings require `admin` or `project_manager`
       acknowledgement before guide activation.
-- [ ] Project-owner source refs are sanitized and reject signed URLs,
-      query-bearing refs, credential-bearing refs, and local filesystem paths.
+- [ ] Durable source snapshot refs are sanitized and reject signed URLs,
+      credential-bearing refs, token-bearing refs, and local filesystem paths.
+- [ ] Approved retrieval adapters can use ordinary URL query parameters only as
+      temporary fetch locators and never persist them as durable source
+      authority.
 - [ ] Embedded instructions in guide material cannot grant tool authority or
       weaken Workstream default policy.
 - [ ] Policy rows are scoped by `project_id` and `guide_version`.
 - [ ] Policy rows have a composite foreign key to `project_guides(project_id, version)`.
+- [ ] Policy rows bind to `source_snapshot_id` and `source_snapshot_hash`.
 - [ ] Pydantic input/output schemas exist for project submission artifact policy.
 - [ ] Project service can create/update the policy with a draft guide.
 - [ ] Project policy records include approval provenance showing the approved
@@ -113,24 +123,28 @@ human review implementation
 - [ ] Guide activation requires valid submission artifact policy.
 - [ ] Workstream default submission artifact policy is represented in code.
 - [ ] Workstream default policy requires `sha256:<64 lowercase hex>` artifact hashes where production hashes are required.
-- [ ] Workstream default policy rejects raw signed URLs, query strings, local filesystem paths, credential-bearing references, and token-bearing storage references before persistence.
+- [ ] Persisted artifact/storage refs reject raw signed URLs, query strings,
+      local filesystem paths, credential-bearing references, and token-bearing
+      storage references before persistence.
 - [ ] Workstream default policy blocks default-forbidden secret/token artifacts even when a project policy lists them as required.
-- [ ] Effective policy merge rejects project policy that weakens defaults.
+- [ ] Effective project policy merge implements deterministic rules for union,
+      intersection, logical OR, minimum limit, platform-locked hash algorithm,
+      and restrictive packaging merges.
+- [ ] Effective project policy merge rejects project policy that weakens defaults.
+- [ ] Required artifact or evidence rules that match forbidden rules block
+      project setup as conflicts.
 - [ ] Effective submission artifact policy hash is persisted for the guide version.
-- [ ] Generated `PreSubmitCheckerPolicy` snapshot/hash is persisted and locked to the guide version.
-- [ ] Generated `PreSubmitCheckerPolicy` stores a constrained checker spec,
-      compiler version, compiled bundle hash, and immutable compiled bundle.
-- [ ] Generated checker bundle uses approved primitives rather than unrestricted
-      generated code.
-- [ ] Transitional `evidence_policy`, `required_files`, and `required_evidence` are replaced, not kept as compatibility aliases.
+- [ ] Approved and superseded policy/effective-policy rows are immutable.
+- [ ] Changing an approved policy creates a new revision with a supersedes
+      pointer.
+- [ ] Legacy `evidence_policy`, `required_files`, and `required_evidence` are
+      not treated as compatibility aliases. Runtime replacement of task fields
+      happens in the task binding and submission migration chunk.
 - [ ] Postgres-backed FastAPI/API tests cover create/update, blocking activation
       from guide sufficiency gaps, `admin`/`project_manager` warning
       acknowledgement, approval provenance fields, default weakening,
-      source-ref sanitization, and pre-submit policy locking.
-- [ ] Tests prove primitive allowlisting, unknown primitive rejection,
-      canonical compiled bundle hashing, hash binding to
-      `effective_submission_artifact_policy_hash`, immutable compiled bundle
-      behavior, and absence of executable code fields in the default path.
+      source snapshot binding, source-ref sanitization, append-only rows, and
+      effective project policy hash persistence.
 
 ## Verification Commands
 
@@ -171,9 +185,11 @@ Conditional:
 ## Human Review Focus
 
 - Are the guide sufficiency report fields precise enough?
+- Are the guide source snapshot fields precise enough?
 - Are the persisted provenance field names precise enough?
 - Does this chunk stay limited to records/contracts/activation guard, leaving
-  full async agent execution for the next chunk?
+  full async agent execution, trusted compiler behavior, task binding, and
+  submission runtime migration for later chunks?
 
 ## Stop Conditions
 

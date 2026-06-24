@@ -23,14 +23,16 @@
   with internal agent assistance allowed, then requires approval by `admin` or
   `project_manager` before guide activation.
 - Workstream default submission artifact rules are non-bypassable.
-- `EffectiveSubmissionArtifactPolicy` is default plus project policy.
+- `EffectiveProjectSubmissionArtifactPolicy` is default plus project policy.
+- `EffectiveTaskSubmissionArtifactPolicy` is effective project policy plus an
+  approved task artifact binding.
 - Workstream's trusted checker compiler turns the constrained checker
   specification into deterministic `PreSubmitCheckerPolicy`, persisted and
-  locked to the project guide version.
+  locked to the effective task policy hash.
 - Pre-submit checks block before submission creation.
-- Blocking pre-submit feedback is `pre_submission_checker_failed` with
-  structured pass/fail/warning details; it is not `accept`, `needs_revision`,
-  or `reject`.
+- Preflight feedback is `PreSubmitCheckResponse`; blocked submission-create
+  attempts return `pre_submission_checker_failed` with structured
+  pass/fail/warning details. Neither is `accept`, `needs_revision`, or `reject`.
 - Post-submit/internal checks remain separate from pre-submit checks.
 - Worker-facing task outcomes remain simple; internal routes stay internal.
 - Stored review decision values remain exactly `accept`, `needs_revision`, and

@@ -31,9 +31,13 @@ Project owner material
 
 WorkstreamDefaultSubmissionArtifactPolicy
 + ProjectSubmissionArtifactPolicy
-= EffectiveSubmissionArtifactPolicy
+= EffectiveProjectSubmissionArtifactPolicy
 
-EffectiveSubmissionArtifactPolicy
+EffectiveProjectSubmissionArtifactPolicy
++ ApprovedTaskArtifactBinding
+= EffectiveTaskSubmissionArtifactPolicy
+
+EffectiveTaskSubmissionArtifactPolicy
 -> constrained pre-submit checker specification
 -> trusted Workstream checker compiler
 -> persisted and locked PreSubmitCheckerPolicy
@@ -95,13 +99,17 @@ After this initiative:
 - `SubmissionArtifactPolicy` is Workstream-derived from project material and
   approved by `admin` or `project_manager`, not authored directly by the
   project owner.
-- `GuideSufficiencyReport` is a first-class record tied to a project guide
-  version.
+- `GuideSourceSnapshot` is a first-class immutable record for the exact guide
+  material Workstream evaluated.
+- `GuideSufficiencyReport` is a first-class record tied to a guide source
+  snapshot.
 - Workstream default submission artifact rules are defined in code.
 - Project submission artifact policy cannot weaken Workstream defaults.
-- Effective submission artifact policy is computed deterministically.
-- Generated pre-submit checker policy is persisted and locked to the project
-  guide version.
+- Effective project submission artifact policy is computed deterministically.
+- Approved task artifact bindings produce task-specific effective submission
+  artifact policy hashes.
+- Generated pre-submit checker policy is persisted and locked to the effective
+  task policy hash.
 - Generated pre-submit checker policy is produced by Workstream's trusted
   compiler from approved checker primitives, not by unrestricted generated code.
 - Submission creation uses the generated pre-submit policy before a submission
@@ -133,9 +141,11 @@ simple. Stored review decision values remain exactly `accept`,
 `needs_revision`, and `reject`; display labels may render those as accepted,
 needs revision, and rejected where appropriate.
 
-Pre-submit feedback is not review. A blocking pre-submit result is presented as
-`pre_submission_checker_failed` with structured pass/fail/warning details. It
-does not create a submission and must not use review decision values.
+Pre-submit feedback is not review. Preflight failures return
+`PreSubmitCheckResponse` with structured pass/fail/warning details. A blocked
+submission-create attempt returns `pre_submission_checker_failed` with those
+details. It does not create a submission and must not use review decision
+values.
 
 ## Human Judgment Required
 

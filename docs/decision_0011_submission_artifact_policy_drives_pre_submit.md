@@ -19,13 +19,33 @@ Workstream also needs platform-owned default submission safety rules that no pro
 
 Every active project guide version must have a complete guide-policy bundle:
 
+- immutable `GuideSourceSnapshot` for the exact guide/source bytes evaluated
 - passing or acknowledged `GuideSufficiencyReport`
 - approved `ProjectSubmissionArtifactPolicy`
-- persisted `EffectiveSubmissionArtifactPolicy` hash
+- persisted `EffectiveProjectSubmissionArtifactPolicy` hash
+
+Before a task can enter the worker pipeline, it must also have:
+
+- approved `ApprovedTaskArtifactBinding`
+- persisted `EffectiveTaskSubmissionArtifactPolicy` hash
 - persisted generated `PreSubmitCheckerPolicy` snapshot/hash
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.
+
+Workstream binds all downstream setup records to the exact guide source
+snapshot, not only to `guide_version`. `GuideSourceSnapshot` records include the
+guide id, source ref, ingestion adapter, content hash, optional future content
+id, and capture timestamp. A guide or source-material change creates a new
+snapshot and invalidates prior sufficiency reports, derived policies, effective
+policies, checker bundles, acknowledgements, and approvals for activation.
+
+URL-backed guide ingestion separates the temporary fetch locator from durable
+source identity. Approved retrieval adapters can fetch legitimate documentation
+that uses ordinary query parameters. Query strings are temporary fetch inputs
+only. Workstream must not persist query strings, signed URLs, credentials,
+token-bearing refs, or local filesystem paths. The durable source record is an
+opaque sanitized source ref plus content hash or future content id.
 
 `ProjectGuideSufficiencyAgent` evaluates whether the guide is sufficient for
 submitters, reviewers, and Workstream quality control. Blocking guide gaps stop
@@ -67,16 +87,27 @@ version/hash.
 The runtime contract is:
 
 ```text
-EffectiveSubmissionArtifactPolicy =
+EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
   + ProjectSubmissionArtifactPolicy
+
+EffectiveTaskSubmissionArtifactPolicy =
+  EffectiveProjectSubmissionArtifactPolicy
+  + ApprovedTaskArtifactBinding
 ```
 
 Workstream's trusted checker compiler generates and persists
-`PreSubmitCheckerPolicy` from the effective submission artifact policy and the
-approved checker specification.
+`PreSubmitCheckerPolicy` from the effective task submission artifact policy and
+the approved checker specification.
 
-`PreSubmitCheckerPolicy` is locked to the project guide version. It is not
+Project policies define project-wide artifact intake rules for a guide
+snapshot. Tasks can still have different required outputs. `ApprovedTaskArtifactBinding`
+selects an approved artifact profile and constrained task parameters. It can
+add or tighten requirements, never weaken platform defaults or the effective
+project policy. The resulting effective task policy hash is locked when the
+task enters `SCREENING` or `READY`.
+
+`PreSubmitCheckerPolicy` is locked to the effective task policy hash. It is not
 derived on read, manually edited by workers, or supplied by clients. Workers
 submit only draft packet fields. They do not choose checker names, policy
 versions, blocking rules, severities, or outcomes.
@@ -110,9 +141,35 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
 - no submission version is assigned
 - no task transition to `submitted` occurs
 - no submission-created audit event is written
-- the response returns `pre_submission_checker_failed`
-- the response includes structured pass/fail/warning details
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
+
+Pre-submit has two API contracts:
+
+```text
+POST /tasks/{id}/submission-precheck
+200 PreSubmitCheckResponse
+{
+  "status": "failed",
+  "eligible_to_submit": false,
+  "results": [...]
+}
+```
+
+```text
+POST /tasks/{id}/submissions
+422 DomainError
+{
+  "code": "pre_submission_checker_failed",
+  "details": {
+    "status": "failed",
+    "eligible_to_submit": false,
+    "results": [...]
+  }
+}
+```
+
+`pre_submission_checker_failed` is the submission-creation error code. It is not
+a review decision and is not the response type for the preflight endpoint.
 
 Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a locked submission.
 
@@ -170,6 +227,40 @@ Uploaded artifacts and storage-backed evidence require `sha256:<64 lowercase hex
 Persisted storage references must be Workstream-issued opaque object references or validated object-storage adapter references. Raw signed URLs, credential-bearing URLs, query strings, local filesystem paths, bucket secrets, and token-bearing references are rejected before persistence. Normalization is allowed only for already-approved adapter references that contain no secrets, credentials, or query material.
 
 Default forbidden artifacts remain blocked even if a project policy accidentally lists them as required. A required artifact that violates the default forbidden policy is a project setup defect.
+
+The effective policy merge is deterministic:
+
+| Field | Merge rule |
+| --- | --- |
+| `required_artifacts` | union by canonical artifact key |
+| `required_evidence` | union by canonical evidence key |
+| `forbidden_artifacts` | union |
+| `required_attestation_terms` | union |
+| `artifact_manifest_required` | logical OR |
+| `artifact_hash_required` | logical OR |
+| `allowed_storage_schemes` | intersection |
+| `artifact_hash_algorithm` | platform-locked value or intersection of allowed algorithms |
+| `maximum_file_size` | minimum non-null limit |
+| `maximum_package_size` | minimum non-null limit |
+| `packaging_rules` | restrictive merge; conflicts block activation |
+
+Conflicts block setup before workers see tasks. A project-required artifact that
+matches a forbidden rule is not accepted as a runtime edge case.
+
+Approved policy and checker records are append-only:
+
+```text
+draft      -> mutable
+approved   -> immutable
+superseded -> immutable
+```
+
+Changing an approved policy, effective policy, task binding, or compiled checker
+bundle creates a new row with a `supersedes_*` reference. Approved rows are
+never edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
+canonical JSON source of truth and `compiled_bundle_hash` is the hash of that
+canonical JSON. `checker_names`, `checker_configs`, and `blocking_severities`
+are derived index projections only.
 
 ## Consequences
 

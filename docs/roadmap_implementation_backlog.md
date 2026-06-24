@@ -85,7 +85,7 @@
 - implement `check_confidentiality_attestation`
 - implement `check_low_quality_generated_artifacts`
 - implement registered readiness checkers only after their contracts are locked
-- implement generated pre-submit intake guards from the effective submission artifact policy
+- implement generated pre-submit intake guards from the effective task submission artifact policy
 
 ### Review
 

@@ -9,10 +9,11 @@ Every project has:
 - active guide
 - queue owner
 - reviewer owner
+- guide source snapshot
 - guide sufficiency report
 - submission artifact policy
-- effective submission artifact policy hash
-- generated pre-submit checker policy
+- effective project submission artifact policy hash
+- generated task pre-submit checker policy
 - post-submit checker policy
 - review policy
 - revision policy
@@ -26,6 +27,7 @@ Before releasing tasks:
 
 - project name and slug exist
 - project guide imported
+- guide source snapshot captured
 - guide version marked active
 - base amount configured
 - currency configured
@@ -34,8 +36,9 @@ Before releasing tasks:
 - project owner setup material captured
 - guide sufficiency report passed or warnings acknowledged by `admin` or `project_manager`
 - submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
-- effective submission artifact policy hash persisted
-- generated pre-submit checker policy created from the effective submission artifact policy
+- effective project submission artifact policy hash persisted
+- task artifact binding and effective task submission artifact policy are created before each task enters `READY`
+- generated pre-submit checker policy is created from the effective task submission artifact policy
 - post-submit checker policy attached
 - review policy attached
 - revision policy attached
@@ -49,9 +52,10 @@ Before releasing tasks:
 
 A project cannot become active unless guide, passed or acknowledged guide
 sufficiency report, approved submission artifact policy, persisted effective
-submission artifact policy hash, generated pre-submit checker policy,
-post-submit checker policy, review policy, revision policy, and payment policy
-are present.
+project submission artifact policy hash, post-submit checker policy, review
+policy, revision policy, and payment policy are present. A task cannot enter
+`READY` until it also has an approved task artifact binding, effective task
+submission artifact policy hash, and task-level pre-submit checker policy.
 
 ### Task Screening Gate
 
@@ -104,9 +108,10 @@ Before accepting a submission packet:
 - output package or reference exists
 - evidence exists
 - revision replay exists when task was previously `NEEDS_REVISION`
-- effective submission artifact policy is loaded
+- effective task submission artifact policy is loaded
 - generated pre-submit checker policy runs
-- blocking pre-submit failures return `pre_submission_checker_failed` with structured pass/fail/warning details
+- preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
+- blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details
 - no submission row is created until blocking pre-submit checks pass
 
 ## Reviewer Simulation Gate

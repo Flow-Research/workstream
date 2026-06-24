@@ -12,7 +12,7 @@
 
 This template governs durable internal checker runs after a submission is created, locked, and ready for the pre-review gate.
 
-It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveSubmissionArtifactPolicy`.
+It does not define pre-submit intake. `PreSubmitCheckerPolicy` is generated from `EffectiveTaskSubmissionArtifactPolicy`.
 
 ## Design Boundaries
 
@@ -50,15 +50,21 @@ Task setup checks:
 Pre-submit checker policy is generated from:
 
 ```text
-EffectiveSubmissionArtifactPolicy =
+EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
   + ProjectSubmissionArtifactPolicy
+
+EffectiveTaskSubmissionArtifactPolicy =
+  EffectiveProjectSubmissionArtifactPolicy
+  + ApprovedTaskArtifactBinding
 ```
 
-Blocking pre-submit failures prevent submission creation, return
-`pre_submission_checker_failed` with structured pass/fail/warning details, do
-not create durable `CheckerRun` records, and do not return review decision
-values: `accept`, `needs_revision`, or `reject`.
+Preflight failures return `PreSubmitCheckResponse(status="failed",
+eligible_to_submit=false, results=[...])`. Blocked submission-create attempts
+return `DomainError(code="pre_submission_checker_failed")` with structured
+pass/fail/warning details. Pre-submit failures do not create durable
+`CheckerRun` records and do not return review decision values: `accept`,
+`needs_revision`, or `reject`.
 
 ## Checker Registry Fields
 

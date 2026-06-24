@@ -107,14 +107,20 @@ This section is a human-readable summary. The enforcement source is the approved
 
 Every active guide version must have:
 
+- GuideSourceSnapshot:
 - GuideSufficiencyReport:
 - SubmissionArtifactPolicy:
-- EffectiveSubmissionArtifactPolicy hash:
-- generated PreSubmitCheckerPolicy:
+- EffectiveProjectSubmissionArtifactPolicy hash:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:
 - RevisionPolicy:
 - PaymentPolicy:
+
+Each task later locks:
+
+- ApprovedTaskArtifactBinding:
+- EffectiveTaskSubmissionArtifactPolicy hash:
+- generated PreSubmitCheckerPolicy:
 
 Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 

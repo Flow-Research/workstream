@@ -10,7 +10,9 @@ The architecture docs already lock the target model:
 ```text
 SubmissionArtifactPolicy
 -> GuideSufficiencyReport
--> EffectiveSubmissionArtifactPolicy
+-> EffectiveProjectSubmissionArtifactPolicy
+-> ApprovedTaskArtifactBinding
+-> EffectiveTaskSubmissionArtifactPolicy
 -> persisted and locked PreSubmitCheckerPolicy
 -> pre-submit checks before submission creation
 -> post-submit/internal checks after submission lock

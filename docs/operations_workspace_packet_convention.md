@@ -12,8 +12,17 @@ Every project has a guide-version policy bundle derived by Workstream from
 open-ended project material:
 
 ```text
+GuideSourceSnapshot
 GuideSufficiencyReport
-EffectiveSubmissionArtifactPolicy
+ProjectSubmissionArtifactPolicy
+EffectiveProjectSubmissionArtifactPolicy
+```
+
+Every task then locks a task-specific intake bundle:
+
+```text
+ApprovedTaskArtifactBinding
+EffectiveTaskSubmissionArtifactPolicy
 PreSubmitCheckerPolicy
 required_artifacts
 required_evidence

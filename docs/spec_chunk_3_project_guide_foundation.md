@@ -61,10 +61,10 @@ The guide version is the join key for the guide-specific policies.
 Project guide activation requires:
 
 - guide is still draft
+- immutable guide source snapshot exists for the exact source material being activated
 - guide sufficiency report is passed or warnings are acknowledged by `admin` or `project_manager`
 - Workstream-derived submission artifact policy is approved for the guide version with `admin` or `project_manager` approval provenance
-- effective submission artifact policy hash exists for the guide version
-- generated pre-submit checker policy snapshot/hash exists for the guide version
+- effective project submission artifact policy hash exists for the guide source snapshot
 - post-submit checker policy exists for the guide version
 - review policy exists for the guide version
 - revision policy exists for the guide version
@@ -95,12 +95,12 @@ Submission artifact policy is a first-class guide-version policy. It defines wha
 The architecture contract is:
 
 ```text
-EffectiveSubmissionArtifactPolicy =
+EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
   + ProjectSubmissionArtifactPolicy
 ```
 
-Workstream generates, persists, hashes, and locks pre-submit checker policy from the effective submission artifact policy. Blocking pre-submit failures prevent submission creation.
+Task screening later combines the effective project policy with an approved task artifact binding to produce `EffectiveTaskSubmissionArtifactPolicy`. Workstream generates, persists, hashes, and locks task pre-submit checker policy from that task policy. Blocking pre-submit failures prevent submission creation.
 
 Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is old construction state and is replaced by the dedicated policy table/API path.
 
@@ -144,7 +144,7 @@ The active guide response becomes the future source for task-owned locked guide 
 - guide activation or policy approval is blocked when project submission artifact policy permits unsafe storage references
 - guide activation or policy approval is blocked when project submission artifact policy requires default-forbidden artifacts
 - guide activation or policy approval is blocked when project submission artifact policy downgrades Workstream blocking defaults
-- generated effective submission artifact policy always contains Workstream defaults
+- generated effective project submission artifact policy always contains Workstream defaults
 - guide activation succeeds with complete guide and policies
 - active guide can be retrieved for task creation
 - editing a draft guide works
