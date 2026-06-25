@@ -10,27 +10,27 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 2892c9d4cbe6d8e8e33fcbe37a84384193f003af
+Reviewed code SHA: d218b9cfa54b8f9fecd53932aeb289de9e5f88b2
 
-Reviewed at: 2026-06-25T15:44:21Z
+Reviewed at: 2026-06-25T18:43:16Z
 
-Reviewer run IDs: 019eff2d-7d6f-7933-a5e2-c367ae5ae953, 019eff2e-bbf3-7bb0-b346-8ef3d3476c00, 019eff30-9758-75b2-997c-1afdf511bdf5, 019eff01-0840-7a32-b1a9-db38219edd0d, 019efec1-1d2a-7060-94b8-198914e52e8c, 019eff32-f3fc-7a22-8a21-06964464008d, 019eff36-0550-77a2-9935-e9780b94b693, 019eff4c-42bf-7482-b4bd-1de84dab816e, 019efec6-1c3d-70a2-929e-e1312ea2ff21
+Reviewer run IDs: 019f0006-1036-7a91-b0df-8fa1fc974017, 019f0006-c59b-7741-965e-93b222ab6952, 019eff30-9758-75b2-997c-1afdf511bdf5, 019f0007-abd8-7e60-9c1a-4024d77b16f0, 019efec1-1d2a-7060-94b8-198914e52e8c, 019eff32-f3fc-7a22-8a21-06964464008d, 019eff36-0550-77a2-9935-e9780b94b693, 019f0008-e522-7da0-8210-f6f14f7c622e, 019efec6-1c3d-70a2-929e-e1312ea2ff21
 
-After reviewed SHA `2892c9d4cbe6d8e8e33fcbe37a84384193f003af`, only review evidence changed.
+After reviewed SHA `d218b9cfa54b8f9fecd53932aeb289de9e5f88b2`, only review evidence changed.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS AFTER FIXES | None remaining | Confirmed the project-scoped `PreSubmitCheckerPolicy` model is coherent. Earlier stale evidence blocker was fixed. |
-| QA/test | PASS AFTER FIXES | None remaining | Confirmed stale-model patterns are wired into the gate/test, Chunk 2 has compiler semantic rejection proof obligations, and Chunk 3 has runtime-parameter negative proof obligations. Evidence refresh was the only remaining process item. |
+| senior engineering | PASS WITH LOW RISKS | None | Confirmed shortened hash wording is normalized and protected by the stale-wording gate. Low risk is only non-hash explanatory shorthand. |
+| QA/test | PASS | None | Confirmed no shortened effective-policy hash wording remains in active docs and the stale gate/test cover symbol and prose variants. |
 | security/auth | PASS WITH LOW RISKS | None | Confirmed source-ref canonicalization, duplicate source rejection, runtime-parameter constraints, compiler default/severity rejection, and final project checker activation boundary. Low risk is that this is planning contract, not runtime implementation. |
-| product/ops | PASS WITH LOW RISKS | None | Confirmed project owner supplies material/business terms while Workstream derives internal policy, pre-submit failures are not review decisions, and long-term `evidence_policy` wording is rejected. |
+| product/ops | PASS WITH LOW RISKS | None | Confirmed activation/readiness gates now use effective project submission artifact policy hash clearly. |
 | architecture | PASS WITH LOW RISKS | None | Confirmed no boundary violation. Chunk 1/2/3 split remains records and guards, compiler/enforcement, then task locked-context migration. |
 | ci integrity | PASS | None | Confirmed the stale-wording gate is stricter, no bypass or allowlist was added, and regression tests cover the new rejected-model patterns. |
 | docs | PASS AFTER FIXES | None remaining | Found and fixed remaining ambiguous active docs around task-policy wording, generated project checker wording, and effective project submission artifact policy wording. |
 | reuse/dedup | PASS WITH LOW RISKS | None | Confirmed the change extends existing stale-wording checker/test logic without duplicated gate logic. Optional future cleanup can consolidate git file collection helpers. |
-| test delta | PASS WITH LOW RISKS | None | Confirmed tests were strengthened, no assertions were weakened, and new pattern coverage is explicit. Low risk is manual synchronization between pattern list and fixture set. |
+| test delta | PASS | None | Confirmed tests were strengthened and no CI/test weakening was introduced. |
 
 ## Valid Findings Addressed
 
@@ -60,6 +60,12 @@ After reviewed SHA `2892c9d4cbe6d8e8e33fcbe37a84384193f003af`, only review evide
 - Updated checker specs, templates, lifecycle docs, product flows, roadmap docs,
   packet conventions, ADRs, and the external review response to use the project
   `PreSubmitCheckerPolicy` model consistently.
+- Fixed CodeRabbit follow-up comments around immutable guide-source snapshot
+  wording, canonical policy names, project activation wording, Markdown table
+  formatting, and case-insensitive stale-symbol detection.
+- Normalized active docs and model fields to use
+  `effective_project_submission_artifact_policy_hash` or effective project
+  submission artifact policy hash where the locked artifact-policy hash is meant.
 
 ## Commands Run
 
