@@ -10,9 +10,9 @@ from pathlib import Path
 FORBIDDEN_PATTERNS = (
     re.compile(r"task-production control plane", re.IGNORECASE),
     re.compile(r"garden roadmap", re.IGNORECASE),
-    re.compile(r"ApprovedTaskArtifactBinding"),
-    re.compile(r"EffectiveTaskSubmissionArtifactPolicy"),
-    re.compile(r"ProjectPreSubmitCheckerSpec"),
+    re.compile(r"ApprovedTaskArtifactBinding", re.IGNORECASE),
+    re.compile(r"EffectiveTaskSubmissionArtifactPolicy", re.IGNORECASE),
+    re.compile(r"ProjectPreSubmitCheckerSpec", re.IGNORECASE),
     re.compile(r"task_artifact_binding", re.IGNORECASE),
     re.compile(r"task artifact binding", re.IGNORECASE),
     re.compile(r"effective_task_submission", re.IGNORECASE),

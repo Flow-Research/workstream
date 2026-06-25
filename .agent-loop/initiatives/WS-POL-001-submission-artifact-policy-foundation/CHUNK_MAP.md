@@ -88,7 +88,7 @@ Acceptance criteria:
   packaging merges.
 - Effective project policy merge rejects attempts to weaken defaults.
 - Required artifacts or evidence that match forbidden rules block project setup.
-- Effective submission artifact policy hash is persisted for the guide version.
+- Effective project submission artifact policy hash is persisted for the guide version.
 - Approved and superseded policy rows are immutable; changes create a new
   revision with a supersedes pointer.
 - Guide activation requires passing or acknowledged guide sufficiency, approved

@@ -48,6 +48,9 @@ Internal sub-agent results live in
 | Human review | Bundle hash canonicalization was under-specified. | High | Fixed | Added `sha256(canonical_json(manifest_json))` with UTF-8, sorted keys, deterministic source-item ordering, volatile-field exclusions, and duplicate source item rejection. |
 | Human review | Checker compiler needed a semantic completeness invariant. | High | Fixed | Added the requirement that every enforceable effective project policy rule must produce deterministic checker logic, and the compiler must reject omitted rules, weakened severity, skipped evidence rules, missing platform defaults, or untraceable bundle rules. |
 | Human review | Task-specific runtime parameters could become a hidden per-task policy channel. | High | Fixed | Constrained v0.1 runtime parameters to trusted task-contract fields only; no free-form parameter map is allowed and parameters cannot override checks, severity, storage, forbidden artifacts, hash algorithm, or platform defaults. |
+| CodeRabbit | Some docs still referenced guide version, shortened policy hash names, or generic policy names where immutable guide-source snapshot and effective project submission artifact policy were required. | Minor | Fixed | Updated first-user flow, chunk map, chunk contract, lifecycle, and roadmap wording to use immutable guide-source snapshot, `SubmissionArtifactPolicy`, and effective project submission artifact policy hash consistently. |
+| CodeRabbit | Source snapshot item Markdown table used raw pipe characters inside the source-kind placeholder. | Minor | Fixed | Replaced pipe separators with slash separators so the table remains valid Markdown. |
+| CodeRabbit | Rejected-model stale-wording patterns for PascalCase symbols were case-sensitive. | Minor | Fixed | Made the relevant stale-wording regexes case-insensitive while preserving the existing regression test coverage. |
 
 ## Commands To Re-Run After Push
 

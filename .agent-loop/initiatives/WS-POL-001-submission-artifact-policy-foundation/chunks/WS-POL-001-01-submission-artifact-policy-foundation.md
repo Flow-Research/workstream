@@ -22,8 +22,9 @@ deterministic.
 Project owners must not be asked to author the Workstream policy schema
 directly. They provide open-ended project guide material. Workstream records
 guide-source snapshots, guide sufficiency, project submission artifact policy,
-effective project policy hash, and a Workstream actor with the `admin` or
-`project_manager` role approves the bundle before guide activation.
+effective project submission artifact policy hash, and a Workstream actor with
+the `admin` or `project_manager` role approves the bundle before guide
+activation.
 
 The generated project pre-submit checker policy is deterministic compiled policy, not
 unrestricted generated checker code. This first chunk defines the record

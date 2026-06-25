@@ -7,7 +7,7 @@ The first user flows prove that Workstream can run real work from intake to acce
 1. Admin creates project.
 2. Project owner provides open-ended guide material and business terms.
 3. Admin or project_manager adds the guide.
-4. Workstream runs `ProjectGuideSufficiencyAgent` against the guide version.
+4. Workstream runs `ProjectGuideSufficiencyAgent` against the immutable guide-source snapshot.
 5. Blocking sufficiency gaps create clarification requests for the project owner.
 6. Admin or project_manager acknowledges non-blocking sufficiency warnings.
 7. Workstream runs `SubmissionArtifactPolicyDerivationAgent`.
@@ -21,7 +21,7 @@ The first user flows prove that Workstream can run real work from intake to acce
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
+- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
 - Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 

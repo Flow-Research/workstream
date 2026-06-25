@@ -74,7 +74,7 @@ Required before entering:
 - project guide active
 - current GuideSourceSnapshot id/hash locked
 - GuideSufficiencyReport passed or warnings acknowledged for that source snapshot
-- ProjectSubmissionArtifactPolicy approved
+- SubmissionArtifactPolicy approved
 - EffectiveProjectSubmissionArtifactPolicy hash persisted
 - project PreSubmitCheckerPolicy persisted and locked to that effective project policy hash
 - task locked to GuideSourceSnapshot id/hash, EffectiveProjectSubmissionArtifactPolicy hash, and PreSubmitCheckerPolicy hash

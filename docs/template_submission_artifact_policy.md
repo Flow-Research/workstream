@@ -41,7 +41,7 @@ Source snapshot items:
 
 | Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type |
 | --- | --- | --- | --- | --- | --- |
-| `<inline_markdown | url_doc | repository_doc | example | rubric | imported_file>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` |
+| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` |
 
 Temporary fetch locators are adapter inputs only. Durable source refs must not
 store query strings, signed URLs, credentials, token-bearing refs, local
