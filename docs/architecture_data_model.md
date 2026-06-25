@@ -452,7 +452,7 @@ Fields:
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
-- `effective_project_policy_hash`
+- `effective_project_submission_artifact_policy_hash`
 - `version`
 - `lifecycle_status`
 - `policy_hash`
@@ -481,7 +481,7 @@ Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
 bundle produced by the trusted Workstream checker compiler and is the canonical
 source of truth. It is stored as a structured snapshot, not arbitrary executable
 code. `compiled_bundle_hash` binds the exact compiled logic to
-`effective_project_policy_hash`. `checker_names`,
+`effective_project_submission_artifact_policy_hash`. `checker_names`,
 `checker_configs`, and `blocking_severities` are derived index projections only;
 they must be regenerated from `compiled_bundle` and must not disagree with it.
 

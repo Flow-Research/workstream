@@ -64,11 +64,11 @@ volatile-field exclusions.
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
 actor with the `admin` or `project_manager` role approves the derived policy.
-Workstream then computes the effective project policy and compiles the project
+Workstream then computes the effective project submission artifact policy and compiles the project
 `PreSubmitCheckerPolicy`. The generated project `PreSubmitCheckerPolicy`
 snapshot/hash is scoped to the project guide version.
-Tasks lock references to the exact guide snapshot, effective project policy
-hash, and pre-submit checker policy hash before entering `SCREENING` or
+Tasks lock references to the exact guide snapshot, effective project submission
+artifact policy hash, and pre-submit checker policy hash before entering `SCREENING` or
 `READY`.
 Pre-submit checks run before submission creation and do not create durable
 checker records.
@@ -83,7 +83,7 @@ Runtime checks execute the locked compiled bundle against staged artifact hashes
 or future content identifiers plus the task's constrained parameters. Tasks do
 not rerun the derivation agent or compile a new checker bundle for each task.
 The compiler must reject any specification that does not cover every enforceable
-effective project policy rule. Task runtime parameters come only from trusted
+effective project submission artifact policy rule. Task runtime parameters come only from trusted
 task-contract fields and cannot override required checks, severity, allowed
 storage, forbidden artifacts, hash algorithm, or platform defaults.
 
@@ -170,14 +170,14 @@ while post-submit answers whether a locked submission can move to human review.
 ## Rollout/Migration Strategy
 
 1. Add dedicated guide source snapshot, guide sufficiency, submission artifact
-   policy, and effective project policy records.
+   policy, and effective project submission artifact policy records.
 2. Replace transitional `evidence_policy`, `required_files`, and
    `required_evidence` usage; no v0.1 compatibility alias is required.
 3. Add the Workstream-owned derivation/approval boundary for project policy.
-4. Compute effective project policy in service code and validate defaults cannot weaken.
+4. Compute effective project submission artifact policy in service code and validate defaults cannot weaken.
 5. Add async guide sufficiency, policy derivation execution, and trusted checker
    compiler behavior.
-6. Add task locked-context fields for guide snapshot, effective project policy,
+6. Add task locked-context fields for guide snapshot, effective project submission artifact policy,
    and generated project pre-submit checker bundle.
 7. Migrate submission creation from transitional task fields to the locked task
    context and generated project pre-submit checker bundle.
@@ -187,7 +187,7 @@ while post-submit answers whether a locked submission can move to human review.
 
 - Unit-level policy merge tests for default + project policy.
 - Postgres-backed API tests for guide sufficiency report, project policy
-  creation, immutable source snapshots, effective project policy persistence,
+  creation, immutable source snapshots, effective project submission artifact policy persistence,
   and guide activation.
 - Tests proving a guide cannot activate without passing or acknowledged guide
   sufficiency bound to the current source snapshot, approved project submission

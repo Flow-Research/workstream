@@ -7,8 +7,8 @@ WS-POL-001 - Submission Artifact Policy Foundation
 ## Goal
 
 Add first-class backend support for immutable guide-source snapshots, guide
-sufficiency reports, `SubmissionArtifactPolicy`, effective project policy
-hashes, append-only approval lifecycle, and activation guards without rewiring
+sufficiency reports, `SubmissionArtifactPolicy`, effective project submission
+artifact policy hashes, append-only approval lifecycle, and activation guards without rewiring
 submission creation, task runtime, checker compiler behavior, or durable checker
 execution yet.
 
