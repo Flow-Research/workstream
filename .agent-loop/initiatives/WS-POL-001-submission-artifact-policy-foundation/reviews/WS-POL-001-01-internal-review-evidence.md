@@ -33,9 +33,9 @@ After reviewed SHA `8a0fd181046e2eab9b668c614c845e62dd81db55`, only review evide
 ## Valid Findings Addressed
 
 - Removed the per-task policy/checker generation model from active docs.
-- Removed `ApprovedTaskArtifactBinding`, `EffectiveTaskSubmissionArtifactPolicy`,
-  `ProjectPreSubmitCheckerSpec`, task-level `PreSubmitCheckerPolicy`, and
-  profile-scoped wording from the live architecture path.
+- Removed the rejected task-binding, task-effective-policy, project-checker-spec,
+  task-owned checker, and project profile wording from the live architecture
+  path.
 - Restored the first-principles model: project guide, source snapshot,
   sufficiency report, project submission artifact policy, effective project
   policy, project `PreSubmitCheckerPolicy`, then tasks lock references to that
@@ -58,7 +58,7 @@ python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_loop_memory_state.py
 git diff --check
-rg -n "ApprovedTaskArtifactBinding|EffectiveTaskSubmissionArtifactPolicy|ProjectPreSubmitCheckerSpec|task-level PreSubmitCheckerPolicy|task-level pre-submit|project/profile|profile-scoped|task binding|effective task submission artifact policy|effective task policy" docs README.md .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation --glob '!**/reviews/WS-POL-001-01-internal-review-evidence.md' || true
+python3 scripts/test_agent_gates.py
 ```
 
 ## Remaining Risks
