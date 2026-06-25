@@ -145,7 +145,7 @@ human review implementation
 - [ ] Effective project policy merge rejects project policy that weakens defaults.
 - [ ] Required artifact or evidence rules that match forbidden rules block
       project setup as conflicts.
-- [ ] Effective submission artifact policy hash is persisted for the guide version.
+- [ ] Effective project submission artifact policy hash is persisted for the guide version.
 - [ ] Approved and superseded policy/effective-policy rows are immutable.
 - [ ] Changing an approved policy creates a new revision with a supersedes
       pointer.
@@ -156,7 +156,7 @@ human review implementation
       from guide sufficiency gaps, `admin`/`project_manager` warning
       acknowledgement, approval provenance fields, default weakening,
       source snapshot binding, source-ref sanitization, append-only rows, and
-      effective project policy hash persistence.
+      effective project submission artifact policy hash persistence.
 
 ## Verification Commands
 

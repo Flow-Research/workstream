@@ -89,7 +89,7 @@ storage, forbidden artifacts, hash algorithm, or platform defaults.
 
 In the final architecture, guide activation fails unless the guide snapshot and
 guide version have a passing or acknowledged guide sufficiency report, approved
-project submission artifact policy, effective project policy hash, and compiled
+project submission artifact policy, effective project submission artifact policy hash, and compiled
 project `PreSubmitCheckerPolicy` hash. Chunk 1 creates the records and
 foundational guards; Chunk 2 adds compiler execution and turns the complete
 activation gate on; Chunk 3 makes tasks lock the compiled checker reference
@@ -191,9 +191,9 @@ while post-submit answers whether a locked submission can move to human review.
   and guide activation.
 - Tests proving a guide cannot activate without passing or acknowledged guide
   sufficiency bound to the current source snapshot, approved project submission
-  artifact policy, and effective project policy hash.
+  artifact policy, and effective project submission artifact policy hash.
 - Tests proving a task cannot enter `READY` without locked guide snapshot,
-  effective project policy hash, and generated project pre-submit checker bundle.
+  effective project submission artifact policy hash, and generated project pre-submit checker bundle.
 - Tests proving malicious or credential-bearing source material cannot weaken
   Workstream defaults, grant tool authority, or persist unsafe source refs.
 - Submission API tests proving blocking pre-submit failure creates no submission
@@ -220,6 +220,6 @@ CI integrity is required only for chunks that touch workflows or test tooling.
 
 Start with guide/source/policy bundle foundation. Do not start submission
 runtime rewiring until immutable guide-source snapshots, guide sufficiency
-reports, project policy objects, defaults, effective project policy hash,
+reports, project policy objects, defaults, effective project submission artifact policy hash,
 generated project pre-submit checker bundle, task locked-context fields, and
 activation/ready guards are accepted.

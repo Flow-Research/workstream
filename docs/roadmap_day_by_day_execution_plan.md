@@ -67,8 +67,8 @@ Exit criteria:
 - create a project from a markdown guide
 - retrieve the active guide version for a task
 - edit a draft guide without changing historical task guide versions
-- block project activation when guide source snapshot, submission artifact policy, effective project policy hash, post-submit checker, review policy, revision policy, payment policy, or project pre-submit checker policy hash is missing
-- block task readiness when locked guide snapshot, effective project policy hash, or project pre-submit checker policy hash is missing
+- block project activation when guide source snapshot, submission artifact policy, effective project submission artifact policy hash, post-submit checker, review policy, revision policy, payment policy, or project pre-submit checker policy hash is missing
+- block task readiness when locked guide snapshot, effective project submission artifact policy hash, or project pre-submit checker policy hash is missing
 - migrations and model tests define the expected invariants
 
 ### Day 3: Task Queue

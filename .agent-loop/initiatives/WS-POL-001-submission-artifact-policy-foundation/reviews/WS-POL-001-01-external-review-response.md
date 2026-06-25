@@ -61,6 +61,7 @@ python3 scripts/check_loop_memory_state.py
 python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format json
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+python3 scripts/test_agent_gates.py
 git diff --check
 ```
 

@@ -119,11 +119,11 @@ guide does not cover the tasks, activation is blocked and the guide is improved
 or the work is split into another project/guide. Workstream does not hide guide
 coverage problems by generating new task-specific policies.
 
-`PreSubmitCheckerPolicy` is locked to the effective project policy hash. It is
+`PreSubmitCheckerPolicy` is locked to the effective project submission artifact policy hash. It is
 not derived on read, manually edited by workers, or supplied by clients. Workers
 submit only draft packet fields. They do not choose checker names, policy
 versions, blocking rules, severities, or outcomes. Each task stores locked
-references to the applicable guide snapshot, effective project policy hash, and
+references to the applicable guide snapshot, effective project submission artifact policy hash, and
 pre-submit checker policy hash before entering the worker pipeline. Task-specific
 values are constrained runtime parameters consumed by the shared checker, not
 new checker generation. For v0.1, those parameters come only from trusted

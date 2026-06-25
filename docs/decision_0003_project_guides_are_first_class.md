@@ -43,7 +43,7 @@ Project guide activation requires the guide plus its required policy context bef
 - revision policy
 - payment policy
 
-The Workstream-derived submission artifact policy defines project-level intake rules. Project owners provide open-ended project material and business terms. Workstream captures an immutable guide source snapshot, evaluates guide sufficiency, derives the machine policy, and a Workstream actor with the `admin` or `project_manager` role approves the internal policy bundle. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective project policy, then generates the project pre-submit checker policy from that effective project policy. Tasks lock references to the applicable guide snapshot, effective project policy hash, and pre-submit checker policy hash.
+The Workstream-derived submission artifact policy defines project-level intake rules. Project owners provide open-ended project material and business terms. Workstream captures an immutable guide source snapshot, evaluates guide sufficiency, derives the machine policy, and a Workstream actor with the `admin` or `project_manager` role approves the internal policy bundle. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective project submission artifact policy, then generates the project pre-submit checker policy from that effective project submission artifact policy. Tasks lock references to the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker policy hash.
 
 Blocking pre-submit failures prevent submission creation. They do not create durable post-submit checker runs and they do not create human review decisions.
 

@@ -38,7 +38,7 @@ Before releasing tasks:
 - submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
 - effective project submission artifact policy hash persisted
 - generated project pre-submit checker policy is created from the effective project submission artifact policy
-- each task locks the guide snapshot, effective project policy hash, and pre-submit checker policy hash before entering `READY`
+- each task locks the guide snapshot, effective project submission artifact policy hash, and pre-submit checker policy hash before entering `READY`
 - post-submit checker policy attached
 - review policy attached
 - revision policy attached

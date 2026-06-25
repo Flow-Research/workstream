@@ -92,7 +92,7 @@ Acceptance criteria:
 - Approved and superseded policy rows are immutable; changes create a new
   revision with a supersedes pointer.
 - Guide activation requires passing or acknowledged guide sufficiency, approved
-  submission artifact policy, and effective project policy hash bound to the
+  submission artifact policy, and effective project submission artifact policy hash bound to the
   current guide source snapshot.
 - Chunk 1 models the future activation dependency on project
   `PreSubmitCheckerPolicy`; Chunk 2 compiles the checker and enforces the
@@ -112,7 +112,7 @@ Verification:
 - Postgres-backed FastAPI/API tests cover policy create/update, guide
   sufficiency activation blocking, warning acknowledgement, default weakening
   rejection, source snapshot binding, source-ref sanitization, append-only
-  approved rows, and effective project policy hash persistence.
+  approved rows, and effective project submission artifact policy hash persistence.
 - Unit/service tests may cover deterministic merge helpers, but API-visible
   behavior must be proven through the FastAPI path.
 
@@ -221,7 +221,7 @@ shape.
 
 Goal:
 
-Lock each task to the applicable guide snapshot, effective project policy hash,
+Lock each task to the applicable guide snapshot, effective project submission artifact policy hash,
 and project pre-submit checker bundle. Move submission creation from
 transitional task fields to that locked context.
 

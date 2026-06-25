@@ -701,7 +701,7 @@ External origin adapters are later work. When added, they normalize into this ta
 
 The task id points to the locked task contract. That contract includes the guide
 version, guide source snapshot hash, project submission artifact policy version,
-effective project policy hash, generated project pre-submit checker policy hash,
+effective project submission artifact policy hash, generated project pre-submit checker policy hash,
 post-submit checker policy version, review policy version, revision policy
 version, payment policy version, acceptance criteria, derived display summaries,
 base payout, and skill tags. Workers submit against the task id; they do not

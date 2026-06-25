@@ -710,6 +710,21 @@ def test_stale_wording_patterns_catch_variants() -> None:
         "profile-" + "scoped",
         "project/" + "profile",
     }
+    case_variant_sample = "\n".join(
+        [
+            "approved" + "taskartifactbinding",
+            "effective" + "TaskSubmissionArtifactPolicy",
+            "PROJECT" + "PRESUBMITCHECKERSPEC",
+        ]
+    )
+    case_variant_matches = [
+        pattern.pattern for pattern in stale.FORBIDDEN_PATTERNS if pattern.search(case_variant_sample)
+    ]
+    assert {
+        "Approved" + "TaskArtifactBinding",
+        "Effective" + "TaskSubmissionArtifactPolicy",
+        "Project" + "PreSubmitCheckerSpec",
+    }.issubset(set(case_variant_matches))
     failures = stale.forbidden_path_failures([Path(".claude/settings.json"), Path("CLAUDE.md")])
     assert len(failures) == 2
 

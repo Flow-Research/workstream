@@ -26,7 +26,7 @@
 - `EffectiveProjectSubmissionArtifactPolicy` is default plus project policy.
 - Workstream's trusted checker compiler turns the constrained checker
   specification into deterministic project-scoped `PreSubmitCheckerPolicy`.
-- Tasks lock the applicable guide snapshot, effective project policy hash,
+- Tasks lock the applicable guide snapshot, effective project submission artifact policy hash,
   and pre-submit checker policy hash. Tasks do not rerun derivation or compile
   unique checker bundles by default.
 - Pre-submit checks block before submission creation.
@@ -57,7 +57,7 @@
 ## Remaining Human Review Focus
 
 - Final review of persisted provenance field names for guide sufficiency
-  reports, project submission artifact policies, effective policy hashes, and
+  reports, project submission artifact policies, effective project submission artifact policy hashes, and
   generated project pre-submit checker policy snapshots.
 - Final confirmation that Chunk 1 implements records/contracts/activation guard
   only, while full async agent execution comes later.

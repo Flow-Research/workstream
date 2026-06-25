@@ -39,7 +39,7 @@ EffectiveProjectSubmissionArtifactPolicy
 
 Task
 -> locks guide snapshot
--> locks effective project policy hash
+-> locks effective project submission artifact policy hash
 -> locks PreSubmitCheckerPolicy hash
 ```
 
