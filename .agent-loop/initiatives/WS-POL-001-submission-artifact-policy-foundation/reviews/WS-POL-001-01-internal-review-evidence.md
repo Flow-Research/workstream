@@ -23,7 +23,7 @@ After reviewed SHA `8a0fd181046e2eab9b668c614c845e62dd81db55`, only review evide
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS AFTER FIXES | None remaining | Found stale live docs still carrying the rejected task-level policy/checker model. Fixed across guide template, lifecycle, user flows, project manual, checker specs, and packet conventions. |
-| QA/test | PASS AFTER FIXES | None remaining | Found stale submission fields for task artifact binding and effective task policy. Fixed. Confirmed Chunk 2 and Chunk 3 are feasible after the correction. |
+| QA/test | PASS AFTER FIXES | None remaining | Found stale submission fields from the rejected per-task policy model. Fixed. Confirmed Chunk 2 and Chunk 3 are feasible after the correction. |
 | security/auth | PASS AFTER FIXES | None remaining | Found stale per-task provenance fields and stale evidence narrative. Fixed. Confirmed untrusted material handling, server-owned checker generation, and non-bypassable defaults. |
 | product/ops | PASS AFTER FIXES | None remaining | Found stale per-task provenance fields and stale evidence narrative. Fixed. Confirmed the corrected product flow: project checker reused by tasks. |
 | architecture | PASS AFTER FIXES | None remaining | Found stale per-task provenance fields and stale evidence narrative. Fixed. Confirmed the corrected chain: project guide -> sufficiency -> project policy -> effective project policy -> project `PreSubmitCheckerPolicy`; tasks lock references only. |
@@ -44,8 +44,8 @@ After reviewed SHA `8a0fd181046e2eab9b668c614c845e62dd81db55`, only review evide
   against the project task set. If the guide does not cover the tasks,
   activation is blocked and the guide is improved or work is split into another
   project/guide.
-- Removed stale submission provenance fields for task artifact binding and
-  effective task policy.
+- Removed stale submission provenance fields from the rejected per-task policy
+  model.
 - Updated checker specs, templates, lifecycle docs, product flows, roadmap
   docs, and packet conventions to use the project `PreSubmitCheckerPolicy`.
 - Confirmed workers and clients cannot choose checker names, severities,

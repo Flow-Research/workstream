@@ -203,6 +203,9 @@ Verification:
   `effective_project_submission_artifact_policy_hash`, and client/worker
   inability to supply checker names, severities, versions, outcomes, compiler
   version, or compiled bundles.
+- Compiler semantic rejection tests prove omitted required artifact coverage,
+  skipped evidence coverage, weakened severity, omitted Workstream defaults, and
+  untraceable compiled bundle rules are rejected.
 
 Required reviewers:
 
@@ -279,6 +282,9 @@ Verification:
   stamped locked policy context.
 - Postgres-backed task tests cover locked context stamping, shared checker reuse
   across multiple tasks, and removal of transitional task-field authority.
+- API/schema negative tests reject client-supplied free-form task runtime
+  parameter maps and attempted runtime overrides of required checks, severity,
+  allowed storage, forbidden artifacts, hash algorithm, or platform defaults.
 
 Required reviewers:
 
