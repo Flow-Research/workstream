@@ -201,9 +201,19 @@ trust a mutable URL or mutable draft guide body. They bind to
 `source_snapshot_id` and a server-derived `source_snapshot_hash` copied from
 `GuideSourceSnapshot.bundle_hash`.
 
-`bundle_hash` is the canonical hash of the manifest plus every included source
-item hash. Changing any included document, example, rubric, repository doc, or
-inline guide body creates a new snapshot and bundle hash.
+`bundle_hash` is:
+
+```text
+sha256(canonical_json(manifest_json))
+```
+
+Canonical JSON uses UTF-8, sorted object keys, no insignificant whitespace, and
+source items sorted by `(source_kind, durable_ref, content_hash)`. Volatile
+database ids, capture timestamps, and transient fetch locators are excluded from
+the canonical manifest. Duplicate source items with the same
+`source_kind + durable_ref` are rejected before hashing. Changing any included
+document, example, rubric, repository doc, or inline guide body creates a new
+snapshot and bundle hash.
 
 ## GuideSourceSnapshotItem
 
@@ -359,8 +369,8 @@ sufficiency passes or warnings are acknowledged. A Workstream actor with the
 supply or approve this internal policy schema.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
-`artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project and
-task policies cannot change it.
+`artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project
+policy cannot change it, and trusted task runtime parameters cannot override it.
 `source_snapshot_hash` is server-derived from the referenced snapshot bundle
 hash.
 
@@ -422,7 +432,7 @@ The merge contract is executable per field:
 | `artifact_manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
-| `artifact_hash_algorithm` | platform-locked `sha256`; project/task policy cannot change it |
+| `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
 | `maximum_package_size_bytes` | minimum non-null limit |
 | `packaging_rules` | restrictive merge; conflicts block activation |
@@ -475,9 +485,18 @@ code. `compiled_bundle_hash` binds the exact compiled logic to
 `checker_configs`, and `blocking_severities` are derived index projections only;
 they must be regenerated from `compiled_bundle` and must not disagree with it.
 
-Task-specific values, such as expected output path or task id, are constrained
-runtime parameters consumed by the locked checker bundle. They are not new
-policy derivation and do not create a new checker bundle.
+The compiler must prove semantic coverage: every enforceable
+`EffectiveProjectSubmissionArtifactPolicy` rule must produce deterministic
+checker logic. It rejects checker specifications that omit a required artifact,
+skip an evidence rule, weaken severity, omit a platform default, or produce a
+bundle whose rules are not traceable back to the effective project policy.
+
+For v0.1, task-specific runtime parameters come only from trusted task-contract
+fields already owned by Workstream, such as task id, expected output, declared
+artifact labels, or acceptance criteria references. There is no free-form
+parameter map. Runtime parameters may fill placeholders in the locked checker
+bundle, but they cannot change required checks, severity, allowed storage,
+forbidden artifacts, hash algorithm, or platform defaults.
 
 Approved and superseded checker policy rows are immutable. Changing policy or
 compiler output creates a new row with `supersedes_policy_id`.
@@ -535,7 +554,7 @@ Example:
 }
 ```
 
-Post-submit checker policy governs durable internal checker runs after a submission is locked. It does not replace the generated pre-submit checker policy.
+Post-submit checker policy governs durable internal checker runs after a submission is locked. It does not replace the generated project pre-submit checker policy.
 
 ## ReviewPolicy
 
@@ -682,7 +701,7 @@ External origin adapters are later work. When added, they normalize into this ta
 
 The task id points to the locked task contract. That contract includes the guide
 version, guide source snapshot hash, project submission artifact policy version,
-effective project policy hash, generated pre-submit checker policy hash,
+effective project policy hash, generated project pre-submit checker policy hash,
 post-submit checker policy version, review policy version, revision policy
 version, payment policy version, acceptance criteria, derived display summaries,
 base payout, and skill tags. Workers submit against the task id; they do not

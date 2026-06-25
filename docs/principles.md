@@ -31,7 +31,7 @@ The guide explains:
 The policies enforce:
 
 - submission artifact policy
-- generated pre-submit checker policy
+- generated project pre-submit checker policy
 - post-submit checker policy
 - review policy
 - revision policy

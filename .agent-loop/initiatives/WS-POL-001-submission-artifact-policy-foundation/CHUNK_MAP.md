@@ -70,6 +70,10 @@ Acceptance criteria:
 - Dedicated immutable guide source snapshot bundle model/table exists.
 - Dedicated guide source snapshot item model/table exists, or the snapshot
   table stores an equivalent canonical manifest for every source item.
+- `GuideSourceSnapshot.bundle_hash` is computed as
+  `sha256(canonical_json(manifest_json))` with deterministic key ordering,
+  source-item ordering, UTF-8 encoding, duplicate handling, and volatile-field
+  exclusions.
 - Dedicated guide sufficiency report model/table exists.
 - Guide sufficiency report supports `passed`, `blocked`, and
   `passed_with_warnings`.
@@ -90,6 +94,9 @@ Acceptance criteria:
 - Guide activation requires passing or acknowledged guide sufficiency, approved
   submission artifact policy, and effective project policy hash bound to the
   current guide source snapshot.
+- Chunk 1 models the future activation dependency on project
+  `PreSubmitCheckerPolicy`; Chunk 2 compiles the checker and enforces the
+  complete activation gate.
 - Project-owner source refs persist as sanitized snapshot item refs and cannot store
   signed URLs, credential-bearing refs, token-bearing refs, or local filesystem
   paths. Approved adapters can use ordinary URL query parameters only as
@@ -168,6 +175,14 @@ Acceptance criteria:
 - Trusted checker compiler validates the specification and persists a
   deterministic project `PreSubmitCheckerPolicy` bundle and hash. The default
   path compiles once per project guide version, not once per task.
+- Guide activation requires the compiled project `PreSubmitCheckerPolicy` once
+  Chunk 2 is complete.
+- Compiler rejects any checker specification that omits an enforceable
+  effective project policy rule, weakens severity, skips an evidence rule, or
+  omits a Workstream default.
+- Task runtime parameters come only from trusted task-contract fields and cannot
+  override required checks, severity, allowed storage, forbidden artifacts, hash
+  algorithm, or platform defaults.
 - Derived report, project policy, effective project policy, and pre-submit checker bundle
   are invalidated by a new guide source snapshot.
 - Malicious guide text, embedded prompt-injection instructions, and unsafe
@@ -244,6 +259,8 @@ Acceptance criteria:
   run policy derivation or checker compilation by default.
 - Task-specific values are constrained parameters consumed by the locked
   checker bundle, not a newly generated checker policy.
+- Runtime parameters are sourced only from trusted task-contract fields; no
+  free-form parameter map is introduced.
 - Transitional `required_files` and `required_evidence` are replaced for
   submission runtime and are not compatibility aliases.
 - Blocking pre-submit failure creates no submission row, submission version,

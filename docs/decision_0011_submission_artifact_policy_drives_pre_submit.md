@@ -26,7 +26,7 @@ Every active project guide version must have a complete guide-policy bundle:
 
 Before a task can enter the worker pipeline, it must also have:
 
-- persisted generated `PreSubmitCheckerPolicy` snapshot/hash
+- persisted generated project `PreSubmitCheckerPolicy` snapshot/hash
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.
@@ -36,11 +36,15 @@ snapshot, not only to `guide_version`. `GuideSourceSnapshot` records include the
 guide id, canonical manifest JSON, bundle hash, and capture timestamp. Snapshot
 items record source kind, sanitized durable ref, ingestion adapter, content
 hash, optional future content id, media type, and capture timestamp. The bundle
-hash is the canonical hash of the manifest and every included source item.
-Changing any included document, example, rubric, repository doc, or inline guide
-body creates a new snapshot and invalidates prior sufficiency reports, derived
-policies, effective policies, checker specs, checker bundles,
-acknowledgements, and approvals for activation.
+hash is `sha256(canonical_json(manifest_json))`. Canonical JSON uses UTF-8,
+sorted object keys, no insignificant whitespace, and source items sorted by
+`(source_kind, durable_ref, content_hash)`. Volatile database ids, capture
+timestamps, and transient fetch locators are excluded from the canonical
+manifest. Duplicate source items with the same `source_kind + durable_ref` are
+rejected before hashing. Changing any included document, example, rubric,
+repository doc, or inline guide body creates a new snapshot and invalidates
+prior sufficiency reports, derived policies, effective policies, checker specs,
+checker bundles, acknowledgements, and approvals for activation.
 A new guide-source snapshot invalidates prior setup records for new activation
 and unlocked tasks only. Tasks already locked to an earlier snapshot retain
 that policy context unless an explicit audited rebase occurs.
@@ -122,11 +126,23 @@ versions, blocking rules, severities, or outcomes. Each task stores locked
 references to the applicable guide snapshot, effective project policy hash, and
 pre-submit checker policy hash before entering the worker pipeline. Task-specific
 values are constrained runtime parameters consumed by the shared checker, not
-new checker generation.
+new checker generation. For v0.1, those parameters come only from trusted
+task-contract fields already owned by Workstream; there is no free-form
+parameter map. Runtime parameters may fill placeholders, but they cannot change
+required checks, severity, allowed storage, forbidden artifacts, hash algorithm,
+or platform defaults.
 
 The compiled `PreSubmitCheckerPolicy` is deterministic checker logic, not an
 agent judgment loop. Runtime checks execute the locked compiled checker bundle
 against exact staged artifact hashes or future content identifiers.
+
+The compiler must prove semantic coverage between
+`EffectiveProjectSubmissionArtifactPolicy` and the compiled checker bundle.
+Every enforceable effective project policy rule must produce deterministic
+checker logic. The compiler rejects checker specifications that omit a required
+artifact, skip an evidence rule, weaken severity, omit a platform default, or
+produce a bundle whose rules are not traceable back to the effective project
+policy.
 
 Approved pre-submit checker primitives include:
 
@@ -251,7 +267,7 @@ The effective policy merge is deterministic:
 | `artifact_manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
-| `artifact_hash_algorithm` | platform-locked `sha256`; project/task policy cannot change it |
+| `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
 | `maximum_package_size_bytes` | minimum non-null limit |
 | `packaging_rules` | restrictive merge; conflicts block activation |
@@ -290,4 +306,4 @@ Tradeoff:
 - existing `evidence_policy`, `required_files`, and `required_evidence` wording
   must be replaced by `SubmissionArtifactPolicy`; no v0.1 compatibility alias
   is required
-- post-submit checker policy must remain separate from generated pre-submit checker policy
+- post-submit checker policy must remain separate from generated project pre-submit checker policy

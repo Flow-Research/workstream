@@ -47,7 +47,7 @@ Architecture target:
 - `project_guides`
 - `guide_sufficiency_reports`
 - `submission_artifact_policies`
-- `effective_submission_artifact_policies`
+- `effective_project_submission_artifact_policies`
 - `pre_submit_checker_policies`
 - `checker_policies`
 - `review_policies`
@@ -65,12 +65,17 @@ Project guide activation requires:
 - guide sufficiency report is passed or warnings are acknowledged by `admin` or `project_manager`
 - Workstream-derived submission artifact policy is approved for the guide version with `admin` or `project_manager` approval provenance
 - effective project submission artifact policy hash exists for the guide source snapshot
+- project pre-submit checker policy exists for the effective project policy
 - post-submit checker policy exists for the guide version
 - review policy exists for the guide version
 - revision policy exists for the guide version
 - payment policy exists for the guide version
 - revision policy has max revision rounds, revision deadline hours, and allowed resubmission states
 - payment policy has base amount, currency, payout type, and accepted payment rule
+
+Implementation sequencing: Chunk 1 can model the project pre-submit checker
+dependency before compiler execution exists. Chunk 2 compiles the checker and
+enforces the complete activation gate.
 
 Activating a new guide supersedes the prior active guide for that project without mutating its content.
 

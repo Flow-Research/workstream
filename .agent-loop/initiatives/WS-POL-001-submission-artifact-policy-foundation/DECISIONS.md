@@ -58,6 +58,6 @@
 
 - Final review of persisted provenance field names for guide sufficiency
   reports, project submission artifact policies, effective policy hashes, and
-  generated pre-submit checker policy snapshots.
+  generated project pre-submit checker policy snapshots.
 - Final confirmation that Chunk 1 implements records/contracts/activation guard
   only, while full async agent execution comes later.

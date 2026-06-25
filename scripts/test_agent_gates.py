@@ -673,12 +673,34 @@ def test_stale_wording_patterns_catch_variants() -> None:
             "task-" + "production control plane",
             "This repository does not use auto-" + "merge.",
             "Claude " + "Code support is not configured here.",
+            "Approved" + "TaskArtifactBinding",
+            "Effective" + "TaskSubmissionArtifactPolicy",
+            "Project" + "PreSubmitCheckerSpec",
+            "locked_" + "task_" + "artifact_binding_id",
+            "locked_" + "effective_" + "task_submission_artifact_policy_hash",
+            "generated task " + "pre-submit checker",
+            "task-level " + "PreSubmitCheckerPolicy",
+            "project/task " + "policy",
+            "profile-" + "scoped",
+            "project/" + "profile",
         ]
     )
     matches = [pattern.pattern for pattern in stale.FORBIDDEN_PATTERNS if pattern.search(sample)]
     assert set(matches) == {
         "task-" + "production control plane",
         "garden " + "roadmap",
+        "Approved" + "TaskArtifactBinding",
+        "Effective" + "TaskSubmissionArtifactPolicy",
+        "Project" + "PreSubmitCheckerSpec",
+        "task_" + "artifact_binding",
+        "effective_" + "task_submission",
+        "locked_" + "task_" + "artifact_binding_id",
+        "locked_" + "effective_" + "task_submission_artifact_policy_hash",
+        "generated task " + "pre-submit",
+        "task-level " + "PreSubmitCheckerPolicy",
+        "project/task " + "policy",
+        "profile-" + "scoped",
+        "project/" + "profile",
     }
     failures = stale.forbidden_path_failures([Path(".claude/settings.json"), Path("CLAUDE.md")])
     assert len(failures) == 2

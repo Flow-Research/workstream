@@ -25,7 +25,7 @@ guide-source snapshots, guide sufficiency, project submission artifact policy,
 effective project policy hash, and a Workstream actor with the `admin` or
 `project_manager` role approves the bundle before guide activation.
 
-The generated pre-submit checker policy is deterministic compiled policy, not
+The generated project pre-submit checker policy is deterministic compiled policy, not
 unrestricted generated checker code. This first chunk defines the record
 contract and activation dependency; the async derivation and trusted compiler
 behavior land in the next chunk.
@@ -96,6 +96,10 @@ human review implementation
 - [ ] Dedicated immutable `GuideSourceSnapshot` bundle model/table exists.
 - [ ] Dedicated `GuideSourceSnapshotItem` model/table exists, or the snapshot
       stores an equivalent canonical manifest for every source item.
+- [ ] `GuideSourceSnapshot.bundle_hash` is computed as
+      `sha256(canonical_json(manifest_json))` using UTF-8, sorted object keys,
+      no insignificant whitespace, deterministic source-item ordering,
+      volatile-field exclusions, and duplicate source-item rejection.
 - [ ] Dedicated `GuideSufficiencyReport` model/table exists.
 - [ ] Guide sufficiency report records `passed`, `blocked`, or
       `passed_with_warnings`.
@@ -125,6 +129,9 @@ human review implementation
 - [ ] Guide activation fails when no approved project submission artifact policy
       exists for the guide version.
 - [ ] Guide activation requires valid submission artifact policy.
+- [ ] The activation contract models project `PreSubmitCheckerPolicy` as a
+      required final activation dependency; Chunk 2 enforces it after compiler
+      execution exists.
 - [ ] Workstream default submission artifact policy is represented in code.
 - [ ] Workstream default policy requires `sha256:<64 lowercase hex>` artifact hashes where production hashes are required.
 - [ ] Persisted artifact/storage refs reject raw signed URLs, query strings,

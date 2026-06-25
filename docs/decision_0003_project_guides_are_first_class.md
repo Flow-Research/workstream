@@ -51,7 +51,7 @@ Revision policy is not optional. It defines the revision loop contract, includin
 
 Guide and policy changes do not silently mutate submitted attempts. A submitted attempt stays tied to the guide and policy versions stamped on that submission. When a task enters `NEEDS_REVISION`, revision policy controls whether the next attempt keeps the prior context or rebases to the latest active guide and policy context.
 
-Rules that affect acceptance judgment may be encoded in the human-facing project guide, review policy, revision policy, payment policy, task template, or checker implementation. Rules that affect submission intake must be encoded in `SubmissionArtifactPolicy` and the generated `PreSubmitCheckerPolicy`. Chat messages and informal notices are not enforceable rules until they are moved into those contracts.
+Rules that affect acceptance judgment may be encoded in the human-facing project guide, review policy, revision policy, payment policy, task template, or checker implementation. Rules that affect submission intake must be encoded in `SubmissionArtifactPolicy` and the generated project `PreSubmitCheckerPolicy`. Chat messages and informal notices are not enforceable rules until they are moved into those contracts.
 
 ## Consequences
 

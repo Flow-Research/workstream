@@ -48,7 +48,7 @@ Required before leaving:
 
 ### SCREENING
 
-The task is structurally prepared but not yet released. This is the pre-release quality gate used to catch weak guides, vague acceptance criteria, missing submission artifact requirements, bad payment policy, missing generated pre-submit checker policy, missing post-submit checker policy, missing review policy, or missing revision policy before workers see the task.
+The task is structurally prepared but not yet released. This is the pre-release quality gate used to catch weak guides, vague acceptance criteria, missing submission artifact requirements, bad payment policy, missing generated project pre-submit checker policy, missing post-submit checker policy, missing review policy, or missing revision policy before workers see the task.
 
 Required before entering:
 
@@ -104,7 +104,7 @@ Required before entering:
 - package or output reference
 - evidence items
 - effective project submission artifact policy loaded
-- generated pre-submit checker policy executed
+- generated project pre-submit checker policy executed
 - no blocking pre-submit failures
 - immutable submission version
 - content hash for every uploaded artifact

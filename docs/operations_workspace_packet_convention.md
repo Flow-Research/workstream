@@ -69,7 +69,7 @@ A packet is not ready unless:
 - evidence is attached
 - artifact hashes are present
 - evidence references bind to artifact hashes
-- generated pre-submit checks pass before submission creation
+- pre-submit checks from the locked project pre-submit checker policy pass before submission creation
 - prior feedback is linked when resubmitting
 - status is current
 

@@ -120,7 +120,7 @@ Each task later locks:
 
 - GuideSourceSnapshot id/hash:
 - EffectiveProjectSubmissionArtifactPolicy hash:
-- generated PreSubmitCheckerPolicy hash:
+- generated project PreSubmitCheckerPolicy hash:
 
 Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 

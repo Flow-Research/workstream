@@ -26,9 +26,9 @@ List files, links, packages, or deliverables.
 - artifact hash manifest:
 - generated at:
 
-Workstream derives the locked project guide version, submission artifact policy version, generated pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, and payment policy version from the task and server-side project policy records. The worker does not provide those versions in the submission packet.
+Workstream derives the locked project guide version, submission artifact policy version, generated project pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, and payment policy version from the task and server-side project policy records. The worker does not provide those versions in the submission packet.
 
-Workstream runs generated pre-submit checks before creating the submission.
+Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating the submission.
 Preflight failures return `PreSubmitCheckResponse` with structured
 pass/fail/warning details. Blocked submission-create attempts return
 `pre_submission_checker_failed` with the same structured details, create no

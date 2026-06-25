@@ -515,7 +515,7 @@
             <article class="step">
               <span class="num">6</span>
               <h3>Pre-submit intake checks run</h3>
-              <p>Workstream runs generated pre-submit checks from the locked project pre-submit checker policy before creating a submission row. Preflight failures return PreSubmitCheckResponse details. Blocked submission-create attempts return pre_submission_checker_failed with pass/fail/warning details.</p>
+              <p>Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating a submission row. Preflight failures return PreSubmitCheckResponse details. Blocked submission-create attempts return pre_submission_checker_failed with pass/fail/warning details.</p>
               <div class="data">
                 <code>no submission yet</code>
                 <code>no checker run yet</code>
@@ -628,7 +628,7 @@
       <aside class="side-panel" aria-labelledby="invariants-title">
         <h2 id="invariants-title">Hard Invariants</h2>
         <ul class="check-list">
-          <li>Guide activation fails if submission artifact policy or required policy context is missing.</li>
+          <li>Guide activation fails if submission artifact policy, project pre-submit checker policy, or required policy context is missing.</li>
           <li>Pre-submit intake failures create no submission row or submission version.</li>
           <li>Revision resubmission states are limited to needs_revision in v0.1.</li>
           <li>Submission packet does not carry guide or policy versions from the worker.</li>

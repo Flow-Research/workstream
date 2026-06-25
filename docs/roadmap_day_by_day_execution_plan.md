@@ -51,7 +51,7 @@ Deliver:
 - guide versioning
 - guide approval and active-version locking
 - submission artifact policy fields
-- generated pre-submit checker policy fields
+- generated project pre-submit checker policy fields
 - post-submit checker policy fields
 - review policy fields
 - revision policy fields
@@ -197,7 +197,7 @@ Exit criteria:
 
 Deliver:
 
-- generated `PreSubmitCheckerPolicy`
+- generated project `PreSubmitCheckerPolicy`
 - `PostSubmitCheckerPolicy`
 - project pre-submit checker policy generation
 - project-required checker list

@@ -71,7 +71,7 @@ Default:
 - medium-severity `failed` result creates reviewer warning
 - low-severity `failed` result creates informational note
 
-Approved machine policies can declare stricter blocking behavior. `SubmissionArtifactPolicy` and generated `PreSubmitCheckerPolicy` govern pre-submit artifact rules. `PostSubmitCheckerPolicy` governs durable post-submit checker blocking.
+Approved machine policies can declare stricter blocking behavior. `SubmissionArtifactPolicy` and generated project `PreSubmitCheckerPolicy` govern pre-submit artifact rules. `PostSubmitCheckerPolicy` governs durable post-submit checker blocking.
 
 Project policy cannot weaken Workstream default submission artifact rules. Workstream defaults are applied before project policy. A project policy that attempts to require a forbidden artifact, remove hash requirements, allow credential-bearing storage references, or downgrade blocking defaults is a project setup defect.
 

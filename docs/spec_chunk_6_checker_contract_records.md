@@ -191,7 +191,7 @@ Normalization rules:
 
 Pre-submit checks run before a submission is created. They are authoritative for submission intake and return immediate API feedback without creating an authoritative post-submit checker run.
 
-Workstream loads the locked generated pre-submit checker policy snapshot/hash
+Workstream loads the locked generated project pre-submit checker policy snapshot/hash
 for the task's guide version. Workers submit only draft packet fields. They
 cannot choose checker names, policy versions, blocking rules, severities,
 results, or outcomes.
@@ -323,7 +323,7 @@ Internal services may only create new runs/results or transition a run status th
 - post-submit checker run creation snapshots locked submission context server-side
 - creating run for an unlocked submission fails
 - creating run with mismatched task/submission context fails
-- later task policy changes do not mutate historical checker run context
+- later project policy changes or audited task-context rebases do not mutate historical checker run context
 - artifact manifest hash follows the canonical SHA-256 JSON algorithm
 - equivalent manifests with different entry or key order hash identically
 - duplicate artifact names are rejected

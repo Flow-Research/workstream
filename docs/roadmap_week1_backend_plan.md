@@ -193,7 +193,7 @@ Scope:
 - project model
 - project guide model
 - submission artifact policy model
-- generated pre-submit checker policy model
+- generated project pre-submit checker policy model
 - post-submit checker policy model
 - review policy model
 - revision policy model

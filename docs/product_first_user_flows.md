@@ -38,7 +38,7 @@ Acceptance:
 
 - Missing required fields block `SCREENING`.
 - Missing required fields block `READY`.
-- Task shows project guide, required artifacts, generated pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
+- Task shows project guide, required artifacts, generated project pre-submit checker policy summary, post-submit checker policy, review policy, revision policy, and payment policy.
 
 ## Flow 3: Worker Submits Work
 

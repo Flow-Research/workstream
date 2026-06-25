@@ -26,6 +26,17 @@ Source snapshot:
 - manifest json:
 - captured at:
 
+Bundle hash algorithm:
+
+```text
+sha256(canonical_json(manifest_json))
+```
+
+Canonical JSON uses UTF-8, sorted object keys, no insignificant whitespace, and
+source items sorted by `(source_kind, durable_ref, content_hash)`. Exclude
+database ids, capture timestamps, and transient fetch locators. Reject duplicate
+source items with the same `source_kind + durable_ref` before hashing.
+
 Source snapshot items:
 
 | Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type |
@@ -112,7 +123,7 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 | manifest required | logical OR |
 | hash required | logical OR |
 | allowed storage schemes | intersection |
-| hash algorithm | platform-locked `sha256`; project/task policy cannot change it |
+| hash algorithm | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | maximum file size bytes | minimum non-null limit |
 | maximum package size bytes | minimum non-null limit |
 | packaging rules | restrictive merge; conflicts block setup |
@@ -162,12 +173,19 @@ EffectiveProjectSubmissionArtifactPolicy
 + constrained checker specification
 ```
 
-Generated pre-submit checks run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+Pre-submit checks from the locked project pre-submit checker policy run before submission creation. Blocking failures create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event.
+
+Compiler coverage requirement:
+
+- every enforceable effective project policy rule maps to deterministic checker logic
+- required artifacts and evidence rules cannot be omitted
+- Workstream defaults cannot be omitted or weakened
+- severity cannot be downgraded by project policy or task runtime parameters
 
 Generated policy lock:
 
-- generated pre-submit checker policy version:
-- generated pre-submit checker policy hash:
+- generated project pre-submit checker policy version:
+- generated project pre-submit checker policy hash:
 - effective project submission artifact policy hash:
 - locked guide version:
 
