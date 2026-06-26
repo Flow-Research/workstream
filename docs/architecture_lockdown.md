@@ -71,6 +71,7 @@ Every active guide version must also have approved machine-readable policies:
 - guide sufficiency report
 - submission artifact policy
 - effective project submission artifact policy hash
+- project pre-submit checker policy hash
 - post-submit checker policy
 - review policy
 - revision policy

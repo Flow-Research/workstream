@@ -13,15 +13,16 @@ The first user flows prove that Workstream can run real work from intake to acce
 7. Workstream runs `SubmissionArtifactPolicyDerivationAgent`.
 8. Admin or project_manager reviews and approves the derived submission artifact policy.
 9. Workstream persists the effective project submission artifact policy hash.
-10. Admin or project_manager enables post-submit checker policy.
-11. Admin or project_manager enables review policy.
-12. Admin or project_manager enables revision policy.
-13. Admin or project_manager enables payment policy.
-14. Project becomes active.
+10. Workstream compiles, persists, and locks the project `PreSubmitCheckerPolicy`.
+11. Admin or project_manager enables post-submit checker policy.
+12. Admin or project_manager enables review policy.
+13. Admin or project_manager enables revision policy.
+14. Admin or project_manager enables payment policy.
+15. Project becomes active.
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
+- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
 - Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
@@ -31,7 +32,7 @@ Acceptance:
 2. Operator creates task with title, description, expected output, acceptance criteria, base amount, deadline, and difficulty.
 3. Workstream validates task against project guide.
 4. Task enters `SCREENING`.
-5. Screening confirms guide source snapshot, task contract, effective project submission artifact policy hash, generated project pre-submit checker policy, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
+5. Screening locks the guide source snapshot id/hash, effective project submission artifact policy hash, and project pre-submit checker policy hash, then confirms task contract, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
 6. Task enters `READY`.
 
 Acceptance:
@@ -46,7 +47,7 @@ Acceptance:
 2. Worker attaches output files or links.
 3. Worker attaches evidence.
 4. Worker writes submission notes.
-5. Workstream runs pre-submit checks generated from the effective project submission artifact policy.
+5. Workstream executes the task's locked project `PreSubmitCheckerPolicy`.
 6. Preflight failures return `PreSubmitCheckResponse`; blocked submission-create attempts return `pre_submission_checker_failed` with structured pass/fail/warning details and create no submission.
 7. When blocking pre-submit checks pass, Worker submits packet.
 8. Task enters `SUBMITTED`.

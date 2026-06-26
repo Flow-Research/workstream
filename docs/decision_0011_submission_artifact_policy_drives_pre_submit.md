@@ -23,10 +23,11 @@ Every active project guide version must have a complete guide-policy bundle:
 - passing or acknowledged `GuideSufficiencyReport`
 - approved `ProjectSubmissionArtifactPolicy`
 - persisted `EffectiveProjectSubmissionArtifactPolicy` hash
-
-Before a task can enter the worker pipeline, it must also have:
-
 - persisted generated project `PreSubmitCheckerPolicy` snapshot/hash
+- `PostSubmitCheckerPolicy`
+- `ReviewPolicy`
+- `RevisionPolicy`
+- `PaymentPolicy`
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.

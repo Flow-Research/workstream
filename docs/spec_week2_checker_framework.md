@@ -61,7 +61,7 @@ The checker binding includes:
 
 Workstream has two checker moments.
 
-Pre-submit static checks run before Workstream creates a submission. They are generated from the effective project submission artifact policy and give immediate feedback on packet shape and policy issues:
+Pre-submit static checks run before Workstream creates a submission. They execute the task's locked project `PreSubmitCheckerPolicy`, which was generated from the effective project submission artifact policy during project setup, and give immediate feedback on packet shape and policy issues:
 
 - required field presence
 - package hash presence

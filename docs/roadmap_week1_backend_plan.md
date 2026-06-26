@@ -303,6 +303,6 @@ By the end of the week:
 - project/guide/task/assignment/submission records exist
 - core lifecycle works through `SUBMITTED`
 - every status transition is audit-recorded
-- submitter packet is simple and task-owned policy context is server-stamped
+- submitter packet is simple and task locked-context is server-stamped
 - tests cover model invariants and transition guards
 - no frontend work is required for this acceptance bar

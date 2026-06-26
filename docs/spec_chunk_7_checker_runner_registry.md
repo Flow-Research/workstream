@@ -26,7 +26,7 @@ Note: Chunk 8 supersedes the temporary Chunk 7 artifact-manifest and evidence-re
 - checker service
 - checker API router
 - checker registry
-- pre-submit intake feedback path generated from the effective project submission artifact policy
+- pre-submit intake feedback path that executes the locked project `PreSubmitCheckerPolicy`
 - first structural checkers:
   - `check_submission_packet`
   - `check_policy_context_present`

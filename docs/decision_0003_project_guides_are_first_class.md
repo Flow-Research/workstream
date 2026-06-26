@@ -38,6 +38,7 @@ Project guide activation requires the guide plus its required policy context bef
 - guide sufficiency report
 - submission artifact policy
 - effective project submission artifact policy hash
+- project pre-submit checker policy hash
 - post-submit checker policy
 - review policy
 - revision policy

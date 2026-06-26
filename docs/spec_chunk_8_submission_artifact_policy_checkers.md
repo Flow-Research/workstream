@@ -192,7 +192,7 @@ If a future project needs generated-artifact signals to block review, that must 
 
 ## Pre-Submit Versus Durable Runs
 
-Pre-submit feedback runs checks generated from the effective project submission artifact policy. These checks run before Workstream creates a submission row:
+Pre-submit feedback executes the task's locked project `PreSubmitCheckerPolicy`, which was compiled from the effective project submission artifact policy at project setup time. These checks run before Workstream creates a submission row:
 
 - `check_submission_packet`
 - `check_evidence_present`
@@ -302,7 +302,7 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 
 - canonical Chunk 8 checker names are registered
 - stale Chunk 7 temporary checker names are removed from public docs/templates/tests
-- pre-submit feedback is generated from the effective project submission artifact policy and runs without durable checker records
+- pre-submit feedback executes the task's locked project `PreSubmitCheckerPolicy` and runs without durable checker records
 - preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
 - blocked submission-create attempts return `DomainError(code="pre_submission_checker_failed")`, include structured pass/fail/warning details, create no submission row, no submission version, no task transition to `submitted`, and no submission-created audit event
 - Workstream default submission artifact rules cannot be weakened by project policy

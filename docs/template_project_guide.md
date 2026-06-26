@@ -111,6 +111,7 @@ Every active guide version must have:
 - GuideSufficiencyReport:
 - SubmissionArtifactPolicy:
 - EffectiveProjectSubmissionArtifactPolicy hash:
+- project PreSubmitCheckerPolicy hash:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:
 - RevisionPolicy:

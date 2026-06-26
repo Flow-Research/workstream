@@ -45,6 +45,7 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `artifact_hash_manifest`
 - `worker_attestation`
 - `locked_guide_version`
+- `locked_guide_source_snapshot_id`
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`

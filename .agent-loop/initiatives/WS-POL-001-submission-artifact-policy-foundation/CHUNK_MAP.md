@@ -105,7 +105,7 @@ Acceptance criteria:
   Workstream default policy.
 - Legacy `evidence_policy`, `required_files`, and `required_evidence` are not
   treated as compatibility contracts. Runtime removal happens in the task
-  binding and submission migration chunks.
+  locked-context and submission migration chunk.
 
 Verification:
 

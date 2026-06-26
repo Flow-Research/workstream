@@ -700,7 +700,7 @@ Source type:
 External origin adapters are later work. When added, they normalize into this task shape instead of creating a separate task lifecycle.
 
 The task id points to the locked task contract. That contract includes the guide
-version, guide source snapshot hash, project submission artifact policy version,
+version, guide source snapshot id/hash, project submission artifact policy version,
 effective project submission artifact policy hash, generated project pre-submit checker policy hash,
 post-submit checker policy version, review policy version, revision policy
 version, payment policy version, acceptance criteria, derived display summaries,
