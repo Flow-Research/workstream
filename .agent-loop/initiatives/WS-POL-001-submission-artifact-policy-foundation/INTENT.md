@@ -40,7 +40,7 @@ EffectiveProjectSubmissionArtifactPolicy
 Task
 -> locks guide snapshot
 -> locks effective project submission artifact policy hash
--> locks PreSubmitCheckerPolicy hash
+-> locks PreSubmitCheckerPolicy compiled bundle hash
 ```
 
 Project owners provide open-ended project material: markdown, URLs, full
@@ -77,13 +77,14 @@ specification. Workstream compiles that specification into deterministic checker
 logic. Runtime submission evaluation is performed by the locked checker bundle,
 not by an agent.
 
-Most tasks in a project reuse the same compiled checker bundle. A task locks the
-policy/checker context that governs it; it does not get a freshly derived policy
-or freshly compiled checker. If the sufficiency agent finds that the guide does
-not cover the project's task set, activation is blocked and the guide is
-improved or the work is split into another project/guide. Small task-specific
-values are constrained parameters fed into the same locked checker bundle, not
-new checker generation.
+Every task under the same active project guide version reuses that guide
+version's compiled project checker bundle. A task locks the policy/checker
+context that governs it; it does not get a freshly derived policy or freshly
+compiled checker. If the sufficiency agent finds that the guide does not cover
+the project's task set, activation is blocked and the guide is improved or the
+work is split into another project/guide. Small task-specific values are
+constrained parameters fed into the same locked checker bundle, not new checker
+generation.
 
 ## Why Now
 
@@ -116,7 +117,7 @@ After this initiative:
 - Project submission artifact policy cannot weaken Workstream defaults.
 - Effective project submission artifact policy is computed deterministically.
 - Generated pre-submit checker policy is persisted at project scope and tasks
-  lock its hash before entering the worker pipeline.
+  lock its compiled bundle hash during screening before entering `READY`.
 - Workstream's trusted compiler produces the project pre-submit checker
   policy from approved checker primitives, not by unrestricted generated code.
 - Submission creation uses the generated pre-submit policy before a submission

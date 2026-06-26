@@ -199,10 +199,10 @@ Workstream default submission artifact rules require:
 
 Project policy adds required artifacts, evidence requirements, stricter forbidden artifacts, stricter packaging rules, and project-specific attestation requirements.
 
-The generated project `PreSubmitCheckerPolicy` is persisted, hashed, and locked
-to the effective project submission artifact policy before tasks enter the
-worker pipeline. Tasks lock references to that shared project checker hash. It
-runs before Workstream creates a submission. Preflight failures return
+The generated project `PreSubmitCheckerPolicy` is persisted with a compiled
+bundle hash and locked to the effective project submission artifact policy before tasks enter the
+worker pipeline. Tasks lock references to the shared project's compiled checker
+bundle hash. It runs before Workstream creates a submission. Preflight failures return
 `PreSubmitCheckResponse` with `status="failed"`,
 `eligible_to_submit=false`, and structured pass/fail/warning details in
 `results`. Blocked submission-create attempts use the user-facing error code
@@ -261,7 +261,7 @@ Examples:
 Draft packet
 -> load locked task context
 -> load locked EffectiveProjectSubmissionArtifactPolicy hash
--> load locked PreSubmitCheckerPolicy snapshot/hash
+-> load locked PreSubmitCheckerPolicy compiled bundle hash
 -> run pre-submit intake checks
 -> create Submission only when blocking pre-submit checks pass
 -> lock submission

@@ -21,8 +21,8 @@ Worker-visible fields:
 | next guide version | `<guide version>` |
 | prior submission artifact policy version | `<submission artifact policy version>` |
 | next submission artifact policy version | `<submission artifact policy version>` |
-| prior pre-submit checker policy hash | `<pre-submit checker policy hash>` |
-| next pre-submit checker policy hash | `<pre-submit checker policy hash>` |
+| prior pre-submit checker bundle hash | `<pre-submit checker bundle hash>` |
+| next pre-submit checker bundle hash | `<pre-submit checker bundle hash>` |
 | prior post-submit checker policy version | `<post-submit checker policy version>` |
 | next post-submit checker policy version | `<post-submit checker policy version>` |
 | prior review policy version | `<review policy version>` |

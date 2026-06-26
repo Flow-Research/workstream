@@ -30,9 +30,9 @@ Task setup and post-submit checks must stay separated from worker-fixable submis
 
 | Checker | Severity | Blocks Review | Purpose |
 | --- | --- | --- | --- |
-| `check_policy_context_present` | high | yes | Task must have locked checker, review, revision, and payment policy context. |
+| `check_policy_context_present` | high | yes | Task must have locked guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, post-submit checker, review, revision, and payment policy context. |
 | `check_submission_packet` | high | yes | Submission must include required packet fields. |
-| `check_required_files` | high | yes | Submission must include files required by the task. |
+| `check_required_files` | high | yes | Submission must include files required by the locked project pre-submit checker policy and task contract. |
 | `check_forbidden_files` | high | yes | Submission must not include forbidden file paths. |
 | `check_evidence_present` | high | yes | Submission must include audit evidence. |
 | `check_evidence_integrity` | high | yes | Evidence and checker runs must bind to submitted artifacts. |

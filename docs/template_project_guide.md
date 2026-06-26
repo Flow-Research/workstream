@@ -111,7 +111,7 @@ Every active guide version must have:
 - GuideSufficiencyReport:
 - SubmissionArtifactPolicy:
 - EffectiveProjectSubmissionArtifactPolicy hash:
-- project PreSubmitCheckerPolicy hash:
+- project PreSubmitCheckerPolicy compiled bundle hash:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:
 - RevisionPolicy:
@@ -121,7 +121,7 @@ Each task later locks:
 
 - GuideSourceSnapshot id/hash:
 - EffectiveProjectSubmissionArtifactPolicy hash:
-- generated project PreSubmitCheckerPolicy hash:
+- generated project PreSubmitCheckerPolicy compiled bundle hash:
 
 Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 

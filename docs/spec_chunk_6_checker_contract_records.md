@@ -191,7 +191,7 @@ Normalization rules:
 
 Pre-submit checks run before a submission is created. They are authoritative for submission intake and return immediate API feedback without creating an authoritative post-submit checker run.
 
-Workstream loads the locked generated project pre-submit checker policy snapshot/hash
+Workstream loads the locked generated project pre-submit checker compiled bundle hash
 for the task's guide version. Workers submit only draft packet fields. They
 cannot choose checker names, policy versions, blocking rules, severities,
 results, or outcomes.
@@ -213,7 +213,7 @@ Response fields:
 - `expires_at`
 
 Pre-submit feedback binds to `task_id`, the task's locked guide source snapshot,
-effective project submission artifact policy hash, pre-submit checker policy hash,
+effective project submission artifact policy hash, pre-submit checker bundle hash,
 draft packet fields, package hash, and artifact manifest shape. It does not
 require a locked `submission_id` or locked submission version because those do
 not exist before submission creation.

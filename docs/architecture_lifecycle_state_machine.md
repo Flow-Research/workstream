@@ -76,8 +76,8 @@ Required before entering:
 - GuideSufficiencyReport passed or warnings acknowledged for that source snapshot
 - SubmissionArtifactPolicy approved
 - EffectiveProjectSubmissionArtifactPolicy hash persisted
-- project PreSubmitCheckerPolicy persisted and locked to that effective project submission artifact policy hash
-- task locked to GuideSourceSnapshot id/hash, EffectiveProjectSubmissionArtifactPolicy hash, and PreSubmitCheckerPolicy hash
+- project PreSubmitCheckerPolicy persisted with a compiled bundle hash and locked to that effective project submission artifact policy hash
+- task locked to GuideSourceSnapshot id/hash, EffectiveProjectSubmissionArtifactPolicy hash, and PreSubmitCheckerPolicy compiled bundle hash
 - PostSubmitCheckerPolicy present
 - review policy present
 - revision policy present

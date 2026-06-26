@@ -472,9 +472,13 @@ Fields:
 
 Generated server-side from `EffectiveProjectSubmissionArtifactPolicy`, then
 persisted and locked for the project guide version before tasks enter the
-worker pipeline. Most tasks under the same project guide reuse the same
-pre-submit checker bundle. The task stores the locked project checker hash; it
-does not own a newly derived policy or newly compiled checker.
+worker pipeline. Every task under the same active project guide version reuses
+that guide version's project pre-submit checker bundle. If the guide version
+does not cover the task set, activation is blocked and the guide is improved or
+the work is split into another project/guide. The task stores
+`locked_pre_submit_checker_bundle_hash`, which equals
+`PreSubmitCheckerPolicy.compiled_bundle_hash`; it does not own a newly derived
+policy or newly compiled checker.
 
 `checker_spec` is the constrained machine-readable specification using
 Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
@@ -484,6 +488,9 @@ code. `compiled_bundle_hash` binds the exact compiled logic to
 `effective_project_submission_artifact_policy_hash`. `checker_names`,
 `checker_configs`, and `blocking_severities` are derived index projections only;
 they must be regenerated from `compiled_bundle` and must not disagree with it.
+`policy_hash` identifies the approved checker policy/spec record, while
+`compiled_bundle_hash` is the runtime provenance value locked by tasks,
+submissions, and revision context.
 
 The compiler must prove semantic coverage: every enforceable
 `EffectiveProjectSubmissionArtifactPolicy` rule must produce deterministic
@@ -646,7 +653,7 @@ Fields:
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`
-- `locked_pre_submit_checker_policy_hash`
+- `locked_pre_submit_checker_bundle_hash`
 - `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
@@ -701,7 +708,7 @@ External origin adapters are later work. When added, they normalize into this ta
 
 The task id points to the locked task contract. That contract includes the guide
 version, guide source snapshot id/hash, project submission artifact policy version,
-effective project submission artifact policy hash, generated project pre-submit checker policy hash,
+effective project submission artifact policy hash, generated project pre-submit checker bundle hash,
 post-submit checker policy version, review policy version, revision policy
 version, payment policy version, acceptance criteria, derived display summaries,
 base payout, and skill tags. Workers submit against the task id; they do not
@@ -741,7 +748,7 @@ Fields:
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`
-- `locked_pre_submit_checker_policy_hash`
+- `locked_pre_submit_checker_bundle_hash`
 - `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
@@ -1021,8 +1028,8 @@ Fields:
 - `next_locked_guide_version`
 - `prior_locked_submission_artifact_policy_version`
 - `next_locked_submission_artifact_policy_version`
-- `prior_locked_pre_submit_checker_policy_hash`
-- `next_locked_pre_submit_checker_policy_hash`
+- `prior_locked_pre_submit_checker_bundle_hash`
+- `next_locked_pre_submit_checker_bundle_hash`
 - `prior_locked_post_submit_checker_policy_version`
 - `next_locked_post_submit_checker_policy_version`
 - `prior_locked_review_policy_version`

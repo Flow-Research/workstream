@@ -66,10 +66,10 @@ volatile-field exclusions.
 actor with the `admin` or `project_manager` role approves the derived policy.
 Workstream then computes the effective project submission artifact policy and compiles the project
 `PreSubmitCheckerPolicy`. The generated project `PreSubmitCheckerPolicy`
-snapshot/hash is scoped to the project guide version.
+compiled bundle hash is scoped to the project guide version.
 Tasks lock references to the exact guide snapshot, effective project submission
-artifact policy hash, and pre-submit checker policy hash before entering `SCREENING` or
-`READY`.
+artifact policy hash, and pre-submit checker bundle hash during screening before
+entering `READY`.
 Pre-submit checks run before submission creation and do not create durable
 checker records.
 Post-submit/internal checks run after submission lock and do create durable
@@ -89,8 +89,8 @@ storage, forbidden artifacts, hash algorithm, or platform defaults.
 
 In the final architecture, guide activation fails unless the guide snapshot and
 guide version have a passing or acknowledged guide sufficiency report, approved
-project submission artifact policy, effective project submission artifact policy hash, and compiled
-project `PreSubmitCheckerPolicy` hash. Chunk 1 creates the records and
+project submission artifact policy, effective project submission artifact policy hash, and project
+`PreSubmitCheckerPolicy` compiled bundle hash. Chunk 1 creates the records and
 foundational guards; Chunk 2 adds compiler execution and turns the complete
 activation gate on; Chunk 3 makes tasks lock the compiled checker reference
 before entering the worker pipeline. The system must surface setup failure

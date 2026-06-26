@@ -67,8 +67,8 @@ Exit criteria:
 - create a project from a markdown guide
 - retrieve the active guide version for a task
 - edit a draft guide without changing historical task guide versions
-- block project activation when guide source snapshot, submission artifact policy, effective project submission artifact policy hash, post-submit checker, review policy, revision policy, payment policy, or project pre-submit checker policy hash is missing
-- block task readiness when locked guide snapshot, effective project submission artifact policy hash, or project pre-submit checker policy hash is missing
+- block project activation when guide source snapshot, submission artifact policy, effective project submission artifact policy hash, post-submit checker, review policy, revision policy, payment policy, or project pre-submit checker bundle hash is missing
+- block task readiness when locked guide snapshot, effective project submission artifact policy hash, or project pre-submit checker bundle hash is missing
 - migrations and model tests define the expected invariants
 
 ### Day 3: Task Queue
@@ -125,7 +125,7 @@ Deliver:
 Exit criteria:
 
 - submit v1 packet
-- worker does not provide submission version, guide version, submission artifact policy version, pre-submit checker policy hash, post-submit checker policy version, review policy version, revision policy version, or payment policy version
+- worker does not provide submission version, guide version, submission artifact policy version, pre-submit checker bundle hash, post-submit checker policy version, review policy version, revision policy version, or payment policy version
 - blocking pre-submit failures create no submission row, no submission version, no `SUBMITTED` transition, and no submission-created audit event
 - task moves to `SUBMITTED`
 - package/evidence records are immutable after checker run starts

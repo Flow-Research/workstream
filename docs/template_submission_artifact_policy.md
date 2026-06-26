@@ -185,11 +185,11 @@ Compiler coverage requirement:
 Generated policy lock:
 
 - generated project pre-submit checker policy version:
-- generated project pre-submit checker policy hash:
+- generated project pre-submit checker bundle hash:
 - effective project submission artifact policy hash:
 - locked guide version:
 
-Tasks lock this project checker hash before entering the worker pipeline. Tasks
+Tasks lock this project checker compiled bundle hash before entering the worker pipeline. Tasks
 do not derive or compile their own checker by default.
 
 Blocked submission-create attempts return `pre_submission_checker_failed` with

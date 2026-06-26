@@ -49,7 +49,7 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `locked_guide_source_snapshot_hash`
 - `locked_submission_artifact_policy_version`
 - `locked_effective_project_submission_artifact_policy_hash`
-- `locked_pre_submit_checker_policy_hash`
+- `locked_pre_submit_checker_bundle_hash`
 - `locked_post_submit_checker_policy_version`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
@@ -58,7 +58,7 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `locked_at`
 - `supersedes_submission_id`
 
-Submissions intentionally reference the task's locked guide and policy version fields, including submission artifact policy provenance and generated project pre-submit checker policy provenance. This prevents task-owned locked context from changing silently after a submission has been recorded.
+Submissions intentionally reference the task's locked guide and policy version fields, including submission artifact policy provenance and generated project pre-submit checker compiled bundle hash provenance. This prevents task-owned locked context from changing silently after a submission has been recorded.
 
 Implementation note: current v0.1 code uses `locked_checker_policy_version` for post-submit checker policy provenance. The architecture target splits this into explicit submission artifact, pre-submit checker, and post-submit checker provenance fields.
 
@@ -125,7 +125,7 @@ Locks a submission packet before checker execution. Locking makes the packet imm
 - a worker can submit only when assigned to the task
 - first submission requires task status `IN_PROGRESS`
 - Workstream loads the locked effective project submission artifact policy hash before creating a submission
-- Workstream loads the locked generated project pre-submit checker policy snapshot/hash before creating a submission
+- Workstream loads the locked generated project pre-submit checker compiled bundle hash before creating a submission
 - blocking pre-submit failures prevent submission creation
 - when blocking pre-submit fails, no submission row is created, no submission version is assigned, no task transition to `SUBMITTED` occurs, and no submission-created audit event is written
 - first submission moves the task to `SUBMITTED`

@@ -22,7 +22,7 @@ The first user flows prove that Workstream can run real work from intake to acce
 
 Acceptance:
 
-- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker policy hash, post-submit checker policy, review policy, revision policy, and payment policy.
+- Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker bundle hash, post-submit checker policy, review policy, revision policy, and payment policy.
 - Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
@@ -32,7 +32,7 @@ Acceptance:
 2. Operator creates task with title, description, expected output, acceptance criteria, base amount, deadline, and difficulty.
 3. Workstream validates task against project guide.
 4. Task enters `SCREENING`.
-5. Screening locks the guide source snapshot id/hash, effective project submission artifact policy hash, and project pre-submit checker policy hash, then confirms task contract, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
+5. Screening locks the guide source snapshot id/hash, effective project submission artifact policy hash, and project pre-submit checker bundle hash, then confirms task contract, post-submit checker policy, review policy, revision policy, payment policy, and reviewability.
 6. Task enters `READY`.
 
 Acceptance:

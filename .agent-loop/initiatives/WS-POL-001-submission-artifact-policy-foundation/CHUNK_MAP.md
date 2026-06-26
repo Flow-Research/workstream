@@ -255,11 +255,15 @@ frontend
 
 Acceptance criteria:
 
-- Tasks lock `guide_source_snapshot_id`, `guide_source_snapshot_hash`,
-  `effective_project_submission_artifact_policy_hash`,
-  and `pre_submit_checker_policy_hash` before `SCREENING` or `READY`.
-- Most tasks in a project share the same `PreSubmitCheckerPolicy`; tasks do not
-  run policy derivation or checker compilation by default.
+- Tasks lock `locked_guide_source_snapshot_id`,
+  `locked_guide_source_snapshot_hash`,
+  `locked_effective_project_submission_artifact_policy_hash`,
+  and `locked_pre_submit_checker_bundle_hash` during screening before `READY`.
+- Every task under the same active project guide version shares that guide
+  version's project `PreSubmitCheckerPolicy`; tasks do not run policy
+  derivation or checker compilation.
+- If a guide version does not cover the task set, activation is blocked and the
+  guide is improved or the work is split into another project/guide.
 - Task-specific values are constrained parameters consumed by the locked
   checker bundle, not a newly generated checker policy.
 - Runtime parameters are sourced only from trusted task-contract fields; no
@@ -281,7 +285,8 @@ Verification:
   failure, no-row/no-version/no-transition/no-durable-checker side effects, and
   stamped locked policy context.
 - Postgres-backed task tests cover locked context stamping, shared checker reuse
-  across multiple tasks, and removal of transitional task-field authority.
+  for every task under the same active project guide version, blocked activation
+  for uncovered task sets, and removal of transitional task-field authority.
 - API/schema negative tests reject client-supplied free-form task runtime
   parameter maps and attempted runtime overrides of required checks, severity,
   allowed storage, forbidden artifacts, hash algorithm, or platform defaults.

@@ -58,7 +58,7 @@ The deterministic merge of Workstream's default submission artifact policy and t
 
 ## Pre-Submit Checker Policy
 
-The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a hash, and locked by tasks before they enter the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
+The server-generated project checker matrix produced from the effective project submission artifact policy, persisted with a compiled bundle hash, and locked by tasks before they enter the worker pipeline. It runs before Workstream creates a submission row or submission version. The preflight endpoint returns `PreSubmitCheckResponse`; a blocked submission-create attempt returns `pre_submission_checker_failed` with structured pass/fail/warning details. Neither path returns review decision values: `accept`, `needs_revision`, or `reject`.
 
 ## pre_submission_checker_failed
 

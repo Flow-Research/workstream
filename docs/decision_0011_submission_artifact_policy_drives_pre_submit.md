@@ -23,7 +23,7 @@ Every active project guide version must have a complete guide-policy bundle:
 - passing or acknowledged `GuideSufficiencyReport`
 - approved `ProjectSubmissionArtifactPolicy`
 - persisted `EffectiveProjectSubmissionArtifactPolicy` hash
-- persisted generated project `PreSubmitCheckerPolicy` snapshot/hash
+- persisted generated project `PreSubmitCheckerPolicy` compiled bundle hash
 - `PostSubmitCheckerPolicy`
 - `ReviewPolicy`
 - `RevisionPolicy`
@@ -125,7 +125,7 @@ not derived on read, manually edited by workers, or supplied by clients. Workers
 submit only draft packet fields. They do not choose checker names, policy
 versions, blocking rules, severities, or outcomes. Each task stores locked
 references to the applicable guide snapshot, effective project submission artifact policy hash, and
-pre-submit checker policy hash before entering the worker pipeline. Task-specific
+pre-submit checker bundle hash before entering the worker pipeline. Task-specific
 values are constrained runtime parameters consumed by the shared checker, not
 new checker generation. For v0.1, those parameters come only from trusted
 task-contract fields already owned by Workstream; there is no free-form
@@ -290,6 +290,11 @@ edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
 canonical JSON source of truth and `compiled_bundle_hash` is the hash of that
 canonical JSON. `checker_names`, `checker_configs`, and `blocking_severities`
 are derived index projections only.
+
+Task, submission, and revision provenance fields named
+`locked_pre_submit_checker_bundle_hash` store
+`PreSubmitCheckerPolicy.compiled_bundle_hash`. They do not store
+`PreSubmitCheckerPolicy.policy_hash`.
 
 ## Consequences
 

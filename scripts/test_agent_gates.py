@@ -675,6 +675,7 @@ def test_stale_wording_patterns_catch_variants() -> None:
             "Claude " + "Code support is not configured here.",
             "Approved" + "TaskArtifactBinding",
             "Effective" + "TaskSubmissionArtifactPolicy",
+            "Effective" + "SubmissionArtifactPolicy",
             "Project" + "PreSubmitCheckerSpec",
             "locked_" + "task_" + "artifact_binding_id",
             "locked_" + "effective_" + "task_submission_artifact_policy_hash",
@@ -690,6 +691,12 @@ def test_stale_wording_patterns_catch_variants() -> None:
             "project/task " + "policy",
             "profile-" + "scoped",
             "project/" + "profile",
+            "pre-submit checker policy " + "hash",
+            "pre_submit_checker_" + "policy_hash",
+            "project pre-submit checker policy " + "hashes",
+            "project checker " + "hash",
+            "PreSubmitCheckerPolicy " + "hash",
+            "PreSubmitCheckerPolicy snapshot/" + "hash",
         ]
     )
     matches = [pattern.pattern for pattern in stale.FORBIDDEN_PATTERNS if pattern.search(sample)]
@@ -698,6 +705,7 @@ def test_stale_wording_patterns_catch_variants() -> None:
         "garden " + "roadmap",
         "Approved" + "TaskArtifactBinding",
         "Effective" + "TaskSubmissionArtifactPolicy",
+        "Effective" + "SubmissionArtifactPolicy",
         "Project" + "PreSubmitCheckerSpec",
         "task_" + "artifact_binding",
         "effective_" + "task_submission",
@@ -715,6 +723,12 @@ def test_stale_wording_patterns_catch_variants() -> None:
         "project/task " + "policy",
         "profile-" + "scoped",
         "project/" + "profile",
+        "pre-submit checker policy " + "hash(?:es)?",
+        "pre_submit_checker_" + "policy_hash",
+        "project pre-submit checker policy " + "hash(?:es)?",
+        "project checker " + "hash(?:es)?",
+        "PreSubmitCheckerPolicy " + "hash(?:es)?",
+        "PreSubmitCheckerPolicy snapshot/" + "hash(?:es)?",
     }
     case_variant_sample = "\n".join(
         [
@@ -733,6 +747,50 @@ def test_stale_wording_patterns_catch_variants() -> None:
     }.issubset(set(case_variant_matches))
     failures = stale.forbidden_path_failures([Path(".claude/settings.json"), Path("CLAUDE.md")])
     assert len(failures) == 2
+
+
+def test_stale_wording_skips_only_docs_internal_reviews_prefix() -> None:
+    """Historical review archives are skipped without hiding other folders."""
+    stale = load_module(
+        "stale_wording_skip_prefix",
+        "scripts/check_stale_workstream_wording.py",
+    )
+    original_check_output = stale.subprocess.check_output
+    original_cwd = Path.cwd()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "docs/internal_reviews").mkdir(parents=True)
+        (root / "other/internal_reviews").mkdir(parents=True)
+        (root / "active").mkdir()
+        (root / "docs/internal_reviews/archive.md").write_text("old review\n", encoding="utf-8")
+        (root / "other/internal_reviews/file.md").write_text("active review\n", encoding="utf-8")
+        (root / "active/file.md").write_text("active doc\n", encoding="utf-8")
+
+        def fake_check_output(cmd: list[str], text: bool) -> str:
+            if cmd == ["git", "ls-files"]:
+                return "\n".join(
+                    [
+                        "docs/internal_reviews/archive.md",
+                        "other/internal_reviews/file.md",
+                        "active/file.md",
+                    ]
+                )
+            if cmd == ["git", "ls-files", "--others", "--exclude-standard"]:
+                return ""
+            return ""
+
+        stale.subprocess.check_output = fake_check_output
+        os.chdir(root)
+        try:
+            scanned = {path.as_posix() for path in stale.tracked_and_new_files()}
+        finally:
+            os.chdir(original_cwd)
+            stale.subprocess.check_output = original_check_output
+
+    assert "docs/internal_reviews/archive.md" not in scanned
+    assert "other/internal_reviews/file.md" in scanned
+    assert "active/file.md" in scanned
 
 
 def test_loop_memory_state_rejects_pre_merge_status() -> None:
@@ -828,6 +886,7 @@ def main() -> int:
         test_static_sensor_flags_backend_config_as_ci_surface,
         test_markdown_link_checker_collects_base_cached_dirty_and_untracked,
         test_stale_wording_patterns_catch_variants,
+        test_stale_wording_skips_only_docs_internal_reviews_prefix,
         test_loop_memory_state_rejects_pre_merge_status,
         test_loop_memory_state_accepts_merged_fixture,
     ]

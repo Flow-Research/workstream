@@ -63,12 +63,14 @@ Fails when the task requires evidence and the locked submission has no evidence 
 
 The checker reads:
 
-- `task.required_evidence`
+- the locked project `PreSubmitCheckerPolicy` and effective project submission
+  artifact policy
 - `submission.evidence_items`
 
 Worker-visible failure:
 
-- explain that evidence required by the task is missing
+- explain that evidence required by the locked project pre-submit checker
+  policy is missing
 - tell the worker to attach evidence items before review
 
 ### `check_evidence_integrity`

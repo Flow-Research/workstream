@@ -60,6 +60,9 @@ Task records store:
 
 - project id
 - locked guide version
+- locked guide source snapshot id/hash
+- locked effective project submission artifact policy hash
+- locked pre-submit checker bundle hash
 - locked post-submit checker policy version
 - locked review policy version
 - locked revision policy version

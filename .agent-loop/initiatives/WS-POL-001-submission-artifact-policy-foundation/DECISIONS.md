@@ -27,7 +27,7 @@
 - Workstream's trusted checker compiler turns the constrained checker
   specification into deterministic project-scoped `PreSubmitCheckerPolicy`.
 - Tasks lock the applicable guide snapshot, effective project submission artifact policy hash,
-  and pre-submit checker policy hash. Tasks do not rerun derivation or compile
+  and pre-submit checker bundle hash. Tasks do not rerun derivation or compile
   unique checker bundles by default.
 - Pre-submit checks block before submission creation.
 - Preflight feedback is `PreSubmitCheckResponse`; blocked submission-create
@@ -58,6 +58,6 @@
 
 - Final review of persisted provenance field names for guide sufficiency
   reports, project submission artifact policies, effective project submission artifact policy hashes, and
-  generated project pre-submit checker policy snapshots.
+  generated project pre-submit checker compiled bundle hashes.
 - Final confirmation that Chunk 1 implements records/contracts/activation guard
   only, while full async agent execution comes later.

@@ -44,6 +44,32 @@ source item refs, and per-item content hashes.
 - PLAN: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/PLAN.md`
 - CHUNK_MAP: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/CHUNK_MAP.md`
 
+## Current Planning PR Scope
+
+PR #26 is the planning approval PR for this initiative. It may update the
+initiative plan, chunk map, architecture docs, operating docs, templates, and
+engineering-loop gates needed to make the implementation contract unambiguous.
+
+The implementation scope below applies after this planning PR is approved. It
+does not authorize runtime product behavior in the planning PR, and it does not
+require the planning PR to be limited to backend implementation files.
+
+Planning PR scope exceptions:
+
+- `.agent-loop/**`
+- `docs/**`
+- `scripts/check_stale_workstream_wording.py`
+- `scripts/test_agent_gates.py`
+
+Planning PR non-scope:
+
+- product runtime behavior
+- database schema changes
+- API behavior changes
+- frontend/demo changes
+- workflow/dependency changes
+- payment, reputation, settlement, or blockchain code
+
 ## Risk Class
 
 L1
@@ -52,7 +78,7 @@ L1
 
 P1
 
-## Allowed Files
+## Implementation Allowed Files
 
 ```text
 backend/alembic/versions/**
@@ -63,7 +89,7 @@ docs/template_submission_artifact_policy.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
 ```
 
-## Not Allowed
+## Implementation Not Allowed
 
 ```text
 backend/app/modules/tasks/**

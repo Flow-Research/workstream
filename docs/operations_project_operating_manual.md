@@ -28,35 +28,36 @@ Before releasing tasks:
 - project name and slug exist
 - project guide imported
 - guide source snapshot captured
-- guide version marked active
+- project owner setup material captured
 - base amount configured
 - currency configured
 - allowed task types listed
 - required task fields listed
-- project owner setup material captured
 - guide sufficiency report passed or warnings acknowledged by `admin` or `project_manager`
 - submission artifact policy derived by Workstream and approved by `admin` or `project_manager`
 - effective project submission artifact policy hash persisted
 - generated project pre-submit checker policy is created from the effective project submission artifact policy
-- each task locks the guide snapshot, effective project submission artifact policy hash, and pre-submit checker policy hash before entering `READY`
+- project pre-submit checker bundle hash persisted
 - post-submit checker policy attached
 - review policy attached
 - revision policy attached
 - payment policy attached
 - reviewer pool assigned
 - review guard created from the project guide
+- guide version marked active
+- each task locks the guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering `READY`
 
 ## v0.1 Quality Gates
 
 ### Project Activation Gate
 
-A project cannot become active unless guide, passed or acknowledged guide
-sufficiency report, approved submission artifact policy, persisted effective
-project submission artifact policy hash, project pre-submit checker policy,
-post-submit checker policy, review policy, revision policy, and payment policy
-are present. A task cannot enter `READY` until it also locks the effective
-project submission artifact policy hash and project pre-submit checker policy
-hash.
+A project cannot become active unless guide, immutable guide-source snapshot,
+passed or acknowledged guide sufficiency report, approved submission artifact
+policy, persisted effective project submission artifact policy hash, project
+pre-submit checker bundle hash, post-submit checker policy, review policy,
+revision policy, and payment policy are present. A task cannot enter `READY`
+until it also locks the guide source snapshot id/hash, effective project
+submission artifact policy hash, and project pre-submit checker bundle hash.
 
 ### Task Screening Gate
 

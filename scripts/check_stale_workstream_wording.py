@@ -12,6 +12,7 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"garden roadmap", re.IGNORECASE),
     re.compile(r"ApprovedTaskArtifactBinding", re.IGNORECASE),
     re.compile(r"EffectiveTaskSubmissionArtifactPolicy", re.IGNORECASE),
+    re.compile(r"EffectiveSubmissionArtifactPolicy", re.IGNORECASE),
     re.compile(r"ProjectPreSubmitCheckerSpec", re.IGNORECASE),
     re.compile(r"task_artifact_binding", re.IGNORECASE),
     re.compile(r"task artifact binding", re.IGNORECASE),
@@ -29,6 +30,12 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"project/task policy", re.IGNORECASE),
     re.compile(r"profile-scoped", re.IGNORECASE),
     re.compile(r"project/profile", re.IGNORECASE),
+    re.compile(r"pre-submit checker policy hash(?:es)?", re.IGNORECASE),
+    re.compile(r"pre_submit_checker_policy_hash", re.IGNORECASE),
+    re.compile(r"project pre-submit checker policy hash(?:es)?", re.IGNORECASE),
+    re.compile(r"project checker hash(?:es)?", re.IGNORECASE),
+    re.compile(r"PreSubmitCheckerPolicy hash(?:es)?", re.IGNORECASE),
+    re.compile(r"PreSubmitCheckerPolicy snapshot/hash(?:es)?", re.IGNORECASE),
 )
 FORBIDDEN_PATH_PATTERNS = (
     re.compile(r"(^|/)\.claude(/|$)", re.IGNORECASE),
@@ -43,6 +50,9 @@ SKIP_DIRS = {
     "downloads",
     "sheets",
 }
+SKIP_PREFIXES = (
+    "docs/internal_reviews/",
+)
 SKIP_FILES = {
     "scripts/check_stale_workstream_wording.py",
 }
@@ -61,7 +71,11 @@ def tracked_and_new_files() -> list[Path]:
     paths = []
     for raw_path in tracked + untracked:
         path = Path(raw_path)
-        if raw_path in SKIP_FILES or any(part in SKIP_DIRS for part in path.parts):
+        if (
+            raw_path in SKIP_FILES
+            or raw_path.startswith(SKIP_PREFIXES)
+            or any(part in SKIP_DIRS for part in path.parts)
+        ):
             continue
         if path.is_file():
             paths.append(path)
