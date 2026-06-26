@@ -2,7 +2,8 @@
 
 ## Current Status
 
-Planning review is requested, and latest external review feedback has been addressed.
+Planning review is ready, and latest internal and external review feedback has
+been addressed.
 Implementation has not started.
 
 ## Active Chunk
@@ -13,7 +14,7 @@ Implementation has not started.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-POL-001-01` | Pending human planning approval | `codex/submission-artifact-policy-loop-plan` | 26 | CI passed; external review response is recorded separately from internal review evidence. |
+| `WS-POL-001-01` | Awaiting human planning approval | `codex/submission-artifact-policy-loop-plan` | 26 | Internal review complete; external review response is recorded separately from internal review evidence. |
 | `WS-POL-001-02` | Planned | - | - | Starts after policy foundation lands. |
 | `WS-POL-001-03` | Planned | - | - | Moves submission creation to effective policy. |
 | `WS-POL-001-04` | Planned | - | - | Splits post-submit checker policy provenance. |

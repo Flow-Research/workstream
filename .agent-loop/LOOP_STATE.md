@@ -5,10 +5,10 @@
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: `WS-POL-001-01` - Submission Artifact Policy Foundation
 - Branch: `codex/submission-artifact-policy-loop-plan`
-- Status: planning review requested; implementation has not started
+- Status: planning review ready; implementation has not started
 - Merge commit: none for this initiative
-- Reviewed code SHA: `8a0fd181046e2eab9b668c614c845e62dd81db55`
-- Current gate: human planning approval pending; backend implementation is not approved
+- Reviewed code SHA: `8b51a84b1bede193bbafe0b1eeb7b7981a271a0e`
+- Current gate: awaiting human planning approval and PR merge decision; backend implementation is not approved
 - Next chunk: inactive until `WS-POL-001-01` is approved and completed
 
 ## Operating Rule
