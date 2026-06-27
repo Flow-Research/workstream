@@ -63,7 +63,7 @@ class GuideSourceSnapshotItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_kind: str = Field(max_length=50)
-    durable_ref: str
+    durable_ref: str = Field(max_length=2048)
     ingestion_adapter: str = Field(max_length=100)
     content_hash: str = Field(max_length=71)
     content_cid: str | None = Field(default=None, max_length=200)
@@ -75,7 +75,7 @@ class GuideSourceSnapshotCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1)
+    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1, max_length=100)
 
 
 class GuideSourceSnapshotItemResponse(BaseModel):
@@ -118,9 +118,9 @@ class GuideSufficiencyFindingInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     severity: Literal["blocking_gap", "warning", "info"]
-    code: str
-    message: str
-    location: str | None = None
+    code: str = Field(max_length=100)
+    message: str = Field(max_length=1000)
+    location: str | None = Field(default=None, max_length=500)
 
 
 class GuideSufficiencyReportCreate(BaseModel):
@@ -130,8 +130,8 @@ class GuideSufficiencyReportCreate(BaseModel):
 
     source_snapshot_id: str = Field(max_length=36)
     status: Literal["passed", "blocked", "passed_with_warnings"]
-    findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list)
-    summary: str | None = None
+    findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list, max_length=100)
+    summary: str | None = Field(default=None, max_length=2000)
     agent_name: str | None = Field(default=None, max_length=100)
     agent_version: str | None = Field(default=None, max_length=50)
 
@@ -141,7 +141,7 @@ class GuideSufficiencyAcknowledgement(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    acknowledgement_note: str | None = None
+    acknowledgement_note: str | None = Field(default=None, max_length=1000)
 
 
 class GuideSufficiencyReportResponse(BaseModel):
@@ -173,11 +173,11 @@ class ArtifactRuleInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    key: str
-    path: str
+    key: str = Field(max_length=100)
+    path: str = Field(max_length=500)
     hash_required: Literal[True] = True
     required: bool = True
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=1000)
 
 
 class EvidenceRuleInput(BaseModel):
@@ -185,11 +185,11 @@ class EvidenceRuleInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    key: str
-    label: str
+    key: str = Field(max_length=100)
+    label: str = Field(max_length=200)
     hash_required: Literal[True] = True
     required: bool = True
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=1000)
 
 
 class ForbiddenArtifactRuleInput(BaseModel):
@@ -197,9 +197,9 @@ class ForbiddenArtifactRuleInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    pattern: str
-    reason: str
-    worker_facing_fix: str | None = None
+    pattern: str = Field(max_length=500)
+    reason: str = Field(max_length=1000)
+    worker_facing_fix: str | None = Field(default=None, max_length=1000)
 
 
 class SubmissionArtifactPackagingInput(BaseModel):
@@ -218,10 +218,13 @@ class SubmissionArtifactPolicyInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    required_artifacts: list[ArtifactRuleInput] = Field(default_factory=list)
-    required_evidence: list[EvidenceRuleInput] = Field(default_factory=list)
-    forbidden_artifacts: list[ForbiddenArtifactRuleInput] = Field(default_factory=list)
-    attestation_terms: list[str] = Field(default_factory=list)
+    required_artifacts: list[ArtifactRuleInput] = Field(default_factory=list, max_length=100)
+    required_evidence: list[EvidenceRuleInput] = Field(default_factory=list, max_length=100)
+    forbidden_artifacts: list[ForbiddenArtifactRuleInput] = Field(
+        default_factory=list,
+        max_length=100,
+    )
+    attestation_terms: list[str] = Field(default_factory=list, max_length=100)
     manifest_required: bool = True
     artifact_hash_required: bool = True
     artifact_hash_algorithm: Literal["sha256"] = "sha256"

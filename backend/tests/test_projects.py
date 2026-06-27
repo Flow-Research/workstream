@@ -243,6 +243,7 @@ def test_pre_submit_checker_policy_compiled_rows_require_bundle_fields() -> None
 
     assert "lifecycle_status" in constraint_sql
     assert "compiled_bundle_hash" in constraint_sql
+    assert "compiled_bundle_hash is not null" in constraint_sql
     assert "compiled_bundle" in constraint_sql
     assert "compiler_version" in constraint_sql
     assert "sha256" in constraint_sql
@@ -694,6 +695,9 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("import:%2E%2E/guide.md", "path traversal"),
         ("inline:%5CUsers%5Calice%5Cguide.md", "local path separators"),
         ("https://docs.flow.test/guide.md;v=2", "path parameters"),
+        ("https://docs.flow.test/a;b/guide.md", "path parameters"),
+        ("https://docs.flow.test/a%3Bb/guide.md", "path parameters"),
+        ("https://docs.flow.test/a%253Bb/guide.md", "path parameters"),
         ("inline:/workspace/guide.md", "virtual namespace"),
         ("repo:/srv/repos/private/guide.md", "virtual namespace"),
         ("import:/opt/workstream/guide.md", "virtual namespace"),
@@ -779,6 +783,23 @@ async def test_source_snapshot_rejects_unknown_request_fields(
     assert item_response.status_code == 422
     assert "extra" in top_level_response.text
     assert "extra" in item_response.text
+
+
+async def test_source_snapshot_rejects_oversized_source_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    payload = source_snapshot_payload(durable_ref=f"https://docs.flow.test/{'a' * 2050}")
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        headers=auth_headers(),
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert "max_length" in response.text
 
 
 async def test_snapshot_freshness_fails_closed_when_captured_at_ties(
@@ -1539,6 +1560,13 @@ async def test_submission_artifact_policy_rejects_unknown_wrapper_fields(
         "config/.env.production",
         "private-key.txt",
         "keys/id_rsa.pub",
+        "keys/id_ed25519",
+        "keys/id_ecdsa",
+        ".npmrc",
+        ".pypirc",
+        "api-key.txt",
+        "api_key.txt",
+        "service-account.json",
         "secrets/api-token.txt",
     ],
 )
@@ -1562,6 +1590,67 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
 
     assert response.status_code == 422
     assert "forbidden artifacts" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("policy_body", "expected_detail"),
+    [
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "required_artifacts": [
+                    project_submission_artifact_policy_body()["required_artifacts"][0],
+                    {
+                        **project_submission_artifact_policy_body()["required_artifacts"][0],
+                        "path": "outputs/alternate-answer.md",
+                    },
+                ],
+            },
+            "duplicate required artifact key",
+        ),
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "required_evidence": [
+                    project_submission_artifact_policy_body()["required_evidence"][0],
+                    {
+                        **project_submission_artifact_policy_body()["required_evidence"][0],
+                        "label": "Alternate reasoning trace",
+                    },
+                ],
+            },
+            "duplicate required evidence key",
+        ),
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "attestation_terms": ["a" * 101],
+            },
+            "attestation terms",
+        ),
+    ],
+)
+async def test_submission_artifact_policy_rejects_ambiguous_or_oversized_policy_terms(
+    project_client: AsyncClient,
+    policy_body: dict,
+    expected_detail: str,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": policy_body,
+        },
+    )
+
+    assert response.status_code == 422
+    assert expected_detail in response.json()["detail"]
 
 
 async def test_blocking_sufficiency_report_prevents_policy_approval(
@@ -2005,6 +2094,25 @@ async def test_activation_rejects_pending_pre_submit_checker_policy(
 
     assert response.status_code == 422
     assert "compiled project pre-submit checker policy" in response.json()["detail"]
+
+
+async def test_database_enforces_compiled_pre_submit_checker_bundle_hash(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+
+    async with db_session.get_session_factory()() as session:
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == bundle["effective_policy"]["id"]
+            )
+        )
+        assert pre_submit_checker_policy is not None
+        pre_submit_checker_policy.compiled_bundle_hash = None
+        with pytest.raises(IntegrityError):
+            await session.commit()
 
 
 async def test_activation_rejects_mismatched_pre_submit_checker_bundle_hash(

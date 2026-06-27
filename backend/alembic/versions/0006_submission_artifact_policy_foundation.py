@@ -457,6 +457,7 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "lifecycle_status != 'compiled' or "
             "(compiler_version is not null and compiled_bundle is not null and "
+            "compiled_bundle_hash is not null and "
             "compiled_bundle_hash ~ '^sha256:[0-9a-f]{64}$')",
             name="ck_pre_submit_checker_policies_compiled_fields",
         ),

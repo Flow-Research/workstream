@@ -74,6 +74,21 @@ SECRET_REF_PATTERN = re.compile(
     r"(x-amz-|signature|credential|access[_-]?key|secret|token|password|private[_-]?key)",
     re.IGNORECASE,
 )
+SECRET_ARTIFACT_NAME_PATTERN = re.compile(
+    r"(^|[._/\-])("
+    r"\.env[^/]*|"
+    r"\.npmrc|\.pypirc|"
+    r"id_(rsa|dsa|ecdsa|ed25519)(\.[^/]*)?|"
+    r"private[_\-]?key[^/]*|"
+    r"api[_\-]?key[^/]*|"
+    r"access[_\-]?key[^/]*|"
+    r"secret[^/]*|"
+    r"credential[^/]*|"
+    r"token[^/]*|"
+    r"service[_\-]?account[^/]*"
+    r")($|[._/\-])",
+    re.IGNORECASE,
+)
 ALLOWED_SOURCE_REF_SCHEMES = {"https", "http", "repo", "inline", "import", "s3", "r2"}
 GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION = "guide_source_snapshot.v1"
 EFFECTIVE_POLICY_SCHEMA_VERSION = "effective_project_submission_artifact_policy.v1"
@@ -95,12 +110,32 @@ DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS = [
     "credential*",
     "secrets",
     "secret*",
+    ".npmrc",
+    ".pypirc",
+    "api_key",
+    "api-key",
+    "api_key*",
+    "api-key*",
+    "access_key",
+    "access-key",
+    "access_key*",
+    "access-key*",
     "private_key",
     "private-key",
     "private_key*",
     "private-key*",
     "id_rsa",
     "id_rsa*",
+    "id_dsa",
+    "id_dsa*",
+    "id_ecdsa",
+    "id_ecdsa*",
+    "id_ed25519",
+    "id_ed25519*",
+    "service_account",
+    "service-account",
+    "service_account*",
+    "service-account*",
     "token",
     "token*",
     "*.pem",
@@ -1210,6 +1245,10 @@ class ProjectService:
             raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
         if parsed.username or parsed.password or "@" in parsed.netloc:
             raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
+        if ";" in raw_ref or ";" in decoded_ref:
+            raise SourceSnapshotInvalid(
+                "durable source refs cannot contain query, fragment, or path parameters"
+            )
         if (
             parsed.query
             or parsed.fragment
@@ -1224,7 +1263,7 @@ class ProjectService:
         if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
             raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
         decoded_path = self._decode_percent_encoded_ref(parsed.path or "")
-        if "?" in decoded_path or "#" in decoded_path:
+        if "?" in decoded_path or "#" in decoded_path or ";" in decoded_path:
             raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
         path_segments = [segment for segment in decoded_path.split("/") if segment]
         if any(segment in {".", ".."} for segment in path_segments):
@@ -1299,6 +1338,17 @@ class ProjectService:
         """Normalize project policy content before hashing or merging."""
         packaging = policy_body.get("packaging", {})
         self._validate_packaging_rules(packaging)
+        self._validate_unique_policy_rule_keys(
+            policy_body.get("required_artifacts", []),
+            "required artifact",
+        )
+        self._validate_unique_policy_rule_keys(
+            policy_body.get("required_evidence", []),
+            "required evidence",
+        )
+        for term in policy_body.get("attestation_terms", []):
+            if len(term) > 100:
+                raise PolicySetupBlocked("attestation terms must be 100 characters or fewer")
         return {
             "schema_version": "project_submission_artifact_policy.v1",
             "required_artifacts": sorted(
@@ -1327,6 +1377,19 @@ class ProjectService:
             "maximum_package_size_bytes": policy_body.get("maximum_package_size_bytes"),
             "packaging": packaging,
         }
+
+    def _validate_unique_policy_rule_keys(
+        self,
+        rules: list[dict[str, Any]],
+        label: str,
+    ) -> None:
+        """Reject duplicate policy rule keys before canonicalization."""
+        seen: set[str] = set()
+        for rule in rules:
+            key = rule["key"]
+            if key in seen:
+                raise PolicySetupBlocked(f"duplicate {label} key")
+            seen.add(key)
 
     def _validate_packaging_rules(self, packaging: dict[str, Any]) -> None:
         """Validate the constrained packaging rules accepted in v0.1."""
@@ -1498,6 +1561,8 @@ class ProjectService:
         token_normalized = re.sub(r"[-\s]+", "_", normalized)
         segments = normalized.split("/")
         token_segments = token_normalized.split("/")
+        if SECRET_ARTIFACT_NAME_PATTERN.search(normalized):
+            return True
         for pattern in patterns:
             normalized_pattern = pattern.lower()
             token_pattern = re.sub(r"[-\s]+", "_", normalized_pattern)
