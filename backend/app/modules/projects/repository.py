@@ -180,7 +180,7 @@ class ProjectRepository:
             guide_version: Guide version whose snapshots should be loaded.
 
         Returns:
-            Snapshots ordered by creation time and id.
+            Snapshots ordered by creation time.
         """
         result = await self._session.execute(
             select(GuideSourceSnapshot)
@@ -189,7 +189,7 @@ class ProjectRepository:
                 GuideSourceSnapshot.guide_id == guide_id,
                 GuideSourceSnapshot.guide_version == guide_version,
             )
-            .order_by(GuideSourceSnapshot.captured_at, GuideSourceSnapshot.id)
+            .order_by(GuideSourceSnapshot.captured_at)
         )
         return result.scalars().all()
 
@@ -200,8 +200,24 @@ class ProjectRepository:
         guide_version: str,
     ) -> GuideSourceSnapshot | None:
         """Load the latest source snapshot for a guide version."""
-        snapshots = await self.list_guide_source_snapshots(project_id, guide_id, guide_version)
-        return snapshots[-1] if snapshots else None
+        result = await self._session.execute(
+            select(GuideSourceSnapshot)
+            .where(
+                GuideSourceSnapshot.project_id == project_id,
+                GuideSourceSnapshot.guide_id == guide_id,
+                GuideSourceSnapshot.guide_version == guide_version,
+            )
+            .order_by(GuideSourceSnapshot.captured_at.desc())
+            .limit(2)
+        )
+        snapshots = list(result.scalars().all())
+        if not snapshots:
+            return None
+        if len(snapshots) > 1 and snapshots[0].captured_at == snapshots[1].captured_at:
+            raise ProjectRepositoryIntegrityError(
+                "latest guide source snapshot is ambiguous for guide version"
+            )
+        return snapshots[0]
 
     async def list_guide_source_snapshot_items(
         self,

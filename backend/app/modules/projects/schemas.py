@@ -153,6 +153,8 @@ class GuideSufficiencyReportResponse(BaseModel):
 class ArtifactRuleInput(BaseModel):
     """Input schema for a required artifact rule."""
 
+    model_config = ConfigDict(extra="forbid")
+
     key: str
     path: str
     hash_required: Literal[True] = True
@@ -163,6 +165,8 @@ class ArtifactRuleInput(BaseModel):
 class EvidenceRuleInput(BaseModel):
     """Input schema for a required evidence rule."""
 
+    model_config = ConfigDict(extra="forbid")
+
     key: str
     label: str
     hash_required: Literal[True] = True
@@ -172,6 +176,8 @@ class EvidenceRuleInput(BaseModel):
 
 class ForbiddenArtifactRuleInput(BaseModel):
     """Input schema for a project-specific forbidden artifact rule."""
+
+    model_config = ConfigDict(extra="forbid")
 
     pattern: str
     reason: str
@@ -191,6 +197,8 @@ class SubmissionArtifactPackagingInput(BaseModel):
 
 class SubmissionArtifactPolicyInput(BaseModel):
     """Machine-readable project artifact intake policy content."""
+
+    model_config = ConfigDict(extra="forbid")
 
     required_artifacts: list[ArtifactRuleInput] = Field(default_factory=list)
     required_evidence: list[EvidenceRuleInput] = Field(default_factory=list)

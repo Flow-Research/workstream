@@ -265,6 +265,11 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_submission_artifact_policies")),
         sa.UniqueConstraint(
+            "id",
+            "policy_hash",
+            name="uq_submission_artifact_policies_id_hash",
+        ),
+        sa.UniqueConstraint(
             "project_id",
             "guide_version",
             "policy_version",
@@ -357,9 +362,9 @@ def upgrade() -> None:
             name="fk_effective_psap_source_snapshot_hash",
         ),
         sa.ForeignKeyConstraint(
-            ["submission_artifact_policy_id"],
-            ["submission_artifact_policies.id"],
-            name="fk_effective_psap_submission_policy",
+            ["submission_artifact_policy_id", "submission_artifact_policy_hash"],
+            ["submission_artifact_policies.id", "submission_artifact_policies.policy_hash"],
+            name="fk_effective_psap_submission_policy_hash",
         ),
         sa.ForeignKeyConstraint(
             ["supersedes_effective_policy_id"],
@@ -371,10 +376,9 @@ def upgrade() -> None:
             name=op.f("pk_effective_project_submission_artifact_policies"),
         ),
         sa.UniqueConstraint(
-            "project_id",
-            "guide_version",
+            "id",
             "effective_policy_hash",
-            name="uq_effective_project_submission_artifact_policies_project_hash",
+            name="uq_effective_project_submission_artifact_policies_id_hash",
         ),
     )
     op.create_index(
@@ -457,9 +461,12 @@ def upgrade() -> None:
             name="ck_pre_submit_checker_policies_compiled_fields",
         ),
         sa.ForeignKeyConstraint(
-            ["effective_policy_id"],
-            ["effective_project_submission_artifact_policies.id"],
-            name="fk_pre_submit_checker_policies_effective",
+            ["effective_policy_id", "effective_policy_hash"],
+            [
+                "effective_project_submission_artifact_policies.id",
+                "effective_project_submission_artifact_policies.effective_policy_hash",
+            ],
+            name="fk_pre_submit_checker_policies_effective_hash",
         ),
         sa.ForeignKeyConstraint(
             ["guide_id"],

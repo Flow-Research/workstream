@@ -338,6 +338,11 @@ class SubmissionArtifactPolicy(Base):
             name="fk_submission_artifact_policies_source_snapshot_hash",
         ),
         UniqueConstraint(
+            "id",
+            "policy_hash",
+            name="uq_submission_artifact_policies_id_hash",
+        ),
+        UniqueConstraint(
             "project_id",
             "guide_version",
             "policy_version",
@@ -406,11 +411,15 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
             ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
             name="fk_effective_psap_source_snapshot_hash",
         ),
+        ForeignKeyConstraint(
+            ["submission_artifact_policy_id", "submission_artifact_policy_hash"],
+            ["submission_artifact_policies.id", "submission_artifact_policies.policy_hash"],
+            name="fk_effective_psap_submission_policy_hash",
+        ),
         UniqueConstraint(
-            "project_id",
-            "guide_version",
+            "id",
             "effective_policy_hash",
-            name="uq_effective_project_submission_artifact_policies_project_hash",
+            name="uq_effective_project_submission_artifact_policies_id_hash",
         ),
         Index(
             "uq_effective_psap_one_approved",
@@ -431,11 +440,7 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
         index=True,
     )
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    submission_artifact_policy_id: Mapped[str] = mapped_column(
-        ForeignKey("submission_artifact_policies.id"),
-        nullable=False,
-        index=True,
-    )
+    submission_artifact_policy_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     submission_artifact_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="approved", index=True)
     merge_algorithm_version: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -474,6 +479,14 @@ class PreSubmitCheckerPolicy(Base):
             ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
             name="fk_pre_submit_checker_policies_source_snapshot_hash",
         ),
+        ForeignKeyConstraint(
+            ["effective_policy_id", "effective_policy_hash"],
+            [
+                "effective_project_submission_artifact_policies.id",
+                "effective_project_submission_artifact_policies.effective_policy_hash",
+            ],
+            name="fk_pre_submit_checker_policies_effective_hash",
+        ),
         Index(
             "uq_pre_submit_checker_current",
             "project_id",
@@ -493,11 +506,7 @@ class PreSubmitCheckerPolicy(Base):
         index=True,
     )
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
-    effective_policy_id: Mapped[str] = mapped_column(
-        ForeignKey("effective_project_submission_artifact_policies.id"),
-        nullable=False,
-        index=True,
-    )
+    effective_policy_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
     lifecycle_status: Mapped[str] = mapped_column(
         String(30),

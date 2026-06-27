@@ -31,7 +31,7 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
-from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
     CheckerPolicyInput,
@@ -200,6 +200,12 @@ class PolicySetupBlocked(ProjectServiceError):
     """Raised when project submission artifact policy setup is invalid."""
 
     status_code = 422
+
+
+class PolicySetupConflict(ProjectServiceError):
+    """Raised when concurrent project policy setup wins a database race."""
+
+    status_code = 409
 
 
 class PolicyEditBlocked(ProjectServiceError):
@@ -428,8 +434,14 @@ class ProjectService:
             )
             for index, item in enumerate(sanitized_items)
         ]
-        snapshot = await self._repo.add_guide_source_snapshot(snapshot, item_models)
-        await self._session.commit()
+        try:
+            snapshot = await self._repo.add_guide_source_snapshot(snapshot, item_models)
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+            raise PolicySetupConflict(
+                "guide source snapshot conflicted with concurrent setup; retry"
+            ) from exc
         return await self._source_snapshot_response(snapshot)
 
     async def create_guide_sufficiency_report(
@@ -469,8 +481,14 @@ class ProjectService:
             agent_version=payload.agent_version,
             created_by=actor.actor_id,
         )
-        report = await self._repo.add_guide_sufficiency_report(report)
-        await self._session.commit()
+        try:
+            report = await self._repo.add_guide_sufficiency_report(report)
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+            raise PolicySetupConflict(
+                "guide sufficiency report conflicted with concurrent setup; retry"
+            ) from exc
         await self._session.refresh(report)
         return GuideSufficiencyReportResponse.model_validate(report)
 
@@ -556,8 +574,14 @@ class ProjectService:
             created_by=actor.actor_id,
             change_summary=payload.change_summary,
         )
-        policy = await self._repo.add_submission_artifact_policy(policy)
-        await self._session.commit()
+        try:
+            policy = await self._repo.add_submission_artifact_policy(policy)
+            await self._session.commit()
+        except IntegrityError as exc:
+            await self._session.rollback()
+            raise PolicySetupConflict(
+                "submission artifact policy conflicted with concurrent setup; retry"
+            ) from exc
         await self._session.refresh(policy)
         return SubmissionArtifactPolicyResponse.model_validate(policy)
 
@@ -701,33 +725,33 @@ class ProjectService:
                 previous_effective.id if previous_effective is not None else None
             ),
         )
-        effective = await self._repo.add_effective_submission_artifact_policy(effective)
-        pre_submit_checker_policy = PreSubmitCheckerPolicy(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            effective_policy_id=effective.id,
-            effective_policy_hash=effective.effective_policy_hash,
-            lifecycle_status="pending_compilation",
-            compiler_version=None,
-            compiled_bundle=None,
-            compiled_bundle_hash=None,
-            checker_names=[],
-            checker_configs={},
-            created_by=actor.actor_id,
-            supersedes_pre_submit_checker_policy_id=(
-                previous_pre_submit_checker_policy.id
-                if previous_pre_submit_checker_policy is not None
-                else None
-            ),
-        )
-        pre_submit_checker_policy = await self._repo.add_pre_submit_checker_policy(
-            pre_submit_checker_policy
-        )
         try:
+            effective = await self._repo.add_effective_submission_artifact_policy(effective)
+            pre_submit_checker_policy = PreSubmitCheckerPolicy(
+                id=str(uuid4()),
+                project_id=project_id,
+                guide_id=guide.id,
+                guide_version=guide.version,
+                source_snapshot_id=snapshot.id,
+                source_snapshot_hash=snapshot.bundle_hash,
+                effective_policy_id=effective.id,
+                effective_policy_hash=effective.effective_policy_hash,
+                lifecycle_status="pending_compilation",
+                compiler_version=None,
+                compiled_bundle=None,
+                compiled_bundle_hash=None,
+                checker_names=[],
+                checker_configs={},
+                created_by=actor.actor_id,
+                supersedes_pre_submit_checker_policy_id=(
+                    previous_pre_submit_checker_policy.id
+                    if previous_pre_submit_checker_policy is not None
+                    else None
+                ),
+            )
+            pre_submit_checker_policy = await self._repo.add_pre_submit_checker_policy(
+                pre_submit_checker_policy
+            )
             await self._session.commit()
         except IntegrityError as exc:
             await self._session.rollback()
@@ -815,21 +839,21 @@ class ProjectService:
         if project is None:
             raise ProjectNotFound("project not found")
 
-        now = datetime.now(UTC)
-        for active_guide in await self._repo.list_active_guides(project_id):
-            active_guide.status = "superseded"
-            active_guide.superseded_at = now
-        await self._session.flush()
-
-        guide.status = "active"
-        guide.approved_by = actor.actor_id
-        guide.effective_at = now
-
-        project.status = "active"
-        project.base_amount = payment_policy.base_amount
-        project.currency = payment_policy.currency
-
         try:
+            now = datetime.now(UTC)
+            for active_guide in await self._repo.list_active_guides(project_id):
+                active_guide.status = "superseded"
+                active_guide.superseded_at = now
+            await self._session.flush()
+
+            guide.status = "active"
+            guide.approved_by = actor.actor_id
+            guide.effective_at = now
+
+            project.status = "active"
+            project.base_amount = payment_policy.base_amount
+            project.currency = payment_policy.currency
+
             await self._session.commit()
         except IntegrityError as exc:
             await self._session.rollback()
@@ -918,6 +942,18 @@ class ProjectService:
             or pre_submit_checker_policy is None
         ):
             raise GuideActivationBlocked("active guide policy context is incomplete")
+        self._validate_activation_ready(
+            guide,
+            source_snapshot,
+            sufficiency_report,
+            submission_artifact_policy,
+            effective_policy,
+            pre_submit_checker_policy,
+            checker_policy,
+            review_policy,
+            revision_policy,
+            payment_policy,
+        )
         return await self._active_response(
             guide,
             source_snapshot,
@@ -1024,11 +1060,16 @@ class ProjectService:
         Raises:
             PolicySetupBlocked: If another snapshot was captured later.
         """
-        latest_snapshot = await self._repo.get_latest_guide_source_snapshot(
-            project_id,
-            guide.id,
-            guide.version,
-        )
+        try:
+            latest_snapshot = await self._repo.get_latest_guide_source_snapshot(
+                project_id,
+                guide.id,
+                guide.version,
+            )
+        except ProjectRepositoryIntegrityError as exc:
+            raise PolicySetupBlocked(
+                "latest guide source snapshot is ambiguous; create a fresh source snapshot"
+            ) from exc
         if latest_snapshot is None or latest_snapshot.id != snapshot.id:
             raise PolicySetupBlocked(
                 "guide source snapshot is stale; create fresh sufficiency and policy records"
@@ -1143,8 +1184,17 @@ class ProjectService:
             raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
         if parsed.username or parsed.password or "@" in parsed.netloc:
             raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
-        if parsed.query or parsed.fragment:
-            raise SourceSnapshotInvalid("durable source refs cannot contain query or fragment")
+        if (
+            parsed.query
+            or parsed.fragment
+            or parsed.params
+            or decoded_parsed.query
+            or decoded_parsed.fragment
+            or decoded_parsed.params
+        ):
+            raise SourceSnapshotInvalid(
+                "durable source refs cannot contain query, fragment, or path parameters"
+            )
         if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
             raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
         decoded_path = unquote(parsed.path or "")
