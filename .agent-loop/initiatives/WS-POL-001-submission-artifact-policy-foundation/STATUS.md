@@ -2,19 +2,19 @@
 
 ## Current Status
 
-Planning review is ready, and latest internal and external review feedback has
-been addressed.
+Planning review was approved and merged through PR #26.
 Implementation has not started.
 
 ## Active Chunk
 
-`WS-POL-001-01` is pending human planning approval. Implementation has not started.
+`WS-POL-001-01` planning contract is approved for future implementation.
+Implementation has not started.
 
 ## Chunk Status
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-POL-001-01` | Awaiting human planning approval | `codex/submission-artifact-policy-loop-plan` | 26 | Internal review complete; external review response is recorded separately from internal review evidence. |
+| `WS-POL-001-01` | Ready for implementation | - | - | Planning merged through PR #26 at `acf2bcf62a7af391c506c960769268c393aefdab`; start on a new implementation branch. |
 | `WS-POL-001-02` | Planned | - | - | Starts after policy foundation lands. |
 | `WS-POL-001-03` | Planned | - | - | Moves submission creation to effective policy. |
 | `WS-POL-001-04` | Planned | - | - | Splits post-submit checker policy provenance. |
@@ -24,7 +24,7 @@ Implementation has not started.
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| Human approval of chunk sequence and first contract | User | Review PR #26 and decide whether to merge. |
+| Implementation start signal | User | Confirm when to open the implementation branch for `WS-POL-001-01`. |
 
 ## Follow-Ups
 
