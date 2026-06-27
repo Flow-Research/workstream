@@ -348,13 +348,6 @@ class SubmissionArtifactPolicy(Base):
             "policy_version",
             name="uq_submission_artifact_policies_project_version_policy",
         ),
-        Index(
-            "uq_sap_one_approved_per_guide",
-            "project_id",
-            "guide_version",
-            unique=True,
-            postgresql_where=text("lifecycle_status = 'approved'"),
-        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -421,13 +414,6 @@ class EffectiveProjectSubmissionArtifactPolicy(Base):
             "effective_policy_hash",
             name="uq_effective_project_submission_artifact_policies_id_hash",
         ),
-        Index(
-            "uq_effective_psap_one_approved",
-            "project_id",
-            "guide_version",
-            unique=True,
-            postgresql_where=text("lifecycle_status = 'approved'"),
-        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -487,13 +473,6 @@ class PreSubmitCheckerPolicy(Base):
                 "effective_project_submission_artifact_policies.effective_policy_hash",
             ],
             name="fk_pre_submit_checker_policies_effective_hash",
-        ),
-        Index(
-            "uq_pre_submit_checker_current",
-            "project_id",
-            "guide_version",
-            unique=True,
-            postgresql_where=text("lifecycle_status in ('pending_compilation', 'compiled')"),
         ),
     )
 

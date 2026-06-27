@@ -51,6 +51,7 @@ backend/tests/test_projects.py
 backend/tests/test_tasks.py
 backend/tests/test_checkers.py
 backend/scripts/week1_api_e2e.py
+docs/architecture_data_model.md
 docs/spec_chunk_3_project_guide_foundation.md
 docs/template_submission_artifact_policy.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**

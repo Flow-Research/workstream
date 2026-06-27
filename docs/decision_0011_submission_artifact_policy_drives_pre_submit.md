@@ -264,14 +264,14 @@ The effective policy merge is deterministic:
 | `required_artifacts` | union by canonical artifact key |
 | `required_evidence` | union by canonical evidence key |
 | `forbidden_artifacts` | union |
-| `required_attestation_terms` | union |
-| `artifact_manifest_required` | logical OR |
+| `attestation_terms` | union |
+| `manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
 | `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
 | `maximum_package_size_bytes` | minimum non-null limit |
-| `packaging_rules` | restrictive merge; conflicts block activation |
+| `packaging` | restrictive merge; conflicts block activation |
 
 Conflicts block setup before workers see tasks. A project-required artifact that
 matches a forbidden rule is not accepted as a runtime edge case.
@@ -288,8 +288,10 @@ Changing an approved policy, effective policy, or compiled checker bundle
 creates a new row with a `supersedes_*` reference. Approved rows are never
 edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
 canonical JSON source of truth and `compiled_bundle_hash` is the hash of that
-canonical JSON. `checker_names`, `checker_configs`, and `blocking_severities`
-are derived index projections only.
+canonical JSON. `checker_names` and `checker_configs` are derived index
+projections only. Project guide APIs expose stable checker provenance and hash
+fields; compiler-owned bundle internals are retrieved through the checker
+runtime boundary.
 
 Task, submission, and revision provenance fields named
 `locked_pre_submit_checker_bundle_hash` store

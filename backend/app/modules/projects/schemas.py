@@ -350,6 +350,28 @@ class PreSubmitCheckerPolicyResponse(BaseModel):
     superseded_at: datetime | None
 
 
+class PreSubmitCheckerPolicySummaryResponse(BaseModel):
+    """Project API summary for a pre-submit checker bundle contract."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    effective_policy_id: str
+    effective_policy_hash: str
+    lifecycle_status: str
+    compiler_version: str | None
+    compiled_bundle_hash: str | None
+    created_by: str
+    created_at: datetime
+    supersedes_pre_submit_checker_policy_id: str | None
+    superseded_at: datetime | None
+
+
 class ProjectCreate(BaseModel):
     """Request schema for creating a project shell."""
 
@@ -536,7 +558,7 @@ class ActiveGuideResponse(BaseModel):
     guide_sufficiency_report: GuideSufficiencyReportResponse
     submission_artifact_policy: SubmissionArtifactPolicyResponse
     effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
-    pre_submit_checker_policy: PreSubmitCheckerPolicyResponse
+    pre_submit_checker_policy: PreSubmitCheckerPolicySummaryResponse
     checker_policy: CheckerPolicyResponse
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse

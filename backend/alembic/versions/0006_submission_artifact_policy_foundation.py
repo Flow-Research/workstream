@@ -306,14 +306,6 @@ def upgrade() -> None:
         ["source_snapshot_id"],
         unique=False,
     )
-    op.create_index(
-        "uq_sap_one_approved_per_guide",
-        "submission_artifact_policies",
-        ["project_id", "guide_version"],
-        unique=True,
-        postgresql_where=sa.text("lifecycle_status = 'approved'"),
-    )
-
     op.create_table(
         "effective_project_submission_artifact_policies",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -417,14 +409,6 @@ def upgrade() -> None:
         ["submission_artifact_policy_id"],
         unique=False,
     )
-    op.create_index(
-        "uq_effective_psap_one_approved",
-        "effective_project_submission_artifact_policies",
-        ["project_id", "guide_version"],
-        unique=True,
-        postgresql_where=sa.text("lifecycle_status = 'approved'"),
-    )
-
     op.create_table(
         "pre_submit_checker_policies",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -538,21 +522,9 @@ def upgrade() -> None:
         ["source_snapshot_id"],
         unique=False,
     )
-    op.create_index(
-        "uq_pre_submit_checker_current",
-        "pre_submit_checker_policies",
-        ["project_id", "guide_version"],
-        unique=True,
-        postgresql_where=sa.text("lifecycle_status in ('pending_compilation', 'compiled')"),
-    )
-
 
 def downgrade() -> None:
     """Drop submission artifact policy tables in dependency order."""
-    op.drop_index(
-        "uq_pre_submit_checker_current",
-        table_name="pre_submit_checker_policies",
-    )
     op.drop_index(
         "ix_pre_submit_checker_source_snapshot",
         table_name="pre_submit_checker_policies",
@@ -584,10 +556,6 @@ def downgrade() -> None:
     op.drop_table("pre_submit_checker_policies")
 
     op.drop_index(
-        "uq_effective_psap_one_approved",
-        table_name="effective_project_submission_artifact_policies",
-    )
-    op.drop_index(
         "ix_effective_psap_submission_policy",
         table_name="effective_project_submission_artifact_policies",
     )
@@ -613,10 +581,6 @@ def downgrade() -> None:
     )
     op.drop_table("effective_project_submission_artifact_policies")
 
-    op.drop_index(
-        "uq_sap_one_approved_per_guide",
-        table_name="submission_artifact_policies",
-    )
     op.drop_index(
         op.f("ix_submission_artifact_policies_source_snapshot_id"),
         table_name="submission_artifact_policies",

@@ -188,10 +188,11 @@ Fields:
 - `project_id`
 - `guide_id`
 - `guide_version`
+- `manifest_schema_version`
 - `manifest_json`
 - `bundle_hash`
 - `captured_at`
-- `created_by`
+- `captured_by`
 
 `GuideSourceSnapshot` is the immutable bundle binding for guide material. It
 captures the exact guide/source material Workstream evaluated as a canonical
@@ -214,6 +215,11 @@ the canonical manifest. Duplicate source items with the same
 `source_kind + durable_ref` are rejected before hashing. Changing any included
 document, example, rubric, repository doc, or inline guide body creates a new
 snapshot and bundle hash.
+
+Every snapshot includes a server-derived `project_guide` source item whose
+content hash is computed from the current guide material fields. Caller-supplied
+source items can add external docs, examples, or rubrics, but they cannot omit
+the guide body from the bundle hash.
 
 ## GuideSourceSnapshotItem
 
@@ -259,18 +265,21 @@ Fields:
 
 - `id`
 - `project_id`
+- `guide_id`
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
 - `status`
 - `findings`
-- `source_material_refs`
+- `summary`
 - `agent_name`
 - `agent_version`
+- `created_by`
 - `created_at`
-- `acknowledged_by_role`
-- `acknowledged_by`
-- `acknowledged_at`
+- `warnings_acknowledged_by_role`
+- `warnings_acknowledged_by_actor`
+- `warnings_acknowledged_at`
+- `acknowledgement_note`
 
 Status:
 
@@ -298,6 +307,7 @@ Fields:
 
 - `id`
 - `project_id`
+- `guide_id`
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
@@ -406,6 +416,7 @@ Fields:
 
 - `id`
 - `project_id`
+- `guide_id`
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
@@ -420,7 +431,7 @@ Fields:
 - `supersedes_effective_policy_id`
 - `superseded_at`
 
-This policy is deterministic. It preserves Workstream defaults first and adds project-approved requirements. Duplicate rules collapse by canonical key. Any project rule that conflicts with Workstream defaults is a project setup defect.
+This policy is deterministic. It preserves Workstream defaults first and adds project-approved requirements. Duplicate project rule keys are rejected before merge. Default and project rules merge by canonical key, and any project rule that conflicts with Workstream defaults is a project setup defect.
 
 The merge contract is executable per field:
 
@@ -429,20 +440,22 @@ The merge contract is executable per field:
 | `required_artifacts` | union by canonical artifact key |
 | `required_evidence` | union by canonical evidence key |
 | `forbidden_artifacts` | union |
-| `required_attestation_terms` | union |
-| `artifact_manifest_required` | logical OR |
+| `attestation_terms` | union |
+| `manifest_required` | logical OR |
 | `artifact_hash_required` | logical OR |
 | `allowed_storage_schemes` | intersection |
 | `artifact_hash_algorithm` | platform-locked `sha256`; project policy cannot change it and task runtime parameters cannot override it |
 | `maximum_file_size_bytes` | minimum non-null limit |
 | `maximum_package_size_bytes` | minimum non-null limit |
-| `packaging_rules` | restrictive merge; conflicts block activation |
+| `packaging` | restrictive merge; conflicts block activation |
 
 A required artifact or evidence rule matching a forbidden artifact rule blocks
 project setup as a policy conflict. It is not deferred to worker submission.
 
 Approved and superseded effective policies are immutable. Recomputing the
 effective policy after guide/source/policy changes creates a new row and hash.
+Supersession is represented by the replacement row's
+`supersedes_effective_policy_id`; the prior approved row is not edited in place.
 
 ## PreSubmitCheckerPolicy
 
@@ -450,6 +463,7 @@ Fields:
 
 - `id`
 - `project_id`
+- `guide_id`
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
@@ -500,7 +514,8 @@ forbidden artifacts, hash algorithm, or platform defaults.
 
 Compiled and superseded checker policy rows are immutable. Changing policy or
 compiler output creates a new row with
-`supersedes_pre_submit_checker_policy_id`.
+`supersedes_pre_submit_checker_policy_id`; the prior compiled row is not edited
+in place.
 
 The generated checker order is deterministic:
 

@@ -33,6 +33,7 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.service import GUIDE_SOURCE_MATERIAL_FIELDS
 
 
 @pytest.fixture
@@ -89,29 +90,21 @@ def test_project_guide_partial_unique_index_metadata_compiles() -> None:
     assert "status = 'active'" in postgres_compiled
 
 
-def test_submission_policy_partial_unique_index_metadata_compiles() -> None:
-    index = next(
-        index
-        for index in SubmissionArtifactPolicy.__table__.indexes
-        if index.name == "uq_sap_one_approved_per_guide"
-    )
+def test_policy_models_do_not_enforce_mutable_current_uniqueness() -> None:
+    disallowed_current_indexes = {
+        "uq_sap_one_approved_per_guide",
+        "uq_effective_psap_one_approved",
+        "uq_pre_submit_checker_current",
+    }
 
-    postgres_compiled = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
+    for model in (
+        SubmissionArtifactPolicy,
+        EffectiveProjectSubmissionArtifactPolicy,
+        PreSubmitCheckerPolicy,
+    ):
+        index_names = {index.name for index in model.__table__.indexes}
 
-    assert "lifecycle_status = 'approved'" in postgres_compiled
-
-
-def test_pre_submit_checker_policy_partial_unique_index_metadata_compiles() -> None:
-    index = next(
-        index
-        for index in PreSubmitCheckerPolicy.__table__.indexes
-        if index.name == "uq_pre_submit_checker_current"
-    )
-
-    postgres_compiled = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
-
-    assert "pending_compilation" in postgres_compiled
-    assert "compiled" in postgres_compiled
+        assert index_names.isdisjoint(disallowed_current_indexes)
 
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:
@@ -612,10 +605,22 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    guide_material = {
+        field: guide[field]
+        for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
+    }
     expected_manifest = {
         "schema_version": "guide_source_snapshot.v1",
         "items": sorted(
             [
+                {
+                    "source_kind": "project_guide",
+                    "durable_ref": f"inline:/guides/{guide['id']}/{guide['version']}",
+                    "ingestion_adapter": "workstream_project_guide",
+                    "content_hash": canonical_json_hash(guide_material),
+                    "content_cid": None,
+                    "media_type": "application/json",
+                },
                 {
                     "source_kind": "url_doc",
                     "durable_ref": "https://docs.flow.test/stem/guide.md",
@@ -647,7 +652,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
 
     assert snapshot["manifest_json"] == expected_manifest
     assert snapshot["bundle_hash"] == expected_hash
-    assert [item["item_order"] for item in snapshot["items"]] == [0, 1]
+    assert [item["item_order"] for item in snapshot["items"]] == [0, 1, 2]
 
 
 async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) -> None:
@@ -689,6 +694,14 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("s3://workstream-guides/%63redential/guide.md", "credential material"),
         ("s3://workstream-guides/%70assword/guide.md", "credential material"),
         ("s3://workstream-guides/%2574oken/guide.md", "credential material"),
+        ("https://docs.flow.test/.env", "credential material"),
+        ("https://docs.flow.test/%252Eenv", "credential material"),
+        ("https://docs.flow.test/keys/id_rsa", "credential material"),
+        ("https://docs.flow.test/keys/deploy.pem", "credential material"),
+        ("s3://bucket/private/key.pem", "credential material"),
+        ("s3://bucket/access/key/guide.md", "credential material"),
+        ("s3://bucket/api/key/guide.md", "credential material"),
+        ("s3://bucket/private/key/guide.md", "credential material"),
         ("https://docs.flow.test/guide.md%253Ftoken%253Dsecret", "query"),
         ("inline:%2Fhome%2Fabiorh%2Fguide.md", "local filesystem paths"),
         ("repo:%2Ftmp%2Fguide.md", "local filesystem paths"),
@@ -959,6 +972,7 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert persisted_policy.derivation_source == "manual_admin_derivation"
     assert set(persisted_policy.source_material_refs) == {
         "https://docs.flow.test/stem/guide.md",
+        f"inline:/guides/{guide['id']}/{guide['version']}",
         "inline:/rubrics/stem-v1",
     }
     assert pre_submit_checker_policy is not None
@@ -1205,38 +1219,53 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
                 )
             )
         ).all()
+        repo = ProjectRepository(session)
+        current_policy = await repo.get_current_approved_submission_artifact_policy(
+            project["id"],
+            guide["version"],
+        )
+        current_effective = await repo.get_effective_submission_artifact_policy(
+            project["id"],
+            guide["version"],
+            snapshot["id"],
+        )
+        current_pre_submit = await repo.get_current_pre_submit_checker_policy(
+            project["id"],
+            guide["version"],
+        )
 
     assert len(pre_submit_rows) == 2
     assert first_persisted is not None
     assert second_persisted is not None
     assert first_effective_persisted is not None
     assert second_effective_persisted is not None
-    assert first_persisted.lifecycle_status == "superseded"
-    assert first_persisted.superseded_at is not None
+    assert current_policy is not None
+    assert current_effective is not None
+    assert current_pre_submit is not None
+
+    assert first_persisted.lifecycle_status == "approved"
+    assert first_persisted.superseded_at is None
     assert second_persisted.lifecycle_status == "approved"
     assert second_persisted.supersedes_policy_id == first_persisted.id
-    assert first_effective_persisted.lifecycle_status == "superseded"
-    assert first_effective_persisted.superseded_at is not None
+    assert first_effective_persisted.lifecycle_status == "approved"
+    assert first_effective_persisted.superseded_at is None
     assert second_effective_persisted.lifecycle_status == "approved"
     assert second_effective_persisted.supersedes_effective_policy_id == (
         first_effective_persisted.id
     )
     assert {row.lifecycle_status for row in pre_submit_rows} == {
         "pending_compilation",
-        "superseded",
     }
-    current_pre_submit = next(
-        row for row in pre_submit_rows if row.lifecycle_status == "pending_compilation"
+    old_pre_submit = next(
+        row for row in pre_submit_rows if row.effective_policy_id == first_effective_persisted.id
     )
-    superseded_pre_submit = next(
-        row for row in pre_submit_rows if row.lifecycle_status == "superseded"
-    )
+    assert old_pre_submit.superseded_at is None
     assert current_pre_submit.effective_policy_id == second_effective_persisted.id
     assert current_pre_submit.supersedes_pre_submit_checker_policy_id == (
-        superseded_pre_submit.id
+        old_pre_submit.id
     )
-    assert superseded_pre_submit.effective_policy_id == first_effective_persisted.id
-    assert superseded_pre_submit.superseded_at is not None
+    assert current_policy.id == second_persisted.id
+    assert current_effective.id == second_effective_persisted.id
 
 
 async def test_approving_replacement_policy_with_same_effective_content_succeeds(
@@ -1280,6 +1309,106 @@ async def test_approving_replacement_policy_with_same_effective_content_succeeds
     assert second_effective["effective_policy_hash"] == first_effective["effective_policy_hash"]
 
 
+async def test_concurrent_policy_approvals_do_not_fork_current_chain(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    first_policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        policy_version="v1",
+    )
+    second_policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        policy_body=project_submission_artifact_policy_body(
+            artifact_path="outputs/final-answer.md"
+        ),
+        policy_version="v2",
+    )
+
+    first_response, second_response = await asyncio.gather(
+        project_client.post(
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+            f"submission-artifact-policies/{first_policy['id']}/approve",
+            headers=auth_headers(),
+            json={"approval_note": "Approved first policy."},
+        ),
+        project_client.post(
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+            f"submission-artifact-policies/{second_policy['id']}/approve",
+            headers=auth_headers(),
+            json={"approval_note": "Approved second policy."},
+        ),
+    )
+
+    assert first_response.status_code == 200, first_response.text
+    assert second_response.status_code == 200, second_response.text
+    async with db_session.get_session_factory()() as session:
+        policies = (
+            await session.scalars(
+                select(SubmissionArtifactPolicy).where(
+                    SubmissionArtifactPolicy.project_id == project["id"],
+                    SubmissionArtifactPolicy.guide_version == guide["version"],
+                    SubmissionArtifactPolicy.lifecycle_status == "approved",
+                )
+            )
+        ).all()
+        effective_policies = (
+            await session.scalars(
+                select(EffectiveProjectSubmissionArtifactPolicy).where(
+                    EffectiveProjectSubmissionArtifactPolicy.project_id == project["id"],
+                    EffectiveProjectSubmissionArtifactPolicy.guide_version == guide["version"],
+                )
+            )
+        ).all()
+        pre_submit_policies = (
+            await session.scalars(
+                select(PreSubmitCheckerPolicy).where(
+                    PreSubmitCheckerPolicy.project_id == project["id"],
+                    PreSubmitCheckerPolicy.guide_version == guide["version"],
+                )
+            )
+        ).all()
+        repo = ProjectRepository(session)
+        current_policy = await repo.get_current_approved_submission_artifact_policy(
+            project["id"],
+            guide["version"],
+        )
+        current_pre_submit = await repo.get_current_pre_submit_checker_policy(
+            project["id"],
+            guide["version"],
+        )
+
+    assert len(policies) == 2
+    assert len(effective_policies) == 2
+    assert len(pre_submit_policies) == 2
+    assert current_policy is not None
+    assert current_pre_submit is not None
+    assert len({policy.supersedes_policy_id for policy in policies if policy.supersedes_policy_id}) == 1
+    assert len(
+        {
+            policy.supersedes_effective_policy_id
+            for policy in effective_policies
+            if policy.supersedes_effective_policy_id
+        }
+    ) == 1
+    assert len(
+        {
+            policy.supersedes_pre_submit_checker_policy_id
+            for policy in pre_submit_policies
+            if policy.supersedes_pre_submit_checker_policy_id
+        }
+    ) == 1
+
+
 async def test_material_guide_edit_after_source_snapshot_is_blocked(
     project_client: AsyncClient,
 ) -> None:
@@ -1295,6 +1424,25 @@ async def test_material_guide_edit_after_source_snapshot_is_blocked(
 
     assert response.status_code == 409
     assert "source material" in response.json()["detail"]
+
+
+async def test_policy_context_edit_after_source_snapshot_is_blocked(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    await create_source_snapshot(project_client, project["id"], guide["id"])
+    payment_policy = complete_guide_payload()["payment_policy"]
+    payment_policy["base_amount"] = "100.00"
+
+    response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
+        headers=auth_headers(),
+        json={"payment_policy": payment_policy},
+    )
+
+    assert response.status_code == 409
+    assert "policy context" in response.json()["detail"]
 
 
 async def test_activation_rejects_policy_bound_to_stale_source_snapshot(
@@ -2143,6 +2291,67 @@ async def test_activation_rejects_mismatched_pre_submit_checker_bundle_hash(
     assert "compiled bundle hash mismatch" in response.json()["detail"]
 
 
+async def test_activation_rejects_mismatched_submission_policy_body_hash(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+    async with db_session.get_session_factory()() as session:
+        policy = await session.get(
+            SubmissionArtifactPolicy,
+            bundle["submission_artifact_policy"]["id"],
+        )
+        assert policy is not None
+        policy.policy_body = {
+            **policy.policy_body,
+            "allowed_storage_schemes": ["local"],
+        }
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "policy body hash mismatch" in response.json()["detail"]
+
+
+async def test_active_guide_read_rejects_mismatched_effective_policy_body_hash(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+    activation = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+    assert activation.status_code == 200, activation.text
+    async with db_session.get_session_factory()() as session:
+        effective_policy = await session.get(
+            EffectiveProjectSubmissionArtifactPolicy,
+            bundle["effective_policy"]["id"],
+        )
+        assert effective_policy is not None
+        effective_policy.effective_policy = {
+            **effective_policy.effective_policy,
+            "allowed_storage_schemes": ["local"],
+        }
+        await session.commit()
+
+    response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/active-guide",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "effective project submission artifact policy body hash mismatch" in (
+        response.json()["detail"]
+    )
+
+
 async def test_active_guide_read_revalidates_policy_context(
     project_client: AsyncClient,
 ) -> None:
@@ -2210,6 +2419,9 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.json()["pre_submit_checker_policy"]["compiled_bundle_hash"] == (
         bundle["pre_submit_checker_policy"]["compiled_bundle_hash"]
     )
+    assert "compiled_bundle" not in active.json()["pre_submit_checker_policy"]
+    assert "checker_configs" not in active.json()["pre_submit_checker_policy"]
+    assert "checker_names" not in active.json()["pre_submit_checker_policy"]
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
     assert active.json()["payment_policy"]["base_amount"] == "25.00"

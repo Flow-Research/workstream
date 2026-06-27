@@ -43,7 +43,7 @@ PostSubmitCheckerPolicy
 Project owners provide open-ended project material. Workstream does not enforce
 a universal checklist. `ProjectGuideSufficiencyAgent` reviews the guide and task
 shape asynchronously. Blocking gaps stop activation and create clarification
-requests for the project owner. Warnings can be accepted only by a Workstream
+requests for the project owner. Warnings can be acknowledged only by a Workstream
 actor with the `admin` or `project_manager` role.
 
 Project owner material is always treated as untrusted data. Internal agents must

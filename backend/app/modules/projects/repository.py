@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,25 @@ class ProjectRepository:
             session: Async SQLAlchemy session for the current unit of work.
         """
         self._session = session
+
+    def _resolve_current_append_only_row(
+        self,
+        rows: Sequence[Any],
+        supersedes_field: str,
+        description: str,
+    ) -> Any | None:
+        """Return the row not superseded by another row in an append-only chain."""
+        superseded_ids = {
+            getattr(row, supersedes_field)
+            for row in rows
+            if getattr(row, supersedes_field) is not None
+        }
+        current_rows = [row for row in rows if row.id not in superseded_ids]
+        if len(current_rows) > 1:
+            raise ProjectRepositoryIntegrityError(f"multiple current {description} found")
+        if not current_rows:
+            return None
+        return current_rows[0]
 
     async def add_project(self, project: Project) -> Project:
         """Persist a new project and refresh generated database fields.
@@ -87,6 +107,15 @@ class ProjectRepository:
             Project guide model when found; otherwise ``None``.
         """
         return await self._session.get(ProjectGuide, guide_id)
+
+    async def lock_project_guide(self, guide_id: str) -> ProjectGuide | None:
+        """Load one project guide with a transactional row lock."""
+        result = await self._session.execute(
+            select(ProjectGuide)
+            .where(ProjectGuide.id == guide_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
 
     async def get_active_guide(self, project_id: str) -> ProjectGuide | None:
         """Load the active guide for a project.
@@ -313,7 +342,30 @@ class ProjectRepository:
                 SubmissionArtifactPolicy.lifecycle_status == "approved",
             )
         )
-        return result.scalar_one_or_none()
+        return self._resolve_current_append_only_row(
+            result.scalars().all(),
+            "supersedes_policy_id",
+            "submission artifact policies",
+        )
+
+    async def get_current_approved_submission_artifact_policy(
+        self,
+        project_id: str,
+        guide_version: str,
+    ) -> SubmissionArtifactPolicy | None:
+        """Load the current approved policy for one guide version."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy).where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_version == guide_version,
+                SubmissionArtifactPolicy.lifecycle_status == "approved",
+            )
+        )
+        return self._resolve_current_append_only_row(
+            result.scalars().all(),
+            "supersedes_policy_id",
+            "submission artifact policies",
+        )
 
     async def list_approved_submission_artifact_policies(
         self,
@@ -355,7 +407,11 @@ class ProjectRepository:
                 EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
             )
         )
-        return result.scalar_one_or_none()
+        return self._resolve_current_append_only_row(
+            result.scalars().all(),
+            "supersedes_effective_policy_id",
+            "effective project submission artifact policies",
+        )
 
     async def add_pre_submit_checker_policy(
         self,
@@ -380,14 +436,21 @@ class ProjectRepository:
                 ),
             )
         )
-        return result.scalar_one_or_none()
+        rows = result.scalars().all()
+        if len(rows) > 1:
+            raise ProjectRepositoryIntegrityError(
+                "multiple pre-submit checker policies found for effective policy"
+            )
+        if not rows:
+            return None
+        return rows[0]
 
-    async def list_current_pre_submit_checker_policies(
+    async def get_current_pre_submit_checker_policy(
         self,
         project_id: str,
         guide_version: str,
-    ) -> Sequence[PreSubmitCheckerPolicy]:
-        """List non-superseded pre-submit checker policies for one guide version."""
+    ) -> PreSubmitCheckerPolicy | None:
+        """Load the current pre-submit checker policy for one guide version."""
         result = await self._session.execute(
             select(PreSubmitCheckerPolicy).where(
                 PreSubmitCheckerPolicy.project_id == project_id,
@@ -397,7 +460,11 @@ class ProjectRepository:
                 ),
             )
         )
-        return result.scalars().all()
+        return self._resolve_current_append_only_row(
+            result.scalars().all(),
+            "supersedes_pre_submit_checker_policy_id",
+            "pre-submit checker policies",
+        )
 
     async def list_active_guides(self, project_id: str) -> Sequence[ProjectGuide]:
         """List active guides for a project.
