@@ -99,6 +99,18 @@ DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS = [
     "node_modules",
 ]
 OPAQUE_SOURCE_REF_SCHEMES = {"inline", "import", "repo"}
+OPAQUE_SOURCE_REF_NAMESPACES = {
+    "docs",
+    "examples",
+    "fixtures",
+    "guides",
+    "manual-imports",
+    "project-docs",
+    "rubrics",
+    "source-material",
+    "task-docs",
+    "week1",
+}
 GUIDE_SOURCE_MATERIAL_FIELDS = {
     "content_markdown",
     "required_task_fields",
@@ -664,6 +676,11 @@ class ProjectService:
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         if policy.source_snapshot_hash != snapshot.bundle_hash:
             raise PolicySetupBlocked("submission artifact policy is bound to a stale source snapshot")
+        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
+        self._validate_sufficiency_report_allows_policy_approval(
+            sufficiency_report,
+            snapshot,
+        )
 
         effective_policy = self._merge_effective_submission_artifact_policy(policy.policy_body)
         effective_policy_hash = self._hash_canonical_json(effective_policy)
@@ -755,7 +772,7 @@ class ProjectService:
             await self._session.commit()
         except IntegrityError as exc:
             await self._session.rollback()
-            raise PolicySetupBlocked(
+            raise PolicySetupConflict(
                 "submission artifact policy approval conflicted with concurrent setup; retry"
             ) from exc
         await self._session.refresh(policy)
@@ -1203,16 +1220,30 @@ class ProjectService:
         path_segments = [segment for segment in decoded_path.split("/") if segment]
         if any(segment in {".", ".."} for segment in path_segments):
             raise SourceSnapshotInvalid("durable source refs cannot contain path traversal")
-        if scheme in {"http", "https"} and not parsed.netloc:
-            raise SourceSnapshotInvalid("http source refs require a host")
         if decoded_path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
             r"^/?[A-Za-z]:/",
             decoded_path,
         ):
             raise SourceSnapshotInvalid("durable source refs cannot be local filesystem paths")
+        if scheme in OPAQUE_SOURCE_REF_SCHEMES:
+            self._validate_opaque_source_ref_path(decoded_path)
+        if scheme in {"http", "https"} and not parsed.netloc:
+            raise SourceSnapshotInvalid("http source refs require a host")
         netloc = parsed.netloc.lower()
         path = parsed.path or ""
         return f"{scheme}://{netloc}{path}" if netloc else f"{scheme}:{path}"
+
+    def _validate_opaque_source_ref_path(self, decoded_path: str) -> None:
+        """Require opaque durable refs to use approved virtual namespaces."""
+        segments = [segment for segment in decoded_path.split("/") if segment]
+        if not decoded_path.startswith("/") or len(segments) < 2:
+            raise SourceSnapshotInvalid(
+                "opaque durable source refs must use an approved virtual namespace"
+            )
+        if segments[0] not in OPAQUE_SOURCE_REF_NAMESPACES:
+            raise SourceSnapshotInvalid(
+                "opaque durable source refs must use an approved virtual namespace"
+            )
 
     def _sanitize_content_cid(self, content_cid: str | None) -> str | None:
         """Validate optional immutable content identifiers before persistence."""
@@ -1299,10 +1330,15 @@ class ProjectService:
         severities = {finding.severity for finding in payload.findings}
         if "blocking_gap" in severities and payload.status != "blocked":
             raise PolicySetupBlocked("blocking guide sufficiency findings require blocked status")
+        if payload.status == "blocked" and "blocking_gap" not in severities:
+            raise PolicySetupBlocked("blocked sufficiency reports require blocking gap findings")
         if payload.status == "passed" and severities.intersection({"blocking_gap", "warning"}):
             raise PolicySetupBlocked("passed sufficiency reports cannot contain gaps or warnings")
-        if payload.status == "passed_with_warnings" and "blocking_gap" in severities:
-            raise PolicySetupBlocked("warning sufficiency reports cannot contain blocking gaps")
+        if payload.status == "passed_with_warnings":
+            if "blocking_gap" in severities:
+                raise PolicySetupBlocked("warning sufficiency reports cannot contain blocking gaps")
+            if "warning" not in severities:
+                raise PolicySetupBlocked("warning sufficiency reports require warning findings")
 
     def _merge_effective_submission_artifact_policy(
         self,
@@ -1468,6 +1504,28 @@ class ProjectService:
             if role in actor.roles:
                 return role
         raise PolicySetupBlocked("actor lacks project setup approval role")
+
+    def _validate_sufficiency_report_allows_policy_approval(
+        self,
+        sufficiency_report: GuideSufficiencyReport | None,
+        source_snapshot: GuideSourceSnapshot,
+    ) -> None:
+        """Require sufficiency clearance before approving derived policy."""
+        if sufficiency_report is None:
+            raise PolicySetupBlocked("guide sufficiency report is required before policy approval")
+        if sufficiency_report.source_snapshot_id != source_snapshot.id:
+            raise PolicySetupBlocked("guide sufficiency report is bound to a stale snapshot")
+        if sufficiency_report.source_snapshot_hash != source_snapshot.bundle_hash:
+            raise PolicySetupBlocked("guide sufficiency report snapshot hash mismatch")
+        if sufficiency_report.status == "blocked":
+            raise PolicySetupBlocked("guide sufficiency has blocking gaps")
+        if (
+            sufficiency_report.status == "passed_with_warnings"
+            and not sufficiency_report.warnings_acknowledged_by_actor
+        ):
+            raise PolicySetupBlocked(
+                "guide sufficiency warnings require acknowledgement before policy approval"
+            )
 
     def _validate_activation_ready(
         self,

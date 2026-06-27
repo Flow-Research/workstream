@@ -692,6 +692,10 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("import:%2E%2E/guide.md", "path traversal"),
         ("inline:%5CUsers%5Calice%5Cguide.md", "local path separators"),
         ("https://docs.flow.test/guide.md;v=2", "path parameters"),
+        ("inline:/workspace/guide.md", "virtual namespace"),
+        ("repo:/srv/repos/private/guide.md", "virtual namespace"),
+        ("import:/opt/workstream/guide.md", "virtual namespace"),
+        ("inline:/mnt/material/guide.md", "virtual namespace"),
     ],
 )
 async def test_source_snapshot_rejects_credential_and_local_refs(
@@ -749,6 +753,32 @@ async def test_source_snapshot_rejects_duplicate_source_items(
     assert "duplicate source item" in response.json()["detail"]
 
 
+async def test_source_snapshot_rejects_unknown_request_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    top_level_payload = {**source_snapshot_payload(), "client_note": "not allowed"}
+    item_payload = source_snapshot_payload()
+    item_payload["items"][0]["signed_url"] = "not allowed"
+
+    top_level_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        headers=auth_headers(),
+        json=top_level_payload,
+    )
+    item_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        headers=auth_headers(),
+        json=item_payload,
+    )
+
+    assert top_level_response.status_code == 422
+    assert item_response.status_code == 422
+    assert "extra" in top_level_response.text
+    assert "extra" in item_response.text
+
+
 async def test_snapshot_freshness_fails_closed_when_captured_at_ties(
     project_client: AsyncClient,
 ) -> None:
@@ -786,6 +816,79 @@ async def test_snapshot_freshness_fails_closed_when_captured_at_ties(
 
     assert response.status_code == 422
     assert "ambiguous" in response.json()["detail"]
+
+
+async def test_sufficiency_report_rejects_unknown_request_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    top_level_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Guide reviewed.",
+            "raw_agent_output": "not allowed",
+        },
+    )
+    finding_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed_with_warnings",
+            "findings": [
+                {
+                    "severity": "warning",
+                    "code": "thin_examples",
+                    "message": "Examples are thin.",
+                    "prompt": "not allowed",
+                }
+            ],
+        },
+    )
+
+    assert top_level_response.status_code == 422
+    assert finding_response.status_code == 422
+    assert "extra" in top_level_response.text
+    assert "extra" in finding_response.text
+
+
+@pytest.mark.parametrize(
+    ("status", "findings", "expected_detail"),
+    [
+        ("blocked", [], "blocking gap findings"),
+        ("passed_with_warnings", [], "warning findings"),
+    ],
+)
+async def test_sufficiency_report_status_requires_matching_findings(
+    project_client: AsyncClient,
+    status: str,
+    findings: list[dict],
+    expected_detail: str,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": status,
+            "findings": findings,
+            "summary": "Guide reviewed.",
+        },
+    )
+
+    assert response.status_code == 422
+    assert expected_detail in response.json()["detail"]
 
 
 async def test_submission_artifact_policy_approval_persists_effective_policy_hash(
@@ -839,6 +942,30 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert pre_submit_checker_policy.lifecycle_status == "pending_compilation"
     assert pre_submit_checker_policy.effective_policy_hash == effective["effective_policy_hash"]
     assert pre_submit_checker_policy.compiled_bundle_hash is None
+
+
+async def test_submission_artifact_policy_approval_requires_sufficiency_report(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Should require sufficiency first."},
+    )
+
+    assert response.status_code == 422
+    assert "sufficiency report is required" in response.json()["detail"]
 
 
 async def test_database_enforces_effective_policy_submission_policy_hash(
@@ -907,6 +1034,7 @@ async def test_submission_artifact_policy_approval_merges_packaging_rules(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -941,6 +1069,7 @@ async def test_approved_submission_artifact_policy_is_immutable(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -1355,6 +1484,51 @@ async def test_submission_artifact_policy_rejects_unknown_policy_keys(
     assert "extra" in response.text
 
 
+async def test_submission_artifact_policy_rejects_unknown_wrapper_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+
+    create_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v2",
+            "policy_body": project_submission_artifact_policy_body(),
+            "project_owner_approved": True,
+        },
+    )
+    update_response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}",
+        headers=auth_headers(),
+        json={"change_summary": "valid", "approval_status": "not allowed"},
+    )
+    approve_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "valid", "project_owner_approved": True},
+    )
+
+    assert create_response.status_code == 422
+    assert update_response.status_code == 422
+    assert approve_response.status_code == 422
+    assert "extra" in create_response.text
+    assert "extra" in update_response.text
+    assert "extra" in approve_response.text
+
+
 async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
     project_client: AsyncClient,
 ) -> None:
@@ -1376,21 +1550,31 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
     assert "forbidden artifacts" in response.json()["detail"]
 
 
-async def test_blocking_sufficiency_report_prevents_activation(
+async def test_blocking_sufficiency_report_prevents_policy_approval(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    await create_approved_policy_bundle(
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(
         project_client,
         project["id"],
         guide["id"],
-        sufficiency_status="blocked",
+        snapshot["id"],
+        status="blocked",
+    )
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
     )
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
         headers=auth_headers(),
+        json={"approval_note": "Blocked guide should not approve."},
     )
 
     assert response.status_code == 422
@@ -1402,34 +1586,77 @@ async def test_sufficiency_warnings_require_acknowledgement(
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
-    bundle = await create_approved_policy_bundle(
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    report = await create_sufficiency_report(
         project_client,
         project["id"],
         guide["id"],
-        sufficiency_status="passed_with_warnings",
+        snapshot["id"],
+        status="passed_with_warnings",
+    )
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
     )
 
     blocked = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
         headers=auth_headers(),
+        json={"approval_note": "Requires acknowledgement first."},
     )
     assert blocked.status_code == 422
     assert "warnings require acknowledgement" in blocked.json()["detail"]
 
     acknowledgement = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
-        f"{bundle['sufficiency_report']['id']}/acknowledge-warnings",
+        f"{report['id']}/acknowledge-warnings",
         headers=auth_headers(),
         json={"acknowledgement_note": "Accepted with known thin examples."},
     )
     assert acknowledgement.status_code == 200, acknowledgement.text
     assert acknowledgement.json()["warnings_acknowledged_by_role"] == "project_manager"
 
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+    await mark_pre_submit_checker_policy_compiled(effective)
+
     activated = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
         headers=auth_headers(),
     )
     assert activated.status_code == 200, activated.text
+
+
+async def test_sufficiency_warning_acknowledgement_rejects_unknown_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        status="passed_with_warnings",
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{report['id']}/acknowledge-warnings",
+        headers=auth_headers(),
+        json={"acknowledgement_note": "valid", "approver_role": "project_owner"},
+    )
+
+    assert response.status_code == 422
+    assert "extra" in response.text
 
 
 async def test_worker_cannot_approve_submission_artifact_policy(

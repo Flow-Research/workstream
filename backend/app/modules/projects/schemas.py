@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class CheckerPolicyInput(BaseModel):
     """Input schema for checker requirements on a guide version."""
 
+    model_config = ConfigDict(extra="forbid")
+
     required_checkers: list[str] = Field(default_factory=list)
     warning_checkers: list[str] = Field(default_factory=list)
     blocking_severities: list[str] = Field(default_factory=list)
@@ -19,6 +21,8 @@ class CheckerPolicyInput(BaseModel):
 
 class ReviewPolicyInput(BaseModel):
     """Input schema for review rules on a guide version."""
+
+    model_config = ConfigDict(extra="forbid")
 
     requires_second_review: bool = False
     allowed_decisions: list[Literal["accept", "needs_revision", "reject"]] = Field(
@@ -31,6 +35,8 @@ class ReviewPolicyInput(BaseModel):
 class RevisionPolicyInput(BaseModel):
     """Input schema for revision-loop rules on a guide version."""
 
+    model_config = ConfigDict(extra="forbid")
+
     max_revision_rounds: int = Field(ge=1)
     revision_deadline_hours: int = Field(ge=1)
     auto_reject_after_limit: bool = True
@@ -40,6 +46,8 @@ class RevisionPolicyInput(BaseModel):
 
 class PaymentPolicyInput(BaseModel):
     """Input schema for payout rules on a guide version."""
+
+    model_config = ConfigDict(extra="forbid")
 
     base_amount: Decimal | None = None
     currency: str | None = None
@@ -52,6 +60,8 @@ class PaymentPolicyInput(BaseModel):
 class GuideSourceSnapshotItemInput(BaseModel):
     """Input schema for one source item in a guide material bundle."""
 
+    model_config = ConfigDict(extra="forbid")
+
     source_kind: str
     durable_ref: str
     ingestion_adapter: str
@@ -62,6 +72,8 @@ class GuideSourceSnapshotItemInput(BaseModel):
 
 class GuideSourceSnapshotCreate(BaseModel):
     """Request schema for creating an immutable guide-source snapshot."""
+
+    model_config = ConfigDict(extra="forbid")
 
     items: list[GuideSourceSnapshotItemInput] = Field(min_length=1)
 
@@ -103,6 +115,8 @@ class GuideSourceSnapshotResponse(BaseModel):
 class GuideSufficiencyFindingInput(BaseModel):
     """Input schema for one guide sufficiency finding."""
 
+    model_config = ConfigDict(extra="forbid")
+
     severity: Literal["blocking_gap", "warning", "info"]
     code: str
     message: str
@@ -111,6 +125,8 @@ class GuideSufficiencyFindingInput(BaseModel):
 
 class GuideSufficiencyReportCreate(BaseModel):
     """Request schema for recording guide sufficiency assessment output."""
+
+    model_config = ConfigDict(extra="forbid")
 
     source_snapshot_id: str
     status: Literal["passed", "blocked", "passed_with_warnings"]
@@ -122,6 +138,8 @@ class GuideSufficiencyReportCreate(BaseModel):
 
 class GuideSufficiencyAcknowledgement(BaseModel):
     """Request schema for acknowledging non-blocking sufficiency warnings."""
+
+    model_config = ConfigDict(extra="forbid")
 
     acknowledgement_note: str | None = None
 
@@ -220,6 +238,8 @@ class SubmissionArtifactPolicyInput(BaseModel):
 class SubmissionArtifactPolicyCreate(BaseModel):
     """Request schema for creating a draft project submission artifact policy."""
 
+    model_config = ConfigDict(extra="forbid")
+
     source_snapshot_id: str
     policy_version: str
     policy_body: SubmissionArtifactPolicyInput
@@ -232,6 +252,8 @@ class SubmissionArtifactPolicyCreate(BaseModel):
 class SubmissionArtifactPolicyUpdate(BaseModel):
     """Request schema for editing a draft project submission artifact policy."""
 
+    model_config = ConfigDict(extra="forbid")
+
     policy_body: SubmissionArtifactPolicyInput | None = None
     derivation_source: str | None = None
     derivation_agent_name: str | None = None
@@ -241,6 +263,8 @@ class SubmissionArtifactPolicyUpdate(BaseModel):
 
 class SubmissionArtifactPolicyApprove(BaseModel):
     """Request schema for approving a draft submission artifact policy."""
+
+    model_config = ConfigDict(extra="forbid")
 
     approval_note: str | None = None
 
@@ -326,6 +350,8 @@ class PreSubmitCheckerPolicyResponse(BaseModel):
 class ProjectCreate(BaseModel):
     """Request schema for creating a project shell."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     slug: str
     description: str | None = None
@@ -352,6 +378,8 @@ class ProjectResponse(BaseModel):
 class ProjectGuideCreate(BaseModel):
     """Request schema for creating a draft project guide."""
 
+    model_config = ConfigDict(extra="forbid")
+
     version: str
     content_markdown: str
     required_task_fields: list[str] = Field(default_factory=list)
@@ -377,6 +405,8 @@ class ProjectGuideCreate(BaseModel):
 
 class ProjectGuideUpdate(BaseModel):
     """Request schema for editing mutable fields on a draft guide."""
+
+    model_config = ConfigDict(extra="forbid")
 
     content_markdown: str | None = None
     required_task_fields: list[str] | None = None
