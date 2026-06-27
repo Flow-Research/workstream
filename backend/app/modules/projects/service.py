@@ -89,11 +89,20 @@ DEFAULT_ATTESTATION_TERMS = [
 ]
 DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS = [
     ".env",
+    ".env*",
     ".git",
     "credentials",
+    "credential*",
     "secrets",
+    "secret*",
     "private_key",
+    "private-key",
+    "private_key*",
+    "private-key*",
+    "id_rsa",
+    "id_rsa*",
     "token",
+    "token*",
     "*.pem",
     "*.key",
     "node_modules",
@@ -1179,7 +1188,7 @@ class ProjectService:
         and token-bearing values are rejected before persistence.
         """
         raw_ref = durable_ref.strip()
-        decoded_ref = unquote(raw_ref)
+        decoded_ref = self._decode_percent_encoded_ref(raw_ref)
         if "\\" in raw_ref or "\\" in decoded_ref:
             raise SourceSnapshotInvalid("durable source refs cannot contain local path separators")
         parsed = urlparse(raw_ref)
@@ -1214,7 +1223,7 @@ class ProjectService:
             )
         if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
             raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-        decoded_path = unquote(parsed.path or "")
+        decoded_path = self._decode_percent_encoded_ref(parsed.path or "")
         if "?" in decoded_path or "#" in decoded_path:
             raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
         path_segments = [segment for segment in decoded_path.split("/") if segment]
@@ -1232,6 +1241,16 @@ class ProjectService:
         netloc = parsed.netloc.lower()
         path = parsed.path or ""
         return f"{scheme}://{netloc}{path}" if netloc else f"{scheme}:{path}"
+
+    def _decode_percent_encoded_ref(self, value: str) -> str:
+        """Decode percent-encoded source refs until stable or fail closed."""
+        decoded = value
+        for _ in range(5):
+            next_decoded = unquote(decoded)
+            if next_decoded == decoded:
+                return decoded
+            decoded = next_decoded
+        raise SourceSnapshotInvalid("durable source refs cannot contain nested encoded locators")
 
     def _validate_opaque_source_ref_path(self, decoded_path: str) -> None:
         """Require opaque durable refs to use approved virtual namespaces."""
@@ -1476,15 +1495,28 @@ class ProjectService:
     def _matches_forbidden_artifact(self, value: str, patterns: list[str]) -> bool:
         """Return whether a value is blocked by default or project forbidden rules."""
         normalized = value.replace("\\", "/").lower()
+        token_normalized = re.sub(r"[-\s]+", "_", normalized)
         segments = normalized.split("/")
+        token_segments = token_normalized.split("/")
         for pattern in patterns:
             normalized_pattern = pattern.lower()
-            if normalized_pattern in segments or fnmatch.fnmatch(normalized, normalized_pattern):
+            token_pattern = re.sub(r"[-\s]+", "_", normalized_pattern)
+            if (
+                normalized_pattern in segments
+                or token_pattern in token_segments
+                or fnmatch.fnmatch(normalized, normalized_pattern)
+                or fnmatch.fnmatch(token_normalized, token_pattern)
+                or any(fnmatch.fnmatch(segment, normalized_pattern) for segment in segments)
+                or any(fnmatch.fnmatch(segment, token_pattern) for segment in token_segments)
+            ):
                 return True
-            if normalized_pattern in normalized and normalized_pattern in {
+            if token_pattern in token_normalized and token_pattern in {
                 "credentials",
+                "credential",
                 "secrets",
+                "secret",
                 "private_key",
+                "id_rsa",
                 "token",
             }:
                 return True
@@ -1519,12 +1551,11 @@ class ProjectService:
             raise PolicySetupBlocked("guide sufficiency report snapshot hash mismatch")
         if sufficiency_report.status == "blocked":
             raise PolicySetupBlocked("guide sufficiency has blocking gaps")
-        if (
-            sufficiency_report.status == "passed_with_warnings"
-            and not sufficiency_report.warnings_acknowledged_by_actor
-        ):
-            raise PolicySetupBlocked(
-                "guide sufficiency warnings require acknowledgement before policy approval"
+        if sufficiency_report.status == "passed_with_warnings":
+            self._validate_sufficiency_warning_acknowledgement(
+                sufficiency_report,
+                PolicySetupBlocked,
+                "before policy approval",
             )
 
     def _validate_activation_ready(
@@ -1569,11 +1600,12 @@ class ProjectService:
             raise GuideActivationBlocked("guide sufficiency report snapshot hash mismatch")
         if sufficiency_report.status == "blocked":
             raise GuideActivationBlocked("guide sufficiency has blocking gaps")
-        if (
-            sufficiency_report.status == "passed_with_warnings"
-            and not sufficiency_report.warnings_acknowledged_by_actor
-        ):
-            raise GuideActivationBlocked("guide sufficiency warnings require acknowledgement")
+        if sufficiency_report.status == "passed_with_warnings":
+            self._validate_sufficiency_warning_acknowledgement(
+                sufficiency_report,
+                GuideActivationBlocked,
+                "before guide activation",
+            )
         if submission_artifact_policy.lifecycle_status != "approved":
             raise GuideActivationBlocked("approved submission artifact policy is required")
         if submission_artifact_policy.source_snapshot_id != source_snapshot.id:
@@ -1668,6 +1700,22 @@ class ProjectService:
             or not payment_policy.accepted_payment_rule
         ):
             raise GuideActivationBlocked("payment policy is incomplete")
+
+    def _validate_sufficiency_warning_acknowledgement(
+        self,
+        sufficiency_report: GuideSufficiencyReport,
+        exception_type: type[ProjectServiceError],
+        action: str,
+    ) -> None:
+        """Require trusted provenance for warning acknowledgements."""
+        if (
+            not sufficiency_report.warnings_acknowledged_by_actor
+            or not sufficiency_report.warnings_acknowledged_at
+            or sufficiency_report.warnings_acknowledged_by_role not in PROJECT_SETUP_ROLES
+        ):
+            raise exception_type(
+                f"guide sufficiency warnings require admin/project_manager acknowledgement {action}"
+            )
 
     def _checker_policy_model(
         self,

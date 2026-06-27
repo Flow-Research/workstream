@@ -62,12 +62,12 @@ class GuideSourceSnapshotItemInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_kind: str
+    source_kind: str = Field(max_length=50)
     durable_ref: str
-    ingestion_adapter: str
-    content_hash: str
-    content_cid: str | None = None
-    media_type: str | None = None
+    ingestion_adapter: str = Field(max_length=100)
+    content_hash: str = Field(max_length=71)
+    content_cid: str | None = Field(default=None, max_length=200)
+    media_type: str | None = Field(default=None, max_length=100)
 
 
 class GuideSourceSnapshotCreate(BaseModel):
@@ -128,12 +128,12 @@ class GuideSufficiencyReportCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_snapshot_id: str
+    source_snapshot_id: str = Field(max_length=36)
     status: Literal["passed", "blocked", "passed_with_warnings"]
     findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list)
     summary: str | None = None
-    agent_name: str | None = None
-    agent_version: str | None = None
+    agent_name: str | None = Field(default=None, max_length=100)
+    agent_version: str | None = Field(default=None, max_length=50)
 
 
 class GuideSufficiencyAcknowledgement(BaseModel):
@@ -240,12 +240,12 @@ class SubmissionArtifactPolicyCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source_snapshot_id: str
-    policy_version: str
+    source_snapshot_id: str = Field(max_length=36)
+    policy_version: str = Field(max_length=50)
     policy_body: SubmissionArtifactPolicyInput
-    derivation_source: str = "manual_admin_derivation"
-    derivation_agent_name: str | None = None
-    derivation_agent_version: str | None = None
+    derivation_source: str = Field(default="manual_admin_derivation", max_length=100)
+    derivation_agent_name: str | None = Field(default=None, max_length=100)
+    derivation_agent_version: str | None = Field(default=None, max_length=50)
     change_summary: str | None = None
 
 
@@ -255,9 +255,9 @@ class SubmissionArtifactPolicyUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     policy_body: SubmissionArtifactPolicyInput | None = None
-    derivation_source: str | None = None
-    derivation_agent_name: str | None = None
-    derivation_agent_version: str | None = None
+    derivation_source: str | None = Field(default=None, max_length=100)
+    derivation_agent_name: str | None = Field(default=None, max_length=100)
+    derivation_agent_version: str | None = Field(default=None, max_length=50)
     change_summary: str | None = None
 
 

@@ -687,6 +687,8 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("s3://workstream-guides/%74oken/guide.md", "credential material"),
         ("s3://workstream-guides/%63redential/guide.md", "credential material"),
         ("s3://workstream-guides/%70assword/guide.md", "credential material"),
+        ("s3://workstream-guides/%2574oken/guide.md", "credential material"),
+        ("https://docs.flow.test/guide.md%253Ftoken%253Dsecret", "query"),
         ("inline:%2Fhome%2Fabiorh%2Fguide.md", "local filesystem paths"),
         ("repo:%2Ftmp%2Fguide.md", "local filesystem paths"),
         ("import:%2E%2E/guide.md", "path traversal"),
@@ -1529,8 +1531,20 @@ async def test_submission_artifact_policy_rejects_unknown_wrapper_fields(
     assert "extra" in approve_response.text
 
 
+@pytest.mark.parametrize(
+    "artifact_path",
+    [
+        ".env",
+        ".env.production",
+        "config/.env.production",
+        "private-key.txt",
+        "keys/id_rsa.pub",
+        "secrets/api-token.txt",
+    ],
+)
 async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
     project_client: AsyncClient,
+    artifact_path: str,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -1542,7 +1556,7 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
         json={
             "source_snapshot_id": snapshot["id"],
             "policy_version": "v1",
-            "policy_body": project_submission_artifact_policy_body(artifact_path=".env"),
+            "policy_body": project_submission_artifact_policy_body(artifact_path=artifact_path),
         },
     )
 
@@ -1608,7 +1622,7 @@ async def test_sufficiency_warnings_require_acknowledgement(
         json={"approval_note": "Requires acknowledgement first."},
     )
     assert blocked.status_code == 422
-    assert "warnings require acknowledgement" in blocked.json()["detail"]
+    assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
 
     acknowledgement = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
@@ -1632,6 +1646,94 @@ async def test_sufficiency_warnings_require_acknowledgement(
         headers=auth_headers(),
     )
     assert activated.status_code == 200, activated.text
+
+
+async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_policy_approval(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        status="passed_with_warnings",
+    )
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(GuideSufficiencyReport, report["id"])
+        assert persisted is not None
+        persisted.warnings_acknowledged_by_actor = "worker-subject"
+        persisted.warnings_acknowledged_by_role = "worker"
+        persisted.warnings_acknowledged_at = datetime.now(UTC)
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Invalid warning acknowledgement provenance."},
+    )
+
+    assert response.status_code == 422
+    assert "warnings require admin/project_manager acknowledgement" in response.json()["detail"]
+
+
+async def test_activation_revalidates_sufficiency_warning_acknowledgement_provenance(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        status="passed_with_warnings",
+    )
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    acknowledgement = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{report['id']}/acknowledge-warnings",
+        headers=auth_headers(),
+        json={"acknowledgement_note": "Accepted with known thin examples."},
+    )
+    assert acknowledgement.status_code == 200, acknowledgement.text
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+    await mark_pre_submit_checker_policy_compiled(effective)
+
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(GuideSufficiencyReport, report["id"])
+        assert persisted is not None
+        persisted.warnings_acknowledged_by_role = None
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "warnings require admin/project_manager acknowledgement" in response.json()["detail"]
 
 
 async def test_sufficiency_warning_acknowledgement_rejects_unknown_fields(
