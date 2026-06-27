@@ -12,11 +12,21 @@ from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
+    EffectiveProjectSubmissionArtifactPolicyResponse,
+    GuideSourceSnapshotCreate,
+    GuideSourceSnapshotResponse,
+    GuideSufficiencyAcknowledgement,
+    GuideSufficiencyReportCreate,
+    GuideSufficiencyReportResponse,
     ProjectCreate,
     ProjectGuideCreate,
     ProjectGuideResponse,
     ProjectGuideUpdate,
     ProjectResponse,
+    SubmissionArtifactPolicyApprove,
+    SubmissionArtifactPolicyCreate,
+    SubmissionArtifactPolicyResponse,
+    SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import ProjectService, ProjectServiceError
 from app.schemas.auth import ActorContext
@@ -108,6 +118,165 @@ async def update_guide(
             actor,
             project_id,
             guide_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/source-snapshots",
+    response_model=GuideSourceSnapshotResponse,
+    status_code=201,
+)
+async def create_guide_source_snapshot(
+    project_id: str,
+    guide_id: str,
+    payload: GuideSourceSnapshotCreate,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideSourceSnapshotResponse:
+    """Create an immutable source-material snapshot for a draft guide."""
+    try:
+        return await ProjectService(session).create_guide_source_snapshot(
+            actor,
+            project_id,
+            guide_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/sufficiency-reports",
+    response_model=GuideSufficiencyReportResponse,
+    status_code=201,
+)
+async def create_guide_sufficiency_report(
+    project_id: str,
+    guide_id: str,
+    payload: GuideSufficiencyReportCreate,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideSufficiencyReportResponse:
+    """Record Workstream's sufficiency assessment for a guide snapshot."""
+    try:
+        return await ProjectService(session).create_guide_sufficiency_report(
+            actor,
+            project_id,
+            guide_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings",
+    response_model=GuideSufficiencyReportResponse,
+)
+async def acknowledge_guide_sufficiency_warnings(
+    project_id: str,
+    guide_id: str,
+    report_id: str,
+    payload: GuideSufficiencyAcknowledgement,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideSufficiencyReportResponse:
+    """Acknowledge non-blocking guide sufficiency warnings."""
+    try:
+        return await ProjectService(session).acknowledge_guide_sufficiency_warnings(
+            actor,
+            project_id,
+            guide_id,
+            report_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/submission-artifact-policies",
+    response_model=SubmissionArtifactPolicyResponse,
+    status_code=201,
+)
+async def create_submission_artifact_policy(
+    project_id: str,
+    guide_id: str,
+    payload: SubmissionArtifactPolicyCreate,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubmissionArtifactPolicyResponse:
+    """Create a draft Workstream-derived submission artifact policy."""
+    try:
+        return await ProjectService(session).create_submission_artifact_policy(
+            actor,
+            project_id,
+            guide_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.patch(
+    "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
+    response_model=SubmissionArtifactPolicyResponse,
+)
+async def update_submission_artifact_policy(
+    project_id: str,
+    guide_id: str,
+    policy_id: str,
+    payload: SubmissionArtifactPolicyUpdate,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubmissionArtifactPolicyResponse:
+    """Update a draft submission artifact policy."""
+    try:
+        return await ProjectService(session).update_submission_artifact_policy(
+            actor,
+            project_id,
+            guide_id,
+            policy_id,
+            payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve",
+    response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
+)
+async def approve_submission_artifact_policy(
+    project_id: str,
+    guide_id: str,
+    policy_id: str,
+    payload: SubmissionArtifactPolicyApprove,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> EffectiveProjectSubmissionArtifactPolicyResponse:
+    """Approve a draft submission artifact policy and persist the effective policy."""
+    try:
+        return await ProjectService(session).approve_submission_artifact_policy(
+            actor,
+            project_id,
+            guide_id,
+            policy_id,
             payload,
         )
     except PermissionDenied as exc:

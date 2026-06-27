@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections.abc import AsyncIterator, Iterator
 from decimal import Decimal
 from pathlib import Path
@@ -152,6 +153,109 @@ def complete_guide_payload(version: str = "v1") -> dict:
     }
 
 
+def sha256_hash(seed: str) -> str:
+    return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
+
+
+def policy_body_for_task_tests() -> dict:
+    return {
+        "required_artifacts": [
+            {
+                "key": "answer",
+                "path": "answer.md",
+                "hash_required": True,
+                "required": True,
+                "description": "Main task answer.",
+            }
+        ],
+        "required_evidence": [
+            {
+                "key": "checker_log",
+                "label": "checker log",
+                "hash_required": True,
+                "required": True,
+                "description": "Evidence used by the reviewer.",
+            }
+        ],
+        "forbidden_artifacts": [],
+        "attestation_terms": ["task_test_originality"],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": 1_000_000,
+        "maximum_package_size_bytes": 5_000_000,
+        "packaging": {"package_required": False},
+    }
+
+
+async def create_policy_bundle_for_guide(
+    client: AsyncClient,
+    project_id: str,
+    guide_id: str,
+) -> dict:
+    snapshot_response = await client.post(
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
+        headers=auth_headers(),
+        json={
+            "items": [
+                {
+                    "source_kind": "inline_markdown",
+                    "durable_ref": f"inline:/guides/{guide_id}/guide",
+                    "ingestion_adapter": "manual_import",
+                    "content_hash": sha256_hash(f"{guide_id}:guide"),
+                    "media_type": "text/markdown",
+                }
+            ]
+        },
+    )
+    assert snapshot_response.status_code == 201, snapshot_response.text
+    snapshot = snapshot_response.json()
+
+    report_response = await client.post(
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Guide is sufficient for test setup.",
+            "agent_name": "ProjectGuideSufficiencyAgent",
+            "agent_version": "test",
+        },
+    )
+    assert report_response.status_code == 201, report_response.text
+
+    policy_response = await client.post(
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": policy_body_for_task_tests(),
+            "derivation_source": "manual_admin_derivation",
+            "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
+            "derivation_agent_version": "test",
+        },
+    )
+    assert policy_response.status_code == 201, policy_response.text
+    policy = policy_response.json()
+
+    effective_response = await client.post(
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Approved for test setup."},
+    )
+    assert effective_response.status_code == 200, effective_response.text
+    return {
+        "source_snapshot": snapshot,
+        "sufficiency_report": report_response.json(),
+        "submission_artifact_policy": policy,
+        "effective_policy": effective_response.json(),
+    }
+
+
 def complete_task_payload() -> dict:
     return {
         "title": "Evaluate proof",
@@ -223,6 +327,7 @@ async def create_active_project(client: AsyncClient) -> dict:
     )
     assert guide_response.status_code == 201, guide_response.text
     guide = guide_response.json()
+    await create_policy_bundle_for_guide(client, project["id"], guide["id"])
 
     activation_response = await client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
@@ -945,6 +1050,7 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
         json=complete_guide_payload("v2"),
     )
     assert guide_v2.status_code == 201, guide_v2.text
+    await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
     activate_v2 = await task_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
         headers=auth_headers(),
@@ -1267,6 +1373,7 @@ async def test_database_blocks_task_locked_context_mutation_after_submission(
         json=complete_guide_payload("v2"),
     )
     assert guide_v2.status_code == 201, guide_v2.text
+    await create_policy_bundle_for_guide(task_client, project["id"], guide_v2.json()["id"])
     activate_v2 = await task_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
         headers=auth_headers(),

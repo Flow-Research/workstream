@@ -27,6 +27,7 @@ from tests.test_tasks import (
     complete_guide_payload,
     complete_submission_payload,
     create_active_project,
+    create_policy_bundle_for_guide,
     create_started_task,
     seed_worker_profile,
     set_dev_actor,
@@ -199,6 +200,7 @@ async def create_checker_trial_project(
         json=guide_payload,
     )
     assert guide_response.status_code == 201, guide_response.text
+    await create_policy_bundle_for_guide(client, project["id"], guide_response.json()["id"])
     activation_response = await client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
         headers=auth_headers(),
@@ -507,6 +509,11 @@ async def test_chunk8_default_blocking_checker_survives_empty_blocking_severitie
         json=guide_payload,
     )
     assert guide_response.status_code == 201, guide_response.text
+    await create_policy_bundle_for_guide(
+        checker_client,
+        project["id"],
+        guide_response.json()["id"],
+    )
     activation_response = await checker_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
         headers=auth_headers(),
@@ -658,6 +665,11 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
         json=guide_payload,
     )
     assert guide_response.status_code == 201, guide_response.text
+    await create_policy_bundle_for_guide(
+        checker_client,
+        project["id"],
+        guide_response.json()["id"],
+    )
     activation_response = await checker_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
         headers=auth_headers(),
@@ -1243,6 +1255,11 @@ async def test_old_checker_name_blocks_guide_activation_without_alias(
         json=guide_payload,
     )
     assert guide_response.status_code == 201, guide_response.text
+    await create_policy_bundle_for_guide(
+        checker_client,
+        project["id"],
+        guide_response.json()["id"],
+    )
     activation_response = await checker_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide_response.json()['id']}/activate",
         headers=auth_headers(),

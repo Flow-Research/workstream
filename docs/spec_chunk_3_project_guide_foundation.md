@@ -56,6 +56,13 @@ Architecture target:
 
 Current v0.1 implementation note: the first project-guide foundation stores submission artifact requirements in `ProjectGuide.evidence_policy`. That is old construction state. The target replacement is `SubmissionArtifactPolicy`; no compatibility alias is required.
 
+There is no automatic backfill from `ProjectGuide.evidence_policy` into
+`SubmissionArtifactPolicy`. Existing local draft guides must create a fresh
+guide source snapshot, guide sufficiency report, approved submission artifact
+policy, effective project submission artifact policy, and project
+`PreSubmitCheckerPolicy` contract before activation. Already-active task policy
+context is not silently rewritten.
+
 The guide version is the join key for the guide-specific policies.
 
 Project guide activation requires:
@@ -105,7 +112,12 @@ EffectiveProjectSubmissionArtifactPolicy =
   + ProjectSubmissionArtifactPolicy
 ```
 
-Workstream generates, persists, and locks project `PreSubmitCheckerPolicy` with a compiled bundle hash from the effective project submission artifact policy. Tasks later lock the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash. Blocking pre-submit failures prevent submission creation.
+Workstream generates, persists, and locks a project `PreSubmitCheckerPolicy`
+contract bound to the effective project submission artifact policy hash. Chunk
+2 fills the compiled bundle and compiled bundle hash. Tasks later lock the
+applicable guide snapshot, effective project submission artifact policy hash,
+and compiled pre-submit checker bundle hash once compiler execution exists.
+Blocking pre-submit failures prevent submission creation.
 
 Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is old construction state and is replaced by the dedicated policy table/API path.
 
@@ -117,10 +129,34 @@ Adds protected v1 routes:
 - `GET /api/v1/projects/{project_id}`
 - `POST /api/v1/projects/{project_id}/guides`
 - `PATCH /api/v1/projects/{project_id}/guides/{guide_id}`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
+- `PATCH /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
+- `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/activate`
 - `GET /api/v1/projects/{project_id}/active-guide`
 
 These routes require an actor role allowed to manage project setup.
+
+`POST /submission-artifact-policies/{policy_id}/approve` returns the merged
+`EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the
+project-scoped `PreSubmitCheckerPolicy` contract in `pending_compilation`
+status. Chunk 2 fills the compiled bundle and compiled bundle hash.
+
+`POST /activate` and `GET /active-guide` return the active guide with the full
+setup bundle:
+
+- `guide_source_snapshot`
+- `guide_sufficiency_report`
+- `submission_artifact_policy`
+- `effective_submission_artifact_policy`
+- `pre_submit_checker_policy`
+- `checker_policy`
+- `review_policy`
+- `revision_policy`
+- `payment_policy`
 
 ## Lifecycle Impact
 

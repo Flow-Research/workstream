@@ -26,11 +26,16 @@ from app.db import session as db_session
 from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.projects.models import (
     CheckerPolicy,
+    EffectiveProjectSubmissionArtifactPolicy,
+    GuideSourceSnapshot,
+    GuideSufficiencyReport,
     PaymentPolicy,
+    PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
     RevisionPolicy,
     ReviewPolicy,
+    SubmissionArtifactPolicy,
 )
 from app.modules.tasks.models import (
     AuditEvent,
@@ -492,6 +497,132 @@ def guide_payload(run_id: str) -> dict:
     }
 
 
+def sha256_token(seed: str) -> str:
+    """Return a platform-shaped sha256 token for deterministic E2E fixtures.
+
+    Args:
+        seed: Stable seed material.
+
+    Returns:
+        Hash token shaped as ``sha256:<64 lowercase hex>``.
+    """
+    return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
+
+
+def submission_artifact_policy_body() -> dict:
+    """Build the project submission artifact policy used by the Week 1 drill.
+
+    Returns:
+        Machine-readable artifact policy payload.
+    """
+    return {
+        "required_artifacts": [
+            {
+                "key": "answer",
+                "path": "answer.md",
+                "hash_required": True,
+                "required": True,
+                "description": "Main answer artifact.",
+            }
+        ],
+        "required_evidence": [
+            {
+                "key": "checker_log",
+                "label": "checker log",
+                "hash_required": True,
+                "required": True,
+                "description": "Evidence item used by the reviewer.",
+            }
+        ],
+        "forbidden_artifacts": [],
+        "attestation_terms": ["real_api_originality"],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": 1_000_000,
+        "maximum_package_size_bytes": 5_000_000,
+        "packaging": {"package_required": False},
+    }
+
+
+async def create_policy_bundle_for_guide(
+    client: httpx.AsyncClient,
+    manager_token: str,
+    project_id: str,
+    guide_id: str,
+    run_id: str,
+) -> dict:
+    """Create the guide-source, sufficiency, and approved policy bundle.
+
+    Args:
+        client: HTTP client pointed at the running API.
+        manager_token: Flow token with project manager role.
+        project_id: Project id that owns the guide.
+        guide_id: Guide id to bind.
+        run_id: Unique run id used for deterministic source hashes.
+
+    Returns:
+        Effective project submission artifact policy response.
+    """
+    snapshot = await request_json(
+        client,
+        "POST",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
+        manager_token,
+        {
+            "items": [
+                {
+                    "source_kind": "inline_markdown",
+                    "durable_ref": f"inline:/week1/{run_id}/guide",
+                    "ingestion_adapter": "manual_import",
+                    "content_hash": sha256_token(f"{run_id}:guide"),
+                    "media_type": "text/markdown",
+                }
+            ]
+        },
+        201,
+    )
+    await request_json(
+        client,
+        "POST",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        manager_token,
+        {
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Guide is sufficient for the Week 1 real API drill.",
+            "agent_name": "ProjectGuideSufficiencyAgent",
+            "agent_version": "e2e",
+        },
+        201,
+    )
+    policy = await request_json(
+        client,
+        "POST",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        manager_token,
+        {
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": submission_artifact_policy_body(),
+            "derivation_source": "manual_admin_derivation",
+            "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
+            "derivation_agent_version": "e2e",
+        },
+        201,
+    )
+    return await request_json(
+        client,
+        "POST",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        manager_token,
+        {"approval_note": "Approved for Week 1 real API drill."},
+    )
+
+
 async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
     """Run the real Project -> Task -> Submission Week 1 API flow.
 
@@ -618,6 +749,13 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             {"change_summary": "Patched before activation through real API"},
         )
         assert patched_guide["change_summary"] == "Patched before activation through real API"
+        await create_policy_bundle_for_guide(
+            client,
+            manager_token,
+            project["id"],
+            guide["id"],
+            run_id,
+        )
         active = await request_json(
             client,
             "POST",
@@ -932,6 +1070,62 @@ async def assert_week1_database_invariants(
                 select(model).where(model.project_id == project_id, model.guide_version == "v1")
             )
             ensure(policy is not None, f"{label} missing for active guide")
+
+        snapshot = await session.scalar(
+            select(GuideSourceSnapshot).where(
+                GuideSourceSnapshot.project_id == project_id,
+                GuideSourceSnapshot.guide_id == guide_id,
+                GuideSourceSnapshot.guide_version == "v1",
+            )
+        )
+        ensure(snapshot is not None, "guide source snapshot missing for active guide")
+        sufficiency_report = await session.scalar(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.project_id == project_id,
+                GuideSufficiencyReport.guide_id == guide_id,
+                GuideSufficiencyReport.source_snapshot_id == snapshot.id,
+            )
+        )
+        ensure(sufficiency_report is not None, "sufficiency report missing for active guide")
+        ensure(sufficiency_report.status == "passed", "sufficiency report did not pass")
+        submission_policy = await session.scalar(
+            select(SubmissionArtifactPolicy).where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_id == guide_id,
+                SubmissionArtifactPolicy.source_snapshot_id == snapshot.id,
+                SubmissionArtifactPolicy.lifecycle_status == "approved",
+            )
+        )
+        ensure(submission_policy is not None, "approved submission artifact policy missing")
+        effective_policy = await session.scalar(
+            select(EffectiveProjectSubmissionArtifactPolicy).where(
+                EffectiveProjectSubmissionArtifactPolicy.project_id == project_id,
+                EffectiveProjectSubmissionArtifactPolicy.guide_id == guide_id,
+                EffectiveProjectSubmissionArtifactPolicy.source_snapshot_id == snapshot.id,
+                EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
+            )
+        )
+        ensure(effective_policy is not None, "effective project submission artifact policy missing")
+        ensure(
+            effective_policy.submission_artifact_policy_id == submission_policy.id,
+            "effective policy is not bound to the approved submission artifact policy",
+        )
+        ensure(
+            effective_policy.source_snapshot_hash == snapshot.bundle_hash,
+            "effective policy source snapshot hash drifted",
+        )
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy.id,
+                PreSubmitCheckerPolicy.lifecycle_status == "pending_compilation",
+            )
+        )
+        ensure(pre_submit_checker_policy is not None, "pre-submit checker policy missing")
+        ensure(
+            pre_submit_checker_policy.effective_policy_hash
+            == effective_policy.effective_policy_hash,
+            "pre-submit checker policy effective hash drifted",
+        )
 
         locked_versions = {
             task.locked_guide_version,

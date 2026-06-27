@@ -49,6 +49,272 @@ class PaymentPolicyInput(BaseModel):
     accepted_payment_rule: str | None = None
 
 
+class GuideSourceSnapshotItemInput(BaseModel):
+    """Input schema for one source item in a guide material bundle."""
+
+    source_kind: str
+    durable_ref: str
+    ingestion_adapter: str
+    content_hash: str
+    content_cid: str | None = None
+    media_type: str | None = None
+
+
+class GuideSourceSnapshotCreate(BaseModel):
+    """Request schema for creating an immutable guide-source snapshot."""
+
+    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1)
+
+
+class GuideSourceSnapshotItemResponse(BaseModel):
+    """Response schema for a sanitized guide-source snapshot item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    source_snapshot_id: str
+    item_order: int
+    source_kind: str
+    durable_ref: str
+    ingestion_adapter: str
+    content_hash: str
+    content_cid: str | None
+    media_type: str | None
+    created_at: datetime
+
+
+class GuideSourceSnapshotResponse(BaseModel):
+    """Response schema for immutable guide-source snapshots."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    manifest_schema_version: str
+    manifest_json: dict[str, Any]
+    bundle_hash: str
+    captured_by: str
+    captured_at: datetime
+    items: list[GuideSourceSnapshotItemResponse] = Field(default_factory=list)
+
+
+class GuideSufficiencyFindingInput(BaseModel):
+    """Input schema for one guide sufficiency finding."""
+
+    severity: Literal["blocking_gap", "warning", "info"]
+    code: str
+    message: str
+    location: str | None = None
+
+
+class GuideSufficiencyReportCreate(BaseModel):
+    """Request schema for recording guide sufficiency assessment output."""
+
+    source_snapshot_id: str
+    status: Literal["passed", "blocked", "passed_with_warnings"]
+    findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list)
+    summary: str | None = None
+    agent_name: str | None = None
+    agent_version: str | None = None
+
+
+class GuideSufficiencyAcknowledgement(BaseModel):
+    """Request schema for acknowledging non-blocking sufficiency warnings."""
+
+    acknowledgement_note: str | None = None
+
+
+class GuideSufficiencyReportResponse(BaseModel):
+    """Response schema for guide sufficiency reports."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    status: str
+    findings: list[dict[str, Any]]
+    summary: str | None
+    agent_name: str | None
+    agent_version: str | None
+    created_by: str
+    created_at: datetime
+    warnings_acknowledged_by_role: str | None
+    warnings_acknowledged_by_actor: str | None
+    warnings_acknowledged_at: datetime | None
+    acknowledgement_note: str | None
+
+
+class ArtifactRuleInput(BaseModel):
+    """Input schema for a required artifact rule."""
+
+    key: str
+    path: str
+    hash_required: Literal[True] = True
+    required: bool = True
+    description: str | None = None
+
+
+class EvidenceRuleInput(BaseModel):
+    """Input schema for a required evidence rule."""
+
+    key: str
+    label: str
+    hash_required: Literal[True] = True
+    required: bool = True
+    description: str | None = None
+
+
+class ForbiddenArtifactRuleInput(BaseModel):
+    """Input schema for a project-specific forbidden artifact rule."""
+
+    pattern: str
+    reason: str
+    worker_facing_fix: str | None = None
+
+
+class SubmissionArtifactPackagingInput(BaseModel):
+    """Constrained packaging rules for submission artifact intake."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_required: bool = False
+    allowed_package_formats: list[Literal["zip", "tar", "tar.gz", "tar.zst"]] = Field(
+        default_factory=list
+    )
+
+
+class SubmissionArtifactPolicyInput(BaseModel):
+    """Machine-readable project artifact intake policy content."""
+
+    required_artifacts: list[ArtifactRuleInput] = Field(default_factory=list)
+    required_evidence: list[EvidenceRuleInput] = Field(default_factory=list)
+    forbidden_artifacts: list[ForbiddenArtifactRuleInput] = Field(default_factory=list)
+    attestation_terms: list[str] = Field(default_factory=list)
+    manifest_required: bool = True
+    artifact_hash_required: bool = True
+    artifact_hash_algorithm: Literal["sha256"] = "sha256"
+    allowed_storage_schemes: list[Literal["local", "s3", "r2"]] = Field(
+        default_factory=lambda: ["local", "s3", "r2"]
+    )
+    maximum_file_size_bytes: int | None = Field(default=None, gt=0)
+    maximum_package_size_bytes: int | None = Field(default=None, gt=0)
+    packaging: SubmissionArtifactPackagingInput = Field(
+        default_factory=SubmissionArtifactPackagingInput
+    )
+
+
+class SubmissionArtifactPolicyCreate(BaseModel):
+    """Request schema for creating a draft project submission artifact policy."""
+
+    source_snapshot_id: str
+    policy_version: str
+    policy_body: SubmissionArtifactPolicyInput
+    derivation_source: str = "manual_admin_derivation"
+    derivation_agent_name: str | None = None
+    derivation_agent_version: str | None = None
+    change_summary: str | None = None
+
+
+class SubmissionArtifactPolicyUpdate(BaseModel):
+    """Request schema for editing a draft project submission artifact policy."""
+
+    policy_body: SubmissionArtifactPolicyInput | None = None
+    derivation_source: str | None = None
+    derivation_agent_name: str | None = None
+    derivation_agent_version: str | None = None
+    change_summary: str | None = None
+
+
+class SubmissionArtifactPolicyApprove(BaseModel):
+    """Request schema for approving a draft submission artifact policy."""
+
+    approval_note: str | None = None
+
+
+class SubmissionArtifactPolicyResponse(BaseModel):
+    """Response schema for project submission artifact policy records."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    policy_version: str
+    lifecycle_status: str
+    policy_body: dict[str, Any]
+    policy_hash: str
+    derivation_source: str
+    source_material_refs: list[str]
+    derivation_agent_name: str | None
+    derivation_agent_version: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    approved_by_role: str | None
+    approved_by_actor: str | None
+    approved_at: datetime | None
+    supersedes_policy_id: str | None
+    superseded_at: datetime | None
+    change_summary: str | None
+
+
+class EffectiveProjectSubmissionArtifactPolicyResponse(BaseModel):
+    """Response schema for merged effective project submission artifact policy."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    submission_artifact_policy_id: str
+    submission_artifact_policy_hash: str
+    lifecycle_status: str
+    merge_algorithm_version: str
+    effective_policy: dict[str, Any]
+    effective_policy_hash: str
+    created_by: str
+    created_at: datetime
+    supersedes_effective_policy_id: str | None
+    superseded_at: datetime | None
+
+
+class PreSubmitCheckerPolicyResponse(BaseModel):
+    """Response schema for project-scoped pre-submit checker bundle contracts."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    effective_policy_id: str
+    effective_policy_hash: str
+    lifecycle_status: str
+    compiler_version: str | None
+    compiled_bundle: dict[str, Any] | None
+    compiled_bundle_hash: str | None
+    checker_names: list[str]
+    checker_configs: dict[str, Any]
+    created_by: str
+    created_at: datetime
+    supersedes_pre_submit_checker_policy_id: str | None
+    superseded_at: datetime | None
+
+
 class ProjectCreate(BaseModel):
     """Request schema for creating a project shell."""
 
@@ -225,6 +491,11 @@ class ActiveGuideResponse(BaseModel):
     """Response schema for an active guide and its policy context."""
 
     guide: ProjectGuideResponse
+    guide_source_snapshot: GuideSourceSnapshotResponse
+    guide_sufficiency_report: GuideSufficiencyReportResponse
+    submission_artifact_policy: SubmissionArtifactPolicyResponse
+    effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
+    pre_submit_checker_policy: PreSubmitCheckerPolicyResponse
     checker_policy: CheckerPolicyResponse
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse

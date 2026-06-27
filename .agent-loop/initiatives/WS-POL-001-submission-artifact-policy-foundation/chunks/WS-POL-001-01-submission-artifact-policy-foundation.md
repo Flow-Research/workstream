@@ -82,8 +82,12 @@ P1
 
 ```text
 backend/alembic/versions/**
+backend/app/db/models.py
 backend/app/modules/projects/**
 backend/tests/test_projects.py
+backend/tests/test_tasks.py
+backend/tests/test_checkers.py
+backend/scripts/week1_api_e2e.py
 docs/spec_chunk_3_project_guide_foundation.md
 docs/template_submission_artifact_policy.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
@@ -112,6 +116,13 @@ human review implementation
   derivation boundaries, and permission-aware orchestration.
 - Repositories only persist and query policy records.
 - Schemas only define API input/output contracts and validation shape.
+- `backend/app/db/models.py` may only register new project policy models for
+  Alembic metadata discovery; no cross-module behavior belongs there.
+- `backend/tests/test_tasks.py` and `backend/tests/test_checkers.py` may only
+  update test setup helpers to create the required guide-policy bundle before
+  guide activation; no task/checker product behavior changes belong there.
+- `backend/scripts/week1_api_e2e.py` may only update the real API drill setup
+  to create the required guide-policy bundle before guide activation.
 - Full async agent execution is not part of this chunk. This chunk models the
   records/contracts and activation guard those agents will use.
 - Trusted checker compiler behavior is not part of this chunk. This chunk

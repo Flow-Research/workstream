@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -202,3 +203,304 @@ class PaymentPolicy(Base):
     rejection_payment_rule: Mapped[str | None] = mapped_column(Text)
     accepted_payment_rule: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceSnapshot(Base):
+    """Immutable bundle of guide material evaluated for one guide version."""
+
+    __tablename__ = "guide_source_snapshots"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_guide_source_snapshots_project_guide",
+        ),
+        UniqueConstraint("id", "bundle_hash", name="uq_guide_source_snapshots_id_hash"),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "bundle_hash",
+            name="uq_guide_source_snapshots_project_version_hash",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    manifest_schema_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    manifest_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    bundle_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
+    captured_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceSnapshotItem(Base):
+    """Sanitized source item included in a guide-source snapshot bundle."""
+
+    __tablename__ = "guide_source_snapshot_items"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_snapshot_id",
+            "source_kind",
+            "durable_ref",
+            name="uq_guide_source_snapshot_items_snapshot_kind_ref",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    item_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    durable_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    ingestion_adapter: Mapped[str] = mapped_column(String(100), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    content_cid: Mapped[str | None] = mapped_column(String(200))
+    media_type: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSufficiencyReport(Base):
+    """Workstream assessment of whether a guide snapshot is usable."""
+
+    __tablename__ = "guide_sufficiency_reports"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ('passed', 'blocked', 'passed_with_warnings')",
+            name="ck_guide_sufficiency_reports_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_guide_sufficiency_reports_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_guide_sufficiency_reports_source_snapshot_hash",
+        ),
+        UniqueConstraint(
+            "source_snapshot_id",
+            name="uq_guide_sufficiency_reports_source_snapshot",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    findings: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
+    summary: Mapped[str | None] = mapped_column(Text)
+    agent_name: Mapped[str | None] = mapped_column(String(100))
+    agent_version: Mapped[str | None] = mapped_column(String(50))
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    warnings_acknowledged_by_role: Mapped[str | None] = mapped_column(String(50))
+    warnings_acknowledged_by_actor: Mapped[str | None] = mapped_column(String(100))
+    warnings_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acknowledgement_note: Mapped[str | None] = mapped_column(Text)
+
+
+class SubmissionArtifactPolicy(Base):
+    """Workstream-derived machine intake policy for one guide snapshot."""
+
+    __tablename__ = "submission_artifact_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_status in ('draft', 'approved', 'superseded')",
+            name="ck_submission_artifact_policies_lifecycle_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_submission_artifact_policies_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_submission_artifact_policies_source_snapshot_hash",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "policy_version",
+            name="uq_submission_artifact_policies_project_version_policy",
+        ),
+        Index(
+            "uq_sap_one_approved_per_guide",
+            "project_id",
+            "guide_version",
+            unique=True,
+            postgresql_where=text("lifecycle_status = 'approved'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
+    policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
+    policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
+    derivation_source: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_material_refs: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    derivation_agent_name: Mapped[str | None] = mapped_column(String(100))
+    derivation_agent_version: Mapped[str | None] = mapped_column(String(50))
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    approved_by_role: Mapped[str | None] = mapped_column(String(50))
+    approved_by_actor: Mapped[str | None] = mapped_column(String(100))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    supersedes_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_artifact_policies.id"),
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    change_summary: Mapped[str | None] = mapped_column(Text)
+
+
+class EffectiveProjectSubmissionArtifactPolicy(Base):
+    """Immutable effective intake policy after merging defaults and project policy."""
+
+    __tablename__ = "effective_project_submission_artifact_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_status in ('approved', 'superseded')",
+            name="ck_effective_psap_lifecycle_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_effective_project_submission_artifact_policies_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_effective_psap_source_snapshot_hash",
+        ),
+        UniqueConstraint(
+            "project_id",
+            "guide_version",
+            "effective_policy_hash",
+            name="uq_effective_project_submission_artifact_policies_project_hash",
+        ),
+        Index(
+            "uq_effective_psap_one_approved",
+            "project_id",
+            "guide_version",
+            unique=True,
+            postgresql_where=text("lifecycle_status = 'approved'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    submission_artifact_policy_id: Mapped[str] = mapped_column(
+        ForeignKey("submission_artifact_policies.id"),
+        nullable=False,
+        index=True,
+    )
+    submission_artifact_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="approved", index=True)
+    merge_algorithm_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    effective_policy: Mapped[dict] = mapped_column(JSON, nullable=False)
+    effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    supersedes_effective_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("effective_project_submission_artifact_policies.id"),
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PreSubmitCheckerPolicy(Base):
+    """Project-scoped pre-submit checker bundle contract for one effective policy."""
+
+    __tablename__ = "pre_submit_checker_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_status in ('pending_compilation', 'compiled', 'superseded')",
+            name="ck_pre_submit_checker_policies_lifecycle_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_pre_submit_checker_policies_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_pre_submit_checker_policies_source_snapshot_hash",
+        ),
+        Index(
+            "uq_pre_submit_checker_current",
+            "project_id",
+            "guide_version",
+            unique=True,
+            postgresql_where=text("lifecycle_status in ('pending_compilation', 'compiled')"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    effective_policy_id: Mapped[str] = mapped_column(
+        ForeignKey("effective_project_submission_artifact_policies.id"),
+        nullable=False,
+        index=True,
+    )
+    effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="pending_compilation",
+        index=True,
+    )
+    compiler_version: Mapped[str | None] = mapped_column(String(50))
+    compiled_bundle: Mapped[dict | None] = mapped_column(JSON)
+    compiled_bundle_hash: Mapped[str | None] = mapped_column(String(71), index=True)
+    checker_names: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    checker_configs: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    supersedes_pre_submit_checker_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("pre_submit_checker_policies.id"),
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
