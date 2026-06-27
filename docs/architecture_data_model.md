@@ -301,65 +301,73 @@ Fields:
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
-- `version`
+- `policy_version`
 - `lifecycle_status`
-- `required_artifacts`
-- `required_evidence`
-- `artifact_manifest_required`
-- `artifact_hash_required`
-- `artifact_hash_algorithm`
-- `maximum_file_size_bytes`
-- `maximum_package_size_bytes`
-- `allowed_storage_schemes`
-- `forbidden_artifacts`
-- `required_attestation_terms`
-- `packaging_rules`
-- `created_by`
-- `sufficiency_report_id`
+- `policy_body`
+- `policy_hash`
+- `derivation_source`
+- `source_material_refs`
 - `derivation_agent_name`
 - `derivation_agent_version`
-- `source_material_refs`
-- `approved_policy_hash`
-- `approved_by_role`
-- `approved_by`
-- `approved_at`
+- `created_by`
 - `created_at`
+- `updated_at`
+- `approved_by_role`
+- `approved_by_actor`
+- `approved_at`
 - `supersedes_policy_id`
+- `superseded_at`
+- `change_summary`
 
 Example:
 
 ```json
 {
-  "version": "v1",
-  "required_artifacts": [
-    "submission.zip",
-    "task.toml",
-    "static_guard.txt",
-    "review_packet.md"
-  ],
-  "required_evidence": [
-    "oracle_test.log",
-    "starter_m1_test.log"
-  ],
-  "artifact_manifest_required": true,
-  "artifact_hash_required": true,
-  "artifact_hash_algorithm": "sha256",
-  "maximum_file_size_bytes": 52428800,
-  "maximum_package_size_bytes": 104857600,
-  "allowed_storage_schemes": ["local", "s3", "r2"],
-  "forbidden_artifacts": ["secrets/**", ".env"],
-  "sufficiency_report_id": "guide-sufficiency:v1",
+  "policy_version": "v1",
+  "policy_body": {
+    "required_artifacts": [
+      {
+        "key": "answer",
+        "path": "outputs/final-answer.md",
+        "hash_required": true,
+        "required": true
+      }
+    ],
+    "required_evidence": [
+      {
+        "key": "oracle_test_log",
+        "label": "Oracle test log",
+        "hash_required": true,
+        "required": true
+      }
+    ],
+    "forbidden_artifacts": [
+      {
+        "pattern": "*.tmp",
+        "reason": "Temporary files are not reviewable."
+      }
+    ],
+    "attestation_terms": ["project_specific_originality"],
+    "manifest_required": true,
+    "artifact_hash_required": true,
+    "artifact_hash_algorithm": "sha256",
+    "maximum_file_size_bytes": 52428800,
+    "maximum_package_size_bytes": 104857600,
+    "allowed_storage_schemes": ["local", "s3", "r2"],
+    "packaging": {
+      "package_required": true,
+      "allowed_package_formats": ["zip"]
+    }
+  },
+  "policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "derivation_source": "agent_derived",
   "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
   "derivation_agent_version": "v1",
   "source_material_refs": ["project-guide:v1"],
   "lifecycle_status": "approved",
-  "approved_policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "approved_by_role": "project_manager",
-  "approved_by": "flow-project-manager",
-  "approved_at": "2026-06-22T12:00:00Z",
-  "packaging_rules": {
-    "archive_required": true
-  }
+  "approved_by_actor": "flow-project-manager",
+  "approved_at": "2026-06-22T12:00:00Z"
 }
 ```
 
@@ -401,23 +409,16 @@ Fields:
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
-- `version`
+- `submission_artifact_policy_id`
+- `submission_artifact_policy_hash`
 - `lifecycle_status`
-- `policy_hash`
-- `source_project_policy_hash`
-- `required_artifacts`
-- `required_evidence`
-- `artifact_manifest_required`
-- `artifact_hash_required`
-- `artifact_hash_algorithm`
-- `maximum_file_size_bytes`
-- `maximum_package_size_bytes`
-- `allowed_storage_schemes`
-- `forbidden_artifacts`
-- `required_attestation_terms`
-- `generated_from`
-- `generated_at`
-- `supersedes_policy_id`
+- `merge_algorithm_version`
+- `effective_policy`
+- `effective_policy_hash`
+- `created_by`
+- `created_at`
+- `supersedes_effective_policy_id`
+- `superseded_at`
 
 This policy is deterministic. It preserves Workstream defaults first and adds project-approved requirements. Duplicate rules collapse by canonical key. Any project rule that conflicts with Workstream defaults is a project setup defect.
 
@@ -452,23 +453,18 @@ Fields:
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
-- `effective_project_submission_artifact_policy_hash`
-- `version`
+- `effective_policy_id`
+- `effective_policy_hash`
 - `lifecycle_status`
-- `policy_hash`
-- `checker_spec`
 - `compiler_version`
-- `compiled_bundle_hash`
 - `compiled_bundle`
+- `compiled_bundle_hash`
 - `checker_names` (derived index projection)
 - `checker_configs` (derived index projection)
-- `blocking_severities` (derived index projection)
-- `generated_from_policy_version`
-- `generated_at`
-- `approved_by_role`
-- `approved_by`
-- `approved_at`
-- `supersedes_policy_id`
+- `created_by`
+- `created_at`
+- `supersedes_pre_submit_checker_policy_id`
+- `superseded_at`
 
 Generated server-side from `EffectiveProjectSubmissionArtifactPolicy`, then
 persisted and locked for the project guide version before tasks enter the
@@ -480,17 +476,14 @@ the work is split into another project/guide. The task stores
 `PreSubmitCheckerPolicy.compiled_bundle_hash`; it does not own a newly derived
 policy or newly compiled checker.
 
-`checker_spec` is the constrained machine-readable specification using
-Workstream-approved primitives. `compiled_bundle` is the immutable JSON checker
-bundle produced by the trusted Workstream checker compiler and is the canonical
-source of truth. It is stored as a structured snapshot, not arbitrary executable
-code. `compiled_bundle_hash` binds the exact compiled logic to
-`effective_project_submission_artifact_policy_hash`. `checker_names`,
-`checker_configs`, and `blocking_severities` are derived index projections only;
-they must be regenerated from `compiled_bundle` and must not disagree with it.
-`policy_hash` identifies the approved checker policy/spec record, while
-`compiled_bundle_hash` is the runtime provenance value locked by tasks,
-submissions, and revision context.
+In Chunk 1, approval creates a project-scoped `PreSubmitCheckerPolicy` row in
+`pending_compilation`. Chunk 2 supplies the trusted compiler path that writes the
+immutable `compiled_bundle` JSON and `compiled_bundle_hash`. The compiled bundle
+is the canonical checker source of truth. It is stored as a structured snapshot,
+not arbitrary executable code. `compiled_bundle_hash` binds the exact compiled
+logic to `effective_policy_hash`. `checker_names` and `checker_configs` are
+derived index projections only; they must be regenerated from `compiled_bundle`
+and must not disagree with it.
 
 The compiler must prove semantic coverage: every enforceable
 `EffectiveProjectSubmissionArtifactPolicy` rule must produce deterministic
@@ -505,8 +498,9 @@ parameter map. Runtime parameters may fill placeholders in the locked checker
 bundle, but they cannot change required checks, severity, allowed storage,
 forbidden artifacts, hash algorithm, or platform defaults.
 
-Approved and superseded checker policy rows are immutable. Changing policy or
-compiler output creates a new row with `supersedes_policy_id`.
+Compiled and superseded checker policy rows are immutable. Changing policy or
+compiler output creates a new row with
+`supersedes_pre_submit_checker_policy_id`.
 
 The generated checker order is deterministic:
 

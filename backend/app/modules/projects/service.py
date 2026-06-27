@@ -89,6 +89,24 @@ SECRET_ARTIFACT_NAME_PATTERN = re.compile(
     r")($|[._/\-])",
     re.IGNORECASE,
 )
+SECRET_ARTIFACT_TOKEN_SETS = [
+    {"access", "key"},
+    {"api", "key"},
+    {"private", "key"},
+    {"service", "account"},
+    {"client", "secret"},
+    {"aws", "access", "key"},
+]
+SECRET_ARTIFACT_SINGLE_TOKENS = {
+    "credential",
+    "credentials",
+    "secret",
+    "secrets",
+    "password",
+    "passwords",
+    "token",
+    "tokens",
+}
 ALLOWED_SOURCE_REF_SCHEMES = {"https", "http", "repo", "inline", "import", "s3", "r2"}
 GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION = "guide_source_snapshot.v1"
 EFFECTIVE_POLICY_SCHEMA_VERSION = "effective_project_submission_artifact_policy.v1"
@@ -1561,7 +1579,9 @@ class ProjectService:
         token_normalized = re.sub(r"[-\s]+", "_", normalized)
         segments = normalized.split("/")
         token_segments = token_normalized.split("/")
-        if SECRET_ARTIFACT_NAME_PATTERN.search(normalized):
+        if SECRET_ARTIFACT_NAME_PATTERN.search(normalized) or self._contains_secret_artifact_tokens(
+            normalized
+        ):
             return True
         for pattern in patterns:
             normalized_pattern = pattern.lower()
@@ -1584,6 +1604,20 @@ class ProjectService:
                 "id_rsa",
                 "token",
             }:
+                return True
+        return False
+
+    def _contains_secret_artifact_tokens(self, value: str) -> bool:
+        """Return whether any path segment uses credential-like words."""
+        for segment in value.split("/"):
+            tokens = {
+                token
+                for token in re.split(r"[^a-z0-9]+", segment.lower())
+                if token
+            }
+            if tokens.intersection(SECRET_ARTIFACT_SINGLE_TOKENS):
+                return True
+            if any(secret_tokens.issubset(tokens) for secret_tokens in SECRET_ARTIFACT_TOKEN_SETS):
                 return True
         return False
 

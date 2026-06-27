@@ -249,7 +249,7 @@ class SubmissionArtifactPolicyCreate(BaseModel):
     derivation_source: str = Field(default="manual_admin_derivation", max_length=100)
     derivation_agent_name: str | None = Field(default=None, max_length=100)
     derivation_agent_version: str | None = Field(default=None, max_length=50)
-    change_summary: str | None = None
+    change_summary: str | None = Field(default=None, max_length=2000)
 
 
 class SubmissionArtifactPolicyUpdate(BaseModel):
@@ -261,7 +261,7 @@ class SubmissionArtifactPolicyUpdate(BaseModel):
     derivation_source: str | None = Field(default=None, max_length=100)
     derivation_agent_name: str | None = Field(default=None, max_length=100)
     derivation_agent_version: str | None = Field(default=None, max_length=50)
-    change_summary: str | None = None
+    change_summary: str | None = Field(default=None, max_length=2000)
 
 
 class SubmissionArtifactPolicyApprove(BaseModel):
@@ -269,7 +269,7 @@ class SubmissionArtifactPolicyApprove(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    approval_note: str | None = None
+    approval_note: str | None = Field(default=None, max_length=2000)
 
 
 class SubmissionArtifactPolicyResponse(BaseModel):
