@@ -9,7 +9,7 @@ import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -1121,30 +1121,43 @@ class ProjectService:
         and token-bearing values are rejected before persistence.
         """
         raw_ref = durable_ref.strip()
-        if "\\" in raw_ref:
+        decoded_ref = unquote(raw_ref)
+        if "\\" in raw_ref or "\\" in decoded_ref:
             raise SourceSnapshotInvalid("durable source refs cannot contain local path separators")
         parsed = urlparse(raw_ref)
+        decoded_parsed = urlparse(decoded_ref)
         if not parsed.scheme:
             raise SourceSnapshotInvalid("durable source refs must use an approved scheme")
         scheme = parsed.scheme.lower()
         if scheme not in ALLOWED_SOURCE_REF_SCHEMES:
             raise SourceSnapshotInvalid("durable source ref scheme is not approved")
+        if decoded_parsed.scheme and decoded_parsed.scheme.lower() != scheme:
+            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
+        if decoded_parsed.netloc and decoded_parsed.netloc != parsed.netloc:
+            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
         if scheme in OPAQUE_SOURCE_REF_SCHEMES and (parsed.netloc or parsed.path.startswith("//")):
+            raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
+        if scheme in OPAQUE_SOURCE_REF_SCHEMES and (
+            decoded_parsed.netloc or decoded_parsed.path.startswith("//")
+        ):
             raise SourceSnapshotInvalid("durable source refs cannot contain network share authority")
         if parsed.username or parsed.password or "@" in parsed.netloc:
             raise SourceSnapshotInvalid("durable source refs cannot contain credentials")
         if parsed.query or parsed.fragment:
             raise SourceSnapshotInvalid("durable source refs cannot contain query or fragment")
-        if SECRET_REF_PATTERN.search(raw_ref):
+        if SECRET_REF_PATTERN.search(raw_ref) or SECRET_REF_PATTERN.search(decoded_ref):
             raise SourceSnapshotInvalid("durable source refs cannot contain credential material")
-        path_segments = [segment for segment in parsed.path.split("/") if segment]
+        decoded_path = unquote(parsed.path or "")
+        if "?" in decoded_path or "#" in decoded_path:
+            raise SourceSnapshotInvalid("durable source refs cannot contain encoded locators")
+        path_segments = [segment for segment in decoded_path.split("/") if segment]
         if any(segment in {".", ".."} for segment in path_segments):
             raise SourceSnapshotInvalid("durable source refs cannot contain path traversal")
         if scheme in {"http", "https"} and not parsed.netloc:
             raise SourceSnapshotInvalid("http source refs require a host")
-        if parsed.path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
+        if decoded_path.startswith(("~", "/tmp", "/home", "/Users", "/var", "/etc")) or re.match(
             r"^/?[A-Za-z]:/",
-            parsed.path,
+            decoded_path,
         ):
             raise SourceSnapshotInvalid("durable source refs cannot be local filesystem paths")
         netloc = parsed.netloc.lower()
@@ -1274,6 +1287,10 @@ class ProjectService:
             default_policy["maximum_package_size_bytes"],
             project_policy["maximum_package_size_bytes"],
         )
+        effective_packaging = self._merge_packaging_rules(
+            default_policy["packaging"],
+            project_policy["packaging"],
+        )
         effective = {
             "schema_version": EFFECTIVE_POLICY_SCHEMA_VERSION,
             "merge_algorithm_version": MERGE_ALGORITHM_VERSION,
@@ -1303,11 +1320,31 @@ class ProjectService:
             "allowed_storage_schemes": allowed_storage_schemes,
             "maximum_file_size_bytes": maximum_file_size_bytes,
             "maximum_package_size_bytes": maximum_package_size_bytes,
-            "packaging": {
-                "workstream_default": default_policy["packaging"],
-                "project": project_policy["packaging"],
-            },
+            "packaging": effective_packaging,
         }
+        return effective
+
+    def _merge_packaging_rules(
+        self,
+        default_packaging: dict[str, Any],
+        project_packaging: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Merge packaging rules without weakening platform defaults."""
+        default_required = bool(default_packaging.get("package_required", False))
+        project_required = bool(project_packaging.get("package_required", False))
+        default_formats = set(default_packaging.get("allowed_package_formats") or [])
+        project_formats = set(project_packaging.get("allowed_package_formats") or [])
+
+        if default_formats and project_formats:
+            allowed_formats = default_formats.intersection(project_formats)
+            if not allowed_formats:
+                raise PolicySetupBlocked("packaging rules leave no allowed package formats")
+        else:
+            allowed_formats = default_formats or project_formats
+
+        effective = {"package_required": default_required or project_required}
+        if allowed_formats:
+            effective["allowed_package_formats"] = sorted(allowed_formats)
         return effective
 
     def _validate_project_policy_against_defaults(self, project_policy: dict[str, Any]) -> None:
@@ -1437,6 +1474,8 @@ class ProjectService:
             raise GuideActivationBlocked("submission artifact policy snapshot hash mismatch")
         if not submission_artifact_policy.approved_by_actor or not submission_artifact_policy.approved_at:
             raise GuideActivationBlocked("submission artifact policy approval provenance is required")
+        if submission_artifact_policy.approved_by_role not in PROJECT_SETUP_ROLES:
+            raise GuideActivationBlocked("submission artifact policy approver role is invalid")
         if effective_policy is None:
             raise GuideActivationBlocked("effective project submission artifact policy is required")
         if effective_policy.lifecycle_status != "approved":
@@ -1475,6 +1514,17 @@ class ProjectService:
             raise GuideActivationBlocked("pre-submit checker compiled bundle hash is required")
         if not pre_submit_checker_policy.compiled_bundle:
             raise GuideActivationBlocked("pre-submit checker compiled bundle is required")
+        self._require_sha256_hash(
+            pre_submit_checker_policy.compiled_bundle_hash,
+            "pre-submit checker compiled bundle hash",
+        )
+        if not isinstance(pre_submit_checker_policy.compiled_bundle, dict):
+            raise GuideActivationBlocked("pre-submit checker compiled bundle must be an object")
+        if (
+            self._hash_canonical_json(pre_submit_checker_policy.compiled_bundle)
+            != pre_submit_checker_policy.compiled_bundle_hash
+        ):
+            raise GuideActivationBlocked("pre-submit checker compiled bundle hash mismatch")
         if checker_policy is None or not checker_policy.required_checkers:
             raise GuideActivationBlocked("checker policy with required checkers is required")
         checker_names = set(checker_policy.required_checkers or []).union(

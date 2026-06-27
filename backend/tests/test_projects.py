@@ -189,6 +189,24 @@ def test_pre_submit_checker_policy_compiled_rows_require_bundle_fields() -> None
     assert "compiled_bundle_hash" in constraint_sql
     assert "compiled_bundle" in constraint_sql
     assert "compiler_version" in constraint_sql
+    assert "sha256" in constraint_sql
+
+
+def test_submission_artifact_policy_approval_requires_provenance() -> None:
+    constraint = next(
+        constraint
+        for constraint in SubmissionArtifactPolicy.__table__.constraints
+        if constraint.name is not None
+        and constraint.name.endswith("ck_submission_artifact_policies_approval_provenance")
+    )
+
+    constraint_sql = str(constraint.sqltext)
+
+    assert "approved_by_role" in constraint_sql
+    assert "admin" in constraint_sql
+    assert "project_manager" in constraint_sql
+    assert "approved_by_actor" in constraint_sql
+    assert "approved_at" in constraint_sql
 
 
 def complete_guide_payload(version: str = "v1") -> dict:
@@ -610,6 +628,13 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("inline:~/guide.md", "local filesystem paths"),
         ("repo:~/guide.md", "local filesystem paths"),
         ("import:~/guide.md", "local filesystem paths"),
+        ("s3://workstream-guides/%74oken/guide.md", "credential material"),
+        ("s3://workstream-guides/%63redential/guide.md", "credential material"),
+        ("s3://workstream-guides/%70assword/guide.md", "credential material"),
+        ("inline:%2Fhome%2Fabiorh%2Fguide.md", "local filesystem paths"),
+        ("repo:%2Ftmp%2Fguide.md", "local filesystem paths"),
+        ("import:%2E%2E/guide.md", "path traversal"),
+        ("inline:%5CUsers%5Calice%5Cguide.md", "local path separators"),
     ],
 )
 async def test_source_snapshot_rejects_credential_and_local_refs(
@@ -718,6 +743,40 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert pre_submit_checker_policy.lifecycle_status == "pending_compilation"
     assert pre_submit_checker_policy.effective_policy_hash == effective["effective_policy_hash"]
     assert pre_submit_checker_policy.compiled_bundle_hash is None
+
+
+async def test_submission_artifact_policy_approval_merges_packaging_rules(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        policy_body=project_submission_artifact_policy_body(
+            packaging={
+                "package_required": True,
+                "allowed_package_formats": ["zip", "tar"],
+            }
+        ),
+    )
+
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+
+    assert effective["effective_policy"]["packaging"] == {
+        "package_required": True,
+        "allowed_package_formats": ["tar", "zip"],
+    }
+    assert "workstream_default" not in effective["effective_policy"]["packaging"]
+    assert "project" not in effective["effective_policy"]["packaging"]
 
 
 async def test_approved_submission_artifact_policy_is_immutable(
@@ -1365,6 +1424,31 @@ async def test_activation_rejects_pending_pre_submit_checker_policy(
 
     assert response.status_code == 422
     assert "compiled project pre-submit checker policy" in response.json()["detail"]
+
+
+async def test_activation_rejects_mismatched_pre_submit_checker_bundle_hash(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+    async with db_session.get_session_factory()() as session:
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == bundle["effective_policy"]["id"]
+            )
+        )
+        assert pre_submit_checker_policy is not None
+        pre_submit_checker_policy.compiled_bundle_hash = sha256_hash("wrong-compiled-bundle")
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "compiled bundle hash mismatch" in response.json()["detail"]
 
 
 async def test_guide_activation_and_active_guide_retrieval(project_client: AsyncClient) -> None:

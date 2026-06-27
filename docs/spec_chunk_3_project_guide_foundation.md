@@ -27,6 +27,7 @@ Revision workflow execution is not in this chunk, but revision policy is in scop
 - `backend/app/modules/projects/service.py`
 - `backend/app/modules/projects/router.py`
 - `backend/alembic/versions/0002_project_guide_foundation.py`
+- `backend/alembic/versions/0006_submission_artifact_policy_foundation.py`
 - `backend/tests/test_projects.py`
 
 ## Architecture Requirements

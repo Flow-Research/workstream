@@ -321,6 +321,12 @@ class SubmissionArtifactPolicy(Base):
             "lifecycle_status in ('draft', 'approved', 'superseded')",
             name="ck_submission_artifact_policies_lifecycle_status",
         ),
+        CheckConstraint(
+            "lifecycle_status != 'approved' or "
+            "(approved_by_role in ('admin', 'project_manager') and "
+            "approved_by_actor is not null and approved_at is not null)",
+            name="ck_submission_artifact_policies_approval_provenance",
+        ),
         ForeignKeyConstraint(
             ["project_id", "guide_version"],
             ["project_guides.project_id", "project_guides.version"],
@@ -455,7 +461,7 @@ class PreSubmitCheckerPolicy(Base):
         CheckConstraint(
             "lifecycle_status != 'compiled' or "
             "(compiler_version is not null and compiled_bundle is not null and "
-            "compiled_bundle_hash is not null)",
+            "compiled_bundle_hash ~ '^sha256:[0-9a-f]{64}$')",
             name="ck_pre_submit_checker_policies_compiled_fields",
         ),
         ForeignKeyConstraint(

@@ -91,8 +91,8 @@ In the final architecture, guide activation fails unless the guide snapshot and
 guide version have a passing or acknowledged guide sufficiency report, approved
 project submission artifact policy, effective project submission artifact policy hash, and project
 `PreSubmitCheckerPolicy` compiled bundle hash. Chunk 1 creates the records and
-foundational guards; Chunk 2 adds compiler execution and turns the complete
-activation gate on; Chunk 3 makes tasks lock the compiled checker reference
+enforces the compiled-checker activation dependency; Chunk 2 adds compiler
+execution that writes the compiled bundle fields; Chunk 3 makes tasks lock the compiled checker reference
 before entering the worker pipeline. The system must surface setup failure
 internally as task/project setup incomplete rather than letting workers discover
 missing intake rules at submit time.
