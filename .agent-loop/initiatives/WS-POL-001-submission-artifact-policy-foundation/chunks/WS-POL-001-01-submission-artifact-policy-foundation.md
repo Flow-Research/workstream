@@ -200,7 +200,7 @@ human review implementation
 ## Verification Commands
 
 ```bash
-cd backend && .venv/bin/python -m ruff check app tests
+cd backend && .venv/bin/python -m ruff check app tests scripts
 cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests
 cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_api_e2e.py
 cd backend && .venv/bin/docstr-coverage --config .docstr.yaml
