@@ -4,12 +4,12 @@
 
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: none
-- Branch: `main`
-- Status: WS-POL-001 planning approved and merged; implementation has not started
-- Merge commit: `acf2bcf62a7af391c506c960769268c393aefdab`
-- Reviewed code SHA: `8b51a84b1bede193bbafe0b1eeb7b7981a271a0e`
-- Current gate: ready to open the `WS-POL-001-01` implementation branch when the user says to start
-- Next chunk: `WS-POL-001-01` implementation
+- Active implementation chunk: `WS-POL-001-01`
+- Branch: `codex/ws-pol-001-01-submission-artifact-policy`
+- Status: `WS-POL-001-01` implementation complete locally; internal review evidence written; PR pending
+- Reviewed code SHA: `de41f8701eb2ce98b2e355d984c60d9c0a0e7a34`
+- Current gate: run internal evidence gate, commit evidence/status/trust bundle, open PR, wait for external review
+- Next chunk: inactive until `WS-POL-001-01` is reviewed and merged by the user
 
 ## Operating Rule
 
@@ -19,10 +19,10 @@ Workstream engineering chunks move through:
 Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> Implementation -> Evidence -> Internal Review -> PR -> Human Checkpoint -> Memory Update -> Stop
 ```
 
-The current initiative is Workstream product implementation planning for
-submission intake policy. PR #26 approved the planning contract only; it did not
-change Workstream product behavior, database schema, API behavior, or frontend
-behavior.
+This branch implements the first backend foundation chunk for submission intake
+policy. It does not implement async agents, the trusted compiler runtime, task
+locked-context migration, submission runtime migration, frontend behavior,
+payment, reputation, settlement, or blockchain integrations.
 
 ## Last Review State
 
@@ -31,5 +31,8 @@ behavior.
 - PR #24 updated post-merge loop memory on `main`.
 - PR #25 added Terminal Benchmark example material under `examples/`.
 - PR #26 approved and merged WS-POL-001 planning into `main` on 2026-06-27.
+- PR #27 updated WS-POL post-merge memory on `main`.
+- Current implementation branch: `codex/ws-pol-001-01-submission-artifact-policy`.
 - Internal review evidence is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-internal-review-evidence.md`.
+- PR trust bundle is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-pr-trust-bundle.md`.
 - External review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-external-review-response.md`.
