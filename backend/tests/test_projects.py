@@ -154,6 +154,7 @@ def test_submission_artifact_policy_models_bind_to_snapshot_hashes() -> None:
         GuideSufficiencyReport: "fk_guide_sufficiency_reports_source_snapshot_hash",
         SubmissionArtifactPolicy: "fk_submission_artifact_policies_source_snapshot_hash",
         EffectiveProjectSubmissionArtifactPolicy: "fk_effective_psap_source_snapshot_hash",
+        PreSubmitCheckerPolicy: "fk_pre_submit_checker_policies_source_snapshot_hash",
     }
 
     for model, constraint_name in expected_constraints.items():
@@ -172,6 +173,22 @@ def test_submission_artifact_policy_models_bind_to_snapshot_hashes() -> None:
             "guide_source_snapshots",
         ]
         assert [element.column.name for element in constraint.elements] == ["id", "bundle_hash"]
+
+
+def test_pre_submit_checker_policy_compiled_rows_require_bundle_fields() -> None:
+    constraint = next(
+        constraint
+        for constraint in PreSubmitCheckerPolicy.__table__.constraints
+        if constraint.name is not None
+        and constraint.name.endswith("ck_pre_submit_checker_policies_compiled_fields")
+    )
+
+    constraint_sql = str(constraint.sqltext)
+
+    assert "lifecycle_status" in constraint_sql
+    assert "compiled_bundle_hash" in constraint_sql
+    assert "compiled_bundle" in constraint_sql
+    assert "compiler_version" in constraint_sql
 
 
 def complete_guide_payload(version: str = "v1") -> dict:
@@ -411,12 +428,63 @@ async def approve_submission_artifact_policy(
     return response.json()
 
 
+def canonical_json_hash(value: dict) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+async def mark_pre_submit_checker_policy_compiled(effective_policy: dict) -> dict:
+    compiled_bundle = {
+        "schema_version": "pre_submit_checker_bundle.v1",
+        "compiler_version": "test-compiler-v0.1",
+        "effective_policy_hash": effective_policy["effective_policy_hash"],
+        "checks": [
+            {
+                "name": "require_submission_manifest",
+                "severity": "blocking",
+            },
+            {
+                "name": "require_artifact_hashes",
+                "severity": "blocking",
+            },
+        ],
+    }
+    compiled_bundle_hash = canonical_json_hash(compiled_bundle)
+    async with db_session.get_session_factory()() as session:
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
+            )
+        )
+        assert pre_submit_checker_policy is not None
+        pre_submit_checker_policy.lifecycle_status = "compiled"
+        pre_submit_checker_policy.compiler_version = "test-compiler-v0.1"
+        pre_submit_checker_policy.compiled_bundle = compiled_bundle
+        pre_submit_checker_policy.compiled_bundle_hash = compiled_bundle_hash
+        pre_submit_checker_policy.checker_names = [
+            "require_submission_manifest",
+            "require_artifact_hashes",
+        ]
+        pre_submit_checker_policy.checker_configs = {}
+        await session.commit()
+    return {
+        "compiled_bundle": compiled_bundle,
+        "compiled_bundle_hash": compiled_bundle_hash,
+    }
+
+
 async def create_approved_policy_bundle(
     client: AsyncClient,
     project_id: str,
     guide_id: str,
     *,
     sufficiency_status: str = "passed",
+    compile_pre_submit_checker: bool = True,
 ) -> dict:
     snapshot = await create_source_snapshot(client, project_id, guide_id)
     report = await create_sufficiency_report(
@@ -433,11 +501,15 @@ async def create_approved_policy_bundle(
         guide_id,
         policy["id"],
     )
+    compiled_pre_submit_checker = None
+    if compile_pre_submit_checker:
+        compiled_pre_submit_checker = await mark_pre_submit_checker_policy_compiled(effective)
     return {
         "source_snapshot": snapshot,
         "sufficiency_report": report,
         "submission_artifact_policy": policy,
         "effective_policy": effective,
+        "pre_submit_checker_policy": compiled_pre_submit_checker,
     }
 
 
@@ -876,12 +948,13 @@ async def test_draft_policy_cannot_be_approved_after_guide_activation(
         snapshot["id"],
         policy_version="v2",
     )
-    await approve_submission_artifact_policy(
+    effective = await approve_submission_artifact_policy(
         project_client,
         project["id"],
         guide["id"],
         first_policy["id"],
     )
+    await mark_pre_submit_checker_policy_compiled(effective)
     activation = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
         headers=auth_headers(),
@@ -1273,6 +1346,27 @@ async def test_activation_rejects_unsupported_revision_resubmission_states(
     assert "invalid resubmission states" in response.json()["detail"]
 
 
+async def test_activation_rejects_pending_pre_submit_checker_policy(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    await create_approved_policy_bundle(
+        project_client,
+        project["id"],
+        guide["id"],
+        compile_pre_submit_checker=False,
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "compiled project pre-submit checker policy" in response.json()["detail"]
+
+
 async def test_guide_activation_and_active_guide_retrieval(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -1302,13 +1396,13 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.json()["effective_submission_artifact_policy"]["effective_policy_hash"] == (
         bundle["effective_policy"]["effective_policy_hash"]
     )
-    assert active.json()["pre_submit_checker_policy"]["lifecycle_status"] == (
-        "pending_compilation"
-    )
+    assert active.json()["pre_submit_checker_policy"]["lifecycle_status"] == "compiled"
     assert active.json()["pre_submit_checker_policy"]["effective_policy_id"] == (
         bundle["effective_policy"]["id"]
     )
-    assert active.json()["pre_submit_checker_policy"]["compiled_bundle_hash"] is None
+    assert active.json()["pre_submit_checker_policy"]["compiled_bundle_hash"] == (
+        bundle["pre_submit_checker_policy"]["compiled_bundle_hash"]
+    )
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
     assert active.json()["payment_policy"]["base_amount"] == "25.00"

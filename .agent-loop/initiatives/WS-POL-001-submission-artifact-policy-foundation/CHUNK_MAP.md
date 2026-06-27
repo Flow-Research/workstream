@@ -94,9 +94,9 @@ Acceptance criteria:
 - Guide activation requires passing or acknowledged guide sufficiency, approved
   submission artifact policy, and effective project submission artifact policy hash bound to the
   current guide source snapshot.
-- Chunk 1 models the future activation dependency on project
-  `PreSubmitCheckerPolicy`; Chunk 2 compiles the checker and enforces the
-  complete activation gate.
+- Chunk 1 models and enforces the activation dependency on compiled project
+  `PreSubmitCheckerPolicy` fields. Chunk 2 adds the trusted compiler path that
+  writes those fields.
 - Project-owner source refs persist as sanitized snapshot item refs and cannot store
   signed URLs, credential-bearing refs, token-bearing refs, or local filesystem
   paths. Approved adapters can use ordinary URL query parameters only as

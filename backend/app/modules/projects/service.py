@@ -1469,8 +1469,12 @@ class ProjectService:
             )
         if pre_submit_checker_policy.effective_policy_hash != effective_policy.effective_policy_hash:
             raise GuideActivationBlocked("pre-submit checker bundle provenance mismatch")
-        if pre_submit_checker_policy.lifecycle_status not in {"pending_compilation", "compiled"}:
-            raise GuideActivationBlocked("pre-submit checker policy contract is not current")
+        if pre_submit_checker_policy.lifecycle_status != "compiled":
+            raise GuideActivationBlocked("compiled project pre-submit checker policy is required")
+        if not pre_submit_checker_policy.compiled_bundle_hash:
+            raise GuideActivationBlocked("pre-submit checker compiled bundle hash is required")
+        if not pre_submit_checker_policy.compiled_bundle:
+            raise GuideActivationBlocked("pre-submit checker compiled bundle is required")
         if checker_policy is None or not checker_policy.required_checkers:
             raise GuideActivationBlocked("checker policy with required checkers is required")
         checker_names = set(checker_policy.required_checkers or []).union(

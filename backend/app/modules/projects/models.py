@@ -452,6 +452,12 @@ class PreSubmitCheckerPolicy(Base):
             "lifecycle_status in ('pending_compilation', 'compiled', 'superseded')",
             name="ck_pre_submit_checker_policies_lifecycle_status",
         ),
+        CheckConstraint(
+            "lifecycle_status != 'compiled' or "
+            "(compiler_version is not null and compiled_bundle is not null and "
+            "compiled_bundle_hash is not null)",
+            name="ck_pre_submit_checker_policies_compiled_fields",
+        ),
         ForeignKeyConstraint(
             ["project_id", "guide_version"],
             ["project_guides.project_id", "project_guides.version"],

@@ -509,6 +509,63 @@ def sha256_token(seed: str) -> str:
     return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
 
 
+def canonical_json_hash(value: dict) -> str:
+    """Hash canonical JSON using the Workstream policy hash shape."""
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+async def mark_pre_submit_checker_policy_compiled(effective_policy: dict) -> dict:
+    """Simulate trusted compiler output for the Week 1 API drill.
+
+    Chunk 1 persists the project checker contract and activation guard. The
+    actual compiler lands later, so this E2E setup writes the deterministic
+    compiler-owned fields directly before activating the guide.
+    """
+    compiled_bundle = {
+        "schema_version": "pre_submit_checker_bundle.v1",
+        "compiler_version": "e2e-compiler-v0.1",
+        "effective_policy_hash": effective_policy["effective_policy_hash"],
+        "checks": [
+            {
+                "name": "require_submission_manifest",
+                "severity": "blocking",
+            },
+            {
+                "name": "require_artifact_hashes",
+                "severity": "blocking",
+            },
+        ],
+    }
+    compiled_bundle_hash = canonical_json_hash(compiled_bundle)
+    async with db_session.get_session_factory()() as session:
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
+            )
+        )
+        ensure(pre_submit_checker_policy is not None, "pre-submit checker policy missing")
+        pre_submit_checker_policy.lifecycle_status = "compiled"
+        pre_submit_checker_policy.compiler_version = "e2e-compiler-v0.1"
+        pre_submit_checker_policy.compiled_bundle = compiled_bundle
+        pre_submit_checker_policy.compiled_bundle_hash = compiled_bundle_hash
+        pre_submit_checker_policy.checker_names = [
+            "require_submission_manifest",
+            "require_artifact_hashes",
+        ]
+        pre_submit_checker_policy.checker_configs = {}
+        await session.commit()
+    return {
+        "compiled_bundle": compiled_bundle,
+        "compiled_bundle_hash": compiled_bundle_hash,
+    }
+
+
 def submission_artifact_policy_body() -> dict:
     """Build the project submission artifact policy used by the Week 1 drill.
 
@@ -613,7 +670,7 @@ async def create_policy_bundle_for_guide(
         },
         201,
     )
-    return await request_json(
+    effective_policy = await request_json(
         client,
         "POST",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
@@ -621,6 +678,8 @@ async def create_policy_bundle_for_guide(
         manager_token,
         {"approval_note": "Approved for Week 1 real API drill."},
     )
+    await mark_pre_submit_checker_policy_compiled(effective_policy)
+    return effective_policy
 
 
 async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
@@ -1117,7 +1176,7 @@ async def assert_week1_database_invariants(
         pre_submit_checker_policy = await session.scalar(
             select(PreSubmitCheckerPolicy).where(
                 PreSubmitCheckerPolicy.effective_policy_id == effective_policy.id,
-                PreSubmitCheckerPolicy.lifecycle_status == "pending_compilation",
+                PreSubmitCheckerPolicy.lifecycle_status == "compiled",
             )
         )
         ensure(pre_submit_checker_policy is not None, "pre-submit checker policy missing")
@@ -1125,6 +1184,10 @@ async def assert_week1_database_invariants(
             pre_submit_checker_policy.effective_policy_hash
             == effective_policy.effective_policy_hash,
             "pre-submit checker policy effective hash drifted",
+        )
+        ensure(
+            pre_submit_checker_policy.compiled_bundle_hash is not None,
+            "pre-submit checker compiled bundle hash missing",
         )
 
         locked_versions = {

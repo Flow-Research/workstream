@@ -28,8 +28,10 @@ activation.
 
 The generated project pre-submit checker policy is deterministic compiled policy, not
 unrestricted generated checker code. This first chunk defines the record
-contract and activation dependency; the async derivation and trusted compiler
-behavior land in the next chunk.
+contract and activation dependency. Approval creates the pending checker
+contract; activation requires compiler-owned compiled bundle fields. The async
+derivation and trusted compiler behavior that writes those fields lands in the
+next chunk.
 
 Project owner material is untrusted input. Guide text, URLs, repository docs,
 examples, and imported documents cannot grant tool authority, override
@@ -167,9 +169,9 @@ human review implementation
 - [ ] Guide activation fails when no approved project submission artifact policy
       exists for the guide version.
 - [ ] Guide activation requires valid submission artifact policy.
-- [ ] The activation contract models project `PreSubmitCheckerPolicy` as a
-      required final activation dependency; Chunk 2 enforces it after compiler
-      execution exists.
+- [ ] The activation contract requires project `PreSubmitCheckerPolicy` to be
+      `compiled` with a persisted compiled bundle and compiled bundle hash;
+      Chunk 2 implements the compiler path that writes those fields.
 - [ ] Workstream default submission artifact policy is represented in code.
 - [ ] Workstream default policy requires `sha256:<64 lowercase hex>` artifact hashes where production hashes are required.
 - [ ] Persisted artifact/storage refs reject raw signed URLs, query strings,

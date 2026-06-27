@@ -72,7 +72,8 @@ Project guide activation requires:
 - guide sufficiency report is passed or warnings are acknowledged by `admin` or `project_manager`
 - Workstream-derived submission artifact policy is approved for the guide version with `admin` or `project_manager` approval provenance
 - effective project submission artifact policy hash exists for the guide source snapshot
-- project pre-submit checker policy exists for the effective project policy
+- project pre-submit checker policy is compiled for the effective project policy
+  and has a persisted compiled bundle hash
 - post-submit checker policy exists for the guide version
 - review policy exists for the guide version
 - revision policy exists for the guide version
@@ -80,9 +81,9 @@ Project guide activation requires:
 - revision policy has max revision rounds, revision deadline hours, and allowed resubmission states
 - payment policy has base amount, currency, payout type, and accepted payment rule
 
-Implementation sequencing: Chunk 1 can model the project pre-submit checker
-dependency before compiler execution exists. Chunk 2 compiles the checker and
-enforces the complete activation gate.
+Implementation sequencing: Chunk 1 models the project pre-submit checker
+dependency and fails activation unless compiler-owned compiled bundle fields are
+present. Chunk 2 adds the trusted compiler path that writes those fields.
 
 Activating a new guide supersedes the prior active guide for that project without mutating its content.
 
@@ -143,7 +144,8 @@ These routes require an actor role allowed to manage project setup.
 `POST /submission-artifact-policies/{policy_id}/approve` returns the merged
 `EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the
 project-scoped `PreSubmitCheckerPolicy` contract in `pending_compilation`
-status. Chunk 2 fills the compiled bundle and compiled bundle hash.
+status. Chunk 2 fills the compiled bundle and compiled bundle hash. Until those
+fields are present with lifecycle status `compiled`, guide activation fails.
 
 `POST /activate` and `GET /active-guide` return the active guide with the full
 setup bundle:

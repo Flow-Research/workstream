@@ -444,6 +444,12 @@ def upgrade() -> None:
             "lifecycle_status in ('pending_compilation', 'compiled', 'superseded')",
             name="ck_pre_submit_checker_policies_lifecycle_status",
         ),
+        sa.CheckConstraint(
+            "lifecycle_status != 'compiled' or "
+            "(compiler_version is not null and compiled_bundle is not null and "
+            "compiled_bundle_hash is not null)",
+            name="ck_pre_submit_checker_policies_compiled_fields",
+        ),
         sa.ForeignKeyConstraint(
             ["effective_policy_id"],
             ["effective_project_submission_artifact_policies.id"],
