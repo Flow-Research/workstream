@@ -201,7 +201,9 @@ human review implementation
 
 ```bash
 cd backend && .venv/bin/python -m ruff check app tests
-cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests/test_projects.py
+cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python -m pytest tests
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_api_e2e.py
+cd backend && .venv/bin/docstr-coverage --config .docstr.yaml
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_internal_review_evidence.py
