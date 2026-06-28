@@ -227,13 +227,14 @@ Fields:
 
 - `id`
 - `source_snapshot_id`
+- `item_order`
 - `source_kind`
 - `durable_ref`
 - `ingestion_adapter`
 - `content_hash`
 - `content_cid` (future Flow Node binding)
 - `media_type`
-- `captured_at`
+- `created_at`
 
 `GuideSourceSnapshotItem` records each material item included in the guide
 bundle. `source_kind` distinguishes inline markdown, URL-backed documentation,

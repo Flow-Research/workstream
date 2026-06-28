@@ -327,6 +327,18 @@ class ProjectRepository:
         """Load one submission artifact policy by primary key."""
         return await self._session.get(SubmissionArtifactPolicy, policy_id)
 
+    async def lock_submission_artifact_policy(
+        self,
+        policy_id: str,
+    ) -> SubmissionArtifactPolicy | None:
+        """Load one submission artifact policy with a transactional row lock."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy)
+            .where(SubmissionArtifactPolicy.id == policy_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
     async def get_approved_submission_artifact_policy(
         self,
         project_id: str,

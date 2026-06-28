@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
@@ -33,7 +34,7 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
-from app.modules.projects.service import GUIDE_SOURCE_MATERIAL_FIELDS
+from app.modules.projects.service import GUIDE_SOURCE_MATERIAL_FIELDS, ProjectService
 
 
 @pytest.fixture
@@ -105,6 +106,25 @@ def test_policy_models_do_not_enforce_mutable_current_uniqueness() -> None:
         index_names = {index.name for index in model.__table__.indexes}
 
         assert index_names.isdisjoint(disallowed_current_indexes)
+
+
+def test_setup_mutations_use_locked_guide_helper() -> None:
+    methods = [
+        "update_draft_guide",
+        "create_guide_source_snapshot",
+        "create_guide_sufficiency_report",
+        "acknowledge_guide_sufficiency_warnings",
+        "create_submission_artifact_policy",
+        "update_submission_artifact_policy",
+        "approve_submission_artifact_policy",
+        "activate_guide",
+    ]
+
+    for method_name in methods:
+        source = inspect.getsource(getattr(ProjectService, method_name))
+
+        assert "_lock_project_guide_for_setup" in source
+        assert "_get_project_guide(project_id, guide_id)" not in source
 
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:
@@ -696,6 +716,8 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("s3://workstream-guides/%2574oken/guide.md", "credential material"),
         ("https://docs.flow.test/.env", "credential material"),
         ("https://docs.flow.test/%252Eenv", "credential material"),
+        ("https://docs.flow.test/config.env", "credential material"),
+        ("https://docs.flow.test/outputs/prod.env", "credential material"),
         ("https://docs.flow.test/keys/id_rsa", "credential material"),
         ("https://docs.flow.test/keys/deploy.pem", "credential material"),
         ("s3://bucket/private/key.pem", "credential material"),
@@ -979,6 +1001,37 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert pre_submit_checker_policy.lifecycle_status == "pending_compilation"
     assert pre_submit_checker_policy.effective_policy_hash == effective["effective_policy_hash"]
     assert pre_submit_checker_policy.compiled_bundle_hash is None
+
+
+async def test_approved_submission_artifact_policy_cannot_be_updated(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+
+    response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        f"submission-artifact-policies/{policy['id']}",
+        headers=auth_headers(),
+        json={"change_summary": "Attempt to mutate approved policy."},
+    )
+
+    assert response.status_code == 409
+    assert "immutable" in response.json()["detail"]
 
 
 async def test_submission_artifact_policy_approval_requires_sufficiency_report(
@@ -1719,6 +1772,8 @@ async def test_submission_artifact_policy_rejects_unknown_wrapper_fields(
         "outputs/client secret.txt",
         "service-account.json",
         "secrets/api-token.txt",
+        "config.env",
+        "outputs/prod.env",
     ],
 )
 async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(

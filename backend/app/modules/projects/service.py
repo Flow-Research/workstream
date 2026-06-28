@@ -123,6 +123,8 @@ DEFAULT_ATTESTATION_TERMS = [
 DEFAULT_FORBIDDEN_ARTIFACT_PATTERNS = [
     ".env",
     ".env*",
+    "*.env",
+    "*.env.*",
     ".git",
     "credentials",
     "credential*",
@@ -543,7 +545,7 @@ class ProjectService:
             Persisted sufficiency report response.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
+        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         self._validate_sufficiency_report_payload(payload)
@@ -593,7 +595,7 @@ class ProjectService:
             Updated sufficiency report response.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
+        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can acknowledge sufficiency warnings")
         report = await self._repo.get_guide_sufficiency_report(report_id)
@@ -628,7 +630,7 @@ class ProjectService:
             Created draft policy response.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
+        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can receive submission artifact policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
@@ -686,10 +688,10 @@ class ProjectService:
             Updated draft policy response.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
+        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can edit submission artifact policies")
-        policy = await self._repo.get_submission_artifact_policy(policy_id)
+        policy = await self._repo.lock_submission_artifact_policy(policy_id)
         if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
             raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
         if policy.lifecycle_status != "draft":
@@ -735,7 +737,7 @@ class ProjectService:
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can approve submission artifact policies")
-        policy = await self._repo.get_submission_artifact_policy(policy_id)
+        policy = await self._repo.lock_submission_artifact_policy(policy_id)
         if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
             raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
         if policy.lifecycle_status != "draft":
@@ -875,7 +877,7 @@ class ProjectService:
             ProjectNotFound: If the parent project disappears during activation.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
+        guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideActivationBlocked("only draft guides can be activated")
 
