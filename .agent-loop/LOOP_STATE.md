@@ -6,9 +6,9 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-01`
 - Branch: `codex/ws-pol-001-01-submission-artifact-policy`
-- Status: `WS-POL-001-01` implementation complete locally; internal review evidence written; PR pending
-- Reviewed code SHA: `de41f8701eb2ce98b2e355d984c60d9c0a0e7a34`
-- Current gate: run internal evidence gate, commit evidence/status/trust bundle, open PR, wait for external review
+- Status: `WS-POL-001-01` implementation complete locally; internal reviewer fanout complete; evidence validation passed
+- Reviewed code SHA: `a77845bfe041c3fa8d7f9b25b928e76060049ec2`
+- Current gate: push branch, publish or update PR, then wait for external review
 - Next chunk: inactive until `WS-POL-001-01` is reviewed and merged by the user
 
 ## Operating Rule

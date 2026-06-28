@@ -6,8 +6,9 @@
 `codex/ws-pol-001-01-submission-artifact-policy`.
 
 Internal reviewer fanout is complete for reviewed code SHA
-`de41f8701eb2ce98b2e355d984c60d9c0a0e7a34`. Deterministic local checks passed.
-The current gate is PR creation and external review.
+`a77845bfe041c3fa8d7f9b25b928e76060049ec2`. Deterministic local checks and
+internal evidence validation passed. The current gate is PR publication and
+external review.
 
 ## Active Chunk
 
@@ -17,7 +18,7 @@ The current gate is PR creation and external review.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-POL-001-01` | Internal review complete; PR pending | `codex/ws-pol-001-01-submission-artifact-policy` | - | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, and activation guards. |
+| `WS-POL-001-01` | Internal review complete; ready for PR publication | `codex/ws-pol-001-01-submission-artifact-policy` | - | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, activation guards, and key-based artifact policy merge. |
 | `WS-POL-001-02` | Planned | - | - | Adds async guide sufficiency / derivation agents and the trusted compiler path. |
 | `WS-POL-001-03` | Planned | - | - | Moves task locked-context and submission runtime to the effective policy and project checker bundle. |
 | `WS-POL-001-04` | Planned | - | - | Splits post-submit checker policy provenance. |
@@ -27,14 +28,15 @@ The current gate is PR creation and external review.
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| External review | Codex/user | Open PR, wait for GitHub checks and CodeRabbit, then address valid findings. |
+| External review | Codex/user | Open or update PR, wait for GitHub checks and CodeRabbit, then address valid findings. |
 | Human merge decision | User | Review PR trust bundle and approve merge only if acceptable. |
 
 ## Follow-Ups
 
 | Item | Source | Priority |
 |---|---|---|
-| Replace test/E2E direct compiled-field mutation with real trusted compiler path | Reuse/dedup and product/ops review | High for Chunk 2 |
+| Replace test/E2E direct compiled-field mutation with real trusted compiler path | Reuse/dedup, architecture, and product/ops review | High for Chunk 2 |
+| Define artifact/evidence key grammar before compiler/runtime consumption | Senior engineering and QA review | High for Chunk 2 |
+| Decide whether `required` remains boolean or becomes `Literal[True]` | Senior engineering review | High for Chunk 2 |
+| Make sufficiency report creation draft-only and warning acknowledgement idempotent | Security review | Medium |
 | Add task locked guide-source snapshot/effective-policy/pre-submit bundle references before `READY` | Chunk map | High for Chunk 3 |
-| Reuse activation-strength validation for active-guide reads before task locked-context consumes active-guide output | Senior engineering review | Medium |
-| Map duplicate source-snapshot bundle conflicts to a clean API response or idempotent return | Senior engineering review | Medium |
