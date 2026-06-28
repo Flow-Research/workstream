@@ -1253,6 +1253,7 @@ class ProjectService:
         """Recompute and verify an immutable guide-source snapshot bundle."""
 
         def fail() -> None:
+            """Raise the caller-specific snapshot integrity error."""
             raise exception_type("guide source snapshot integrity check failed")
 
         manifest = snapshot.manifest_json
