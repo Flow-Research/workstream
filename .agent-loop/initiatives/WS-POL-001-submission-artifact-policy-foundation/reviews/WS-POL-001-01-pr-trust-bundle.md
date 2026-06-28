@@ -128,7 +128,8 @@ Reviewer run IDs: see `WS-POL-001-01-internal-review-evidence.md`.
 
 External review is tracked separately in
 `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-01-external-review-response.md`.
-No external review result is being claimed in this internal evidence bundle.
+For PR #28, GitHub Actions and CodeRabbit passed; the PR is non-draft and
+mergeable. Human merge approval is still pending.
 
 ## Remaining Risks
 

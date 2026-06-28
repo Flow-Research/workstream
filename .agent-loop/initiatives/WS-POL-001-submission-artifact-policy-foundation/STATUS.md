@@ -6,9 +6,9 @@
 `codex/ws-pol-001-01-submission-artifact-policy`.
 
 Internal reviewer fanout is complete for reviewed code SHA
-`a77845bfe041c3fa8d7f9b25b928e76060049ec2`. Deterministic local checks and
-internal evidence validation passed. The current gate is PR publication and
-external review.
+`a77845bfe041c3fa8d7f9b25b928e76060049ec2`. Deterministic local checks,
+internal evidence validation, GitHub Actions, and CodeRabbit passed. The current
+gate is explicit user review and merge approval for PR #28.
 
 ## Active Chunk
 
@@ -18,7 +18,7 @@ external review.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-POL-001-01` | Internal review complete; ready for PR publication | `codex/ws-pol-001-01-submission-artifact-policy` | - | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, activation guards, and key-based artifact policy merge. |
+| `WS-POL-001-01` | External review complete; awaiting explicit user approval | `codex/ws-pol-001-01-submission-artifact-policy` | 28 | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, activation guards, and key-based artifact policy merge. |
 | `WS-POL-001-02` | Planned | - | - | Adds async guide sufficiency / derivation agents and the trusted compiler path. |
 | `WS-POL-001-03` | Planned | - | - | Moves task locked-context and submission runtime to the effective policy and project checker bundle. |
 | `WS-POL-001-04` | Planned | - | - | Splits post-submit checker policy provenance. |
@@ -28,8 +28,7 @@ external review.
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| External review | Codex/user | Open or update PR, wait for GitHub checks and CodeRabbit, then address valid findings. |
-| Human merge decision | User | Review PR trust bundle and approve merge only if acceptable. |
+| Human merge decision | User | Review PR #28 trust bundle and approve merge only if acceptable. |
 
 ## Follow-Ups
 
