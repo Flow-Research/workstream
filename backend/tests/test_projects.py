@@ -34,6 +34,7 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects import service as project_service_module
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.service import GUIDE_SOURCE_MATERIAL_FIELDS, ProjectService
 
@@ -1764,6 +1765,88 @@ async def test_submission_artifact_policy_rejects_default_weakening(
 
     assert response.status_code == 422
     assert "manifest" in response.json()["detail"]
+
+
+async def test_submission_artifact_policy_rejects_default_artifact_key_conflict(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    default_policy = {
+        **project_service_module.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+        "required_artifacts": [
+            {
+                "key": "answer",
+                "path": "platform/answer.md",
+                "hash_required": True,
+                "required": True,
+                "description": "Platform answer artifact.",
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        project_service_module,
+        "WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY",
+        default_policy,
+    )
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(
+                artifact_path="project/answer.md",
+            ),
+            "derivation_source": "manual_admin_derivation",
+            "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
+            "derivation_agent_version": "v0.1",
+            "change_summary": "Conflicting artifact key.",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "conflicts with Workstream default rules" in response.json()["detail"]
+
+
+async def test_submission_artifact_policy_dedupes_identical_default_artifact_key(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    artifact = project_submission_artifact_policy_body()["required_artifacts"][0]
+    default_policy = {
+        **project_service_module.WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY,
+        "required_artifacts": [artifact],
+    }
+    monkeypatch.setattr(
+        project_service_module,
+        "WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY",
+        default_policy,
+    )
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+
+    required_artifacts = effective["effective_policy"]["required_artifacts"]
+    assert len(required_artifacts) == 1
+    assert required_artifacts[0] == artifact
 
 
 async def test_submission_artifact_policy_rejects_rule_hash_weakening(

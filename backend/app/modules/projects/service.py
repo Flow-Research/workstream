@@ -1684,7 +1684,7 @@ class ProjectService:
         required_artifacts = self._merge_required_policy_rules(
             default_policy["required_artifacts"],
             project_policy["required_artifacts"],
-            "path",
+            "key",
         )
         required_evidence = self._merge_required_policy_rules(
             default_policy["required_evidence"],

@@ -130,15 +130,19 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 
 ## Project Required Artifacts
 
-| Artifact | Required | Hash Required | Notes |
-| --- | --- | --- | --- |
-| `<artifact path>` | yes | yes | `<why this artifact is required>` |
+| Key | Path | Required | Hash Required | Description |
+| --- | --- | --- | --- | --- |
+| `<canonical artifact key>` | `<safe relative path>` | yes | yes | `<why this artifact is required>` |
+
+`key` is the canonical merge identity. Two artifact rules with the same key must be identical or setup blocks.
 
 ## Project Required Evidence
 
-| Evidence | Required | Hash Required | Notes |
-| --- | --- | --- | --- |
-| `<evidence label>` | yes | yes | `<what this evidence proves>` |
+| Key | Label | Required | Hash Required | Description |
+| --- | --- | --- | --- | --- |
+| `<canonical evidence key>` | `<worker-facing label>` | yes | yes | `<what this evidence proves>` |
+
+`key` is the canonical merge identity. `label` is worker-facing display text.
 
 ## Project Packaging Rules
 
