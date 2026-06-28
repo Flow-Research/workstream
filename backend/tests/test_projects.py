@@ -25,6 +25,7 @@ from app.modules.projects.models import (
     CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
+    GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
     PreSubmitCheckerPolicy,
@@ -423,11 +424,16 @@ def project_submission_artifact_policy_body(
     }
 
 
-async def create_source_snapshot(client: AsyncClient, project_id: str, guide_id: str) -> dict:
+async def create_source_snapshot(
+    client: AsyncClient,
+    project_id: str,
+    guide_id: str,
+    payload: dict | None = None,
+) -> dict:
     response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
         headers=auth_headers(),
-        json=source_snapshot_payload(),
+        json=payload if payload is not None else source_snapshot_payload(),
     )
     assert response.status_code == 201, response.text
     return response.json()
@@ -675,6 +681,35 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
     assert [item["item_order"] for item in snapshot["items"]] == [0, 1, 2]
 
 
+async def test_source_snapshot_can_use_only_project_guide_material(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+
+    snapshot = await create_source_snapshot(
+        project_client,
+        project["id"],
+        guide["id"],
+        payload={"items": []},
+    )
+
+    assert len(snapshot["items"]) == 1
+    assert snapshot["items"][0]["source_kind"] == "project_guide"
+    assert snapshot["manifest_json"]["items"] == [
+        {
+            "source_kind": "project_guide",
+            "durable_ref": f"inline:/guides/{guide['id']}/{guide['version']}",
+            "ingestion_adapter": "workstream_project_guide",
+            "content_hash": canonical_json_hash(
+                {field: guide[field] for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)}
+            ),
+            "content_cid": None,
+            "media_type": "application/json",
+        }
+    ]
+
+
 async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -835,6 +870,66 @@ async def test_source_snapshot_rejects_oversized_source_fields(
 
     assert response.status_code == 422
     assert "max_length" in response.text
+
+
+async def test_sufficiency_report_rejects_snapshot_manifest_hash_drift(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(GuideSourceSnapshot, snapshot["id"])
+        assert persisted is not None
+        persisted.manifest_json = {**persisted.manifest_json, "tampered": True}
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Looks sufficient.",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "integrity" in response.json()["detail"]
+
+
+async def test_submission_policy_rejects_snapshot_item_drift(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+
+    async with db_session.get_session_factory()() as session:
+        item = await session.scalar(
+            select(GuideSourceSnapshotItem)
+            .where(GuideSourceSnapshotItem.source_snapshot_id == snapshot["id"])
+            .order_by(GuideSourceSnapshotItem.item_order)
+        )
+        assert item is not None
+        item.content_hash = sha256_hash("tampered-source-item")
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "integrity" in response.json()["detail"]
 
 
 async def test_snapshot_freshness_fails_closed_when_captured_at_ties(
@@ -1296,23 +1391,24 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
     assert current_effective is not None
     assert current_pre_submit is not None
 
-    assert first_persisted.lifecycle_status == "approved"
-    assert first_persisted.superseded_at is None
+    assert first_persisted.lifecycle_status == "superseded"
+    assert first_persisted.superseded_at is not None
     assert second_persisted.lifecycle_status == "approved"
     assert second_persisted.supersedes_policy_id == first_persisted.id
-    assert first_effective_persisted.lifecycle_status == "approved"
-    assert first_effective_persisted.superseded_at is None
+    assert first_effective_persisted.lifecycle_status == "superseded"
+    assert first_effective_persisted.superseded_at is not None
     assert second_effective_persisted.lifecycle_status == "approved"
     assert second_effective_persisted.supersedes_effective_policy_id == (
         first_effective_persisted.id
     )
     assert {row.lifecycle_status for row in pre_submit_rows} == {
         "pending_compilation",
+        "superseded",
     }
     old_pre_submit = next(
         row for row in pre_submit_rows if row.effective_policy_id == first_effective_persisted.id
     )
-    assert old_pre_submit.superseded_at is None
+    assert old_pre_submit.superseded_at is not None
     assert current_pre_submit.effective_policy_id == second_effective_persisted.id
     assert current_pre_submit.supersedes_pre_submit_checker_policy_id == (
         old_pre_submit.id
@@ -1360,6 +1456,60 @@ async def test_approving_replacement_policy_with_same_effective_content_succeeds
     )
 
     assert second_effective["effective_policy_hash"] == first_effective["effective_policy_hash"]
+
+
+async def test_replacement_policy_requires_complete_prior_effective_context(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    first_policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        policy_version="v1",
+    )
+    first_effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        first_policy["id"],
+    )
+    second_policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+        policy_body=project_submission_artifact_policy_body(
+            artifact_path="outputs/final-answer.md"
+        ),
+        policy_version="v2",
+    )
+
+    async with db_session.get_session_factory()() as session:
+        effective = await session.get(
+            EffectiveProjectSubmissionArtifactPolicy,
+            first_effective["id"],
+        )
+        assert effective is not None
+        effective.lifecycle_status = "superseded"
+        effective.superseded_at = datetime.now(UTC)
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{second_policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Replacement should fail on incomplete chain."},
+    )
+
+    assert response.status_code == 409
+    assert "effective project submission artifact policy chain is incomplete" in (
+        response.json()["detail"]
+    )
 
 
 async def test_concurrent_policy_approvals_do_not_fork_current_chain(
@@ -1410,7 +1560,6 @@ async def test_concurrent_policy_approvals_do_not_fork_current_chain(
                 select(SubmissionArtifactPolicy).where(
                     SubmissionArtifactPolicy.project_id == project["id"],
                     SubmissionArtifactPolicy.guide_version == guide["version"],
-                    SubmissionArtifactPolicy.lifecycle_status == "approved",
                 )
             )
         ).all()
@@ -1445,6 +1594,15 @@ async def test_concurrent_policy_approvals_do_not_fork_current_chain(
     assert len(pre_submit_policies) == 2
     assert current_policy is not None
     assert current_pre_submit is not None
+    assert {policy.lifecycle_status for policy in policies} == {"approved", "superseded"}
+    assert {policy.lifecycle_status for policy in effective_policies} == {
+        "approved",
+        "superseded",
+    }
+    assert {policy.lifecycle_status for policy in pre_submit_policies} == {
+        "pending_compilation",
+        "superseded",
+    }
     assert len({policy.supersedes_policy_id for policy in policies if policy.supersedes_policy_id}) == 1
     assert len(
         {
@@ -1833,6 +1991,24 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
                 "attestation_terms": ["a" * 101],
             },
             "attestation terms",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="outputs/%2E%2E/secret.txt"
+            ),
+            "percent-encoded",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="outputs/100%complete.md"
+            ),
+            "percent-encoded",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="outputs/final\nanswer.md"
+            ),
+            "control characters",
         ),
     ],
 )

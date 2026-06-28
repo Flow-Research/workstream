@@ -548,6 +548,7 @@ class ProjectService:
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
+        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         self._validate_sufficiency_report_payload(payload)
         report = GuideSufficiencyReport(
             id=str(uuid4()),
@@ -635,6 +636,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can receive submission artifact policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
+        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
         self._merge_effective_submission_artifact_policy(policy_body)
         source_material_refs = await self._source_material_refs(snapshot.id)
@@ -744,6 +746,7 @@ class ProjectService:
             raise PolicyEditBlocked("only draft policies can be approved")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, policy.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
+        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         if policy.source_snapshot_hash != snapshot.bundle_hash:
             raise PolicySetupBlocked("submission artifact policy is bound to a stale source snapshot")
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
@@ -778,6 +781,17 @@ class ProjectService:
                 raise PolicySetupConflict(
                     "effective project submission artifact policy chain is ambiguous; create fresh policy records"
                 ) from exc
+            if previous_effective is None:
+                raise PolicySetupConflict(
+                    "effective project submission artifact policy chain is incomplete; create fresh policy records"
+                )
+            if (
+                previous_effective.submission_artifact_policy_id != previous_policy.id
+                or previous_effective.submission_artifact_policy_hash != previous_policy.policy_hash
+            ):
+                raise PolicySetupConflict(
+                    "effective project submission artifact policy chain is inconsistent; create fresh policy records"
+                )
         try:
             previous_pre_submit_checker_policy = (
                 await self._repo.get_current_pre_submit_checker_policy(
@@ -789,6 +803,23 @@ class ProjectService:
             raise PolicySetupConflict(
                 "pre-submit checker policy chain is ambiguous; create fresh policy records"
             ) from exc
+        if previous_policy is not None:
+            if previous_pre_submit_checker_policy is None:
+                raise PolicySetupConflict(
+                    "pre-submit checker policy chain is incomplete; create fresh policy records"
+                )
+            if (
+                previous_pre_submit_checker_policy.effective_policy_id != previous_effective.id
+                or previous_pre_submit_checker_policy.effective_policy_hash
+                != previous_effective.effective_policy_hash
+            ):
+                raise PolicySetupConflict(
+                    "pre-submit checker policy chain is inconsistent; create fresh policy records"
+                )
+        elif previous_pre_submit_checker_policy is not None:
+            raise PolicySetupConflict(
+                "pre-submit checker policy chain is inconsistent; create fresh policy records"
+            )
 
         policy.lifecycle_status = "approved"
         policy.approved_by_role = self._approver_role(actor)
@@ -796,6 +827,13 @@ class ProjectService:
         policy.approved_at = now
         if payload.approval_note:
             policy.change_summary = payload.approval_note
+        if previous_policy is not None:
+            previous_policy.lifecycle_status = "superseded"
+            previous_policy.superseded_at = now
+            previous_effective.lifecycle_status = "superseded"
+            previous_effective.superseded_at = now
+            previous_pre_submit_checker_policy.lifecycle_status = "superseded"
+            previous_pre_submit_checker_policy.superseded_at = now
 
         effective = EffectiveProjectSubmissionArtifactPolicy(
             id=str(uuid4()),
@@ -902,6 +940,7 @@ class ProjectService:
             submission_artifact_policy.source_snapshot_id,
         )
         await self._ensure_snapshot_is_latest(project_id, guide, source_snapshot)
+        await self._validate_source_snapshot_integrity(source_snapshot, GuideActivationBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(
             source_snapshot.id
         )
@@ -1018,6 +1057,7 @@ class ProjectService:
             submission_artifact_policy.source_snapshot_id,
         )
         await self._ensure_snapshot_is_latest(project_id, guide, source_snapshot)
+        await self._validate_source_snapshot_integrity(source_snapshot, GuideActivationBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(
             source_snapshot.id
         )
@@ -1204,6 +1244,89 @@ class ProjectService:
         """Return sanitized source refs included in a snapshot."""
         items = await self._repo.list_guide_source_snapshot_items(snapshot_id)
         return [item.durable_ref for item in items]
+
+    async def _validate_source_snapshot_integrity(
+        self,
+        snapshot: GuideSourceSnapshot,
+        exception_type: type[ProjectServiceError],
+    ) -> None:
+        """Recompute and verify an immutable guide-source snapshot bundle."""
+
+        def fail() -> None:
+            raise exception_type("guide source snapshot integrity check failed")
+
+        manifest = snapshot.manifest_json
+        if not isinstance(manifest, dict):
+            fail()
+        if snapshot.manifest_schema_version != GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION:
+            fail()
+        if manifest.get("schema_version") != GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION:
+            fail()
+        manifest_items = manifest.get("items")
+        if not isinstance(manifest_items, list) or not manifest_items:
+            fail()
+        if self._hash_canonical_json(manifest) != snapshot.bundle_hash:
+            fail()
+
+        persisted_items = await self._repo.list_guide_source_snapshot_items(snapshot.id)
+        if len(persisted_items) != len(manifest_items):
+            fail()
+
+        row_items: list[dict[str, Any]] = []
+        seen_refs: set[tuple[str, str]] = set()
+        required_fields = {
+            "source_kind",
+            "durable_ref",
+            "ingestion_adapter",
+            "content_hash",
+            "content_cid",
+            "media_type",
+        }
+        for index, item in enumerate(persisted_items):
+            if item.item_order != index:
+                fail()
+            row_item = {
+                "source_kind": item.source_kind,
+                "durable_ref": item.durable_ref,
+                "ingestion_adapter": item.ingestion_adapter,
+                "content_hash": item.content_hash,
+                "content_cid": item.content_cid,
+                "media_type": item.media_type,
+            }
+            ref_key = (item.source_kind, item.durable_ref)
+            if ref_key in seen_refs:
+                fail()
+            seen_refs.add(ref_key)
+            row_items.append(row_item)
+
+        for manifest_item in manifest_items:
+            if not isinstance(manifest_item, dict):
+                fail()
+            if set(manifest_item) != required_fields:
+                fail()
+            if not isinstance(manifest_item["source_kind"], str):
+                fail()
+            if not isinstance(manifest_item["durable_ref"], str):
+                fail()
+            if not isinstance(manifest_item["ingestion_adapter"], str):
+                fail()
+            if not isinstance(manifest_item["content_hash"], str):
+                fail()
+            if not HASH_PATTERN.fullmatch(manifest_item["content_hash"]):
+                fail()
+            if manifest_item["content_cid"] is not None and not isinstance(
+                manifest_item["content_cid"],
+                str,
+            ):
+                fail()
+            if manifest_item["media_type"] is not None and not isinstance(
+                manifest_item["media_type"],
+                str,
+            ):
+                fail()
+
+        if manifest_items != row_items:
+            fail()
 
     def _build_source_snapshot_manifest(
         self,
@@ -1648,6 +1771,11 @@ class ProjectService:
 
     def _validate_artifact_path(self, path: str) -> None:
         """Validate relative artifact paths used by project policy."""
+        if any(ord(character) < 32 or ord(character) == 127 for character in path):
+            raise PolicySetupBlocked("artifact paths cannot contain control characters")
+        decoded_path = self._decode_percent_encoded_artifact_path(path)
+        if "%" in path or decoded_path != path:
+            raise PolicySetupBlocked("artifact paths cannot contain percent-encoded characters")
         if not path or path.startswith(("/", "\\", "~")):
             raise PolicySetupBlocked("artifact paths must be safe relative paths")
         if "://" in path or "?" in path or "#" in path:
@@ -1655,6 +1783,16 @@ class ProjectService:
         segments = path.replace("\\", "/").split("/")
         if any(segment in {"", ".", ".."} for segment in segments):
             raise PolicySetupBlocked("artifact paths cannot contain empty or traversal segments")
+
+    def _decode_percent_encoded_artifact_path(self, path: str) -> str:
+        """Decode artifact paths until stable without allowing nested encodings."""
+        decoded = path
+        for _ in range(5):
+            next_decoded = unquote(decoded)
+            if next_decoded == decoded:
+                return decoded
+            decoded = next_decoded
+        raise PolicySetupBlocked("artifact paths cannot contain nested percent-encoding")
 
     def _matches_forbidden_artifact(self, value: str, patterns: list[str]) -> bool:
         """Return whether a value is blocked by default or project forbidden rules."""

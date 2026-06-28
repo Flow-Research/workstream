@@ -75,7 +75,7 @@ class GuideSourceSnapshotCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    items: list[GuideSourceSnapshotItemInput] = Field(min_length=1, max_length=100)
+    items: list[GuideSourceSnapshotItemInput] = Field(default_factory=list, max_length=100)
 
 
 class GuideSourceSnapshotItemResponse(BaseModel):
