@@ -204,8 +204,10 @@ Pre-submit checks are authoritative for submission intake. They are not authorit
 
 ## Implementation Enforcement Contract
 
-This ADR defines the required product contract. This planning PR does not claim
-the backend implementation already enforces it.
+This ADR defines the required product contract. `WS-POL-001-01` implements the
+project setup records, source snapshot binding, effective project policy
+materialization, and project pre-submit checker policy provenance. Downstream
+pre-submit runtime execution and compiler enforcement remain in later chunks.
 
 The implementation chunks that close this ADR must prove these enforcement
 points before they can be marked complete:

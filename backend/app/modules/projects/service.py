@@ -1784,14 +1784,26 @@ class ProjectService:
             if artifact["required"] and artifact["hash_required"] is not True:
                 raise PolicySetupBlocked("required artifacts must require sha256 hashes")
             self._validate_artifact_path(artifact["path"])
-            if self._matches_forbidden_artifact(artifact["path"], forbidden_patterns):
+            if (
+                self._matches_forbidden_artifact(artifact["key"], forbidden_patterns)
+                or self._matches_forbidden_artifact(artifact["path"], forbidden_patterns)
+                or self._matches_forbidden_artifact(
+                    artifact.get("description") or "",
+                    forbidden_patterns,
+                )
+            ):
                 raise PolicySetupBlocked("required artifact conflicts with forbidden artifacts")
         for evidence in project_policy["required_evidence"]:
             if evidence["required"] and evidence["hash_required"] is not True:
                 raise PolicySetupBlocked("required evidence must require sha256 hashes")
-            if self._matches_forbidden_artifact(evidence["key"], forbidden_patterns):
-                raise PolicySetupBlocked("required evidence conflicts with forbidden artifacts")
-            if self._matches_forbidden_artifact(evidence["label"], forbidden_patterns):
+            if (
+                self._matches_forbidden_artifact(evidence["key"], forbidden_patterns)
+                or self._matches_forbidden_artifact(evidence["label"], forbidden_patterns)
+                or self._matches_forbidden_artifact(
+                    evidence.get("description") or "",
+                    forbidden_patterns,
+                )
+            ):
                 raise PolicySetupBlocked("required evidence conflicts with forbidden artifacts")
 
     def _validate_artifact_path(self, path: str) -> None:

@@ -53,6 +53,7 @@ backend/tests/test_checkers.py
 backend/scripts/week1_api_e2e.py
 docs/architecture_data_model.md
 docs/decision_0011_submission_artifact_policy_drives_pre_submit.md
+docs/operations_project_operating_manual.md
 docs/spec_chunk_3_project_guide_foundation.md
 docs/template_submission_artifact_policy.md
 .agent-loop/LOOP_STATE.md

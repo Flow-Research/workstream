@@ -208,12 +208,12 @@ The active guide response becomes the future source for task-owned locked guide 
 - model/service/API tests pass
 - stale wording scan passes
 - Markdown link check passes
-- senior engineering verifier passes
-- QA/test verifier passes
-- security/auth verifier passes
+- required engineering-loop reviewer tracks pass according to the active chunk contract
 
 ## Reviewer Agents Required
 
 - senior engineering
 - QA/test
 - security/auth
+- product/ops
+- architecture/docs/reuse/test-delta/CI reviewers when the chunk touches those surfaces

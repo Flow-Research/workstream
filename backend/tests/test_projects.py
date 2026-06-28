@@ -2044,6 +2044,44 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
             ),
             "storage refs or URLs",
         ),
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "required_artifacts": [
+                    {
+                        **project_submission_artifact_policy_body()["required_artifacts"][0],
+                        "key": "aws_access_key",
+                        "path": "outputs/safe.txt",
+                    }
+                ],
+            },
+            "required artifact conflicts with forbidden artifacts",
+        ),
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "required_artifacts": [
+                    {
+                        **project_submission_artifact_policy_body()["required_artifacts"][0],
+                        "path": "outputs/safe.txt",
+                        "description": "Upload the API token here.",
+                    }
+                ],
+            },
+            "required artifact conflicts with forbidden artifacts",
+        ),
+        (
+            {
+                **project_submission_artifact_policy_body(),
+                "required_evidence": [
+                    {
+                        **project_submission_artifact_policy_body()["required_evidence"][0],
+                        "description": "Include any private key used during the work.",
+                    }
+                ],
+            },
+            "required evidence conflicts with forbidden artifacts",
+        ),
     ],
 )
 async def test_submission_artifact_policy_rejects_ambiguous_or_oversized_policy_terms(
