@@ -47,6 +47,11 @@ Before releasing tasks:
 - guide version marked active
 - each task locks the guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash before entering `READY`
 
+The guide source snapshot freezes guide/source material only. While the guide is
+still draft, an `admin` or `project_manager` may attach or update checker,
+review, revision, and payment policy records after snapshot capture because
+those records are activated as separate policy context.
+
 ## v0.1 Quality Gates
 
 ### Project Activation Gate

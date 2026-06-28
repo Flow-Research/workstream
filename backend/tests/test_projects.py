@@ -1393,10 +1393,15 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
 
     assert first_persisted.lifecycle_status == "superseded"
     assert first_persisted.superseded_at is not None
+    assert first_persisted.policy_body == first_policy["policy_body"]
+    assert first_persisted.policy_hash == first_policy["policy_hash"]
     assert second_persisted.lifecycle_status == "approved"
     assert second_persisted.supersedes_policy_id == first_persisted.id
     assert first_effective_persisted.lifecycle_status == "superseded"
     assert first_effective_persisted.superseded_at is not None
+    assert first_effective_persisted.effective_policy_hash == first_effective[
+        "effective_policy_hash"
+    ]
     assert second_effective_persisted.lifecycle_status == "approved"
     assert second_effective_persisted.supersedes_effective_policy_id == (
         first_effective_persisted.id
@@ -1637,7 +1642,7 @@ async def test_material_guide_edit_after_source_snapshot_is_blocked(
     assert "source material" in response.json()["detail"]
 
 
-async def test_policy_context_edit_after_source_snapshot_is_blocked(
+async def test_policy_context_edit_after_source_snapshot_is_allowed(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
@@ -1652,8 +1657,7 @@ async def test_policy_context_edit_after_source_snapshot_is_blocked(
         json={"payment_policy": payment_policy},
     )
 
-    assert response.status_code == 409
-    assert "policy context" in response.json()["detail"]
+    assert response.status_code == 200, response.text
 
 
 async def test_activation_rejects_policy_bound_to_stale_source_snapshot(
@@ -2009,6 +2013,36 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
                 artifact_path="outputs/final\nanswer.md"
             ),
             "control characters",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="C:/Users/alice/output.md"
+            ),
+            "safe relative paths",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="C:\\Users\\alice\\output.md"
+            ),
+            "safe relative paths",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="outputs\\final-answer.md"
+            ),
+            "local path separators",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="s3:bucket/key.md"
+            ),
+            "storage refs or URLs",
+        ),
+        (
+            project_submission_artifact_policy_body(
+                artifact_path="file:output.md"
+            ),
+            "storage refs or URLs",
         ),
     ],
 )

@@ -393,7 +393,8 @@ policy cannot change it, and trusted task runtime parameters cannot override it.
 `source_snapshot_hash` is server-derived from the referenced snapshot bundle
 hash.
 
-Policy rows are append-only after approval:
+Policy content, hashes, approval provenance, and source binding are immutable
+after approval:
 
 ```text
 draft      -> mutable
@@ -402,7 +403,11 @@ superseded -> immutable
 ```
 
 Changing an approved policy creates a new policy revision with
-`supersedes_policy_id`. The old row is never edited in place.
+`supersedes_policy_id`. During that locked replacement transaction, Workstream
+may update only the prior row's lifecycle closeout metadata
+(`lifecycle_status = superseded`, `superseded_at`) so operators can see the
+current lineage directly. Policy body, policy hash, source snapshot binding,
+approval actor, approval role, and approval timestamp are not edited in place.
 
 ## EffectiveProjectSubmissionArtifactPolicy
 
@@ -453,10 +458,12 @@ The merge contract is executable per field:
 A required artifact or evidence rule matching a forbidden artifact rule blocks
 project setup as a policy conflict. It is not deferred to worker submission.
 
-Approved and superseded effective policies are immutable. Recomputing the
-effective policy after guide/source/policy changes creates a new row and hash.
-Supersession is represented by the replacement row's
-`supersedes_effective_policy_id`; the prior approved row is not edited in place.
+Approved and superseded effective policy content and hashes are immutable.
+Recomputing the effective policy after guide/source/policy changes creates a new
+row and hash. Supersession is represented by the replacement row's
+`supersedes_effective_policy_id`. During that locked replacement transaction,
+Workstream may update only the prior row's lifecycle closeout metadata
+(`lifecycle_status = superseded`, `superseded_at`).
 
 ## PreSubmitCheckerPolicy
 
@@ -513,10 +520,11 @@ parameter map. Runtime parameters may fill placeholders in the locked checker
 bundle, but they cannot change required checks, severity, allowed storage,
 forbidden artifacts, hash algorithm, or platform defaults.
 
-Compiled and superseded checker policy rows are immutable. Changing policy or
-compiler output creates a new row with
-`supersedes_pre_submit_checker_policy_id`; the prior compiled row is not edited
-in place.
+Compiled checker bundles, hashes, and effective-policy bindings are immutable.
+Changing policy or compiler output creates a new row with
+`supersedes_pre_submit_checker_policy_id`. During that locked replacement
+transaction, Workstream may update only the prior row's lifecycle closeout
+metadata (`lifecycle_status = superseded`, `superseded_at`).
 
 The generated checker order is deterministic:
 

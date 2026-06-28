@@ -192,12 +192,6 @@ GUIDE_SOURCE_MATERIAL_FIELDS = {
     "evidence_policy",
     "unacceptable_work_policy",
 }
-GUIDE_POLICY_CONTEXT_FIELDS = {
-    "checker_policy",
-    "review_policy",
-    "revision_policy",
-    "payment_policy",
-}
 WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY: dict[str, Any] = {
     "schema_version": "workstream_default_submission_artifact_policy.v1",
     "required_packet_fields": DEFAULT_REQUIRED_PACKET_FIELDS,
@@ -442,7 +436,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can be edited")
 
         changes = payload.model_dump(exclude_unset=True)
-        if GUIDE_SOURCE_MATERIAL_FIELDS.union(GUIDE_POLICY_CONTEXT_FIELDS).intersection(changes):
+        if GUIDE_SOURCE_MATERIAL_FIELDS.intersection(changes):
             snapshots = await self._repo.list_guide_source_snapshots(
                 project_id,
                 guide.id,
@@ -450,7 +444,7 @@ class ProjectService:
             )
             if snapshots:
                 raise GuideEditBlocked(
-                    "guide source material and policy context cannot change after a source snapshot exists"
+                    "guide source material cannot change after a source snapshot exists"
                 )
         for field, value in changes.items():
             if field in {"checker_policy", "review_policy", "revision_policy", "payment_policy"}:
@@ -1325,6 +1319,36 @@ class ProjectService:
                 str,
             ):
                 fail()
+            try:
+                if (
+                    self._safe_source_token(manifest_item["source_kind"], "source kind")
+                    != manifest_item["source_kind"]
+                ):
+                    fail()
+                if (
+                    self._safe_source_token(
+                        manifest_item["ingestion_adapter"],
+                        "ingestion adapter",
+                    )
+                    != manifest_item["ingestion_adapter"]
+                ):
+                    fail()
+                if (
+                    self._sanitize_durable_source_ref(manifest_item["durable_ref"])
+                    != manifest_item["durable_ref"]
+                ):
+                    fail()
+                self._require_sha256_hash(
+                    manifest_item["content_hash"],
+                    "source item content hash",
+                )
+                if (
+                    self._sanitize_content_cid(manifest_item["content_cid"])
+                    != manifest_item["content_cid"]
+                ):
+                    fail()
+            except ProjectServiceError:
+                fail()
 
         if manifest_items != row_items:
             fail()
@@ -1777,9 +1801,11 @@ class ProjectService:
         decoded_path = self._decode_percent_encoded_artifact_path(path)
         if "%" in path or decoded_path != path:
             raise PolicySetupBlocked("artifact paths cannot contain percent-encoded characters")
-        if not path or path.startswith(("/", "\\", "~")):
+        if not path or path.startswith(("/", "\\", "~")) or re.match(r"^[A-Za-z]:", path):
             raise PolicySetupBlocked("artifact paths must be safe relative paths")
-        if "://" in path or "?" in path or "#" in path:
+        if "\\" in path:
+            raise PolicySetupBlocked("artifact paths cannot contain local path separators")
+        if ":" in path or "://" in path or "?" in path or "#" in path:
             raise PolicySetupBlocked("artifact paths cannot be storage refs or URLs")
         segments = path.replace("\\", "/").split("/")
         if any(segment in {"", ".", ".."} for segment in segments):

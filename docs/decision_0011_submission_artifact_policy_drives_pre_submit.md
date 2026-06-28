@@ -276,7 +276,8 @@ The effective policy merge is deterministic:
 Conflicts block setup before workers see tasks. A project-required artifact that
 matches a forbidden rule is not accepted as a runtime edge case.
 
-Approved policy and checker records are append-only:
+Approved policy and checker content, hashes, source bindings, and approval
+provenance are immutable:
 
 ```text
 draft      -> mutable
@@ -285,13 +286,17 @@ superseded -> immutable
 ```
 
 Changing an approved policy, effective policy, or compiled checker bundle
-creates a new row with a `supersedes_*` reference. Approved rows are never
-edited in place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the
-canonical JSON source of truth and `compiled_bundle_hash` is the hash of that
-canonical JSON. `checker_names` and `checker_configs` are derived index
-projections only. Project guide APIs expose stable checker provenance and hash
-fields; compiler-owned bundle internals are retrieved through the checker
-runtime boundary.
+creates a new row with a `supersedes_*` reference. During that locked
+replacement transaction, Workstream may update only the prior row's lifecycle
+closeout metadata (`lifecycle_status = superseded`, `superseded_at`) for
+operator-visible lineage. Policy bodies, effective policies, compiled bundles,
+hashes, source snapshot bindings, and approval provenance are never edited in
+place. For `PreSubmitCheckerPolicy`, `compiled_bundle` is the canonical JSON
+source of truth and `compiled_bundle_hash` is the hash of that canonical JSON.
+`checker_names` and `checker_configs` are derived index projections only.
+Project guide APIs expose stable checker provenance and hash fields;
+compiler-owned bundle internals are retrieved through the checker runtime
+boundary.
 
 Task, submission, and revision provenance fields named
 `locked_pre_submit_checker_bundle_hash` store
