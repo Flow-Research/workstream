@@ -15,23 +15,22 @@ GitHub Actions and CodeRabbit.
 Internal sub-agent results are recorded separately in
 `WS-POL-001-01-internal-review-evidence.md`.
 
-## Reviewed Head
-
-Current PR head: `2fbb0c177cafac27ea23d005abf6b1b67685b7b9`
+## Review Binding
 
 Internal reviewed code SHA: `a77845bfe041c3fa8d7f9b25b928e76060049ec2`
 
 Only allowed evidence/status/trust-bundle files changed after the internal
-reviewed code SHA.
+reviewed code SHA. Live GitHub checks on PR #28 are the authoritative external
+state for the latest PR head.
 
 ## Final External Review State
 
 | Source | Result | Details |
 |---|---:|---|
 | CodeRabbit | PASS | Review completed with no blocking comments reported by PR checks. |
-| GitHub Actions: agent-gates | PASS | `agent-gates` passed in 8s. |
-| GitHub Actions: Backend test | PASS | `test` passed in 3m3s. |
-| GitHub Actions: Week 1 API Demo UI | PASS | `build-demo-ui` passed in 20s. |
+| GitHub Actions: agent-gates | PASS | `agent-gates` passed. |
+| GitHub Actions: Backend test | PASS | `test` passed. |
+| GitHub Actions: Week 1 API Demo UI | PASS | `build-demo-ui` passed. |
 | GitHub merge state | CLEAN | PR is open, non-draft, and mergeable. |
 
 ## Commands Run
@@ -39,7 +38,7 @@ reviewed code SHA.
 ```bash
 gh pr checks 28 --watch --interval 15
 gh pr checks 28 --watch=false
-gh pr view 28 --json number,url,isDraft,mergeStateStatus,reviewDecision,headRefOid
+gh pr view 28 --json number,url,isDraft,mergeStateStatus,reviewDecision
 ```
 
 ## Result Summary
