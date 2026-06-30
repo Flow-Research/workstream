@@ -26,11 +26,11 @@ SubmissionArtifactPolicy = machine-readable intake contract
 Project owner material
 -> ProjectGuideSufficiencyAgent
 -> SubmissionArtifactPolicyDerivationAgent
--> Workstream-derived ProjectSubmissionArtifactPolicy
+-> Workstream-derived SubmissionArtifactPolicy
 -> approval by admin or project_manager
 
 WorkstreamDefaultSubmissionArtifactPolicy
-+ ProjectSubmissionArtifactPolicy
++ SubmissionArtifactPolicy
 = EffectiveProjectSubmissionArtifactPolicy
 
 EffectiveProjectSubmissionArtifactPolicy

@@ -1400,6 +1400,19 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert create_response.status_code == 422
     assert create_response.json()["detail"][0]["loc"] == ["body", "derivation_source"]
 
+    reserved_version_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "agent-aaaaaaaaaaaaaaaaaaaaaaaa",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+
+    assert reserved_version_response.status_code == 422
+    assert reserved_version_response.json()["detail"][0]["loc"] == ["body", "policy_version"]
+
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -1463,6 +1476,35 @@ async def test_derivation_agent_validates_warning_ack_before_existing_policy_reu
 
     assert blocked.status_code == 422
     assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
+
+
+async def test_agent_derived_submission_artifact_policy_body_is_immutable(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    endpoint = (
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/derive-submission-artifact-policy"
+    )
+    derived = await project_client.post(endpoint, headers=auth_headers())
+    assert derived.status_code == 201, derived.text
+
+    update_response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{derived.json()['id']}",
+        headers=auth_headers(),
+        json={
+            "policy_body": project_submission_artifact_policy_body(
+                artifact_path="adjusted/output.json"
+            )
+        },
+    )
+
+    assert update_response.status_code == 409
+    assert "agent-derived policy bodies are immutable" in update_response.json()["detail"]
 
 
 async def test_derivation_agent_idempotency_uses_server_owned_policy_version(

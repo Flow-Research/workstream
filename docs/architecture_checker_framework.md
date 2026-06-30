@@ -166,7 +166,7 @@ The deterministic chain is:
 ProjectGuide
 -> GuideSourceSnapshot
 -> GuideSufficiencyReport
--> ProjectSubmissionArtifactPolicy
+-> SubmissionArtifactPolicy
 -> EffectiveProjectSubmissionArtifactPolicy
 -> trusted Workstream checker compiler
 -> PreSubmitCheckerPolicy

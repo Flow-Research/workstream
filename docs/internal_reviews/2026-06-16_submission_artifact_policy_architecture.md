@@ -22,7 +22,7 @@ Changed contract surfaces:
 
 The corrected contract is:
 
-`ProjectGuide -> SubmissionArtifactPolicy + Workstream defaults -> EffectiveSubmissionArtifactPolicy -> generated PreSubmitCheckerPolicy -> blocking pre-submit checks -> Submission created`
+`ProjectGuide -> SubmissionArtifactPolicy + Workstream defaults -> EffectiveProjectSubmissionArtifactPolicy -> generated PreSubmitCheckerPolicy -> blocking pre-submit checks -> Submission created`
 
 ## Reviewer Tracks
 
@@ -30,7 +30,7 @@ The corrected contract is:
 
 Finding: the earlier documentation mixed human-facing guide prose, evidence policy, checker policy, and submission intake enforcement.
 
-Resolution: docs now separate `ProjectGuide` as the human-facing instruction from `SubmissionArtifactPolicy` as the machine-readable intake contract. The generated `PreSubmitCheckerPolicy` is derived from `EffectiveSubmissionArtifactPolicy`, not free-form guide prose.
+Resolution: docs now separate `ProjectGuide` as the human-facing instruction from `SubmissionArtifactPolicy` as the machine-readable intake contract. The generated `PreSubmitCheckerPolicy` is derived from `EffectiveProjectSubmissionArtifactPolicy`, not free-form guide prose.
 
 Final result: no blocking findings after re-review.
 
@@ -54,7 +54,7 @@ Final result: no blocking findings after re-review.
 
 Finding: the terms `evidence policy`, `preflight evidence`, and broad checker-policy wording made the operator and worker workflow harder to reason about.
 
-Resolution: docs now use `SubmissionArtifactPolicy`, `EffectiveSubmissionArtifactPolicy`, `PreSubmitCheckerPolicy`, and `PostSubmitCheckerPolicy` consistently. The Chunk 8 spec file was renamed to submission-artifact-policy wording, and templates now separate worker-facing guide expectations from machine-enforced intake requirements.
+Resolution: docs now use `SubmissionArtifactPolicy`, `EffectiveProjectSubmissionArtifactPolicy`, `PreSubmitCheckerPolicy`, and `PostSubmitCheckerPolicy` consistently. The Chunk 8 spec file was renamed to submission-artifact-policy wording, and templates now separate worker-facing guide expectations from machine-enforced intake requirements.
 
 Final result: no blocking findings after re-review.
 

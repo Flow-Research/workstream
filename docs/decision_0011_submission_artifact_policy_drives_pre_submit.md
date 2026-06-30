@@ -21,7 +21,7 @@ Every active project guide version must have a complete guide-policy bundle:
 
 - immutable `GuideSourceSnapshot` bundle for the exact guide/source material evaluated
 - passing or acknowledged `GuideSufficiencyReport`
-- approved `ProjectSubmissionArtifactPolicy`
+- approved `SubmissionArtifactPolicy`
 - persisted `EffectiveProjectSubmissionArtifactPolicy` hash
 - persisted generated project `PreSubmitCheckerPolicy` compiled bundle hash
 - `PostSubmitCheckerPolicy`
@@ -65,7 +65,7 @@ remain visible to Workstream actors with the `admin` or `project_manager` role
 and must be acknowledged before activation.
 
 `SubmissionArtifactPolicyDerivationAgent` derives
-`ProjectSubmissionArtifactPolicy` from the guide material after sufficiency
+`SubmissionArtifactPolicy` from the guide material after sufficiency
 passes or warnings are acknowledged. The project owner does not approve this
 internal policy. A Workstream actor with the `admin` or `project_manager` role
 reviews and approves the derived policy before guide activation.
@@ -105,7 +105,7 @@ The runtime contract is:
 ```text
 EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
-  + ProjectSubmissionArtifactPolicy
+  + SubmissionArtifactPolicy
 
 PreSubmitCheckerPolicy =
   trusted compiler output from EffectiveProjectSubmissionArtifactPolicy

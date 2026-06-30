@@ -82,7 +82,7 @@ The guide may summarize or link to those policies, but the policies are the enfo
 
 Project owners provide open-ended project material and business terms.
 Workstream evaluates guide sufficiency, derives
-`ProjectSubmissionArtifactPolicy` from that material, and a Workstream actor
+`SubmissionArtifactPolicy` from that material, and a Workstream actor
 with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation. Project owners do not approve Workstream's internal
 submission policy schema.

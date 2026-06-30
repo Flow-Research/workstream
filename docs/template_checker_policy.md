@@ -52,7 +52,7 @@ Pre-submit checker policy is generated from:
 ```text
 EffectiveProjectSubmissionArtifactPolicy =
   WorkstreamDefaultSubmissionArtifactPolicy
-  + ProjectSubmissionArtifactPolicy
+  + SubmissionArtifactPolicy
 
 PreSubmitCheckerPolicy =
   trusted compiler output from EffectiveProjectSubmissionArtifactPolicy

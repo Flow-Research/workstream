@@ -262,6 +262,14 @@ class SubmissionArtifactPolicyCreate(BaseModel):
     policy_body: SubmissionArtifactPolicyInput
     change_summary: str | None = Field(default=None, max_length=2000)
 
+    @field_validator("policy_version")
+    @classmethod
+    def reject_reserved_agent_policy_version(cls, value: str) -> str:
+        """Reserve agent-derived policy version names for Workstream."""
+        if value.startswith("agent-"):
+            raise ValueError("policy_version prefix 'agent-' is reserved")
+        return value
+
 
 class SubmissionArtifactPolicyUpdate(BaseModel):
     """Request schema for editing a draft project submission artifact policy."""

@@ -371,7 +371,7 @@ Example:
     }
   },
   "policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "derivation_source": "agent_derived",
+  "derivation_source": "agent_derivation",
   "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
   "derivation_agent_version": "v1",
   "source_material_refs": ["project-guide:v1"],
@@ -386,6 +386,10 @@ Workstream derives this policy from project guide material after guide
 sufficiency passes or warnings are acknowledged. A Workstream actor with the
 `admin` or `project_manager` role approves it. Project owners and workers do not
 supply or approve this internal policy schema.
+`derivation_source` is server-owned. Manual/admin-created policies persist
+`manual_admin_derivation`; policies created by the derivation agent persist
+`agent_derivation`. Client requests do not supply derivation provenance, and
+manual `policy_version` values cannot use the reserved `agent-` prefix.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 `artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project
@@ -415,7 +419,7 @@ Generated server-side from:
 
 ```text
 WorkstreamDefaultSubmissionArtifactPolicy
-+ ProjectSubmissionArtifactPolicy
++ SubmissionArtifactPolicy
 ```
 
 Fields:
@@ -498,9 +502,9 @@ the work is split into another project/guide. The task stores
 `PreSubmitCheckerPolicy.compiled_bundle_hash`; it does not own a newly derived
 policy or newly compiled checker.
 
-In Chunk 1, approval creates a project-scoped `PreSubmitCheckerPolicy` row in
-`pending_compilation`. Chunk 2 supplies the trusted compiler path that writes the
-immutable `compiled_bundle` JSON and `compiled_bundle_hash`. The compiled bundle
+Approval creates a project-scoped `PreSubmitCheckerPolicy` row with lifecycle
+status `compiled`. The trusted compiler writes the immutable `compiled_bundle`
+JSON and `compiled_bundle_hash` in the same approval path. The compiled bundle
 is the canonical checker source of truth. It is stored as a structured snapshot,
 not arbitrary executable code. `compiled_bundle_hash` binds the exact compiled
 logic to `effective_policy_hash`. `checker_names` and `checker_configs` are

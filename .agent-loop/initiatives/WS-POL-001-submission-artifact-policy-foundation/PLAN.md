@@ -27,7 +27,7 @@ GuideSufficiencyReport
 WorkstreamDefaultSubmissionArtifactPolicy
   platform-owned, non-bypassable safety rules
 
-ProjectSubmissionArtifactPolicy
+SubmissionArtifactPolicy
   Workstream-derived, admin-or-project-manager-approved machine-readable intake rules
 
 EffectiveProjectSubmissionArtifactPolicy
@@ -63,7 +63,7 @@ volatile-field exclusions. Non-finite numbers such as `NaN` or `Infinity` are
 rejected before hashing.
 
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
-`ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
+`SubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
 actor with the `admin` or `project_manager` role approves the derived policy.
 Workstream then computes the effective project submission artifact policy and compiles the project
 `PreSubmitCheckerPolicy`. The generated project `PreSubmitCheckerPolicy`

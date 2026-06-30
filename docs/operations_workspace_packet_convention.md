@@ -14,7 +14,7 @@ open-ended project material:
 ```text
 GuideSourceSnapshot
 GuideSufficiencyReport
-ProjectSubmissionArtifactPolicy
+SubmissionArtifactPolicy
 EffectiveProjectSubmissionArtifactPolicy
 ```
 

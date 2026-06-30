@@ -208,7 +208,7 @@ The project pre-submit checker policy is generated from:
 
 ```text
 WorkstreamDefaultSubmissionArtifactPolicy
-+ ProjectSubmissionArtifactPolicy
++ SubmissionArtifactPolicy
 ```
 
 Workstream defaults are non-bypassable. Project policy can add required artifacts, evidence requirements, stricter forbidden patterns, and packaging rules, but it cannot remove hash requirements, allow unsafe storage references, require forbidden files, or downgrade blocking defaults.

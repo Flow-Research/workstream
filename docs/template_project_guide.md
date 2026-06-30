@@ -127,7 +127,7 @@ Artifact requirements shown to workers are derived from the approved `Submission
 
 Project owners provide open-ended guide material and business terms in plain
 language. Workstream evaluates guide sufficiency, derives
-`ProjectSubmissionArtifactPolicy` from that material, and a Workstream actor
+`SubmissionArtifactPolicy` from that material, and a Workstream actor
 with the `admin` or `project_manager` role approves the internal policy bundle
 before guide activation.
 

@@ -955,6 +955,10 @@ class ProjectService:
         if policy.lifecycle_status != "draft":
             raise PolicyEditBlocked("approved and superseded policies are immutable")
         if payload.policy_body is not None:
+            if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
+                raise PolicyEditBlocked(
+                    "agent-derived policy bodies are immutable; create a manual policy to adjust"
+                )
             policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
             self._merge_effective_submission_artifact_policy(policy_body)
             policy.policy_body = policy_body
