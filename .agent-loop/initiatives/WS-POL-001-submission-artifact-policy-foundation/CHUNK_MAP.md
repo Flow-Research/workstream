@@ -155,6 +155,7 @@ Allowed files:
 
 ```text
 backend/pyproject.toml
+backend/app/main.py
 backend/app/core/config.py
 backend/app/core/hashing.py
 backend/app/core/project_agents.py

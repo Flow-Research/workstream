@@ -67,7 +67,8 @@ rejected before hashing.
 actor with the `admin` or `project_manager` role approves the derived policy.
 Workstream then computes the effective project submission artifact policy and compiles the project
 `PreSubmitCheckerPolicy`. The generated project `PreSubmitCheckerPolicy`
-compiled bundle hash is scoped to the project guide version.
+compiled bundle hash is scoped to the effective project submission artifact
+policy hash plus compiler version.
 Tasks lock references to the exact guide snapshot, effective project submission
 artifact policy hash, and pre-submit checker bundle hash during screening before
 entering `READY`.

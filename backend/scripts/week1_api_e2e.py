@@ -626,9 +626,6 @@ async def create_policy_bundle_for_guide(
             "source_snapshot_id": snapshot["id"],
             "policy_version": "v1",
             "policy_body": submission_artifact_policy_body(),
-            "derivation_source": "manual_admin_derivation",
-            "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
-            "derivation_agent_version": "e2e",
         },
         201,
     )
