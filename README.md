@@ -165,6 +165,29 @@ Destructive real API drills use the separate local test database:
 postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 ```
 
+Project guide sufficiency and submission artifact policy derivation use the
+deterministic local runtime by default:
+
+```text
+WORKSTREAM_PROJECT_AGENT_RUNTIME=deterministic
+```
+
+To try the optional OpenAI Agents SDK adapter, install the backend agent extra
+and set the model explicitly:
+
+```bash
+cd backend
+.venv/bin/pip install -e ".[agents]"
+```
+
+```text
+WORKSTREAM_PROJECT_AGENT_RUNTIME=openai
+WORKSTREAM_OPENAI_AGENT_MODEL=<approved-model>
+```
+
+The OpenAI adapter is only resolved on the explicit project-agent routes.
+Normal project setup APIs do not require an OpenAI API key.
+
 ## Week 1 API Demo UI
 
 The Week 1 API demo UI lives in `demos/week1_api_demo_ui/`. It is a temporary walkthrough client for the Week 1 backend APIs, not the canonical Workstream frontend implementation. It calls the real backend over HTTP through the Vite proxy and uses local Flow-style bearer tokens against the backend `flow` verifier.

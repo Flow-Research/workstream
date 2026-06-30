@@ -327,6 +327,31 @@ class ProjectRepository:
         """Load one submission artifact policy by primary key."""
         return await self._session.get(SubmissionArtifactPolicy, policy_id)
 
+    async def get_agent_derived_submission_artifact_policy_for_snapshot(
+        self,
+        project_id: str,
+        guide_version: str,
+        source_snapshot_id: str,
+    ) -> SubmissionArtifactPolicy | None:
+        """Load the current agent-derived policy for one guide source snapshot."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy).where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_version == guide_version,
+                SubmissionArtifactPolicy.source_snapshot_id == source_snapshot_id,
+                SubmissionArtifactPolicy.derivation_source == "agent_derivation",
+                SubmissionArtifactPolicy.lifecycle_status.in_(["draft", "approved"]),
+            )
+        )
+        rows = result.scalars().all()
+        if len(rows) > 1:
+            raise ProjectRepositoryIntegrityError(
+                "multiple current agent-derived submission artifact policies found"
+            )
+        if not rows:
+            return None
+        return rows[0]
+
     async def lock_submission_artifact_policy(
         self,
         policy_id: str,

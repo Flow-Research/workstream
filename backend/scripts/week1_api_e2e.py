@@ -509,40 +509,8 @@ def sha256_token(seed: str) -> str:
     return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
 
 
-def canonical_json_hash(value: dict) -> str:
-    """Hash canonical JSON using the Workstream policy hash shape."""
-    encoded = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
-async def mark_pre_submit_checker_policy_compiled(effective_policy: dict) -> dict:
-    """Simulate trusted compiler output for the Week 1 API drill.
-
-    Chunk 1 persists the project checker contract and activation guard. The
-    actual compiler lands later, so this E2E setup writes the deterministic
-    compiler-owned fields directly before activating the guide.
-    """
-    compiled_bundle = {
-        "schema_version": "pre_submit_checker_bundle.v1",
-        "compiler_version": "e2e-compiler-v0.1",
-        "effective_policy_hash": effective_policy["effective_policy_hash"],
-        "checks": [
-            {
-                "name": "require_submission_manifest",
-                "severity": "blocking",
-            },
-            {
-                "name": "require_artifact_hashes",
-                "severity": "blocking",
-            },
-        ],
-    }
-    compiled_bundle_hash = canonical_json_hash(compiled_bundle)
+async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
+    """Load the project pre-submit checker policy compiled during approval."""
     async with db_session.get_session_factory()() as session:
         pre_submit_checker_policy = await session.scalar(
             select(PreSubmitCheckerPolicy).where(
@@ -550,20 +518,14 @@ async def mark_pre_submit_checker_policy_compiled(effective_policy: dict) -> dic
             )
         )
         ensure(pre_submit_checker_policy is not None, "pre-submit checker policy missing")
-        pre_submit_checker_policy.lifecycle_status = "compiled"
-        pre_submit_checker_policy.compiler_version = "e2e-compiler-v0.1"
-        pre_submit_checker_policy.compiled_bundle = compiled_bundle
-        pre_submit_checker_policy.compiled_bundle_hash = compiled_bundle_hash
-        pre_submit_checker_policy.checker_names = [
-            "require_submission_manifest",
-            "require_artifact_hashes",
-        ]
-        pre_submit_checker_policy.checker_configs = {}
-        await session.commit()
-    return {
-        "compiled_bundle": compiled_bundle,
-        "compiled_bundle_hash": compiled_bundle_hash,
-    }
+        ensure(
+            pre_submit_checker_policy.lifecycle_status == "compiled",
+            "pre-submit checker policy was not compiled during approval",
+        )
+        return {
+            "compiled_bundle": pre_submit_checker_policy.compiled_bundle,
+            "compiled_bundle_hash": pre_submit_checker_policy.compiled_bundle_hash,
+        }
 
 
 def submission_artifact_policy_body() -> dict:
@@ -678,7 +640,7 @@ async def create_policy_bundle_for_guide(
         manager_token,
         {"approval_note": "Approved for Week 1 real API drill."},
     )
-    await mark_pre_submit_checker_policy_compiled(effective_policy)
+    await load_pre_submit_checker_policy(effective_policy)
     return effective_policy
 
 

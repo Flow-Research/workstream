@@ -3,7 +3,7 @@
 Discovery is read-only. No product implementation has started for this
 initiative.
 
-## Current Behavior
+## Baseline Behavior Captured Before Implementation
 
 The architecture docs already lock the target model:
 
@@ -17,14 +17,14 @@ SubmissionArtifactPolicy
 -> post-submit/internal checks after submission lock
 ```
 
-The backend is still transitional:
+At initiative start, the backend was transitional:
 
-- `ProjectGuide.evidence_policy` represents submission artifact requirements.
-- `WorkstreamTask.required_files` and `required_evidence` drive checker behavior.
-- `Submission.locked_checker_policy_version` is used broadly for post-submit
+- `ProjectGuide.evidence_policy` represented submission artifact requirements.
+- `WorkstreamTask.required_files` and `required_evidence` drove checker behavior.
+- `Submission.locked_checker_policy_version` was used broadly for post-submit
   checker context.
-- Pre-submit feedback uses `task.required_files` and `task.required_evidence`.
-- Post-submit durable checks use registered checker names and locked checker
+- Pre-submit feedback used `task.required_files` and `task.required_evidence`.
+- Post-submit durable checks used registered checker names and locked checker
   policy.
 
 The product ownership boundary is now locked. Project owners provide open-ended
@@ -40,13 +40,13 @@ project owner does not approve Workstream's internal policy controls.
 | `docs/spec_chunk_5_submission_packet_foundation.md` | Submission packet target contract | Already says current code is transitional. |
 | `docs/spec_chunk_8_submission_artifact_policy_checkers.md` | Pre-submit versus durable checker boundary | Names default pre-submit checks and routing. |
 | `docs/spec_chunk_9_pre_review_gate.md` | Post-submit gate | Keeps internal checker routing separate from human review. |
-| `backend/app/modules/projects/models.py` | Project guide and policies | `ProjectGuide.evidence_policy` is transitional. |
-| `backend/app/modules/projects/schemas.py` | Project guide API schemas | Exposes `evidence_policy` today. |
-| `backend/app/modules/projects/service.py` | Guide activation and policy validation | Activation currently checks `evidence_policy` and checker policy. |
-| `backend/app/modules/tasks/models.py` | Task/submission models | Task stores required files/evidence; submission stores broad checker policy version. |
-| `backend/app/modules/tasks/service.py` | Task lifecycle and locked context | Stamps locked guide/policy context onto tasks/submissions. |
-| `backend/app/modules/checkers/runner.py` | Checker implementations | Pre-submit and durable checks share helper logic today. |
-| `backend/app/modules/checkers/service.py` | Pre-submit and durable checker orchestration | Needs to consume generated pre-submit policy later. |
+| `backend/app/modules/projects/models.py` | Project guide and policies | `ProjectGuide.evidence_policy` is old construction state that remains until the later migration removes it. |
+| `backend/app/modules/projects/schemas.py` | Project guide API schemas | Exposes `evidence_policy` until the later API cleanup removes the field. |
+| `backend/app/modules/projects/service.py` | Guide activation and policy validation | Chunk 1 moved activation authority to dedicated submission artifact policy records. |
+| `backend/app/modules/tasks/models.py` | Task/submission models | Transitional task required files/evidence remain until the task locked-context chunk. |
+| `backend/app/modules/tasks/service.py` | Task lifecycle and locked context | Later chunk migrates runtime authority to locked project policy/checker references. |
+| `backend/app/modules/checkers/runner.py` | Checker implementations | Pre-submit and durable checks share helper logic until the runtime migration. |
+| `backend/app/modules/checkers/service.py` | Pre-submit and durable checker orchestration | Later chunk consumes generated pre-submit policy at runtime. |
 
 ## Current Tests
 

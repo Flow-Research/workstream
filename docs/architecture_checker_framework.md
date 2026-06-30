@@ -211,21 +211,24 @@ Pre-submit results do not create durable `CheckerRun` records, do not move a
 task to `review_pending`, and do not return review decision values: `accept`,
 `needs_revision`, or `reject`.
 
-The `SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
-specification. It does not produce unrestricted checker code. Workstream's
-trusted checker compiler validates that project spec during setup, then
-persists deterministic project-level checker logic using approved primitives
-such as:
+The `SubmissionArtifactPolicyDerivationAgent` produces the artifact-intake
+contract. It does not produce unrestricted checker code. Workstream's trusted
+checker compiler builds and validates the project checker specification during
+setup, then persists deterministic project-level checker logic using approved
+primitives such as:
 
-- `require_file`
-- `allow_extension`
-- `forbid_extension`
+- `validate_submission_packet`
+- `enforce_storage_scheme`
 - `require_manifest_field`
-- `validate_json_schema`
-- `check_directory_structure`
-- `require_minimum_evidence`
 - `verify_hash`
+- `require_file`
+- `require_minimum_evidence`
+- `forbid_artifact`
+- `require_attestation`
 - `limit_file_size`
+- `limit_package_size`
+- `require_packaging`
+- `warn_low_quality_generated_artifact`
 
 Project-specific executable checker code is a future extension path, not the
 default. That extension path must require static validation, generated tests,

@@ -70,9 +70,9 @@ internal policy. A Workstream actor with the `admin` or `project_manager` role
 reviews and approves the derived policy before guide activation.
 
 The derivation agent does not generate unrestricted executable checker code as
-the default path. It produces a machine-readable artifact-intake contract and a
-constrained pre-submit checker specification using Workstream-approved
-primitives.
+the default path. It produces a machine-readable artifact-intake contract.
+Workstream's trusted compiler builds and validates the constrained pre-submit
+checker specification using Workstream-approved primitives.
 
 `SubmissionArtifactPolicy` is the Workstream-derived, admin-or-project-manager-approved machine-readable contract for worker submissions. It defines:
 
@@ -106,9 +106,9 @@ PreSubmitCheckerPolicy =
   trusted compiler output from EffectiveProjectSubmissionArtifactPolicy
 ```
 
-`SubmissionArtifactPolicyDerivationAgent` produces a constrained checker
-specification at project setup time. Workstream's trusted checker compiler
-validates that specification and persists the project-level
+`SubmissionArtifactPolicyDerivationAgent` produces the artifact-intake contract
+at project setup time. Workstream's trusted checker compiler builds and
+validates the constrained checker specification and persists the project-level
 `PreSubmitCheckerPolicy`.
 
 Project policies define project-wide artifact intake rules for a guide
@@ -147,15 +147,18 @@ policy.
 
 Approved pre-submit checker primitives include:
 
-- `require_file`
-- `allow_extension`
-- `forbid_extension`
+- `validate_submission_packet`
+- `enforce_storage_scheme`
 - `require_manifest_field`
-- `validate_json_schema`
-- `check_directory_structure`
-- `require_minimum_evidence`
 - `verify_hash`
+- `require_file`
+- `require_minimum_evidence`
+- `forbid_artifact`
+- `require_attestation`
 - `limit_file_size`
+- `limit_package_size`
+- `require_packaging`
+- `warn_low_quality_generated_artifact`
 
 Project-specific executable checker code is not part of the default path. If a
 future project requires logic that cannot fit the constrained checker

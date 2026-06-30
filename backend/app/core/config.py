@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     flow_auth_audience: str = "workstream-api"
     flow_auth_local_hmac_secret: str | None = None
     enable_demo_routes: bool = False
+    project_agent_runtime: Literal["deterministic", "openai"] = "deterministic"
+    openai_agent_model: str | None = None
 
     model_config = SettingsConfigDict(
         env_prefix="WORKSTREAM_",

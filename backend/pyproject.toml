@@ -20,6 +20,10 @@ build-backend = "setuptools.build_meta"
 include = ["app*"]
 
 [project.optional-dependencies]
+agents = [
+  "openai-agents>=0.17,<1.0",
+]
+
 dev = [
   "docstr-coverage>=2.3,<3.0",
   "httpx>=0.27,<1.0",

@@ -179,6 +179,32 @@ async def create_guide_sufficiency_report(
 
 
 @router.post(
+    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/run-sufficiency-agent",
+    response_model=GuideSufficiencyReportResponse,
+    status_code=201,
+)
+async def run_guide_sufficiency_agent(
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideSufficiencyReportResponse:
+    """Run Workstream's guide sufficiency agent for a source snapshot."""
+    try:
+        return await ProjectService(session).run_guide_sufficiency_agent(
+            actor,
+            project_id,
+            guide_id,
+            source_snapshot_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
     "/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}/acknowledge-warnings",
     response_model=GuideSufficiencyReportResponse,
 )
@@ -224,6 +250,32 @@ async def create_submission_artifact_policy(
             project_id,
             guide_id,
             payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/derive-submission-artifact-policy",
+    response_model=SubmissionArtifactPolicyResponse,
+    status_code=201,
+)
+async def run_submission_artifact_policy_derivation_agent(
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    actor: Annotated[ActorContext, Depends(get_current_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubmissionArtifactPolicyResponse:
+    """Run Workstream's submission artifact policy derivation agent."""
+    try:
+        return await ProjectService(session).run_submission_artifact_policy_derivation_agent(
+            actor,
+            project_id,
+            guide_id,
+            source_snapshot_id,
         )
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc

@@ -64,18 +64,18 @@ remain visible to the Workstream `admin` or `project_manager` and must be
 acknowledged before activation.
 
 After sufficiency passes, the `SubmissionArtifactPolicyDerivationAgent` derives
-the machine-readable project submission artifact policy and constrained checker
-specification. The project owner does not approve this internal policy. A
+the machine-readable project submission artifact policy. The project owner does
+not approve this internal policy. A
 Workstream actor with the `admin` or `project_manager` role approves the
 derived policy and activates the guide-policy bundle. Workers submit draft
 packet fields. Workstream decides required artifacts, evidence, hashes, storage
 reference rules, forbidden artifacts, and blocking pre-submit feedback from the
 locked effective policy and compiled project checker bundle.
 
-The derivation agent produces a constrained artifact-intake contract and checker
-specification. Workstream compiles that specification into deterministic checker
-logic. Runtime submission evaluation is performed by the locked checker bundle,
-not by an agent.
+The derivation agent produces a constrained artifact-intake contract. Workstream
+builds and validates the checker specification from that contract, then
+compiles deterministic checker logic. Runtime submission evaluation is performed
+by the locked checker bundle, not by an agent.
 
 Every task under the same active project guide version reuses that guide
 version's compiled project checker bundle. A task locks the policy/checker

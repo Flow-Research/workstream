@@ -18,6 +18,13 @@ from app.db import models as db_models
 from app.db import session as db_session
 from app.db.base import Base
 from app.main import create_app
+from app.modules.checkers.compiler import (
+    PRE_SUBMIT_COMPILER_VERSION,
+    PreSubmitCheckerCompilerError,
+    build_project_pre_submit_checker_spec,
+    compile_effective_project_submission_artifact_policy,
+    compile_project_pre_submit_checker_spec,
+)
 from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.checkers.runner import canonical_artifact_manifest_hash
 from app.modules.checkers.schemas import CheckerRoutingRecommendation
@@ -129,6 +136,248 @@ def test_artifact_manifest_hash_is_stable_and_rejects_duplicates() -> None:
                 {"artifact": "a.txt", "hash": "sha256:b"},
             ]
         )
+
+
+def compiler_effective_policy() -> dict:
+    """Return a minimal effective project policy for compiler tests."""
+    default_policy = {
+        "required_packet_fields": ["summary", "artifact_hash_manifest", "worker_attestation"],
+        "required_artifacts": [],
+        "required_evidence": [],
+        "forbidden_artifacts": [
+            {"pattern": ".env", "source": "workstream_default", "severity": "blocking"},
+        ],
+        "attestation_terms": ["original_work"],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": None,
+        "maximum_package_size_bytes": None,
+        "packaging": {},
+    }
+    project_policy = {
+        "schema_version": "project_submission_artifact_policy.v1",
+        "required_artifacts": [
+            {
+                "key": "answer",
+                "path": "outputs/answer.md",
+                "hash_required": True,
+                "required": True,
+                "description": "Answer artifact.",
+            }
+        ],
+        "required_evidence": [
+            {
+                "key": "work_evidence",
+                "label": "Work evidence",
+                "hash_required": True,
+                "required": True,
+                "description": "Evidence for the answer.",
+            }
+        ],
+        "forbidden_artifacts": [
+            {"pattern": "*.tmp", "reason": "Temporary files are not reviewable."},
+        ],
+        "attestation_terms": ["project_specific_originality"],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": 1_000_000,
+        "maximum_package_size_bytes": 5_000_000,
+        "packaging": {"package_required": False},
+    }
+    return {
+        "schema_version": "effective_project_submission_artifact_policy.v1",
+        "merge_algorithm_version": "workstream_default_merge.v1",
+        "workstream_default_policy": default_policy,
+        "project_policy": project_policy,
+        "required_packet_fields": default_policy["required_packet_fields"],
+        "required_artifacts": project_policy["required_artifacts"],
+        "required_evidence": project_policy["required_evidence"],
+        "forbidden_artifacts": [
+            *default_policy["forbidden_artifacts"],
+            *project_policy["forbidden_artifacts"],
+        ],
+        "attestation_terms": [
+            *default_policy["attestation_terms"],
+            *project_policy["attestation_terms"],
+        ],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": 1_000_000,
+        "maximum_package_size_bytes": 5_000_000,
+        "packaging": {"package_required": False},
+    }
+
+
+def test_pre_submit_compiler_emits_stable_approved_project_bundle() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "1" * 64
+
+    first = compile_effective_project_submission_artifact_policy(
+        effective_policy,
+        effective_policy_hash,
+    )
+    second = compile_effective_project_submission_artifact_policy(
+        effective_policy,
+        effective_policy_hash,
+    )
+
+    assert first.compiler_version == PRE_SUBMIT_COMPILER_VERSION
+    assert first.compiled_bundle == second.compiled_bundle
+    assert first.compiled_bundle_hash == second.compiled_bundle_hash
+    assert first.compiled_bundle["effective_policy_hash"] == effective_policy_hash
+    assert {
+        "validate_submission_packet",
+        "require_manifest_field",
+        "verify_hash",
+        "require_file",
+        "require_minimum_evidence",
+        "forbid_artifact",
+        "require_attestation",
+    }.issubset({rule["primitive"] for rule in first.compiled_bundle["rules"]})
+    assert "check_required_files" in first.checker_names
+    assert "check_evidence_present" in first.checker_names
+
+
+def test_pre_submit_compiler_rejects_unknown_primitive() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "2" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    spec["rules"].append(
+        {
+            "primitive": "run_arbitrary_python",
+            "severity": "blocking",
+            "policy_fields": ["required_artifacts"],
+            "config": {},
+        }
+    )
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="unknown primitive"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_omitted_required_artifact_coverage() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "3" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    spec["rules"] = [
+        rule
+        for rule in spec["rules"]
+        if rule["primitive"] != "require_file"
+    ]
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="require_file"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_skipped_evidence_coverage() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "4" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "require_minimum_evidence":
+            rule["config"]["evidence_keys"] = []
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="required evidence"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_weakened_default_severity() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "5" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "verify_hash":
+            rule["severity"] = "warning"
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="weakens severity"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_missing_workstream_defaults() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "6" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "forbid_artifact":
+            rule["config"]["patterns"] = ["*.tmp"]
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="forbidden artifacts"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_untraceable_policy_fields() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "7" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "require_file":
+            rule["policy_fields"] = ["required_artifacts", "operator_override"]
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="untraceable policy fields"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_weakened_size_limits() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "8" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "limit_file_size":
+            rule["config"]["maximum_file_size_bytes"] = 2_000_000
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="file size"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_weakened_package_limits() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "9" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "limit_package_size":
+            rule["config"]["maximum_package_size_bytes"] = 6_000_000
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="package size"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_weakened_packaging_config() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy["packaging"] = {
+        "package_required": True,
+        "allowed_package_formats": ["zip"],
+    }
+    effective_policy_hash = "sha256:" + "a" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "require_packaging":
+            rule["config"]["package_required"] = False
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="packaging"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_untraceable_extra_rules() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "b" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    spec["rules"].append(
+        {
+            "primitive": "require_packaging",
+            "severity": "blocking",
+            "policy_fields": ["packaging"],
+            "config": {"package_required": True},
+        }
+    )
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="untraceable primitive"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
 
 
 async def lock_submission_and_get_auto_run(
