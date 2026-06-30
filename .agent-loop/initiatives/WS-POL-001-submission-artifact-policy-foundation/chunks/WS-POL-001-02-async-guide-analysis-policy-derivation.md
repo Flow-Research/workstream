@@ -47,6 +47,7 @@ P1
 
 ```text
 backend/pyproject.toml
+backend/app/main.py
 backend/app/core/config.py
 backend/app/core/hashing.py
 backend/app/core/project_agents.py
@@ -105,6 +106,10 @@ post-submit lifecycle changes
 - The compiler compiles once per effective project policy, not once per task.
 - Workers and project owners cannot submit checker names, severities, versions,
   outcomes, compiler version, or compiled bundles.
+- `backend/app/main.py` may change only to register validation-error handling
+  required to prevent non-finite JSON and raw request input from leaking through
+  setup API errors. It must not add unrelated middleware, auth, routing, or
+  lifecycle behavior.
 
 ## Acceptance Criteria
 

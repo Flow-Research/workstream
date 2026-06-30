@@ -656,6 +656,25 @@ async def test_project_guide_rejects_non_finite_source_metadata(
 
     assert response.status_code == 422
     assert "non-finite numbers are not allowed" in response.text
+    assert "unsafe" not in response.text
+
+
+async def test_project_guide_update_rejects_non_finite_source_metadata(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    payload = {"estimated_time_policy": {"unsafe": float("inf")}}
+
+    response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
+        headers={**auth_headers(), "Content-Type": "application/json"},
+        content=json.dumps(payload, allow_nan=True),
+    )
+
+    assert response.status_code == 422
+    assert "non-finite numbers are not allowed" in response.text
+    assert "unsafe" not in response.text
 
 
 async def test_source_snapshot_hash_is_server_computed_and_canonical(
@@ -2920,7 +2939,8 @@ async def test_review_policy_rejects_invalid_decision_names(project_client: Asyn
     assert response.status_code == 422
     detail = response.json()["detail"][0]
     assert "allowed_decisions" in detail["loc"]
-    assert detail["input"] == "hold"
+    assert detail["input"] == "redacted"
+    assert "hold" not in response.text
 
 
 async def test_activation_requires_complete_payment_policy(project_client: AsyncClient) -> None:
