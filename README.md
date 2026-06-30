@@ -183,10 +183,12 @@ cd backend
 ```text
 WORKSTREAM_PROJECT_AGENT_RUNTIME=openai
 WORKSTREAM_OPENAI_AGENT_MODEL=<approved-model>
+OPENAI_API_KEY=<runtime-secret>
 ```
 
 The OpenAI adapter is only resolved on the explicit project-agent routes.
-Normal project setup APIs do not require an OpenAI API key.
+Normal project setup APIs and the deterministic local runtime do not require an
+OpenAI API key.
 
 ## Week 1 API Demo UI
 

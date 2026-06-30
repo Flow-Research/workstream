@@ -133,6 +133,9 @@ post-submit lifecycle changes
       acknowledgement before derivation can proceed.
 - [ ] `SubmissionArtifactPolicyDerivationAgent` can run after sufficiency passes
       or warnings are acknowledged and persist a draft `SubmissionArtifactPolicy`.
+- [ ] Agent-derived policy versioning is server-owned and deterministic from the
+      guide source snapshot; provider-returned policy versions cannot create
+      multiple current policies for the same snapshot.
 - [ ] Agent-derived policy cannot weaken Workstream defaults.
 - [ ] Derived report and policy bind to `source_snapshot_id` and
       `source_snapshot_hash`.

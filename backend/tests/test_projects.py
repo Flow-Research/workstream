@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
-import json
 import sys
 import types
 from collections.abc import AsyncIterator, Iterator
@@ -21,11 +20,18 @@ from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
 from app.core.config import Settings
+from app.core.hashing import canonical_json_hash
+from app.adapters.project_agents import openai_agents as openai_agents_module
 from app.adapters.project_agents.openai_agents import OpenAIAgentsProjectGuideRuntime
 from app.db import session as db_session
 from app.db.base import Base
 from app.main import create_app
-from app.interfaces.project_agents import GuideSourceMaterial, ProjectAgentRuntimeError
+from app.interfaces.project_agents import (
+    GuideSourceMaterial,
+    GuideSufficiencyAgentResult,
+    ProjectAgentRuntimeError,
+    SubmissionArtifactPolicyDerivationResult,
+)
 from app.modules.projects.models import (
     CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
@@ -541,16 +547,6 @@ async def approve_submission_artifact_policy(
     return response.json()
 
 
-def canonical_json_hash(value: dict) -> str:
-    encoded = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
-
-
 async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
     """Load the compiled project pre-submit checker policy for an effective policy."""
     async with db_session.get_session_factory()() as session:
@@ -687,14 +683,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
             key=lambda item: (item["source_kind"], item["durable_ref"], item["content_hash"]),
         ),
     }
-    expected_hash = "sha256:" + hashlib.sha256(
-        json.dumps(
-            expected_manifest,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    expected_hash = canonical_json_hash(expected_manifest)
 
     assert snapshot["manifest_json"] == expected_manifest
     assert snapshot["bundle_hash"] == expected_hash
@@ -1077,12 +1066,13 @@ async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
         f"{snapshot['id']}/run-sufficiency-agent"
     )
 
-    first = await project_client.post(endpoint, headers=auth_headers())
-    second = await project_client.post(endpoint, headers=auth_headers())
+    first, second = await asyncio.gather(
+        project_client.post(endpoint, headers=auth_headers()),
+        project_client.post(endpoint, headers=auth_headers()),
+    )
 
     assert inspect.iscoroutinefunction(ProjectService.run_guide_sufficiency_agent)
-    assert first.status_code == 201, first.text
-    assert second.status_code == 201, second.text
+    assert {first.status_code, second.status_code} == {200, 201}
     assert first.json()["id"] == second.json()["id"]
     assert first.json()["status"] == "passed"
     assert "test-openai-key-that-must-not-be-persisted" not in first.text
@@ -1159,6 +1149,120 @@ async def test_openai_agent_adapter_wraps_sdk_failures(
         await runtime.analyze_guide_sufficiency(material)
 
     assert "raw-openai-secret-token" not in str(exc.value)
+    assert exc.value.__cause__ is None
+
+
+async def test_openai_agent_adapter_wraps_sdk_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAgent:
+        """Fake OpenAI Agent constructor for timeout tests."""
+
+        def __init__(self, **_: object) -> None:
+            """Accept the adapter's SDK constructor arguments."""
+
+    class FakeRunner:
+        """Fake OpenAI Runner that exceeds the adapter timeout."""
+
+        @staticmethod
+        async def run(_: FakeAgent, __: str) -> object:
+            """Sleep long enough for the adapter's application timeout."""
+            await asyncio.sleep(0.01)
+            return object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "agents",
+        types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
+    )
+    monkeypatch.setattr(openai_agents_module, "OPENAI_AGENT_RUN_TIMEOUT_SECONDS", 0.001)
+    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    material = GuideSourceMaterial(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={"content_markdown": "A complete project guide."},
+        source_refs=[],
+    )
+
+    with pytest.raises(ProjectAgentRuntimeError, match="timed out"):
+        await runtime.analyze_guide_sufficiency(material)
+
+
+async def test_openai_agent_adapter_propagates_sdk_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAgent:
+        """Fake OpenAI Agent constructor for cancellation tests."""
+
+        def __init__(self, **_: object) -> None:
+            """Accept the adapter's SDK constructor arguments."""
+
+    class FakeRunner:
+        """Fake OpenAI Runner that propagates cooperative cancellation."""
+
+        @staticmethod
+        async def run(_: FakeAgent, __: str) -> object:
+            """Raise cancellation exactly as an async SDK call would."""
+            raise asyncio.CancelledError
+
+    monkeypatch.setitem(
+        sys.modules,
+        "agents",
+        types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
+    )
+    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    material = GuideSourceMaterial(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={"content_markdown": "A complete project guide."},
+        source_refs=[],
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await runtime.analyze_guide_sufficiency(material)
+
+
+async def test_agent_route_sanitizes_runtime_exception_chain(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingRuntime:
+        """Project-agent runtime that fails with sensitive provider text."""
+
+        async def analyze_guide_sufficiency(
+            self,
+            _: GuideSourceMaterial,
+        ) -> object:
+            """Raise a raw provider-style error that must not chain outward."""
+            raise ProjectAgentRuntimeError("raw-openai-secret-token") from RuntimeError(
+                "provider-prompt-body"
+            )
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    monkeypatch.setattr(
+        project_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: FailingRuntime(),
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 503, response.text
+    assert response.json()["detail"] == "project guide sufficiency agent is unavailable"
+    assert "raw-openai-secret-token" not in response.text
+    assert "provider-prompt-body" not in response.text
 
 
 async def test_sufficiency_agent_blocks_thin_guides(project_client: AsyncClient) -> None:
@@ -1224,12 +1328,13 @@ async def test_derivation_agent_requires_warning_acknowledgement_and_is_idempote
         json={"acknowledgement_note": "Prompt-injection text is source material only."},
     )
     assert acknowledgement.status_code == 200, acknowledgement.text
-    first = await project_client.post(endpoint, headers=auth_headers())
-    second = await project_client.post(endpoint, headers=auth_headers())
+    first, second = await asyncio.gather(
+        project_client.post(endpoint, headers=auth_headers()),
+        project_client.post(endpoint, headers=auth_headers()),
+    )
 
     assert inspect.iscoroutinefunction(ProjectService.run_submission_artifact_policy_derivation_agent)
-    assert first.status_code == 201, first.text
-    assert second.status_code == 201, second.text
+    assert {first.status_code, second.status_code} == {200, 201}
     assert first.json()["id"] == second.json()["id"]
     assert first.json()["source_snapshot_id"] == snapshot["id"]
     assert first.json()["source_snapshot_hash"] == snapshot["bundle_hash"]
@@ -1237,6 +1342,82 @@ async def test_derivation_agent_requires_warning_acknowledgement_and_is_idempote
     assert first.json()["policy_body"]["artifact_hash_algorithm"] == "sha256"
     assert first.json()["policy_body"]["manifest_required"] is True
     assert first.json()["policy_body"]["artifact_hash_required"] is True
+
+
+async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NondeterministicRuntime:
+        """Runtime that returns different provider policy versions per call."""
+
+        def __init__(self) -> None:
+            """Create an isolated call counter for this test runtime."""
+            self.calls = 0
+
+        async def analyze_guide_sufficiency(
+            self,
+            _: GuideSourceMaterial,
+        ) -> GuideSufficiencyAgentResult:
+            """Unused sufficiency implementation required by the runtime protocol."""
+            return GuideSufficiencyAgentResult(
+                status="guide_sufficient",
+                findings=[],
+                agent_version="fake-v0",
+            )
+
+        async def derive_submission_artifact_policy(
+            self,
+            _: GuideSourceMaterial,
+            __: GuideSufficiencyAgentResult,
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            """Return a valid policy with nondeterministic provider versioning."""
+            self.calls += 1
+            await asyncio.sleep(0)
+            return SubmissionArtifactPolicyDerivationResult(
+                policy_version=f"provider-version-{self.calls}",
+                policy_body=project_submission_artifact_policy_body(),
+                change_summary="Derived by fake runtime.",
+                agent_version="fake-v0",
+            )
+
+    runtime = NondeterministicRuntime()
+    monkeypatch.setattr(
+        project_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: runtime,
+    )
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    endpoint = (
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/derive-submission-artifact-policy"
+    )
+
+    first, second = await asyncio.gather(
+        project_client.post(endpoint, headers=auth_headers()),
+        project_client.post(endpoint, headers=auth_headers()),
+    )
+
+    assert {first.status_code, second.status_code} == {200, 201}
+    assert first.json()["id"] == second.json()["id"]
+    assert first.json()["policy_version"].startswith("agent-")
+    assert first.json()["policy_version"] != "provider-version-1"
+    assert second.json()["policy_version"] != "provider-version-2"
+    async with db_session.get_session_factory()() as session:
+        policies = (
+            await session.scalars(
+                select(SubmissionArtifactPolicy).where(
+                    SubmissionArtifactPolicy.source_snapshot_id == snapshot["id"],
+                    SubmissionArtifactPolicy.derivation_source == "agent_derivation",
+                    SubmissionArtifactPolicy.lifecycle_status.in_(["draft", "approved"]),
+                )
+            )
+        ).all()
+
+    assert len(policies) == 1
 
 
 async def test_submission_artifact_policy_approval_persists_effective_policy_hash(

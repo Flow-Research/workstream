@@ -81,7 +81,8 @@ Acceptance criteria:
 - `GuideSourceSnapshot.bundle_hash` is computed as
   `sha256(canonical_json(manifest_json))` with deterministic key ordering,
   source-item ordering, UTF-8 encoding, duplicate handling, and volatile-field
-  exclusions.
+  exclusions. Non-finite numbers such as `NaN` or `Infinity` are rejected before
+  hashing.
 - Dedicated guide sufficiency report model/table exists.
 - Guide sufficiency report supports `passed`, `blocked`, and
   `passed_with_warnings`.

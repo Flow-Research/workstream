@@ -124,6 +124,22 @@ GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION = "guide_source_snapshot.v1"
 EFFECTIVE_POLICY_SCHEMA_VERSION = "effective_project_submission_artifact_policy.v1"
 MERGE_ALGORITHM_VERSION = "workstream_default_merge.v1"
 PLATFORM_HASH_ALGORITHM = "sha256"
+AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS = {
+    "guide_sufficient": "passed",
+    "guide_blocked": "blocked",
+    "guide_sufficient_with_warnings": "passed_with_warnings",
+}
+REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS = {
+    report_status: agent_status
+    for agent_status, report_status in AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS.items()
+}
+
+
+def agent_submission_artifact_policy_version(source_snapshot_hash: str) -> str:
+    """Return the server-owned policy version for agent-derived snapshot policy."""
+    return f"agent-{source_snapshot_hash.removeprefix('sha256:')[:24]}"
+
+
 DEFAULT_ALLOWED_STORAGE_SCHEMES = ["local", "s3", "r2"]
 DEFAULT_REQUIRED_PACKET_FIELDS = ["summary", "artifact_hash_manifest", "worker_attestation"]
 DEFAULT_ATTESTATION_TERMS = [
@@ -340,8 +356,8 @@ class ProjectService:
             return self._agent_runtime
         try:
             return get_project_guide_agent_runtime()
-        except ProjectAgentRuntimeError as exc:
-            raise AgentRuntimeUnavailable("project guide agent runtime is unavailable") from exc
+        except ProjectAgentRuntimeError:
+            raise AgentRuntimeUnavailable("project guide agent runtime is unavailable") from None
 
     async def create_project(self, actor: ActorContext, payload: ProjectCreate) -> ProjectResponse:
         """Create a draft project record after project setup authorization.
@@ -612,7 +628,7 @@ class ProjectService:
         project_id: str,
         guide_id: str,
         source_snapshot_id: str,
-    ) -> GuideSufficiencyReportResponse:
+    ) -> tuple[GuideSufficiencyReportResponse, bool]:
         """Run the configured guide sufficiency agent for a source snapshot.
 
         Args:
@@ -622,7 +638,7 @@ class ProjectService:
             source_snapshot_id: Source snapshot id to analyze.
 
         Returns:
-            Existing or newly persisted sufficiency report.
+            Existing or newly persisted sufficiency report plus whether it was created.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
         guide = await self._get_project_guide(project_id, guide_id)
@@ -633,17 +649,17 @@ class ProjectService:
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         if existing is not None:
-            return GuideSufficiencyReportResponse.model_validate(existing)
+            return GuideSufficiencyReportResponse.model_validate(existing), False
 
         material = await self._guide_source_material(guide, snapshot)
         await self._session.rollback()
         try:
             result = await self._project_agent_runtime().analyze_guide_sufficiency(material)
-        except ProjectAgentRuntimeError as exc:
-            raise AgentRuntimeUnavailable("project guide sufficiency agent is unavailable") from exc
+        except ProjectAgentRuntimeError:
+            raise AgentRuntimeUnavailable("project guide sufficiency agent is unavailable") from None
         payload = GuideSufficiencyReportCreate(
             source_snapshot_id=material.source_snapshot_id,
-            status=result.status,
+            status=AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS[result.status],
             findings=[
                 finding.model_dump(mode="json")
                 for finding in result.findings
@@ -661,7 +677,7 @@ class ProjectService:
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         if existing is not None:
-            return GuideSufficiencyReportResponse.model_validate(existing)
+            return GuideSufficiencyReportResponse.model_validate(existing), False
         report = GuideSufficiencyReport(
             id=str(uuid4()),
             project_id=project_id,
@@ -683,12 +699,12 @@ class ProjectService:
             await self._session.rollback()
             existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
             if existing is not None:
-                return GuideSufficiencyReportResponse.model_validate(existing)
+                return GuideSufficiencyReportResponse.model_validate(existing), False
             raise PolicySetupConflict(
                 "guide sufficiency report conflicted with concurrent setup; retry"
             ) from exc
         await self._session.refresh(report)
-        return GuideSufficiencyReportResponse.model_validate(report)
+        return GuideSufficiencyReportResponse.model_validate(report), True
 
     async def acknowledge_guide_sufficiency_warnings(
         self,
@@ -790,7 +806,7 @@ class ProjectService:
         project_id: str,
         guide_id: str,
         source_snapshot_id: str,
-    ) -> SubmissionArtifactPolicyResponse:
+    ) -> tuple[SubmissionArtifactPolicyResponse, bool]:
         """Run the configured policy derivation agent for a source snapshot.
 
         Args:
@@ -800,7 +816,7 @@ class ProjectService:
             source_snapshot_id: Source snapshot id to derive policy from.
 
         Returns:
-            Existing or newly persisted agent-derived submission artifact policy.
+            Existing or newly persisted policy plus whether it was created.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
         guide = await self._get_project_guide(project_id, guide_id)
@@ -815,7 +831,7 @@ class ProjectService:
             snapshot.id,
         )
         if existing is not None:
-            return SubmissionArtifactPolicyResponse.model_validate(existing)
+            return SubmissionArtifactPolicyResponse.model_validate(existing), False
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         self._validate_sufficiency_report_allows_policy_approval(
             sufficiency_report,
@@ -825,7 +841,7 @@ class ProjectService:
 
         material = await self._guide_source_material(guide, snapshot)
         runtime_report = GuideSufficiencyAgentResult(
-            status=sufficiency_report.status,  # type: ignore[arg-type]
+            status=REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS[sufficiency_report.status],
             findings=[
                 AgentFinding.model_validate(finding)
                 for finding in sufficiency_report.findings
@@ -840,8 +856,8 @@ class ProjectService:
                 material,
                 runtime_report,
             )
-        except ProjectAgentRuntimeError as exc:
-            raise AgentRuntimeUnavailable("submission artifact policy agent is unavailable") from exc
+        except ProjectAgentRuntimeError:
+            raise AgentRuntimeUnavailable("submission artifact policy agent is unavailable") from None
 
         try:
             policy_input = SubmissionArtifactPolicyInput.model_validate(result.policy_body)
@@ -861,7 +877,7 @@ class ProjectService:
             snapshot.id,
         )
         if existing is not None:
-            return SubmissionArtifactPolicyResponse.model_validate(existing)
+            return SubmissionArtifactPolicyResponse.model_validate(existing), False
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         self._validate_sufficiency_report_allows_policy_approval(
             sufficiency_report,
@@ -875,7 +891,7 @@ class ProjectService:
             guide_version=guide.version,
             source_snapshot_id=snapshot.id,
             source_snapshot_hash=snapshot.bundle_hash,
-            policy_version=result.policy_version,
+            policy_version=agent_submission_artifact_policy_version(snapshot.bundle_hash),
             lifecycle_status="draft",
             policy_body=policy_body,
             policy_hash=self._hash_canonical_json(policy_body),
@@ -897,12 +913,12 @@ class ProjectService:
                 snapshot.id,
             )
             if existing is not None:
-                return SubmissionArtifactPolicyResponse.model_validate(existing)
+                return SubmissionArtifactPolicyResponse.model_validate(existing), False
             raise PolicySetupConflict(
                 "submission artifact policy conflicted with concurrent setup; retry"
             ) from exc
         await self._session.refresh(policy)
-        return SubmissionArtifactPolicyResponse.model_validate(policy)
+        return SubmissionArtifactPolicyResponse.model_validate(policy), True
 
     async def update_submission_artifact_policy(
         self,

@@ -14,6 +14,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
+from app.core.hashing import canonical_json_hash
 from app.db import models as db_models
 from app.db import session as db_session
 from app.db.base import Base
@@ -297,6 +298,23 @@ def test_pre_submit_compiler_rejects_weakened_default_severity() -> None:
 
     with pytest.raises(PreSubmitCheckerCompilerError, match="weakens severity"):
         compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_pre_submit_compiler_rejects_escalated_warning_only_rule() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "c" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "warn_low_quality_generated_artifact":
+            rule["severity"] = "blocking"
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="warning-only"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
+def test_canonical_json_hash_rejects_non_finite_numbers() -> None:
+    with pytest.raises(ValueError):
+        canonical_json_hash({"score": float("nan")})
 
 
 def test_pre_submit_compiler_rejects_missing_workstream_defaults() -> None:

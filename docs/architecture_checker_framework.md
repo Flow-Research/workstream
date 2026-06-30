@@ -230,6 +230,9 @@ primitives such as:
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
 
+`warn_low_quality_generated_artifact` is warning-only. The trusted compiler
+rejects checker specifications that escalate that primitive to blocking.
+
 Project-specific executable checker code is a future extension path, not the
 default. That extension path must require static validation, generated tests,
 sandboxed execution, no network, no shell, no secrets, no database access,

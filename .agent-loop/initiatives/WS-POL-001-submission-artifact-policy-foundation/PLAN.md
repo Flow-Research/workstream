@@ -59,7 +59,8 @@ timestamps. It never persists signed URLs, credentials, or token-bearing
 locators as durable source identity.
 The bundle hash is `sha256(canonical_json(manifest_json))` with deterministic
 key ordering, source-item ordering, UTF-8 encoding, duplicate handling, and
-volatile-field exclusions.
+volatile-field exclusions. Non-finite numbers such as `NaN` or `Infinity` are
+rejected before hashing.
 
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
 `ProjectSubmissionArtifactPolicy` after guide sufficiency passes. A Workstream

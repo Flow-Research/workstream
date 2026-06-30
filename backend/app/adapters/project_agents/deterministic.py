@@ -41,7 +41,7 @@ class DeterministicProjectGuideAgentRuntime:
                 )
             )
             return GuideSufficiencyAgentResult(
-                status="blocked",
+                status="guide_blocked",
                 findings=findings,
                 summary="Guide material needs clarification before setup can continue.",
                 agent_version=DETERMINISTIC_AGENT_VERSION,
@@ -63,7 +63,7 @@ class DeterministicProjectGuideAgentRuntime:
                 break
 
         return GuideSufficiencyAgentResult(
-            status="passed_with_warnings" if findings else "passed",
+            status="guide_sufficient_with_warnings" if findings else "guide_sufficient",
             findings=findings,
             summary="Guide material is sufficient for deterministic policy derivation.",
             agent_version=DETERMINISTIC_AGENT_VERSION,
@@ -114,7 +114,7 @@ class DeterministicProjectGuideAgentRuntime:
             policy_body=policy_body,
             change_summary=(
                 "Derived from the immutable project guide source snapshot after "
-                f"{sufficiency_report.status} sufficiency review."
+                f"{sufficiency_report.agent_name} review."
             ),
             agent_version=DETERMINISTIC_AGENT_VERSION,
         )

@@ -45,7 +45,11 @@ class GuideSufficiencyAgentResult(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["passed", "blocked", "passed_with_warnings"]
+    status: Literal[
+        "guide_sufficient",
+        "guide_blocked",
+        "guide_sufficient_with_warnings",
+    ]
     findings: list[AgentFinding] = Field(default_factory=list)
     summary: str | None = Field(default=None, max_length=2000)
     agent_name: str = Field(default="ProjectGuideSufficiencyAgent", max_length=100)

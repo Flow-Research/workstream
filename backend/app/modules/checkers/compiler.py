@@ -311,6 +311,7 @@ def _validate_rule_coverage(effective_policy: dict[str, Any], rules: list[dict[s
             f"checker spec omits required primitive rules: {', '.join(omitted_primitives)}"
         )
     by_primitive = {rule["primitive"]: rule for rule in rules}
+    _require_warning_rule(by_primitive, "warn_low_quality_generated_artifact")
     _require_blocking_rule(by_primitive, "validate_submission_packet")
     _require_config_values(
         by_primitive["validate_submission_packet"],
@@ -429,6 +430,15 @@ def _require_blocking_rule(by_primitive: dict[str, dict[str, Any]], primitive: s
         raise PreSubmitCheckerCompilerError(f"checker spec omits {primitive}")
     if rule["severity"] != BLOCKING_SEVERITY:
         raise PreSubmitCheckerCompilerError(f"checker spec weakens severity for {primitive}")
+
+
+def _require_warning_rule(by_primitive: dict[str, dict[str, Any]], primitive: str) -> None:
+    """Require one warning-only primitive rule."""
+    rule = by_primitive.get(primitive)
+    if rule is None:
+        raise PreSubmitCheckerCompilerError(f"checker spec omits {primitive}")
+    if rule["severity"] != WARNING_SEVERITY:
+        raise PreSubmitCheckerCompilerError(f"checker spec escalates warning-only rule for {primitive}")
 
 
 def _require_config_values(

@@ -41,7 +41,8 @@ hash is `sha256(canonical_json(manifest_json))`. Canonical JSON uses UTF-8,
 sorted object keys, no insignificant whitespace, and source items sorted by
 `(source_kind, durable_ref, content_hash)`. Volatile database ids, capture
 timestamps, and transient fetch locators are excluded from the canonical
-manifest. Duplicate source items with the same `source_kind + durable_ref` are
+manifest. Non-finite numbers such as `NaN` or `Infinity` are rejected before
+hashing. Duplicate source items with the same `source_kind + durable_ref` are
 rejected before hashing. Changing any included document, example, rubric,
 repository doc, or inline guide body creates a new snapshot and invalidates
 prior sufficiency reports, derived policies, effective policies, checker specs,
@@ -68,6 +69,10 @@ and must be acknowledged before activation.
 passes or warnings are acknowledged. The project owner does not approve this
 internal policy. A Workstream actor with the `admin` or `project_manager` role
 reviews and approves the derived policy before guide activation.
+Agent-derived policy versioning is server-owned and deterministic from the
+guide source snapshot hash. Provider-returned policy versions are not trusted
+for idempotency and cannot create multiple current policies for the same
+snapshot.
 
 The derivation agent does not generate unrestricted executable checker code as
 the default path. It produces a machine-readable artifact-intake contract.
@@ -159,6 +164,10 @@ Approved pre-submit checker primitives include:
 - `limit_package_size`
 - `require_packaging`
 - `warn_low_quality_generated_artifact`
+
+The trusted compiler must keep `warn_low_quality_generated_artifact`
+warning-only; escalating that primitive to blocking is rejected because it would
+change worker-facing intake semantics.
 
 Project-specific executable checker code is not part of the default path. If a
 future project requires logic that cannot fit the constrained checker
