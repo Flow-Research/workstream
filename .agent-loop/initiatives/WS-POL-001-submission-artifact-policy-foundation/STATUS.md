@@ -2,10 +2,12 @@
 
 ## Current Status
 
-`WS-POL-001-01` is merged to `main`. `WS-POL-001-02` is starting on branch
+`WS-POL-001-01` is merged to `main`. `WS-POL-001-02` is implemented on branch
 `codex/ws-pol-001-02-agent-runtime-compiler`.
 
-The current gate is Chunk 2 implementation under its approved chunk contract.
+Internal review, deterministic proof, and the internal review evidence gate have
+passed for reviewed code SHA `c2f79b835a1bb033ffffca79ec507b77efcaae3b`.
+The current gate is PR publication, external review, and human checkpoint.
 
 ## Active Chunk
 
@@ -16,7 +18,7 @@ The current gate is Chunk 2 implementation under its approved chunk contract.
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
 | `WS-POL-001-01` | Merged | `codex/ws-pol-001-01-submission-artifact-policy` | 28 | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, activation guards, and key-based artifact policy merge. |
-| `WS-POL-001-02` | In progress | `codex/ws-pol-001-02-agent-runtime-compiler` | - | Adds async guide sufficiency / derivation agents, runtime port, OpenAI adapter boundary, and the trusted compiler path. |
+| `WS-POL-001-02` | Internal review complete; ready for PR | `codex/ws-pol-001-02-agent-runtime-compiler` | - | Adds async guide sufficiency / derivation agents, runtime port, OpenAI adapter boundary, and the trusted compiler path. |
 | `WS-POL-001-03` | Planned | - | - | Moves task locked-context and submission runtime to the effective policy and project checker bundle. |
 | `WS-POL-001-04` | Planned | - | - | Splits post-submit checker policy provenance. |
 | `WS-POL-001-05` | Planned | - | - | Proves revision resubmission and real API drill. |
@@ -25,7 +27,7 @@ The current gate is Chunk 2 implementation under its approved chunk contract.
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| Chunk 2 implementation | Codex | Implement only the allowed WS-POL-001-02 files and run deterministic proof before reviewer fanout. |
+| External PR review | Codex | Publish the reviewed branch, open PR, and wait for CodeRabbit/GitHub Actions before human checkpoint. |
 
 ## Follow-Ups
 
