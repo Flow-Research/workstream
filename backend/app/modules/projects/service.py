@@ -1831,7 +1831,10 @@ class ProjectService:
 
     def _hash_canonical_json(self, value: dict[str, Any]) -> str:
         """Hash canonical JSON using the Workstream policy hash contract."""
-        return canonical_json_hash(value)
+        try:
+            return canonical_json_hash(value)
+        except ValueError:
+            raise PolicySetupBlocked("canonical JSON cannot contain non-finite numbers") from None
 
     def _canonical_policy_body(self, policy_body: dict[str, Any]) -> dict[str, Any]:
         """Normalize project policy content before hashing or merging."""

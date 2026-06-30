@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def reject_non_finite_json_numbers(value: Any) -> Any:
+    """Reject NaN and Infinity values from JSON-like request metadata."""
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("non-finite numbers are not allowed")
+    if isinstance(value, dict):
+        for item in value.values():
+            reject_non_finite_json_numbers(item)
+    if isinstance(value, list):
+        for item in value:
+            reject_non_finite_json_numbers(item)
+    return value
 
 
 class CheckerPolicyInput(BaseModel):
@@ -427,6 +441,12 @@ class ProjectGuideCreate(BaseModel):
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
 
+    @field_validator("difficulty_scale", "estimated_time_policy", "evidence_policy")
+    @classmethod
+    def validate_finite_json_metadata(cls, value: Any) -> Any:
+        """Reject non-finite numbers from guide metadata."""
+        return reject_non_finite_json_numbers(value)
+
 
 class ProjectGuideUpdate(BaseModel):
     """Request schema for editing mutable fields on a draft guide."""
@@ -453,6 +473,12 @@ class ProjectGuideUpdate(BaseModel):
     review_policy: ReviewPolicyInput | None = None
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
+
+    @field_validator("difficulty_scale", "estimated_time_policy", "evidence_policy")
+    @classmethod
+    def validate_finite_json_metadata(cls, value: Any) -> Any:
+        """Reject non-finite numbers from guide metadata updates."""
+        return reject_non_finite_json_numbers(value)
 
 
 class ProjectGuideResponse(BaseModel):

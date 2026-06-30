@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import json
 import sys
 import types
 from collections.abc import AsyncIterator, Iterator
@@ -638,6 +639,23 @@ async def test_draft_guide_can_be_created(project_client: AsyncClient) -> None:
     assert guide["version"] == "v1"
     assert guide["status"] == "draft"
     assert guide["created_by"]
+
+
+async def test_project_guide_rejects_non_finite_source_metadata(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    payload = complete_guide_payload()
+    payload["difficulty_scale"] = {"unsafe": float("nan")}
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides",
+        headers={**auth_headers(), "Content-Type": "application/json"},
+        content=json.dumps(payload, allow_nan=True),
+    )
+
+    assert response.status_code == 422
+    assert "non-finite numbers are not allowed" in response.text
 
 
 async def test_source_snapshot_hash_is_server_computed_and_canonical(
