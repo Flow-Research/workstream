@@ -30,10 +30,13 @@ The human-facing operating guide for a project. It contains the project instruct
 
 ## Guide Sufficiency Report
 
-The Workstream-owned record produced by `ProjectGuideSufficiencyAgent` for a
-project guide version. It records whether the guide passed, is blocked by gaps,
-or passed with warnings that an `admin` or `project_manager` must acknowledge
-before activation.
+The Workstream-owned sufficiency record for a project guide version and source
+snapshot. It is normally produced by `ProjectGuideSufficiencyAgent`, but an
+`admin` or `project_manager` can create a manual report when needed. It records
+whether the guide passed, is blocked by gaps, or passed with warnings that an
+`admin` or `project_manager` must acknowledge before activation. Manual reports
+clear only the manual policy path; agent derivation requires an agent-created
+sufficiency report for the same snapshot.
 
 ## Submission Artifact Policy
 

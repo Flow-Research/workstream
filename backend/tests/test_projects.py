@@ -1686,6 +1686,45 @@ async def test_agent_derived_submission_artifact_policy_body_is_immutable(
     assert persisted_policy.change_summary == derived.json()["change_summary"]
 
 
+async def test_agent_derived_policy_approval_revalidates_server_owned_provenance(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    spoofed_policy = SubmissionArtifactPolicy(
+        id=str(uuid4()),
+        project_id=project["id"],
+        guide_id=guide["id"],
+        guide_version=guide["version"],
+        source_snapshot_id=snapshot["id"],
+        source_snapshot_hash=snapshot["bundle_hash"],
+        policy_version=f"agent-{snapshot['bundle_hash'].removeprefix('sha256:')[:24]}",
+        lifecycle_status="draft",
+        policy_body=project_submission_artifact_policy_body(),
+        policy_hash=canonical_json_hash(project_submission_artifact_policy_body()),
+        derivation_source="agent_derivation",
+        source_material_refs=[],
+        derivation_agent_name="ProviderControlledAgent",
+        derivation_agent_version="provider-v0",
+        created_by="seeded-actor",
+    )
+    async with db_session.get_session_factory()() as session:
+        session.add(spoofed_policy)
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{spoofed_policy.id}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Should revalidate agent provenance."},
+    )
+
+    assert response.status_code == 409
+    assert "runtime provenance is not server-owned" in response.json()["detail"]
+
+
 async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1773,6 +1812,43 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
         ).all()
 
     assert len(policies) == 1
+
+
+async def test_activation_revalidates_agent_derived_policy_provenance(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(SubmissionArtifactPolicy, policy["id"])
+        assert persisted is not None
+        persisted.derivation_source = "agent_derivation"
+        persisted.policy_version = f"agent-{snapshot['bundle_hash'].removeprefix('sha256:')[:24]}"
+        persisted.derivation_agent_name = "ProviderControlledAgent"
+        persisted.derivation_agent_version = "provider-v0"
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert "runtime provenance is not server-owned" in response.json()["detail"]
 
 
 async def test_submission_artifact_policy_approval_persists_effective_policy_hash(

@@ -153,6 +153,9 @@ post-submit lifecycle changes
 - [ ] Persisted agent names and versions are server-owned provenance; runtime or
       provider-returned identity fields cannot spoof sufficiency or derivation
       audit records.
+- [ ] Agent-derived policy provenance is revalidated before approval and guide
+      activation, so seeded or stale rows with spoofed agent identity cannot
+      become active.
 - [ ] Manual sufficiency reports can clear manual policy creation, but the
       derivation agent requires a Workstream-agent sufficiency report for the
       same immutable snapshot.

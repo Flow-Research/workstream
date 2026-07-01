@@ -304,6 +304,9 @@ with the `admin` or `project_manager` role before activation.
 Manual sufficiency reports persist `agent_name` and `agent_version` as null.
 Reports created through the agent route persist Workstream-owned agent identity;
 provider-returned names or versions are not trusted as audit provenance.
+A source snapshot has one sufficiency report. If a manual report already exists
+for a snapshot, operators either continue through manual policy creation after
+clearance or create a new guide-source snapshot to run the agent path.
 
 ## SubmissionArtifactPolicy
 
@@ -398,6 +401,9 @@ server-owned. The derivation agent can run only from a Workstream-agent
 sufficiency report for the same guide source snapshot; manual sufficiency
 reports can support manual policy creation after clearance, but they do not
 create agent-derivation provenance.
+Agent-derived policy provenance is revalidated before approval and guide
+activation, so seeded or stale rows with spoofed agent identity cannot become
+the active policy context.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 `artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project

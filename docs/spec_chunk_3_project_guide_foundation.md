@@ -152,7 +152,10 @@ policies persist `manual_admin_derivation`; agent-created policies persist
 version. Manual policy creation requires sufficiency clearance first. Agent
 policy derivation requires a Workstream-agent sufficiency report for the same
 snapshot, and persisted agent identity is server-owned rather than copied from
-provider output.
+provider output. A source snapshot has one sufficiency report. If a manual
+report exists for that snapshot, the agent route reuses that row; operators
+continue through manual policy creation after clearance or create a fresh
+guide-source snapshot before running the agent path.
 
 `POST /submission-artifact-policies/{policy_id}/approve` returns the merged
 `EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the

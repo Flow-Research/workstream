@@ -24,6 +24,7 @@ Acceptance:
 
 - Project cannot become active without guide, base amount, immutable guide source snapshot, passed or acknowledged guide sufficiency report for that immutable guide source snapshot, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker bundle hash, post-submit checker policy, review policy, revision policy, and payment policy.
 - Submission artifact policy is Workstream-derived and approved by `admin` or `project_manager`; project owners do not author or approve the machine policy schema directly.
+- This flow is the agent-derived setup path. If an admin or project_manager creates a manual sufficiency report for a snapshot, that snapshot continues through manual policy creation; agent derivation requires an agent-created sufficiency report for the same snapshot or a fresh guide-source snapshot.
 - Submission artifact, checker, review, revision, and payment policies are visible on the project page.
 
 ## Flow 2: Operator Creates A Task

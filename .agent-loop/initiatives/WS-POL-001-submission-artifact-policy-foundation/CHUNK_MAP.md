@@ -207,6 +207,8 @@ Acceptance criteria:
   creation but do not create agent-derivation provenance.
 - Persisted sufficiency-agent and derivation-agent names and versions are
   server-owned; runtime/provider identity fields cannot spoof audit records.
+- Agent-derived policy provenance is revalidated before approval and guide
+  activation.
 - Derived policy cannot weaken Workstream defaults.
 - Workstream's trusted checker compiler builds a constrained checker
   specification using only approved Workstream primitives.
