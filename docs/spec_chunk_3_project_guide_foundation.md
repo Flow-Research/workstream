@@ -149,7 +149,10 @@ when they reuse the existing server-owned row for the same source snapshot.
 Manual policy creation does not accept derivation provenance fields. Manual
 policies persist `manual_admin_derivation`; agent-created policies persist
 `agent_derivation` and use a server-owned `agent-<snapshot-hash>` policy
-version.
+version. Manual policy creation requires sufficiency clearance first. Agent
+policy derivation requires a Workstream-agent sufficiency report for the same
+snapshot, and persisted agent identity is server-owned rather than copied from
+provider output.
 
 `POST /submission-artifact-policies/{policy_id}/approve` returns the merged
 `EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the

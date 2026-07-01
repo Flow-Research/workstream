@@ -301,6 +301,9 @@ with the `admin` or `project_manager` role before activation.
 
 `source_snapshot_hash` is server-derived from the referenced
 `GuideSourceSnapshot.bundle_hash`. Clients cannot supply a conflicting hash.
+Manual sufficiency reports persist `agent_name` and `agent_version` as null.
+Reports created through the agent route persist Workstream-owned agent identity;
+provider-returned names or versions are not trusted as audit provenance.
 
 ## SubmissionArtifactPolicy
 
@@ -373,7 +376,7 @@ Example:
   "policy_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "derivation_source": "agent_derivation",
   "derivation_agent_name": "SubmissionArtifactPolicyDerivationAgent",
-  "derivation_agent_version": "v1",
+  "derivation_agent_version": "workstream-policy-derivation-agent-v0.1",
   "source_material_refs": ["project-guide:v1"],
   "lifecycle_status": "approved",
   "approved_by_role": "project_manager",
@@ -390,6 +393,11 @@ supply or approve this internal policy schema.
 `manual_admin_derivation`; policies created by the derivation agent persist
 `agent_derivation`. Client requests do not supply derivation provenance, and
 manual `policy_version` values cannot use the reserved `agent-` prefix.
+Agent-derived policy versioning and persisted derivation-agent identity are
+server-owned. The derivation agent can run only from a Workstream-agent
+sufficiency report for the same guide source snapshot; manual sufficiency
+reports can support manual policy creation after clearance, but they do not
+create agent-derivation provenance.
 
 Project policy can add stricter requirements, but it cannot weaken Workstream's default submission artifact policy.
 `artifact_hash_algorithm` is platform-locked to `sha256` for v0.1. Project

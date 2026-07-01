@@ -126,6 +126,12 @@ MERGE_ALGORITHM_VERSION = "workstream_default_merge.v1"
 PLATFORM_HASH_ALGORITHM = "sha256"
 MANUAL_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE = "manual_admin_derivation"
 AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE = "agent_derivation"
+PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME = "ProjectGuideSufficiencyAgent"
+PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION = "workstream-sufficiency-agent-v0.1"
+SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME = "SubmissionArtifactPolicyDerivationAgent"
+SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION = (
+    "workstream-policy-derivation-agent-v0.1"
+)
 AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS = {
     "guide_sufficient": "passed",
     "guide_blocked": "blocked",
@@ -688,8 +694,8 @@ class ProjectService:
             status=payload.status,
             findings=[finding.model_dump(mode="json") for finding in payload.findings],
             summary=payload.summary,
-            agent_name=result.agent_name,
-            agent_version=result.agent_version,
+            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
             created_by=actor.actor_id,
         )
         try:
@@ -770,6 +776,11 @@ class ProjectService:
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
         self._merge_effective_submission_artifact_policy(policy_body)
+        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
+        self._validate_sufficiency_report_allows_policy_approval(
+            sufficiency_report,
+            snapshot,
+        )
         source_material_refs = await self._source_material_refs(snapshot.id)
         policy = SubmissionArtifactPolicy(
             id=str(uuid4()),
@@ -830,6 +841,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
+        self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
         assert sufficiency_report is not None
         existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
             project_id,
@@ -848,8 +860,8 @@ class ProjectService:
                 for finding in sufficiency_report.findings
             ],
             summary=sufficiency_report.summary,
-            agent_name=sufficiency_report.agent_name or "ProjectGuideSufficiencyAgent",
-            agent_version=sufficiency_report.agent_version or "unknown",
+            agent_name=PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+            agent_version=PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
         )
         await self._session.rollback()
         try:
@@ -877,6 +889,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
+        self._validate_agent_sufficiency_report_for_derivation(sufficiency_report)
         existing = await self._repo.get_agent_derived_submission_artifact_policy_for_snapshot(
             project_id,
             guide.version,
@@ -899,8 +912,8 @@ class ProjectService:
             policy_hash=self._hash_canonical_json(policy_body),
             derivation_source=AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE,
             source_material_refs=source_material_refs,
-            derivation_agent_name=result.agent_name,
-            derivation_agent_version=result.agent_version,
+            derivation_agent_name=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
+            derivation_agent_version=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
             created_by=actor.actor_id,
             change_summary=result.change_summary,
         )
@@ -2193,7 +2206,7 @@ class ProjectService:
         sufficiency_report: GuideSufficiencyReport | None,
         source_snapshot: GuideSourceSnapshot,
     ) -> None:
-        """Require sufficiency clearance before approving derived policy."""
+        """Require sufficiency clearance before creating or approving policy."""
         if sufficiency_report is None:
             raise PolicySetupBlocked("guide sufficiency report is required before policy approval")
         if sufficiency_report.source_snapshot_id != source_snapshot.id:
@@ -2207,6 +2220,23 @@ class ProjectService:
                 sufficiency_report,
                 PolicySetupBlocked,
                 "before policy approval",
+            )
+
+    def _validate_agent_sufficiency_report_for_derivation(
+        self,
+        sufficiency_report: GuideSufficiencyReport | None,
+    ) -> None:
+        """Require server-owned sufficiency provenance before agent derivation."""
+        if sufficiency_report is None:
+            raise PolicySetupBlocked(
+                "agent sufficiency report is required before policy derivation"
+            )
+        if (
+            sufficiency_report.agent_name != PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
+            or sufficiency_report.agent_version != PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION
+        ):
+            raise PolicySetupBlocked(
+                "agent sufficiency report is required before policy derivation"
             )
 
     def _validate_agent_derived_submission_artifact_policy(
@@ -2231,6 +2261,13 @@ class ProjectService:
         if policy.derivation_agent_name is None or policy.derivation_agent_version is None:
             raise PolicySetupConflict(
                 "agent-derived submission artifact policy runtime provenance is incomplete"
+            )
+        if (
+            policy.derivation_agent_name != SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME
+            or policy.derivation_agent_version != SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION
+        ):
+            raise PolicySetupConflict(
+                "agent-derived submission artifact policy runtime provenance is not server-owned"
             )
 
     def _validate_activation_ready(

@@ -150,6 +150,12 @@ post-submit lifecycle changes
 - [ ] Agent-derived policy versioning is server-owned and deterministic from the
       guide source snapshot; provider-returned policy versions cannot create
       multiple current policies for the same snapshot.
+- [ ] Persisted agent names and versions are server-owned provenance; runtime or
+      provider-returned identity fields cannot spoof sufficiency or derivation
+      audit records.
+- [ ] Manual sufficiency reports can clear manual policy creation, but the
+      derivation agent requires a Workstream-agent sufficiency report for the
+      same immutable snapshot.
 - [ ] Agent-derived policy cannot weaken Workstream defaults.
 - [ ] Derived report and policy bind to `source_snapshot_id` and
       `source_snapshot_hash`.

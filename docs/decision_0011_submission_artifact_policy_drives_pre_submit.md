@@ -73,6 +73,10 @@ Agent-derived policy versioning is server-owned and deterministic from the
 guide source snapshot hash. Provider-returned policy versions are not trusted
 for idempotency and cannot create multiple current policies for the same
 snapshot.
+Persisted agent names and versions are also Workstream-owned provenance, not
+provider-returned audit truth. Manual sufficiency reports can support manual
+policy creation after sufficiency clearance, but the derivation agent requires
+a Workstream-agent sufficiency report for the same immutable snapshot.
 
 The derivation agent does not generate unrestricted executable checker code as
 the default path. It produces a machine-readable artifact-intake contract.

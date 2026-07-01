@@ -49,7 +49,14 @@ from app.modules.projects.models import (
 )
 from app.modules.projects import service as project_service_module
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
-from app.modules.projects.service import GUIDE_SOURCE_MATERIAL_FIELDS, ProjectService
+from app.modules.projects.service import (
+    GUIDE_SOURCE_MATERIAL_FIELDS,
+    PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
+    PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
+    SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
+    SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+    ProjectService,
+)
 
 
 @pytest.fixture
@@ -1146,8 +1153,8 @@ async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
     assert {first.status_code, second.status_code} == {200, 201}
     assert first.json()["id"] == second.json()["id"]
     assert first.json()["status"] == "passed"
-    assert first.json()["agent_name"] == "ProjectGuideSufficiencyAgent"
-    assert first.json()["agent_version"] == "deterministic-v0.1"
+    assert first.json()["agent_name"] == PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
+    assert first.json()["agent_version"] == PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION
     assert "test-openai-key-that-must-not-be-persisted" not in first.text
     async with db_session.get_session_factory()() as session:
         reports = (
@@ -1158,6 +1165,60 @@ async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
             )
         ).all()
     assert len(reports) == 1
+
+
+async def test_sufficiency_agent_persists_server_owned_agent_identity(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SpoofingRuntime:
+        """Runtime that attempts to spoof persisted sufficiency provenance."""
+
+        async def analyze_guide_sufficiency(
+            self,
+            _: GuideSourceMaterial,
+        ) -> GuideSufficiencyAgentResult:
+            """Return a valid result with untrusted provider identity fields."""
+            return GuideSufficiencyAgentResult(
+                status="guide_sufficient",
+                findings=[],
+                summary="Spoofed provider summary.",
+                agent_name="ProjectOwnerApprovedAgent",
+                agent_version="provider-controlled-version",
+            )
+
+        async def derive_submission_artifact_policy(
+            self,
+            _: GuideSourceMaterial,
+            __: GuideSufficiencyAgentResult,
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            """Unused derivation implementation required by the runtime protocol."""
+            return SubmissionArtifactPolicyDerivationResult(
+                policy_body=project_submission_artifact_policy_body(),
+                change_summary="Unused.",
+                agent_version="provider-controlled-version",
+            )
+
+    monkeypatch.setattr(
+        project_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: SpoofingRuntime(),
+    )
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["agent_name"] == PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME
+    assert response.json()["agent_version"] == PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION
+    assert "ProjectOwnerApprovedAgent" not in response.text
+    assert "provider-controlled-version" not in response.text
 
 
 async def test_openai_runtime_misconfiguration_is_sanitized_and_agent_route_only(
@@ -1417,6 +1478,30 @@ async def test_derivation_agent_requires_warning_acknowledgement_and_is_idempote
     assert first.json()["policy_body"]["artifact_hash_required"] is True
 
 
+async def test_derivation_agent_requires_agent_sufficiency_report(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    manual_report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    endpoint = (
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/derive-submission-artifact-policy"
+    )
+
+    response = await project_client.post(endpoint, headers=auth_headers())
+
+    assert manual_report["agent_name"] is None
+    assert response.status_code == 422
+    assert "agent sufficiency report is required" in response.json()["detail"]
+
+
 async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields(
     project_client: AsyncClient,
 ) -> None:
@@ -1477,6 +1562,7 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert padded_version_response.status_code == 422
     assert padded_version_response.json()["detail"][0]["loc"] == ["body", "policy_version"]
 
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -1548,7 +1634,12 @@ async def test_agent_derived_submission_artifact_policy_body_is_immutable(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    report = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+    assert report.status_code == 201, report.text
     endpoint = (
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/derive-submission-artifact-policy"
@@ -1629,6 +1720,7 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
                 policy_version=f"provider-version-{self.calls}",
                 policy_body=project_submission_artifact_policy_body(),
                 change_summary="Derived by fake runtime.",
+                agent_name="ProjectOwnerApprovedDerivationAgent",
                 agent_version="fake-v0",
             )
 
@@ -1641,7 +1733,12 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    sufficiency = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+    assert sufficiency.status_code == 201, sufficiency.text
     endpoint = (
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/derive-submission-artifact-policy"
@@ -1657,6 +1754,13 @@ async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
     assert first.json()["policy_version"].startswith("agent-")
     assert first.json()["policy_version"] != "provider-version-1"
     assert second.json()["policy_version"] != "provider-version-2"
+    assert first.json()["derivation_agent_name"] == SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME
+    assert (
+        first.json()["derivation_agent_version"]
+        == SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION
+    )
+    assert "ProjectOwnerApprovedDerivationAgent" not in first.text
+    assert "fake-v0" not in first.text
     async with db_session.get_session_factory()() as session:
         policies = (
             await session.scalars(
@@ -1761,24 +1865,21 @@ async def test_approved_submission_artifact_policy_cannot_be_updated(
     assert "immutable" in response.json()["detail"]
 
 
-async def test_submission_artifact_policy_approval_requires_sufficiency_report(
+async def test_submission_artifact_policy_creation_requires_sufficiency_report(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    policy = await create_submission_artifact_policy(
-        project_client,
-        project["id"],
-        guide["id"],
-        snapshot["id"],
-    )
-
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{policy['id']}/approve",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         headers=auth_headers(),
-        json={"approval_note": "Should require sufficiency first."},
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(),
+            "change_summary": "Should require sufficiency first.",
+        },
     )
 
     assert response.status_code == 422
@@ -1912,6 +2013,7 @@ async def test_draft_submission_artifact_policy_can_be_updated(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -2817,7 +2919,7 @@ async def test_submission_artifact_policy_rejects_ambiguous_or_oversized_policy_
     assert expected_detail in response.json()["detail"]
 
 
-async def test_blocking_sufficiency_report_prevents_policy_approval(
+async def test_blocking_sufficiency_report_prevents_policy_creation(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
@@ -2830,18 +2932,15 @@ async def test_blocking_sufficiency_report_prevents_policy_approval(
         snapshot["id"],
         status="blocked",
     )
-    policy = await create_submission_artifact_policy(
-        project_client,
-        project["id"],
-        guide["id"],
-        snapshot["id"],
-    )
-
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{policy['id']}/approve",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         headers=auth_headers(),
-        json={"approval_note": "Blocked guide should not approve."},
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(),
+            "change_summary": "Blocked guide should not create policy.",
+        },
     )
 
     assert response.status_code == 422
@@ -2861,18 +2960,16 @@ async def test_sufficiency_warnings_require_acknowledgement(
         snapshot["id"],
         status="passed_with_warnings",
     )
-    policy = await create_submission_artifact_policy(
-        project_client,
-        project["id"],
-        guide["id"],
-        snapshot["id"],
-    )
 
     blocked = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{policy['id']}/approve",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         headers=auth_headers(),
-        json={"approval_note": "Requires acknowledgement first."},
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(),
+            "change_summary": "Requires acknowledgement first.",
+        },
     )
     assert blocked.status_code == 422
     assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
@@ -2886,6 +2983,12 @@ async def test_sufficiency_warnings_require_acknowledgement(
     assert acknowledgement.status_code == 200, acknowledgement.text
     assert acknowledgement.json()["warnings_acknowledged_by_role"] == "project_manager"
 
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
     await approve_submission_artifact_policy(
         project_client,
         project["id"],
@@ -2913,12 +3016,6 @@ async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_polic
         snapshot["id"],
         status="passed_with_warnings",
     )
-    policy = await create_submission_artifact_policy(
-        project_client,
-        project["id"],
-        guide["id"],
-        snapshot["id"],
-    )
 
     async with db_session.get_session_factory()() as session:
         persisted = await session.get(GuideSufficiencyReport, report["id"])
@@ -2929,10 +3026,14 @@ async def test_sufficiency_warning_acknowledgement_requires_setup_role_for_polic
         await session.commit()
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
-        f"{policy['id']}/approve",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         headers=auth_headers(),
-        json={"approval_note": "Invalid warning acknowledgement provenance."},
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": project_submission_artifact_policy_body(),
+            "change_summary": "Invalid warning acknowledgement provenance.",
+        },
     )
 
     assert response.status_code == 422
@@ -2952,12 +3053,6 @@ async def test_activation_revalidates_sufficiency_warning_acknowledgement_proven
         snapshot["id"],
         status="passed_with_warnings",
     )
-    policy = await create_submission_artifact_policy(
-        project_client,
-        project["id"],
-        guide["id"],
-        snapshot["id"],
-    )
     acknowledgement = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
         f"{report['id']}/acknowledge-warnings",
@@ -2965,6 +3060,12 @@ async def test_activation_revalidates_sufficiency_warning_acknowledgement_proven
         json={"acknowledgement_note": "Accepted with known thin examples."},
     )
     assert acknowledgement.status_code == 200, acknowledgement.text
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
     await approve_submission_artifact_policy(
         project_client,
         project["id"],
@@ -3019,6 +3120,7 @@ async def test_worker_cannot_approve_submission_artifact_policy(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],

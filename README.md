@@ -172,6 +172,9 @@ deterministic local runtime by default:
 WORKSTREAM_PROJECT_AGENT_RUNTIME=deterministic
 ```
 
+Persisted sufficiency and derivation agent identity is Workstream-owned; runtime
+or provider-returned identity fields are not trusted as audit provenance.
+
 To try the optional OpenAI Agents SDK adapter, install the backend agent extra
 and set the model explicitly:
 

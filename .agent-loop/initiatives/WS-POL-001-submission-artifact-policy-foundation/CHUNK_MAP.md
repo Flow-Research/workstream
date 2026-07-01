@@ -202,6 +202,11 @@ Acceptance criteria:
 - Warnings can be acknowledged only by `admin` or `project_manager`.
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
   or warnings are acknowledged.
+- Agent derivation requires a Workstream-agent sufficiency report for the same
+  immutable snapshot; manual sufficiency reports can clear manual policy
+  creation but do not create agent-derivation provenance.
+- Persisted sufficiency-agent and derivation-agent names and versions are
+  server-owned; runtime/provider identity fields cannot spoof audit records.
 - Derived policy cannot weaken Workstream defaults.
 - Workstream's trusted checker compiler builds a constrained checker
   specification using only approved Workstream primitives.
