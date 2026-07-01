@@ -198,10 +198,14 @@ Reviewer run IDs: see `WS-POL-001-02-internal-review-evidence.md`.
 
 ## External Review
 
-External review and CI must rerun after the current implementation changes are
-committed and pushed. Previous CodeRabbit and GitHub Actions results apply only
-to older branch heads and are not current approval evidence for this working
-tree.
+External review and CI passed on pushed head
+`d7e4669f6fa6bd782a8f12e43bb5b94449fb235d`:
+
+- CodeRabbit: pass, `Review completed`.
+- Agent Gates: pass.
+- Backend test: pass.
+- Week 1 API Demo UI: pass.
+- Unresolved non-outdated review threads: none.
 
 ## Remaining Risks
 

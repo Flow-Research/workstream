@@ -2,10 +2,8 @@
 
 ## Status
 
-This file records the previous external review response for PR #61. It is
-superseded for the current working tree because implementation and docs changed
-after the older reviewed heads. External review and CI must run again after the
-current changes are committed and pushed.
+External review and CI passed for PR #61 on pushed head
+`d7e4669f6fa6bd782a8f12e43bb5b94449fb235d`.
 
 Previous external review was received for PR #61 and addressed in reviewed code
 SHA `89420d15184d6ff00b13a537d81de94e0703f3af`. The previous final branch head
@@ -16,10 +14,10 @@ was `1ce3fed5c4e562d20a35cc498f1bf42a665579eb`.
 - GitHub Actions before the final external-review fix: passing.
 - CodeRabbit before the final external-review fix: passing status with actionable comments.
 - Human PR review: pending.
-- Current post-update GitHub Actions: pending until the branch is pushed again.
-- Current post-update CodeRabbit: pending until the branch is pushed again.
-- Current unresolved review-thread query: pending until the branch is pushed
-  again.
+- Current post-update GitHub Actions: Agent Gates, Backend, and Week 1 API Demo
+  UI passed.
+- Current post-update CodeRabbit: passed with `Review completed`.
+- Current unresolved review-thread query: `[]`.
 
 ## CodeRabbit Findings Addressed
 
@@ -57,8 +55,22 @@ CodeRabbit status passed after manual review trigger.
 Unresolved review-thread query returned `[]`.
 ```
 
-Those previous validation results are historical only. They are not current
-approval evidence for the updated working tree.
+## Current Validation
+
+```bash
+gh pr checks 61 --watch --interval 30
+gh api graphql -f owner='Flow-Research' -f name='workstream' -F number=61 -f query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid reviewThreads(first:100) { nodes { isResolved isOutdated path line comments(first:10) { nodes { author { login } body url createdAt } } } } } } }' --jq '.data.repository.pullRequest | {headRefOid, unresolved: (.reviewThreads.nodes | map(select((.isResolved == false) and (.isOutdated == false))))}'
+```
+
+Result:
+
+```text
+CodeRabbit: pass, Review completed.
+Agent Gates: pass.
+Backend test: pass in 2m49s.
+Week 1 API Demo UI: pass.
+Review thread query: {"headRefOid":"d7e4669f6fa6bd782a8f12e43bb5b94449fb235d","unresolved":[]}
+```
 
 ## Notes
 
