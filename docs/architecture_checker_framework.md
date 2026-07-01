@@ -180,8 +180,9 @@ create clarification requests for the project owner. Warnings require
 acknowledgement by `admin` or `project_manager`.
 
 `SubmissionArtifactPolicy` is machine-readable, derived by Workstream from
-project guide material after sufficiency passes or warnings are acknowledged,
-and approved by a Workstream actor with the `admin` or `project_manager` role.
+project guide material after sufficiency passes or passes with warnings, and
+approved by a Workstream actor with the `admin` or `project_manager` role after
+any warnings are acknowledged.
 The project owner does not approve this internal policy. Workstream combines
 that policy with the non-bypassable Workstream default submission artifact
 policy.

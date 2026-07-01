@@ -63,8 +63,9 @@ volatile-field exclusions. Non-finite numbers such as `NaN` or `Infinity` are
 rejected before hashing.
 
 `SubmissionArtifactPolicyDerivationAgent` derives machine-readable
-`SubmissionArtifactPolicy` after guide sufficiency passes. A Workstream
-actor with the `admin` or `project_manager` role approves the derived policy.
+`SubmissionArtifactPolicy` after guide sufficiency passes or passes with
+warnings. A Workstream actor with the `admin` or `project_manager` role
+approves the derived policy after any sufficiency warnings are acknowledged.
 Workstream then computes the effective project submission artifact policy and compiles the project
 `PreSubmitCheckerPolicy`. The generated project `PreSubmitCheckerPolicy`
 compiled bundle hash is scoped to the effective project submission artifact

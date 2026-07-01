@@ -1,4 +1,4 @@
-"""Deterministic project-agent runtime for local development and tests."""
+"""Local fixture project-agent runtime for development and tests."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from app.interfaces.project_agents import (
     SubmissionArtifactPolicyDerivationResult,
 )
 
-DETERMINISTIC_AGENT_VERSION = "deterministic-v0.1"
+LOCAL_FIXTURE_AGENT_VERSION = "local-fixture-v0.1"
 PROMPT_INJECTION_PATTERNS = (
     re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
     re.compile(r"developer\s+message", re.IGNORECASE),
@@ -21,17 +21,26 @@ PROMPT_INJECTION_PATTERNS = (
 )
 
 
-class DeterministicProjectGuideAgentRuntime:
-    """Local project-agent runtime that never performs network or model calls."""
+class LocalFixtureProjectGuideAgentRuntime:
+    """Local async runtime that never performs network or model calls."""
 
     async def analyze_guide_sufficiency(
         self,
         material: GuideSourceMaterial,
     ) -> GuideSufficiencyAgentResult:
-        """Assess guide material with deterministic local rules."""
-        text = _flatten_material_text(material.guide_material)
+        """Assess guide material with deterministic local fixture rules."""
+        guide_text = _flatten_material_text(material.guide_material)
+        full_text = _flatten_material_text(
+            {
+                "guide_material": material.guide_material,
+                "source_items": [item.model_dump(mode="json") for item in material.source_items],
+                "representative_task_material": material.representative_task_material.model_dump(
+                    mode="json"
+                ),
+            }
+        )
         findings: list[AgentFinding] = []
-        if len(text.strip()) < 80:
+        if len(guide_text.strip()) < 80:
             findings.append(
                 AgentFinding(
                     severity="blocking_gap",
@@ -44,11 +53,11 @@ class DeterministicProjectGuideAgentRuntime:
                 status="guide_blocked",
                 findings=findings,
                 summary="Guide material needs clarification before setup can continue.",
-                agent_version=DETERMINISTIC_AGENT_VERSION,
+                agent_version=LOCAL_FIXTURE_AGENT_VERSION,
             )
 
         for pattern in PROMPT_INJECTION_PATTERNS:
-            if pattern.search(text):
+            if pattern.search(full_text):
                 findings.append(
                     AgentFinding(
                         severity="warning",
@@ -65,8 +74,8 @@ class DeterministicProjectGuideAgentRuntime:
         return GuideSufficiencyAgentResult(
             status="guide_sufficient_with_warnings" if findings else "guide_sufficient",
             findings=findings,
-            summary="Guide material is sufficient for deterministic policy derivation.",
-            agent_version=DETERMINISTIC_AGENT_VERSION,
+            summary="Guide material is sufficient for local fixture policy derivation.",
+            agent_version=LOCAL_FIXTURE_AGENT_VERSION,
         )
 
     async def derive_submission_artifact_policy(
@@ -116,12 +125,12 @@ class DeterministicProjectGuideAgentRuntime:
                 "Derived from the immutable project guide source snapshot after "
                 f"{sufficiency_report.agent_name} review."
             ),
-            agent_version=DETERMINISTIC_AGENT_VERSION,
+            agent_version=LOCAL_FIXTURE_AGENT_VERSION,
         )
 
 
 def _flatten_material_text(value: Any) -> str:
-    """Flatten nested material into text for deterministic inspection."""
+    """Flatten nested material into text for local fixture inspection."""
     if value is None:
         return ""
     if isinstance(value, str):

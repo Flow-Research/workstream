@@ -31,9 +31,10 @@ Chunk 1 still relied on tests and local E2E helpers to mark the project
 trusted Workstream compiler.
 
 This chunk also introduces the agent runtime boundary. Workstream owns the
-domain contract. OpenAI Agents SDK is the first adapter. Other runtimes, such as
-OmnicoreAgent, LangChain, or DeepAgents, can be evaluated later behind the same
-contract without changing project setup services.
+domain contract. OpenAI Agents SDK is the first real model-backed adapter.
+`local_fixture` is only the no-network local/test adapter. Other runtimes, such
+as OmnicoreAgent, LangGraph, LangChain, or DeepAgents, can be evaluated later
+behind the same contract without changing project setup services.
 
 ## Risk Class
 
@@ -73,6 +74,7 @@ docs/spec_chunk_7_checker_runner_registry.md
 docs/spec_chunk_8_submission_artifact_policy_checkers.md
 docs/template_checker_policy.md
 docs/template_project_guide.md
+docs/template_submission_artifact_policy.md
 .agent-loop/LOOP_STATE.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
 ```
@@ -100,8 +102,15 @@ post-submit lifecycle changes
 - Agent runtime code lives behind a Workstream port/interface.
 - OpenAI Agents SDK code lives only in an adapter; services must not import SDK
   classes directly.
-- The default test/local runtime must be deterministic and must not require
-  network access or an OpenAI API key.
+- The default test/local adapter must be an async local fixture and must not
+  require network access or an OpenAI API key.
+- Project-agent runtime configuration must use adapter-specific names:
+  `WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER`,
+  `WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL`, and
+  `WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS`.
+- Project-agent prompt budgets must be explicit runtime configuration through
+  `WORKSTREAM_PROJECT_AGENT_MAX_PROMPT_BYTES`; adapters must fail closed before
+  sending oversized source material to a model runtime.
 - OpenAI credentials are read only from runtime configuration/environment.
   Credentials must never be persisted in database records, emitted in logs or
   errors, embedded in evidence artifacts, or committed in fixtures.
@@ -127,11 +136,11 @@ post-submit lifecycle changes
       submission artifact policy derivation.
 - [ ] OpenAI Agents SDK adapter exists behind the port and is optional/configured,
       not imported by project services directly.
-- [ ] Local/test default agent runtime is deterministic and async.
+- [ ] Local/test default agent adapter is async and no-network.
 - [ ] Local/test default requires no network and no OpenAI API key.
 - [ ] Tests prove OpenAI credentials are env/config-only, never persisted in
       project setup records, never emitted in API errors, and not required for
-      deterministic local/test runtime.
+      the local/test fixture adapter.
 - [ ] `ProjectGuideSufficiencyAgent` can run against an immutable
       `GuideSourceSnapshot` and persist a `GuideSufficiencyReport`.
 - [ ] Malicious guide text and embedded prompt-injection instructions are
@@ -144,10 +153,11 @@ post-submit lifecycle changes
       WS-POL-001-01 sanitization contract.
 - [ ] Blocking guide gaps stop activation and produce project-owner
       clarification findings.
-- [ ] `passed_with_warnings` reports require `admin` or `project_manager`
-      acknowledgement before derivation can proceed.
+- [ ] `passed_with_warnings` reports allow derivation to create a draft policy,
+      but require `admin` or `project_manager` acknowledgement before policy
+      approval and guide activation can proceed.
 - [ ] `SubmissionArtifactPolicyDerivationAgent` can run after sufficiency passes
-      or warnings are acknowledged and persist a draft `SubmissionArtifactPolicy`.
+      or passes with warnings and persist a draft `SubmissionArtifactPolicy`.
 - [ ] Agent-derived policy versioning is server-owned and deterministic from the
       guide source snapshot; provider-returned policy versions cannot create
       multiple current policies for the same snapshot.
@@ -226,7 +236,7 @@ to declare the optional OpenAI Agents SDK extra.
 ## Human Review Focus
 
 - Agent runtime interface boundaries.
-- OpenAI adapter isolation.
+- OpenAI Agents SDK adapter isolation.
 - Sufficiency findings and clarification shape.
 - Compiler primitive set and semantic coverage checks.
 - Assurance that project checker compilation is project-scoped, not task-scoped.

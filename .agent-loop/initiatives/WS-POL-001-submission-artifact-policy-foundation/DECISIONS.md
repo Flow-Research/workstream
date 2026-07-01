@@ -16,12 +16,14 @@
 - Guide sufficiency finding severities are `blocking_gap`, `warning`, and
   `info`.
 - `SubmissionArtifactPolicyDerivationAgent` derives
-  `SubmissionArtifactPolicy` after guide sufficiency passes.
+  `SubmissionArtifactPolicy` after guide sufficiency passes or passes with
+  warnings.
 - `SubmissionArtifactPolicyDerivationAgent` produces constrained project
   policy, not unrestricted executable checker code.
 - Workstream derives `SubmissionArtifactPolicy` from project material,
   with internal agent assistance allowed, then requires approval by `admin` or
-  `project_manager` before guide activation.
+  `project_manager` after any sufficiency warnings are acknowledged and before
+  guide activation.
 - Workstream default submission artifact rules are non-bypassable.
 - `EffectiveProjectSubmissionArtifactPolicy` is default plus project policy.
 - Workstream's trusted checker compiler builds and validates the constrained

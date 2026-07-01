@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,8 +37,10 @@ class Settings(BaseSettings):
     flow_auth_audience: str = "workstream-api"
     flow_auth_local_hmac_secret: str | None = None
     enable_demo_routes: bool = False
-    project_agent_runtime: Literal["deterministic", "openai"] = "deterministic"
-    openai_agent_model: str | None = None
+    project_agent_runtime_adapter: Literal["local_fixture", "openai_agent_sdk"] = "local_fixture"
+    project_agent_openai_agent_sdk_model: str | None = None
+    project_agent_run_timeout_seconds: float = Field(default=1800.0, gt=0.0, le=7200.0)
+    project_agent_max_prompt_bytes: int = Field(default=2_000_000, gt=0, le=10_000_000)
 
     model_config = SettingsConfigDict(
         env_prefix="WORKSTREAM_",

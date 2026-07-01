@@ -15,8 +15,30 @@ class ProjectAgentRuntimeConfigurationError(ProjectAgentRuntimeError):
     """Raised when a configured project-agent runtime is unavailable or incomplete."""
 
 
+class GuideSourceItemMaterial(BaseModel):
+    """One immutable source item made available to setup agents."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_kind: str
+    durable_ref: str
+    ingestion_adapter: str
+    content_hash: str
+    content_cid: str | None = None
+    media_type: str | None = None
+    content_excerpt: str | None = None
+
+
+class RepresentativeTaskMaterialContext(BaseModel):
+    """Representative task material used for guide sufficiency analysis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[GuideSourceItemMaterial] = Field(default_factory=list)
+
+
 class GuideSourceMaterial(BaseModel):
-    """Immutable project guide material made available to setup agents."""
+    """Immutable project and task-context material made available to setup agents."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -26,7 +48,11 @@ class GuideSourceMaterial(BaseModel):
     source_snapshot_id: str
     source_snapshot_hash: str
     guide_material: dict[str, Any]
+    source_items: list[GuideSourceItemMaterial] = Field(default_factory=list)
     source_refs: list[str] = Field(default_factory=list)
+    representative_task_material: RepresentativeTaskMaterialContext = Field(
+        default_factory=RepresentativeTaskMaterialContext
+    )
 
 
 class AgentFinding(BaseModel):

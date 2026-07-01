@@ -15,7 +15,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
@@ -23,14 +23,15 @@ from sqlalchemy.schema import CreateIndex
 from app.core.config import get_settings
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
-from app.adapters.project_agents import openai_agents as openai_agents_module
-from app.adapters.project_agents.openai_agents import OpenAIAgentsProjectGuideRuntime
+from app.adapters.project_agents import build_project_guide_agent_runtime
+from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime
 from app.db import session as db_session
 from app.db.base import Base
 from app.main import create_app
 from app.interfaces.project_agents import (
     GuideSourceMaterial,
     GuideSufficiencyAgentResult,
+    ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,
     SubmissionArtifactPolicyDerivationResult,
 )
@@ -702,6 +703,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
                     "content_hash": canonical_json_hash(guide_material),
                     "content_cid": None,
                     "media_type": "application/json",
+                    "content_excerpt": None,
                 },
                 {
                     "source_kind": "url_doc",
@@ -710,6 +712,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
                     "content_hash": sha256_hash("guide-doc"),
                     "content_cid": None,
                     "media_type": "text/markdown",
+                    "content_excerpt": None,
                 },
                 {
                     "source_kind": "rubric",
@@ -718,6 +721,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
                     "content_hash": sha256_hash("rubric"),
                     "content_cid": None,
                     "media_type": "text/markdown",
+                    "content_excerpt": None,
                 },
             ],
             key=lambda item: (item["source_kind"], item["durable_ref"], item["content_hash"]),
@@ -755,6 +759,7 @@ async def test_source_snapshot_can_use_only_project_guide_material(
             ),
             "content_cid": None,
             "media_type": "application/json",
+            "content_excerpt": None,
         }
     ]
 
@@ -1131,7 +1136,7 @@ async def test_manual_sufficiency_report_rejects_agent_provenance_fields(
     assert created.json()["agent_version"] is None
 
 
-async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
+async def test_local_fixture_sufficiency_agent_is_async_idempotent_and_keyless(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1270,12 +1275,168 @@ async def test_sufficiency_agent_reuses_existing_manual_report(
     assert response.json()["agent_version"] is None
 
 
+async def test_agent_material_includes_representative_task_context(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, GuideSourceMaterial] = {}
+
+    class CapturingRuntime:
+        """Runtime that records the material Workstream passes to setup agents."""
+
+        async def analyze_guide_sufficiency(
+            self,
+            material: GuideSourceMaterial,
+        ) -> GuideSufficiencyAgentResult:
+            """Capture source material and return a passing report."""
+            captured["material"] = material
+            return GuideSufficiencyAgentResult(
+                status="guide_sufficient",
+                findings=[],
+                summary="Captured material.",
+                agent_version="capture-v0",
+            )
+
+        async def derive_submission_artifact_policy(
+            self,
+            _: GuideSourceMaterial,
+            __: GuideSufficiencyAgentResult,
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            """Unused derivation implementation required by the runtime protocol."""
+            raise AssertionError("derivation is not part of this test")
+
+    monkeypatch.setattr(
+        project_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: CapturingRuntime(),
+    )
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    payload = source_snapshot_payload()
+    payload["items"].append(
+        {
+            "source_kind": "example",
+            "durable_ref": "inline:/examples/tasks/stem/sample-1",
+            "ingestion_adapter": "manual_import",
+            "content_hash": sha256_hash("representative-task"),
+            "media_type": "application/json",
+            "content_excerpt": "Representative task: solve a STEM prompt and submit a reasoned answer.",
+        }
+    )
+    snapshot = await create_source_snapshot(
+        project_client,
+        project["id"],
+        guide["id"],
+        payload=payload,
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 201, response.text
+    material = captured["material"]
+    assert len(material.representative_task_material.items) == 1
+    representative_task = material.representative_task_material.items[0]
+    assert representative_task.source_kind == "example"
+    assert representative_task.durable_ref == "inline:/examples/tasks/stem/sample-1"
+    assert representative_task.content_excerpt == (
+        "Representative task: solve a STEM prompt and submit a reasoned answer."
+    )
+    assert any(item.durable_ref == representative_task.durable_ref for item in material.source_items)
+
+
+async def test_source_snapshot_integrity_accepts_v1_manifest_without_content_excerpt(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(GuideSourceSnapshot, snapshot["id"])
+        assert persisted is not None
+        manifest = json.loads(json.dumps(persisted.manifest_json))
+        for item in manifest["items"]:
+            item.pop("content_excerpt", None)
+        await session.execute(
+            update(GuideSourceSnapshot)
+            .where(GuideSourceSnapshot.id == snapshot["id"])
+            .values(manifest_json=manifest, bundle_hash=canonical_json_hash(manifest))
+        )
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 201, response.text
+
+
+def test_local_fixture_agent_adapter_fails_closed_outside_dev_environments() -> None:
+    for environment in ("production", "prod", "staging", "preview"):
+        settings = Settings(
+            environment=environment,
+            project_agent_runtime_adapter="local_fixture",
+        )
+
+        with pytest.raises(ProjectAgentRuntimeConfigurationError):
+            build_project_guide_agent_runtime(settings)
+
+
+def test_project_agent_timeout_is_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER", "openai_agent_sdk")
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL", "gpt-test")
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS", "42")
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_MAX_PROMPT_BYTES", "12345")
+    get_settings.cache_clear()
+    try:
+        settings = get_settings()
+        runtime = OpenAIAgentSdkProjectGuideRuntime(settings)
+
+        assert settings.project_agent_run_timeout_seconds == 42.0
+        assert settings.project_agent_max_prompt_bytes == 12345
+        assert runtime._timeout_seconds == 42.0
+        assert runtime._max_prompt_bytes == 12345
+    finally:
+        get_settings.cache_clear()
+
+
+async def test_openai_agent_sdk_adapter_rejects_oversized_prompt_before_sdk_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(sys.modules, "agents", raising=False)
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(
+            project_agent_openai_agent_sdk_model="gpt-test",
+            project_agent_max_prompt_bytes=10,
+        )
+    )
+    material = GuideSourceMaterial(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={"content_markdown": "x" * 100},
+        source_refs=[],
+    )
+
+    with pytest.raises(ProjectAgentRuntimeError, match="prompt exceeds configured size limit"):
+        await runtime.analyze_guide_sufficiency(material)
+
+
 async def test_openai_runtime_misconfiguration_is_sanitized_and_agent_route_only(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME", "openai")
-    monkeypatch.delenv("WORKSTREAM_OPENAI_AGENT_MODEL", raising=False)
+    monkeypatch.setenv("WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER", "openai_agent_sdk")
+    monkeypatch.delenv("WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-secret-must-not-leak")
     get_settings.cache_clear()
     try:
@@ -1295,7 +1456,7 @@ async def test_openai_runtime_misconfiguration_is_sanitized_and_agent_route_only
         get_settings.cache_clear()
 
 
-async def test_openai_agent_adapter_wraps_sdk_failures(
+async def test_openai_agent_sdk_adapter_wraps_sdk_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeAgent:
@@ -1317,7 +1478,9 @@ async def test_openai_agent_adapter_wraps_sdk_failures(
         "agents",
         types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
     )
-    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
     material = GuideSourceMaterial(
         project_id="project-1",
         guide_id="guide-1",
@@ -1328,14 +1491,14 @@ async def test_openai_agent_adapter_wraps_sdk_failures(
         source_refs=[],
     )
 
-    with pytest.raises(ProjectAgentRuntimeError, match="OpenAI project agent run failed") as exc:
+    with pytest.raises(ProjectAgentRuntimeError, match="OpenAI Agents SDK run failed") as exc:
         await runtime.analyze_guide_sufficiency(material)
 
     assert "raw-openai-secret-token" not in str(exc.value)
     assert exc.value.__cause__ is None
 
 
-async def test_openai_agent_adapter_wraps_sdk_timeouts(
+async def test_openai_agent_sdk_adapter_wraps_sdk_timeouts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeAgent:
@@ -1358,8 +1521,12 @@ async def test_openai_agent_adapter_wraps_sdk_timeouts(
         "agents",
         types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
     )
-    monkeypatch.setattr(openai_agents_module, "OPENAI_AGENT_RUN_TIMEOUT_SECONDS", 0.001)
-    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(
+            project_agent_openai_agent_sdk_model="gpt-test",
+            project_agent_run_timeout_seconds=0.001,
+        )
+    )
     material = GuideSourceMaterial(
         project_id="project-1",
         guide_id="guide-1",
@@ -1374,7 +1541,7 @@ async def test_openai_agent_adapter_wraps_sdk_timeouts(
         await runtime.analyze_guide_sufficiency(material)
 
 
-async def test_openai_agent_adapter_wraps_sdk_cancellation(
+async def test_openai_agent_sdk_adapter_wraps_sdk_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeAgent:
@@ -1396,7 +1563,9 @@ async def test_openai_agent_adapter_wraps_sdk_cancellation(
         "agents",
         types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
     )
-    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
     material = GuideSourceMaterial(
         project_id="project-1",
         guide_id="guide-1",
@@ -1411,7 +1580,7 @@ async def test_openai_agent_adapter_wraps_sdk_cancellation(
         await runtime.analyze_guide_sufficiency(material)
 
 
-async def test_openai_agent_adapter_propagates_caller_cancellation(
+async def test_openai_agent_sdk_adapter_propagates_caller_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeAgent:
@@ -1434,7 +1603,9 @@ async def test_openai_agent_adapter_propagates_caller_cancellation(
         "agents",
         types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
     )
-    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    runtime = OpenAIAgentSdkProjectGuideRuntime(
+        Settings(project_agent_openai_agent_sdk_model="gpt-test")
+    )
     material = GuideSourceMaterial(
         project_id="project-1",
         guide_id="guide-1",

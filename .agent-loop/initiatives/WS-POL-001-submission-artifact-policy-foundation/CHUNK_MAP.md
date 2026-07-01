@@ -180,6 +180,7 @@ docs/spec_chunk_7_checker_runner_registry.md
 docs/spec_chunk_8_submission_artifact_policy_checkers.md
 docs/template_checker_policy.md
 docs/template_project_guide.md
+docs/template_submission_artifact_policy.md
 .agent-loop/LOOP_STATE.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
 ```
@@ -201,7 +202,8 @@ Acceptance criteria:
   requests.
 - Warnings can be acknowledged only by `admin` or `project_manager`.
 - `SubmissionArtifactPolicyDerivationAgent` runs async after sufficiency passes
-  or warnings are acknowledged.
+  or passes with warnings. Warning acknowledgement is required before policy
+  approval and guide activation.
 - Agent derivation requires a Workstream-agent sufficiency report for the same
   immutable snapshot; manual sufficiency reports can clear manual policy
   creation but do not create agent-derivation provenance.

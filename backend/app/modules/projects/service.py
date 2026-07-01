@@ -18,10 +18,12 @@ from app.core.permissions import require_any_role
 from app.core.project_agents import get_project_guide_agent_runtime
 from app.interfaces.project_agents import (
     AgentFinding,
+    GuideSourceItemMaterial,
     GuideSourceMaterial,
     GuideSufficiencyAgentResult,
     ProjectAgentRuntimeError,
     ProjectGuideAgentRuntime,
+    RepresentativeTaskMaterialContext,
 )
 from app.modules.checkers.compiler import (
     PreSubmitCheckerCompilerError,
@@ -228,6 +230,8 @@ GUIDE_SOURCE_MATERIAL_FIELDS = {
     "evidence_policy",
     "unacceptable_work_policy",
 }
+REPRESENTATIVE_TASK_SOURCE_KINDS = {"example", "representative_task", "task_sample", "task_example"}
+SOURCE_ITEM_CONTENT_EXCERPT_MAX_LENGTH = 12000
 WORKSTREAM_DEFAULT_SUBMISSION_ARTIFACT_POLICY: dict[str, Any] = {
     "schema_version": "workstream_default_submission_artifact_policy.v1",
     "required_packet_fields": DEFAULT_REQUIRED_PACKET_FIELDS,
@@ -781,7 +785,7 @@ class ProjectService:
             sufficiency_report,
             snapshot,
         )
-        source_material_refs = await self._source_material_refs(snapshot.id)
+        source_material_refs = self._source_material_refs(snapshot)
         policy = SubmissionArtifactPolicy(
             id=str(uuid4()),
             project_id=project_id,
@@ -898,7 +902,7 @@ class ProjectService:
         if existing is not None:
             self._validate_agent_derived_submission_artifact_policy(existing, snapshot)
             return SubmissionArtifactPolicyResponse.model_validate(existing), False
-        source_material_refs = await self._source_material_refs(snapshot.id)
+        source_material_refs = self._source_material_refs(snapshot)
         policy = SubmissionArtifactPolicy(
             id=str(uuid4()),
             project_id=project_id,
@@ -1523,17 +1527,16 @@ class ProjectService:
         ]
         return response
 
-    async def _source_material_refs(self, snapshot_id: str) -> list[str]:
-        """Return sanitized source refs included in a snapshot."""
-        items = await self._repo.list_guide_source_snapshot_items(snapshot_id)
-        return [item.durable_ref for item in items]
-
     async def _guide_source_material(
         self,
         guide: ProjectGuide,
         snapshot: GuideSourceSnapshot,
     ) -> GuideSourceMaterial:
         """Build the immutable material context passed to project setup agents."""
+        source_items = self._source_material_items(snapshot)
+        representative_task_items = [
+            item for item in source_items if item.source_kind in REPRESENTATIVE_TASK_SOURCE_KINDS
+        ]
         return GuideSourceMaterial(
             project_id=guide.project_id,
             guide_id=guide.id,
@@ -1544,8 +1547,32 @@ class ProjectService:
                 field: getattr(guide, field)
                 for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
             },
-            source_refs=await self._source_material_refs(snapshot.id),
+            source_items=source_items,
+            source_refs=[item.durable_ref for item in source_items],
+            representative_task_material=RepresentativeTaskMaterialContext(
+                items=representative_task_items
+            ),
         )
+
+    def _source_material_items(
+        self,
+        snapshot: GuideSourceSnapshot,
+    ) -> list[GuideSourceItemMaterial]:
+        """Return typed source items from a guide-source snapshot manifest."""
+        return [
+            GuideSourceItemMaterial.model_validate(
+                self._normalized_source_manifest_item(item)
+            )
+            for item in snapshot.manifest_json["items"]
+        ]
+
+    def _source_material_refs(self, snapshot: GuideSourceSnapshot) -> list[str]:
+        """Return durable source refs from a validated guide-source snapshot."""
+        return [item.durable_ref for item in self._source_material_items(snapshot)]
+
+    def _normalized_source_manifest_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Normalize optional source manifest fields introduced during v0.1."""
+        return {**item, "content_excerpt": item.get("content_excerpt")}
 
     async def _validate_source_snapshot_integrity(
         self,
@@ -1584,7 +1611,9 @@ class ProjectService:
             "content_hash",
             "content_cid",
             "media_type",
+            "content_excerpt",
         }
+        persisted_item_fields = required_fields - {"content_excerpt"}
         for index, item in enumerate(persisted_items):
             if item.item_order != index:
                 fail()
@@ -1605,6 +1634,7 @@ class ProjectService:
         for manifest_item in manifest_items:
             if not isinstance(manifest_item, dict):
                 fail()
+            manifest_item = self._normalized_source_manifest_item(manifest_item)
             if set(manifest_item) != required_fields:
                 fail()
             if not isinstance(manifest_item["source_kind"], str):
@@ -1625,6 +1655,11 @@ class ProjectService:
             if manifest_item["media_type"] is not None and not isinstance(
                 manifest_item["media_type"],
                 str,
+            ):
+                fail()
+            if manifest_item["content_excerpt"] is not None and (
+                not isinstance(manifest_item["content_excerpt"], str)
+                or len(manifest_item["content_excerpt"]) > SOURCE_ITEM_CONTENT_EXCERPT_MAX_LENGTH
             ):
                 fail()
             try:
@@ -1658,7 +1693,17 @@ class ProjectService:
             except ProjectServiceError:
                 fail()
 
-        if manifest_items != row_items:
+        manifest_row_items = [
+            {
+                field: manifest_item[field]
+                for field in required_fields
+                if field in persisted_item_fields
+            }
+            for manifest_item in (
+                self._normalized_source_manifest_item(item) for item in manifest_items
+            )
+        ]
+        if manifest_row_items != row_items:
             fail()
 
     def _build_source_snapshot_manifest(
@@ -1704,6 +1749,7 @@ class ProjectService:
                     "content_hash": item.content_hash,
                     "content_cid": content_cid,
                     "media_type": item.media_type,
+                    "content_excerpt": item.content_excerpt,
                 }
             )
 
@@ -1734,6 +1780,7 @@ class ProjectService:
             "content_hash": self._hash_canonical_json(guide_material),
             "content_cid": None,
             "media_type": "application/json",
+            "content_excerpt": None,
         }
 
     def _safe_source_token(self, value: str, label: str) -> str:

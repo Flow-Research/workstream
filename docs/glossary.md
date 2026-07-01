@@ -42,9 +42,10 @@ sufficiency report for the same snapshot.
 
 The Workstream-derived, admin-or-project-manager-approved machine-readable
 contract for what a worker must submit. It is derived from open-ended project
-guide material after guide sufficiency passes or warnings are acknowledged,
-reviewed by a Workstream actor with the `admin` or `project_manager` role, and
-attached to a project guide version. It defines required artifacts, evidence
+guide material after guide sufficiency passes or passes with warnings, reviewed
+by a Workstream actor with the `admin` or `project_manager` role after any
+warnings are acknowledged, and attached to a project guide version. It defines
+required artifacts, evidence
 requirements, artifact hash requirements, allowed storage reference forms,
 forbidden artifacts, attestation requirements, and project-specific packaging
 rules. It can add or tighten requirements, but it cannot weaken Workstream's

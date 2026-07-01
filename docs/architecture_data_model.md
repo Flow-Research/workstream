@@ -221,6 +221,12 @@ content hash is computed from the current guide material fields. Caller-supplied
 source items can add external docs, examples, or rubrics, but they cannot omit
 the guide body from the bundle hash.
 
+Source items may include a bounded `content_excerpt` in the canonical manifest
+so setup agents can inspect representative task examples or source snippets
+without following mutable refs at runtime. `content_excerpt` is untrusted source
+material, is included in `bundle_hash`, and is not stored as a separate mutable
+database column.
+
 ## GuideSourceSnapshotItem
 
 Fields:
@@ -389,9 +395,10 @@ Example:
 ```
 
 Workstream derives this policy from project guide material after guide
-sufficiency passes or warnings are acknowledged. A Workstream actor with the
-`admin` or `project_manager` role approves it. Project owners and workers do not
-supply or approve this internal policy schema.
+sufficiency passes or passes with warnings. A Workstream actor with the
+`admin` or `project_manager` role approves it after any sufficiency warnings are
+acknowledged. Project owners and workers do not supply or approve this internal
+policy schema.
 `derivation_source` is server-owned. Manual/admin-created policies persist
 `manual_admin_derivation`; policies created by the derivation agent persist
 `agent_derivation`. Client requests do not supply derivation provenance, and

@@ -36,17 +36,24 @@ Workstream binds all downstream setup records to the exact guide source
 snapshot, not only to `guide_version`. `GuideSourceSnapshot` records include the
 guide id, canonical manifest JSON, bundle hash, and capture timestamp. Snapshot
 items record source kind, sanitized durable ref, ingestion adapter, content
-hash, optional future content id, media type, and capture timestamp. The bundle
-hash is `sha256(canonical_json(manifest_json))`. Canonical JSON uses UTF-8,
-sorted object keys, no insignificant whitespace, and source items sorted by
+hash, optional future content id, media type, capture timestamp, and optional
+bounded `content_excerpt` inside the canonical manifest. The bundle hash is
+`sha256(canonical_json(manifest_json))`. Canonical JSON uses UTF-8, sorted
+object keys, no insignificant whitespace, and source items sorted by
 `(source_kind, durable_ref, content_hash)`. Volatile database ids, capture
 timestamps, and transient fetch locators are excluded from the canonical
 manifest. Non-finite numbers such as `NaN` or `Infinity` are rejected before
 hashing. Duplicate source items with the same `source_kind + durable_ref` are
 rejected before hashing. Changing any included document, example, rubric,
-repository doc, or inline guide body creates a new snapshot and invalidates
-prior sufficiency reports, derived policies, effective policies, checker specs,
-checker bundles, acknowledgements, and approvals for activation.
+repository doc, representative task excerpt, task sample, or inline guide body
+creates a new snapshot and invalidates prior sufficiency reports, derived
+policies, effective policies, checker specs, checker bundles, acknowledgements,
+and approvals for activation.
+Representative task excerpts and task samples are source material for project
+setup agents only. They help the `ProjectGuideSufficiencyAgent` and
+`SubmissionArtifactPolicyDerivationAgent` evaluate whether the project guide is
+usable across the project task set; they do not create task-scoped policy or
+task-scoped checker generation.
 A new guide-source snapshot invalidates prior setup records for new activation
 and unlocked tasks only. Tasks already locked to an earlier snapshot retain
 that policy context unless an explicit audited rebase occurs.
@@ -66,9 +73,10 @@ and must be acknowledged before activation.
 
 `SubmissionArtifactPolicyDerivationAgent` derives
 `SubmissionArtifactPolicy` from the guide material after sufficiency
-passes or warnings are acknowledged. The project owner does not approve this
+passes or passes with warnings. The project owner does not approve this
 internal policy. A Workstream actor with the `admin` or `project_manager` role
-reviews and approves the derived policy before guide activation.
+reviews and approves the derived policy before guide activation, and any
+sufficiency warnings must be acknowledged before approval or activation.
 Agent-derived policy versioning is server-owned and deterministic from the
 guide source snapshot hash. Provider-returned policy versions are not trusted
 for idempotency and cannot create multiple current policies for the same

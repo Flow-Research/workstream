@@ -6,9 +6,9 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-02`
 - Branch: `codex/ws-pol-001-02-agent-runtime-compiler`
-- Status: `WS-POL-001-01` merged; `WS-POL-001-02` implementation complete with internal review, external review, and CI complete
-- Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
-- Current gate: human checkpoint for PR #61
+- Status: `WS-POL-001-01` merged; `WS-POL-001-02` implementation updated after prior external review
+- Reviewed code SHA: pending final internal review rerun for the current implementation
+- Current gate: internal review rerun for PR #61
 - Next chunk: inactive until `WS-POL-001-02` is reviewed and merged by the user
 
 ## Operating Rule
@@ -20,8 +20,9 @@ Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> Implementation -> 
 ```
 
 This branch implements the second backend foundation chunk for submission intake
-policy. It introduces the agent runtime boundary, first OpenAI adapter, async
-guide analysis/derivation orchestration, and trusted compiler path. It does not
+policy. It introduces the agent runtime boundary, first OpenAI Agents SDK
+adapter, async guide analysis/derivation orchestration, and trusted compiler
+path. It does not
 implement task locked-context migration, submission runtime migration, frontend
 behavior, payment, reputation, settlement, or blockchain integrations.
 
@@ -38,4 +39,5 @@ behavior, payment, reputation, settlement, or blockchain integrations.
 - Internal review evidence for the active chunk is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-internal-review-evidence.md`.
 - PR trust bundle for the active chunk is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-pr-trust-bundle.md`.
 - External review response for the active chunk is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-external-review-response.md` after external review runs.
-- PR #61 is open and awaiting the user-owned merge decision.
+- PR #61 is open, but the current local branch is in internal review rerun
+  before it can return to external review and user-owned merge decision.

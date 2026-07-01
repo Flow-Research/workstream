@@ -166,10 +166,11 @@ postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 ```
 
 Project guide sufficiency and submission artifact policy derivation use the
-deterministic local runtime by default:
+local fixture adapter by default. This adapter is an async, no-network test and
+development stand-in; it is not the production intelligence path.
 
 ```text
-WORKSTREAM_PROJECT_AGENT_RUNTIME=deterministic
+WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER=local_fixture
 ```
 
 Persisted sufficiency and derivation agent identity is Workstream-owned; runtime
@@ -184,13 +185,15 @@ cd backend
 ```
 
 ```text
-WORKSTREAM_PROJECT_AGENT_RUNTIME=openai
-WORKSTREAM_OPENAI_AGENT_MODEL=<approved-model>
+WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER=openai_agent_sdk
+WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL=<approved-model>
+WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS=1800
+WORKSTREAM_PROJECT_AGENT_MAX_PROMPT_BYTES=2000000
 OPENAI_API_KEY=<runtime-secret>
 ```
 
-The OpenAI adapter is only resolved on the explicit project-agent routes.
-Normal project setup APIs and the deterministic local runtime do not require an
+The OpenAI Agents SDK adapter is only resolved on the explicit project-agent routes.
+Normal project setup APIs and the local fixture adapter do not require an
 OpenAI API key.
 
 ## Week 1 API Demo UI

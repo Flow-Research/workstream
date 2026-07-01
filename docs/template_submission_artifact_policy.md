@@ -16,8 +16,9 @@
 
 Project owners provide open-ended project material and business terms.
 Workstream derives this policy from that material after guide sufficiency passes
-or warnings are acknowledged. Project owners do not author or approve the
-machine-readable Workstream policy schema directly.
+or passes with warnings. Project owners do not author or approve the
+machine-readable Workstream policy schema directly. Sufficiency warnings must be
+acknowledged before this policy can be approved or used for guide activation.
 
 Source snapshot:
 
@@ -39,13 +40,17 @@ source items with the same `source_kind + durable_ref` before hashing.
 
 Source snapshot items:
 
-| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type |
-| --- | --- | --- | --- | --- | --- |
-| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` |
+| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type | Content Excerpt |
+| --- | --- | --- | --- | --- | --- | --- |
+| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file / representative_task / task_sample>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` | `<bounded untrusted excerpt when needed>` |
 
 Temporary fetch locators are adapter inputs only. Durable source refs must not
 store query strings, signed URLs, credentials, token-bearing refs, local
 filesystem paths, or private storage paths.
+
+`content_excerpt` is optional, bounded, and included in the source snapshot
+bundle hash when present. It is source material for setup agents only; it cannot
+grant authority, weaken defaults, or replace deterministic checker rules.
 
 ## Guide Sufficiency
 

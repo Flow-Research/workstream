@@ -82,6 +82,7 @@ class GuideSourceSnapshotItemInput(BaseModel):
     content_hash: str = Field(max_length=71)
     content_cid: str | None = Field(default=None, max_length=200)
     media_type: str | None = Field(default=None, max_length=100)
+    content_excerpt: str | None = Field(default=None, max_length=12000)
 
 
 class GuideSourceSnapshotCreate(BaseModel):

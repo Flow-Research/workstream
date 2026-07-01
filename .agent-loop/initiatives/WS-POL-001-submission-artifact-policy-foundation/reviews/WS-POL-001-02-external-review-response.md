@@ -2,20 +2,24 @@
 
 ## Status
 
-External review was received for PR #61 and addressed in reviewed code SHA
-`89420d15184d6ff00b13a537d81de94e0703f3af`. The final branch head is
-`1ce3fed5c4e562d20a35cc498f1bf42a665579eb`; changes after the reviewed SHA
-are limited to permitted evidence/status artifacts.
+This file records the previous external review response for PR #61. It is
+superseded for the current working tree because implementation and docs changed
+after the older reviewed heads. External review and CI must run again after the
+current changes are committed and pushed.
+
+Previous external review was received for PR #61 and addressed in reviewed code
+SHA `89420d15184d6ff00b13a537d81de94e0703f3af`. The previous final branch head
+was `1ce3fed5c4e562d20a35cc498f1bf42a665579eb`.
 
 ## External Systems
 
 - GitHub Actions before the final external-review fix: passing.
 - CodeRabbit before the final external-review fix: passing status with actionable comments.
 - Human PR review: pending.
-- Post-fix GitHub Actions: passing.
-- Post-fix CodeRabbit: manual `@coderabbitai review` request completed with no
-  new actionable comments; unresolved review-thread query returned no open
-  threads.
+- Current post-update GitHub Actions: pending until the branch is pushed again.
+- Current post-update CodeRabbit: pending until the branch is pushed again.
+- Current unresolved review-thread query: pending until the branch is pushed
+  again.
 
 ## CodeRabbit Findings Addressed
 
@@ -26,7 +30,7 @@ are limited to permitted evidence/status artifacts.
 | `docs/spec_chunk_3_project_guide_foundation.md` | Route reuse wording blurred sufficiency-agent reuse with derivation-agent behavior. | Clarified that `run-sufficiency-agent` can reuse an existing sufficiency row, while `derive-submission-artifact-policy` rejects manual sufficiency reports and only reuses agent-derived policies. |
 | Internal evidence wording | Tighten “a small number of” phrasing. | Updated evidence wording to “a few default literals.” |
 
-## Validation
+## Previous Validation
 
 ```bash
 cd backend && .venv/bin/python -m pytest tests/test_projects.py -k 'sufficiency_agent_reuses_existing_manual_report or submission_artifact_policy_approval_rejects_body_hash_mismatch or project_guide_rejects_non_finite_source_metadata or review_policy_rejects_invalid_decision_names or project_create_validation_errors_are_structured' -q
@@ -52,6 +56,9 @@ GitHub Actions passed: Agent Gates, Backend, Week 1 API Demo UI.
 CodeRabbit status passed after manual review trigger.
 Unresolved review-thread query returned `[]`.
 ```
+
+Those previous validation results are historical only. They are not current
+approval evidence for the updated working tree.
 
 ## Notes
 

@@ -6,8 +6,8 @@
 
 ## Goal
 
-Add the Workstream-owned project-agent runtime boundary, deterministic local
-runtime, optional OpenAI Agents SDK adapter, async guide sufficiency and policy
+Add the Workstream-owned project-agent runtime boundary, local fixture adapter,
+optional OpenAI Agents SDK adapter, async guide sufficiency and policy
 derivation routes, and the trusted project pre-submit checker compiler.
 
 ## Human-Approved Intent
@@ -19,11 +19,18 @@ derivation routes, and the trusted project pre-submit checker compiler.
 ## What Changed
 
 - Added `ProjectGuideAgentRuntime` as a Workstream-owned port.
-- Added deterministic local/test project-agent runtime with no network or API key requirement.
+- Added local fixture project-agent runtime with no network or API key requirement.
 - Added optional OpenAI Agents SDK adapter behind the port.
-- Added config for `WORKSTREAM_PROJECT_AGENT_RUNTIME` and `WORKSTREAM_OPENAI_AGENT_MODEL`.
+- Added adapter-specific config for `WORKSTREAM_PROJECT_AGENT_RUNTIME_ADAPTER`,
+  `WORKSTREAM_PROJECT_AGENT_OPENAI_AGENT_SDK_MODEL`, and
+  `WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS`.
+- Added `WORKSTREAM_PROJECT_AGENT_MAX_PROMPT_BYTES` so model-backed adapters
+  fail closed before sending oversized guide-source material to a runtime.
 - Added async project routes to run guide sufficiency analysis and submission artifact policy derivation.
 - Ensured agent calls run outside DB row locks and revalidate under lock before persistence.
+- Added typed guide source material, source items, and representative task
+  material so setup agents can inspect bounded, hash-bound project examples
+  without introducing task-scoped checker generation.
 - Persisted server-owned sufficiency and derivation agent provenance instead of trusting runtime/provider identity fields.
 - Required agent derivation to follow a Workstream-agent sufficiency report for the same immutable snapshot.
 - Required manual policy creation to wait for sufficiency clearance.
@@ -71,6 +78,7 @@ Allowed files changed:
 - `docs/spec_chunk_8_submission_artifact_policy_checkers.md`
 - `docs/template_checker_policy.md`
 - `docs/template_project_guide.md`
+- `docs/template_submission_artifact_policy.md`
 
 Files outside scope:
 
@@ -83,7 +91,7 @@ Files outside scope:
 Project setup can now run two Workstream-internal agent-assisted steps:
 
 1. `ProjectGuideSufficiencyAgent` assesses an immutable guide-source snapshot.
-2. `SubmissionArtifactPolicyDerivationAgent` derives a draft submission artifact policy after agent sufficiency passes or warnings are acknowledged.
+2. `SubmissionArtifactPolicyDerivationAgent` derives a draft submission artifact policy after agent sufficiency passes or passes with warnings.
 
 Manual sufficiency reports remain possible for operator-controlled setup, but
 they clear only the manual policy path. Agent derivation requires an
@@ -94,6 +102,9 @@ create a fresh guide-source snapshot before running the agent-derived path.
 The agent does not evaluate worker submissions. Workstream compiles deterministic
 checker logic from the effective project submission artifact policy, and the
 compiled project `PreSubmitCheckerPolicy` remains the runtime authority.
+Warnings from sufficiency analysis can produce a draft policy before
+acknowledgement, but approval and guide activation still require acknowledgement
+by `admin` or `project_manager`.
 
 This PR does not move task locked-context or submission creation runtime. That
 is still Chunk 3.
@@ -101,13 +112,13 @@ is still Chunk 3.
 ## Acceptance Criteria Proof
 
 - Runtime port and adapter isolation: `backend/app/interfaces/project_agents.py`, `backend/app/adapters/project_agents/**`
-- Deterministic local runtime: `backend/app/adapters/project_agents/deterministic.py`, `backend/tests/test_projects.py`
-- Optional OpenAI adapter: `backend/app/adapters/project_agents/openai_agents.py`, `backend/tests/test_projects.py`
+- Local fixture runtime: `backend/app/adapters/project_agents/local_fixture.py`, `backend/tests/test_projects.py`
+- Optional OpenAI Agents SDK adapter: `backend/app/adapters/project_agents/openai_agent_sdk.py`, `backend/tests/test_projects.py`
 - Async agent API routes: `backend/app/modules/projects/router.py`, `backend/app/modules/projects/service.py`
 - No row lock across agent calls: `backend/app/modules/projects/service.py`
 - Source snapshot binding and idempotency: `backend/tests/test_projects.py`
 - Server-owned agent provenance: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
-- Warning acknowledgement before derivation: `backend/tests/test_projects.py`
+- Warning acknowledgement before approval/activation: `backend/tests/test_projects.py`
 - Manual sufficiency/manual policy boundary: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
 - Approval-time policy body/hash consistency: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
 - Sanitized validation error encoding: `backend/app/main.py`, `backend/tests/test_projects.py`
@@ -160,6 +171,11 @@ Final external-review fix touched-file ruff passed.
 
 ## Reviewer Results
 
+Current reviewer results are being regenerated for the working tree after the
+runtime adapter naming, source-material contract, and prompt-budget changes.
+Historical results below are retained for continuity but are superseded until
+the final evidence file is rewritten with the current reviewed SHA.
+
 Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
 
 Reviewed at: `2026-07-01T09:32:48Z`
@@ -191,22 +207,18 @@ Final external-review fix reviewers:
 
 ## External Review
 
-CodeRabbit comments from the previous push were addressed in
-`89420d15184d6ff00b13a537d81de94e0703f3af`. The final branch head is
-`1ce3fed5c4e562d20a35cc498f1bf42a665579eb`; changes after the reviewed SHA are
-limited to permitted evidence/status artifacts. GitHub Actions passed after the
-final push: Agent Gates, Backend, and Week 1 API Demo UI. CodeRabbit was
-manually triggered after the final push, returned `Review finished`, and no new
-actionable comments were posted. A thread-aware GitHub review query returned no
-open unresolved review threads.
+External review and CI must rerun after the current implementation changes are
+committed and pushed. Previous CodeRabbit and GitHub Actions results apply only
+to older branch heads and are not current approval evidence for this working
+tree.
 
 ## Remaining Risks
 
 - Chunk 3 must lock task references to guide snapshot, effective project submission artifact policy hash, and project pre-submit checker bundle hash.
 - Chunk 3 must migrate submission creation runtime away from transitional task `required_files` and `required_evidence`.
-- OpenAI runtime production use still depends on environment-managed credentials and model choice.
+- OpenAI Agents SDK adapter production use still depends on environment-managed credentials and model choice.
 - CI does not currently install optional `.[agents]`; adapter behavior is covered through delayed-import and fake-SDK tests.
-- Deterministic runtime repeats a few default literals, but the output is untrusted and revalidated before approval.
+- Local fixture adapter repeats a few default literals, but the output is untrusted and revalidated before approval.
 
 ## Human Review Focus
 
@@ -214,7 +226,7 @@ Please inspect:
 
 - `ProjectService` async transaction boundaries around agent calls.
 - Server-owned agent provenance and approval/activation revalidation.
-- OpenAI adapter isolation and sanitized failure handling.
+- OpenAI Agents SDK adapter isolation and sanitized failure handling.
 - Compiler semantic coverage rules and primitive vocabulary.
 - Approval-time persistence of compiled `PreSubmitCheckerPolicy`.
 - Manual sufficiency versus agent-derived setup path wording.
