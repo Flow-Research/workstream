@@ -7,7 +7,7 @@
 - Active implementation chunk: `WS-POL-001-02`
 - Branch: `codex/ws-pol-001-02-agent-runtime-compiler`
 - Status: `WS-POL-001-01` merged; `WS-POL-001-02` implementation complete with internal review complete and final evidence being prepared
-- Reviewed code SHA: `66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3`
+- Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
 - Current gate: run evidence gates, push reviewed branch, run external review, then wait for human checkpoint
 - Next chunk: inactive until `WS-POL-001-02` is reviewed and merged by the user
 

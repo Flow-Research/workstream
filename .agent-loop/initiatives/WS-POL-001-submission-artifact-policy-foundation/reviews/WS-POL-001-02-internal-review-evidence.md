@@ -10,13 +10,13 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3
+Reviewed code SHA: 89420d15184d6ff00b13a537d81de94e0703f3af
 
-Reviewed at: 2026-07-01T08:56:11Z
+Reviewed at: 2026-07-01T09:32:48Z
 
-Reviewer run IDs: 019f1cc9-3ace-70a0-b81b-fa5188f47a5d, 019f1cc9-3e04-7962-bc42-38c71e6e5f9d, 019f1cc9-48f1-7ec3-a4e2-09fea5b012a1, 019f1cc9-5954-7413-9dea-10d1c5df721e, 019f1cc9-61a4-77e2-ac55-76be99b17c2f, 019f1cc9-740c-7c31-9ba9-24cbab3019bf, 019f1cdf-f82a-70b1-8a2b-6cfedd686ac0, 019f1cdf-fa31-7f80-86f9-bd9861a20928, 019f1cdf-fd43-7731-b780-876654b43bf6, 019f1ce0-0518-75d2-852c-c23082bc4680, 019f1ce0-2042-7f72-bc12-d44d69949ccd, 019f1ce0-2959-7af0-9140-70922fdd8639, 019f1ce5-15d6-78d0-a6a7-bc343881782f, 019f1ce5-1877-7d81-b440-be48ca20e194
+Reviewer run IDs: 019f1cc9-3ace-70a0-b81b-fa5188f47a5d, 019f1cc9-3e04-7962-bc42-38c71e6e5f9d, 019f1cc9-48f1-7ec3-a4e2-09fea5b012a1, 019f1cc9-5954-7413-9dea-10d1c5df721e, 019f1cc9-61a4-77e2-ac55-76be99b17c2f, 019f1cc9-740c-7c31-9ba9-24cbab3019bf, 019f1cdf-f82a-70b1-8a2b-6cfedd686ac0, 019f1cdf-fa31-7f80-86f9-bd9861a20928, 019f1cdf-fd43-7731-b780-876654b43bf6, 019f1ce0-0518-75d2-852c-c23082bc4680, 019f1ce0-2042-7f72-bc12-d44d69949ccd, 019f1ce0-2959-7af0-9140-70922fdd8639, 019f1ce5-15d6-78d0-a6a7-bc343881782f, 019f1ce5-1877-7d81-b440-be48ca20e194, 019f1cf8-1378-7213-a2cd-58f0aa35e398, 019f1cf8-2eb2-76c1-a904-8f972fb6bd89, 019f1cf8-1e68-76c2-b169-e5fe13104793, 019f1cf8-4360-7943-b90b-ae6c9a635efe, 019f1cf8-56c4-7443-8f49-4dc392ba3f62, 019f1cf8-7936-7500-bcaf-3ba9c7bb6733, 019f1cff-7559-7e02-ba38-356451b8b579, 019f1cff-8065-7b73-ba0e-4fc800b9bfc7, 019f1cff-903f-7431-b04b-3d9675aa9990, 019f1cff-a0a2-7cb2-a9b5-00ba9341b467, 019f1cff-b4bb-7a83-990f-23b99235cb60, 019f1cff-d252-7f82-a037-0caaadf29fc8
 
-After reviewed SHA `66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3`, only review evidence, initiative status, loop state, and PR trust-bundle files may change before PR publication.
+After reviewed SHA `89420d15184d6ff00b13a537d81de94e0703f3af`, only review evidence, initiative status, loop state, and PR trust-bundle files may change before PR publication.
 
 ## Reviewer Results
 
@@ -31,6 +31,17 @@ After reviewed SHA `66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3`, only review evide
 | docs | PASS AFTER FIXES | None | Manual sufficiency occupying a source snapshot, operator path, glossary, first user flow, and server-owned provenance wording are now aligned. Final narrow scope re-review passed. |
 | reuse/dedup | PASS WITH LOW RISKS | None | Shared hashing and checker registry validation are reused. Low residual: deterministic runtime repeats default literals, but output is untrusted and revalidated before approval. |
 | test delta | PASS WITH LOW RISKS | None | Tests were strengthened; no skips, xfails, or removed regression coverage. Low residual: seeded stale-agent tests use broad spoofed identity, but implementation exact checks cover stale-version variants. |
+
+Final external-review fix reviewers:
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | PASS | None | Confirmed approval hash guard, validation encoding, route wording, and manual-report reuse test are minimal and in scope. |
+| qa/test | PASS | None | Confirmed approval-time hash mismatch, validation error encoding, manual-report reuse, and derivation manual-report rejection coverage. |
+| security/auth | PASS | None | Confirmed validation errors redact raw input and encode safely; tampered policy body/hash rows are rejected before approval. |
+| product/ops | PASS | None | Confirmed operator fork is clear and remains project setup behavior, not a review decision. |
+| docs | PASS | None | Confirmed sufficiency/derivation route wording and evidence wording are correct. |
+| test delta | PASS | None | Confirmed new tests strengthen coverage and no skips or weakened assertions were added. |
 
 ## Valid Findings Addressed
 
@@ -59,6 +70,8 @@ python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_loop_memory_state.py
 python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format json
 git diff --check
+cd backend && .venv/bin/python -m pytest tests/test_projects.py -k 'sufficiency_agent_reuses_existing_manual_report or submission_artifact_policy_approval_rejects_body_hash_mismatch or project_guide_rejects_non_finite_source_metadata or review_policy_rejects_invalid_decision_names or project_create_validation_errors_are_structured' -q
+cd backend && .venv/bin/python -m ruff check app/main.py app/modules/projects/service.py tests/test_projects.py
 ```
 
 ## Results
@@ -79,6 +92,8 @@ git diff --check passed.
 Internal review evidence gate passed.
 Loop memory state check passed.
 Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/compiler chunk touching risk-sensitive files and backend package config.
+Final external-review fix focused tests passed: 5 passed, 174 deselected in 50.32s.
+Final external-review fix touched-file ruff passed.
 ```
 
 ## Remaining Risks

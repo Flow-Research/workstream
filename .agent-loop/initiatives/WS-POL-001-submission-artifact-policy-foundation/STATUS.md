@@ -6,7 +6,7 @@
 `codex/ws-pol-001-02-agent-runtime-compiler`.
 
 Internal review and deterministic proof are complete for reviewed code SHA
-`66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3`. The current gate is evidence-gate
+`89420d15184d6ff00b13a537d81de94e0703f3af`. The current gate is evidence-gate
 rerun, reviewed branch push, external review, and human checkpoint.
 
 ## Active Chunk

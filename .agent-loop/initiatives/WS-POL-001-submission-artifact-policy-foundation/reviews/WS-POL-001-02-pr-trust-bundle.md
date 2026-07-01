@@ -28,6 +28,13 @@ derivation routes, and the trusted project pre-submit checker compiler.
 - Required agent derivation to follow a Workstream-agent sufficiency report for the same immutable snapshot.
 - Required manual policy creation to wait for sufficiency clearance.
 - Revalidated agent-derived policy provenance before approval and guide activation.
+- Rejected approval of tampered draft policy rows where `policy_body` no longer
+  matches `policy_hash`.
+- Encoded sanitized FastAPI validation errors through `jsonable_encoder` before
+  returning 422 responses.
+- Clarified that `run-sufficiency-agent` can reuse an existing sufficiency
+  report while `derive-submission-artifact-policy` rejects manual sufficiency
+  reports.
 - Added trusted compiler behavior for project `PreSubmitCheckerPolicy` bundles.
 - Moved test/E2E helpers away from direct compiled-field mutation and onto compiler-produced rows.
 - Aligned ADR/checker/data-model docs with the implemented contract.
@@ -102,6 +109,8 @@ is still Chunk 3.
 - Server-owned agent provenance: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
 - Warning acknowledgement before derivation: `backend/tests/test_projects.py`
 - Manual sufficiency/manual policy boundary: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
+- Approval-time policy body/hash consistency: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
+- Sanitized validation error encoding: `backend/app/main.py`, `backend/tests/test_projects.py`
 - Trusted compiler and primitive coverage: `backend/app/modules/checkers/compiler.py`, `backend/tests/test_checkers.py`
 - Approval-time compiler persistence: `backend/app/modules/projects/service.py`, `backend/tests/test_projects.py`
 - Existing task/E2E helper migration: `backend/tests/test_tasks.py`, `backend/scripts/week1_api_e2e.py`
@@ -123,6 +132,8 @@ python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_loop_memory_state.py
 python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format json
 git diff --check
+cd backend && .venv/bin/python -m pytest tests/test_projects.py -k 'sufficiency_agent_reuses_existing_manual_report or submission_artifact_policy_approval_rejects_body_hash_mismatch or project_guide_rejects_non_finite_source_metadata or review_policy_rejects_invalid_decision_names or project_create_validation_errors_are_structured' -q
+cd backend && .venv/bin/python -m ruff check app/main.py app/modules/projects/service.py tests/test_projects.py
 ```
 
 Result summary:
@@ -143,13 +154,15 @@ git diff --check passed.
 Internal review evidence gate passed.
 Loop memory state check passed.
 Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/compiler chunk touching risk-sensitive files and backend package config.
+Final external-review fix focused tests passed: 5 passed, 174 deselected in 50.32s.
+Final external-review fix touched-file ruff passed.
 ```
 
 ## Reviewer Results
 
-Reviewed code SHA: `66fb9936c0a9f7fa04bbe783483dbdff0cfb5eb3`
+Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
 
-Reviewed at: `2026-07-01T08:56:11Z`
+Reviewed at: `2026-07-01T09:32:48Z`
 
 Reviewer run IDs: see `WS-POL-001-02-internal-review-evidence.md`.
 
@@ -165,11 +178,22 @@ Reviewer run IDs: see `WS-POL-001-02-internal-review-evidence.md`.
 | reuse/dedup | PASS WITH LOW RISKS | None | No blocking duplication; deterministic output is still untrusted and revalidated. |
 | test delta | PASS WITH LOW RISKS | None | Tests were strengthened; no skips or weakened assertions. |
 
+Final external-review fix reviewers:
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | PASS | None | Confirmed approval hash guard, validation encoding, route wording, and manual-report reuse test are minimal and in scope. |
+| QA/test | PASS | None | Confirmed approval-time hash mismatch, validation error encoding, manual-report reuse, and derivation manual-report rejection coverage. |
+| security/auth | PASS | None | Confirmed validation errors redact raw input and encode safely; tampered policy body/hash rows are rejected before approval. |
+| product/ops | PASS | None | Confirmed operator fork is clear and remains project setup behavior, not a review decision. |
+| docs | PASS | None | Confirmed sufficiency/derivation route wording and evidence wording are correct. |
+| test delta | PASS | None | Confirmed new tests strengthen coverage and no skips or weakened assertions were added. |
+
 ## External Review
 
-External review should be checked after pushing this final evidence commit.
-CodeRabbit, GitHub Actions, and human PR review are external checks and do not
-replace the internal reviewer evidence above.
+CodeRabbit comments from the previous push were addressed in
+`89420d15184d6ff00b13a537d81de94e0703f3af`. GitHub Actions were green before
+that fix. External checks must rerun after this evidence update is pushed.
 
 ## Remaining Risks
 
