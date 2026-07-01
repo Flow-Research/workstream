@@ -61,8 +61,17 @@ backend/tests/test_tasks.py
 backend/scripts/week1_api_e2e.py
 README.md
 docs/architecture_checker_framework.md
+docs/architecture_data_model.md
+docs/architecture_lockdown.md
 docs/decision_0011_submission_artifact_policy_drives_pre_submit.md
+docs/glossary.md
+docs/internal_reviews/2026-06-16_submission_artifact_policy_architecture.md
+docs/operations_workspace_packet_convention.md
+docs/spec_chunk_3_project_guide_foundation.md
+docs/spec_chunk_7_checker_runner_registry.md
 docs/spec_chunk_8_submission_artifact_policy_checkers.md
+docs/template_checker_policy.md
+docs/template_project_guide.md
 .agent-loop/LOOP_STATE.md
 .agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
 ```

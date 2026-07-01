@@ -237,8 +237,6 @@ async def create_policy_bundle_for_guide(
             "status": "passed",
             "findings": [],
             "summary": "Guide is sufficient for test setup.",
-            "agent_name": "ProjectGuideSufficiencyAgent",
-            "agent_version": "test",
         },
     )
     assert report_response.status_code == 201, report_response.text

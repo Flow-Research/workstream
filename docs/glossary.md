@@ -47,10 +47,8 @@ forbidden artifacts, attestation requirements, and project-specific packaging
 rules. It can add or tighten requirements, but it cannot weaken Workstream's
 default submission artifact rules.
 
-## Project Submission Artifact Policy
-
-The project-specific `SubmissionArtifactPolicy` attached to one project guide
-version before Workstream merges it with default submission artifact policy.
+The project-specific policy row is still `SubmissionArtifactPolicy`; Workstream
+does not define a separate `ProjectSubmissionArtifactPolicy` type.
 
 ## Effective Project Submission Artifact Policy
 

@@ -146,8 +146,6 @@ class GuideSufficiencyReportCreate(BaseModel):
     status: Literal["passed", "blocked", "passed_with_warnings"]
     findings: list[GuideSufficiencyFindingInput] = Field(default_factory=list, max_length=100)
     summary: str | None = Field(default=None, max_length=2000)
-    agent_name: str | None = Field(default=None, max_length=100)
-    agent_version: str | None = Field(default=None, max_length=50)
 
 
 class GuideSufficiencyAcknowledgement(BaseModel):
@@ -266,7 +264,10 @@ class SubmissionArtifactPolicyCreate(BaseModel):
     @classmethod
     def reject_reserved_agent_policy_version(cls, value: str) -> str:
         """Reserve agent-derived policy version names for Workstream."""
-        if value.startswith("agent-"):
+        stripped_value = value.strip()
+        if value != stripped_value:
+            raise ValueError("policy_version cannot include surrounding whitespace")
+        if stripped_value.casefold().startswith("agent-"):
             raise ValueError("policy_version prefix 'agent-' is reserved")
         return value
 

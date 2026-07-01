@@ -612,8 +612,6 @@ async def create_policy_bundle_for_guide(
             "status": "passed",
             "findings": [],
             "summary": "Guide is sufficient for the Week 1 real API drill.",
-            "agent_name": "ProjectGuideSufficiencyAgent",
-            "agent_version": "e2e",
         },
         201,
     )

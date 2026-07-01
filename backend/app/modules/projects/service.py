@@ -609,8 +609,8 @@ class ProjectService:
             status=payload.status,
             findings=[finding.model_dump(mode="json") for finding in payload.findings],
             summary=payload.summary,
-            agent_name=payload.agent_name,
-            agent_version=payload.agent_version,
+            agent_name=None,
+            agent_version=None,
             created_by=actor.actor_id,
         )
         try:
@@ -667,8 +667,6 @@ class ProjectService:
                 for finding in result.findings
             ],
             summary=result.summary,
-            agent_name=result.agent_name,
-            agent_version=result.agent_version,
         )
         self._validate_sufficiency_report_payload(payload)
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
@@ -690,8 +688,8 @@ class ProjectService:
             status=payload.status,
             findings=[finding.model_dump(mode="json") for finding in payload.findings],
             summary=payload.summary,
-            agent_name=payload.agent_name,
-            agent_version=payload.agent_version,
+            agent_name=result.agent_name,
+            agent_version=result.agent_version,
             created_by=actor.actor_id,
         )
         try:
@@ -964,6 +962,10 @@ class ProjectService:
             policy.policy_body = policy_body
             policy.policy_hash = self._hash_canonical_json(policy_body)
         if payload.change_summary is not None:
+            if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
+                raise PolicyEditBlocked(
+                    "agent-derived policy summaries are immutable; create a manual policy to adjust"
+                )
             policy.change_summary = payload.change_summary
         await self._session.commit()
         await self._session.refresh(policy)
@@ -1086,7 +1088,10 @@ class ProjectService:
         policy.approved_by_role = self._approver_role(actor)
         policy.approved_by_actor = actor.actor_id
         policy.approved_at = now
-        if payload.approval_note:
+        if (
+            payload.approval_note
+            and policy.derivation_source != AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE
+        ):
             policy.change_summary = payload.approval_note
         if previous_policy is not None:
             previous_policy.lifecycle_status = "superseded"

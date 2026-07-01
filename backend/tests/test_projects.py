@@ -499,8 +499,6 @@ async def create_sufficiency_report(
             "status": status,
             "findings": findings,
             "summary": "Guide reviewed.",
-            "agent_name": "ProjectGuideSufficiencyAgent",
-            "agent_version": "v0.1",
         },
     )
     assert response.status_code == 201, response.text
@@ -1088,6 +1086,44 @@ async def test_sufficiency_report_status_requires_matching_findings(
     assert expected_detail in response.json()["detail"]
 
 
+async def test_manual_sufficiency_report_rejects_agent_provenance_fields(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+
+    rejected = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Manual sufficiency assessment.",
+            "agent_name": "ProjectGuideSufficiencyAgent",
+        },
+    )
+
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"][0]["loc"] == ["body", "agent_name"]
+
+    created = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Manual sufficiency assessment.",
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["agent_name"] is None
+    assert created.json()["agent_version"] is None
+
+
 async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1110,6 +1146,8 @@ async def test_deterministic_sufficiency_agent_is_async_idempotent_and_keyless(
     assert {first.status_code, second.status_code} == {200, 201}
     assert first.json()["id"] == second.json()["id"]
     assert first.json()["status"] == "passed"
+    assert first.json()["agent_name"] == "ProjectGuideSufficiencyAgent"
+    assert first.json()["agent_version"] == "deterministic-v0.1"
     assert "test-openai-key-that-must-not-be-persisted" not in first.text
     async with db_session.get_session_factory()() as session:
         reports = (
@@ -1413,6 +1451,32 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert reserved_version_response.status_code == 422
     assert reserved_version_response.json()["detail"][0]["loc"] == ["body", "policy_version"]
 
+    reserved_case_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "Agent-aaaaaaaaaaaaaaaaaaaaaaaa",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+
+    assert reserved_case_response.status_code == 422
+    assert reserved_case_response.json()["detail"][0]["loc"] == ["body", "policy_version"]
+
+    padded_version_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+        json={
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": " v1 ",
+            "policy_body": project_submission_artifact_policy_body(),
+        },
+    )
+
+    assert padded_version_response.status_code == 422
+    assert padded_version_response.json()["detail"][0]["loc"] == ["body", "policy_version"]
+
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -1505,6 +1569,30 @@ async def test_agent_derived_submission_artifact_policy_body_is_immutable(
 
     assert update_response.status_code == 409
     assert "agent-derived policy bodies are immutable" in update_response.json()["detail"]
+
+    summary_response = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{derived.json()['id']}",
+        headers=auth_headers(),
+        json={"change_summary": "Admin-edited generated summary."},
+    )
+
+    assert summary_response.status_code == 409
+    assert "agent-derived policy summaries are immutable" in summary_response.json()["detail"]
+
+    approved = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{derived.json()['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Approval note must not overwrite generated summary."},
+    )
+    assert approved.status_code == 200, approved.text
+
+    async with db_session.get_session_factory()() as session:
+        persisted_policy = await session.get(SubmissionArtifactPolicy, derived.json()["id"])
+
+    assert persisted_policy is not None
+    assert persisted_policy.change_summary == derived.json()["change_summary"]
 
 
 async def test_derivation_agent_idempotency_uses_server_owned_policy_version(
