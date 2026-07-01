@@ -192,8 +192,13 @@ Final external-review fix reviewers:
 ## External Review
 
 CodeRabbit comments from the previous push were addressed in
-`89420d15184d6ff00b13a537d81de94e0703f3af`. GitHub Actions were green before
-that fix. External checks must rerun after this evidence update is pushed.
+`89420d15184d6ff00b13a537d81de94e0703f3af`. The final branch head is
+`1ce3fed5c4e562d20a35cc498f1bf42a665579eb`; changes after the reviewed SHA are
+limited to permitted evidence/status artifacts. GitHub Actions passed after the
+final push: Agent Gates, Backend, and Week 1 API Demo UI. CodeRabbit was
+manually triggered after the final push, returned `Review finished`, and no new
+actionable comments were posted. A thread-aware GitHub review query returned no
+open unresolved review threads.
 
 ## Remaining Risks
 

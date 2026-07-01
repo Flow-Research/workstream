@@ -6,9 +6,9 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-02`
 - Branch: `codex/ws-pol-001-02-agent-runtime-compiler`
-- Status: `WS-POL-001-01` merged; `WS-POL-001-02` implementation complete with internal review complete and final evidence being prepared
+- Status: `WS-POL-001-01` merged; `WS-POL-001-02` implementation complete with internal review, external review, and CI complete
 - Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
-- Current gate: run evidence gates, push reviewed branch, run external review, then wait for human checkpoint
+- Current gate: human checkpoint for PR #61
 - Next chunk: inactive until `WS-POL-001-02` is reviewed and merged by the user
 
 ## Operating Rule
@@ -38,3 +38,4 @@ behavior, payment, reputation, settlement, or blockchain integrations.
 - Internal review evidence for the active chunk is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-internal-review-evidence.md`.
 - PR trust bundle for the active chunk is at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-pr-trust-bundle.md`.
 - External review response for the active chunk is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-02-external-review-response.md` after external review runs.
+- PR #61 is open and awaiting the user-owned merge decision.
