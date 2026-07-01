@@ -1221,6 +1221,55 @@ async def test_sufficiency_agent_persists_server_owned_agent_identity(
     assert "provider-controlled-version" not in response.text
 
 
+async def test_sufficiency_agent_reuses_existing_manual_report(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailingRuntime:
+        """Runtime that proves the service does not rerun an occupied snapshot."""
+
+        async def analyze_guide_sufficiency(
+            self,
+            _: GuideSourceMaterial,
+        ) -> GuideSufficiencyAgentResult:
+            """Fail if the agent is invoked after a manual report exists."""
+            raise AssertionError("manual sufficiency report should be reused")
+
+        async def derive_submission_artifact_policy(
+            self,
+            _: GuideSourceMaterial,
+            __: GuideSufficiencyAgentResult,
+        ) -> SubmissionArtifactPolicyDerivationResult:
+            """Unused derivation implementation required by the runtime protocol."""
+            raise AssertionError("derivation is not part of this test")
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    manual_report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    monkeypatch.setattr(
+        project_service_module,
+        "get_project_guide_agent_runtime",
+        lambda: FailingRuntime(),
+    )
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
+        f"{snapshot['id']}/run-sufficiency-agent",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == manual_report["id"]
+    assert response.json()["agent_name"] is None
+    assert response.json()["agent_version"] is None
+
+
 async def test_openai_runtime_misconfiguration_is_sanitized_and_agent_route_only(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
