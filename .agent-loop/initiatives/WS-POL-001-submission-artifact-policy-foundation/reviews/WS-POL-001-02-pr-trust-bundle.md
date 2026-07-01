@@ -119,6 +119,9 @@ cd backend && .venv/bin/python -m pytest tests -q
 cd backend && .venv/bin/docstr-coverage --config .docstr.yaml
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_internal_review_evidence.py
+python3 scripts/check_loop_memory_state.py
+python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format json
 git diff --check
 ```
 
@@ -137,6 +140,9 @@ Docstring coverage passed: 100.0% (499/499).
 Markdown link check passed for 24 changed Markdown files.
 Stale wording check passed.
 git diff --check passed.
+Internal review evidence gate passed.
+Loop memory state check passed.
+Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/compiler chunk touching risk-sensitive files and backend package config.
 ```
 
 ## Reviewer Results
