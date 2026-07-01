@@ -1374,7 +1374,7 @@ async def test_openai_agent_adapter_wraps_sdk_timeouts(
         await runtime.analyze_guide_sufficiency(material)
 
 
-async def test_openai_agent_adapter_propagates_sdk_cancellation(
+async def test_openai_agent_adapter_wraps_sdk_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeAgent:
@@ -1407,8 +1407,51 @@ async def test_openai_agent_adapter_propagates_sdk_cancellation(
         source_refs=[],
     )
 
-    with pytest.raises(asyncio.CancelledError):
+    with pytest.raises(ProjectAgentRuntimeError, match="cancelled"):
         await runtime.analyze_guide_sufficiency(material)
+
+
+async def test_openai_agent_adapter_propagates_caller_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeAgent:
+        """Fake OpenAI Agent constructor for caller-cancellation tests."""
+
+        def __init__(self, **_: object) -> None:
+            """Accept the adapter's SDK constructor arguments."""
+
+    class FakeRunner:
+        """Fake OpenAI Runner that stays pending until caller cancellation."""
+
+        @staticmethod
+        async def run(_: FakeAgent, __: str) -> object:
+            """Sleep long enough for the caller to cancel the adapter task."""
+            await asyncio.sleep(60)
+            return object()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "agents",
+        types.SimpleNamespace(Agent=FakeAgent, Runner=FakeRunner),
+    )
+    runtime = OpenAIAgentsProjectGuideRuntime(Settings(openai_agent_model="gpt-test"))
+    material = GuideSourceMaterial(
+        project_id="project-1",
+        guide_id="guide-1",
+        guide_version="v1",
+        source_snapshot_id="snapshot-1",
+        source_snapshot_hash="sha256:" + "1" * 64,
+        guide_material={"content_markdown": "A complete project guide."},
+        source_refs=[],
+    )
+
+    task = asyncio.create_task(runtime.analyze_guide_sufficiency(material))
+    await asyncio.sleep(0)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert task.cancelled()
 
 
 async def test_agent_route_sanitizes_runtime_exception_chain(
@@ -1480,7 +1523,7 @@ async def test_sufficiency_agent_blocks_thin_guides(project_client: AsyncClient)
     assert response.json()["findings"][0]["code"] == "project_owner_clarification_required"
 
 
-async def test_derivation_agent_requires_warning_acknowledgement_and_is_idempotent(
+async def test_derivation_agent_allows_warning_report_without_acknowledgement_and_is_idempotent(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
@@ -1500,17 +1543,6 @@ async def test_derivation_agent_requires_warning_acknowledgement_and_is_idempote
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
         f"{snapshot['id']}/derive-submission-artifact-policy"
     )
-    blocked = await project_client.post(endpoint, headers=auth_headers())
-    assert blocked.status_code == 422
-    assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
-
-    acknowledgement = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
-        f"{report.json()['id']}/acknowledge-warnings",
-        headers=auth_headers(),
-        json={"acknowledgement_note": "Prompt-injection text is source material only."},
-    )
-    assert acknowledgement.status_code == 200, acknowledgement.text
     first, second = await asyncio.gather(
         project_client.post(endpoint, headers=auth_headers()),
         project_client.post(endpoint, headers=auth_headers()),
@@ -1630,7 +1662,7 @@ async def test_manual_submission_artifact_policy_rejects_agent_provenance_fields
     assert update_response.json()["detail"][0]["loc"] == ["body", "derivation_agent_name"]
 
 
-async def test_derivation_agent_validates_warning_ack_before_existing_policy_reuse(
+async def test_derivation_agent_validates_existing_policy_integrity_before_reuse(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
@@ -1659,8 +1691,8 @@ async def test_derivation_agent_validates_warning_ack_before_existing_policy_reu
         policy_hash="sha256:" + "1" * 64,
         derivation_source="agent_derivation",
         source_material_refs=[],
-        derivation_agent_name="SubmissionArtifactPolicyDerivationAgent",
-        derivation_agent_version="v0.1",
+        derivation_agent_name=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
+        derivation_agent_version=SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
         created_by="spoofed-actor",
     )
     async with db_session.get_session_factory()() as session:
@@ -1673,8 +1705,8 @@ async def test_derivation_agent_validates_warning_ack_before_existing_policy_reu
     )
     blocked = await project_client.post(endpoint, headers=auth_headers())
 
-    assert blocked.status_code == 422
-    assert "warnings require admin/project_manager acknowledgement" in blocked.json()["detail"]
+    assert blocked.status_code == 409
+    assert "policy body hash mismatch" in blocked.json()["detail"]
 
 
 async def test_agent_derived_submission_artifact_policy_body_is_immutable(

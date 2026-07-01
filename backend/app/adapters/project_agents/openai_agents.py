@@ -125,6 +125,11 @@ class OpenAIAgentsProjectGuideRuntime:
             raise
         except TimeoutError:
             raise ProjectAgentRuntimeError("OpenAI project agent run timed out") from None
+        except asyncio.CancelledError:
+            current_task = asyncio.current_task()
+            if current_task is not None and current_task.cancelling():
+                raise
+            raise ProjectAgentRuntimeError("OpenAI project agent run was cancelled") from None
         except Exception:
             raise ProjectAgentRuntimeError("OpenAI project agent run failed") from None
         raise ProjectAgentRuntimeError("OpenAI project agent returned invalid structured output")

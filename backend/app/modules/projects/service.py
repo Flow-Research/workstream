@@ -837,7 +837,7 @@ class ProjectService:
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        self._validate_sufficiency_report_allows_policy_approval(
+        self._validate_sufficiency_report_allows_policy_derivation(
             sufficiency_report,
             snapshot,
         )
@@ -885,7 +885,7 @@ class ProjectService:
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
-        self._validate_sufficiency_report_allows_policy_approval(
+        self._validate_sufficiency_report_allows_policy_derivation(
             sufficiency_report,
             snapshot,
         )
@@ -2226,6 +2226,21 @@ class ProjectService:
                 "before policy approval",
             )
 
+    def _validate_sufficiency_report_allows_policy_derivation(
+        self,
+        sufficiency_report: GuideSufficiencyReport | None,
+        source_snapshot: GuideSourceSnapshot,
+    ) -> None:
+        """Require report freshness and no blocking gaps before deriving policy."""
+        if sufficiency_report is None:
+            raise PolicySetupBlocked("guide sufficiency report is required before policy derivation")
+        if sufficiency_report.source_snapshot_id != source_snapshot.id:
+            raise PolicySetupBlocked("guide sufficiency report is bound to a stale snapshot")
+        if sufficiency_report.source_snapshot_hash != source_snapshot.bundle_hash:
+            raise PolicySetupBlocked("guide sufficiency report snapshot hash mismatch")
+        if sufficiency_report.status == "blocked":
+            raise PolicySetupBlocked("guide sufficiency has blocking gaps")
+
     def _validate_agent_sufficiency_report_for_derivation(
         self,
         sufficiency_report: GuideSufficiencyReport | None,
@@ -2272,6 +2287,10 @@ class ProjectService:
         ):
             raise PolicySetupConflict(
                 "agent-derived submission artifact policy runtime provenance is not server-owned"
+            )
+        if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
+            raise PolicySetupConflict(
+                "agent-derived submission artifact policy body hash mismatch"
             )
 
     def _validate_activation_ready(

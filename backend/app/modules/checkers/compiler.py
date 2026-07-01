@@ -439,6 +439,8 @@ def _require_warning_rule(by_primitive: dict[str, dict[str, Any]], primitive: st
         raise PreSubmitCheckerCompilerError(f"checker spec omits {primitive}")
     if rule["severity"] != WARNING_SEVERITY:
         raise PreSubmitCheckerCompilerError(f"checker spec escalates warning-only rule for {primitive}")
+    if rule["config"] != {}:
+        raise PreSubmitCheckerCompilerError(f"checker spec adds config for warning-only rule {primitive}")
 
 
 def _require_config_values(

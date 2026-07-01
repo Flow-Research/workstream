@@ -312,6 +312,18 @@ def test_pre_submit_compiler_rejects_escalated_warning_only_rule() -> None:
         compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
 
 
+def test_pre_submit_compiler_rejects_configured_warning_only_rule() -> None:
+    effective_policy = compiler_effective_policy()
+    effective_policy_hash = "sha256:" + "c" * 64
+    spec = build_project_pre_submit_checker_spec(effective_policy, effective_policy_hash)
+    for rule in spec["rules"]:
+        if rule["primitive"] == "warn_low_quality_generated_artifact":
+            rule["config"] = {"threshold": "strict"}
+
+    with pytest.raises(PreSubmitCheckerCompilerError, match="warning-only rule"):
+        compile_project_pre_submit_checker_spec(effective_policy, effective_policy_hash, spec)
+
+
 def test_canonical_json_hash_rejects_non_finite_numbers() -> None:
     with pytest.raises(ValueError):
         canonical_json_hash({"score": float("nan")})
