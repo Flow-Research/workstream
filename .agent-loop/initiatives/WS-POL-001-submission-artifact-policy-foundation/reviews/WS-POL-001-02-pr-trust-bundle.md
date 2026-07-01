@@ -167,43 +167,34 @@ Loop memory state check passed.
 Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/compiler chunk touching risk-sensitive files and backend package config.
 Final external-review fix focused tests passed: 5 passed, 174 deselected in 50.32s.
 Final external-review fix touched-file ruff passed.
+Focused runtime/source tests passed: 12 passed, 172 deselected in 41.99s.
+Regression cluster after source_material_refs repair passed: 18 passed, 166 deselected in 119.94s.
+Affected project/checker suite passed after helper repair: 221 passed in 1204.17s.
+OpenAI Agents SDK adapter/config prompt-budget tests passed: 6 passed, 179 deselected in 10.82s.
+Optional v1 manifest/content_excerpt focused tests passed: 4 passed, 182 deselected in 32.90s.
+Final affected project/checker suite passed: 223 passed in 1435.00s.
+Final docstring coverage passed: 100.0% (504/504).
 ```
 
 ## Reviewer Results
 
-Current reviewer results are being regenerated for the working tree after the
-runtime adapter naming, source-material contract, and prompt-budget changes.
-Historical results below are retained for continuity but are superseded until
-the final evidence file is rewritten with the current reviewed SHA.
+Reviewed code SHA: `aaffa7b25d88fcdff9a87e89d6a2f7ff6ceabb46`
 
-Reviewed code SHA: `89420d15184d6ff00b13a537d81de94e0703f3af`
-
-Reviewed at: `2026-07-01T09:32:48Z`
+Reviewed at: `2026-07-01T16:36:58Z`
 
 Reviewer run IDs: see `WS-POL-001-02-internal-review-evidence.md`.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS AFTER FIXES | None | Provenance revalidation and final scope correction reviewed. |
-| QA/test | PASS | None | Confirmed Postgres-backed API and idempotency coverage. |
-| security/auth | PASS | None | Confirmed provider identity cannot spoof persisted provenance. |
-| product/ops | PASS AFTER FIXES | None | Confirmed manual and agent-derived setup paths are clear. |
-| architecture | PASS | None | Confirmed project-scoped compiler and port/adapter boundary. |
-| CI integrity | PASS WITH LOW RISKS | None | No workflow weakening; optional agent extra remains adapter-isolated. |
-| docs | PASS AFTER FIXES | None | Confirmed docs now align with manual sufficiency and server-owned provenance. |
-| reuse/dedup | PASS WITH LOW RISKS | None | No blocking duplication; deterministic output is still untrusted and revalidated. |
-| test delta | PASS WITH LOW RISKS | None | Tests were strengthened; no skips or weakened assertions. |
-
-Final external-review fix reviewers:
-
-| Reviewer | Result | Blocking findings | Notes |
-|---|---:|---|---|
-| senior engineering | PASS | None | Confirmed approval hash guard, validation encoding, route wording, and manual-report reuse test are minimal and in scope. |
-| QA/test | PASS | None | Confirmed approval-time hash mismatch, validation error encoding, manual-report reuse, and derivation manual-report rejection coverage. |
-| security/auth | PASS | None | Confirmed validation errors redact raw input and encode safely; tampered policy body/hash rows are rejected before approval. |
-| product/ops | PASS | None | Confirmed operator fork is clear and remains project setup behavior, not a review decision. |
-| docs | PASS | None | Confirmed sufficiency/derivation route wording and evidence wording are correct. |
-| test delta | PASS | None | Confirmed new tests strengthen coverage and no skips or weakened assertions were added. |
+| senior engineering | PASS AFTER FIXES | None | Runtime naming, warning-derivation contract drift, tracked local fixture, and process-evidence binding were reviewed. |
+| QA/test | PASS AFTER FIXES | None | Confirmed adapter naming/config, timeout and prompt-budget coverage, local fixture guard, representative task material, and project/checker lifecycle coverage. |
+| security/auth | PASS AFTER FIXES | None | Confirmed OpenAI Agents SDK errors remain sanitized, content excerpts and representative task material are untrusted source material, and the prompt-size guard fails closed. |
+| product/ops | PASS | None | Confirmed project-scoped setup semantics, no task-scoped checker generation, and no confusion with product review decisions. |
+| architecture | PASS | None | Confirmed the port/adapter boundary, project-scoped compiler, typed source material, and no service import of SDK classes. |
+| CI integrity | PASS WITH LOW RISKS | None | No workflow weakening. Low residual: CI does not install optional `.[agents]`; adapter behavior remains delayed-import and fake-SDK tested. |
+| docs | PASS AFTER FIXES | None | Confirmed scope lists, warning-derivation wording, status/trust/external-review state, and template docs are aligned. |
+| reuse/dedup | PASS AFTER FIXES | None | Confirmed source item parsing uses `_source_material_items` and v1 manifests without `content_excerpt` remain valid. |
+| test delta | PASS | None | Confirmed tests were strengthened without skips, xfails, or weakened assertions. |
 
 ## External Review
 
