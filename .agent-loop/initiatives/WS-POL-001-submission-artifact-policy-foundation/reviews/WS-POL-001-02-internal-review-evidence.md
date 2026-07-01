@@ -10,11 +10,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 89420d15184d6ff00b13a537d81de94e0703f3af
+Reviewed code SHA: 75adc273aaf9be848233c62629ddaf5fcf424370
 
-Reviewed at: 2026-07-01T09:32:48Z
+Reviewed at: 2026-07-01T11:37:44Z
 
-Reviewer run IDs: 019f1cc9-3ace-70a0-b81b-fa5188f47a5d, 019f1cc9-3e04-7962-bc42-38c71e6e5f9d, 019f1cc9-48f1-7ec3-a4e2-09fea5b012a1, 019f1cc9-5954-7413-9dea-10d1c5df721e, 019f1cc9-61a4-77e2-ac55-76be99b17c2f, 019f1cc9-740c-7c31-9ba9-24cbab3019bf, 019f1cdf-f82a-70b1-8a2b-6cfedd686ac0, 019f1cdf-fa31-7f80-86f9-bd9861a20928, 019f1cdf-fd43-7731-b780-876654b43bf6, 019f1ce0-0518-75d2-852c-c23082bc4680, 019f1ce0-2042-7f72-bc12-d44d69949ccd, 019f1ce0-2959-7af0-9140-70922fdd8639, 019f1ce5-15d6-78d0-a6a7-bc343881782f, 019f1ce5-1877-7d81-b440-be48ca20e194, 019f1cf8-1378-7213-a2cd-58f0aa35e398, 019f1cf8-2eb2-76c1-a904-8f972fb6bd89, 019f1cf8-1e68-76c2-b169-e5fe13104793, 019f1cf8-4360-7943-b90b-ae6c9a635efe, 019f1cf8-56c4-7443-8f49-4dc392ba3f62, 019f1cf8-7936-7500-bcaf-3ba9c7bb6733, 019f1cff-7559-7e02-ba38-356451b8b579, 019f1cff-8065-7b73-ba0e-4fc800b9bfc7, 019f1cff-903f-7431-b04b-3d9675aa9990, 019f1cff-a0a2-7cb2-a9b5-00ba9341b467, 019f1cff-b4bb-7a83-990f-23b99235cb60, 019f1cff-d252-7f82-a037-0caaadf29fc8
+Reviewer run IDs: 019f1cc9-3ace-70a0-b81b-fa5188f47a5d, 019f1cc9-3e04-7962-bc42-38c71e6e5f9d, 019f1cc9-48f1-7ec3-a4e2-09fea5b012a1, 019f1cc9-5954-7413-9dea-10d1c5df721e, 019f1cc9-61a4-77e2-ac55-76be99b17c2f, 019f1cc9-740c-7c31-9ba9-24cbab3019bf, 019f1cdf-f82a-70b1-8a2b-6cfedd686ac0, 019f1cdf-fa31-7f80-86f9-bd9861a20928, 019f1cdf-fd43-7731-b780-876654b43bf6, 019f1ce0-0518-75d2-852c-c23082bc4680, 019f1ce0-2042-7f72-bc12-d44d69949ccd, 019f1ce0-2959-7af0-9140-70922fdd8639, 019f1ce5-15d6-78d0-a6a7-bc343881782f, 019f1ce5-1877-7d81-b440-be48ca20e194, 019f1cf8-1378-7213-a2cd-58f0aa35e398, 019f1cf8-2eb2-76c1-a904-8f972fb6bd89, 019f1cf8-1e68-76c2-b169-e5fe13104793, 019f1cf8-4360-7943-b90b-ae6c9a635efe, 019f1cf8-56c4-7443-8f49-4dc392ba3f62, 019f1cf8-7936-7500-bcaf-3ba9c7bb6733, 019f1cff-7559-7e02-ba38-356451b8b579, 019f1cff-8065-7b73-ba0e-4fc800b9bfc7, 019f1cff-903f-7431-b04b-3d9675aa9990, 019f1cff-a0a2-7cb2-a9b5-00ba9341b467, 019f1cff-b4bb-7a83-990f-23b99235cb60, 019f1cff-d252-7f82-a037-0caaadf29fc8, 019f1d3a-b6bf-7382-8a83-99b6ac8a1fb5, 019f1d3a-ceae-7be0-afc5-d425f5c2ee51, 019f1d3a-e771-7a60-86d0-4cc92afc77cc, 019f1d62-5ed1-78b3-830f-f5bd045cd00d
 
 After reviewed SHA `89420d15184d6ff00b13a537d81de94e0703f3af`, only review evidence, initiative status, loop state, and PR trust-bundle files may change before PR publication.
 
@@ -43,6 +43,15 @@ Final external-review fix reviewers:
 | docs | PASS | None | Confirmed sufficiency/derivation route wording and evidence wording are correct. |
 | test delta | PASS | None | Confirmed new tests strengthen coverage and no skips or weakened assertions were added. |
 
+Final CodeRabbit follow-up reviewers:
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | PASS AFTER FIXES | None | Found that broad `CancelledError` wrapping swallowed caller cancellation; fixed by propagating active task cancellation and wrapping SDK-originated cancellation only. |
+| qa/test | PASS | None | Confirmed warning reports can derive without acknowledgement, approval still requires acknowledgement, and reuse-integrity coverage is present. |
+| security/auth | PASS | None | Confirmed agent-derived policy reuse validates body/hash integrity and OpenAI adapter failures remain sanitized. |
+| test delta | PASS AFTER FIXES | None | Found missing direct coverage for approval of an agent-derived warning policy; fixed with `test_agent_derived_warning_policy_requires_acknowledgement_before_approval`. |
+
 ## Valid Findings Addressed
 
 - Made persisted sufficiency-agent and derivation-agent identity server-owned. Runtime/provider-returned `agent_name`, `agent_version`, and policy versions cannot become audit provenance.
@@ -52,6 +61,11 @@ Final external-review fix reviewers:
 - Documented the manual sufficiency path: a source snapshot has one sufficiency report; if a manual report already exists, operators continue through manual policy creation or create a fresh guide-source snapshot for the agent path.
 - Added `docs/product_first_user_flows.md` to the WS-POL-001-02 chunk contract because the reviewed product-flow clarification directly resolved docs/product-ops findings.
 - Earlier in the chunk, replaced eager runtime construction with lazy explicit agent-route resolution; split agent execution from locked persistence; hardened compiler semantic coverage; shared canonical hashing; sanitized OpenAI adapter failures; and aligned docs so the agent derives policy while Workstream's compiler builds deterministic checker bundles.
+- Wrapped SDK-originated OpenAI cancellation as `ProjectAgentRuntimeError` without swallowing caller/request/shutdown cancellation.
+- Locked `warn_low_quality_generated_artifact` as warning-only with empty config.
+- Split policy derivation sufficiency validation from policy approval validation, so warning reports can derive policy while approval still requires authorized warning acknowledgement.
+- Revalidated existing agent-derived policy body/hash integrity before reuse.
+- Added direct coverage that an agent-derived policy from a warning sufficiency report cannot be approved until warnings are acknowledged.
 
 ## Commands Run
 
@@ -72,6 +86,62 @@ python3 scripts/workstream_agent_gate.py --base origin/main --head HEAD --format
 git diff --check
 cd backend && .venv/bin/python -m pytest tests/test_projects.py -k 'sufficiency_agent_reuses_existing_manual_report or submission_artifact_policy_approval_rejects_body_hash_mismatch or project_guide_rejects_non_finite_source_metadata or review_policy_rejects_invalid_decision_names or project_create_validation_errors_are_structured' -q
 cd backend && .venv/bin/python -m ruff check app/main.py app/modules/projects/service.py tests/test_projects.py
+cd backend && .venv/bin/python -m ruff check app/adapters/project_agents/openai_agents.py app/modules/checkers/compiler.py app/modules/projects/service.py tests/test_checkers.py tests/test_projects.py
+python3 -S - <<'PY'
+import os
+import sys
+os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
+sys.path.insert(0, '/home/abiorh/flow/workstream/backend')
+sys.path.extend([
+    '/home/abiorh/.local/lib/python3.12/site-packages',
+    '/usr/local/lib/python3.12/dist-packages',
+    '/usr/lib/python3/dist-packages',
+])
+import pytest
+raise SystemExit(pytest.main([
+    '-p', 'pytest_asyncio.plugin',
+    'tests/test_projects.py::test_openai_agent_adapter_wraps_sdk_timeouts',
+    'tests/test_projects.py::test_openai_agent_adapter_wraps_sdk_cancellation',
+    'tests/test_projects.py::test_openai_agent_adapter_propagates_caller_cancellation',
+    'tests/test_projects.py::test_agent_route_sanitizes_runtime_exception_chain',
+]))
+PY
+python3 -S - <<'PY'
+import os
+import sys
+os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
+sys.path.insert(0, '/home/abiorh/flow/workstream/backend')
+sys.path.extend([
+    '/home/abiorh/.local/lib/python3.12/site-packages',
+    '/usr/local/lib/python3.12/dist-packages',
+    '/usr/lib/python3/dist-packages',
+])
+import pytest
+raise SystemExit(pytest.main([
+    '-p', 'pytest_asyncio.plugin',
+    'tests/test_checkers.py',
+    'tests/test_projects.py',
+]))
+PY
+python3 -S - <<'PY'
+import os
+import sys
+os.environ['PYTEST_DISABLE_PLUGIN_AUTOLOAD'] = '1'
+sys.path.insert(0, '/home/abiorh/flow/workstream/backend')
+sys.path.extend([
+    '/home/abiorh/.local/lib/python3.12/site-packages',
+    '/usr/local/lib/python3.12/dist-packages',
+    '/usr/lib/python3/dist-packages',
+])
+import pytest
+raise SystemExit(pytest.main([
+    '-p', 'pytest_asyncio.plugin',
+    'tests/test_projects.py::test_derivation_agent_allows_warning_report_without_acknowledgement_and_is_idempotent',
+    'tests/test_projects.py::test_agent_derived_warning_policy_requires_acknowledgement_before_approval',
+    'tests/test_projects.py::test_sufficiency_warnings_require_acknowledgement',
+]))
+PY
+cd backend && .venv/bin/python -m ruff check tests/test_projects.py
 ```
 
 ## Results
@@ -94,6 +164,12 @@ Loop memory state check passed.
 Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/compiler chunk touching risk-sensitive files and backend package config.
 Final external-review fix focused tests passed: 5 passed, 174 deselected in 50.32s.
 Final external-review fix touched-file ruff passed.
+CodeRabbit follow-up touched-file ruff passed.
+Adapter timeout/cancellation focused tests passed: 4 passed in 9.96s.
+Checker and project affected suites passed after follow-up fixes: 217 passed in 787.86s.
+Warning-derived approval focused tests passed: 3 passed in 30.53s.
+Final test-file ruff passed.
+Final checker and project affected suites passed after added warning-derived approval coverage: 218 passed in 1164.34s.
 ```
 
 ## Remaining Risks
