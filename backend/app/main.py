@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -63,12 +64,12 @@ async def request_validation_exception_handler(
     """Return validation errors without echoing non-finite JSON values."""
     return JSONResponse(
         status_code=422,
-        content={
+        content=jsonable_encoder({
             "detail": [
                 _validation_error_detail(error)
                 for error in exc.errors()
             ],
-        },
+        }),
     )
 
 

@@ -86,4 +86,4 @@ Agent gate result: REVIEW_REQUIRED because this is a large L1 policy/runtime/com
 - Chunk 3 must make tasks lock the guide source snapshot, effective project submission artifact policy hash, and project pre-submit checker bundle hash before `READY`.
 - Chunk 3 must migrate submission creation runtime away from transitional task `required_files` and `required_evidence` authority.
 - The optional OpenAI Agents SDK extra is adapter-isolated and fake-SDK tested; CI does not currently install `.[agents]`.
-- Deterministic runtime output repeats a small number of default literals, but those outputs remain untrusted and are revalidated through schema, merge rules, provenance checks, and compiler checks before approval.
+- Deterministic runtime output repeats a few default literals, but those outputs remain untrusted and are revalidated through schema, merge rules, provenance checks, and compiler checks before approval.

@@ -144,8 +144,11 @@ Adds protected v1 routes:
 
 These routes require an actor role allowed to manage project setup.
 
-Agent routes return `201` when they create a new report or policy and `200`
-when they reuse the existing server-owned row for the same source snapshot.
+`run-sufficiency-agent` returns `201` when it creates a new report and `200`
+when it reuses the existing sufficiency row for the same source snapshot.
+`derive-submission-artifact-policy` returns `201` when it creates a new policy
+and `200` only when it reuses an existing agent-derived policy for the same
+source snapshot.
 Manual policy creation does not accept derivation provenance fields. Manual
 policies persist `manual_admin_derivation`; agent-created policies persist
 `agent_derivation` and use a server-owned `agent-<snapshot-hash>` policy
@@ -153,9 +156,10 @@ version. Manual policy creation requires sufficiency clearance first. Agent
 policy derivation requires a Workstream-agent sufficiency report for the same
 snapshot, and persisted agent identity is server-owned rather than copied from
 provider output. A source snapshot has one sufficiency report. If a manual
-report exists for that snapshot, the agent route reuses that row; operators
-continue through manual policy creation after clearance or create a fresh
-guide-source snapshot before running the agent path.
+report exists for that snapshot, `run-sufficiency-agent` reuses that row, while
+`derive-submission-artifact-policy` rejects it; operators continue through
+manual policy creation after clearance or create a fresh guide-source snapshot
+before running the agent path.
 
 `POST /submission-artifact-policies/{policy_id}/approve` returns the merged
 `EffectiveProjectSubmissionArtifactPolicy`. The approval path also creates the

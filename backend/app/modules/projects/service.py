@@ -1018,6 +1018,8 @@ class ProjectService:
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         if policy.source_snapshot_hash != snapshot.bundle_hash:
             raise PolicySetupBlocked("submission artifact policy is bound to a stale source snapshot")
+        if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
+            raise PolicySetupBlocked("submission artifact policy body hash mismatch")
         if policy.derivation_source == AGENT_SUBMISSION_ARTIFACT_POLICY_DERIVATION_SOURCE:
             self._validate_agent_derived_submission_artifact_policy(policy, snapshot)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)

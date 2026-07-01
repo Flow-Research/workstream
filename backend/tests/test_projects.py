@@ -1910,6 +1910,39 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert "require_file" in pre_submit_checker_policy.checker_configs
 
 
+async def test_submission_artifact_policy_approval_rejects_body_hash_mismatch(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    await create_sufficiency_report(project_client, project["id"], guide["id"], snapshot["id"])
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(SubmissionArtifactPolicy, policy["id"])
+        assert persisted is not None
+        persisted.policy_body = {
+            **persisted.policy_body,
+            "allowed_storage_schemes": ["local"],
+        }
+        await session.commit()
+
+    response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        headers=auth_headers(),
+        json={"approval_note": "Hash mismatch must be rejected."},
+    )
+
+    assert response.status_code == 422
+    assert "submission artifact policy body hash mismatch" in response.json()["detail"]
+
+
 async def test_approved_submission_artifact_policy_cannot_be_updated(
     project_client: AsyncClient,
 ) -> None:
