@@ -1,0 +1,22 @@
+# CODEOWNERS for Flow-Research/workstream
+# Security team must review changes to payment and submission logic
+
+# Payment service - require security review
+backend/payment/                          @Flow-Research/security
+backend/*/payment*                        @Flow-Research/security
+
+# Submission and checker logic - require security review
+backend/checker/                          @Flow-Research/security
+backend/submission/                       @Flow-Research/security
+
+# Workstream API runtime and settings - require security review
+workstream/api/                           @Flow-Research/security
+
+# Auth configuration - require security review
+backend/auth/                             @Flow-Research/security
+
+# CI/CD workflows - require security review
+.github/workflows/                        @Flow-Research/security
+
+# Environment / secrets config
+.env*                                     @Flow-Research/security
