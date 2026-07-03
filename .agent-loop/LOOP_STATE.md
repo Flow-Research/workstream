@@ -6,10 +6,10 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-04`
 - Branch: `codex/ws-pol-001-04-post-submit-policy`
-- Status: `WS-POL-001-04` implementation, internal reviewer fanout, evidence, and PR trust artifacts are complete
+- Status: `WS-POL-001-04` implementation, internal reviewer fanout, evidence, and PR trust artifacts are complete; PR #65 is open
 - Last merged implementation SHA: `d1e80e3903038cb9c99aec9e83faf164a010c46d`
 - Last merge commit: `a73be67bf6c3c2ac0194f8aecbda89d748baa92c`
-- Current gate: PR creation and external review
+- Current gate: external review and CI on PR #65
 - Next chunk: inactive until `WS-POL-001-04` is reviewed and merged by the user
 
 ## Operating Rule
