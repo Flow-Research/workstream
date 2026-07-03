@@ -589,22 +589,88 @@ Fields:
 - `required_checkers`
 - `warning_checkers`
 - `blocking_severities`
+- `policy_hash`
+- `policy_body`
 - `created_at`
+
+`policy_body` is the canonical source for post-submit checker execution. The
+hash is `sha256(canonical_json(policy_body))`. `required_checkers`,
+`warning_checkers`, and `blocking_severities` are query projections and must
+match `policy_body`.
+
+When a task locks its project context, Workstream stamps
+`locked_post_submit_checker_policy_body` by copying the persisted project
+`PostSubmitCheckerPolicy.policy_body`. Submissions copy that body from the task,
+and durable checker runs copy it from the submission. Checker execution
+validates the body against the stamped hash and executes from that locked body,
+not from mutable project setup rows or the current default-checker constant.
+Later project policy edits therefore cannot change already locked task,
+submission, or checker-run behavior.
+
+The policy body includes:
+
+- `schema_version`
+- `project_id`
+- `guide_version`
+- `default_checkers`
+- `required_checkers`
+- `warning_checkers`
+- `execution_checkers`
+- `blocking_severities`
+
+`execution_checkers` is the complete ordered durable checker list. It is
+computed from Workstream default durable checkers plus project required and
+warning checkers, and it is covered by `policy_hash`.
 
 Example:
 
 ```json
 {
+  "schema_version": "post_submit_checker_policy.v1",
+  "project_id": "project-id",
+  "guide_version": "v1",
+  "default_checkers": [
+    "check_submission_packet",
+    "check_policy_context_present",
+    "check_evidence_present",
+    "check_evidence_integrity",
+    "check_required_files",
+    "check_forbidden_files",
+    "check_confidentiality_attestation",
+    "check_low_quality_generated_artifacts"
+  ],
   "required_checkers": [
     "check_policy_context_present",
     "check_submission_packet",
     "check_evidence_present"
+  ],
+  "warning_checkers": [],
+  "execution_checkers": [
+    "check_submission_packet",
+    "check_policy_context_present",
+    "check_evidence_present",
+    "check_evidence_integrity",
+    "check_required_files",
+    "check_forbidden_files",
+    "check_confidentiality_attestation",
+    "check_low_quality_generated_artifacts"
   ],
   "blocking_severities": ["high"]
 }
 ```
 
 Post-submit checker policy governs durable internal checker runs after a submission is locked. It does not replace the generated project pre-submit checker policy.
+
+Migration note: the `0008_post_submit_checker_policy` migration adds explicit
+post-submit policy hash, body, and lock columns. Existing local v0.1 checker
+policy rows without policy hashes are intentionally not backfilled into
+authority. They must be recreated or repaired through the project setup
+lifecycle. Existing non-draft task, submission, or checker-run rows from the
+construction database block the migration with an explicit preflight error
+because Workstream cannot truthfully infer which post-submit policy body and
+hash governed those runtime records. After the migration, runtime records fail
+closed when a task, submission, or checker run lacks valid
+`locked_post_submit_checker_policy_*` context.
 
 ## ReviewPolicy
 
@@ -699,6 +765,10 @@ Fields:
 - `locked_pre_submit_checker_policy_id`
 - `locked_pre_submit_checker_bundle_hash`
 - `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_id`
+- `locked_post_submit_checker_policy_version`
+- `locked_post_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_body`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -753,14 +823,18 @@ External origin adapters are later work. When added, they normalize into this ta
 The task id points to the locked task contract. That contract includes the guide
 version, guide source snapshot id/hash, effective project submission artifact
 policy id/hash, generated project pre-submit checker policy id/bundle hash,
-current checker policy version, review policy version, revision policy
-version, payment policy version, acceptance criteria, derived display summaries,
-base payout, and skill tags. Workers submit against the task id; they do not
-restate policy versions.
+legacy checker policy version, post-submit checker policy id/version/hash,
+review policy version, revision policy version, payment policy version,
+acceptance criteria, derived display summaries, base payout, and skill tags.
+Workers submit against the task id; they do not restate policy versions.
 
-Implementation note: current v0.1 code uses `locked_checker_policy_version`
-for current checker-policy provenance. The later post-submit split adds
-explicit post-submit checker provenance.
+Implementation note: `locked_checker_policy_version` is retained only as
+legacy/admin-visible context. Durable post-submit checker execution uses
+`locked_post_submit_checker_policy_id`,
+`locked_post_submit_checker_policy_version`, and
+`locked_post_submit_checker_policy_hash`.
+Worker-facing task responses omit the legacy checker-policy version and
+post-submit checker policy internals.
 
 ## Assignment
 
@@ -797,6 +871,10 @@ Fields:
 - `locked_pre_submit_checker_policy_id`
 - `locked_pre_submit_checker_bundle_hash`
 - `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_id`
+- `locked_post_submit_checker_policy_version`
+- `locked_post_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_body`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -812,10 +890,15 @@ checker, review, revision, and payment policy provenance from trusted
 task/project state. The worker does not provide submission version, evidence
 ids, checker results, checker run ids, guide versions, source snapshots,
 effective project policy ids/hashes, pre-submit checker ids/bundle hashes,
-current checker policy versions, review policy versions, revision policy
-versions, or payment policy versions.
+legacy checker policy versions, post-submit checker policy ids/versions/hashes,
+review policy versions, revision policy versions, or payment policy versions.
 
-Implementation note: current v0.1 code stamps explicit effective project submission artifact policy and pre-submit checker provenance on submissions. `locked_checker_policy_version` remains the v0.1 post-submit checker policy reference until `WS-POL-001-04` splits post-submit checker provenance into a dedicated `PostSubmitCheckerPolicy`.
+Implementation note: submissions stamp explicit post-submit checker provenance
+from the task. Durable `CheckerRun` creation uses those
+`locked_post_submit_checker_policy_*` fields and fails closed when they are
+missing, mismatched, deleted, stale, or unauthorized.
+Worker-facing submission responses omit the legacy checker-policy version and
+post-submit checker policy internals.
 
 Status:
 
@@ -872,6 +955,10 @@ Fields:
 - `runner_version`
 - `locked_guide_version`
 - `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_id`
+- `locked_post_submit_checker_policy_version`
+- `locked_post_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_body`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`

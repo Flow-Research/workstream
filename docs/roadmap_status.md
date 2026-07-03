@@ -40,9 +40,9 @@ Current phase: Week 3 review and revision preparation.
 - Chunk 6 checker contract and records specification.
 - Chunk 7 checker runner, registry, structural checkers, durable checker records, and API tests.
 - Chunk 8 evidence, policy, forbidden-file, confidentiality, and generated-artifact checkers.
-- Chunk 9 automatic pre-review gate with checker-caused `needs_revision`, internal `task_setup_blocked`, trusted checker retry, and worker redaction.
+- Chunk 9 automatic pre-review gate with pre-submit intake blocking, internal `task_setup_blocked`, trusted checker retry, and worker redaction.
 - Chunk 10 checker trial with the expanded real API sample matrix, failure catalog, false-positive notes, missing-checker notes, and internal verifier evidence.
-- Week 2 real HTTP API drill through Flow-token auth, project/guide/task/submission lifecycle, pre-submit checks, automatic checker runs, checker-caused `needs_revision`, worker redaction, internal `task_setup_blocked`, and trusted checker retry.
+- Week 2 real HTTP API drill through Flow-token auth, project/guide/task/submission lifecycle, pre-submit checks, automatic checker runs, `pre_submission_checker_failed` intake failures, worker redaction, internal `task_setup_blocked`, and trusted checker retry.
 
 ## Review Tracks Closed
 
@@ -92,7 +92,7 @@ WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:543
 
 The script starts a real local API server, issues local Flow-compatible tokens, runs migrations forward, and exercises:
 
-`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> Submit -> Lock submission -> Automatic checker run -> review_pending | needs_revision | internal task_setup_blocked -> trusted checker retry`
+`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> pre_submission_checker_failed | Submit -> Lock submission -> Automatic checker run -> review_pending | checker-caused needs_revision | internal task_setup_blocked -> trusted checker retry`
 
 ## Deterministic Week 2 Closeout Gate
 

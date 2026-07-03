@@ -176,7 +176,7 @@ setup bundle:
 - `submission_artifact_policy`
 - `effective_submission_artifact_policy`
 - `pre_submit_checker_policy`
-- `checker_policy`
+- `post_submit_checker_policy`
 - `review_policy`
 - `revision_policy`
 - `payment_policy`

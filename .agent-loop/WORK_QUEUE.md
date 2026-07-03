@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-POL-001-04` | Post-Submit Checker Policy Provenance | L1 | Planned; inactive until the user gives an explicit start signal |
+| `WS-POL-001-04` | Post-Submit Checker Policy Provenance | L1 | Review complete; evidence preparation on `codex/ws-pol-001-04-post-submit-policy` |
 
 ## Completed
 
@@ -19,9 +19,9 @@
 
 ## Proposed Next
 
-`WS-POL-001-04` is the next Workstream product implementation chunk. It splits
-post-submit checker policy provenance from pre-submit intake and must start on a
-new branch only after the user's explicit start signal.
+`WS-POL-001-04` has completed deterministic verification and internal reviewer
+fanout. Evidence and PR trust artifacts must be committed before PR, then the
+chunk stops for user review.
 
 ## Blocked
 

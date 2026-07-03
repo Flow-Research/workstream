@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -19,6 +20,12 @@ from app.modules.tasks.models import WorkerProfile
 
 TOKEN = "week1-dry-run-token"
 ISSUER = "flow-dry-run"
+STRONG_ATTESTATION = (
+    "I attest this is original dry run originality work with no confidential client data, "
+    "credentials, secrets, tokens, passwords, API keys, private source material, source code, "
+    "copied platform artifacts, or copied platform content. I confirm credential and secret "
+    "exclusion and accept human accountability for agent assisted work."
+)
 
 
 def set_actor(*, subject: str, roles: str) -> None:
@@ -99,8 +106,96 @@ async def post_ok(client: AsyncClient, url: str, payload: dict | None = None) ->
         Parsed JSON response.
     """
     response = await client.post(url, headers=auth_headers(), json=payload)
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise RuntimeError(f"POST {url} failed: {response.status_code} {response.text}")
     return response.json()
+
+
+def sha256_token(value: str) -> str:
+    """Return a Workstream sha256 token for deterministic dry-run fixtures."""
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def submission_artifact_policy_body() -> dict:
+    """Return a minimal project submission artifact policy for the dry run."""
+    return {
+        "required_artifacts": [
+            {
+                "key": "answer",
+                "path": "answer.md",
+                "hash_required": True,
+                "required": True,
+                "description": "Main answer artifact.",
+            }
+        ],
+        "required_evidence": [
+            {
+                "key": "checker_log",
+                "label": "checker log",
+                "hash_required": True,
+                "required": True,
+                "description": "Evidence item used by the reviewer.",
+            }
+        ],
+        "forbidden_artifacts": [],
+        "attestation_terms": ["dry_run_originality"],
+        "manifest_required": True,
+        "artifact_hash_required": True,
+        "artifact_hash_algorithm": "sha256",
+        "allowed_storage_schemes": ["local", "s3", "r2"],
+        "maximum_file_size_bytes": 1_000_000,
+        "maximum_package_size_bytes": 5_000_000,
+        "packaging": {"package_required": False},
+    }
+
+
+async def create_policy_bundle_for_guide(
+    client: AsyncClient,
+    project_id: str,
+    guide_id: str,
+    run_id: str,
+) -> None:
+    """Create the guide-source, sufficiency, and approved policy bundle."""
+    snapshot = await post_ok(
+        client,
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
+        {
+            "items": [
+                {
+                    "source_kind": "inline_markdown",
+                    "durable_ref": f"inline:/guides/{guide_id}/{run_id}",
+                    "ingestion_adapter": "manual_import",
+                    "content_hash": sha256_token(f"{run_id}:guide"),
+                    "media_type": "text/markdown",
+                }
+            ]
+        },
+    )
+    await post_ok(
+        client,
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        {
+            "source_snapshot_id": snapshot["id"],
+            "status": "passed",
+            "findings": [],
+            "summary": "Guide is sufficient for the Week 1 dry run.",
+        },
+    )
+    policy = await post_ok(
+        client,
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        {
+            "source_snapshot_id": snapshot["id"],
+            "policy_version": "v1",
+            "policy_body": submission_artifact_policy_body(),
+        },
+    )
+    await post_ok(
+        client,
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/"
+        f"{policy['id']}/approve",
+        {"approval_note": "Approved for Week 1 dry run."},
+    )
 
 
 async def main() -> None:
@@ -152,7 +247,7 @@ async def main() -> None:
                 "evidence_policy": {"required": ["log"]},
                 "unacceptable_work_policy": "Copied or unverifiable work.",
                 "change_summary": "Initial dry-run guide",
-                "checker_policy": {
+                "post_submit_checker_policy": {
                     "required_checkers": ["check_policy_context_present"],
                     "warning_checkers": [],
                     "blocking_severities": ["high"],
@@ -180,6 +275,7 @@ async def main() -> None:
                 },
             },
         )
+        await create_policy_bundle_for_guide(client, project["id"], guide["id"], run_id)
         await post_ok(client, f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate")
         task = await post_ok(
             client,
@@ -238,7 +334,7 @@ async def main() -> None:
                         "notes": "dry-run artifact",
                     }
                 ],
-                "worker_attestation": "I confirm this dry-run packet follows the locked guide.",
+                "worker_attestation": STRONG_ATTESTATION,
                 "evidence_items": [
                     {
                         "type": "log",
@@ -246,7 +342,7 @@ async def main() -> None:
                         "uri": f"local://dry-run/{run_id}/evidence.log",
                         "hash": f"sha256:evidence-{run_id}",
                         "size_bytes": 256,
-                        "metadata": {"command": "week1_dry_run"},
+                        "metadata": {"command": "week1_dry_run", "policy_key": "checker_log"},
                     }
                 ],
             },

@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -83,6 +84,15 @@ class WorkstreamTask(Base):
             name="fk_workstream_tasks_locked_checker_policy",
         ),
         ForeignKeyConstraint(
+            [
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+            ],
+            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            name="fk_workstream_tasks_locked_post_submit_policy_hash",
+        ),
+        ForeignKeyConstraint(
             ["project_id", "locked_review_policy_version"],
             ["review_policies.project_id", "review_policies.guide_version"],
             name="fk_workstream_tasks_locked_review_policy",
@@ -126,6 +136,13 @@ class WorkstreamTask(Base):
         ),
         UniqueConstraint(
             "id",
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+            name="uq_workstream_tasks_id_locked_post_submit_policy_hash",
+        ),
+        UniqueConstraint(
+            "id",
             "locked_review_policy_version",
             name="uq_workstream_tasks_id_locked_review_policy",
         ),
@@ -157,6 +174,18 @@ class WorkstreamTask(Base):
             "locked_pre_submit_checker_bundle_hash",
             name="uq_workstream_tasks_id_locked_pre_submit_checker_hash",
         ),
+        CheckConstraint(
+            """
+            status = 'draft'
+            or (
+                locked_post_submit_checker_policy_id is not null
+                and locked_post_submit_checker_policy_version is not null
+                and locked_post_submit_checker_policy_hash is not null
+                and locked_post_submit_checker_policy_body is not null
+            )
+            """,
+            name="post_submit_policy_lock_complete",
+        ),
         Index(
             "ix_workstream_tasks_locked_source_snapshot",
             "locked_guide_source_snapshot_id",
@@ -169,12 +198,20 @@ class WorkstreamTask(Base):
             "ix_workstream_tasks_locked_pre_submit_checker_hash",
             "locked_pre_submit_checker_bundle_hash",
         ),
+        Index(
+            "ix_workstream_tasks_locked_post_submit_policy_hash",
+            "locked_post_submit_checker_policy_hash",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     locked_guide_version: Mapped[str | None] = mapped_column(String(50))
     locked_checker_policy_version: Mapped[str | None] = mapped_column(String(50))
+    locked_post_submit_checker_policy_id: Mapped[str | None] = mapped_column(String(36))
+    locked_post_submit_checker_policy_version: Mapped[str | None] = mapped_column(String(50))
+    locked_post_submit_checker_policy_hash: Mapped[str | None] = mapped_column(String(71))
+    locked_post_submit_checker_policy_body: Mapped[dict | None] = mapped_column(JSON)
     locked_review_policy_version: Mapped[str | None] = mapped_column(String(50))
     locked_revision_policy_version: Mapped[str | None] = mapped_column(String(50))
     locked_payment_policy_version: Mapped[str | None] = mapped_column(String(50))
@@ -275,6 +312,21 @@ class Submission(Base):
             name="fk_submissions_task_locked_checker_policy",
         ),
         ForeignKeyConstraint(
+            [
+                "task_id",
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+            ],
+            [
+                "workstream_tasks.id",
+                "workstream_tasks.locked_post_submit_checker_policy_id",
+                "workstream_tasks.locked_post_submit_checker_policy_version",
+                "workstream_tasks.locked_post_submit_checker_policy_hash",
+            ],
+            name="fk_submissions_task_locked_post_submit_policy_hash",
+        ),
+        ForeignKeyConstraint(
             ["task_id", "locked_review_policy_version"],
             ["workstream_tasks.id", "workstream_tasks.locked_review_policy_version"],
             name="fk_submissions_task_locked_review_policy",
@@ -341,8 +393,33 @@ class Submission(Base):
             ["pre_submit_checker_policies.id", "pre_submit_checker_policies.compiled_bundle_hash"],
             name="fk_submissions_locked_pre_submit_checker_hash",
         ),
+        ForeignKeyConstraint(
+            [
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+            ],
+            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            name="fk_submissions_locked_post_submit_policy_hash",
+        ),
         UniqueConstraint("task_id", "version", name="uq_submissions_task_version"),
         UniqueConstraint("id", "version", name="uq_submissions_id_version"),
+        UniqueConstraint(
+            "id",
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+            name="uq_submissions_id_locked_post_submit_policy_hash",
+        ),
+        CheckConstraint(
+            """
+            locked_post_submit_checker_policy_id is not null
+            and locked_post_submit_checker_policy_version is not null
+            and locked_post_submit_checker_policy_hash is not null
+            and locked_post_submit_checker_policy_body is not null
+            """,
+            name="post_submit_policy_lock_complete",
+        ),
         Index(
             "ix_submissions_locked_source_snapshot",
             "locked_guide_source_snapshot_id",
@@ -354,6 +431,10 @@ class Submission(Base):
         Index(
             "ix_submissions_locked_pre_submit_checker_hash",
             "locked_pre_submit_checker_bundle_hash",
+        ),
+        Index(
+            "ix_submissions_locked_post_submit_policy_hash",
+            "locked_post_submit_checker_policy_hash",
         ),
     )
 
@@ -369,6 +450,13 @@ class Submission(Base):
     worker_attestation: Mapped[str] = mapped_column(Text, nullable=False)
     locked_guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_checker_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    locked_post_submit_checker_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_post_submit_checker_policy_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+    locked_post_submit_checker_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_post_submit_checker_policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
     locked_review_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_revision_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_payment_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)

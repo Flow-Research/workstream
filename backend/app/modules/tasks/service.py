@@ -10,14 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import require_any_role
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectGuide,
     RevisionPolicy,
     ReviewPolicy,
+)
+from app.modules.projects.post_submit_policy import (
+    parse_locked_post_submit_checker_policy_body,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.tasks.lifecycle import (
@@ -62,17 +65,9 @@ SUBMISSION_LOCK_ROLES = {"admin", "project_manager"}
 WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS = {
     "assignment_id",
     "locked_guide_version",
-    "locked_checker_policy_version",
     "locked_review_policy_version",
     "locked_revision_policy_version",
     "locked_payment_policy_version",
-    "locked_guide_source_snapshot_id",
-    "locked_guide_source_snapshot_hash",
-    "locked_effective_project_submission_artifact_policy_id",
-    "locked_effective_project_submission_artifact_policy_hash",
-    "locked_pre_submit_checker_policy_id",
-    "locked_pre_submit_checker_bundle_hash",
-    "package_hash",
     "source_type",
     "submission_id",
     "submission_version",
@@ -239,7 +234,7 @@ class TaskService:
         )
         await self._session.commit()
         await self._session.refresh(task)
-        return TaskResponse.model_validate(task)
+        return self._task_response(actor, task)
 
     async def get_task(self, actor: ActorContext, task_id: str) -> TaskResponse:
         """Return one task visible to authorized workflow actors.
@@ -258,7 +253,7 @@ class TaskService:
         require_any_role(actor, TASK_VIEW_ROLES)
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
-        return TaskResponse.model_validate(task)
+        return self._task_response(actor, task)
 
     async def move_to_screening(
         self,
@@ -311,7 +306,7 @@ class TaskService:
         await self._change_task_status(actor, task, TASK_STATUS_SCREENING, reason)
         await self._session.commit()
         await self._session.refresh(task)
-        return TaskResponse.model_validate(task)
+        return self._task_response(actor, task)
 
     async def release_to_ready(
         self,
@@ -339,10 +334,11 @@ class TaskService:
         if reason is None or not reason.strip():
             raise TaskValidationError("release decision reason is required")
         self._ensure_locked_context(task)
+        await self._validate_locked_post_submit_policy_context(task)
         await self._change_task_status(actor, task, TASK_STATUS_READY, reason)
         await self._session.commit()
         await self._session.refresh(task)
-        return TaskResponse.model_validate(task)
+        return self._task_response(actor, task)
 
     async def claim_task(
         self,
@@ -396,7 +392,7 @@ class TaskService:
         await self._session.refresh(task)
         await self._session.refresh(assignment)
         return TaskWithAssignmentResponse(
-            task=TaskResponse.model_validate(task),
+            task=self._task_response(actor, task),
             assignment=AssignmentResponse.model_validate(assignment),
         )
 
@@ -447,7 +443,7 @@ class TaskService:
         )
         await self._session.commit()
         await self._session.refresh(task)
-        return TaskResponse.model_validate(task)
+        return self._task_response(actor, task)
 
     async def create_submission(
         self,
@@ -467,6 +463,7 @@ class TaskService:
 
         Raises:
             PermissionDenied: If the actor cannot create worker submissions.
+            TaskProjectNotReady: If locked project policy context is invalid.
             TaskTransitionBlocked: If task state or assignment does not allow submission.
             TaskValidationError: If required submission fields are missing.
             SubmissionVersionConflict: If concurrent version allocation conflicts.
@@ -487,6 +484,7 @@ class TaskService:
                 "task must be in progress or needs revision before submission"
             )
         self._ensure_locked_context(task)
+        await self._validate_locked_post_submit_policy_context(task)
 
         from app.modules.checkers.service import CheckerService, CheckerServiceError
 
@@ -520,6 +518,12 @@ class TaskService:
             worker_attestation=payload.worker_attestation,
             locked_guide_version=task.locked_guide_version,
             locked_checker_policy_version=task.locked_checker_policy_version,
+            locked_post_submit_checker_policy_id=task.locked_post_submit_checker_policy_id,
+            locked_post_submit_checker_policy_version=(
+                task.locked_post_submit_checker_policy_version
+            ),
+            locked_post_submit_checker_policy_hash=task.locked_post_submit_checker_policy_hash,
+            locked_post_submit_checker_policy_body=task.locked_post_submit_checker_policy_body,
             locked_review_policy_version=task.locked_review_policy_version,
             locked_revision_policy_version=task.locked_revision_policy_version,
             locked_payment_policy_version=task.locked_payment_policy_version,
@@ -577,7 +581,7 @@ class TaskService:
         persisted = await self._repo.get_submission(submission.id)
         if persisted is None:
             raise SubmissionNotFound("submission not found")
-        return SubmissionResponse.model_validate(persisted)
+        return self._submission_response(actor, persisted)
 
     async def list_task_submissions(
         self,
@@ -597,7 +601,7 @@ class TaskService:
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
         submissions = await self._repo.list_submissions_for_task(task.id)
-        return [SubmissionResponse.model_validate(submission) for submission in submissions]
+        return [self._submission_response(actor, submission) for submission in submissions]
 
     async def get_submission(
         self,
@@ -617,7 +621,7 @@ class TaskService:
         submission = await self._get_submission(submission_id)
         task = await self._get_task(submission.task_id)
         await self._ensure_task_visible(actor, task)
-        return SubmissionResponse.model_validate(submission)
+        return self._submission_response(actor, submission)
 
     async def lock_submission(
         self,
@@ -644,7 +648,7 @@ class TaskService:
         if latest_submission is None or latest_submission.id != submission.id:
             raise TaskTransitionBlocked("only latest submission version can be locked")
         if submission.locked_at is not None:
-            return SubmissionResponse.model_validate(submission)
+            return self._submission_response(actor, submission)
         if task.status != TASK_STATUS_SUBMITTED:
             raise TaskTransitionBlocked("task must be submitted before locking submission")
 
@@ -675,7 +679,7 @@ class TaskService:
         persisted = await self._repo.get_submission(submission.id)
         if persisted is None:
             raise SubmissionNotFound("submission not found")
-        return SubmissionResponse.model_validate(persisted)
+        return self._submission_response(actor, persisted)
 
     async def list_task_audit_events(
         self,
@@ -751,6 +755,15 @@ class TaskService:
             "locked_at": submission.locked_at.isoformat() if submission.locked_at else None,
             "locked_guide_source_snapshot_id": submission.locked_guide_source_snapshot_id,
             "locked_guide_source_snapshot_hash": submission.locked_guide_source_snapshot_hash,
+            "locked_post_submit_checker_policy_id": (
+                submission.locked_post_submit_checker_policy_id
+            ),
+            "locked_post_submit_checker_policy_version": (
+                submission.locked_post_submit_checker_policy_version
+            ),
+            "locked_post_submit_checker_policy_hash": (
+                submission.locked_post_submit_checker_policy_hash
+            ),
             "locked_effective_project_submission_artifact_policy_id": (
                 submission.locked_effective_project_submission_artifact_policy_id
             ),
@@ -768,7 +781,7 @@ class TaskService:
         project_id: str,
     ) -> tuple[
         ProjectGuide,
-        CheckerPolicy,
+        PostSubmitCheckerPolicy,
         ReviewPolicy,
         RevisionPolicy,
         PaymentPolicy,
@@ -791,7 +804,10 @@ class TaskService:
             guide = await self._project_repo.get_active_guide(project_id)
             if guide is None:
                 raise TaskProjectNotReady("project has no active guide")
-            checker_policy = await self._project_repo.get_checker_policy(project_id, guide.version)
+            checker_policy = await self._project_repo.get_post_submit_checker_policy(
+                project_id,
+                guide.version,
+            )
             review_policy = await self._project_repo.get_review_policy(project_id, guide.version)
             revision_policy = await self._project_repo.get_revision_policy(
                 project_id,
@@ -842,6 +858,23 @@ class TaskService:
             or not pre_submit_checker_policy.compiled_bundle_hash
         ):
             raise TaskProjectNotReady("active project pre-submit checker policy is incomplete")
+        if not checker_policy.policy_hash or not checker_policy.policy_body:
+            raise TaskProjectNotReady("active post-submit checker policy hash is incomplete")
+        try:
+            parsed_checker_policy = parse_locked_post_submit_checker_policy_body(
+                checker_policy.policy_body,
+                project_id=checker_policy.project_id,
+                guide_version=checker_policy.guide_version,
+                policy_hash=checker_policy.policy_hash,
+            )
+        except ValueError as exc:
+            raise TaskProjectNotReady("active post-submit checker policy hash is invalid") from exc
+        if (
+            parsed_checker_policy.required_checkers != checker_policy.required_checkers
+            or parsed_checker_policy.warning_checkers != checker_policy.warning_checkers
+            or parsed_checker_policy.blocking_severities != checker_policy.blocking_severities
+        ):
+            raise TaskProjectNotReady("active post-submit checker policy hash is invalid")
         return (
             guide,
             checker_policy,
@@ -908,7 +941,7 @@ class TaskService:
         self,
         task: WorkstreamTask,
         guide: ProjectGuide,
-        checker_policy: CheckerPolicy,
+        checker_policy: PostSubmitCheckerPolicy,
         review_policy: ReviewPolicy,
         revision_policy: RevisionPolicy,
         payment_policy: PaymentPolicy,
@@ -931,6 +964,10 @@ class TaskService:
         """
         task.locked_guide_version = guide.version
         task.locked_checker_policy_version = checker_policy.guide_version
+        task.locked_post_submit_checker_policy_id = checker_policy.id
+        task.locked_post_submit_checker_policy_version = checker_policy.guide_version
+        task.locked_post_submit_checker_policy_hash = checker_policy.policy_hash
+        task.locked_post_submit_checker_policy_body = dict(checker_policy.policy_body or {})
         task.locked_review_policy_version = review_policy.guide_version
         task.locked_revision_policy_version = revision_policy.guide_version
         task.locked_payment_policy_version = payment_policy.guide_version
@@ -962,6 +999,10 @@ class TaskService:
             for field in (
                 "locked_guide_version",
                 "locked_checker_policy_version",
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+                "locked_post_submit_checker_policy_body",
                 "locked_review_policy_version",
                 "locked_revision_policy_version",
                 "locked_payment_policy_version",
@@ -976,6 +1017,38 @@ class TaskService:
         ]
         if missing:
             raise TaskTransitionBlocked(f"task missing locked context: {', '.join(missing)}")
+
+    async def _validate_locked_post_submit_policy_context(self, task: WorkstreamTask) -> None:
+        """Validate the task's locked post-submit checker policy before submission.
+
+        Args:
+            task: Task whose locked post-submit policy context should be
+                verified before a submission row can be created.
+
+        Raises:
+            TaskProjectNotReady: If the locked post-submit policy row is
+                missing, mismatched, or no longer hashes to the stamped value.
+        """
+        policy = await self._project_repo.get_post_submit_checker_policy_by_id(
+            task.locked_post_submit_checker_policy_id or ""
+        )
+        if (
+            policy is None
+            or policy.project_id != task.project_id
+            or policy.guide_version != task.locked_post_submit_checker_policy_version
+            or policy.guide_version != task.locked_guide_version
+            or policy.policy_hash != task.locked_post_submit_checker_policy_hash
+        ):
+            raise TaskProjectNotReady("locked post-submit checker policy is invalid")
+        try:
+            parse_locked_post_submit_checker_policy_body(
+                task.locked_post_submit_checker_policy_body,
+                project_id=task.project_id,
+                guide_version=task.locked_post_submit_checker_policy_version or "",
+                policy_hash=task.locked_post_submit_checker_policy_hash or "",
+            )
+        except ValueError as exc:
+            raise TaskProjectNotReady("locked post-submit checker policy hash is invalid") from exc
 
     async def _require_active_worker_profile(
         self,
@@ -1082,6 +1155,11 @@ class TaskService:
         payload = {
             "locked_guide_version": task.locked_guide_version,
             "locked_checker_policy_version": task.locked_checker_policy_version,
+            "locked_post_submit_checker_policy_id": task.locked_post_submit_checker_policy_id,
+            "locked_post_submit_checker_policy_version": (
+                task.locked_post_submit_checker_policy_version
+            ),
+            "locked_post_submit_checker_policy_hash": task.locked_post_submit_checker_policy_hash,
             "locked_review_policy_version": task.locked_review_policy_version,
             "locked_revision_policy_version": task.locked_revision_policy_version,
             "locked_payment_policy_version": task.locked_payment_policy_version,
@@ -1137,6 +1215,62 @@ class TaskService:
                 return
         raise TaskNotFound("task not found")
 
+    def _task_response(self, actor: ActorContext, task: WorkstreamTask) -> TaskResponse:
+        """Build a role-sensitive task response.
+
+        Args:
+            actor: Verified actor reading the task.
+            task: Persisted task model.
+
+        Returns:
+            Task response with internal locked policy hashes hidden from workers.
+        """
+        response = TaskResponse.model_validate(task)
+        if not set(actor.roles).intersection(PROJECT_OPERATOR_ROLES):
+            response.locked_guide_source_snapshot_id = None
+            response.locked_guide_source_snapshot_hash = None
+            response.locked_effective_project_submission_artifact_policy_id = None
+            response.locked_effective_project_submission_artifact_policy_hash = None
+            response.locked_pre_submit_checker_policy_id = None
+            response.locked_pre_submit_checker_bundle_hash = None
+        return response
+
+    def _submission_response(
+        self,
+        actor: ActorContext,
+        submission: Submission,
+    ) -> SubmissionResponse:
+        """Build a role-sensitive submission response.
+
+        Args:
+            actor: Verified actor reading the submission.
+            submission: Persisted submission model.
+
+        Returns:
+            Submission response with artifact and policy provenance hidden from workers.
+        """
+        response = SubmissionResponse.model_validate(submission)
+        if not set(actor.roles).intersection(PROJECT_OPERATOR_ROLES):
+            response.package_uri = None
+            response.package_hash = None
+            response.artifact_hash_manifest = None
+            response.worker_attestation = None
+            response.locked_guide_version = None
+            response.locked_review_policy_version = None
+            response.locked_revision_policy_version = None
+            response.locked_payment_policy_version = None
+            response.locked_guide_source_snapshot_id = None
+            response.locked_guide_source_snapshot_hash = None
+            response.locked_effective_project_submission_artifact_policy_id = None
+            response.locked_effective_project_submission_artifact_policy_hash = None
+            response.locked_pre_submit_checker_policy_id = None
+            response.locked_pre_submit_checker_bundle_hash = None
+            for evidence_item in response.evidence_items:
+                evidence_item.uri = None
+                evidence_item.hash = None
+                evidence_item.metadata = {}
+        return response
+
     def _audit_response(self, actor: ActorContext, event: AuditEvent) -> AuditEventResponse:
         """Build a public audit response with claim snapshots redacted.
 
@@ -1156,6 +1290,9 @@ class TaskService:
                 if key in WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS
             }
             if response.event_type in WORKER_REDACTED_AUDIT_EVENTS:
+                response.event_type = "post_submit_checks_processing"
+                response.from_status = None
+                response.to_status = None
                 response.reason = None
         return response
 

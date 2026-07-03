@@ -11,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import inspect, select
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
 
 from app.core.config import get_settings
@@ -29,6 +30,11 @@ from app.modules.checkers.compiler import (
 from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.checkers.runner import canonical_artifact_manifest_hash
 from app.modules.checkers.schemas import CheckerRoutingRecommendation
+from app.modules.projects.models import PostSubmitCheckerPolicy
+from app.modules.projects.post_submit_policy import (
+    POST_SUBMIT_CHECKER_POLICY_SCHEMA_VERSION,
+    parse_locked_post_submit_checker_policy_body,
+)
 from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, WorkstreamTask
 from tests.test_tasks import (
     auth_headers,
@@ -37,6 +43,7 @@ from tests.test_tasks import (
     create_active_project,
     create_policy_bundle_for_guide,
     create_started_task,
+    load_post_submit_checker_policy,
     seed_worker_profile,
     set_dev_actor,
 )
@@ -80,6 +87,33 @@ def alembic_config() -> Config:
     return config
 
 
+def test_locked_post_submit_policy_parser_uses_persisted_body_hash() -> None:
+    body = {
+        "schema_version": POST_SUBMIT_CHECKER_POLICY_SCHEMA_VERSION,
+        "project_id": "project-id",
+        "guide_version": "v1",
+        "default_checkers": ["legacy_default_checker"],
+        "required_checkers": ["project_required_checker"],
+        "warning_checkers": [],
+        "execution_checkers": ["legacy_default_checker", "project_required_checker"],
+        "blocking_severities": ["high"],
+    }
+    policy_hash = canonical_json_hash(body)
+
+    parsed = parse_locked_post_submit_checker_policy_body(
+        body,
+        project_id="project-id",
+        guide_version="v1",
+        policy_hash=policy_hash,
+    )
+
+    assert parsed.default_checkers == ["legacy_default_checker"]
+    assert parsed.execution_checkers == [
+        "legacy_default_checker",
+        "project_required_checker",
+    ]
+
+
 def test_checker_models_are_registered_for_alembic_metadata() -> None:
     expected_tables = {"checker_runs", "checker_results"}
 
@@ -95,6 +129,35 @@ def test_checker_routing_recommendation_schema_uses_canonical_routing_tokens() -
     assert adapter.validate_python("task_setup_blocked") == "task_setup_blocked"
     with pytest.raises(ValidationError):
         adapter.validate_python("operator" + "_retry")
+
+
+def test_checker_run_openapi_documents_worker_safe_public_response_schema() -> None:
+    schema = create_app().openapi()
+    public_schema = schema["components"]["schemas"]["CheckerRunPublicResponse"]
+    public_properties = set(public_schema["properties"])
+    forbidden_properties = {
+        "trigger_source",
+        "routing_recommendation",
+        "outcome_source",
+        "triggered_by",
+        "trigger_reason",
+        "audit_event_id",
+        "locked_post_submit_checker_policy_id",
+        "locked_post_submit_checker_policy_version",
+        "locked_post_submit_checker_policy_hash",
+        "locked_post_submit_checker_policy_body",
+        "failure_message",
+    }
+
+    assert forbidden_properties.isdisjoint(public_properties)
+    detail_schema = schema["paths"]["/api/v1/checker-runs/{checker_run_id}"]["get"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]
+    list_schema = schema["paths"]["/api/v1/submissions/{submission_id}/checker-runs"]["get"][
+        "responses"
+    ]["200"]["content"]["application/json"]["schema"]
+    assert detail_schema["$ref"] == "#/components/schemas/CheckerRunPublicResponse"
+    assert list_schema["items"]["$ref"] == "#/components/schemas/CheckerRunPublicResponse"
 
 
 async def test_checker_migration_creates_expected_tables(checker_database_env: str) -> None:
@@ -116,6 +179,33 @@ def test_checker_run_current_partial_unique_index_metadata_compiles() -> None:
     postgres_compiled = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
 
     assert "is_current_for_submission = true" in postgres_compiled
+
+
+def test_checker_run_binds_to_locked_post_submit_policy_context() -> None:
+    expected_constraints = {
+        "fk_checker_runs_locked_post_submit_policy_hash": [
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ],
+        "fk_checker_runs_submission_locked_post_submit_policy_hash": [
+            "submission_id",
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ],
+    }
+
+    for constraint_name, local_columns in expected_constraints.items():
+        constraint = next(
+            constraint
+            for constraint in CheckerRun.__table__.foreign_key_constraints
+            if constraint.name == constraint_name
+        )
+        assert [column.name for column in constraint.columns] == local_columns
+    assert "ck_checker_runs_post_submit_policy_lock_complete" in {
+        constraint.name for constraint in CheckerRun.__table__.constraints
+    }
 
 
 def test_artifact_manifest_hash_is_stable_and_rejects_duplicates() -> None:
@@ -472,7 +562,7 @@ async def create_checker_trial_project(
 
     guide_payload = complete_guide_payload()
     if required_checkers is not None:
-        guide_payload["checker_policy"]["required_checkers"] = required_checkers
+        guide_payload["post_submit_checker_policy"]["required_checkers"] = required_checkers
     guide_response = await client.post(
         f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
@@ -594,6 +684,10 @@ async def test_locked_submission_checker_run_persists_results_and_allows_review(
     assert body["outcome_source"] == "none"
     assert body["submission_version"] == 1
     assert body["locked_checker_policy_version"] == "v1"
+    expected_post_submit_policy = await load_post_submit_checker_policy(project["id"])
+    assert body["locked_post_submit_checker_policy_id"] == expected_post_submit_policy["id"]
+    assert body["locked_post_submit_checker_policy_version"] == "v1"
+    assert body["locked_post_submit_checker_policy_hash"] == expected_post_submit_policy["policy_hash"]
     assert body["artifact_manifest_hash"].startswith("sha256:")
     assert body["audit_event_id"]
     assert body["passed_count"] >= 8
@@ -619,14 +713,31 @@ async def test_locked_submission_checker_run_persists_results_and_allows_review(
     async with db_session.get_session_factory()() as session:
         audit = await session.get(AuditEvent, body["audit_event_id"])
         task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        checker_run = await session.get(CheckerRun, body["id"])
     assert audit is not None
     assert audit.event_type == "checker_run_triggered"
     assert audit.entity_id == created.json()["id"]
     assert audit.reason == "submission locked pre-review gate"
     assert audit.event_payload["submission_version"] == 1
     assert audit.event_payload["trigger_source"] == "submission_locked"
+    assert (
+        audit.event_payload["locked_post_submit_checker_policy_hash"]
+        == expected_post_submit_policy["policy_hash"]
+    )
     assert task is not None
     assert task.status == "review_pending"
+    assert submission is not None
+    assert checker_run is not None
+    assert task.locked_post_submit_checker_policy_id == expected_post_submit_policy["id"]
+    assert submission.locked_post_submit_checker_policy_id == expected_post_submit_policy["id"]
+    assert checker_run.locked_post_submit_checker_policy_id == expected_post_submit_policy["id"]
+    assert (
+        task.locked_post_submit_checker_policy_hash
+        == submission.locked_post_submit_checker_policy_hash
+        == checker_run.locked_post_submit_checker_policy_hash
+        == expected_post_submit_policy["policy_hash"]
+    )
     audit_response = await checker_client.get(
         f"/api/v1/tasks/{started_task['id']}/audit-events",
         headers=auth_headers(),
@@ -641,6 +752,226 @@ async def test_locked_submission_checker_run_persists_results_and_allows_review(
     assert audit_events["pre_review_gate_passed"]["event_payload"]["trigger_source"] == (
         "submission_locked"
     )
+
+
+async def test_database_rejects_missing_submission_post_submit_policy_context(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(checker_client)
+    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    created = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert created.status_code == 201, created.text
+
+    async with db_session.get_session_factory()() as session:
+        submission = await session.get(Submission, created.json()["id"])
+        assert submission is not None
+        submission.locked_post_submit_checker_policy_id = None
+        submission.locked_post_submit_checker_policy_version = None
+        submission.locked_post_submit_checker_policy_hash = None
+        with pytest.raises(IntegrityError):
+            await session.commit()
+        await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        runs = (
+            await session.execute(
+                select(CheckerRun).where(CheckerRun.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+        results = (
+            await session.execute(
+                select(CheckerResult).where(CheckerResult.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+    assert task is not None
+    assert task.status == "submitted"
+    assert submission is not None
+    assert submission.locked_at is None
+    assert runs == []
+    assert results == []
+
+
+async def test_checker_run_uses_locked_post_submit_policy_body_after_setup_mutation(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(checker_client)
+    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    created = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert created.status_code == 201, created.text
+
+    async with db_session.get_session_factory()() as session:
+        submission = await session.get(Submission, created.json()["id"])
+        assert submission is not None
+        locked_body = dict(submission.locked_post_submit_checker_policy_body or {})
+        policy = await session.scalar(
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project["id"],
+                PostSubmitCheckerPolicy.guide_version == "v1",
+            )
+        )
+        assert policy is not None
+        policy.required_checkers = [
+            "check_policy_context_present",
+            "check_acceptance_criteria_present",
+        ]
+        await session.commit()
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    locked = await checker_client.post(
+        f"/api/v1/submissions/{created.json()['id']}/lock",
+        headers=auth_headers(),
+    )
+
+    assert locked.status_code == 200, locked.text
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        runs = (
+            await session.execute(
+                select(CheckerRun).where(CheckerRun.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+        results = (
+            await session.execute(
+                select(CheckerResult).where(CheckerResult.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+    assert task is not None
+    assert task.status == "review_pending"
+    assert submission is not None
+    assert submission.locked_at is not None
+    assert submission.locked_post_submit_checker_policy_body == locked_body
+    assert len(runs) == 1
+    assert runs[0].locked_post_submit_checker_policy_body == locked_body
+    assert "check_acceptance_criteria_present" not in locked_body["required_checkers"]
+    assert "check_acceptance_criteria_present" not in locked_body["execution_checkers"]
+    assert "check_evidence_present" in locked_body["default_checkers"]
+    assert "check_evidence_present" in locked_body["execution_checkers"]
+    assert "check_required_files" in locked_body["execution_checkers"]
+    assert "check_acceptance_criteria_present" not in {
+        result.checker_name for result in results
+    }
+    assert results != []
+
+
+async def test_lock_submission_rejects_malformed_locked_post_submit_policy_body_without_side_effects(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(checker_client)
+    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    created = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert created.status_code == 201, created.text
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        assert task is not None
+        assert submission is not None
+        corrupted_body = dict(submission.locked_post_submit_checker_policy_body or {})
+        corrupted_body["required_checkers"] = [
+            "check_policy_context_present",
+            "check_evidence_present",
+        ]
+        task.locked_post_submit_checker_policy_body = corrupted_body
+        submission.locked_post_submit_checker_policy_body = corrupted_body
+        await session.commit()
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    locked = await checker_client.post(
+        f"/api/v1/submissions/{created.json()['id']}/lock",
+        headers=auth_headers(),
+    )
+
+    assert locked.status_code == 422
+    assert "locked post-submit checker policy" in locked.json()["detail"]
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        runs = (
+            await session.execute(
+                select(CheckerRun).where(CheckerRun.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+        results = (
+            await session.execute(
+                select(CheckerResult).where(CheckerResult.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+        audit_events = (
+            await session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.entity_id.in_([started_task["id"], created.json()["id"]])
+                )
+            )
+        ).scalars().all()
+
+    assert task is not None
+    assert task.status == "submitted"
+    assert submission is not None
+    assert submission.locked_at is None
+    assert runs == []
+    assert results == []
+    assert "submission_locked" not in {event.event_type for event in audit_events}
+    assert "checker_run_triggered" not in {event.event_type for event in audit_events}
+
+
+async def test_database_rejects_mismatched_submission_post_submit_policy_context(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(checker_client)
+    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    created = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert created.status_code == 201, created.text
+
+    async with db_session.get_session_factory()() as session:
+        submission = await session.get(Submission, created.json()["id"])
+        assert submission is not None
+        submission.locked_post_submit_checker_policy_hash = "sha256:" + "0" * 64
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, created.json()["id"])
+        runs = (
+            await session.execute(
+                select(CheckerRun).where(CheckerRun.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+        results = (
+            await session.execute(
+                select(CheckerResult).where(CheckerResult.submission_id == created.json()["id"])
+            )
+        ).scalars().all()
+    assert task is not None
+    assert task.status == "submitted"
+    assert submission is not None
+    assert submission.locked_at is None
+    assert submission.locked_post_submit_checker_policy_hash != "sha256:" + "0" * 64
+    assert runs == []
+    assert results == []
 
 
 async def test_locked_submission_checker_run_enforces_required_evidence_key(
@@ -840,8 +1171,8 @@ async def test_chunk8_default_blocking_checker_survives_empty_blocking_severitie
     assert project_response.status_code == 201, project_response.text
     project = project_response.json()
     guide_payload = complete_guide_payload()
-    guide_payload["checker_policy"]["required_checkers"] = ["check_policy_context_present"]
-    guide_payload["checker_policy"]["blocking_severities"] = []
+    guide_payload["post_submit_checker_policy"]["required_checkers"] = ["check_policy_context_present"]
+    guide_payload["post_submit_checker_policy"]["blocking_severities"] = []
     guide_response = await checker_client.post(
         f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
@@ -992,7 +1323,7 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     assert project_response.status_code == 201, project_response.text
     project = project_response.json()
     guide_payload = complete_guide_payload()
-    guide_payload["checker_policy"]["required_checkers"] = [
+    guide_payload["post_submit_checker_policy"]["required_checkers"] = [
         "check_acceptance_criteria_present"
     ]
     guide_response = await checker_client.post(
@@ -1037,7 +1368,7 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     assert setup_result["status"] == "failed"
     assert setup_result["blocks_review"] is True
     assert setup_result["worker_visible"] is False
-    assert setup_result["worker_message"] is None
+    assert "worker_message" not in setup_result
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
     assert task is not None
@@ -1063,8 +1394,8 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     )
     assert worker_read.status_code == 200, worker_read.text
     worker_body = worker_read.json()
-    assert worker_body["routing_recommendation"] == "not_evaluated"
-    assert worker_body["outcome_source"] == "none"
+    assert "routing_recommendation" not in worker_body
+    assert "outcome_source" not in worker_body
     assert worker_body["passed_count"] == 0
     assert worker_body["warning_count"] == 0
     assert worker_body["failed_count"] == 0
@@ -1237,7 +1568,8 @@ async def test_chunk10_checker_trial_runs_sample_submissions_through_real_api(
         )
         assert worker_read.status_code == 200, worker_read.text
         worker_body = worker_read.json()
-        assert worker_body["routing_recommendation"] == case["worker_route"]
+        assert "routing_recommendation" not in worker_body
+        assert "outcome_source" not in worker_body
         worker_result = next(
             result
             for result in worker_body["results"]
@@ -1303,9 +1635,14 @@ async def test_chunk10_checker_trial_runs_sample_submissions_through_real_api(
         headers=auth_headers(),
     )
     assert worker_blocked_read.status_code == 200, worker_blocked_read.text
-    assert worker_blocked_read.json()["routing_recommendation"] == "not_evaluated"
-    assert worker_blocked_read.json()["results"] == []
+    worker_blocked_body = worker_blocked_read.json()
+    assert "trigger_source" not in worker_blocked_body
+    assert "routing_recommendation" not in worker_blocked_body
+    assert "outcome_source" not in worker_blocked_body
+    assert worker_blocked_body["results"] == []
     assert "task_setup_blocked" not in worker_blocked_read.text
+    assert "submission_locked" not in worker_blocked_read.text
+    assert "manual_checker_trigger" not in worker_blocked_read.text
     assert "acceptance_criteria" not in worker_blocked_read.text
 
     async with db_session.get_session_factory()() as session:
@@ -1355,25 +1692,57 @@ async def test_worker_can_read_only_worker_visible_checker_result_fields(
 
     assert read.status_code == 200, read.text
     body = read.json()
-    assert body["failure_message"] is None
-    assert body["triggered_by"] is None
-    assert body["triggered_by_subject"] is None
-    assert body["triggered_by_issuer"] is None
-    assert body["trigger_auth_source"] is None
-    assert body["trigger_reason"] is None
-    assert body["audit_event_id"] is None
-    assert body["locked_guide_version"] is None
-    assert body["locked_checker_policy_version"] is None
-    assert body["locked_review_policy_version"] is None
-    assert body["locked_revision_policy_version"] is None
-    assert body["locked_payment_policy_version"] is None
-    assert body["package_hash"] is None
+    assert "trigger_source" not in body
+    assert "routing_recommendation" not in body
+    assert "outcome_source" not in body
+    assert "failure_message" not in body
+    assert "triggered_by" not in body
+    assert "triggered_by_subject" not in body
+    assert "triggered_by_issuer" not in body
+    assert "trigger_auth_source" not in body
+    assert "trigger_reason" not in body
+    assert "audit_event_id" not in body
+    assert "locked_guide_version" not in body
+    assert "locked_checker_policy_version" not in body
+    assert "locked_post_submit_checker_policy_id" not in body
+    assert "locked_post_submit_checker_policy_version" not in body
+    assert "locked_post_submit_checker_policy_hash" not in body
+    assert "locked_post_submit_checker_policy_body" not in body
+    assert "locked_review_policy_version" not in body
+    assert "locked_revision_policy_version" not in body
+    assert "locked_payment_policy_version" not in body
+    assert "package_hash" not in body
     assert body["artifact_hash_manifest"] == []
-    assert body["artifact_manifest_hash"] is None
+    assert "artifact_manifest_hash" not in body
+    assert "submission_locked" not in read.text
+    assert "manual_checker_trigger" not in read.text
     assert body["results"]
-    assert all(result["message"] is None for result in body["results"])
+    assert all("message" not in result for result in body["results"])
     assert all(result["metadata"] == {} for result in body["results"])
     assert all(result["worker_visible"] is True for result in body["results"])
+
+    listed = await checker_client.get(
+        f"/api/v1/submissions/{created.json()['id']}/checker-runs",
+        headers=auth_headers(),
+    )
+    assert listed.status_code == 200, listed.text
+    listed_body = listed.json()
+    assert len(listed_body) == 1
+    listed_run = listed_body[0]
+    assert listed_run["id"] == run["id"]
+    assert "trigger_source" not in listed_run
+    assert "routing_recommendation" not in listed_run
+    assert "outcome_source" not in listed_run
+    assert "failure_message" not in listed_run
+    assert "triggered_by" not in listed_run
+    assert "trigger_reason" not in listed_run
+    assert "audit_event_id" not in listed_run
+    assert "locked_post_submit_checker_policy_id" not in listed_run
+    assert "locked_post_submit_checker_policy_version" not in listed_run
+    assert "locked_post_submit_checker_policy_hash" not in listed_run
+    assert "locked_post_submit_checker_policy_body" not in listed_run
+    assert "submission_locked" not in listed.text
+    assert "manual_checker_trigger" not in listed.text
 
 
 async def test_worker_cannot_see_hidden_checker_results(
@@ -1599,7 +1968,7 @@ async def test_old_checker_name_blocks_guide_activation_without_alias(
     assert project_response.status_code == 201, project_response.text
     project = project_response.json()
     guide_payload = complete_guide_payload()
-    guide_payload["checker_policy"]["required_checkers"] = [old_checker_name]
+    guide_payload["post_submit_checker_policy"]["required_checkers"] = [old_checker_name]
     guide_response = await checker_client.post(
         f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),

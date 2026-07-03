@@ -51,7 +51,10 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `locked_effective_project_submission_artifact_policy_hash`
 - `locked_pre_submit_checker_policy_id`
 - `locked_pre_submit_checker_bundle_hash`
-- `locked_checker_policy_version`
+- `locked_post_submit_checker_policy_id`
+- `locked_post_submit_checker_policy_version`
+- `locked_post_submit_checker_policy_hash`
+- `locked_post_submit_checker_policy_body`
 - `locked_review_policy_version`
 - `locked_revision_policy_version`
 - `locked_payment_policy_version`
@@ -59,9 +62,13 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 - `locked_at`
 - `supersedes_submission_id`
 
-Submissions intentionally reference the task's locked guide and policy fields, including guide-source snapshot provenance, effective project submission artifact policy provenance, and project pre-submit checker compiled bundle hash provenance. This prevents task-owned locked context from changing silently after a submission has been recorded.
-
-Implementation note: current v0.1 code uses `locked_checker_policy_version` for post-submit checker policy provenance. `WS-POL-001-04` splits post-submit checker provenance into an explicit `PostSubmitCheckerPolicy`.
+Submissions intentionally reference the task's locked guide and policy fields,
+including guide-source snapshot provenance, effective project submission
+artifact policy provenance, project pre-submit checker compiled bundle hash
+provenance, and explicit post-submit checker policy provenance. The locked
+post-submit checker policy body is internal runtime provenance, copied from the
+task and hidden from worker-facing responses. This prevents task-owned locked
+context from changing silently after a submission has been recorded.
 
 `evidence_items`
 
@@ -130,7 +137,9 @@ Returns one visible submission packet.
 
 POST `/api/v1/submissions/{submission_id}/lock`
 
-Locks a submission packet and triggers the current post-submit checker gate. Locking makes the packet immutable in place. This uses the existing checker gate behavior; defining the dedicated post-submit checker policy model remains separate scope.
+Locks a submission packet and triggers the current post-submit checker gate.
+Locking makes the packet immutable in place and binds durable checker runs to
+the locked `PostSubmitCheckerPolicy` id, version, hash, and body.
 
 ## Versioning Rules
 
@@ -170,7 +179,7 @@ Locks a submission packet and triggers the current post-submit checker gate. Loc
 - only the assigned worker can create a submission for the task
 - project managers and admins can read and lock submissions for operational flow
 - workers can read their own task submissions
-- response payloads return server-stamped locked guide source snapshot ids/hashes, effective project submission artifact policy ids/hashes, project pre-submit checker policy ids/bundle hashes, and guide/checker/review/revision/payment policy versions
+- response payloads are role-sensitive: operators can inspect server-stamped locked provenance for source snapshots and policy context, while worker-facing payloads hide internal policy ids, hashes, and bodies
 - package and evidence URIs are stored as object references, not signed URLs or credentials
 - persisted storage references are Workstream-issued opaque object references or validated object-storage adapter references
 - raw signed URLs, credential-bearing URLs, query strings, local filesystem paths, bucket secrets, and token-bearing references are rejected before persistence

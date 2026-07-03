@@ -23,8 +23,8 @@ def reject_non_finite_json_numbers(value: Any) -> Any:
     return value
 
 
-class CheckerPolicyInput(BaseModel):
-    """Input schema for checker requirements on a guide version."""
+class PostSubmitCheckerPolicyInput(BaseModel):
+    """Input schema for post-submit checker requirements on a guide version."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -440,7 +440,7 @@ class ProjectGuideCreate(BaseModel):
     evidence_policy: dict[str, Any] | None = None
     unacceptable_work_policy: str | None = None
     change_summary: str | None = None
-    checker_policy: CheckerPolicyInput | None = None
+    post_submit_checker_policy: PostSubmitCheckerPolicyInput | None = None
     review_policy: ReviewPolicyInput | None = None
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
@@ -473,7 +473,7 @@ class ProjectGuideUpdate(BaseModel):
     evidence_policy: dict[str, Any] | None = None
     unacceptable_work_policy: str | None = None
     change_summary: str | None = None
-    checker_policy: CheckerPolicyInput | None = None
+    post_submit_checker_policy: PostSubmitCheckerPolicyInput | None = None
     review_policy: ReviewPolicyInput | None = None
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
@@ -518,8 +518,8 @@ class ProjectGuideResponse(BaseModel):
     superseded_at: datetime | None
 
 
-class CheckerPolicyResponse(BaseModel):
-    """Response schema for checker policy records."""
+class PostSubmitCheckerPolicyResponse(BaseModel):
+    """Response schema for post-submit checker policy records."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -529,6 +529,7 @@ class CheckerPolicyResponse(BaseModel):
     required_checkers: list[str]
     warning_checkers: list[str]
     blocking_severities: list[str]
+    policy_hash: str | None
     created_at: datetime
 
 
@@ -589,7 +590,7 @@ class ActiveGuideResponse(BaseModel):
     submission_artifact_policy: SubmissionArtifactPolicyResponse
     effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
     pre_submit_checker_policy: PreSubmitCheckerPolicySummaryResponse
-    checker_policy: CheckerPolicyResponse
+    post_submit_checker_policy: PostSubmitCheckerPolicyResponse
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse
     payment_policy: PaymentPolicyResponse

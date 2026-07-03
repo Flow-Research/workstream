@@ -31,12 +31,12 @@ from app.modules.checkers.compiler import (
 )
 from app.modules.checkers.runner import UnknownChecker, default_checker_registry
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
@@ -44,11 +44,14 @@ from app.modules.projects.models import (
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.projects.post_submit_policy import (
+    parse_locked_post_submit_checker_policy_body,
+    post_submit_checker_policy_body,
+    post_submit_checker_policy_hash,
+)
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
-    CheckerPolicyInput,
-    CheckerPolicyResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
     GuideSourceSnapshotCreate,
     GuideSourceSnapshotItemResponse,
@@ -58,6 +61,8 @@ from app.modules.projects.schemas import (
     GuideSufficiencyReportResponse,
     PaymentPolicyInput,
     PaymentPolicyResponse,
+    PostSubmitCheckerPolicyInput,
+    PostSubmitCheckerPolicyResponse,
     PreSubmitCheckerPolicySummaryResponse,
     ProjectCreate,
     ProjectGuideCreate,
@@ -512,7 +517,12 @@ class ProjectService:
                     "guide source material cannot change after a source snapshot exists"
                 )
         for field, value in changes.items():
-            if field in {"checker_policy", "review_policy", "revision_policy", "payment_policy"}:
+            if field in {
+                "post_submit_checker_policy",
+                "review_policy",
+                "revision_policy",
+                "payment_policy",
+            }:
                 continue
             setattr(guide, field, value)
         await self._upsert_optional_policies(project_id, guide.version, payload)
@@ -1206,7 +1216,10 @@ class ProjectService:
         if guide.status != "draft":
             raise GuideActivationBlocked("only draft guides can be activated")
 
-        checker_policy = await self._repo.get_checker_policy(project_id, guide.version)
+        post_submit_checker_policy = await self._repo.get_post_submit_checker_policy(
+            project_id,
+            guide.version,
+        )
         review_policy = await self._repo.get_review_policy(project_id, guide.version)
         revision_policy = await self._repo.get_revision_policy(project_id, guide.version)
         payment_policy = await self._repo.get_payment_policy(project_id, guide.version)
@@ -1251,7 +1264,7 @@ class ProjectService:
             submission_artifact_policy,
             effective_policy,
             pre_submit_checker_policy,
-            checker_policy,
+            post_submit_checker_policy,
             review_policy,
             revision_policy,
             payment_policy,
@@ -1287,7 +1300,7 @@ class ProjectService:
         await self._session.refresh(submission_artifact_policy)
         await self._session.refresh(effective_policy)
         await self._session.refresh(pre_submit_checker_policy)
-        await self._session.refresh(checker_policy)
+        await self._session.refresh(post_submit_checker_policy)
         await self._session.refresh(review_policy)
         await self._session.refresh(revision_policy)
         await self._session.refresh(payment_policy)
@@ -1298,7 +1311,7 @@ class ProjectService:
             submission_artifact_policy,
             effective_policy,
             pre_submit_checker_policy,
-            checker_policy,
+            post_submit_checker_policy,
             review_policy,
             revision_policy,
             payment_policy,
@@ -1323,7 +1336,10 @@ class ProjectService:
         guide = await self._repo.get_active_guide(project_id)
         if guide is None:
             raise GuideNotFound("active guide not found")
-        checker_policy = await self._repo.get_checker_policy(project_id, guide.version)
+        post_submit_checker_policy = await self._repo.get_post_submit_checker_policy(
+            project_id,
+            guide.version,
+        )
         review_policy = await self._repo.get_review_policy(project_id, guide.version)
         revision_policy = await self._repo.get_revision_policy(project_id, guide.version)
         payment_policy = await self._repo.get_payment_policy(project_id, guide.version)
@@ -1362,7 +1378,7 @@ class ProjectService:
         except ProjectRepositoryIntegrityError as exc:
             raise GuideActivationBlocked("active guide policy context is ambiguous") from exc
         if (
-            checker_policy is None
+            post_submit_checker_policy is None
             or review_policy is None
             or revision_policy is None
             or payment_policy is None
@@ -1378,7 +1394,7 @@ class ProjectService:
             submission_artifact_policy,
             effective_policy,
             pre_submit_checker_policy,
-            checker_policy,
+            post_submit_checker_policy,
             review_policy,
             revision_policy,
             payment_policy,
@@ -1390,7 +1406,7 @@ class ProjectService:
             submission_artifact_policy,
             effective_policy,
             pre_submit_checker_policy,
-            checker_policy,
+            post_submit_checker_policy,
             review_policy,
             revision_policy,
             payment_policy,
@@ -1438,9 +1454,13 @@ class ProjectService:
             guide_version: Guide version the policies apply to.
             payload: Guide create or update payload carrying optional policies.
         """
-        if payload.checker_policy is not None:
-            await self._repo.upsert_checker_policy(
-                self._checker_policy_model(project_id, guide_version, payload.checker_policy)
+        if payload.post_submit_checker_policy is not None:
+            await self._repo.upsert_post_submit_checker_policy(
+                self._post_submit_checker_policy_model(
+                    project_id,
+                    guide_version,
+                    payload.post_submit_checker_policy,
+                )
             )
         if payload.review_policy is not None:
             await self._repo.upsert_review_policy(
@@ -2348,7 +2368,7 @@ class ProjectService:
         submission_artifact_policy: SubmissionArtifactPolicy,
         effective_policy: EffectiveProjectSubmissionArtifactPolicy | None,
         pre_submit_checker_policy: PreSubmitCheckerPolicy | None,
-        checker_policy: CheckerPolicy | None,
+        post_submit_checker_policy: PostSubmitCheckerPolicy | None,
         review_policy: ReviewPolicy | None,
         revision_policy: RevisionPolicy | None,
         payment_policy: PaymentPolicy | None,
@@ -2362,7 +2382,7 @@ class ProjectService:
             submission_artifact_policy: Approved submission artifact policy.
             effective_policy: Effective policy produced from default + project policy.
             pre_submit_checker_policy: Project pre-submit checker bundle contract.
-            checker_policy: Checker policy for the guide version.
+            post_submit_checker_policy: Post-submit checker policy for the guide version.
             review_policy: Review policy for the guide version.
             revision_policy: Revision policy for the guide version.
             payment_policy: Payment policy for the guide version.
@@ -2474,11 +2494,27 @@ class ProjectService:
             != pre_submit_checker_policy.compiled_bundle_hash
         ):
             raise GuideActivationBlocked("pre-submit checker compiled bundle hash mismatch")
-        if checker_policy is None or not checker_policy.required_checkers:
-            raise GuideActivationBlocked("checker policy with required checkers is required")
-        checker_names = set(checker_policy.required_checkers or []).union(
-            checker_policy.warning_checkers or []
-        )
+        if post_submit_checker_policy is None or not post_submit_checker_policy.required_checkers:
+            raise GuideActivationBlocked("post-submit checker policy with required checkers is required")
+        try:
+            parsed_post_submit_policy = parse_locked_post_submit_checker_policy_body(
+                post_submit_checker_policy.policy_body,
+                project_id=post_submit_checker_policy.project_id,
+                guide_version=post_submit_checker_policy.guide_version,
+                policy_hash=post_submit_checker_policy.policy_hash or "",
+            )
+        except ValueError as exc:
+            raise GuideActivationBlocked("post-submit checker policy hash is invalid") from exc
+        if (
+            parsed_post_submit_policy.required_checkers
+            != post_submit_checker_policy.required_checkers
+            or parsed_post_submit_policy.warning_checkers
+            != post_submit_checker_policy.warning_checkers
+            or parsed_post_submit_policy.blocking_severities
+            != post_submit_checker_policy.blocking_severities
+        ):
+            raise GuideActivationBlocked("post-submit checker policy hash is invalid")
+        checker_names = set(parsed_post_submit_policy.execution_checkers)
         try:
             default_checker_registry().require_registered(checker_names)
         except UnknownChecker as exc:
@@ -2526,29 +2562,45 @@ class ProjectService:
                 f"guide sufficiency warnings require admin/project_manager acknowledgement {action}"
             )
 
-    def _checker_policy_model(
+    def _post_submit_checker_policy_model(
         self,
         project_id: str,
         guide_version: str,
-        payload: CheckerPolicyInput,
-    ) -> CheckerPolicy:
-        """Build a checker policy model from API input.
+        payload: PostSubmitCheckerPolicyInput,
+    ) -> PostSubmitCheckerPolicy:
+        """Build a post-submit checker policy model from API input.
 
         Args:
             project_id: Project that owns the policy.
             guide_version: Guide version the policy applies to.
-            payload: Validated checker policy input.
+            payload: Validated post-submit checker policy input.
 
         Returns:
-            Unsaved checker policy model.
+            Unsaved post-submit checker policy model.
         """
-        return CheckerPolicy(
+        policy_body = post_submit_checker_policy_body(
+            project_id=project_id,
+            guide_version=guide_version,
+            required_checkers=payload.required_checkers,
+            warning_checkers=payload.warning_checkers,
+            blocking_severities=payload.blocking_severities,
+        )
+        policy_hash = post_submit_checker_policy_hash(
+            project_id=project_id,
+            guide_version=guide_version,
+            required_checkers=payload.required_checkers,
+            warning_checkers=payload.warning_checkers,
+            blocking_severities=payload.blocking_severities,
+        )
+        return PostSubmitCheckerPolicy(
             id=str(uuid4()),
             project_id=project_id,
             guide_version=guide_version,
             required_checkers=payload.required_checkers,
             warning_checkers=payload.warning_checkers,
             blocking_severities=payload.blocking_severities,
+            policy_hash=policy_hash,
+            policy_body=policy_body,
         )
 
     def _review_policy_model(
@@ -2640,7 +2692,7 @@ class ProjectService:
         submission_artifact_policy: SubmissionArtifactPolicy,
         effective_policy: EffectiveProjectSubmissionArtifactPolicy,
         pre_submit_checker_policy: PreSubmitCheckerPolicy,
-        checker_policy: CheckerPolicy,
+        post_submit_checker_policy: PostSubmitCheckerPolicy,
         review_policy: ReviewPolicy,
         revision_policy: RevisionPolicy,
         payment_policy: PaymentPolicy,
@@ -2654,7 +2706,8 @@ class ProjectService:
             submission_artifact_policy: Approved project submission artifact policy.
             effective_policy: Effective project policy bound to the snapshot.
             pre_submit_checker_policy: Project pre-submit checker bundle contract.
-            checker_policy: Checker policy attached to the active guide version.
+            post_submit_checker_policy: Post-submit checker policy attached to
+                the active guide version.
             review_policy: Review policy attached to the active guide version.
             revision_policy: Revision policy attached to the active guide version.
             payment_policy: Payment policy attached to the active guide version.
@@ -2678,7 +2731,9 @@ class ProjectService:
             pre_submit_checker_policy=PreSubmitCheckerPolicySummaryResponse.model_validate(
                 pre_submit_checker_policy
             ),
-            checker_policy=CheckerPolicyResponse.model_validate(checker_policy),
+            post_submit_checker_policy=PostSubmitCheckerPolicyResponse.model_validate(
+                post_submit_checker_policy
+            ),
             review_policy=ReviewPolicyResponse.model_validate(review_policy),
             revision_policy=RevisionPolicyResponse.model_validate(revision_policy),
             payment_policy=PaymentPolicyResponse.model_validate(payment_policy),

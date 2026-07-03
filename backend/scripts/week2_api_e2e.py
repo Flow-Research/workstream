@@ -20,12 +20,14 @@ from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, Works
 from week1_api_e2e import (
     alembic_config,
     api_environment,
+    create_policy_bundle_for_guide,
     find_free_port,
     flow_settings,
     guide_payload,
     issue_flow_token,
     project_root,
     request_json,
+    sha256_token,
     wait_for_health,
 )
 
@@ -46,6 +48,7 @@ EXPECTED_PRE_SUBMIT_CHECKERS = {
     "check_required_files",
     "check_forbidden_files",
     "check_confidentiality_attestation",
+    "check_low_quality_generated_artifacts",
 }
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
@@ -54,7 +57,9 @@ NONLOCAL_DATABASE_OVERRIDE_VALUE = "I_UNDERSTAND_THIS_WRITES_DATA"
 STRONG_ATTESTATION = (
     "I attest this submission contains no confidential client data, credentials, "
     "secrets, tokens, passwords, API keys, private source material, source code, "
-    "copied platform artifacts, or copied platform content."
+    "copied platform artifacts, or copied platform content, and it satisfies "
+    "the original_work, credentials_and_secret_exclusion, real_api_originality, and "
+    "human_accountability_for_agent_assisted_work policy terms."
 )
 
 
@@ -219,7 +224,7 @@ def task_payload(run_id: str, suffix: str) -> dict:
         "estimated_time_minutes": 45,
         "source_type": "manual",
         "source_ref": f"week2-{suffix}-{run_id}",
-        "source_payload_hash": f"sha256:source-{suffix}-{run_id}",
+        "source_payload_hash": sha256_token(f"source:{suffix}:{run_id}"),
         "acceptance_criteria": "Submission packet is complete and reviewable.",
         "rejection_criteria": "Evidence or required output is missing.",
         "required_files": ["answer.md"],
@@ -240,11 +245,11 @@ def submission_payload(run_id: str, suffix: str) -> dict:
     return {
         "summary": f"Week 2 {suffix} packet completed.",
         "package_uri": f"local://week2/{run_id}/{suffix}/package.tar.zst",
-        "package_hash": f"sha256:package-{suffix}-{run_id}",
+        "package_hash": sha256_token(f"package:{suffix}:{run_id}"),
         "artifact_hash_manifest": [
             {
                 "artifact": "answer.md",
-                "hash": f"sha256:answer-{suffix}-{run_id}",
+                "hash": sha256_token(f"answer:{suffix}:{run_id}"),
                 "size_bytes": 128,
                 "notes": "main answer",
             }
@@ -255,9 +260,12 @@ def submission_payload(run_id: str, suffix: str) -> dict:
                 "type": "log",
                 "label": f"checker evidence {suffix}",
                 "uri": f"local://week2/{run_id}/{suffix}/checker.log",
-                "hash": f"sha256:evidence-{suffix}-{run_id}",
+                "hash": sha256_token(f"evidence:{suffix}:{run_id}"),
                 "size_bytes": 256,
-                "metadata": {"command": "week2_api_e2e"},
+                "metadata": {
+                    "command": "week2_api_e2e",
+                    "required_evidence_key": "checker_log",
+                },
             }
         ],
     }
@@ -327,7 +335,7 @@ async def create_project_with_guide(
     )
     payload = guide_payload(run_id)
     if required_checkers is not None:
-        payload["checker_policy"]["required_checkers"] = required_checkers
+        payload["post_submit_checker_policy"]["required_checkers"] = required_checkers
     guide = await request_json(
         client,
         "POST",
@@ -335,6 +343,13 @@ async def create_project_with_guide(
         manager_token,
         payload,
         201,
+    )
+    await create_policy_bundle_for_guide(
+        client,
+        manager_token,
+        project["id"],
+        guide["id"],
+        run_id,
     )
     await request_json(
         client,
@@ -473,7 +488,6 @@ def assert_locked_submission_response(submission: dict) -> None:
     ensure(submission["locked_at"] is not None, "locked submission missing locked_at")
     locked_versions = {
         submission["locked_guide_version"],
-        submission["locked_checker_policy_version"],
         submission["locked_review_policy_version"],
         submission["locked_revision_policy_version"],
         submission["locked_payment_policy_version"],
@@ -671,6 +685,12 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 task.locked_payment_policy_version,
             }
             ensure(task_versions == {"v1"}, f"{scenario['name']} task context drifted")
+            ensure(
+                task.locked_post_submit_checker_policy_id is not None
+                and task.locked_post_submit_checker_policy_version == "v1"
+                and task.locked_post_submit_checker_policy_hash is not None,
+                f"{scenario['name']} task post-submit policy lock missing",
+            )
             submission_versions = {
                 submission.locked_guide_version,
                 submission.locked_checker_policy_version,
@@ -681,6 +701,21 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
             ensure(
                 submission_versions == task_versions,
                 f"{scenario['name']} submission context drifted",
+            )
+            ensure(
+                submission.locked_post_submit_checker_policy_id
+                == task.locked_post_submit_checker_policy_id,
+                f"{scenario['name']} submission post-submit policy id drifted",
+            )
+            ensure(
+                submission.locked_post_submit_checker_policy_version
+                == task.locked_post_submit_checker_policy_version,
+                f"{scenario['name']} submission post-submit policy version drifted",
+            )
+            ensure(
+                submission.locked_post_submit_checker_policy_hash
+                == task.locked_post_submit_checker_policy_hash,
+                f"{scenario['name']} submission post-submit policy hash drifted",
             )
             ensure(submission.locked_at is not None, f"{scenario['name']} submission not locked")
             ensure(
@@ -732,6 +767,21 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 checker_run.locked_payment_policy_version,
             }
             ensure(run_versions == submission_versions, f"{scenario['name']} checker context drifted")
+            ensure(
+                checker_run.locked_post_submit_checker_policy_id
+                == submission.locked_post_submit_checker_policy_id,
+                f"{scenario['name']} checker post-submit policy id drifted",
+            )
+            ensure(
+                checker_run.locked_post_submit_checker_policy_version
+                == submission.locked_post_submit_checker_policy_version,
+                f"{scenario['name']} checker post-submit policy version drifted",
+            )
+            ensure(
+                checker_run.locked_post_submit_checker_policy_hash
+                == submission.locked_post_submit_checker_policy_hash,
+                f"{scenario['name']} checker post-submit policy hash drifted",
+            )
 
             results = (
                 await session.scalars(
@@ -880,7 +930,10 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             {"submission": submission_payload(run_id, "clean")},
         )
         ensure(clean_precheck["authoritative"] is False, "precheck must be non-authoritative")
-        ensure(clean_precheck["eligible_to_submit"] is True, "clean precheck should pass")
+        ensure(
+            clean_precheck["eligible_to_submit"] is True,
+            f"clean precheck should pass: {clean_precheck}",
+        )
         assert_pre_submit_checker_set(clean_precheck)
         await assert_task_status(client, manager_token, clean_task["id"], "in_progress")
         clean_precheck_submissions = await request_json(
@@ -915,8 +968,14 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             clean_worker_token,
         )
         ensure(
-            worker_clean_run["routing_recommendation"] == "allow_review",
-            "worker clean route mismatch",
+            "routing_recommendation" not in worker_clean_run,
+            "worker saw internal routing recommendation",
+        )
+        ensure("outcome_source" not in worker_clean_run, "worker saw internal outcome source")
+        ensure("trigger_source" not in worker_clean_run, "worker saw internal trigger source")
+        ensure(
+            "locked_post_submit_checker_policy_hash" not in worker_clean_run,
+            "worker saw locked post-submit checker policy hash",
         )
         ensure(worker_clean_run["artifact_hash_manifest"] == [], "worker saw artifact manifest")
         manager_clean_runs = await request_json(
@@ -936,6 +995,14 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         ensure(
             worker_clean_runs[0]["artifact_hash_manifest"] == [],
             "worker checker-run list exposed artifact manifest",
+        )
+        ensure(
+            "routing_recommendation" not in worker_clean_runs[0],
+            "worker checker-run list exposed routing recommendation",
+        )
+        ensure(
+            "locked_post_submit_checker_policy_hash" not in worker_clean_runs[0],
+            "worker checker-run list exposed locked post-submit checker policy hash",
         )
         await request_json(
             client,
@@ -987,7 +1054,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         missing_file_payload["artifact_hash_manifest"] = [
             {
                 "artifact": "other.md",
-                "hash": f"sha256:other-{run_id}",
+                "hash": sha256_token(f"other:{run_id}"),
                 "size_bytes": 128,
                 "notes": "wrong artifact",
             }
@@ -1009,38 +1076,14 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             revision_worker_token,
         )
         ensure(revision_precheck_submissions == [], "failed precheck created a submission")
-        first_submission, first_locked, first_run = await submit_lock_and_get_run(
+        await request_json(
             client,
-            manager_token=manager_token,
-            worker_token=revision_worker_token,
-            task_id=revision_task["id"],
-            payload=missing_file_payload,
-        )
-        assert_default_checker_set(first_run)
-        ensure(first_run["routing_recommendation"] == "needs_revision", "missing file route drifted")
-        ensure(first_run["outcome_source"] == "auto_checker", "missing file source drifted")
-        await assert_task_status(client, manager_token, revision_task["id"], "needs_revision")
-        worker_revision_run = await request_json(
-            client,
-            "GET",
-            f"/api/v1/checker-runs/{first_run['id']}",
+            "POST",
+            f"/api/v1/tasks/{revision_task['id']}/submissions",
             revision_worker_token,
+            missing_file_payload,
+            422,
         )
-        required_file_result = checker_result(worker_revision_run, "check_required_files")
-        ensure(bool(required_file_result["worker_message"]), "required-file worker message missing")
-        ensure(required_file_result["metadata"] == {}, "worker saw required-file metadata")
-        second_submission, second_locked, second_run = await submit_lock_and_get_run(
-            client,
-            manager_token=manager_token,
-            worker_token=revision_worker_token,
-            task_id=revision_task["id"],
-            payload=submission_payload(run_id, "revision-v2"),
-        )
-        assert_default_checker_set(second_run)
-        ensure(first_submission["version"] == 1, "first submission version drifted")
-        ensure(second_submission["version"] == 2, "second submission version drifted")
-        ensure(second_run["routing_recommendation"] == "allow_review", "fixed v2 did not pass")
-        await assert_task_status(client, manager_token, revision_task["id"], "review_pending")
 
         missing_evidence_worker_subject = f"week2-worker-no-evidence-{run_id}"
         missing_evidence_worker_token = token_for(
@@ -1134,26 +1177,39 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         duplicate_artifact_payload["artifact_hash_manifest"].append(
             {
                 "artifact": "answer.md",
-                "hash": f"sha256:duplicate-{run_id}",
+                "hash": sha256_token(f"duplicate:{run_id}"),
                 "size_bytes": 128,
                 "notes": "duplicate artifact",
             }
         )
-        integrity_submission, integrity_locked, integrity_run = await submit_lock_and_get_run(
+        integrity_precheck = await request_json(
             client,
-            manager_token=manager_token,
-            worker_token=integrity_worker_token,
-            task_id=integrity_task["id"],
-            payload=duplicate_artifact_payload,
+            "POST",
+            f"/api/v1/tasks/{integrity_task['id']}/submission-precheck",
+            integrity_worker_token,
+            {"submission": duplicate_artifact_payload},
         )
-        assert_default_checker_set(integrity_run)
+        assert_pre_submit_checker_set(integrity_precheck)
         ensure(
-            integrity_run["routing_recommendation"] == "needs_revision",
-            "integrity failure did not route to needs_revision",
+            integrity_precheck["eligible_to_submit"] is False,
+            "duplicate artifact precheck should block submission",
         )
         ensure(
-            checker_result(integrity_run, "check_evidence_integrity")["status"] == "failed",
-            "evidence integrity checker did not fail",
+            next(
+                result
+                for result in integrity_precheck["results"]
+                if result["checker_name"] == "check_evidence_integrity"
+            )["status"]
+            == "failed",
+            "duplicate artifact precheck did not fail integrity",
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{integrity_task['id']}/submissions",
+            integrity_worker_token,
+            duplicate_artifact_payload,
+            422,
         )
 
         attestation_worker_subject = f"week2-worker-attestation-{run_id}"
@@ -1182,22 +1238,34 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         weak_attestation_payload = submission_payload(run_id, "attestation")
         weak_attestation_payload["worker_attestation"] = "ok"
-        attestation_submission, attestation_locked, attestation_run = await submit_lock_and_get_run(
+        attestation_precheck = await request_json(
             client,
-            manager_token=manager_token,
-            worker_token=attestation_worker_token,
-            task_id=attestation_task["id"],
-            payload=weak_attestation_payload,
+            "POST",
+            f"/api/v1/tasks/{attestation_task['id']}/submission-precheck",
+            attestation_worker_token,
+            {"submission": weak_attestation_payload},
         )
-        assert_default_checker_set(attestation_run)
+        assert_pre_submit_checker_set(attestation_precheck)
         ensure(
-            attestation_run["routing_recommendation"] == "needs_revision",
-            "weak attestation did not route to needs_revision",
+            attestation_precheck["eligible_to_submit"] is False,
+            "weak attestation precheck should block submission",
         )
         ensure(
-            checker_result(attestation_run, "check_confidentiality_attestation")["status"]
+            next(
+                result
+                for result in attestation_precheck["results"]
+                if result["checker_name"] == "check_confidentiality_attestation"
+            )["status"]
             == "failed",
-            "confidentiality attestation checker did not fail",
+            "weak attestation precheck did not fail confidentiality",
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{attestation_task['id']}/submissions",
+            attestation_worker_token,
+            weak_attestation_payload,
+            422,
         )
 
         warning_worker_subject = f"week2-worker-warning-{run_id}"
@@ -1270,37 +1338,40 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         forbidden_payload["artifact_hash_manifest"].append(
             {
                 "artifact": "secrets/.env",
-                "hash": f"sha256:forbidden-{run_id}",
+                "hash": sha256_token(f"forbidden:{run_id}"),
                 "size_bytes": 64,
                 "notes": "must be blocked",
             }
         )
-        forbidden_submission, forbidden_locked, forbidden_run = await submit_lock_and_get_run(
+        forbidden_precheck = await request_json(
             client,
-            manager_token=manager_token,
-            worker_token=forbidden_worker_token,
-            task_id=forbidden_task["id"],
-            payload=forbidden_payload,
-        )
-        assert_default_checker_set(forbidden_run)
-        ensure(
-            forbidden_run["routing_recommendation"] == "needs_revision",
-            "forbidden path did not route to needs_revision",
-        )
-        ensure(
-            checker_result(forbidden_run, "check_forbidden_files")["status"] == "failed",
-            "forbidden-file checker did not fail",
-        )
-        worker_forbidden_run = await request_json(
-            client,
-            "GET",
-            f"/api/v1/checker-runs/{forbidden_run['id']}",
+            "POST",
+            f"/api/v1/tasks/{forbidden_task['id']}/submission-precheck",
             forbidden_worker_token,
+            {"submission": forbidden_payload},
         )
-        serialized_forbidden = str(worker_forbidden_run)
-        ensure(".env" not in serialized_forbidden, "worker saw forbidden .env path")
-        ensure("secrets/" not in serialized_forbidden, "worker saw forbidden directory path")
-        ensure("local://" not in serialized_forbidden, "worker saw internal storage URI")
+        assert_pre_submit_checker_set(forbidden_precheck)
+        ensure(
+            forbidden_precheck["eligible_to_submit"] is False,
+            "forbidden path precheck should block submission",
+        )
+        ensure(
+            next(
+                result
+                for result in forbidden_precheck["results"]
+                if result["checker_name"] == "check_forbidden_files"
+            )["status"]
+            == "failed",
+            "forbidden path precheck did not fail forbidden-file checker",
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{forbidden_task['id']}/submissions",
+            forbidden_worker_token,
+            forbidden_payload,
+            422,
+        )
 
         setup_worker_subject = f"week2-worker-setup-{run_id}"
         setup_worker_token = token_for(
@@ -1365,9 +1436,10 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             setup_worker_token,
         )
         ensure(
-            worker_setup_run["routing_recommendation"] == "not_evaluated",
+            "routing_recommendation" not in worker_setup_run,
             "worker saw internal setup route",
         )
+        ensure("outcome_source" not in worker_setup_run, "worker saw internal setup outcome")
         ensure(worker_setup_run["results"] == [], "worker saw internal setup results")
         await repair_acceptance_criteria(setup_task["id"])
         retry = await request_json(
@@ -1439,70 +1511,6 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_gate_event": "pre_review_gate_passed",
             },
             {
-                "name": "missing_file_v1",
-                "task_id": revision_task["id"],
-                "submission_id": first_submission["id"],
-                "checker_run_id": first_run["id"],
-                "locked_at": first_locked["locked_at"],
-                "expected_route": "needs_revision",
-                "expected_task_status": "review_pending",
-                "expected_trigger_source": "submission_locked",
-                "expected_attempt": 1,
-                "expected_attempts": [1],
-                "expected_current": True,
-                "expected_current_run_id": first_run["id"],
-                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
-                "expected_gate_event": "pre_review_gate_needs_revision",
-            },
-            {
-                "name": "revision_v2",
-                "task_id": revision_task["id"],
-                "submission_id": second_submission["id"],
-                "checker_run_id": second_run["id"],
-                "locked_at": second_locked["locked_at"],
-                "expected_route": "allow_review",
-                "expected_task_status": "review_pending",
-                "expected_trigger_source": "submission_locked",
-                "expected_attempt": 1,
-                "expected_attempts": [1],
-                "expected_current": True,
-                "expected_current_run_id": second_run["id"],
-                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
-                "expected_gate_event": "pre_review_gate_passed",
-            },
-            {
-                "name": "integrity",
-                "task_id": integrity_task["id"],
-                "submission_id": integrity_submission["id"],
-                "checker_run_id": integrity_run["id"],
-                "locked_at": integrity_locked["locked_at"],
-                "expected_route": "needs_revision",
-                "expected_task_status": "needs_revision",
-                "expected_trigger_source": "submission_locked",
-                "expected_attempt": 1,
-                "expected_attempts": [1],
-                "expected_current": True,
-                "expected_current_run_id": integrity_run["id"],
-                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
-                "expected_gate_event": "pre_review_gate_needs_revision",
-            },
-            {
-                "name": "attestation",
-                "task_id": attestation_task["id"],
-                "submission_id": attestation_submission["id"],
-                "checker_run_id": attestation_run["id"],
-                "locked_at": attestation_locked["locked_at"],
-                "expected_route": "needs_revision",
-                "expected_task_status": "needs_revision",
-                "expected_trigger_source": "submission_locked",
-                "expected_attempt": 1,
-                "expected_attempts": [1],
-                "expected_current": True,
-                "expected_current_run_id": attestation_run["id"],
-                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
-                "expected_gate_event": "pre_review_gate_needs_revision",
-            },
-            {
                 "name": "warning",
                 "task_id": warning_task["id"],
                 "submission_id": warning_submission["id"],
@@ -1517,22 +1525,6 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_current_run_id": warning_run["id"],
                 "expected_checkers": EXPECTED_DURABLE_CHECKERS,
                 "expected_gate_event": "pre_review_gate_passed",
-            },
-            {
-                "name": "forbidden",
-                "task_id": forbidden_task["id"],
-                "submission_id": forbidden_submission["id"],
-                "checker_run_id": forbidden_run["id"],
-                "locked_at": forbidden_locked["locked_at"],
-                "expected_route": "needs_revision",
-                "expected_task_status": "needs_revision",
-                "expected_trigger_source": "submission_locked",
-                "expected_attempt": 1,
-                "expected_attempts": [1],
-                "expected_current": True,
-                "expected_current_run_id": forbidden_run["id"],
-                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
-                "expected_gate_event": "pre_review_gate_needs_revision",
             },
             {
                 "name": "setup_blocked",
@@ -1572,18 +1564,16 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
     print("Week 2 real API e2e passed")
     print("scenario_summary:")
     print("clean=review_pending")
-    print("missing_file=needs_revision")
+    print("missing_file=pre_submit_blocked")
     print("missing_evidence=pre_submit_blocked")
-    print("duplicate_artifact_integrity=needs_revision")
-    print("weak_attestation=needs_revision")
+    print("duplicate_artifact_integrity=pre_submit_blocked")
+    print("weak_attestation=pre_submit_blocked")
     print("generated_output_warning=review_pending")
-    print("forbidden_path=needs_revision")
+    print("forbidden_path=pre_submit_blocked")
     print("task_setup_blocked=auto_checking->review_pending")
     print(f"clean_task_id={clean_task['id']}")
     print(f"clean_submission_id={clean_submission['id']}")
-    print(f"revision_task_id={revision_task['id']}")
-    print(f"revision_v1_submission_id={first_submission['id']}")
-    print(f"revision_v2_submission_id={second_submission['id']}")
+    print(f"missing_file_task_id={revision_task['id']}")
     print(f"missing_evidence_task_id={missing_evidence_task['id']}")
     print(f"integrity_task_id={integrity_task['id']}")
     print(f"attestation_task_id={attestation_task['id']}")

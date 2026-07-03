@@ -64,14 +64,22 @@ If a worker submits a new version after `needs_revision`, older locked versions 
 The automatic run uses the policy context already stamped on the locked submission:
 
 - locked guide version
+- locked post-submit checker policy id
 - locked post-submit checker policy version
+- locked post-submit checker policy hash
+- locked post-submit checker policy body
 - locked review policy version
 - locked revision policy version
 - locked payment policy version
 
 The worker does not provide or restate these policy versions.
 
-The checker service loads required checker names and blocking severities from the locked post-submit checker policy. Unregistered checker names are policy errors and block the lock/gate path with a structured API error.
+The checker service validates the locked `PostSubmitCheckerPolicy`
+id/version/hash/body stamped on the submission, then executes from that locked
+body. Missing, mismatched, deleted, stale, malformed, or unregistered
+post-submit policy context blocks the lock/gate path with a structured setup or
+post-submit checker policy API error before a durable `CheckerRun` or
+`CheckerResult` is created.
 
 ## Revision Boundary
 
@@ -112,7 +120,9 @@ Each event records actor identity, auth source, task id, submission id, submissi
 - clean submission moves task to `review_pending`
 - worker-fixable blocking result moves task to `needs_revision`
 - task setup defect produces `task_setup_blocked` and keeps task internal in `auto_checking`
-- worker-visible checker responses do not leak internal `task_setup_blocked` details
+- worker-visible checker responses do not expose `routing_recommendation`,
+  `outcome_source`, internal `task_setup_blocked` details, or other internal
+  route tokens
 - manual checker retry supersedes the prior current run and increments attempt number
 - older submission versions cannot receive checker runs after a newer submission exists
 - checker-caused revision does not create a human review decision

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -39,6 +40,15 @@ class CheckerRun(Base):
             name="fk_checker_runs_task_locked_checker_policy",
         ),
         ForeignKeyConstraint(
+            [
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+            ],
+            ["checker_policies.id", "checker_policies.guide_version", "checker_policies.policy_hash"],
+            name="fk_checker_runs_locked_post_submit_policy_hash",
+        ),
+        ForeignKeyConstraint(
             ["task_id", "locked_review_policy_version"],
             ["workstream_tasks.id", "workstream_tasks.locked_review_policy_version"],
             name="fk_checker_runs_task_locked_review_policy",
@@ -58,16 +68,44 @@ class CheckerRun(Base):
             ["submissions.id", "submissions.version"],
             name="fk_checker_runs_submission_version",
         ),
+        ForeignKeyConstraint(
+            [
+                "submission_id",
+                "locked_post_submit_checker_policy_id",
+                "locked_post_submit_checker_policy_version",
+                "locked_post_submit_checker_policy_hash",
+            ],
+            [
+                "submissions.id",
+                "submissions.locked_post_submit_checker_policy_id",
+                "submissions.locked_post_submit_checker_policy_version",
+                "submissions.locked_post_submit_checker_policy_hash",
+            ],
+            name="fk_checker_runs_submission_locked_post_submit_policy_hash",
+        ),
         UniqueConstraint(
             "submission_id",
             "attempt_number",
             name="uq_checker_runs_submission_attempt",
+        ),
+        CheckConstraint(
+            """
+            locked_post_submit_checker_policy_id is not null
+            and locked_post_submit_checker_policy_version is not null
+            and locked_post_submit_checker_policy_hash is not null
+            and locked_post_submit_checker_policy_body is not null
+            """,
+            name="post_submit_policy_lock_complete",
         ),
         Index(
             "uq_checker_runs_current_per_submission",
             "submission_id",
             unique=True,
             postgresql_where=text("is_current_for_submission = true"),
+        ),
+        Index(
+            "ix_checker_runs_locked_post_submit_policy_hash",
+            "locked_post_submit_checker_policy_hash",
         ),
     )
 
@@ -98,6 +136,13 @@ class CheckerRun(Base):
     is_current_for_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     locked_guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_checker_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    locked_post_submit_checker_policy_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    locked_post_submit_checker_policy_version: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+    )
+    locked_post_submit_checker_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    locked_post_submit_checker_policy_body: Mapped[dict] = mapped_column(JSON, nullable=False)
     locked_review_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_revision_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_payment_policy_version: Mapped[str] = mapped_column(String(50), nullable=False)

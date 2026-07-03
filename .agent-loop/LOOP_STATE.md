@@ -4,13 +4,13 @@
 
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: none
-- Active implementation chunk: none
-- Branch: `main`
-- Status: `WS-POL-001-03` merged through PR #63 on 2026-07-03; post-merge memory is current
-- Merged implementation SHA: `d1e80e3903038cb9c99aec9e83faf164a010c46d`
-- Merge commit: `a73be67bf6c3c2ac0194f8aecbda89d748baa92c`
-- Current gate: stop after memory update
-- Next chunk: `WS-POL-001-04` is inactive until the user gives an explicit start signal
+- Active implementation chunk: `WS-POL-001-04`
+- Branch: `codex/ws-pol-001-04-post-submit-policy`
+- Status: `WS-POL-001-04` implementation and internal reviewer fanout are complete; evidence and PR trust artifacts are being prepared
+- Last merged implementation SHA: `d1e80e3903038cb9c99aec9e83faf164a010c46d`
+- Last merge commit: `a73be67bf6c3c2ac0194f8aecbda89d748baa92c`
+- Current gate: evidence and PR trust bundle before PR
+- Next chunk: inactive until `WS-POL-001-04` is reviewed and merged by the user
 
 ## Operating Rule
 
@@ -27,6 +27,11 @@ not implement frontend behavior, payment, reputation, settlement, blockchain
 integrations, post-submit policy splitting, or revision resubmission drill
 behavior.
 
+The active `WS-POL-001-04` chunk splits post-submit checker policy provenance
+from pre-submit checker policy provenance. It must not implement human review
+decisions, revision resubmission, payment, reputation, blockchain integrations,
+frontend behavior, or agent runtime redesign.
+
 ## Last Review State
 
 - Last completed initiative: `WS-ENG-001` Codex zero-trust engineering loop bootstrap.
@@ -41,3 +46,5 @@ behavior.
 - Internal review evidence for `WS-POL-001-03` is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-03-internal-review-evidence.md`.
 - PR trust bundle for `WS-POL-001-03` is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-03-pr-trust-bundle.md`.
 - External review response for `WS-POL-001-03` is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-03-external-review-response.md`.
+- `WS-POL-001-04` started on branch `codex/ws-pol-001-04-post-submit-policy` after the user's explicit start signal.
+- `WS-POL-001-04` internal reviewer fanout completed with no open sub-agent sessions. Evidence and PR trust artifacts must be committed before PR.

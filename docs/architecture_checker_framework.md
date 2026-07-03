@@ -273,8 +273,8 @@ Draft packet
 -> create Submission only when blocking pre-submit checks pass
 -> lock submission
 -> create CheckerRun
--> load locked PostSubmitCheckerPolicy
--> run required checkers
+-> validate locked PostSubmitCheckerPolicy id/version/hash/body
+-> execute locked PostSubmitCheckerPolicy execution_checkers
 -> store CheckerResult records
 -> calculate blocking status
 -> if no blocking failures remain: store readiness proof on CheckerRun and move to REVIEW_PENDING
@@ -298,7 +298,8 @@ When all blocking checks pass, the checker service stores readiness proof on the
 The checker run records:
 
 - submission id
-- post-submit checker policy version derived from the locked task context
+- post-submit checker policy id, version, hash, and internal locked body
+  stamped from the locked submission context
 - artifact hash manifest
 - blocking failure count
 - warning count
@@ -316,6 +317,10 @@ Workers see:
 - severity
 - message
 - suggested fix when safe
+
+Worker-facing checker-run responses do not expose `routing_recommendation`,
+`outcome_source`, internal route tokens, post-submit policy provenance fields,
+locked post-submit policy body, or hidden task setup details.
 
 Reviewers see:
 

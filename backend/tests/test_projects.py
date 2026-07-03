@@ -36,12 +36,12 @@ from app.interfaces.project_agents import (
     SubmissionArtifactPolicyDerivationResult,
 )
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectGuide,
     RevisionPolicy,
@@ -165,7 +165,7 @@ def test_setup_mutations_use_locked_guide_helper() -> None:
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:
     expected_constraints = {
-        CheckerPolicy: "fk_checker_policies_project_guide",
+        PostSubmitCheckerPolicy: "fk_checker_policies_project_guide",
         ReviewPolicy: "fk_review_policies_project_guide",
         RevisionPolicy: "fk_revision_policies_project_guide",
         PaymentPolicy: "fk_payment_policies_project_guide",
@@ -261,6 +261,7 @@ def test_policy_models_bind_to_denormalized_policy_hashes() -> None:
 
 def test_policy_hash_pairs_are_unique_fk_targets() -> None:
     expected_constraints = {
+        PostSubmitCheckerPolicy: "uq_checker_policies_id_version_hash",
         SubmissionArtifactPolicy: "uq_submission_artifact_policies_id_hash",
         EffectiveProjectSubmissionArtifactPolicy: (
             "uq_effective_project_submission_artifact_policies_id_hash"
@@ -276,6 +277,7 @@ def test_policy_hash_pairs_are_unique_fk_targets() -> None:
         )
 
         assert [column.name for column in constraint.columns] in (
+            ["id", "guide_version", "policy_hash"],
             ["id", "policy_hash"],
             ["id", "effective_policy_hash"],
             ["id", "compiled_bundle_hash"],
@@ -336,7 +338,7 @@ def complete_guide_payload(version: str = "v1") -> dict:
         "evidence_policy": {"required": ["log"]},
         "unacceptable_work_policy": "Copied or unverifiable work.",
         "change_summary": f"Initial {version}",
-        "checker_policy": {
+        "post_submit_checker_policy": {
             "required_checkers": ["check_policy_context_present"],
             "warning_checkers": [],
             "blocking_severities": ["high"],
@@ -3588,7 +3590,7 @@ async def test_activation_does_not_require_legacy_evidence_policy(
 async def test_activation_requires_all_policies(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
-    payload["checker_policy"] = None
+    payload["post_submit_checker_policy"] = None
     guide = await create_guide(project_client, project["id"], payload)
     await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 
@@ -3720,7 +3722,7 @@ async def test_activation_rejects_unregistered_checker_names(
 ) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
-    payload["checker_policy"]["required_checkers"] = ["missing_checker"]
+    payload["post_submit_checker_policy"]["required_checkers"] = ["missing_checker"]
     guide = await create_guide(project_client, project["id"], payload)
     await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 
@@ -3926,7 +3928,7 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.status_code == 200, active.text
     assert active.json()["guide"]["status"] == "active"
     assert active.json()["guide"]["version"] == "v1"
-    assert active.json()["checker_policy"]["required_checkers"] == [
+    assert active.json()["post_submit_checker_policy"]["required_checkers"] == [
         "check_policy_context_present"
     ]
     assert active.json()["guide_source_snapshot"]["bundle_hash"] == (

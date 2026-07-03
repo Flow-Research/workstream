@@ -221,7 +221,13 @@ pass/fail/warning details, create no submission row, no submission version, no
 task transition to `submitted`, and no submission-created audit event. They do
 not return review decision values: `accept`, `needs_revision`, or `reject`.
 
-Durable post-submit checker runs run the canonical default submission-quality checks plus locked checker-policy names:
+Durable post-submit checker runs execute the complete `execution_checkers` list
+from the submission-stamped locked `PostSubmitCheckerPolicy` body. That locked
+body includes Workstream default durable checkers, project required checkers,
+warning checkers, and blocking severities. The durable run records the locked
+post-submit checker policy id, version, hash, and internal policy body stamped
+on the submission. Worker-facing responses do not expose those provenance
+fields.
 
 - `check_submission_packet`
 - `check_policy_context_present`
@@ -234,7 +240,10 @@ Durable post-submit checker runs run the canonical default submission-quality ch
 - additional locked `required_checkers`
 - additional locked `warning_checkers`
 
-`check_acceptance_criteria_present` is registered in Chunk 8, but it is a locked task setup checker. It is not part of the default durable submission-quality list. If a locked post-submit checker policy requires it and it fails, the run must use task setup routing, not worker revision routing.
+`check_acceptance_criteria_present` is registered in Chunk 8, but it is a
+locked task setup checker. It is not part of the default durable
+submission-quality list. If a locked `PostSubmitCheckerPolicy` requires it and
+it fails, the run must use task setup routing, not worker revision routing.
 
 ## Routing Boundary
 
@@ -318,6 +327,9 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 - clean submissions keep `routing_recommendation = allow_review`
 - worker-fixable submission failures keep `routing_recommendation = needs_revision` and `outcome_source = auto_checker`
 - task setup failures keep `routing_recommendation = task_setup_blocked` and do not create worker revision outcomes
+- worker-facing checker-run responses omit `routing_recommendation`,
+  `outcome_source`, and internal route tokens such as `allow_review`,
+  `checker_retry`, and `task_setup_blocked`
 - tests use real FastAPI calls and Postgres-backed persistence, not monkeypatch-only unit tests
 - senior engineering, QA/test, security/auth, and product/ops reviewer tracks pass before PR completion
 

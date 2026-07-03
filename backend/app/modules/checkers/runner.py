@@ -844,6 +844,15 @@ async def check_policy_context_present(context: CheckerContext) -> CheckerOutcom
         for name, value in {
             "locked_guide_version": context.submission.locked_guide_version,
             "locked_checker_policy_version": context.submission.locked_checker_policy_version,
+            "locked_post_submit_checker_policy_id": (
+                context.submission.locked_post_submit_checker_policy_id
+            ),
+            "locked_post_submit_checker_policy_version": (
+                context.submission.locked_post_submit_checker_policy_version
+            ),
+            "locked_post_submit_checker_policy_hash": (
+                context.submission.locked_post_submit_checker_policy_hash
+            ),
             "locked_review_policy_version": context.submission.locked_review_policy_version,
             "locked_revision_policy_version": context.submission.locked_revision_policy_version,
             "locked_payment_policy_version": context.submission.locked_payment_policy_version,

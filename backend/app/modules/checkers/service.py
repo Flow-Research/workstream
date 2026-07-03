@@ -37,6 +37,10 @@ from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     PreSubmitCheckerPolicy,
 )
+from app.modules.projects.post_submit_policy import (
+    LockedPostSubmitCheckerPolicy,
+    parse_locked_post_submit_checker_policy_body,
+)
 from app.modules.projects.repository import ProjectRepository
 from app.modules.tasks.lifecycle import (
     InvalidTaskTransition,
@@ -66,16 +70,6 @@ INTERNAL_ROUTING_RECOMMENDATIONS = {
     ROUTING_CHECKER_RETRY,
     ROUTING_TASK_SETUP_BLOCKED,
 }
-DEFAULT_DURABLE_CHECKERS = [
-    "check_submission_packet",
-    "check_policy_context_present",
-    "check_evidence_present",
-    "check_evidence_integrity",
-    "check_required_files",
-    "check_forbidden_files",
-    "check_confidentiality_attestation",
-    "check_low_quality_generated_artifacts",
-]
 
 
 class CheckerServiceError(Exception):
@@ -312,6 +306,64 @@ class CheckerService:
             ) from exc
         return effective_policy, pre_submit_checker_policy
 
+    async def _load_locked_post_submit_policy(
+        self,
+        task: WorkstreamTask,
+        submission: Submission,
+    ) -> LockedPostSubmitCheckerPolicy:
+        """Load and validate the locked post-submit checker policy.
+
+        Args:
+            task: Task whose locked context must match the submission.
+            submission: Locked submission stamped from the task context.
+
+        Returns:
+            The parsed locked post-submit checker policy body.
+
+        Raises:
+            CheckerPolicyInvalid: If the post-submit policy lock is missing,
+                mismatched, deleted, or stale.
+        """
+        locked_id = submission.locked_post_submit_checker_policy_id
+        locked_version = submission.locked_post_submit_checker_policy_version
+        locked_hash = submission.locked_post_submit_checker_policy_hash
+        if not all([locked_id, locked_version, locked_hash]):
+            raise CheckerPolicyInvalid("locked post-submit checker policy context is incomplete")
+        if (
+            task.locked_post_submit_checker_policy_id != locked_id
+            or task.locked_post_submit_checker_policy_version != locked_version
+            or task.locked_post_submit_checker_policy_hash != locked_hash
+            or task.locked_post_submit_checker_policy_body
+            != submission.locked_post_submit_checker_policy_body
+        ):
+            raise CheckerPolicyInvalid(
+                "submission post-submit checker policy context does not match task lock"
+            )
+        policy = await self._project_repo.get_post_submit_checker_policy_by_id(locked_id)
+        if (
+            policy is None
+            or policy.project_id != task.project_id
+            or policy.guide_version != locked_version
+            or policy.policy_hash != locked_hash
+        ):
+            raise CheckerPolicyInvalid("locked post-submit checker policy is invalid")
+        try:
+            locked_policy = parse_locked_post_submit_checker_policy_body(
+                submission.locked_post_submit_checker_policy_body,
+                project_id=task.project_id,
+                guide_version=locked_version,
+                policy_hash=locked_hash,
+            )
+        except ValueError as exc:
+            raise CheckerPolicyInvalid("locked post-submit checker policy hash is invalid") from exc
+        try:
+            self._registry.require_registered(set(locked_policy.execution_checkers))
+        except UnknownChecker as exc:
+            raise CheckerPolicyInvalid(
+                "locked post-submit checker policy references unregistered checker"
+            ) from exc
+        return locked_policy
+
     @staticmethod
     def _effective_policy_shape_is_valid(effective_policy: Any) -> bool:
         """Return whether a locked effective policy can be safely executed."""
@@ -427,28 +479,13 @@ class CheckerService:
         if latest_submission is None or latest_submission.id != submission.id:
             raise CheckerExecutionBlocked("only latest submission version can be checked")
 
-        checker_policy = await self._project_repo.get_checker_policy(
-            task.project_id,
-            submission.locked_checker_policy_version,
-        )
-        if checker_policy is None:
-            raise CheckerPolicyInvalid("locked checker policy not found")
+        checker_policy = await self._load_locked_post_submit_policy(task, submission)
         effective_policy, _ = await self._load_locked_pre_submit_context(
             task,
             submission,
         )
 
-        required_names = list(checker_policy.required_checkers or [])
-        warning_names = list(checker_policy.warning_checkers or [])
-        checker_names = list(
-            dict.fromkeys(
-                [
-                    *DEFAULT_DURABLE_CHECKERS,
-                    *required_names,
-                    *warning_names,
-                ]
-            )
-        )
+        checker_names = list(checker_policy.execution_checkers or [])
         try:
             self._registry.require_registered(set(checker_names))
         except UnknownChecker as exc:
@@ -475,8 +512,8 @@ class CheckerService:
         context = CheckerContext(
             task=task,
             submission=submission,
-            required_checker_names=frozenset(required_names),
-            warning_checker_names=frozenset(warning_names),
+            required_checker_names=frozenset(checker_policy.required_checkers),
+            warning_checker_names=frozenset(checker_policy.warning_checkers),
             blocking_severities=frozenset(checker_policy.blocking_severities or []),
             effective_policy=effective_policy.effective_policy,
         )
@@ -650,6 +687,16 @@ class CheckerService:
             is_current_for_submission=True,
             locked_guide_version=submission.locked_guide_version,
             locked_checker_policy_version=submission.locked_checker_policy_version,
+            locked_post_submit_checker_policy_id=submission.locked_post_submit_checker_policy_id,
+            locked_post_submit_checker_policy_version=(
+                submission.locked_post_submit_checker_policy_version
+            ),
+            locked_post_submit_checker_policy_hash=(
+                submission.locked_post_submit_checker_policy_hash
+            ),
+            locked_post_submit_checker_policy_body=(
+                submission.locked_post_submit_checker_policy_body
+            ),
             locked_review_policy_version=submission.locked_review_policy_version,
             locked_revision_policy_version=submission.locked_revision_policy_version,
             locked_payment_policy_version=submission.locked_payment_policy_version,
@@ -842,6 +889,15 @@ class CheckerService:
             "submission_version": submission.version,
             "locked_guide_version": submission.locked_guide_version,
             "locked_checker_policy_version": submission.locked_checker_policy_version,
+            "locked_post_submit_checker_policy_id": (
+                submission.locked_post_submit_checker_policy_id
+            ),
+            "locked_post_submit_checker_policy_version": (
+                submission.locked_post_submit_checker_policy_version
+            ),
+            "locked_post_submit_checker_policy_hash": (
+                submission.locked_post_submit_checker_policy_hash
+            ),
             "locked_review_policy_version": submission.locked_review_policy_version,
             "locked_revision_policy_version": submission.locked_revision_policy_version,
             "locked_payment_policy_version": submission.locked_payment_policy_version,
@@ -915,6 +971,15 @@ class CheckerService:
                     "trigger_source": trigger_source,
                     "locked_guide_version": submission.locked_guide_version,
                     "locked_checker_policy_version": submission.locked_checker_policy_version,
+                    "locked_post_submit_checker_policy_id": (
+                        submission.locked_post_submit_checker_policy_id
+                    ),
+                    "locked_post_submit_checker_policy_version": (
+                        submission.locked_post_submit_checker_policy_version
+                    ),
+                    "locked_post_submit_checker_policy_hash": (
+                        submission.locked_post_submit_checker_policy_hash
+                    ),
                     "locked_review_policy_version": submission.locked_review_policy_version,
                     "locked_revision_policy_version": submission.locked_revision_policy_version,
                     "locked_payment_policy_version": submission.locked_payment_policy_version,
@@ -1031,13 +1096,9 @@ class CheckerService:
                 )
             )
         routing_recommendation = (
-            "not_evaluated"
-            if hide_internal_route_from_worker
-            else checker_run.routing_recommendation
+            checker_run.routing_recommendation if has_checker_admin_access else None
         )
-        outcome_source = (
-            "none" if hide_internal_route_from_worker else checker_run.outcome_source
-        )
+        outcome_source = checker_run.outcome_source if has_checker_admin_access else None
         passed_count = 0 if hide_internal_route_from_worker else checker_run.passed_count
         warning_count = 0 if hide_internal_route_from_worker else checker_run.warning_count
         failed_count = 0 if hide_internal_route_from_worker else checker_run.failed_count
@@ -1047,7 +1108,7 @@ class CheckerService:
             task_id=checker_run.task_id,
             submission_id=checker_run.submission_id,
             submission_version=checker_run.submission_version,
-            trigger_source=checker_run.trigger_source,
+            trigger_source=checker_run.trigger_source if has_checker_admin_access else None,
             status=checker_run.status,
             routing_recommendation=routing_recommendation,
             outcome_source=outcome_source,
@@ -1071,6 +1132,21 @@ class CheckerService:
             ),
             locked_checker_policy_version=(
                 checker_run.locked_checker_policy_version if has_checker_admin_access else None
+            ),
+            locked_post_submit_checker_policy_id=(
+                checker_run.locked_post_submit_checker_policy_id
+                if has_checker_admin_access
+                else None
+            ),
+            locked_post_submit_checker_policy_version=(
+                checker_run.locked_post_submit_checker_policy_version
+                if has_checker_admin_access
+                else None
+            ),
+            locked_post_submit_checker_policy_hash=(
+                checker_run.locked_post_submit_checker_policy_hash
+                if has_checker_admin_access
+                else None
             ),
             locked_review_policy_version=(
                 checker_run.locked_review_policy_version if has_checker_admin_access else None

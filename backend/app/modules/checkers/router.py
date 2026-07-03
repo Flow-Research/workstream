@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.auth import get_current_actor
@@ -12,6 +14,7 @@ from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
 from app.modules.checkers.schemas import (
     CheckerRunRequest,
+    CheckerRunPublicResponse,
     CheckerRunResponse,
     PreSubmitCheckRequest,
     PreSubmitCheckResponse,
@@ -20,6 +23,17 @@ from app.modules.checkers.service import CheckerService, CheckerServiceError
 from app.schemas.auth import ActorContext
 
 router = APIRouter(tags=["checkers"])
+
+CHECKER_RUN_PUBLIC_RESPONSE = {
+    200: {
+        "model": CheckerRunPublicResponse,
+        "description": (
+            "Role-sensitive checker run response. Worker-readable OpenAPI "
+            "documents only the public subset; admin and project_manager actors "
+            "may receive additional internal routing and provenance fields."
+        ),
+    }
+}
 
 
 def checker_http_error(exc: CheckerServiceError) -> HTTPException:
@@ -46,6 +60,11 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
     return HTTPException(status_code=403, detail=str(exc))
 
 
+def checker_run_response(payload: CheckerRunResponse | list[CheckerRunResponse]) -> JSONResponse:
+    """Serialize role-sensitive checker-run responses without null hidden fields."""
+    return JSONResponse(content=jsonable_encoder(payload, exclude_none=True))
+
+
 @router.post("/tasks/{task_id}/submission-precheck", response_model=PreSubmitCheckResponse)
 async def pre_submit_check(
     task_id: str,
@@ -62,52 +81,75 @@ async def pre_submit_check(
         raise checker_http_error(exc) from exc
 
 
-@router.post("/submissions/{submission_id}/checker-runs", response_model=CheckerRunResponse)
+@router.post(
+    "/submissions/{submission_id}/checker-runs",
+    response_model=None,
+    responses=CHECKER_RUN_PUBLIC_RESPONSE,
+)
 async def run_submission_checkers(
     submission_id: str,
     payload: CheckerRunRequest,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> CheckerRunResponse:
+) -> JSONResponse:
     """Trigger a durable internal checker run for a locked submission."""
     try:
-        return await CheckerService(session).run_submission_checkers(
+        result = await CheckerService(session).run_submission_checkers(
             actor,
             submission_id,
             payload.trigger_reason,
         )
+        return checker_run_response(result)
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except CheckerServiceError as exc:
         raise checker_http_error(exc) from exc
 
 
-@router.get("/submissions/{submission_id}/checker-runs", response_model=list[CheckerRunResponse])
+@router.get(
+    "/submissions/{submission_id}/checker-runs",
+    response_model=None,
+    responses={
+        200: {
+            "model": list[CheckerRunPublicResponse],
+            "description": (
+                "Role-sensitive checker run list. Worker-readable OpenAPI "
+                "documents only the public subset; admin and project_manager "
+                "actors may receive additional internal routing and provenance fields."
+            ),
+        }
+    },
+)
 async def list_submission_checker_runs(
     submission_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> list[CheckerRunResponse]:
+) -> JSONResponse:
     """Return checker runs for one visible submission."""
     try:
-        return await CheckerService(session).list_submission_checker_runs(actor, submission_id)
+        result = await CheckerService(session).list_submission_checker_runs(actor, submission_id)
+        return checker_run_response(result)
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except CheckerServiceError as exc:
         raise checker_http_error(exc) from exc
 
 
-@router.get("/checker-runs/{checker_run_id}", response_model=CheckerRunResponse)
+@router.get(
+    "/checker-runs/{checker_run_id}",
+    response_model=None,
+    responses=CHECKER_RUN_PUBLIC_RESPONSE,
+)
 async def get_checker_run(
     checker_run_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> CheckerRunResponse:
+) -> JSONResponse:
     """Return one visible checker run."""
     try:
-        return await CheckerService(session).get_checker_run(actor, checker_run_id)
+        result = await CheckerService(session).get_checker_run(actor, checker_run_id)
+        return checker_run_response(result)
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except CheckerServiceError as exc:
         raise checker_http_error(exc) from exc
-

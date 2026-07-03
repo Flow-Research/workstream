@@ -9,12 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
@@ -534,16 +534,22 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
-    async def upsert_checker_policy(self, policy: CheckerPolicy) -> CheckerPolicy:
-        """Create or replace a checker policy for one guide version.
+    async def upsert_post_submit_checker_policy(
+        self,
+        policy: PostSubmitCheckerPolicy,
+    ) -> PostSubmitCheckerPolicy:
+        """Create or replace a post-submit checker policy for one guide version.
 
         Args:
-            policy: Checker policy model carrying the desired values.
+            policy: Post-submit checker policy model carrying the desired values.
 
         Returns:
-            Persisted checker policy model.
+            Persisted post-submit checker policy model.
         """
-        existing = await self.get_checker_policy(policy.project_id, policy.guide_version)
+        existing = await self.get_post_submit_checker_policy(
+            policy.project_id,
+            policy.guide_version,
+        )
         if existing is None:
             self._session.add(policy)
             await self._session.flush()
@@ -552,27 +558,55 @@ class ProjectRepository:
         existing.required_checkers = policy.required_checkers
         existing.warning_checkers = policy.warning_checkers
         existing.blocking_severities = policy.blocking_severities
+        existing.policy_hash = policy.policy_hash
+        existing.policy_body = policy.policy_body
         await self._session.flush()
         await self._session.refresh(existing)
         return existing
 
-    async def get_checker_policy(self, project_id: str, guide_version: str) -> CheckerPolicy | None:
-        """Load a checker policy by project and guide version.
+    async def upsert_checker_policy(
+        self,
+        policy: PostSubmitCheckerPolicy,
+    ) -> PostSubmitCheckerPolicy:
+        """Legacy wrapper for creating a post-submit checker policy."""
+        return await self.upsert_post_submit_checker_policy(policy)
+
+    async def get_post_submit_checker_policy(
+        self,
+        project_id: str,
+        guide_version: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load a post-submit checker policy by project and guide version.
 
         Args:
             project_id: Project id that owns the policy.
             guide_version: Guide version the policy applies to.
 
         Returns:
-            Checker policy when found; otherwise ``None``.
+            Post-submit checker policy when found; otherwise ``None``.
         """
         result = await self._session.execute(
-            select(CheckerPolicy).where(
-                CheckerPolicy.project_id == project_id,
-                CheckerPolicy.guide_version == guide_version,
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_checker_policy(
+        self,
+        project_id: str,
+        guide_version: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Legacy wrapper for loading a post-submit checker policy."""
+        return await self.get_post_submit_checker_policy(project_id, guide_version)
+
+    async def get_post_submit_checker_policy_by_id(
+        self,
+        policy_id: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load a post-submit checker policy by id."""
+        return await self._session.get(PostSubmitCheckerPolicy, policy_id)
 
     async def upsert_review_policy(self, policy: ReviewPolicy) -> ReviewPolicy:
         """Create or replace a review policy for one guide version.

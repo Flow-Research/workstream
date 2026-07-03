@@ -27,6 +27,7 @@ from app.main import create_app
 from app.modules.tasks.lifecycle import InvalidTaskTransition, ensure_allowed_transition
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     SubmissionArtifactPolicy,
 )
@@ -131,7 +132,7 @@ def complete_guide_payload(version: str = "v1") -> dict:
         "evidence_policy": {"required": ["log"]},
         "unacceptable_work_policy": "Copied or unverifiable work.",
         "change_summary": f"Initial {version}",
-        "checker_policy": {
+        "post_submit_checker_policy": {
             "required_checkers": ["check_policy_context_present"],
             "warning_checkers": [],
             "blocking_severities": ["high"],
@@ -177,6 +178,26 @@ async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
         return {
             "compiled_bundle": pre_submit_checker_policy.compiled_bundle,
             "compiled_bundle_hash": pre_submit_checker_policy.compiled_bundle_hash,
+        }
+
+
+async def load_post_submit_checker_policy(project_id: str, guide_version: str = "v1") -> dict:
+    """Load the project post-submit checker policy attached to a guide version."""
+    async with db_session.get_session_factory()() as session:
+        policy = await session.scalar(
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
+            )
+        )
+        assert policy is not None
+        assert policy.policy_hash is not None
+        assert policy.policy_body is not None
+        return {
+            "id": policy.id,
+            "guide_version": policy.guide_version,
+            "policy_hash": policy.policy_hash,
+            "policy_body": policy.policy_body,
         }
 
 
@@ -537,6 +558,11 @@ def test_task_locked_context_constraints_bind_task_submission_and_hashes() -> No
             "locked_pre_submit_checker_policy_id",
             "locked_pre_submit_checker_bundle_hash",
         ],
+        "fk_workstream_tasks_locked_post_submit_policy_hash": [
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ],
     }
     for constraint_name, local_columns in expected_task_constraints.items():
         constraint = next(
@@ -566,6 +592,17 @@ def test_task_locked_context_constraints_bind_task_submission_and_hashes() -> No
             "locked_pre_submit_checker_policy_id",
             "locked_pre_submit_checker_bundle_hash",
         ],
+        "fk_submissions_task_locked_post_submit_policy_hash": [
+            "task_id",
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ],
+        "fk_submissions_locked_post_submit_policy_hash": [
+            "locked_post_submit_checker_policy_id",
+            "locked_post_submit_checker_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ],
     }
     for constraint_name, local_columns in expected_submission_constraints.items():
         constraint = next(
@@ -579,12 +616,20 @@ def test_task_locked_context_constraints_bind_task_submission_and_hashes() -> No
         "ix_workstream_tasks_locked_source_snapshot",
         "ix_workstream_tasks_locked_effective_policy_hash",
         "ix_workstream_tasks_locked_pre_submit_checker_hash",
+        "ix_workstream_tasks_locked_post_submit_policy_hash",
     }.issubset({index.name for index in WorkstreamTask.__table__.indexes})
     assert {
         "ix_submissions_locked_source_snapshot",
         "ix_submissions_locked_effective_policy_hash",
         "ix_submissions_locked_pre_submit_checker_hash",
+        "ix_submissions_locked_post_submit_policy_hash",
     }.issubset({index.name for index in Submission.__table__.indexes})
+    assert "ck_workstream_tasks_post_submit_policy_lock_complete" in {
+        constraint.name for constraint in WorkstreamTask.__table__.constraints
+    }
+    assert "ck_submissions_post_submit_policy_lock_complete" in {
+        constraint.name for constraint in Submission.__table__.constraints
+    }
 
 
 async def test_profile_upserts_update_existing_actor_rows(task_database_env: str) -> None:
@@ -672,9 +717,52 @@ async def test_task_can_be_created_in_draft(task_client: AsyncClient) -> None:
     task = await create_draft_task(task_client, project["id"])
 
     assert task["status"] == "draft"
-    assert task["locked_guide_version"] is None
+    assert "locked_guide_version" not in task
     assert task["skill_tags"] == ["stem", "proofs"]
     assert task["source_ref"] == "local-ticket-1"
+
+
+async def test_task_create_and_transitions_reject_client_supplied_policy_context(
+    task_client: AsyncClient,
+) -> None:
+    project = await create_active_project(task_client)
+    locked_context_payload = {
+        "locked_post_submit_checker_policy_id": "malicious",
+        "locked_post_submit_checker_policy_version": "malicious",
+        "locked_post_submit_checker_policy_hash": "sha256:" + "0" * 64,
+        "locked_post_submit_checker_policy_body": {"required_checkers": []},
+    }
+
+    create_payload = complete_task_payload()
+    create_payload.update(locked_context_payload)
+    create_response = await task_client.post(
+        f"/api/v1/projects/{project['id']}/tasks",
+        headers=auth_headers(),
+        json=create_payload,
+    )
+    assert create_response.status_code == 422
+
+    task = await create_draft_task(task_client, project["id"])
+    screen_response = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/screen",
+        headers=auth_headers(),
+        json={"reason": "screen", **locked_context_payload},
+    )
+    assert screen_response.status_code == 422
+
+    valid_screen = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/screen",
+        headers=auth_headers(),
+        json={"reason": "screen"},
+    )
+    assert valid_screen.status_code == 200, valid_screen.text
+
+    release_response = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/release",
+        headers=auth_headers(),
+        json={"reason": "release", **locked_context_payload},
+    )
+    assert release_response.status_code == 422
 
 
 async def test_screening_requires_active_guide_context(task_client: AsyncClient) -> None:
@@ -776,7 +864,7 @@ async def test_screening_locks_guide_policy_context_and_payment_fields(
     body = response.json()
     assert body["status"] == "screening"
     assert body["locked_guide_version"] == "v1"
-    assert body["locked_checker_policy_version"] == "v1"
+    assert "locked_checker_policy_version" not in body
     assert body["locked_review_policy_version"] == "v1"
     assert body["locked_revision_policy_version"] == "v1"
     assert body["locked_payment_policy_version"] == "v1"
@@ -786,9 +874,148 @@ async def test_screening_locks_guide_policy_context_and_payment_fields(
     assert body["locked_effective_project_submission_artifact_policy_hash"].startswith("sha256:")
     assert body["locked_pre_submit_checker_policy_id"]
     assert body["locked_pre_submit_checker_bundle_hash"].startswith("sha256:")
+    expected_post_submit_policy = await load_post_submit_checker_policy(project["id"])
+    async with db_session.get_session_factory()() as session:
+        persisted_task = await session.get(WorkstreamTask, task["id"])
+    assert persisted_task is not None
+    assert persisted_task.locked_post_submit_checker_policy_id == expected_post_submit_policy["id"]
+    assert persisted_task.locked_post_submit_checker_policy_version == "v1"
+    assert (
+        persisted_task.locked_post_submit_checker_policy_hash
+        == expected_post_submit_policy["policy_hash"]
+    )
     assert body["base_amount"] == "25.00"
     assert body["currency"] == "USD"
     assert body["payout_type"] == "fixed"
+
+
+async def test_screening_uses_persisted_post_submit_policy_body_after_default_drift(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.projects import post_submit_policy as post_submit_policy_module
+
+    project = await create_active_project(task_client)
+    async with db_session.get_session_factory()() as session:
+        source_policy = await session.scalar(
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project["id"],
+                PostSubmitCheckerPolicy.guide_version == "v1",
+            )
+        )
+        assert source_policy is not None
+        persisted_body = dict(source_policy.policy_body or {})
+
+    monkeypatch.setattr(
+        post_submit_policy_module,
+        "DEFAULT_DURABLE_CHECKERS",
+        [
+            *post_submit_policy_module.DEFAULT_DURABLE_CHECKERS,
+            "check_acceptance_criteria_present",
+        ],
+    )
+    task = await create_draft_task(task_client, project["id"])
+
+    response = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/screen",
+        headers=auth_headers(),
+        json={"reason": "screen"},
+    )
+
+    assert response.status_code == 200, response.text
+    async with db_session.get_session_factory()() as session:
+        persisted_task = await session.get(WorkstreamTask, task["id"])
+    assert persisted_task is not None
+    assert persisted_task.locked_post_submit_checker_policy_body == persisted_body
+    assert "check_acceptance_criteria_present" not in (
+        persisted_task.locked_post_submit_checker_policy_body or {}
+    )["execution_checkers"]
+
+
+async def test_release_uses_locked_post_submit_policy_body_after_setup_mutation(
+    task_client: AsyncClient,
+) -> None:
+    project = await create_active_project(task_client)
+    task = await create_draft_task(task_client, project["id"])
+    screen = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/screen",
+        headers=auth_headers(),
+        json={"reason": "screening checklist passed"},
+    )
+    assert screen.status_code == 200, screen.text
+    async with db_session.get_session_factory()() as session:
+        persisted_task = await session.get(WorkstreamTask, task["id"])
+        assert persisted_task is not None
+        locked_body = dict(persisted_task.locked_post_submit_checker_policy_body or {})
+        post_submit_policy = await session.get(
+            PostSubmitCheckerPolicy,
+            persisted_task.locked_post_submit_checker_policy_id,
+        )
+        assert post_submit_policy is not None
+        post_submit_policy.required_checkers = [
+            *post_submit_policy.required_checkers,
+            "check_acceptance_criteria_present",
+        ]
+        await session.commit()
+
+    release = await task_client.post(
+        f"/api/v1/tasks/{task['id']}/release",
+        headers=auth_headers(),
+        json={"reason": "release decision recorded"},
+    )
+
+    assert release.status_code == 200, release.text
+    assert release.json()["status"] == "ready"
+    async with db_session.get_session_factory()() as session:
+        persisted_task = await session.get(WorkstreamTask, task["id"])
+    assert persisted_task is not None
+    assert persisted_task.status == "ready"
+    assert persisted_task.locked_post_submit_checker_policy_body == locked_body
+    assert "check_acceptance_criteria_present" not in locked_body["required_checkers"]
+    assert "check_acceptance_criteria_present" not in locked_body["execution_checkers"]
+    assert "check_required_files" in locked_body["default_checkers"]
+    assert "check_required_files" in locked_body["execution_checkers"]
+
+
+async def test_worker_task_response_redacts_locked_policy_hashes(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    ready_task = await create_ready_task(task_client, project["id"])
+    operator_response = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}",
+        headers=auth_headers(),
+    )
+
+    assert operator_response.status_code == 200, operator_response.text
+    assert "locked_checker_policy_version" not in operator_response.json()
+
+    await seed_worker_profile("worker-one")
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+
+    response = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "ready"
+    assert "locked_checker_policy_version" not in body
+    for internal_field in (
+        "locked_guide_source_snapshot_id",
+        "locked_guide_source_snapshot_hash",
+        "locked_effective_project_submission_artifact_policy_id",
+        "locked_effective_project_submission_artifact_policy_hash",
+        "locked_pre_submit_checker_policy_id",
+        "locked_pre_submit_checker_bundle_hash",
+        "locked_post_submit_checker_policy_id",
+        "locked_post_submit_checker_policy_version",
+        "locked_post_submit_checker_policy_hash",
+        "locked_post_submit_checker_policy_body",
+    ):
+        assert internal_field not in body
 
 
 async def test_tasks_under_same_active_guide_share_project_pre_submit_checker(
@@ -987,7 +1214,7 @@ async def test_full_task_claim_start_flow_writes_audit_events(
     release_event = next(event for event in events if event["to_status"] == "ready")
     for event in (screening_event, release_event):
         assert event["event_payload"]["locked_guide_version"] == "v1"
-        assert event["event_payload"]["locked_checker_policy_version"] == "v1"
+        assert "locked_checker_policy_version" not in event["event_payload"]
         assert event["event_payload"]["locked_review_policy_version"] == "v1"
         assert event["event_payload"]["locked_revision_policy_version"] == "v1"
         assert event["event_payload"]["locked_payment_policy_version"] == "v1"
@@ -1141,24 +1368,48 @@ async def test_assigned_worker_submits_v1_and_task_moves_to_submitted(
     assert submission["worker_id"] == worker_actor_id
     assert submission["version"] == 1
     assert submission["status"] == "submitted"
-    assert submission["locked_guide_version"] == "v1"
-    assert submission["locked_checker_policy_version"] == "v1"
-    assert submission["locked_review_policy_version"] == "v1"
-    assert submission["locked_revision_policy_version"] == "v1"
-    assert submission["locked_payment_policy_version"] == "v1"
-    assert submission["locked_guide_source_snapshot_id"]
-    assert submission["locked_guide_source_snapshot_hash"].startswith("sha256:")
-    assert submission["locked_effective_project_submission_artifact_policy_id"]
-    assert submission["locked_effective_project_submission_artifact_policy_hash"].startswith(
-        "sha256:"
+    assert "locked_checker_policy_version" not in submission
+    for internal_field in (
+        "package_uri",
+        "package_hash",
+        "artifact_hash_manifest",
+        "worker_attestation",
+        "locked_guide_version",
+        "locked_review_policy_version",
+        "locked_revision_policy_version",
+        "locked_payment_policy_version",
+        "locked_guide_source_snapshot_id",
+        "locked_guide_source_snapshot_hash",
+        "locked_effective_project_submission_artifact_policy_id",
+        "locked_effective_project_submission_artifact_policy_hash",
+        "locked_pre_submit_checker_policy_id",
+        "locked_pre_submit_checker_bundle_hash",
+        "locked_post_submit_checker_policy_id",
+        "locked_post_submit_checker_policy_version",
+        "locked_post_submit_checker_policy_hash",
+        "locked_post_submit_checker_policy_body",
+    ):
+        assert internal_field not in submission
+    assert submission["evidence_items"][0]["metadata"] == {}
+    assert "uri" not in submission["evidence_items"][0]
+    assert "hash" not in submission["evidence_items"][0]
+    async with db_session.get_session_factory()() as session:
+        persisted_submission = await session.get(Submission, submission["id"])
+        persisted_task = await session.get(WorkstreamTask, started_task["id"])
+    assert persisted_submission is not None
+    assert persisted_task is not None
+    assert (
+        persisted_submission.locked_post_submit_checker_policy_id
+        == persisted_task.locked_post_submit_checker_policy_id
     )
-    assert submission["locked_pre_submit_checker_policy_id"]
-    assert submission["locked_pre_submit_checker_bundle_hash"].startswith("sha256:")
-    assert submission["artifact_hash_manifest"][0]["artifact"] == "answer.md"
-    assert submission["evidence_items"][0]["metadata"] == {
-        "command": "pytest",
-        "policy_key": "checker_log",
-    }
+    assert (
+        persisted_submission.locked_post_submit_checker_policy_version
+        == persisted_task.locked_post_submit_checker_policy_version
+    )
+    assert (
+        persisted_submission.locked_post_submit_checker_policy_hash
+        == persisted_task.locked_post_submit_checker_policy_hash
+    )
 
     task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
     assert task.status_code == 200, task.text
@@ -1175,17 +1426,29 @@ async def test_assigned_worker_submits_v1_and_task_moves_to_submitted(
     assert submission_event["to_status"] == "submitted"
     assert submission_event["event_payload"]["submission_id"] == submission["id"]
     assert submission_event["event_payload"]["submission_version"] == 1
-    assert submission_event["event_payload"]["package_hash"] == "sha256:package-v1"
-    assert submission_event["event_payload"]["locked_guide_source_snapshot_id"]
-    assert submission_event["event_payload"]["locked_guide_source_snapshot_hash"].startswith(
-        "sha256:"
+    assert "package_hash" not in submission_event["event_payload"]
+    assert "artifact_hash_manifest" not in submission_event["event_payload"]
+    assert "locked_guide_source_snapshot_id" not in submission_event["event_payload"]
+    assert "locked_guide_source_snapshot_hash" not in submission_event["event_payload"]
+    assert "locked_effective_project_submission_artifact_policy_hash" not in (
+        submission_event["event_payload"]
     )
-    assert submission_event["event_payload"][
-        "locked_effective_project_submission_artifact_policy_hash"
-    ].startswith("sha256:")
-    assert submission_event["event_payload"]["locked_pre_submit_checker_bundle_hash"].startswith(
-        "sha256:"
+    assert "locked_pre_submit_checker_bundle_hash" not in submission_event["event_payload"]
+    assert "locked_post_submit_checker_policy_hash" not in submission_event["event_payload"]
+
+    async with db_session.get_session_factory()() as session:
+        stored_submission_event = await session.scalar(
+            select(AuditEvent).where(
+                AuditEvent.entity_id == started_task["id"],
+                AuditEvent.event_type == "submission_created",
+            )
+        )
+    assert stored_submission_event is not None
+    assert (
+        stored_submission_event.event_payload["locked_post_submit_checker_policy_hash"]
+        == persisted_submission.locked_post_submit_checker_policy_hash
     )
+    assert stored_submission_event.event_payload["package_hash"] == "sha256:package-v1"
     assert "package_uri" not in submission_event["event_payload"]
 
 
@@ -1203,6 +1466,10 @@ async def test_submission_schema_rejects_worker_supplied_locked_context(
             "status": "submitted",
             "locked_guide_version": "malicious",
             "locked_checker_policy_version": "malicious",
+            "locked_post_submit_checker_policy_id": "malicious",
+            "locked_post_submit_checker_policy_version": "malicious",
+            "locked_post_submit_checker_policy_hash": "sha256:" + "0" * 64,
+            "locked_post_submit_checker_policy_body": {"required_checkers": []},
             "locked_review_policy_version": "malicious",
             "locked_revision_policy_version": "malicious",
             "locked_payment_policy_version": "malicious",
@@ -1716,6 +1983,174 @@ async def test_submission_pre_submit_checker_setup_error_is_controlled(
     assert submissions == []
 
 
+async def test_submission_uses_locked_post_submit_policy_body_after_setup_mutation(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        assert task is not None
+        locked_body = dict(task.locked_post_submit_checker_policy_body or {})
+        post_submit_policy = await session.get(
+            PostSubmitCheckerPolicy,
+            task.locked_post_submit_checker_policy_id,
+        )
+        assert post_submit_policy is not None
+        post_submit_policy.required_checkers = [
+            *post_submit_policy.required_checkers,
+            "check_acceptance_criteria_present",
+        ]
+        await session.commit()
+
+    response = await task_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+
+    assert response.status_code == 201, response.text
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submissions = (
+            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
+        ).scalars().all()
+        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
+    assert task is not None
+    assert task.status == "submitted"
+    assert len(submissions) == 1
+    assert submissions[0].locked_post_submit_checker_policy_body == locked_body
+    assert "check_acceptance_criteria_present" not in locked_body["required_checkers"]
+    assert "check_acceptance_criteria_present" not in locked_body["execution_checkers"]
+    assert "check_required_files" in locked_body["default_checkers"]
+    assert "check_required_files" in locked_body["execution_checkers"]
+    assert checker_runs == []
+
+
+async def test_database_rejects_null_post_submit_context_on_non_draft_task(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        assert task is not None
+        task.locked_post_submit_checker_policy_id = None
+        task.locked_post_submit_checker_policy_version = None
+        task.locked_post_submit_checker_policy_hash = None
+        with pytest.raises(IntegrityError):
+            await session.commit()
+        await session.rollback()
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submissions = (
+            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
+        ).scalars().all()
+        checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
+    assert task is not None
+    assert task.status == "in_progress"
+    assert submissions == []
+    assert checker_runs == []
+
+
+async def test_database_rejects_submission_without_post_submit_policy_context(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        assert task is not None
+        submission = Submission(
+            id=str(uuid4()),
+            task_id=task.id,
+            worker_id=actor_id("worker-one"),
+            version=1,
+            status="submitted",
+            summary="Bypass submission without post-submit policy provenance.",
+            package_hash="sha256:package-bypass",
+            artifact_hash_manifest=[{"artifact": "answer.md", "hash": "sha256:answer-bypass"}],
+            worker_attestation="Bypass attestation.",
+            locked_guide_version=task.locked_guide_version,
+            locked_checker_policy_version=task.locked_checker_policy_version,
+            locked_post_submit_checker_policy_id=None,
+            locked_post_submit_checker_policy_version=None,
+            locked_post_submit_checker_policy_hash=None,
+            locked_post_submit_checker_policy_body=None,
+            locked_review_policy_version=task.locked_review_policy_version,
+            locked_revision_policy_version=task.locked_revision_policy_version,
+            locked_payment_policy_version=task.locked_payment_policy_version,
+            locked_guide_source_snapshot_id=task.locked_guide_source_snapshot_id,
+            locked_guide_source_snapshot_hash=task.locked_guide_source_snapshot_hash,
+            locked_effective_project_submission_artifact_policy_id=(
+                task.locked_effective_project_submission_artifact_policy_id
+            ),
+            locked_effective_project_submission_artifact_policy_hash=(
+                task.locked_effective_project_submission_artifact_policy_hash
+            ),
+            locked_pre_submit_checker_policy_id=task.locked_pre_submit_checker_policy_id,
+            locked_pre_submit_checker_bundle_hash=task.locked_pre_submit_checker_bundle_hash,
+        )
+        session.add(submission)
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+
+async def test_database_rejects_checker_run_without_post_submit_policy_context(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    submission_response = await task_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload(),
+    )
+    assert submission_response.status_code == 201, submission_response.text
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        submission = await session.get(Submission, submission_response.json()["id"])
+        assert task is not None
+        assert submission is not None
+        checker_run = db_models.CheckerRun(
+            id=str(uuid4()),
+            task_id=task.id,
+            submission_id=submission.id,
+            submission_version=submission.version,
+            trigger_source="submission_locked",
+            status="queued",
+            routing_recommendation="not_evaluated",
+            outcome_source="none",
+            triggered_by="project-manager",
+            triggered_by_subject="project-manager-subject",
+            triggered_by_issuer="flow-test",
+            trigger_auth_source="dev_mock",
+            attempt_number=1,
+            is_current_for_submission=True,
+            locked_guide_version=submission.locked_guide_version,
+            locked_checker_policy_version=submission.locked_checker_policy_version,
+            locked_post_submit_checker_policy_id=None,
+            locked_post_submit_checker_policy_version=None,
+            locked_post_submit_checker_policy_hash=None,
+            locked_post_submit_checker_policy_body=None,
+            locked_review_policy_version=submission.locked_review_policy_version,
+            locked_revision_policy_version=submission.locked_revision_policy_version,
+            locked_payment_policy_version=submission.locked_payment_policy_version,
+            package_hash=submission.package_hash,
+            artifact_hash_manifest=submission.artifact_hash_manifest,
+            artifact_manifest_hash=canonical_json_hash(submission.artifact_hash_manifest),
+        )
+        session.add(checker_run)
+        with pytest.raises(IntegrityError):
+            await session.commit()
+
+
 async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1749,8 +2184,13 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     second = v2.json()
     assert second["version"] == 2
     assert second["supersedes_submission_id"] == first["id"]
-    assert first["package_hash"] == "sha256:package-v1"
-    assert first["artifact_hash_manifest"][0]["hash"] == "sha256:answer-v1"
+    assert "package_hash" not in first
+    assert "artifact_hash_manifest" not in first
+    async with db_session.get_session_factory()() as session:
+        persisted_v1 = await session.get(Submission, first["id"])
+    assert persisted_v1 is not None
+    assert persisted_v1.package_hash == "sha256:package-v1"
+    assert persisted_v1.artifact_hash_manifest[0]["hash"] == "sha256:answer-v1"
 
     listed = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/submissions",
@@ -1758,6 +2198,8 @@ async def test_submission_versioning_creates_new_rows_and_preserves_v1(
     )
     assert listed.status_code == 200, listed.text
     assert [submission["version"] for submission in listed.json()] == [1, 2]
+    assert all("package_hash" not in submission for submission in listed.json())
+    assert all("artifact_hash_manifest" not in submission for submission in listed.json())
 
     set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
     await seed_worker_profile("worker-two")
@@ -1799,11 +2241,19 @@ async def test_submission_uses_task_locked_context_after_new_guide_activation(
 
     assert response.status_code == 201, response.text
     submission = response.json()
-    assert submission["locked_guide_version"] == "v1"
-    assert submission["locked_checker_policy_version"] == "v1"
+    assert "locked_checker_policy_version" not in submission
+    assert "locked_guide_version" not in submission
+    async with db_session.get_session_factory()() as session:
+        persisted_submission = await session.get(Submission, submission["id"])
+        persisted_task = await session.get(WorkstreamTask, started_task["id"])
+    assert persisted_submission is not None
+    assert persisted_task is not None
+    assert persisted_submission.locked_guide_version == "v1"
+    assert persisted_task.locked_guide_version == "v1"
     task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
     assert task.status_code == 200, task.text
     assert task.json()["locked_guide_version"] == "v1"
+    assert "locked_guide_source_snapshot_hash" not in task.json()
 
 
 async def test_locked_submission_can_only_be_replaced_by_new_version(
@@ -1851,8 +2301,13 @@ async def test_locked_submission_can_only_be_replaced_by_new_version(
     )
     assert fetched_v1.status_code == 200, fetched_v1.text
     assert fetched_v1.json()["locked_at"] == locked_v1.json()["locked_at"]
-    assert fetched_v1.json()["package_hash"] == "sha256:package-v1"
-    assert fetched_v1.json()["artifact_hash_manifest"][0]["hash"] == "sha256:answer-v1"
+    assert "package_hash" not in fetched_v1.json()
+    assert "artifact_hash_manifest" not in fetched_v1.json()
+    async with db_session.get_session_factory()() as session:
+        persisted_v1 = await session.get(Submission, v1.json()["id"])
+    assert persisted_v1 is not None
+    assert persisted_v1.package_hash == "sha256:package-v1"
+    assert persisted_v1.artifact_hash_manifest[0]["hash"] == "sha256:answer-v1"
 
 
 async def test_project_manager_cannot_submit_as_worker(
@@ -2180,6 +2635,8 @@ async def test_database_enforces_unique_submission_version(
     body = created.json()
 
     async with db_session.get_session_factory()() as session:
+        persisted = await session.get(Submission, body["id"])
+        assert persisted is not None
         session.add(
             Submission(
                 id=str(uuid4()),
@@ -2188,14 +2645,26 @@ async def test_database_enforces_unique_submission_version(
                 version=body["version"],
                 status="submitted",
                 summary="duplicate",
-                package_hash="sha256:duplicate",
-                artifact_hash_manifest=body["artifact_hash_manifest"],
-                worker_attestation="duplicate",
-                locked_guide_version=body["locked_guide_version"],
-                locked_checker_policy_version=body["locked_checker_policy_version"],
-                locked_review_policy_version=body["locked_review_policy_version"],
-                locked_revision_policy_version=body["locked_revision_policy_version"],
-                locked_payment_policy_version=body["locked_payment_policy_version"],
+                package_hash=persisted.package_hash,
+                artifact_hash_manifest=persisted.artifact_hash_manifest,
+                worker_attestation=persisted.worker_attestation,
+                locked_guide_version=persisted.locked_guide_version,
+                locked_checker_policy_version=persisted.locked_checker_policy_version,
+                locked_post_submit_checker_policy_id=(
+                    persisted.locked_post_submit_checker_policy_id
+                ),
+                locked_post_submit_checker_policy_version=(
+                    persisted.locked_post_submit_checker_policy_version
+                ),
+                locked_post_submit_checker_policy_hash=(
+                    persisted.locked_post_submit_checker_policy_hash
+                ),
+                locked_post_submit_checker_policy_body=(
+                    persisted.locked_post_submit_checker_policy_body
+                ),
+                locked_review_policy_version=persisted.locked_review_policy_version,
+                locked_revision_policy_version=persisted.locked_revision_policy_version,
+                locked_payment_policy_version=persisted.locked_payment_policy_version,
             )
         )
         with pytest.raises(IntegrityError):

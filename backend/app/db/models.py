@@ -2,12 +2,12 @@
 
 from app.modules.checkers.models import CheckerResult, CheckerRun  # noqa: F401
 from app.modules.projects.models import (  # noqa: F401
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,

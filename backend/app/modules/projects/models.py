@@ -103,8 +103,8 @@ class ProjectGuide(Base):
     project: Mapped[Project] = relationship(back_populates="guides")
 
 
-class CheckerPolicy(Base):
-    """Checker requirements attached to a project guide version."""
+class PostSubmitCheckerPolicy(Base):
+    """Post-submit checker requirements attached to a project guide version."""
 
     __tablename__ = "checker_policies"
     __table_args__ = (
@@ -113,7 +113,17 @@ class CheckerPolicy(Base):
             ["project_guides.project_id", "project_guides.version"],
             name="fk_checker_policies_project_guide",
         ),
+        CheckConstraint(
+            "policy_hash is null or policy_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name="policy_hash_shape",
+        ),
         UniqueConstraint("project_id", "guide_version", name="uq_checker_policies_project_version"),
+        UniqueConstraint(
+            "id",
+            "guide_version",
+            "policy_hash",
+            name="uq_checker_policies_id_version_hash",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -122,7 +132,14 @@ class CheckerPolicy(Base):
     required_checkers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     warning_checkers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     blocking_severities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    policy_hash: Mapped[str | None] = mapped_column(String(71), index=True)
+    policy_body: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# Legacy alias for older module imports. New runtime authority uses
+# PostSubmitCheckerPolicy naming.
+CheckerPolicy = PostSubmitCheckerPolicy
 
 
 class ReviewPolicy(Base):

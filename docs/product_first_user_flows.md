@@ -62,11 +62,12 @@ Acceptance:
 
 ## Flow 4: Automated Checks Run
 
-1. Checker runner loads project policy.
-2. Runner executes enabled checks.
+1. Checker runner validates the submission-stamped locked `PostSubmitCheckerPolicy` id/version/hash/body.
+2. Runner executes enabled checks from that locked policy body.
 3. Results are saved with `passed`, `warning`, or `failed`, plus severity, message, and evidence.
-4. If high-severity failures exist, task enters `NEEDS_REVISION`.
-5. If no high-severity failures exist, task enters `REVIEW_PENDING`.
+4. If worker-fixable blocking failures exist, task enters `NEEDS_REVISION`.
+5. If setup or provenance defects exist, the task stays in the internal operations queue.
+6. If no blocking failures exist, task enters `REVIEW_PENDING`.
 
 Acceptance:
 

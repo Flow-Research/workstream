@@ -79,7 +79,12 @@ def permission_http_error(exc: PermissionDenied) -> HTTPException:
     return HTTPException(status_code=403, detail=str(exc))
 
 
-@router.post("/projects/{project_id}/tasks", response_model=TaskResponse, status_code=201)
+@router.post(
+    "/projects/{project_id}/tasks",
+    response_model=TaskResponse,
+    response_model_exclude_none=True,
+    status_code=201,
+)
 async def create_task(
     project_id: str,
     payload: TaskCreate,
@@ -95,7 +100,7 @@ async def create_task(
         raise task_http_error(exc) from exc
 
 
-@router.get("/tasks/{task_id}", response_model=TaskResponse)
+@router.get("/tasks/{task_id}", response_model=TaskResponse, response_model_exclude_none=True)
 async def get_task(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -110,7 +115,11 @@ async def get_task(
         raise task_http_error(exc) from exc
 
 
-@router.post("/tasks/{task_id}/screen", response_model=TaskResponse)
+@router.post(
+    "/tasks/{task_id}/screen",
+    response_model=TaskResponse,
+    response_model_exclude_none=True,
+)
 async def screen_task(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -130,7 +139,11 @@ async def screen_task(
         raise task_http_error(exc) from exc
 
 
-@router.post("/tasks/{task_id}/release", response_model=TaskResponse)
+@router.post(
+    "/tasks/{task_id}/release",
+    response_model=TaskResponse,
+    response_model_exclude_none=True,
+)
 async def release_task(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -150,7 +163,11 @@ async def release_task(
         raise task_http_error(exc) from exc
 
 
-@router.post("/tasks/{task_id}/claim", response_model=TaskWithAssignmentResponse)
+@router.post(
+    "/tasks/{task_id}/claim",
+    response_model=TaskWithAssignmentResponse,
+    response_model_exclude_none=True,
+)
 async def claim_task(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -170,7 +187,11 @@ async def claim_task(
         raise task_http_error(exc) from exc
 
 
-@router.post("/tasks/{task_id}/start", response_model=TaskResponse)
+@router.post(
+    "/tasks/{task_id}/start",
+    response_model=TaskResponse,
+    response_model_exclude_none=True,
+)
 async def start_task(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -193,6 +214,7 @@ async def start_task(
 @router.post(
     "/tasks/{task_id}/submissions",
     response_model=SubmissionResponse,
+    response_model_exclude_none=True,
     status_code=201,
     responses={
         422: {
@@ -222,7 +244,11 @@ async def create_submission(
         raise task_http_error(exc) from exc
 
 
-@router.get("/tasks/{task_id}/submissions", response_model=list[SubmissionResponse])
+@router.get(
+    "/tasks/{task_id}/submissions",
+    response_model=list[SubmissionResponse],
+    response_model_exclude_none=True,
+)
 async def list_task_submissions(
     task_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -237,7 +263,11 @@ async def list_task_submissions(
         raise task_http_error(exc) from exc
 
 
-@router.get("/submissions/{submission_id}", response_model=SubmissionResponse)
+@router.get(
+    "/submissions/{submission_id}",
+    response_model=SubmissionResponse,
+    response_model_exclude_none=True,
+)
 async def get_submission(
     submission_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],
@@ -252,7 +282,11 @@ async def get_submission(
         raise task_http_error(exc) from exc
 
 
-@router.post("/submissions/{submission_id}/lock", response_model=SubmissionResponse)
+@router.post(
+    "/submissions/{submission_id}/lock",
+    response_model=SubmissionResponse,
+    response_model_exclude_none=True,
+)
 async def lock_submission(
     submission_id: str,
     actor: Annotated[ActorContext, Depends(get_current_actor)],

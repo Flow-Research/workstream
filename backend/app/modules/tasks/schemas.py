@@ -70,6 +70,8 @@ def validate_storage_reference(value: str | None) -> str | None:
 class TaskCreate(BaseModel):
     """Request schema for creating a draft task."""
 
+    model_config = ConfigDict(extra="forbid")
+
     title: str
     description: str
     task_type: str | None = None
@@ -90,6 +92,8 @@ class TaskCreate(BaseModel):
 
 class TaskTransitionRequest(BaseModel):
     """Optional request body for task lifecycle transitions."""
+
+    model_config = ConfigDict(extra="forbid")
 
     reason: str | None = None
 
@@ -151,7 +155,6 @@ class TaskResponse(BaseModel):
     id: str
     project_id: str
     locked_guide_version: str | None
-    locked_checker_policy_version: str | None
     locked_review_policy_version: str | None
     locked_revision_policy_version: str | None
     locked_payment_policy_version: str | None
@@ -242,14 +245,13 @@ class SubmissionResponse(BaseModel):
     status: str
     summary: str
     package_uri: str | None
-    package_hash: str
-    artifact_hash_manifest: list[dict[str, Any]]
-    worker_attestation: str
-    locked_guide_version: str
-    locked_checker_policy_version: str
-    locked_review_policy_version: str
-    locked_revision_policy_version: str
-    locked_payment_policy_version: str
+    package_hash: str | None
+    artifact_hash_manifest: list[dict[str, Any]] | None
+    worker_attestation: str | None
+    locked_guide_version: str | None
+    locked_review_policy_version: str | None
+    locked_revision_policy_version: str | None
+    locked_payment_policy_version: str | None
     locked_guide_source_snapshot_id: str | None
     locked_guide_source_snapshot_hash: str | None
     locked_effective_project_submission_artifact_policy_id: str | None

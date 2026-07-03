@@ -216,7 +216,7 @@ Every operating day starts with:
 | `DRAFT -> SCREENING` | project id, locked guide candidate, required task fields, payment policy |
 | `SCREENING -> READY` | screening decision, guide version lock, guide source snapshot id/hash lock, acceptance criteria, effective project submission artifact policy hash lock, project `PreSubmitCheckerPolicy` compiled bundle hash lock, post-submit checker policy, review policy, revision policy, payment policy |
 | `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed, submission packet, artifact hash manifest, evidence references, worker attestation |
-| `SUBMITTED -> AUTO_CHECKING` | immutable submission version, post-submit checker policy version derived from the locked task context |
+| `SUBMITTED -> AUTO_CHECKING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
 | `AUTO_CHECKING -> REVIEW_PENDING` | checker run for exact submission version, readiness certificate, no blocking failures |
 | `AUTO_CHECKING -> NEEDS_REVISION` | checker run id, outcome source `auto_checker`, worker-visible checker failures with severity, message, suggested fix |
 | `REVIEW_PENDING -> NEEDS_REVISION` | review decision, at least one structured finding, revision policy still permits revision |

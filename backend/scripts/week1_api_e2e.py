@@ -25,11 +25,11 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
@@ -470,7 +470,7 @@ def guide_payload(run_id: str) -> dict:
         "evidence_policy": {"required": ["log"]},
         "unacceptable_work_policy": "Copied or unverifiable work.",
         "change_summary": "Initial real API guide",
-        "checker_policy": {
+        "post_submit_checker_policy": {
             "required_checkers": ["check_policy_context_present"],
             "warning_checkers": [],
             "blocking_severities": ["high"],
@@ -837,7 +837,6 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
         )
         assert {
             screened["locked_guide_version"],
-            screened["locked_checker_policy_version"],
             screened["locked_review_policy_version"],
             screened["locked_revision_policy_version"],
             screened["locked_payment_policy_version"],
@@ -930,13 +929,17 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             },
             201,
         )
-        assert {
-            submission["locked_guide_version"],
-            submission["locked_checker_policy_version"],
-            submission["locked_review_policy_version"],
-            submission["locked_revision_policy_version"],
-            submission["locked_payment_policy_version"],
-        } == {"v1"}
+        for internal_field in (
+            "artifact_hash_manifest",
+            "package_hash",
+            "worker_attestation",
+            "locked_guide_version",
+            "locked_review_policy_version",
+            "locked_revision_policy_version",
+            "locked_payment_policy_version",
+            "locked_post_submit_checker_policy_hash",
+        ):
+            assert internal_field not in submission
         await request_json(
             client,
             "POST",
@@ -976,6 +979,12 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert locked["locked_at"] is not None
+        assert {
+            locked["locked_guide_version"],
+            locked["locked_review_policy_version"],
+            locked["locked_revision_policy_version"],
+            locked["locked_payment_policy_version"],
+        } == {"v1"}
         assert all(item["locked_at"] == locked["locked_at"] for item in locked["evidence_items"])
         checker_run = await wait_for_submission_checker_run(client, manager_token, submission["id"])
         assert checker_run["routing_recommendation"] == "allow_review"
@@ -1082,7 +1091,7 @@ async def assert_week1_database_invariants(
         ensure(guide.effective_at is not None, "active guide missing effective_at")
 
         for model, label in [
-            (CheckerPolicy, "checker policy"),
+            (PostSubmitCheckerPolicy, "post-submit checker policy"),
             (ReviewPolicy, "review policy"),
             (RevisionPolicy, "revision policy"),
             (PaymentPolicy, "payment policy"),
@@ -1151,6 +1160,17 @@ async def assert_week1_database_invariants(
             pre_submit_checker_policy.compiled_bundle_hash is not None,
             "pre-submit checker compiled bundle hash missing",
         )
+        post_submit_checker_policy = await session.scalar(
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project.id,
+                PostSubmitCheckerPolicy.guide_version == guide.version,
+            )
+        )
+        ensure(post_submit_checker_policy is not None, "post-submit checker policy missing")
+        ensure(
+            post_submit_checker_policy.policy_hash is not None,
+            "post-submit checker policy hash missing",
+        )
 
         locked_versions = {
             task.locked_guide_version,
@@ -1161,6 +1181,18 @@ async def assert_week1_database_invariants(
         }
         ensure(locked_versions == {"v1"}, f"task locked versions drifted: {locked_versions}")
         ensure(task.status == "review_pending", f"task status drifted: {task.status}")
+        ensure(
+            task.locked_post_submit_checker_policy_id == post_submit_checker_policy.id,
+            "task post-submit policy id drifted",
+        )
+        ensure(
+            task.locked_post_submit_checker_policy_version == post_submit_checker_policy.guide_version,
+            "task post-submit policy version drifted",
+        )
+        ensure(
+            task.locked_post_submit_checker_policy_hash == post_submit_checker_policy.policy_hash,
+            "task post-submit policy hash drifted",
+        )
         ensure(task.assigned_to == assignment.worker_id, "task assignment pointer drifted")
         ensure(assignment.status == "active", f"assignment status drifted: {assignment.status}")
         ensure(assignment.accepted_at is not None, "assignment missing accepted_at")
@@ -1178,6 +1210,21 @@ async def assert_week1_database_invariants(
             submission.locked_payment_policy_version,
         }
         ensure(submission_versions == {"v1"}, f"submission locked versions drifted: {submission_versions}")
+        ensure(
+            submission.locked_post_submit_checker_policy_id
+            == task.locked_post_submit_checker_policy_id,
+            "submission post-submit policy id drifted",
+        )
+        ensure(
+            submission.locked_post_submit_checker_policy_version
+            == task.locked_post_submit_checker_policy_version,
+            "submission post-submit policy version drifted",
+        )
+        ensure(
+            submission.locked_post_submit_checker_policy_hash
+            == task.locked_post_submit_checker_policy_hash,
+            "submission post-submit policy hash drifted",
+        )
 
         evidence_items = (
             await session.scalars(
@@ -1200,6 +1247,21 @@ async def assert_week1_database_invariants(
         ensure(checker_run.is_current_for_submission is True, "checker run is not current")
         ensure(checker_run.attempt_number == 1, "first checker attempt number drifted")
         ensure(checker_run.locked_guide_version == submission.locked_guide_version, "checker guide lock drifted")
+        ensure(
+            checker_run.locked_post_submit_checker_policy_id
+            == submission.locked_post_submit_checker_policy_id,
+            "checker post-submit policy id drifted",
+        )
+        ensure(
+            checker_run.locked_post_submit_checker_policy_version
+            == submission.locked_post_submit_checker_policy_version,
+            "checker post-submit policy version drifted",
+        )
+        ensure(
+            checker_run.locked_post_submit_checker_policy_hash
+            == submission.locked_post_submit_checker_policy_hash,
+            "checker post-submit policy hash drifted",
+        )
         ensure(checker_run.package_hash == submission.package_hash, "checker package hash drifted")
 
         results = (
