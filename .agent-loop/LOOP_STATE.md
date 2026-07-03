@@ -6,10 +6,10 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-04`
 - Branch: `codex/ws-pol-001-04-post-submit-policy`
-- Status: `WS-POL-001-04` implementation and internal reviewer fanout are complete; evidence and PR trust artifacts are being prepared
+- Status: `WS-POL-001-04` implementation, internal reviewer fanout, evidence, and PR trust artifacts are complete
 - Last merged implementation SHA: `d1e80e3903038cb9c99aec9e83faf164a010c46d`
 - Last merge commit: `a73be67bf6c3c2ac0194f8aecbda89d748baa92c`
-- Current gate: evidence and PR trust bundle before PR
+- Current gate: PR creation and external review
 - Next chunk: inactive until `WS-POL-001-04` is reviewed and merged by the user
 
 ## Operating Rule
@@ -47,4 +47,6 @@ frontend behavior, or agent runtime redesign.
 - PR trust bundle for `WS-POL-001-03` is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-03-pr-trust-bundle.md`.
 - External review response for `WS-POL-001-03` is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-03-external-review-response.md`.
 - `WS-POL-001-04` started on branch `codex/ws-pol-001-04-post-submit-policy` after the user's explicit start signal.
-- `WS-POL-001-04` internal reviewer fanout completed with no open sub-agent sessions. Evidence and PR trust artifacts must be committed before PR.
+- `WS-POL-001-04` internal reviewer fanout completed with no open sub-agent sessions.
+- `WS-POL-001-04` internal review evidence is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-internal-review-evidence.md`.
+- `WS-POL-001-04` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-pr-trust-bundle.md`.
