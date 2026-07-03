@@ -136,9 +136,19 @@ Reviewer run IDs: see `WS-POL-001-04-internal-review-evidence.md`.
 
 ## External Review
 
-External review has not run yet for this PR. CodeRabbit and GitHub Actions must
-be tracked separately in `WS-POL-001-04-external-review-response.md` after the
-PR exists. Internal review evidence does not replace external review.
+External review is tracked separately in
+`WS-POL-001-04-external-review-response.md`.
+
+Result summary:
+
+```text
+CodeRabbit passed.
+Agent Gates passed.
+Backend passed.
+Week 1 API Demo UI passed.
+```
+
+Internal review evidence does not replace external review.
 
 ## Remaining Risks
 

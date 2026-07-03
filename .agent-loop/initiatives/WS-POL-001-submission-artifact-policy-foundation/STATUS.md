@@ -9,7 +9,7 @@ CodeRabbit, and GitHub Actions completed.
 `WS-POL-001-03` owns the task locked-context and submission creation runtime
 migration. `WS-POL-001-04` has started after the user's explicit start signal
 and completed deterministic verification, internal reviewer fanout, evidence,
-and PR trust artifacts. PR #65 is open.
+PR trust artifacts, external review, and CI on PR #65.
 
 ## Active Chunk
 
@@ -22,14 +22,14 @@ and PR trust artifacts. PR #65 is open.
 | `WS-POL-001-01` | Merged | `codex/ws-pol-001-01-submission-artifact-policy` | 28 | Implements guide-source snapshots, guide sufficiency reports, submission artifact policy, effective project policy, project pre-submit checker contract, activation guards, and key-based artifact policy merge. |
 | `WS-POL-001-02` | Merged | `codex/ws-pol-001-02-agent-runtime-compiler` | 61 | Adds async guide sufficiency / derivation agents, runtime port, OpenAI Agents SDK adapter boundary, trusted compiler path, and server-owned provenance guards. |
 | `WS-POL-001-03` | Merged | `codex/ws-pol-001-03-task-locked-context` | 63 | Moves task locked-context and submission runtime to the effective policy and project checker bundle. |
-| `WS-POL-001-04` | PR open | `codex/ws-pol-001-04-post-submit-policy` | 65 | Waiting for external review and CI. |
+| `WS-POL-001-04` | User review | `codex/ws-pol-001-04-post-submit-policy` | 65 | External review and CI passed. |
 | `WS-POL-001-05` | Planned | - | - | Proves revision resubmission and real API drill. |
 
 ## Blockers
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| None | - | Wait for external review and CI on PR #65. |
+| None | - | User reviews PR #65. |
 
 ## Follow-Ups
 
