@@ -6,7 +6,7 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-05`
 - Branch: `codex/ws-pol-001-05-revision-resubmission`
-- Status: `WS-POL-001-04` is merged to `main`; PR #66 is open for `WS-POL-001-05`, external review is passing, and user PR review is next
+- Status: `WS-POL-001-04` is merged to `main`; PR #66 is open for `WS-POL-001-05`, GitHub checks are passing, CodeRabbit detailed review is rate-limited, and user PR review is next
 - Last merged implementation SHA: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
 - Last merge commit: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
 - Current gate: `WS-POL-001-05` user PR review on PR #66
@@ -59,4 +59,5 @@ frontend behavior, or agent runtime redesign.
 - `WS-POL-001-05` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-pr-trust-bundle.md`.
 - `WS-POL-001-05` external review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-external-review-response.md`.
 - PR #66 is open for `WS-POL-001-05`.
-- PR #66 external checks passed: CodeRabbit, Agent Gates, Backend, and Week 1 API Demo UI.
+- PR #66 GitHub checks passed: Agent Gates, Backend, and Week 1 API Demo UI.
+- PR #66 CodeRabbit status context is green, but detailed review was rate-limited on the latest head.

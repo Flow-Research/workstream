@@ -14,7 +14,9 @@ CodeRabbit / GitHub checks / GitHub human review
 
 ## Summary
 
-External review completed on PR #66. This file is intentionally separate from
+GitHub Actions completed on PR #66. CodeRabbit returned a successful status
+context but its detailed review was rate-limited on the latest head and did not
+post actionable review findings. This file is intentionally separate from
 internal review evidence. Internal sub-agent review is tracked in
 `WS-POL-001-05-internal-review-evidence.md`.
 
@@ -22,14 +24,15 @@ internal review evidence. Internal sub-agent review is tracked in
 
 | Source | Finding | Severity | Status | Response |
 |---|---|---:|---:|---|
-| CodeRabbit | Review completed with no actionable comments | N/A | Passed | No code changes required. |
+| CodeRabbit | Detailed review rate-limited on latest head | N/A | Not fully reviewed | Status context is green, but CodeRabbit says the next included review is available later. Human can retry with `@coderabbitai review` when available. |
 | Agent Gates | GitHub Actions check | N/A | Passed | Completed successfully. |
 | Backend | GitHub Actions check | N/A | Passed | Completed successfully in 4m13s. |
 | Week 1 API Demo UI | GitHub Actions check | N/A | Passed | Completed successfully. |
 
 ## Fix Plan
 
-None.
+None from external review. CodeRabbit did not produce detailed actionable
+findings on the latest head because of the review limit.
 
 ## Out-Of-Scope Items To Defer
 
@@ -42,7 +45,7 @@ gh pr checks 66 --watch --interval 10
 ```
 
 ```text
-CodeRabbit: passed
+CodeRabbit status context: success, detailed review rate-limited
 Agent Gates: passed
 Backend: passed
 Week 1 API Demo UI: passed

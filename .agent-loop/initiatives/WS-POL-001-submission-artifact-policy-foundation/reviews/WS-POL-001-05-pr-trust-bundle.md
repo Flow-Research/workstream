@@ -151,7 +151,7 @@ External review is tracked separately in:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Passed | Review completed with no actionable comments. |
+| CodeRabbit | Rate-limited | Status context is green, but detailed review did not run on latest head. Human can retry with `@coderabbitai review` when available. |
 | GitHub checks | Passed | Agent Gates, Backend, and Week 1 API Demo UI passed. |
 
 Internal review evidence does not replace external review.
