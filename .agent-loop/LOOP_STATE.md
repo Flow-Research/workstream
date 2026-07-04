@@ -6,10 +6,10 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-05`
 - Branch: `codex/ws-pol-001-05-revision-resubmission`
-- Status: `WS-POL-001-04` is merged to `main`; `WS-POL-001-05` implementation, deterministic proof, internal review, and trust bundle are complete; PR publication is next
+- Status: `WS-POL-001-04` is merged to `main`; PR #66 is open for `WS-POL-001-05` and awaiting external review plus human checkpoint
 - Last merged implementation SHA: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
 - Last merge commit: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
-- Current gate: `WS-POL-001-05` PR publication and external review
+- Current gate: `WS-POL-001-05` external review on PR #66
 - Next chunk: inactive until `WS-POL-001-05` is externally reviewed and merged by the user
 
 ## Operating Rule
@@ -58,3 +58,4 @@ frontend behavior, or agent runtime redesign.
 - `WS-POL-001-05` internal review evidence is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-internal-review-evidence.md`.
 - `WS-POL-001-05` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-pr-trust-bundle.md`.
 - `WS-POL-001-05` external review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-external-review-response.md`.
+- PR #66 is open for `WS-POL-001-05`.

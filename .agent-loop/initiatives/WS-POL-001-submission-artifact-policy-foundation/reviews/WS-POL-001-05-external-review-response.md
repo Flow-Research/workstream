@@ -2,7 +2,7 @@
 
 ## PR
 
-Pending.
+https://github.com/Flow-Research/workstream/pull/66
 
 ## Chunk
 
@@ -14,16 +14,16 @@ CodeRabbit / GitHub checks / GitHub human review
 
 ## Summary
 
-External review has not run yet because the PR has not been opened for this chunk.
-This file is intentionally separate from internal review evidence. Internal
-sub-agent review is tracked in `WS-POL-001-05-internal-review-evidence.md`.
+External review is pending on PR #66. This file is intentionally separate from
+internal review evidence. Internal sub-agent review is tracked in
+`WS-POL-001-05-internal-review-evidence.md`.
 
 ## External Findings
 
 | Source | Finding | Severity | Status | Response |
 |---|---|---:|---:|---|
-| CodeRabbit | Pending PR review | N/A | Pending | Capture actionable comments here after PR publication. |
-| GitHub checks | Pending PR checks | N/A | Pending | Capture final workflow status here after PR publication. |
+| CodeRabbit | Pending PR review | N/A | Pending | Capture actionable comments here after CodeRabbit reviews PR #66. |
+| GitHub checks | Pending PR checks | N/A | Pending | Capture final workflow status here after GitHub Actions complete for PR #66. |
 
 ## Fix Plan
 
@@ -36,5 +36,5 @@ None.
 ## Evidence After Fixes
 
 ```bash
-External review pending PR publication.
+External review pending on PR #66.
 ```

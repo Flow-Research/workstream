@@ -12,7 +12,7 @@ fanout, CodeRabbit, GitHub Actions, and user merge approval.
 implemented revision resubmission, the real API drill, and the
 `evaluation_pending` post-submission lifecycle status correction. Deterministic
 proof, internal reviewer repair, evidence, and trust bundle are complete. PR
-publication and external review are next.
+#66 is open and awaiting external review.
 
 ## Active Chunk
 
@@ -26,13 +26,13 @@ publication and external review are next.
 | `WS-POL-001-02` | Merged | `codex/ws-pol-001-02-agent-runtime-compiler` | 61 | Adds async guide sufficiency / derivation agents, runtime port, OpenAI Agents SDK adapter boundary, trusted compiler path, and server-owned provenance guards. |
 | `WS-POL-001-03` | Merged | `codex/ws-pol-001-03-task-locked-context` | 63 | Moves task locked-context and submission runtime to the effective policy and project checker bundle. |
 | `WS-POL-001-04` | Merged | `codex/ws-pol-001-04-post-submit-policy` | 65 | Splits post-submit checker policy provenance and locks durable checker runs to post-submit policy context. |
-| `WS-POL-001-05` | Ready for PR | `codex/ws-pol-001-05-revision-resubmission` | - | Proves revision resubmission, real API drill, and `evaluation_pending` lifecycle status. Reviewed SHA: `5019afc57e7c6f5f7488f26a05b11c65a33e9f18`. |
+| `WS-POL-001-05` | PR open | `codex/ws-pol-001-05-revision-resubmission` | 66 | Proves revision resubmission, real API drill, and `evaluation_pending` lifecycle status. Reviewed SHA: `5019afc57e7c6f5f7488f26a05b11c65a33e9f18`. |
 
 ## Blockers
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| None | - | Publish `WS-POL-001-05` PR and wait for external review. |
+| None | - | Wait for external review on PR #66. |
 
 ## Follow-Ups
 
