@@ -26,7 +26,7 @@ internal review evidence. Internal sub-agent review is tracked in
 |---|---|---:|---:|---|
 | CodeRabbit | Detailed review rate-limited on latest head | N/A | Not fully reviewed | Status context is green, but CodeRabbit says the next included review is available later. Human can retry with `@coderabbitai review` when available. |
 | Agent Gates | GitHub Actions check | N/A | Passed | Completed successfully. |
-| Backend | GitHub Actions check | N/A | Passed | Completed successfully in 4m13s. |
+| Backend | GitHub Actions check | N/A | Passed | Completed successfully. |
 | Week 1 API Demo UI | GitHub Actions check | N/A | Passed | Completed successfully. |
 
 ## Fix Plan
