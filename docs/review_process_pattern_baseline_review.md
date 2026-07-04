@@ -30,7 +30,7 @@ Geranium and Sequoia patterns show review guard plus adversarial/reviewer simula
 
 Suggested change: add `pre_review_gate` as an optional checker phase before `REVIEW_PENDING`, and add reviewer simulation to checker policy/project templates.
 
-Update: Workstream now has a `SCREENING` lifecycle state before `READY` and a post-submission `pre_review_gate` checker phase that runs while the persisted task status is `AUTO_CHECKING`. This captures the same reusable pattern without adding another post-submission task state.
+Update: Workstream now has a `SCREENING` lifecycle state before `READY` and a post-submission `pre_review_gate` checker phase that runs while the persisted task status is `evaluation_pending`. This captures the same reusable pattern without adding another post-submission task state.
 
 ### Medium: Lessons learned should be first-class
 

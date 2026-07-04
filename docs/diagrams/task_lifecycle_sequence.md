@@ -50,7 +50,7 @@ sequenceDiagram
   API->>Checks: Start automated checks asynchronously
   Checks->>Storage: Read referenced artifacts
   Checks->>DB: Persist checker run and results
-  Checks->>DB: Keep task AUTO_CHECKING while pre-review gate runs
+  Checks->>DB: Keep task EVALUATION_PENDING while pre-review gate runs
   Checks->>DB: Move to REVIEW_PENDING, NEEDS_REVISION, or internal task_setup_blocked
 
   Reviewer->>UI: Review packet

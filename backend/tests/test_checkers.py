@@ -87,6 +87,110 @@ def alembic_config() -> Config:
     return config
 
 
+async def task_side_effect_snapshot(task_id: str) -> dict:
+    """Capture durable task-scoped rows that denied requests must not change."""
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, task_id)
+        submissions = (
+            await session.scalars(
+                select(Submission).where(Submission.task_id == task_id).order_by(Submission.id)
+            )
+        ).all()
+        submission_ids = [submission.id for submission in submissions]
+        evidence_items = []
+        if submission_ids:
+            evidence_items = (
+                await session.scalars(
+                    select(EvidenceItem)
+                    .where(EvidenceItem.submission_id.in_(submission_ids))
+                    .order_by(EvidenceItem.id)
+                )
+            ).all()
+        checker_runs = (
+            await session.scalars(
+                select(CheckerRun).where(CheckerRun.task_id == task_id).order_by(CheckerRun.id)
+            )
+        ).all()
+        checker_results = (
+            await session.scalars(
+                select(CheckerResult)
+                .where(CheckerResult.task_id == task_id)
+                .order_by(CheckerResult.id)
+            )
+        ).all()
+        audit_events = (
+            await session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_type == "task", AuditEvent.entity_id == task_id)
+                .order_by(AuditEvent.id)
+            )
+        ).all()
+        submission_audit_events = []
+        if submission_ids:
+            submission_audit_events = (
+                await session.scalars(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.entity_type == "submission",
+                        AuditEvent.entity_id.in_(submission_ids),
+                    )
+                    .order_by(AuditEvent.id)
+                )
+            ).all()
+        return {
+            "task_status": None if task is None else task.status,
+            "task_assigned_to": None if task is None else task.assigned_to,
+            "submissions": [
+                (
+                    submission.id,
+                    submission.version,
+                    submission.status,
+                    submission.package_hash,
+                    submission.supersedes_submission_id,
+                )
+                for submission in submissions
+            ],
+            "evidence_items": [
+                (item.id, item.submission_id, item.type, item.hash) for item in evidence_items
+            ],
+            "checker_runs": [
+                (
+                    run.id,
+                    run.submission_id,
+                    run.submission_version,
+                    run.attempt_number,
+                    run.routing_recommendation,
+                )
+                for run in checker_runs
+            ],
+            "checker_results": [
+                (result.id, result.checker_run_id, result.checker_name, result.status)
+                for result in checker_results
+            ],
+            "audit_events": [
+                (
+                    event.id,
+                    event.event_type,
+                    event.from_status,
+                    event.to_status,
+                    event.event_payload,
+                )
+                for event in audit_events
+            ],
+            "submission_audit_events": [
+                (
+                    event.id,
+                    event.entity_id,
+                    event.event_type,
+                    event.from_status,
+                    event.to_status,
+                    event.event_payload,
+                )
+                for event in submission_audit_events
+            ],
+        }
+
+
 def test_locked_post_submit_policy_parser_uses_persisted_body_hash() -> None:
     body = {
         "schema_version": POST_SUBMIT_CHECKER_POLICY_SCHEMA_VERSION,
@@ -1306,6 +1410,229 @@ async def test_chunk8_low_quality_generated_artifacts_warns_without_blocking(
     assert low_quality["blocks_review"] is False
 
 
+async def test_checker_caused_revision_resubmits_fixed_version_through_api(
+    checker_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_checker_trial_project(
+        checker_client,
+        "checker-caused-revision-project",
+        required_checkers=["check_low_quality_generated_artifacts"],
+    )
+    started_task = await create_started_task(checker_client, project["id"], monkeypatch)
+    v1_payload = complete_submission_payload()
+    v1_payload["summary"] = "Completed the proof evaluation with TODO placeholder notes."
+    precheck_v1 = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submission-precheck",
+        headers=auth_headers(),
+        json={"submission": v1_payload},
+    )
+    assert precheck_v1.status_code == 200, precheck_v1.text
+    assert precheck_v1.json()["eligible_to_submit"] is True
+
+    v1 = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=v1_payload,
+    )
+    assert v1.status_code == 201, v1.text
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    _, v1_run = await lock_submission_and_get_auto_run(checker_client, v1.json()["id"])
+    assert v1_run["routing_recommendation"] == "needs_revision"
+    assert v1_run["outcome_source"] == "auto_checker"
+    low_quality = next(
+        result
+        for result in v1_run["results"]
+        if result["checker_name"] == "check_low_quality_generated_artifacts"
+    )
+    assert low_quality["status"] == "failed"
+    assert low_quality["blocks_review"] is True
+    assert low_quality["worker_message"]
+    assert low_quality["worker_suggested_fix"]
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        v1_submission = await session.get(Submission, v1.json()["id"])
+        gate_events = (
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.entity_type == "task", AuditEvent.entity_id == started_task["id"])
+                    .order_by(AuditEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        pre_submit_policy_id = task.locked_pre_submit_checker_policy_id if task else None
+        pre_submit_bundle_hash = task.locked_pre_submit_checker_bundle_hash if task else None
+        post_submit_policy_hash = task.locked_post_submit_checker_policy_hash if task else None
+        post_submit_policy_body = dict(task.locked_post_submit_checker_policy_body or {}) if task else {}
+    assert task is not None
+    assert task.status == "needs_revision"
+    assert v1_submission is not None
+    assert v1_submission.version == 1
+    assert v1_submission.package_hash == "sha256:package-v1"
+    assert ("submitted", "evaluation_pending") in {
+        (event.from_status, event.to_status) for event in gate_events
+    }
+    assert ("evaluation_pending", "needs_revision") in {
+        (event.from_status, event.to_status) for event in gate_events
+    }
+    v1_revision_events = [
+        event for event in gate_events if event.event_type == "pre_review_gate_needs_revision"
+    ]
+    assert v1_revision_events
+    assert any(
+        event.event_payload.get("checker_run_id") == v1_run["id"]
+        and event.event_payload.get("outcome_source") == "auto_checker"
+        and event.event_payload.get("review_decision_id") is None
+        for event in v1_revision_events
+    )
+
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    worker_run = await checker_client.get(
+        f"/api/v1/checker-runs/{v1_run['id']}",
+        headers=auth_headers(),
+    )
+    assert worker_run.status_code == 200, worker_run.text
+    worker_body = worker_run.json()
+    assert "routing_recommendation" not in worker_body
+    assert "outcome_source" not in worker_body
+    worker_low_quality = next(
+        result
+        for result in worker_body["results"]
+        if result["checker_name"] == "check_low_quality_generated_artifacts"
+    )
+    assert worker_low_quality["id"]
+    assert worker_low_quality["status"] == "failed"
+    assert worker_low_quality["severity"] == "high"
+    assert worker_low_quality["worker_message"]
+    assert worker_low_quality["worker_suggested_fix"]
+    assert "routing_recommendation" not in worker_run.text
+    assert "outcome_source" not in worker_run.text
+    worker_audit = await checker_client.get(
+        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        headers=auth_headers(),
+    )
+    assert worker_audit.status_code == 200, worker_audit.text
+    worker_gate_events = [
+        event
+        for event in worker_audit.json()
+        if event["event_type"] == "post_submit_checks_processing"
+    ]
+    assert worker_gate_events
+    assert all(event["actor_id"] is None for event in worker_gate_events)
+    assert all(event["external_subject"] is None for event in worker_gate_events)
+    assert all(event["external_issuer"] is None for event in worker_gate_events)
+    assert all(event["actor_roles"] == [] for event in worker_gate_events)
+    assert all(event["auth_source"] is None for event in worker_gate_events)
+    assert all(event["is_dev_auth"] is None for event in worker_gate_events)
+    assert "pre_review_gate_needs_revision" not in worker_audit.text
+    assert "outcome_source" not in worker_audit.text
+    assert "review_decision_id" not in worker_audit.text
+
+    await seed_worker_profile("worker-two")
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-two")
+    denied_before = await task_side_effect_snapshot(started_task["id"])
+    denied_precheck = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submission-precheck",
+        headers=auth_headers(),
+        json={"submission": complete_submission_payload("sha256:intruder-package")},
+    )
+    denied_submit = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=complete_submission_payload("sha256:intruder-package"),
+    )
+    denied_submissions = await checker_client.get(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+    )
+    denied_run = await checker_client.get(
+        f"/api/v1/checker-runs/{v1_run['id']}",
+        headers=auth_headers(),
+    )
+    denied_audit = await checker_client.get(
+        f"/api/v1/tasks/{started_task['id']}/audit-events",
+        headers=auth_headers(),
+    )
+    assert denied_precheck.status_code == 404
+    assert denied_submit.status_code == 404
+    assert denied_submissions.status_code == 404
+    assert denied_run.status_code == 404
+    assert denied_audit.status_code == 404
+    assert await task_side_effect_snapshot(started_task["id"]) == denied_before
+
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    v2_payload = complete_submission_payload("sha256:package-v2")
+    v2_payload["summary"] = "Completed the proof evaluation with task-specific final notes."
+    v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
+    precheck_v2 = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submission-precheck",
+        headers=auth_headers(),
+        json={"submission": v2_payload},
+    )
+    assert precheck_v2.status_code == 200, precheck_v2.text
+    assert precheck_v2.json()["eligible_to_submit"] is True
+    v2 = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=v2_payload,
+    )
+    assert v2.status_code == 201, v2.text
+    assert v2.json()["version"] == 2
+    assert v2.json()["supersedes_submission_id"] == v1.json()["id"]
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    stale_run = await checker_client.post(
+        f"/api/v1/submissions/{v1.json()['id']}/checker-runs",
+        headers=auth_headers(),
+        json={"trigger_reason": "stale v1 retry"},
+    )
+    assert stale_run.status_code == 409
+    _, v2_run = await lock_submission_and_get_auto_run(checker_client, v2.json()["id"])
+    assert v2_run["routing_recommendation"] == "allow_review"
+    assert v2_run["outcome_source"] == "none"
+
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, started_task["id"])
+        persisted_v1 = await session.get(Submission, v1.json()["id"])
+        persisted_v2 = await session.get(Submission, v2.json()["id"])
+        task_events = (
+            (
+                await session.execute(
+                    select(AuditEvent)
+                    .where(AuditEvent.entity_type == "task", AuditEvent.entity_id == started_task["id"])
+                    .order_by(AuditEvent.created_at)
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert task is not None
+    assert task.status == "review_pending"
+    assert task.locked_pre_submit_checker_policy_id == pre_submit_policy_id
+    assert task.locked_pre_submit_checker_bundle_hash == pre_submit_bundle_hash
+    assert task.locked_post_submit_checker_policy_hash == post_submit_policy_hash
+    assert task.locked_post_submit_checker_policy_body == post_submit_policy_body
+    assert persisted_v1 is not None
+    assert persisted_v1.version == 1
+    assert persisted_v1.package_hash == "sha256:package-v1"
+    assert persisted_v2 is not None
+    assert persisted_v2.version == 2
+    assert persisted_v2.supersedes_submission_id == persisted_v1.id
+    assert ("needs_revision", "submitted") in {
+        (event.from_status, event.to_status) for event in task_events
+    }
+    assert ("submitted", "evaluation_pending") in {
+        (event.from_status, event.to_status) for event in task_events
+    }
+    assert ("evaluation_pending", "review_pending") in {
+        (event.from_status, event.to_status) for event in task_events
+    }
+
+
 async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     checker_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1372,7 +1699,7 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
     assert task is not None
-    assert task.status == "auto_checking"
+    assert task.status == "evaluation_pending"
     manager_audit = await checker_client.get(
         f"/api/v1/tasks/{started_task['id']}/audit-events",
         headers=auth_headers(),
@@ -1413,6 +1740,18 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
     assert "acceptance_criteria" not in worker_audit.text
     assert "routing_recommendation" not in worker_audit.text
     assert "checker_run_id" not in worker_audit.text
+    worker_gate_events = [
+        event
+        for event in worker_audit.json()
+        if event["event_type"] == "post_submit_checks_processing"
+    ]
+    assert worker_gate_events
+    assert all(event["actor_id"] is None for event in worker_gate_events)
+    assert all(event["external_subject"] is None for event in worker_gate_events)
+    assert all(event["external_issuer"] is None for event in worker_gate_events)
+    assert all(event["actor_roles"] == [] for event in worker_gate_events)
+    assert all(event["auth_source"] is None for event in worker_gate_events)
+    assert all(event["is_dev_auth"] is None for event in worker_gate_events)
 
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
@@ -1627,7 +1966,7 @@ async def test_chunk10_checker_trial_runs_sample_submissions_through_real_api(
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
     assert task is not None
-    assert task.status == "auto_checking"
+    assert task.status == "evaluation_pending"
 
     set_dev_actor(monkeypatch, roles="worker", subject="chunk10-worker-task-setup")
     worker_blocked_read = await checker_client.get(
@@ -1712,7 +2051,7 @@ async def test_worker_can_read_only_worker_visible_checker_result_fields(
     assert "locked_revision_policy_version" not in body
     assert "locked_payment_policy_version" not in body
     assert "package_hash" not in body
-    assert body["artifact_hash_manifest"] == []
+    assert "artifact_hash_manifest" not in body
     assert "artifact_manifest_hash" not in body
     assert "submission_locked" not in read.text
     assert "manual_checker_trigger" not in read.text
@@ -1741,6 +2080,8 @@ async def test_worker_can_read_only_worker_visible_checker_result_fields(
     assert "locked_post_submit_checker_policy_version" not in listed_run
     assert "locked_post_submit_checker_policy_hash" not in listed_run
     assert "locked_post_submit_checker_policy_body" not in listed_run
+    assert "artifact_hash_manifest" not in listed_run
+    assert "artifact_manifest_hash" not in listed_run
     assert "submission_locked" not in listed.text
     assert "manual_checker_trigger" not in listed.text
 
@@ -1809,14 +2150,32 @@ async def test_checker_endpoints_reject_unassigned_worker_and_fake_result_payloa
     payload = complete_submission_payload()
     payload["status"] = "completed"
     payload["routing_recommendation"] = "allow_review"
+    payload["outcome_source"] = "auto_checker"
+    payload["trigger_source"] = "submission_locked"
+    payload["review_decision_id"] = "fake-review-decision"
+    payload["checker_retry"] = True
+    payload["task_setup_blocked"] = True
+    payload["allow_review"] = True
+    payload["review_decision"] = "accept"
+    payload["locked_guide_version"] = "v999"
+    payload["locked_pre_submit_checker_policy_id"] = "fake-policy"
+    payload["locked_pre_submit_checker_bundle_hash"] = "sha256:fake"
     payload["results"] = [{"checker_name": "fake", "status": "passed"}]
 
+    rejected_payload_snapshot = await task_side_effect_snapshot(started_task["id"])
     fake_precheck = await checker_client.post(
         f"/api/v1/tasks/{started_task['id']}/submission-precheck",
         headers=auth_headers(),
         json={"submission": payload},
     )
     assert fake_precheck.status_code == 422
+    fake_submission = await checker_client.post(
+        f"/api/v1/tasks/{started_task['id']}/submissions",
+        headers=auth_headers(),
+        json=payload,
+    )
+    assert fake_submission.status_code == 422
+    assert await task_side_effect_snapshot(started_task["id"]) == rejected_payload_snapshot
 
     created = await checker_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",

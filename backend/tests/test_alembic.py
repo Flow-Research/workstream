@@ -10,6 +10,9 @@ from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+LEGACY_EVALUATION_STATUS = "auto_checking"
+EVALUATION_PENDING_STATUS = "evaluation_pending"
+
 
 def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_lock) -> None:
     project_root = Path(__file__).resolve().parents[1]
@@ -82,6 +85,41 @@ def test_post_submit_policy_upgrade_blocks_legacy_runtime_rows(
             command.downgrade(config, "base")
 
     assert columns_exist is False
+
+
+def test_evaluation_pending_status_migration_rewrites_task_and_audit_rows(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0009 backfills persisted post-submission evaluation statuses."""
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+
+    ids = {name: str(uuid4()) for name in ("project", "policy", "task", "audit_start", "audit_done")}
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0008_post_submit_checker_policy")
+            asyncio.run(_seed_legacy_evaluation_status_rows(isolated_database_env, ids))
+
+            command.upgrade(config, "0009_evaluation_pending_status")
+            upgraded = asyncio.run(_fetch_status_migration_rows(isolated_database_env, ids))
+            command.downgrade(config, "0008_post_submit_checker_policy")
+            downgraded = asyncio.run(_fetch_status_migration_rows(isolated_database_env, ids))
+        finally:
+            command.downgrade(config, "base")
+
+    assert upgraded == {
+        "task_status": EVALUATION_PENDING_STATUS,
+        "audit_start_to_status": EVALUATION_PENDING_STATUS,
+        "audit_done_from_status": EVALUATION_PENDING_STATUS,
+    }
+    assert downgraded == {
+        "task_status": LEGACY_EVALUATION_STATUS,
+        "audit_start_to_status": LEGACY_EVALUATION_STATUS,
+        "audit_done_from_status": LEGACY_EVALUATION_STATUS,
+    }
 
 
 async def _seed_legacy_post_submit_policy(
@@ -175,6 +213,236 @@ async def _seed_legacy_post_submit_policy(
                 ),
                 {"policy_id": policy_id, "project_id": project_id},
             )
+    finally:
+        await engine.dispose()
+
+
+async def _seed_legacy_evaluation_status_rows(database_url: str, ids: dict[str, str]) -> None:
+    """Seed post-0008 rows carrying the old persisted evaluation status."""
+    engine = create_async_engine(database_url)
+    params = {
+        **ids,
+        "project_id": ids["project"],
+        "policy_id": ids["policy"],
+        "task_id": ids["task"],
+        "guide_id": str(uuid4()),
+        "legacy_status": LEGACY_EVALUATION_STATUS,
+    }
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    """
+                    insert into projects (
+                        id,
+                        name,
+                        slug,
+                        status,
+                        base_amount,
+                        currency
+                    )
+                    values (
+                        :project_id,
+                        'Evaluation pending migration project',
+                        'evaluation-pending-migration-project',
+                        'draft',
+                        25.00,
+                        'USD'
+                    )
+                    """
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    """
+                    insert into project_guides (
+                        id,
+                        project_id,
+                        version,
+                        status,
+                        content_markdown,
+                        required_task_fields,
+                        required_submission_fields,
+                        required_skills,
+                        difficulty_scale,
+                        estimated_time_policy,
+                        common_rejection_reasons,
+                        created_by
+                    )
+                    values (
+                        :guide_id,
+                        :project_id,
+                        'v1',
+                        'active',
+                        '# Evaluation pending migration guide',
+                        '[]'::json,
+                        '[]'::json,
+                        '[]'::json,
+                        '{}'::json,
+                        '{}'::json,
+                        '[]'::json,
+                        'migration-test'
+                    )
+                    """
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    """
+                    insert into checker_policies (
+                        id,
+                        project_id,
+                        guide_version,
+                        required_checkers,
+                        warning_checkers,
+                        blocking_severities,
+                        policy_hash,
+                        policy_body
+                    )
+                    values (
+                        :policy_id,
+                        :project_id,
+                        'v1',
+                        '["check_policy_context_present"]'::json,
+                        '[]'::json,
+                        '["high"]'::json,
+                        'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+                        '{}'::json
+                    )
+                    """
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    """
+                    insert into workstream_tasks (
+                        id,
+                        project_id,
+                        locked_post_submit_checker_policy_id,
+                        locked_post_submit_checker_policy_version,
+                        locked_post_submit_checker_policy_hash,
+                        locked_post_submit_checker_policy_body,
+                        source_type,
+                        title,
+                        description,
+                        skill_tags,
+                        status,
+                        required_files,
+                        required_evidence,
+                        created_by
+                    )
+                    values (
+                        :task_id,
+                        :project_id,
+                        :policy_id,
+                        'v1',
+                        'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+                        '{}'::json,
+                        'manual',
+                        'Evaluation pending migration task',
+                        'Task waiting in the old persisted evaluation status.',
+                        '[]'::json,
+                        :legacy_status,
+                        '[]'::json,
+                        '[]'::json,
+                        'migration-test'
+                    )
+                    """
+                ),
+                params,
+            )
+            await connection.execute(
+                text(
+                    """
+                    insert into audit_events (
+                        id,
+                        entity_type,
+                        entity_id,
+                        event_type,
+                        from_status,
+                        to_status,
+                        actor_id,
+                        external_subject,
+                        external_issuer,
+                        actor_roles,
+                        claim_snapshot,
+                        auth_source,
+                        is_dev_auth,
+                        event_payload
+                    )
+                    values
+                    (
+                        :audit_start,
+                        'task',
+                        :task_id,
+                        'pre_review_gate_started',
+                        'submitted',
+                        :legacy_status,
+                        'migration-test',
+                        'migration-test',
+                        'flow-test',
+                        '["project_manager"]'::json,
+                        '{}'::json,
+                        'dev_mock',
+                        true,
+                        '{}'::json
+                    ),
+                    (
+                        :audit_done,
+                        'task',
+                        :task_id,
+                        'pre_review_gate_passed',
+                        :legacy_status,
+                        'review_pending',
+                        'migration-test',
+                        'migration-test',
+                        'flow-test',
+                        '["project_manager"]'::json,
+                        '{}'::json,
+                        'dev_mock',
+                        true,
+                        '{}'::json
+                    )
+                    """
+                ),
+                params,
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _fetch_status_migration_rows(
+    database_url: str,
+    ids: dict[str, str],
+) -> dict[str, str | None]:
+    """Return status values touched by the 0009 status migration."""
+    engine = create_async_engine(database_url)
+    params = {
+        **ids,
+        "task_id": ids["task"],
+    }
+    try:
+        async with engine.begin() as connection:
+            task_status = await connection.scalar(
+                text("select status from workstream_tasks where id = :task_id"),
+                params,
+            )
+            audit_start_to_status = await connection.scalar(
+                text("select to_status from audit_events where id = :audit_start"),
+                ids,
+            )
+            audit_done_from_status = await connection.scalar(
+                text("select from_status from audit_events where id = :audit_done"),
+                ids,
+            )
+            return {
+                "task_status": task_status,
+                "audit_start_to_status": audit_start_to_status,
+                "audit_done_from_status": audit_done_from_status,
+            }
     finally:
         await engine.dispose()
 

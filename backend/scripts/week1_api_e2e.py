@@ -1008,8 +1008,8 @@ async def exercise_week1_api(base_url: str, env: dict[str, str]) -> None:
             ("task_status_changed", "claimed", "in_progress"),
             ("submission_created", "in_progress", "submitted"),
             ("submission_locked", "submitted", "submitted"),
-            ("pre_review_gate_started", "submitted", "auto_checking"),
-            ("pre_review_gate_passed", "auto_checking", "review_pending"),
+            ("pre_review_gate_started", "submitted", "evaluation_pending"),
+            ("pre_review_gate_passed", "evaluation_pending", "review_pending"),
         }:
             assert expected_transition in audit_transitions
         worker_audit_events = await request_json(

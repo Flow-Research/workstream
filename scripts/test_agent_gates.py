@@ -793,6 +793,25 @@ def test_stale_wording_skips_only_docs_internal_reviews_prefix() -> None:
     assert "active/file.md" in scanned
 
 
+def test_stale_wording_catches_multiline_legacy_status_reconstruction() -> None:
+    """The stale wording gate catches split legacy status construction."""
+    stale = load_module(
+        "stale_wording_multiline_legacy_status",
+        "scripts/check_stale_workstream_wording.py",
+    )
+    sample = 'LEGACY = "auto" \\\n    + "_checking"\n'
+    pattern = next(
+        pattern
+        for pattern in stale.FORBIDDEN_PATTERNS
+        if pattern.pattern == r"auto\s*[\"']?\s*\\?\s*\+\s*[\"']?_checking"
+    )
+
+    match = pattern.search(sample)
+
+    assert match is not None
+    assert stale.line_number_for_offset(sample, match.start()) == 1
+
+
 def test_loop_memory_state_rejects_pre_merge_status() -> None:
     """Main loop memory must not keep pre-merge checkpoint language."""
     checker = load_module("loop_memory_state_rejects", "scripts/check_loop_memory_state.py")
@@ -887,6 +906,7 @@ def main() -> int:
         test_markdown_link_checker_collects_base_cached_dirty_and_untracked,
         test_stale_wording_patterns_catch_variants,
         test_stale_wording_skips_only_docs_internal_reviews_prefix,
+        test_stale_wording_catches_multiline_legacy_status_reconstruction,
         test_loop_memory_state_rejects_pre_merge_status,
         test_loop_memory_state_accepts_merged_fixture,
     ]

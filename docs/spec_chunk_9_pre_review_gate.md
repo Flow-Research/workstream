@@ -11,9 +11,9 @@ This matches the operating pattern we want from serious evaluation systems: the 
 ## Scope
 
 - automatic checker run trigger from submission locking
-- `submitted -> auto_checking` task transition when the gate starts
-- `auto_checking -> review_pending` when blocking checks pass
-- `auto_checking -> needs_revision` for worker-fixable blocking failures
+- `submitted -> evaluation_pending` task transition when the gate starts
+- `evaluation_pending -> review_pending` when blocking checks pass
+- `evaluation_pending -> needs_revision` for worker-fixable blocking failures
 - internal `task_setup_blocked` route for task setup defects owned by project managers
 - checker run audit events for gate start, checker trigger, pass, needs-revision, and internal block outcomes
 - latest locked submission enforcement
@@ -40,7 +40,7 @@ The canonical flow is:
 worker submits packet
 -> operator locks latest submission
 -> Workstream runs CheckerRun with trigger_source = submission_locked
--> task moves submitted -> auto_checking
+-> task moves submitted -> evaluation_pending
 -> checker results determine the next route
 ```
 
@@ -48,8 +48,8 @@ Route outcomes:
 
 - `allow_review`: task moves to `review_pending`
 - `needs_revision`: task moves to user-facing `needs_revision`
-- `task_setup_blocked`: task remains in `auto_checking` for project-manager repair
-- `checker_retry`: task remains in `auto_checking` until a trusted checker retry or repair happens
+- `task_setup_blocked`: task remains in `evaluation_pending` for project-manager repair
+- `checker_retry`: task remains in `evaluation_pending` until a trusted checker retry or repair happens
 
 `task_setup_blocked` and `checker_retry` are internal checker routing recommendations. They are not review decisions and they are not worker-facing task outcomes.
 
@@ -119,7 +119,7 @@ Each event records actor identity, auth source, task id, submission id, submissi
 - automatic run uses `trigger_source = submission_locked`
 - clean submission moves task to `review_pending`
 - worker-fixable blocking result moves task to `needs_revision`
-- task setup defect produces `task_setup_blocked` and keeps task internal in `auto_checking`
+- task setup defect produces `task_setup_blocked` and keeps task internal in `evaluation_pending`
 - worker-visible checker responses do not expose `routing_recommendation`,
   `outcome_source`, internal `task_setup_blocked` details, or other internal
   route tokens

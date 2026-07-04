@@ -275,13 +275,13 @@ class AuditEventResponse(BaseModel):
     event_type: str
     from_status: str | None
     to_status: str | None
-    actor_id: str
-    external_subject: str
-    external_issuer: str
+    actor_id: str | None
+    external_subject: str | None
+    external_issuer: str | None
     actor_roles: list[str]
     claim_snapshot: dict[str, Any] = Field(default_factory=dict)
-    auth_source: str
-    is_dev_auth: bool
+    auth_source: str | None
+    is_dev_auth: bool | None
     reason: str | None
     event_payload: dict[str, Any]
     created_at: datetime

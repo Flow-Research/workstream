@@ -44,7 +44,7 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.projects.repository import ProjectRepository
 from app.modules.tasks.lifecycle import (
     InvalidTaskTransition,
-    TASK_STATUS_AUTO_CHECKING,
+    TASK_STATUS_EVALUATION_PENDING,
     TASK_STATUS_IN_PROGRESS,
     TASK_STATUS_NEEDS_REVISION,
     TASK_STATUS_REVIEW_PENDING,
@@ -63,7 +63,7 @@ ROUTING_NEEDS_REVISION = "needs_revision"
 ROUTING_CHECKER_RETRY = "checker_retry"
 CHECKER_RUN_ALLOWED_TASK_STATUSES = {
     TASK_STATUS_SUBMITTED,
-    TASK_STATUS_AUTO_CHECKING,
+    TASK_STATUS_EVALUATION_PENDING,
     TASK_STATUS_REVIEW_PENDING,
 }
 INTERNAL_ROUTING_RECOMMENDATIONS = {
@@ -501,7 +501,7 @@ class CheckerService:
         if current_run is not None:
             current_run.is_current_for_submission = False
         attempt_number = 1 if current_run is None else current_run.attempt_number + 1
-        await self._enter_auto_checking(
+        await self._enter_evaluation_pending(
             actor,
             task,
             submission,
@@ -731,7 +731,7 @@ class CheckerService:
         ]
         return checker_run
 
-    async def _enter_auto_checking(
+    async def _enter_evaluation_pending(
         self,
         actor: ActorContext,
         task: WorkstreamTask,
@@ -739,7 +739,7 @@ class CheckerService:
         trigger_reason: str,
         trigger_source: str,
     ) -> None:
-        """Move a task into the internal checker gate when needed.
+        """Move a task into post-submission evaluation when needed.
 
         Args:
             actor: Trusted actor that triggered the gate.
@@ -748,18 +748,18 @@ class CheckerService:
             trigger_reason: Audit reason for checker execution.
             trigger_source: Durable source label for the checker run.
         """
-        if task.status == TASK_STATUS_AUTO_CHECKING:
+        if task.status == TASK_STATUS_EVALUATION_PENDING:
             return
         from_status = task.status
-        self._ensure_transition_allowed(from_status, TASK_STATUS_AUTO_CHECKING)
-        task.status = TASK_STATUS_AUTO_CHECKING
+        self._ensure_transition_allowed(from_status, TASK_STATUS_EVALUATION_PENDING)
+        task.status = TASK_STATUS_EVALUATION_PENDING
         await self._write_gate_audit(
             actor,
             task,
             submission,
             event_type="pre_review_gate_started",
             from_status=from_status,
-            to_status=TASK_STATUS_AUTO_CHECKING,
+            to_status=TASK_STATUS_EVALUATION_PENDING,
             reason=trigger_reason,
             event_payload={"trigger_source": trigger_source},
         )
@@ -811,6 +811,7 @@ class CheckerService:
                 "checker_run_id": checker_run.id,
                 "routing_recommendation": checker_run.routing_recommendation,
                 "outcome_source": checker_run.outcome_source,
+                "review_decision_id": None,
                 "trigger_source": checker_run.trigger_source,
             },
         )
@@ -849,6 +850,7 @@ class CheckerService:
                 "checker_run_id": checker_run.id,
                 "routing_recommendation": checker_run.routing_recommendation,
                 "outcome_source": checker_run.outcome_source,
+                "review_decision_id": None,
                 "trigger_source": checker_run.trigger_source,
                 "blocking_count": checker_run.blocking_count,
                 "warning_count": checker_run.warning_count,
@@ -1024,15 +1026,41 @@ class CheckerService:
         """
         adjusted: list[CheckerOutcome] = []
         for outcome in outcomes:
+            required_warning = (
+                outcome.status == "warning"
+                and outcome.checker_name in context.required_checker_names
+            )
+            status = "failed" if required_warning else outcome.status
+            severity = "high" if required_warning else outcome.severity
+            metadata = dict(outcome.metadata)
+            if required_warning:
+                metadata["required_checker_warning_escalated"] = True
             blocks_review = (
-                outcome.status == "failed"
+                status == "failed"
                 and (
                     outcome.blocks_review
                     or outcome.checker_name in context.required_checker_names
                     or outcome.severity in context.blocking_severities
+                    or severity in context.blocking_severities
                 )
             )
-            adjusted.append(replace(outcome, blocks_review=blocks_review))
+            adjusted.append(
+                replace(
+                    outcome,
+                    status=status,
+                    severity=severity,
+                    blocks_review=blocks_review,
+                    worker_suggested_fix=(
+                        outcome.worker_suggested_fix
+                        or (
+                            "Resolve this required checker finding before review can continue."
+                            if required_warning and outcome.worker_visible
+                            else None
+                        )
+                    ),
+                    metadata=metadata,
+                )
+            )
         return adjusted
 
     @staticmethod
@@ -1159,7 +1187,7 @@ class CheckerService:
             ),
             package_hash=checker_run.package_hash if has_checker_admin_access else None,
             artifact_hash_manifest=(
-                checker_run.artifact_hash_manifest if has_checker_admin_access else []
+                checker_run.artifact_hash_manifest if has_checker_admin_access else None
             ),
             artifact_manifest_hash=(
                 checker_run.artifact_manifest_hash if has_checker_admin_access else None

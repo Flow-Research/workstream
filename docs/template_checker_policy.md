@@ -37,7 +37,7 @@ Task setup and post-submit checks must stay separated from worker-fixable submis
 | `check_evidence_present` | high | yes | Submission must include audit evidence. |
 | `check_evidence_integrity` | high | yes | Evidence and checker runs must bind to submitted artifacts. |
 | `check_confidentiality_attestation` | high | yes | Worker attestation must address confidentiality and credential handling. |
-| `check_low_quality_generated_artifacts` | low | no | Low-quality generated artifact signals create warning results by default. |
+| `check_low_quality_generated_artifacts` | low/high | policy-dependent | Low-quality generated artifact signals warn by default and block review only when the project explicitly requires this post-submit checker. |
 
 Task setup checks:
 

@@ -36,7 +36,12 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"project checker hash(?:es)?", re.IGNORECASE),
     re.compile(r"PreSubmitCheckerPolicy hash(?:es)?", re.IGNORECASE),
     re.compile(r"PreSubmitCheckerPolicy snapshot/hash(?:es)?", re.IGNORECASE),
+    re.compile(r"auto_checking", re.IGNORECASE),
+    re.compile(r"auto\s*[\"']?\s*\\?\s*\+\s*[\"']?_checking", re.IGNORECASE),
 )
+FULL_TEXT_FORBIDDEN_PATTERNS = {
+    "auto\\s*[\"']?\\s*\\\\?\\s*\\+\\s*[\"']?_checking",
+}
 FORBIDDEN_PATH_PATTERNS = (
     re.compile(r"(^|/)\.claude(/|$)", re.IGNORECASE),
     re.compile(r"(^|/)claude\.md$", re.IGNORECASE),
@@ -58,6 +63,32 @@ SKIP_FILES = {
 }
 ALLOWLISTED_LINES = {
     "AGENTS.md": ("Do not use old names such as",),
+}
+ALLOWLISTED_PATTERN_LINES = {
+    "auto_checking": {
+        ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/"
+        "WS-POL-001-05-revision-resubmission-real-api-drill.md": (
+            "`auto_checking` to `evaluation_pending`",
+            "and audit-event `from_status`/`to_status` values from `auto_checking` to",
+            "scripts, active docs, or real API drill output still depend on `auto_checking`.",
+            "can contain `auto_checking`.",
+            "The status rename is part of this proof. `auto_checking` is vague",
+            "Those docs may only be changed to replace `auto_checking` with the canonical",
+            "`auto_checking` with the canonical `evaluation_pending` lifecycle wording",
+            "- [ ] `auto_checking` is replaced in current runtime code, tests, scripts, and",
+            "already contain `auto_checking`. If the PR does not add a migration",
+            "`auto_checking`.",
+            "`audit_events.to_status` contains `auto_checking` after upgrade/drill.",
+            "scripts, docs, or real API drill output still depend on `auto_checking`.",
+            "replaces `auto_checking`.",
+        ),
+        "backend/alembic/versions/0009_evaluation_pending_status.py": (
+            'OLD_STATUS = "auto_checking"',
+        ),
+        "backend/tests/test_alembic.py": ('LEGACY_EVALUATION_STATUS = "auto_checking"',),
+        "backend/scripts/week2_api_e2e.py": ('LEGACY_EVALUATION_STATUS = "auto_checking"',),
+    },
+    "auto\\s*[\"']?\\s*\\\\?\\s*\\+\\s*[\"']?_checking": {},
 }
 
 
@@ -115,6 +146,20 @@ def read_text(path: Path) -> str | None:
     return text
 
 
+def line_number_for_offset(text: str, offset: int) -> int:
+    """Return the one-based line number for a character offset."""
+    return text.count("\n", 0, offset) + 1
+
+
+def line_at_offset(text: str, offset: int) -> str:
+    """Return the full line containing a character offset."""
+    line_start = text.rfind("\n", 0, offset) + 1
+    line_end = text.find("\n", offset)
+    if line_end == -1:
+        line_end = len(text)
+    return text[line_start:line_end]
+
+
 def main() -> int:
     """Run the stale wording check."""
     paths = tracked_and_new_files()
@@ -124,8 +169,20 @@ def main() -> int:
         if text is None:
             continue
         for pattern in FORBIDDEN_PATTERNS:
-            if pattern.search(text):
-                failures.append(f"{path}: contains stale wording /{pattern.pattern}/i")
+            if pattern.pattern in FULL_TEXT_FORBIDDEN_PATTERNS:
+                matches = pattern.finditer(text)
+            else:
+                matches = pattern.finditer(text)
+            for match in matches:
+                line_number = line_number_for_offset(text, match.start())
+                line = line_at_offset(text, match.start())
+                allowed_lines = ALLOWLISTED_PATTERN_LINES.get(pattern.pattern, {})
+                allowed_fragments = allowed_lines.get(path.as_posix(), ())
+                if any(fragment in line for fragment in allowed_fragments):
+                    continue
+                failures.append(
+                    f"{path}:{line_number}: contains stale wording /{pattern.pattern}/i"
+                )
 
     if failures:
         print("Stale wording check failed:", file=sys.stderr)

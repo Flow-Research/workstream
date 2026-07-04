@@ -128,7 +128,7 @@ class CheckerRunResponse(BaseModel):
     locked_revision_policy_version: str | None
     locked_payment_policy_version: str | None
     package_hash: str | None
-    artifact_hash_manifest: list[dict[str, Any]]
+    artifact_hash_manifest: list[dict[str, Any]] | None
     artifact_manifest_hash: str | None
     passed_count: int
     warning_count: int
@@ -162,7 +162,6 @@ class CheckerRunPublicResponse(BaseModel):
     attempt_number: int
     supersedes_checker_run_id: str | None
     is_current_for_submission: bool
-    artifact_hash_manifest: list[dict[str, Any]]
     passed_count: int
     warning_count: int
     failed_count: int

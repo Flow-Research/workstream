@@ -39,7 +39,7 @@ The trial must include the closeout sample submissions below:
 | Forbidden file path | `needs_revision` | `needs_revision` | Safe forbidden-file fix message |
 | Weak confidentiality attestation | `needs_revision` | `needs_revision` | Attestation fix message |
 | Low-quality generated artifact warning | `allow_review` | `review_pending` | Warning result without blocking review |
-| Locked task setup defect | `task_setup_blocked` | `auto_checking` | Internal route hidden |
+| Locked task setup defect | `task_setup_blocked` | `evaluation_pending` | Internal route hidden |
 
 The worker-facing output must keep the same public language as the rest of Workstream. Worker-fixable checker failures are `needs_revision`. Internal setup defects stay hidden from workers and are repaired by a project manager before a trusted checker retry.
 

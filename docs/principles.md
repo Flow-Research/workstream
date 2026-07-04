@@ -74,10 +74,12 @@ Reviewers must produce actionable findings:
 Needs revision is not a side note. It is a formal loop:
 
 ```text
-NEEDS_REVISION -> IN_PROGRESS -> SUBMITTED -> AUTO_CHECKING -> REVIEW_PENDING
+NEEDS_REVISION -> SUBMITTED -> EVALUATION_PENDING -> REVIEW_PENDING
 ```
 
-The system must preserve original feedback, fix notes, evidence, and closure.
+While a task is in `NEEDS_REVISION`, the assigned worker can run pre-submit
+feedback and submit a replacement version directly. The system must preserve
+original feedback, fix notes, evidence, and closure.
 
 The system must also preserve guide and policy context. Prior submissions keep their locked context; revision policy decides whether the next attempt rebases to the latest active context before the worker resumes.
 

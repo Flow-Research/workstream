@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-POL-001-04` | Post-Submit Checker Policy Provenance | L1 | Review complete; evidence preparation on `codex/ws-pol-001-04-post-submit-policy` |
+| `WS-POL-001-05` | Revision Resubmission And Real API Drill | L1 | Active on `codex/ws-pol-001-05-revision-resubmission`; implementation proof complete, internal reviewer repair/re-review in progress |
 
 ## Completed
 
@@ -16,12 +16,13 @@
 | `WS-POL-001-01` | Submission Artifact Policy Foundation | L1 | Merged through PR #28 |
 | `WS-POL-001-02` | Async Guide Analysis And Policy Derivation | L1 | Merged through PR #61 |
 | `WS-POL-001-03` | Task Locked Context And Submission Creation | L1 | Merged through PR #63 on 2026-07-03 |
+| `WS-POL-001-04` | Post-Submit Checker Policy Provenance | L1 | Merged through PR #65 |
 
 ## Proposed Next
 
-`WS-POL-001-04` has completed deterministic verification and internal reviewer
-fanout. Evidence and PR trust artifacts must be committed before PR, then the
-chunk stops for user review.
+`WS-POL-001-05` must prove checker-caused revision resubmission with real
+Postgres-backed API calls and replace the legacy evaluation lifecycle status
+with `evaluation_pending`.
 
 ## Blocked
 

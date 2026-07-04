@@ -216,13 +216,13 @@ Every operating day starts with:
 | `DRAFT -> SCREENING` | project id, locked guide candidate, required task fields, payment policy |
 | `SCREENING -> READY` | screening decision, guide version lock, guide source snapshot id/hash lock, acceptance criteria, effective project submission artifact policy hash lock, project `PreSubmitCheckerPolicy` compiled bundle hash lock, post-submit checker policy, review policy, revision policy, payment policy |
 | `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed, submission packet, artifact hash manifest, evidence references, worker attestation |
-| `SUBMITTED -> AUTO_CHECKING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
-| `AUTO_CHECKING -> REVIEW_PENDING` | checker run for exact submission version, readiness certificate, no blocking failures |
-| `AUTO_CHECKING -> NEEDS_REVISION` | checker run id, outcome source `auto_checker`, worker-visible checker failures with severity, message, suggested fix |
+| `SUBMITTED -> EVALUATION_PENDING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
+| `EVALUATION_PENDING -> REVIEW_PENDING` | checker run for exact submission version, readiness certificate, no blocking failures |
+| `EVALUATION_PENDING -> NEEDS_REVISION` | checker run id, outcome source `auto_checker`, worker-visible checker failures with severity, message, suggested fix |
 | `REVIEW_PENDING -> NEEDS_REVISION` | review decision, at least one structured finding, revision policy still permits revision |
 | `REVIEW_PENDING -> ACCEPTED` | accepted review, acceptance evidence refs, contribution record, payment record |
-| `NEEDS_REVISION -> IN_PROGRESS` | prior findings visible to worker, revision deadline active |
-| resubmission after `NEEDS_REVISION` | revision replay covering every high and medium prior finding, revision count under policy limit |
+| pre-submit feedback in `NEEDS_REVISION` | prior findings visible to worker, revision deadline active, no new submission created |
+| `NEEDS_REVISION -> SUBMITTED` | replacement submission packet, revision replay covering every high and medium prior finding, revision count under policy limit |
 | payment `PENDING -> PAID` | payment reference and payment audit event |
 
 ## Lane Capacity

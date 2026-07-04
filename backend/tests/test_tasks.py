@@ -1521,7 +1521,7 @@ async def test_submission_requires_assigned_worker_and_in_progress_task(
         json=complete_submission_payload(),
     )
 
-    assert other_worker_response.status_code == 409
+    assert other_worker_response.status_code == 404
 
 
 async def test_submission_pre_submit_failure_returns_structured_domain_error(

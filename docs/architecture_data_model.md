@@ -805,7 +805,7 @@ Status:
 - claimed
 - in_progress
 - submitted
-- auto_checking
+- evaluation_pending
 - review_pending
 - needs_revision
 - accepted
@@ -1048,7 +1048,7 @@ Phase:
 
 The checker registry prevents project guide templates, checker policies, and implementation code from drifting into different checker names for the same rule.
 
-`pre_review_gate` is a checker phase, not a task status. The v0.1 task status during this phase is `auto_checking`.
+`pre_review_gate` is a checker phase, not a task status. The v0.1 task status during this phase is `evaluation_pending`.
 
 ## Future ReadinessCertificate
 

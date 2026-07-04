@@ -26,7 +26,7 @@ This chunk does not run the full checker framework yet. It defines the durable p
 - real checker registry
 - real checker execution
 - automatic background trigger after submission locking
-- task lifecycle movement to `AUTO_CHECKING`, `REVIEW_PENDING`, or `NEEDS_REVISION`
+- task lifecycle movement to `EVALUATION_PENDING`, `REVIEW_PENDING`, or `NEEDS_REVISION`
 - readiness certificate creation; deferred to Chunk 9 when the pre-review gate is implemented
 - product frontend
 - reviewer queue UI

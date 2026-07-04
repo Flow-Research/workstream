@@ -470,12 +470,14 @@ class TaskService:
         """
         require_any_role(actor, TASK_SUBMIT_ROLES)
         task = await self._get_task(task_id)
+        if "worker" in actor.roles and task.assigned_to not in {None, actor.actor_id}:
+            raise TaskNotFound("task not found")
         await self._require_active_worker_profile(actor)
         assignment = await self._repo.get_active_assignment(task_id)
         if assignment is None:
             raise TaskTransitionBlocked("task has no active assignment")
         if assignment.worker_id != actor.actor_id or task.assigned_to != actor.actor_id:
-            raise TaskTransitionBlocked("actor is not assigned to this task")
+            raise TaskNotFound("task not found")
         if task.status not in {
             TASK_STATUS_IN_PROGRESS,
             TASK_STATUS_NEEDS_REVISION,
@@ -1293,6 +1295,12 @@ class TaskService:
                 response.event_type = "post_submit_checks_processing"
                 response.from_status = None
                 response.to_status = None
+                response.actor_id = None
+                response.external_subject = None
+                response.external_issuer = None
+                response.actor_roles = []
+                response.auth_source = None
+                response.is_dev_auth = None
                 response.reason = None
         return response
 

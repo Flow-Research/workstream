@@ -19,7 +19,7 @@ from app.modules.checkers.models import CheckerResult, CheckerRun
 from app.modules.tasks.models import AuditEvent, EvidenceItem, Submission, WorkstreamTask
 from week1_api_e2e import (
     alembic_config,
-    api_environment,
+    api_environment as week1_api_environment,
     create_policy_bundle_for_guide,
     find_free_port,
     flow_settings,
@@ -50,6 +50,9 @@ EXPECTED_PRE_SUBMIT_CHECKERS = {
     "check_confidentiality_attestation",
     "check_low_quality_generated_artifacts",
 }
+LEGACY_EVALUATION_STATUS = "auto_checking"
+DATABASE_URL_ENV = "WORKSTREAM_DATABASE_URL"
+TEST_DATABASE_URL_ENV = "WORKSTREAM_TEST_DATABASE_URL"
 LOCAL_DATABASE_HOSTS = {"localhost", "127.0.0.1", "::1"}
 LOCAL_DATABASE_NAMES = {"workstream_test", "test_workstream"}
 ASYNC_POSTGRES_SCHEMES = {"postgresql+asyncpg"}
@@ -72,6 +75,15 @@ def ensure(condition: bool, message: str) -> None:
     """
     if not condition:
         raise AssertionError(message)
+
+
+def api_environment() -> dict[str, str]:
+    """Build the API environment and honor the contract's test DB variable."""
+    env = week1_api_environment()
+    test_database_url = os.environ.get(TEST_DATABASE_URL_ENV)
+    if test_database_url:
+        env[DATABASE_URL_ENV] = test_database_url
+    return env
 
 
 def assert_local_database_url(database_url: str) -> None:
@@ -630,6 +642,116 @@ async def assert_task_status(
     )
 
 
+async def task_side_effect_snapshot(task_id: str) -> dict:
+    """Capture task-scoped persisted rows for no-side-effect assertions.
+
+    Args:
+        task_id: Task id whose durable side effects should be captured.
+
+    Returns:
+        Stable snapshot of task, submission, checker, and audit rows.
+    """
+    async with db_session.get_session_factory()() as session:
+        task = await session.get(WorkstreamTask, task_id)
+        submissions = (
+            await session.scalars(
+                select(Submission).where(Submission.task_id == task_id).order_by(Submission.id)
+            )
+        ).all()
+        submission_ids = [submission.id for submission in submissions]
+        evidence_items = []
+        if submission_ids:
+            evidence_items = (
+                await session.scalars(
+                    select(EvidenceItem)
+                    .where(EvidenceItem.submission_id.in_(submission_ids))
+                    .order_by(EvidenceItem.id)
+                )
+            ).all()
+        checker_runs = (
+            await session.scalars(
+                select(CheckerRun).where(CheckerRun.task_id == task_id).order_by(CheckerRun.id)
+            )
+        ).all()
+        checker_results = (
+            await session.scalars(
+                select(CheckerResult)
+                .where(CheckerResult.task_id == task_id)
+                .order_by(CheckerResult.id)
+            )
+        ).all()
+        audit_events = (
+            await session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.entity_type == "task", AuditEvent.entity_id == task_id)
+                .order_by(AuditEvent.id)
+            )
+        ).all()
+        submission_audit_events = []
+        if submission_ids:
+            submission_audit_events = (
+                await session.scalars(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.entity_type == "submission",
+                        AuditEvent.entity_id.in_(submission_ids),
+                    )
+                    .order_by(AuditEvent.id)
+                )
+            ).all()
+        return {
+            "task_status": None if task is None else task.status,
+            "submissions": [
+                (
+                    submission.id,
+                    submission.version,
+                    submission.status,
+                    submission.package_hash,
+                    submission.supersedes_submission_id,
+                )
+                for submission in submissions
+            ],
+            "evidence_items": [
+                (item.id, item.submission_id, item.type, item.hash) for item in evidence_items
+            ],
+            "checker_runs": [
+                (
+                    run.id,
+                    run.submission_id,
+                    run.submission_version,
+                    run.attempt_number,
+                    run.routing_recommendation,
+                )
+                for run in checker_runs
+            ],
+            "checker_results": [
+                (result.id, result.checker_run_id, result.checker_name, result.status)
+                for result in checker_results
+            ],
+            "audit_events": [
+                (
+                    event.id,
+                    event.event_type,
+                    event.from_status,
+                    event.to_status,
+                    event.event_payload,
+                )
+                for event in audit_events
+            ],
+            "submission_audit_events": [
+                (
+                    event.id,
+                    event.entity_id,
+                    event.event_type,
+                    event.from_status,
+                    event.to_status,
+                    event.event_payload,
+                )
+                for event in submission_audit_events
+            ],
+        }
+
+
 async def break_acceptance_criteria(task_id: str) -> None:
     """Create a controlled locked task setup defect that normal APIs prevent.
 
@@ -665,6 +787,25 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
         scenarios: Scenario expectations captured from real API responses.
     """
     async with db_session.get_session_factory()() as session:
+        legacy_tasks = (
+            await session.scalars(
+                select(WorkstreamTask).where(WorkstreamTask.status == LEGACY_EVALUATION_STATUS)
+            )
+        ).all()
+        legacy_from_events = (
+            await session.scalars(
+                select(AuditEvent).where(AuditEvent.from_status == LEGACY_EVALUATION_STATUS)
+            )
+        ).all()
+        legacy_to_events = (
+            await session.scalars(
+                select(AuditEvent).where(AuditEvent.to_status == LEGACY_EVALUATION_STATUS)
+            )
+        ).all()
+        ensure(not legacy_tasks, "legacy evaluation status remained on task rows")
+        ensure(not legacy_from_events, "legacy evaluation status remained on audit from_status")
+        ensure(not legacy_to_events, "legacy evaluation status remained on audit to_status")
+
         for scenario in scenarios:
             task = await session.get(WorkstreamTask, scenario["task_id"])
             submission = await session.get(Submission, scenario["submission_id"])
@@ -674,8 +815,8 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
             ensure(checker_run is not None, f"{scenario['name']} checker run missing")
 
             ensure(
-                task.status == scenario["expected_task_status"],
-                f"{scenario['name']} task status drifted: {task.status}",
+                task.status == scenario["expected_final_task_status"],
+                f"{scenario['name']} final task status drifted: {task.status}",
             )
             task_versions = {
                 task.locked_guide_version,
@@ -690,6 +831,21 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 and task.locked_post_submit_checker_policy_version == "v1"
                 and task.locked_post_submit_checker_policy_hash is not None,
                 f"{scenario['name']} task post-submit policy lock missing",
+            )
+            ensure(
+                task.locked_guide_source_snapshot_id is not None
+                and task.locked_guide_source_snapshot_hash is not None,
+                f"{scenario['name']} task guide-source snapshot lock missing",
+            )
+            ensure(
+                task.locked_effective_project_submission_artifact_policy_id is not None
+                and task.locked_effective_project_submission_artifact_policy_hash is not None,
+                f"{scenario['name']} task effective project policy lock missing",
+            )
+            ensure(
+                task.locked_pre_submit_checker_policy_id is not None
+                and task.locked_pre_submit_checker_bundle_hash is not None,
+                f"{scenario['name']} task pre-submit checker lock missing",
             )
             submission_versions = {
                 submission.locked_guide_version,
@@ -716,6 +872,27 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 submission.locked_post_submit_checker_policy_hash
                 == task.locked_post_submit_checker_policy_hash,
                 f"{scenario['name']} submission post-submit policy hash drifted",
+            )
+            ensure(
+                submission.locked_guide_source_snapshot_id
+                == task.locked_guide_source_snapshot_id
+                and submission.locked_guide_source_snapshot_hash
+                == task.locked_guide_source_snapshot_hash,
+                f"{scenario['name']} submission guide-source snapshot drifted",
+            )
+            ensure(
+                submission.locked_effective_project_submission_artifact_policy_id
+                == task.locked_effective_project_submission_artifact_policy_id
+                and submission.locked_effective_project_submission_artifact_policy_hash
+                == task.locked_effective_project_submission_artifact_policy_hash,
+                f"{scenario['name']} submission effective project policy drifted",
+            )
+            ensure(
+                submission.locked_pre_submit_checker_policy_id
+                == task.locked_pre_submit_checker_policy_id
+                and submission.locked_pre_submit_checker_bundle_hash
+                == task.locked_pre_submit_checker_bundle_hash,
+                f"{scenario['name']} submission pre-submit checker lock drifted",
             )
             ensure(submission.locked_at is not None, f"{scenario['name']} submission not locked")
             ensure(
@@ -860,6 +1037,15 @@ async def assert_week2_database_invariants(scenarios: list[dict]) -> None:
                 ),
                 f"{scenario['name']} gate audit event missing matching trigger/run payload",
             )
+            expected_task_transitions = scenario.get("expected_task_transitions", [])
+            actual_task_transitions = {
+                (event.from_status, event.to_status) for event in task_events
+            }
+            for transition in expected_task_transitions:
+                ensure(
+                    tuple(transition) in actual_task_transitions,
+                    f"{scenario['name']} missing task transition: {transition}",
+                )
 
     print("PASS Week 2 database invariants")
 
@@ -977,7 +1163,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             "locked_post_submit_checker_policy_hash" not in worker_clean_run,
             "worker saw locked post-submit checker policy hash",
         )
-        ensure(worker_clean_run["artifact_hash_manifest"] == [], "worker saw artifact manifest")
+        ensure("artifact_hash_manifest" not in worker_clean_run, "worker saw artifact manifest")
         manager_clean_runs = await request_json(
             client,
             "GET",
@@ -993,7 +1179,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
         )
         ensure(len(worker_clean_runs) == 1, "worker checker-run list count drifted")
         ensure(
-            worker_clean_runs[0]["artifact_hash_manifest"] == [],
+            "artifact_hash_manifest" not in worker_clean_runs[0],
             "worker checker-run list exposed artifact manifest",
         )
         ensure(
@@ -1024,6 +1210,124 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/submissions/{clean_submission['id']}/checker-runs",
             unassigned_worker_token,
             expected_status=404,
+        )
+
+        trusted_retry_worker_subject = f"week2-worker-trusted-retry-{run_id}"
+        trusted_retry_worker_token = token_for(
+            trusted_retry_worker_subject,
+            ["worker"],
+            issuer=flow_issuer,
+            audience=flow_audience,
+            secret=flow_secret,
+        )
+        trusted_retry_project = await create_project_with_guide(
+            client,
+            manager_token,
+            run_id,
+            "trusted-retry",
+        )
+        trusted_retry_task = await create_started_task(
+            client,
+            manager_token=manager_token,
+            worker_token=trusted_retry_worker_token,
+            project_id=trusted_retry_project["id"],
+            run_id=run_id,
+            suffix="trusted-retry",
+            worker_subject=trusted_retry_worker_subject,
+            flow_issuer=flow_issuer,
+        )
+        (
+            trusted_retry_submission,
+            trusted_retry_locked,
+            trusted_retry_initial_run,
+        ) = await submit_lock_and_get_run(
+            client,
+            manager_token=manager_token,
+            worker_token=trusted_retry_worker_token,
+            task_id=trusted_retry_task["id"],
+            payload=submission_payload(run_id, "trusted-retry"),
+        )
+        assert_default_checker_set(trusted_retry_initial_run)
+        ensure(
+            trusted_retry_initial_run["routing_recommendation"] == "allow_review",
+            "trusted retry initial run did not pass",
+        )
+        await assert_task_status(
+            client,
+            manager_token,
+            trusted_retry_task["id"],
+            "review_pending",
+        )
+        trusted_retry_run = await request_json(
+            client,
+            "POST",
+            f"/api/v1/submissions/{trusted_retry_submission['id']}/checker-runs",
+            manager_token,
+            {"trigger_reason": "Week 2 trusted review-pending retry"},
+            200,
+        )
+        assert_default_checker_set(trusted_retry_run)
+        ensure(
+            trusted_retry_run["attempt_number"] == 2,
+            "trusted review-pending retry did not create attempt 2",
+        )
+        ensure(
+            trusted_retry_run["routing_recommendation"] == "allow_review",
+            "trusted review-pending retry did not pass",
+        )
+        ensure(
+            trusted_retry_run["supersedes_checker_run_id"] == trusted_retry_initial_run["id"],
+            "trusted review-pending retry did not supersede initial run",
+        )
+        await assert_task_status(
+            client,
+            manager_token,
+            trusted_retry_task["id"],
+            "review_pending",
+        )
+        trusted_retry_runs = await request_json(
+            client,
+            "GET",
+            f"/api/v1/submissions/{trusted_retry_submission['id']}/checker-runs",
+            manager_token,
+        )
+        ensure(len(trusted_retry_runs) == 2, "trusted retry run count drifted")
+        trusted_retry_runs_by_attempt = {
+            run["attempt_number"]: run for run in trusted_retry_runs
+        }
+        ensure(
+            trusted_retry_runs_by_attempt[1]["is_current_for_submission"] is False,
+            "trusted retry initial run still current",
+        )
+        ensure(
+            trusted_retry_runs_by_attempt[2]["is_current_for_submission"] is True,
+            "trusted retry run is not current",
+        )
+        ensure(
+            trusted_retry_runs_by_attempt[2]["trigger_source"] == "manual_checker_trigger",
+            "trusted retry trigger source drifted",
+        )
+        worker_trusted_retry_run = await request_json(
+            client,
+            "GET",
+            f"/api/v1/checker-runs/{trusted_retry_run['id']}",
+            trusted_retry_worker_token,
+        )
+        ensure(
+            "trigger_source" not in worker_trusted_retry_run,
+            "worker saw trusted retry trigger source",
+        )
+        ensure(
+            "routing_recommendation" not in worker_trusted_retry_run,
+            "worker saw trusted retry route",
+        )
+        ensure(
+            "artifact_hash_manifest" not in worker_trusted_retry_run,
+            "worker saw trusted retry artifact manifest",
+        )
+        ensure(
+            "manual_checker_trigger" not in str(worker_trusted_retry_run),
+            "worker saw trusted retry internal trigger label",
         )
 
         revision_worker_subject = f"week2-worker-revision-{run_id}"
@@ -1083,6 +1387,30 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             revision_worker_token,
             missing_file_payload,
             422,
+        )
+        revision_blocked_create_snapshot = await task_side_effect_snapshot(revision_task["id"])
+        ensure(
+            revision_blocked_create_snapshot["submissions"] == [],
+            "blocked submission create persisted a submission",
+        )
+        ensure(
+            revision_blocked_create_snapshot["checker_runs"] == [],
+            "blocked submission create persisted a checker run",
+        )
+        ensure(
+            revision_blocked_create_snapshot["checker_results"] == [],
+            "blocked submission create persisted a checker result",
+        )
+        ensure(
+            revision_blocked_create_snapshot["submission_audit_events"] == [],
+            "blocked submission create persisted submission audit events",
+        )
+        ensure(
+            all(
+                event[1] not in {"submission_created", "submission_locked", "checker_run_triggered"}
+                for event in revision_blocked_create_snapshot["audit_events"]
+            ),
+            "blocked submission create persisted task submission/checker audit events",
         )
 
         missing_evidence_worker_subject = f"week2-worker-no-evidence-{run_id}"
@@ -1310,6 +1638,313 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             "low-quality generated artifact checker did not warn",
         )
 
+        checker_revision_worker_subject = f"week2-worker-checker-revision-{run_id}"
+        checker_revision_worker_token = token_for(
+            checker_revision_worker_subject,
+            ["worker"],
+            issuer=flow_issuer,
+            audience=flow_audience,
+            secret=flow_secret,
+        )
+        checker_revision_project = await create_project_with_guide(
+            client,
+            manager_token,
+            run_id,
+            "checker-revision",
+            required_checkers=["check_low_quality_generated_artifacts"],
+        )
+        checker_revision_task = await create_started_task(
+            client,
+            manager_token=manager_token,
+            worker_token=checker_revision_worker_token,
+            project_id=checker_revision_project["id"],
+            run_id=run_id,
+            suffix="checker-revision",
+            worker_subject=checker_revision_worker_subject,
+            flow_issuer=flow_issuer,
+        )
+        checker_revision_v1_payload = submission_payload(run_id, "checker-revision-v1")
+        checker_revision_v1_payload["summary"] = (
+            "Completed the project evaluation with TODO placeholder notes."
+        )
+        checker_revision_v1_precheck = await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submission-precheck",
+            checker_revision_worker_token,
+            {"submission": checker_revision_v1_payload},
+        )
+        assert_pre_submit_checker_set(checker_revision_v1_precheck)
+        ensure(
+            checker_revision_v1_precheck["eligible_to_submit"] is True,
+            "checker-caused revision precheck should not block before submission",
+        )
+        (
+            checker_revision_v1_submission,
+            checker_revision_v1_locked,
+            checker_revision_v1_run,
+        ) = await submit_lock_and_get_run(
+            client,
+            manager_token=manager_token,
+            worker_token=checker_revision_worker_token,
+            task_id=checker_revision_task["id"],
+            payload=checker_revision_v1_payload,
+        )
+        assert_default_checker_set(checker_revision_v1_run)
+        ensure(
+            checker_revision_v1_run["routing_recommendation"] == "needs_revision",
+            "required post-submit checker did not route to needs_revision",
+        )
+        ensure(
+            checker_revision_v1_run["outcome_source"] == "auto_checker",
+            "checker-caused revision did not stamp auto_checker outcome source",
+        )
+        checker_revision_v1_result = checker_result(
+            checker_revision_v1_run,
+            "check_low_quality_generated_artifacts",
+        )
+        ensure(
+            checker_revision_v1_result["status"] == "failed",
+            "required low-quality checker did not fail",
+        )
+        ensure(
+            checker_revision_v1_result["blocks_review"] is True,
+            "required low-quality checker did not block review",
+        )
+        ensure(
+            checker_revision_v1_result["worker_message"],
+            "checker-caused revision missing worker message",
+        )
+        ensure(
+            checker_revision_v1_result["worker_suggested_fix"],
+            "checker-caused revision missing suggested fix",
+        )
+        await assert_task_status(
+            client,
+            manager_token,
+            checker_revision_task["id"],
+            "needs_revision",
+        )
+        checker_revision_worker_run = await request_json(
+            client,
+            "GET",
+            f"/api/v1/checker-runs/{checker_revision_v1_run['id']}",
+            checker_revision_worker_token,
+        )
+        ensure(
+            "routing_recommendation" not in checker_revision_worker_run,
+            "worker saw internal revision route",
+        )
+        ensure(
+            "outcome_source" not in checker_revision_worker_run,
+            "worker saw internal revision outcome source",
+        )
+        ensure(
+            "artifact_hash_manifest" not in checker_revision_worker_run,
+            "worker saw revision artifact manifest",
+        )
+        checker_revision_worker_result = checker_result(
+            checker_revision_worker_run,
+            "check_low_quality_generated_artifacts",
+        )
+        ensure(
+            checker_revision_worker_result["id"],
+            "worker-visible revision result missing stable id",
+        )
+        ensure(
+            checker_revision_worker_result["status"] == "failed",
+            "worker-visible revision result status drifted",
+        )
+        ensure(
+            checker_revision_worker_result["severity"] == "high",
+            "worker-visible revision result severity drifted",
+        )
+        ensure(
+            checker_revision_worker_result["worker_message"],
+            "worker-visible revision result missing message",
+        )
+        ensure(
+            checker_revision_worker_result["worker_suggested_fix"],
+            "worker-visible revision result missing suggested fix",
+        )
+        checker_revision_audit = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{checker_revision_task['id']}/audit-events",
+            manager_token,
+        )
+        ensure(
+            any(
+                event["event_type"] == "pre_review_gate_needs_revision"
+                and event["event_payload"].get("checker_run_id")
+                == checker_revision_v1_run["id"]
+                and event["event_payload"].get("outcome_source") == "auto_checker"
+                and event["event_payload"].get("review_decision_id") is None
+                for event in checker_revision_audit
+            ),
+            "checker-caused revision audit event missing review_decision_id null",
+        )
+        await request_json(
+            client,
+            "POST",
+            "/api/v1/demo/worker-profile",
+            unassigned_worker_token,
+            {"skill_tags": ["stem", "proofs"]},
+            201,
+        )
+        denied_snapshot = await task_side_effect_snapshot(checker_revision_task["id"])
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submission-precheck",
+            unassigned_worker_token,
+            {"submission": submission_payload(run_id, "checker-intruder")},
+            404,
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submissions",
+            unassigned_worker_token,
+            submission_payload(run_id, "checker-intruder"),
+            404,
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submissions",
+            unassigned_worker_token,
+            expected_status=404,
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/checker-runs/{checker_revision_v1_run['id']}",
+            unassigned_worker_token,
+            expected_status=404,
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{checker_revision_task['id']}/audit-events",
+            unassigned_worker_token,
+            expected_status=404,
+        )
+        ensure(
+            await task_side_effect_snapshot(checker_revision_task["id"]) == denied_snapshot,
+            "denied non-owner calls created task side effects",
+        )
+
+        malicious_payload = submission_payload(run_id, "checker-malicious")
+        malicious_payload.update(
+            {
+                "allow_review": True,
+                "checker_retry": True,
+                "locked_guide_version": "v999",
+                "locked_pre_submit_checker_bundle_hash": "sha256:fake",
+                "locked_pre_submit_checker_policy_id": "fake-policy",
+                "outcome_source": "auto_checker",
+                "review_decision": "accept",
+                "review_decision_id": "fake-review-decision",
+                "routing_recommendation": "allow_review",
+                "task_setup_blocked": True,
+                "trigger_source": "submission_locked",
+            }
+        )
+        malicious_snapshot = await task_side_effect_snapshot(checker_revision_task["id"])
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submission-precheck",
+            checker_revision_worker_token,
+            {"submission": malicious_payload},
+            422,
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submissions",
+            checker_revision_worker_token,
+            malicious_payload,
+            422,
+        )
+        ensure(
+            await task_side_effect_snapshot(checker_revision_task["id"]) == malicious_snapshot,
+            "malicious internal-field payload created task side effects",
+        )
+
+        checker_revision_v2_payload = submission_payload(run_id, "checker-revision-v2")
+        checker_revision_v2_payload["summary"] = (
+            "Completed the project evaluation with task-specific final evidence."
+        )
+        checker_revision_v2_payload["artifact_hash_manifest"][0]["hash"] = sha256_token(
+            f"answer:checker-revision-v2-fixed:{run_id}"
+        )
+        checker_revision_v2_precheck = await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submission-precheck",
+            checker_revision_worker_token,
+            {"submission": checker_revision_v2_payload},
+        )
+        assert_pre_submit_checker_set(checker_revision_v2_precheck)
+        ensure(
+            checker_revision_v2_precheck["eligible_to_submit"] is True,
+            "fixed revision precheck should pass",
+        )
+        checker_revision_v2_submission = await request_json(
+            client,
+            "POST",
+            f"/api/v1/tasks/{checker_revision_task['id']}/submissions",
+            checker_revision_worker_token,
+            checker_revision_v2_payload,
+            201,
+        )
+        ensure(
+            checker_revision_v2_submission["version"] == 2,
+            "fixed revision did not create submission version 2",
+        )
+        ensure(
+            checker_revision_v2_submission["supersedes_submission_id"]
+            == checker_revision_v1_submission["id"],
+            "fixed revision did not supersede v1",
+        )
+        await request_json(
+            client,
+            "POST",
+            f"/api/v1/submissions/{checker_revision_v1_submission['id']}/checker-runs",
+            manager_token,
+            {"trigger_reason": "Week 2 stale revision retry"},
+            409,
+        )
+        checker_revision_v2_locked = await request_json(
+            client,
+            "POST",
+            f"/api/v1/submissions/{checker_revision_v2_submission['id']}/lock",
+            manager_token,
+        )
+        assert_locked_submission_response(checker_revision_v2_locked)
+        checker_revision_v2_run = await wait_for_submission_checker_run(
+            client,
+            manager_token,
+            checker_revision_v2_submission["id"],
+        )
+        assert_default_checker_set(checker_revision_v2_run)
+        ensure(
+            checker_revision_v2_run["routing_recommendation"] == "allow_review",
+            "fixed revision did not reach review",
+        )
+        ensure(
+            checker_revision_v2_run["outcome_source"] == "none",
+            "fixed revision outcome source drifted",
+        )
+        await assert_task_status(
+            client,
+            manager_token,
+            checker_revision_task["id"],
+            "review_pending",
+        )
+
         forbidden_worker_subject = f"week2-worker-forbidden-{run_id}"
         forbidden_worker_token = token_for(
             forbidden_worker_subject,
@@ -1428,7 +2063,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
             checker_result(setup_run, "check_acceptance_criteria_present")["status"] == "failed",
             "acceptance criteria checker did not fail",
         )
-        await assert_task_status(client, manager_token, setup_task["id"], "auto_checking")
+        await assert_task_status(client, manager_token, setup_task["id"], "evaluation_pending")
         worker_setup_run = await request_json(
             client,
             "GET",
@@ -1501,7 +2136,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "checker_run_id": clean_run["id"],
                 "locked_at": clean_locked["locked_at"],
                 "expected_route": "allow_review",
-                "expected_task_status": "review_pending",
+                "expected_final_task_status": "review_pending",
                 "expected_trigger_source": "submission_locked",
                 "expected_attempt": 1,
                 "expected_attempts": [1],
@@ -1509,6 +2144,10 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_current_run_id": clean_run["id"],
                 "expected_checkers": EXPECTED_DURABLE_CHECKERS,
                 "expected_gate_event": "pre_review_gate_passed",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                ],
             },
             {
                 "name": "warning",
@@ -1517,7 +2156,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "checker_run_id": warning_run["id"],
                 "locked_at": warning_locked["locked_at"],
                 "expected_route": "allow_review",
-                "expected_task_status": "review_pending",
+                "expected_final_task_status": "review_pending",
                 "expected_trigger_source": "submission_locked",
                 "expected_attempt": 1,
                 "expected_attempts": [1],
@@ -1525,6 +2164,72 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_current_run_id": warning_run["id"],
                 "expected_checkers": EXPECTED_DURABLE_CHECKERS,
                 "expected_gate_event": "pre_review_gate_passed",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                ],
+            },
+            {
+                "name": "trusted_retry",
+                "task_id": trusted_retry_task["id"],
+                "submission_id": trusted_retry_submission["id"],
+                "checker_run_id": trusted_retry_run["id"],
+                "locked_at": trusted_retry_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_final_task_status": "review_pending",
+                "expected_trigger_source": "manual_checker_trigger",
+                "expected_attempt": 2,
+                "expected_attempts": [1, 2],
+                "expected_current": True,
+                "expected_current_run_id": trusted_retry_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_passed",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                    ("review_pending", "evaluation_pending"),
+                ],
+            },
+            {
+                "name": "checker_caused_revision",
+                "task_id": checker_revision_task["id"],
+                "submission_id": checker_revision_v1_submission["id"],
+                "checker_run_id": checker_revision_v1_run["id"],
+                "locked_at": checker_revision_v1_locked["locked_at"],
+                "expected_route": "needs_revision",
+                "expected_final_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": checker_revision_v1_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_needs_revision",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "needs_revision"),
+                ],
+            },
+            {
+                "name": "fixed_resubmission",
+                "task_id": checker_revision_task["id"],
+                "submission_id": checker_revision_v2_submission["id"],
+                "checker_run_id": checker_revision_v2_run["id"],
+                "locked_at": checker_revision_v2_locked["locked_at"],
+                "expected_route": "allow_review",
+                "expected_final_task_status": "review_pending",
+                "expected_trigger_source": "submission_locked",
+                "expected_attempt": 1,
+                "expected_attempts": [1],
+                "expected_current": True,
+                "expected_current_run_id": checker_revision_v2_run["id"],
+                "expected_checkers": EXPECTED_DURABLE_CHECKERS,
+                "expected_gate_event": "pre_review_gate_passed",
+                "expected_task_transitions": [
+                    ("needs_revision", "submitted"),
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                ],
             },
             {
                 "name": "setup_blocked",
@@ -1533,7 +2238,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "checker_run_id": setup_run["id"],
                 "locked_at": setup_locked["locked_at"],
                 "expected_route": "task_setup_blocked",
-                "expected_task_status": "review_pending",
+                "expected_final_task_status": "review_pending",
                 "expected_trigger_source": "submission_locked",
                 "expected_attempt": 1,
                 "expected_attempts": [1, 2],
@@ -1541,6 +2246,10 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_current_run_id": retry["id"],
                 "expected_checkers": setup_checker_set,
                 "expected_gate_event": "pre_review_gate_blocked",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                ],
             },
             {
                 "name": "setup_retry",
@@ -1549,7 +2258,7 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "checker_run_id": retry["id"],
                 "locked_at": setup_locked["locked_at"],
                 "expected_route": "allow_review",
-                "expected_task_status": "review_pending",
+                "expected_final_task_status": "review_pending",
                 "expected_trigger_source": "manual_checker_trigger",
                 "expected_attempt": 2,
                 "expected_attempts": [1, 2],
@@ -1557,6 +2266,10 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
                 "expected_current_run_id": retry["id"],
                 "expected_checkers": setup_checker_set,
                 "expected_gate_event": "pre_review_gate_passed",
+                "expected_task_transitions": [
+                    ("submitted", "evaluation_pending"),
+                    ("evaluation_pending", "review_pending"),
+                ],
             },
         ]
     )
@@ -1569,8 +2282,11 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
     print("duplicate_artifact_integrity=pre_submit_blocked")
     print("weak_attestation=pre_submit_blocked")
     print("generated_output_warning=review_pending")
+    print("trusted_retry=review_pending->evaluation_pending->review_pending")
+    print("checker_caused_revision=needs_revision")
+    print("fixed_resubmission=review_pending")
     print("forbidden_path=pre_submit_blocked")
-    print("task_setup_blocked=auto_checking->review_pending")
+    print("task_setup_blocked=evaluation_pending->review_pending")
     print(f"clean_task_id={clean_task['id']}")
     print(f"clean_submission_id={clean_submission['id']}")
     print(f"missing_file_task_id={revision_task['id']}")
@@ -1578,6 +2294,11 @@ async def exercise_week2_api(base_url: str, env: dict[str, str]) -> None:
     print(f"integrity_task_id={integrity_task['id']}")
     print(f"attestation_task_id={attestation_task['id']}")
     print(f"warning_task_id={warning_task['id']}")
+    print(f"trusted_retry_task_id={trusted_retry_task['id']}")
+    print(f"trusted_retry_submission_id={trusted_retry_submission['id']}")
+    print(f"checker_revision_task_id={checker_revision_task['id']}")
+    print(f"checker_revision_v1_submission_id={checker_revision_v1_submission['id']}")
+    print(f"checker_revision_v2_submission_id={checker_revision_v2_submission['id']}")
     print(f"forbidden_task_id={forbidden_task['id']}")
     print(f"setup_task_id={setup_task['id']}")
 

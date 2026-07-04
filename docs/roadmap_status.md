@@ -90,9 +90,14 @@ Run from the backend directory against local Postgres:
 WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week2_api_e2e.py
 ```
 
-The script starts a real local API server, issues local Flow-compatible tokens, runs migrations forward, and exercises:
+The script starts a real local API server, issues local Flow-compatible tokens,
+runs migrations forward, and exercises:
 
-`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> pre_submission_checker_failed | Submit -> Lock submission -> Automatic checker run -> review_pending | checker-caused needs_revision | internal task_setup_blocked -> trusted checker retry`
+`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Pre-submit checks -> pre_submission_checker_failed | Submit -> Lock submission -> evaluation_pending -> review_pending | checker_caused_revision -> needs_revision -> fixed_resubmission -> evaluation_pending -> review_pending | internal task_setup_blocked -> trusted checker retry`
+
+It also proves older submissions remain immutable, non-owning worker calls create
+no task-side effects, malicious internal fields are rejected before persistence,
+and checker-caused `needs_revision` creates no human review decision.
 
 ## Deterministic Week 2 Closeout Gate
 

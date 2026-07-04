@@ -39,10 +39,10 @@ Future settlement rails such as ERC-8004, ERC-8183, x402, and OmniClaw remain ar
 Every feature must support the core lifecycle:
 
 ```text
-DRAFT -> SCREENING -> READY -> CLAIMED -> IN_PROGRESS -> SUBMITTED -> AUTO_CHECKING -> REVIEW_PENDING -> needs_revision | accepted work | rejected work
+DRAFT -> SCREENING -> READY -> CLAIMED -> IN_PROGRESS -> SUBMITTED -> EVALUATION_PENDING -> REVIEW_PENDING -> needs_revision | accepted work | rejected work
 ```
 
-`pre_review_gate` is the checker/audit phase that runs while the persisted task status is `AUTO_CHECKING`.
+`pre_review_gate` is the checker/audit phase that runs while the persisted task status is `evaluation_pending`.
 
 Payment status is separate:
 

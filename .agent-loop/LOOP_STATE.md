@@ -4,13 +4,13 @@
 
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: none
-- Active implementation chunk: `WS-POL-001-04`
-- Branch: `codex/ws-pol-001-04-post-submit-policy`
-- Status: `WS-POL-001-04` implementation, internal reviewer fanout, evidence, PR trust artifacts, external review, and CI are complete on PR #65
-- Last merged implementation SHA: `d1e80e3903038cb9c99aec9e83faf164a010c46d`
-- Last merge commit: `a73be67bf6c3c2ac0194f8aecbda89d748baa92c`
-- Current gate: user review of PR #65
-- Next chunk: inactive until `WS-POL-001-04` is reviewed and merged by the user
+- Active implementation chunk: `WS-POL-001-05`
+- Branch: `codex/ws-pol-001-05-revision-resubmission`
+- Status: `WS-POL-001-04` is merged to `main`; `WS-POL-001-05` implementation and deterministic proof are complete, with internal reviewer repair and re-review in progress
+- Last merged implementation SHA: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
+- Last merge commit: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
+- Current gate: `WS-POL-001-05` internal reviewer repair and re-review
+- Next chunk: inactive until `WS-POL-001-05` is implemented, reviewed, and merged by the user
 
 ## Operating Rule
 
@@ -27,9 +27,10 @@ not implement frontend behavior, payment, reputation, settlement, blockchain
 integrations, post-submit policy splitting, or revision resubmission drill
 behavior.
 
-The active `WS-POL-001-04` chunk splits post-submit checker policy provenance
-from pre-submit checker policy provenance. It must not implement human review
-decisions, revision resubmission, payment, reputation, blockchain integrations,
+The active `WS-POL-001-05` chunk proves checker-caused revision resubmission and
+the real API drill. It also replaces the legacy evaluation lifecycle status
+with `evaluation_pending` for the post-submission evaluation window. It must not
+implement human review decisions, payment, reputation, blockchain integrations,
 frontend behavior, or agent runtime redesign.
 
 ## Last Review State
@@ -51,3 +52,5 @@ frontend behavior, or agent runtime redesign.
 - `WS-POL-001-04` internal review evidence is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-internal-review-evidence.md`.
 - `WS-POL-001-04` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-pr-trust-bundle.md`.
 - `WS-POL-001-04` external review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-external-review-response.md`.
+- `WS-POL-001-04` merged to `main` before `WS-POL-001-05` started.
+- `WS-POL-001-05` started on branch `codex/ws-pol-001-05-revision-resubmission` after the user's explicit start signal.

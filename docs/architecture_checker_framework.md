@@ -125,9 +125,13 @@ Ensures the worker explicitly attests that the submission does not contain prohi
 
 Flags repeated low-quality generated patterns banned by project submission artifact policy, such as generic helper files, hidden-test leakage patterns, fabricated model files, placeholder evidence, or boilerplate reports that do not prove task-specific work.
 
+This checker produces warnings by default. If a project explicitly includes it
+in required post-submit checkers, matching low-quality signals become
+worker-fixable blocking failures and route the task to `needs_revision`.
+
 Revision closure, task lifecycle movement, task readiness, and pre-review routing are enforced as lifecycle guards in v0.1. They must not be configured as checker policy names until a registered checker exists for that contract.
 
-The pre-review gate is a checker execution phase. The persisted task status during this phase is `auto_checking`.
+The pre-review gate is a checker execution phase. The persisted task status during this phase is `evaluation_pending`.
 
 ## Gate Mapping
 
