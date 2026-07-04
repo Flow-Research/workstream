@@ -151,8 +151,8 @@ External review is tracked separately in:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | PR has not been opened yet for this chunk. |
-| GitHub checks | Pending | PR has not been opened yet for this chunk. |
+| CodeRabbit | Passed | Review completed with no actionable comments. |
+| GitHub checks | Passed | Agent Gates, Backend, and Week 1 API Demo UI passed. |
 
 Internal review evidence does not replace external review.
 

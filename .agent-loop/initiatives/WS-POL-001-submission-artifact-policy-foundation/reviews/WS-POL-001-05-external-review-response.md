@@ -14,7 +14,7 @@ CodeRabbit / GitHub checks / GitHub human review
 
 ## Summary
 
-External review is pending on PR #66. This file is intentionally separate from
+External review completed on PR #66. This file is intentionally separate from
 internal review evidence. Internal sub-agent review is tracked in
 `WS-POL-001-05-internal-review-evidence.md`.
 
@@ -22,12 +22,14 @@ internal review evidence. Internal sub-agent review is tracked in
 
 | Source | Finding | Severity | Status | Response |
 |---|---|---:|---:|---|
-| CodeRabbit | Pending PR review | N/A | Pending | Capture actionable comments here after CodeRabbit reviews PR #66. |
-| GitHub checks | Pending PR checks | N/A | Pending | Capture final workflow status here after GitHub Actions complete for PR #66. |
+| CodeRabbit | Review completed with no actionable comments | N/A | Passed | No code changes required. |
+| Agent Gates | GitHub Actions check | N/A | Passed | Completed successfully. |
+| Backend | GitHub Actions check | N/A | Passed | Completed successfully in 4m13s. |
+| Week 1 API Demo UI | GitHub Actions check | N/A | Passed | Completed successfully. |
 
 ## Fix Plan
 
-None yet.
+None.
 
 ## Out-Of-Scope Items To Defer
 
@@ -36,5 +38,12 @@ None.
 ## Evidence After Fixes
 
 ```bash
-External review pending on PR #66.
+gh pr checks 66 --watch --interval 10
+```
+
+```text
+CodeRabbit: passed
+Agent Gates: passed
+Backend: passed
+Week 1 API Demo UI: passed
 ```
