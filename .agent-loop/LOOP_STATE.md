@@ -6,11 +6,11 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-05`
 - Branch: `codex/ws-pol-001-05-revision-resubmission`
-- Status: `WS-POL-001-04` is merged to `main`; `WS-POL-001-05` implementation and deterministic proof are complete, with internal reviewer repair and re-review in progress
+- Status: `WS-POL-001-04` is merged to `main`; `WS-POL-001-05` implementation, deterministic proof, internal review, and trust bundle are complete; PR publication is next
 - Last merged implementation SHA: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
 - Last merge commit: `47e6fa48957853fb21ab049d0d505f37df7b24b6`
-- Current gate: `WS-POL-001-05` internal reviewer repair and re-review
-- Next chunk: inactive until `WS-POL-001-05` is implemented, reviewed, and merged by the user
+- Current gate: `WS-POL-001-05` PR publication and external review
+- Next chunk: inactive until `WS-POL-001-05` is externally reviewed and merged by the user
 
 ## Operating Rule
 
@@ -54,3 +54,7 @@ frontend behavior, or agent runtime redesign.
 - `WS-POL-001-04` external review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-04-external-review-response.md`.
 - `WS-POL-001-04` merged to `main` before `WS-POL-001-05` started.
 - `WS-POL-001-05` started on branch `codex/ws-pol-001-05-revision-resubmission` after the user's explicit start signal.
+- `WS-POL-001-05` reviewed implementation SHA: `5019afc57e7c6f5f7488f26a05b11c65a33e9f18`.
+- `WS-POL-001-05` internal review evidence is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-internal-review-evidence.md`.
+- `WS-POL-001-05` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-pr-trust-bundle.md`.
+- `WS-POL-001-05` external review response is tracked separately at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-05-external-review-response.md`.
