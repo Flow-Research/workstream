@@ -10,11 +10,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 965cbddd607e9ac7ef9b070e85bdeccd9cbefa48
+Reviewed code SHA: 1465ddb2c8c40eb3b7cc8f1e2befd3971cea53a5
 
-Reviewed at: 2026-07-07T18:26:47Z
+Reviewed at: 2026-07-07T18:40:28Z
 
-Reviewer run IDs: senior-engineering-review-019f3d21-2c35-7923-ad77-4e3aeefc653e, senior-engineering-rerun-019f3d2f-7f7d-7ec1-96c9-72ce50010243, senior-engineering-final-019f3dcf-c4a5-7e00-95bc-fd65855864d4, qa-test-review-019f3d21-36bb-7881-8b01-74405a83a9af, qa-test-final-019f3dcb-a346-7d52-ac31-e00053b0c81d, security-auth-review-019f3d21-3c05-7fe3-8c98-a88e15ee82ac, security-auth-rerun-019f3d2f-6ae2-7601-bf97-3e43070480c3, security-auth-final-019f3dcb-d1a9-7ed0-be64-b449f854ae9e, product-ops-review-019f3d21-46f2-7330-ab33-2e31a174a8c2, product-ops-rerun-019f3d2f-8d32-7232-ba81-d7b721bce0a5, product-ops-final-019f3dcc-0208-7c72-8896-8e0526be1904, architecture-review-019f3d21-502c-7331-adc0-8c50c43fad2c, architecture-rerun-019f3d2f-78ac-72d1-ba9b-146c4dc04ec6, architecture-final-019f3dcf-ee6a-7e60-aa73-b62d38ffab1d, docs-review-019f3d21-5ad7-7f20-9f77-0cc747ded03d, docs-final-019f3dcc-3de1-70e1-8320-91769dc877ac, reuse-dedup-review-019f3d2f-a189-70f2-ae58-836448d74835, reuse-dedup-final-019f3dd0-156e-7c93-9947-8631f68d5292, test-delta-review-019f3d2f-b8f5-7a00-88c8-ac5e54158b13, test-delta-rerun-019f3d3a-da3a-7372-9082-b41fa77b5236, test-delta-final-019f3dd0-3ee6-78a3-9a42-518bb77cf5ed
+Reviewer run IDs: senior-engineering-review-019f3d21-2c35-7923-ad77-4e3aeefc653e, senior-engineering-rerun-019f3d2f-7f7d-7ec1-96c9-72ce50010243, senior-engineering-final-019f3dcf-c4a5-7e00-95bc-fd65855864d4, qa-test-review-019f3d21-36bb-7881-8b01-74405a83a9af, qa-test-final-019f3dcb-a346-7d52-ac31-e00053b0c81d, security-auth-review-019f3d21-3c05-7fe3-8c98-a88e15ee82ac, security-auth-rerun-019f3d2f-6ae2-7601-bf97-3e43070480c3, security-auth-final-019f3dcb-d1a9-7ed0-be64-b449f854ae9e, product-ops-review-019f3d21-46f2-7330-ab33-2e31a174a8c2, product-ops-rerun-019f3d2f-8d32-7232-ba81-d7b721bce0a5, product-ops-final-019f3dcc-0208-7c72-8896-8e0526be1904, architecture-review-019f3d21-502c-7331-adc0-8c50c43fad2c, architecture-rerun-019f3d2f-78ac-72d1-ba9b-146c4dc04ec6, architecture-final-019f3dcf-ee6a-7e60-aa73-b62d38ffab1d, docs-review-019f3d21-5ad7-7f20-9f77-0cc747ded03d, docs-final-019f3dcc-3de1-70e1-8320-91769dc877ac, reuse-dedup-review-019f3d2f-a189-70f2-ae58-836448d74835, reuse-dedup-final-019f3dd0-156e-7c93-9947-8631f68d5292, test-delta-review-019f3d2f-b8f5-7a00-88c8-ac5e54158b13, test-delta-rerun-019f3d3a-da3a-7372-9082-b41fa77b5236, test-delta-final-019f3dd0-3ee6-78a3-9a42-518bb77cf5ed, test-delta-ci-fix-019f3ddf-a0e1-7563-8224-7fba49e5eb82
 
 After the reviewed SHA, only review evidence files changed.
 
@@ -60,7 +60,7 @@ Scope:
 - Addressed CodeRabbit's tautological `setup_run_id` assertion by comparing captured enqueue payloads to persisted `ProjectSetupRun.id` and recorded Celery task id.
 - Updated roadmap and loop status wording so PR #76 is represented as open and under human review, not merged.
 - Replaced raw unexpected worker exception logging with sanitized structured logging and added regression coverage for result, persisted setup-run error, and log output.
-- Added positive log-record assertions for the unexpected worker failure path.
+- Added deterministic positive logger assertions for the unexpected worker failure path.
 
 ## Commands Run
 
@@ -88,6 +88,7 @@ Results:
 - Final post-hardening targeted visibility tests: 2 passed in 38.57s.
 - API contract real API E2E: passed after final implementation changes.
 - CodeRabbit/security targeted regression tests: 3 passed in 29.13s on final local run.
+- CI-specific deterministic logger regression rerun: 3 passed in 50.76s locally.
 - Focused ruff check for worker/test changes: passed.
 - Final stale wording scan: passed.
 - Final Markdown link check: passed for 18 changed Markdown files.

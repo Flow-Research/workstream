@@ -53,7 +53,7 @@ Key results:
 - Full project suite: 206 passed before the last optional test hardening.
 - Final post-hardening visibility tests: 2 passed.
 - API contract real API E2E: passed.
-- External-review regression tests: 3 passed in 29.13s on final local run.
+- External-review regression tests: 3 passed in 50.76s on final local run after the CI-specific test fix.
 - Focused ruff check for worker/test changes: passed.
 - Final stale wording scan: passed.
 - Final Markdown link check: passed for 18 changed Markdown files.
@@ -81,6 +81,7 @@ CodeRabbit completed review on PR #76. Valid comments were addressed in
 - updated Chunk 12 roadmap/status wording to open PR #76 under human review
 - clarified the API contract drill wording
 - fixed the internal security finding on raw unexpected worker exception logs
+- fixed the CI failure by making the positive logger assertion deterministic
 
 ## Human Review Focus
 

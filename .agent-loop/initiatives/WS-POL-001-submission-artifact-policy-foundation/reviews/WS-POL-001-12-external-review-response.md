@@ -15,9 +15,13 @@
   `logger.exception`, which could leak raw exception text and tracebacks.
   Replaced it with sanitized structured logging and added regression coverage
   for task result, persisted setup-run state, and captured logs.
+- Internal test-delta review: the first positive log assertion relied on
+  `caplog` propagation and failed in GitHub Actions. Replaced it with a
+  deterministic monkeypatched `logger.error` capture that asserts the exact
+  structured payload and secret-free log data.
 - Internal docs/product review: trust evidence and status artifacts were stale
   after external-review fixes. Rebound internal evidence to reviewed code SHA
-  `965cbddd607e9ac7ef9b070e85bdeccd9cbefa48` and updated this response plus
+  `1465ddb2c8c40eb3b7cc8f1e2befd3971cea53a5` and updated this response plus
   the PR trust bundle.
 
 ## Comments Deferred
@@ -31,7 +35,7 @@ None for these comments. Human merge review is still required for PR #76.
 ## Commands Rerun
 
 - `cd backend && .venv/bin/pytest tests/test_projects.py::test_create_guide_autostart_enqueues_without_inline_agent_execution tests/test_projects.py::test_create_source_snapshot_autostart_enqueues_latest_snapshot tests/test_projects.py::test_project_setup_worker_unexpected_error_does_not_leak_raw_exception -q`
-  - Result: 3 passed in 29.13s on the final local run.
+  - Result: 3 passed in 50.76s on the final local run after the CI-specific test fix.
 - `cd backend && .venv/bin/python -m ruff check app/workers/project_setup.py tests/test_projects.py`
   - Result: passed.
 - `python3 scripts/check_stale_workstream_wording.py`
@@ -47,6 +51,7 @@ None for these comments. Human merge review is still required for PR #76.
   - docs: PASS after evidence artifacts are committed
   - reuse/dedup: PASS WITH LOW RISKS
   - test delta: PASS WITH LOW RISKS
+  - CI-specific test-delta rerun: PASS
 
 ## Remaining Risks
 
