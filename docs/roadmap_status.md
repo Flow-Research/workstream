@@ -44,6 +44,7 @@ Current phase: Week 3 review and revision preparation.
 - Chunk 10 checker trial with the expanded real API sample matrix, failure catalog, false-positive notes, missing-checker notes, and internal verifier evidence.
 - Week 2 real HTTP API drill through Flow-token auth, project/guide/task/submission lifecycle, pre-submit checks, automatic checker runs, `pre_submission_checker_failed` intake failures, worker redaction, internal `task_setup_blocked`, and trusted checker retry.
 - Chunk 11 actor identity/profile registry for verified Flow actors.
+- Chunk 12 project setup-run and project policy visibility APIs for setup runs, sufficiency reports, submission artifact policies, effective policy, and compiled project pre-submit checker policy.
 
 ## Review Tracks Closed
 
@@ -63,11 +64,9 @@ Current phase: Week 3 review and revision preparation.
 - Week 3 must keep review decisions canonical: `accept`, `needs_revision`, and `reject`.
 - `needs_revision` from human review must carry `outcome_source = human_review` and a review decision id; checker-caused `needs_revision` keeps `outcome_source = auto_checker`.
 - Review findings, revision replay, and reviewer-quality metrics are the next backend contracts to lock.
-- Chunk 12 project setup-run and project policy visibility APIs are implemented in open PR #76 and under human review.
-- Before the next Terminal Benchmark drill, operators need HTTP visibility for
-  setup runs, sufficiency reports, submission artifact policies, effective
-  policy, and compiled project pre-submit checker policy instead of direct DB
-  inspection.
+- Chunk 13 task context APIs are in progress to expose worker-safe work
+  context, exact submission requirements, and operator-only locked provenance
+  before rerunning the Terminal Benchmark drill.
 
 ## Pending Before Pilot
 
@@ -84,9 +83,9 @@ Run from the backend directory against local Postgres:
 WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/api_contract_e2e.py
 ```
 
-The script runs migrations forward and exercises project policy visibility plus the following flow:
+The script runs migrations forward and exercises project policy visibility plus task context APIs across the following flow:
 
-`Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Submit -> Lock submission`
+`Project -> Guide -> Task -> Screening -> Ready -> Work context -> Submission requirements -> Locked context -> Claim -> Start -> Submit -> Lock submission`
 
 ## Week 2 Real API Drill
 

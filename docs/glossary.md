@@ -116,6 +116,28 @@ The worker-facing domain error code returned when a submission-create attempt is
 
 A unit of work inside a project.
 
+## Task Work Context
+
+The worker-safe API projection of a task's locked guide, project summary,
+review policy, revision policy, payment policy, and lifecycle state. It is read
+from the task's stamped locked context and does not expose source snapshot
+hashes, private source/import refs, compiled checker bundles, checker configs,
+Celery ids, or setup errors.
+
+## Task Submission Requirements
+
+The worker-safe API projection of the task's locked effective project
+submission artifact policy. It tells the worker the exact required artifacts,
+evidence keys, forbidden artifact rules, storage reference rules, packaging
+rules, hash algorithm, size limits, and attestation terms before submission.
+
+## Task Locked Context
+
+The `admin` and `project_manager` API projection of a task's locked guide and
+policy provenance, including guide source snapshot id/hash, effective policy
+id/hash, pre-submit checker policy id/hash, post-submit checker policy
+id/hash/body summary, and review, revision, and payment policy versions.
+
 ## Task Contract
 
 The normalized task fields required for Workstream to screen, assign, check, review, pay, and audit work.

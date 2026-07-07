@@ -613,6 +613,14 @@ the work is split into another project/guide. The task stores
 `PreSubmitCheckerPolicy.compiled_bundle_hash`; it does not own a newly derived
 policy or newly compiled checker.
 
+Task context APIs read this already-stamped context. `work-context` and
+`submission-requirements` return task-visible worker-safe guide and requirement
+projections from the locked rows. `locked-context` is available only to
+token-authenticated `admin` and `project_manager` actors and exposes the full
+locked source snapshot, effective policy, pre-submit checker, post-submit
+checker, review, revision, and payment provenance. None of these reads
+recompute from the current active guide.
+
 Approval creates a project-scoped `PreSubmitCheckerPolicy` row with lifecycle
 status `compiled`. The trusted compiler writes the immutable `compiled_bundle`
 JSON and `compiled_bundle_hash` in the same approval path. The compiled bundle

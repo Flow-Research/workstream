@@ -155,6 +155,9 @@ Owns:
 - task requirements
 - task acceptance criteria
 - queue views
+- worker-safe task work context
+- worker-safe submission requirements derived from locked effective project policy
+- locked task provenance for `admin` and `project_manager` actors
 
 ### Submission Service
 

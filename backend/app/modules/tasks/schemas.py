@@ -180,10 +180,190 @@ class TaskResponse(BaseModel):
     acceptance_criteria: str | None
     rejection_criteria: str | None
     deadline_at: datetime | None
-    created_by: str
+    created_by: str | None
     assigned_to: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TaskProjectContext(BaseModel):
+    """Worker-safe project summary for a task context response."""
+
+    id: str
+    name: str
+    slug: str
+    description: str | None
+
+
+class TaskWorkerTaskContext(BaseModel):
+    """Worker-safe task summary for work-context responses."""
+
+    id: str
+    project_id: str
+    locked_guide_version: str
+    title: str
+    description: str
+    task_type: str | None
+    difficulty: str | None
+    skill_tags: list[str]
+    estimated_time_minutes: int | None
+    base_amount: Decimal | None
+    currency: str | None
+    payout_type: str | None
+    status: str
+    acceptance_criteria: str | None
+    rejection_criteria: str | None
+    deadline_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TaskGuideContext(BaseModel):
+    """Worker-safe guide material locked to a task."""
+
+    id: str
+    version: str
+    content_markdown: str
+    change_summary: str | None
+    effective_at: datetime | None
+
+
+class TaskReviewPolicyContext(BaseModel):
+    """Worker-safe review policy summary for the locked guide version."""
+
+    guide_version: str
+
+
+class TaskRevisionPolicyContext(BaseModel):
+    """Worker-safe revision policy summary for the locked guide version."""
+
+    guide_version: str
+
+
+class TaskPaymentPolicyContext(BaseModel):
+    """Worker-safe payment terms stamped onto the task at screening."""
+
+    guide_version: str
+    base_amount: Decimal | None
+    currency: str | None
+    payout_type: str | None
+
+
+class TaskWorkerLifecycleContext(BaseModel):
+    """Worker-facing lifecycle state for a task."""
+
+    status: str
+    assigned_to_current_actor: bool
+    can_run_pre_submit_check: bool
+    can_submit: bool
+    next_actions: list[str]
+
+
+class TaskWorkContextResponse(BaseModel):
+    """Worker-safe context needed before doing task work."""
+
+    task: TaskWorkerTaskContext
+    project: TaskProjectContext
+    guide: TaskGuideContext
+    review_policy: TaskReviewPolicyContext
+    revision_policy: TaskRevisionPolicyContext
+    payment_policy: TaskPaymentPolicyContext
+    lifecycle: TaskWorkerLifecycleContext
+
+
+class RequiredArtifactRequirement(BaseModel):
+    """Worker-facing required artifact rule from the locked effective policy."""
+
+    key: str
+    path: str
+    hash_required: bool
+    required: bool
+    description: str | None = None
+
+
+class RequiredEvidenceRequirement(BaseModel):
+    """Worker-facing required evidence rule from the locked effective policy."""
+
+    key: str
+    label: str
+    hash_required: bool
+    required: bool
+    description: str | None = None
+
+
+class ForbiddenArtifactRequirement(BaseModel):
+    """Worker-facing forbidden artifact rule from the locked effective policy."""
+
+    pattern: str
+    reason: str | None = None
+    worker_facing_fix: str | None = None
+    severity: str | None = None
+
+
+class StorageReferenceRules(BaseModel):
+    """Worker-facing storage-reference constraints for staged artifacts."""
+
+    allowed_storage_schemes: list[str]
+    allowed_uri_prefixes: list[str]
+    credentials_allowed: bool
+    query_strings_allowed: bool
+    fragments_allowed: bool
+    path_traversal_allowed: bool
+
+
+class SubmissionRequirementsResponse(BaseModel):
+    """Worker-safe exact submission requirements for a locked task."""
+
+    task_id: str
+    project_id: str
+    guide_version: str
+    policy_schema_version: str | None
+    merge_algorithm_version: str | None
+    required_packet_fields: list[str]
+    required_artifacts: list[RequiredArtifactRequirement]
+    required_evidence: list[RequiredEvidenceRequirement]
+    forbidden_artifacts: list[ForbiddenArtifactRequirement]
+    attestation_terms: list[str]
+    manifest_required: bool
+    artifact_hash_required: bool
+    artifact_hash_algorithm: Literal["sha256"]
+    allowed_storage_schemes: list[str]
+    storage_reference_rules: StorageReferenceRules
+    maximum_file_size_bytes: int | None
+    maximum_package_size_bytes: int | None
+    packaging: dict[str, Any]
+
+
+class PostSubmitPolicyBodySummary(BaseModel):
+    """Operator-facing summary of the locked post-submit checker policy body."""
+
+    schema_version: str | None
+    default_checkers: list[str]
+    required_checkers: list[str]
+    warning_checkers: list[str]
+    execution_checkers: list[str]
+    blocking_severities: list[str]
+
+
+class TaskLockedContextResponse(BaseModel):
+    """Operator-only locked provenance for a task."""
+
+    task_id: str
+    project_id: str
+    locked_guide_version: str
+    locked_guide_source_snapshot_id: str
+    locked_guide_source_snapshot_hash: str
+    locked_effective_project_submission_artifact_policy_id: str
+    locked_effective_project_submission_artifact_policy_hash: str
+    locked_pre_submit_checker_policy_id: str
+    locked_pre_submit_checker_bundle_hash: str
+    locked_post_submit_checker_policy_id: str
+    locked_post_submit_checker_policy_version: str
+    locked_post_submit_checker_policy_hash: str
+    locked_post_submit_checker_policy_body_summary: PostSubmitPolicyBodySummary
+    locked_review_policy_version: str
+    locked_revision_policy_version: str
+    locked_payment_policy_version: str
 
 
 class AssignmentResponse(BaseModel):

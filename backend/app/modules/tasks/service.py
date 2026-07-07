@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.hashing import canonical_json_hash
 from app.core.permissions import require_any_role
+from app.modules.checkers.compiler import (
+    PreSubmitCheckerCompilerError,
+    validate_compiled_pre_submit_checker_bundle,
+)
 from app.modules.actors.models import ActorProfile
 from app.modules.actors.service import ActorService
 from app.modules.projects.models import (
@@ -17,6 +24,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    Project,
     ProjectGuide,
     RevisionPolicy,
     ReviewPolicy,
@@ -47,10 +55,25 @@ from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.schemas import (
     AssignmentResponse,
     AuditEventResponse,
+    ForbiddenArtifactRequirement,
+    PostSubmitPolicyBodySummary,
+    RequiredArtifactRequirement,
+    RequiredEvidenceRequirement,
+    StorageReferenceRules,
     SubmissionCreate,
+    SubmissionRequirementsResponse,
     SubmissionResponse,
     TaskCreate,
+    TaskGuideContext,
+    TaskLockedContextResponse,
+    TaskPaymentPolicyContext,
+    TaskProjectContext,
     TaskResponse,
+    TaskReviewPolicyContext,
+    TaskRevisionPolicyContext,
+    TaskWorkerLifecycleContext,
+    TaskWorkerTaskContext,
+    TaskWorkContextResponse,
     TaskWithAssignmentResponse,
 )
 from app.schemas.auth import ActorContext
@@ -80,6 +103,28 @@ WORKER_REDACTED_AUDIT_EVENTS = {
     "pre_review_gate_needs_revision",
     "pre_review_gate_blocked",
 }
+SUBMISSION_CREATE_REQUIRED_PACKET_FIELDS = (
+    "summary",
+    "package_hash",
+    "artifact_hash_manifest",
+    "worker_attestation",
+)
+LOCKED_CONTEXT_REQUIRED_FIELDS = (
+    "locked_guide_version",
+    "locked_post_submit_checker_policy_id",
+    "locked_post_submit_checker_policy_version",
+    "locked_post_submit_checker_policy_hash",
+    "locked_post_submit_checker_policy_body",
+    "locked_review_policy_version",
+    "locked_revision_policy_version",
+    "locked_payment_policy_version",
+    "locked_guide_source_snapshot_id",
+    "locked_guide_source_snapshot_hash",
+    "locked_effective_project_submission_artifact_policy_id",
+    "locked_effective_project_submission_artifact_policy_hash",
+    "locked_pre_submit_checker_policy_id",
+    "locked_pre_submit_checker_bundle_hash",
+)
 
 
 class TaskServiceError(Exception):
@@ -160,6 +205,39 @@ class PreSubmissionCheckerFailed(TaskServiceError):
         """Create a pre-submit failure carrying structured checker feedback."""
         super().__init__(self.code)
         self.details = details
+
+
+class TaskLockedContextInvalid(TaskServiceError):
+    """Raised when a task's stamped policy provenance is missing or inconsistent."""
+
+    status_code = 422
+    code = "task_locked_context_invalid"
+
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
+        """Create a locked-context error with machine-readable details.
+
+        Args:
+            message: Human-readable error summary safe for API responses.
+            details: Optional structured error details.
+        """
+        super().__init__(message)
+        self.details = details or {"message": message}
+
+
+@dataclass(frozen=True)
+class LockedTaskContext:
+    """Validated records bound to one task's stamped locked context."""
+
+    project: Project
+    guide: ProjectGuide
+    source_snapshot: GuideSourceSnapshot
+    effective_policy: EffectiveProjectSubmissionArtifactPolicy
+    pre_submit_checker_policy: PreSubmitCheckerPolicy
+    post_submit_checker_policy: PostSubmitCheckerPolicy
+    locked_post_submit_policy_body: PostSubmitPolicyBodySummary
+    review_policy: ReviewPolicy
+    revision_policy: RevisionPolicy
+    payment_policy: PaymentPolicy
 
 
 class TaskService:
@@ -253,6 +331,80 @@ class TaskService:
         task = await self._get_task(task_id)
         await self._ensure_task_visible(actor, task)
         return self._task_response(actor, task)
+
+    async def get_task_work_context(
+        self,
+        actor: ActorContext,
+        task_id: str,
+    ) -> TaskWorkContextResponse:
+        """Return worker-safe work context from the task's locked provenance.
+
+        Args:
+            actor: Verified Flow actor context for the current request.
+            task_id: Task whose context should be returned.
+
+        Returns:
+            Worker-facing task, guide, policy, and lifecycle context.
+
+        Raises:
+            PermissionDenied: If the actor cannot view tasks.
+            TaskNotFound: If the task is unknown or hidden.
+            TaskLockedContextInvalid: If locked context is incomplete or stale.
+        """
+        require_any_role(actor, TASK_VIEW_ROLES)
+        task = await self._get_task(task_id)
+        await self._ensure_task_visible(actor, task)
+        context = await self._load_locked_task_context(task)
+        return self._work_context_response(actor, task, context)
+
+    async def get_task_submission_requirements(
+        self,
+        actor: ActorContext,
+        task_id: str,
+    ) -> SubmissionRequirementsResponse:
+        """Return exact worker submission requirements for a locked task.
+
+        Args:
+            actor: Verified Flow actor context for the current request.
+            task_id: Task whose locked requirements should be returned.
+
+        Returns:
+            Worker-facing submission artifact requirements.
+
+        Raises:
+            PermissionDenied: If the actor cannot view tasks.
+            TaskNotFound: If the task is unknown or hidden.
+            TaskLockedContextInvalid: If locked context is incomplete or stale.
+        """
+        require_any_role(actor, TASK_VIEW_ROLES)
+        task = await self._get_task(task_id)
+        await self._ensure_task_visible(actor, task)
+        context = await self._load_locked_task_context(task)
+        return self._submission_requirements_response(task, context)
+
+    async def get_task_locked_context(
+        self,
+        actor: ActorContext,
+        task_id: str,
+    ) -> TaskLockedContextResponse:
+        """Return operator-only locked provenance for a task.
+
+        Args:
+            actor: Verified Flow actor context for the current request.
+            task_id: Task whose locked provenance should be returned.
+
+        Returns:
+            Full locked guide and policy provenance for support/debugging.
+
+        Raises:
+            PermissionDenied: If the actor is not an operator.
+            TaskNotFound: If the task is unknown.
+            TaskLockedContextInvalid: If locked context is incomplete or stale.
+        """
+        require_any_role(actor, PROJECT_OPERATOR_ROLES)
+        task = await self._get_task(task_id)
+        context = await self._load_locked_task_context(task)
+        return self._locked_context_response(task, context)
 
     async def move_to_screening(
         self,
@@ -895,6 +1047,597 @@ class TaskService:
             pre_submit_checker_policy,
         )
 
+    async def _load_locked_task_context(self, task: WorkstreamTask) -> LockedTaskContext:
+        """Load and validate every row stamped into a task's locked context.
+
+        Args:
+            task: Task whose locked context is authoritative.
+
+        Returns:
+            Validated locked task context rows.
+
+        Raises:
+            TaskLockedContextInvalid: If any stamped row is missing, stale, or
+                inconsistent with the task's locked ids and hashes.
+        """
+        missing = self._missing_locked_context_fields(task)
+        if missing:
+            raise TaskLockedContextInvalid(
+                "task locked context is incomplete",
+                {"missing_fields": missing},
+            )
+
+        project = await self._project_repo.get_project(task.project_id)
+        guide = await self._project_repo.get_guide_by_version(
+            task.project_id,
+            task.locked_guide_version or "",
+        )
+        if project is None or guide is None or guide.project_id != task.project_id:
+            raise TaskLockedContextInvalid(
+                "task locked guide context is invalid",
+                {"field": "locked_guide_version"},
+            )
+
+        source_snapshot = await self._project_repo.get_guide_source_snapshot(
+            task.locked_guide_source_snapshot_id or "",
+        )
+        if (
+            source_snapshot is None
+            or source_snapshot.project_id != task.project_id
+            or source_snapshot.guide_version != task.locked_guide_version
+            or source_snapshot.bundle_hash != task.locked_guide_source_snapshot_hash
+            or canonical_json_hash(source_snapshot.manifest_json) != source_snapshot.bundle_hash
+        ):
+            raise TaskLockedContextInvalid(
+                "task locked guide source snapshot is invalid",
+                {"field": "locked_guide_source_snapshot_hash"},
+            )
+
+        effective_policy = (
+            await self._project_repo.get_effective_submission_artifact_policy_by_id(
+                task.locked_effective_project_submission_artifact_policy_id or "",
+            )
+        )
+        if (
+            effective_policy is None
+            or effective_policy.project_id != task.project_id
+            or effective_policy.guide_version != task.locked_guide_version
+            or effective_policy.source_snapshot_id != source_snapshot.id
+            or effective_policy.source_snapshot_hash != source_snapshot.bundle_hash
+            or effective_policy.effective_policy_hash
+            != task.locked_effective_project_submission_artifact_policy_hash
+            or effective_policy.lifecycle_status not in {"approved", "superseded"}
+            or canonical_json_hash(effective_policy.effective_policy)
+            != task.locked_effective_project_submission_artifact_policy_hash
+        ):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": "locked_effective_project_submission_artifact_policy_hash"},
+            )
+
+        pre_submit_checker_policy = await self._project_repo.get_pre_submit_checker_policy(
+            task.locked_pre_submit_checker_policy_id or "",
+        )
+        compiled_bundle = (
+            pre_submit_checker_policy.compiled_bundle
+            if pre_submit_checker_policy is not None
+            else None
+        )
+        if (
+            pre_submit_checker_policy is None
+            or pre_submit_checker_policy.project_id != task.project_id
+            or pre_submit_checker_policy.guide_version != task.locked_guide_version
+            or pre_submit_checker_policy.source_snapshot_id != source_snapshot.id
+            or pre_submit_checker_policy.source_snapshot_hash != source_snapshot.bundle_hash
+            or pre_submit_checker_policy.effective_policy_id != effective_policy.id
+            or pre_submit_checker_policy.effective_policy_hash
+            != effective_policy.effective_policy_hash
+            or pre_submit_checker_policy.lifecycle_status not in {"compiled", "superseded"}
+            or pre_submit_checker_policy.compiled_bundle_hash
+            != task.locked_pre_submit_checker_bundle_hash
+            or not isinstance(compiled_bundle, dict)
+            or canonical_json_hash(compiled_bundle) != task.locked_pre_submit_checker_bundle_hash
+        ):
+            raise TaskLockedContextInvalid(
+                "task locked project pre-submit checker policy is invalid",
+                {"field": "locked_pre_submit_checker_bundle_hash"},
+            )
+        try:
+            compiled_checker_names = validate_compiled_pre_submit_checker_bundle(
+                effective_policy.effective_policy,
+                effective_policy.effective_policy_hash,
+                compiled_bundle,
+                compiler_version=pre_submit_checker_policy.compiler_version,
+            )
+        except PreSubmitCheckerCompilerError as exc:
+            raise TaskLockedContextInvalid(
+                "task locked project pre-submit checker policy is invalid",
+                {"field": "locked_pre_submit_checker_bundle_hash"},
+            ) from exc
+        if list(pre_submit_checker_policy.checker_names or []) != compiled_checker_names:
+            raise TaskLockedContextInvalid(
+                "task locked project pre-submit checker projection is invalid",
+                {"field": "locked_pre_submit_checker_policy_id"},
+            )
+
+        post_submit_checker_policy = (
+            await self._project_repo.get_post_submit_checker_policy_by_id(
+                task.locked_post_submit_checker_policy_id or "",
+            )
+        )
+        if (
+            post_submit_checker_policy is None
+            or post_submit_checker_policy.project_id != task.project_id
+            or post_submit_checker_policy.guide_version
+            != task.locked_post_submit_checker_policy_version
+            or post_submit_checker_policy.guide_version != task.locked_guide_version
+            or post_submit_checker_policy.policy_hash
+            != task.locked_post_submit_checker_policy_hash
+        ):
+            raise TaskLockedContextInvalid(
+                "task locked post-submit checker policy is invalid",
+                {"field": "locked_post_submit_checker_policy_hash"},
+            )
+        try:
+            parsed_post_submit_body = parse_locked_post_submit_checker_policy_body(
+                task.locked_post_submit_checker_policy_body,
+                project_id=task.project_id,
+                guide_version=task.locked_post_submit_checker_policy_version or "",
+                policy_hash=task.locked_post_submit_checker_policy_hash or "",
+            )
+        except ValueError as exc:
+            raise TaskLockedContextInvalid(
+                "task locked post-submit checker policy body is invalid",
+                {"field": "locked_post_submit_checker_policy_body"},
+            ) from exc
+        post_submit_summary = PostSubmitPolicyBodySummary(
+            schema_version=(task.locked_post_submit_checker_policy_body or {}).get(
+                "schema_version"
+            ),
+            default_checkers=parsed_post_submit_body.default_checkers,
+            required_checkers=parsed_post_submit_body.required_checkers,
+            warning_checkers=parsed_post_submit_body.warning_checkers,
+            execution_checkers=parsed_post_submit_body.execution_checkers,
+            blocking_severities=parsed_post_submit_body.blocking_severities,
+        )
+
+        review_policy = await self._project_repo.get_review_policy(
+            task.project_id,
+            task.locked_review_policy_version or "",
+        )
+        revision_policy = await self._project_repo.get_revision_policy(
+            task.project_id,
+            task.locked_revision_policy_version or "",
+        )
+        payment_policy = await self._project_repo.get_payment_policy(
+            task.project_id,
+            task.locked_payment_policy_version or "",
+        )
+        if (
+            review_policy is None
+            or review_policy.guide_version != task.locked_guide_version
+            or revision_policy is None
+            or revision_policy.guide_version != task.locked_guide_version
+            or payment_policy is None
+            or payment_policy.guide_version != task.locked_guide_version
+        ):
+            raise TaskLockedContextInvalid(
+                "task locked review, revision, or payment policy is invalid",
+                {"field": "locked_policy_versions"},
+            )
+
+        return LockedTaskContext(
+            project=project,
+            guide=guide,
+            source_snapshot=source_snapshot,
+            effective_policy=effective_policy,
+            pre_submit_checker_policy=pre_submit_checker_policy,
+            post_submit_checker_policy=post_submit_checker_policy,
+            locked_post_submit_policy_body=post_submit_summary,
+            review_policy=review_policy,
+            revision_policy=revision_policy,
+            payment_policy=payment_policy,
+        )
+
+    def _missing_locked_context_fields(self, task: WorkstreamTask) -> list[str]:
+        """Return missing locked-context fields for a task."""
+        return [
+            field
+            for field in LOCKED_CONTEXT_REQUIRED_FIELDS
+            if not getattr(task, field)
+        ]
+
+    def _work_context_response(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+        context: LockedTaskContext,
+    ) -> TaskWorkContextResponse:
+        """Build the worker-safe work-context response."""
+        return TaskWorkContextResponse(
+            task=self._worker_safe_task_response(task),
+            project=TaskProjectContext(
+                id=context.project.id,
+                name=context.project.name,
+                slug=context.project.slug,
+                description=context.project.description,
+            ),
+            guide=TaskGuideContext(
+                id=context.guide.id,
+                version=context.guide.version,
+                content_markdown=context.guide.content_markdown,
+                change_summary=context.guide.change_summary,
+                effective_at=context.guide.effective_at,
+            ),
+            review_policy=TaskReviewPolicyContext(
+                guide_version=task.locked_review_policy_version or "",
+            ),
+            revision_policy=TaskRevisionPolicyContext(
+                guide_version=task.locked_revision_policy_version or "",
+            ),
+            payment_policy=TaskPaymentPolicyContext(
+                guide_version=task.locked_payment_policy_version or "",
+                base_amount=task.base_amount,
+                currency=task.currency,
+                payout_type=task.payout_type,
+            ),
+            lifecycle=self._worker_lifecycle_context(actor, task),
+        )
+
+    def _submission_requirements_response(
+        self,
+        task: WorkstreamTask,
+        context: LockedTaskContext,
+    ) -> SubmissionRequirementsResponse:
+        """Build worker-facing requirements from the locked effective policy."""
+        policy = context.effective_policy.effective_policy
+        if not isinstance(policy, dict):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": "effective_policy"},
+            )
+        allowed_storage_schemes = self._policy_string_list(
+            policy,
+            "allowed_storage_schemes",
+        )
+        required_artifacts = self._policy_list(policy, "required_artifacts")
+        required_evidence = self._policy_list(policy, "required_evidence")
+        forbidden_artifacts = self._policy_list(policy, "forbidden_artifacts")
+        return SubmissionRequirementsResponse(
+            task_id=task.id,
+            project_id=task.project_id,
+            guide_version=task.locked_guide_version or "",
+            policy_schema_version=self._optional_policy_text(policy, "schema_version"),
+            merge_algorithm_version=self._optional_policy_text(
+                policy,
+                "merge_algorithm_version",
+            ),
+            required_packet_fields=self._required_packet_fields(policy),
+            required_artifacts=[
+                RequiredArtifactRequirement(
+                    key=self._policy_rule_text(rule, "key", "required_artifacts"),
+                    path=self._policy_rule_text(rule, "path", "required_artifacts"),
+                    hash_required=self._policy_rule_bool(
+                        rule,
+                        "hash_required",
+                        "required_artifacts",
+                    ),
+                    required=self._policy_rule_bool(
+                        rule,
+                        "required",
+                        "required_artifacts",
+                    ),
+                    description=self._optional_policy_rule_text(
+                        rule,
+                        "description",
+                        "required_artifacts",
+                    ),
+                )
+                for rule in required_artifacts
+            ],
+            required_evidence=[
+                RequiredEvidenceRequirement(
+                    key=self._policy_rule_text(rule, "key", "required_evidence"),
+                    label=self._policy_rule_text(rule, "label", "required_evidence"),
+                    hash_required=self._policy_rule_bool(
+                        rule,
+                        "hash_required",
+                        "required_evidence",
+                    ),
+                    required=self._policy_rule_bool(
+                        rule,
+                        "required",
+                        "required_evidence",
+                    ),
+                    description=self._optional_policy_rule_text(
+                        rule,
+                        "description",
+                        "required_evidence",
+                    ),
+                )
+                for rule in required_evidence
+            ],
+            forbidden_artifacts=[
+                ForbiddenArtifactRequirement(
+                    pattern=self._policy_rule_text(rule, "pattern", "forbidden_artifacts"),
+                    reason=self._optional_policy_rule_text(
+                        rule,
+                        "reason",
+                        "forbidden_artifacts",
+                    ),
+                    worker_facing_fix=self._optional_policy_rule_text(
+                        rule,
+                        "worker_facing_fix",
+                        "forbidden_artifacts",
+                    ),
+                    severity=self._optional_policy_rule_text(
+                        rule,
+                        "severity",
+                        "forbidden_artifacts",
+                    ),
+                )
+                for rule in forbidden_artifacts
+            ],
+            attestation_terms=self._policy_string_list(policy, "attestation_terms"),
+            manifest_required=self._policy_bool(policy, "manifest_required"),
+            artifact_hash_required=self._policy_bool(policy, "artifact_hash_required"),
+            artifact_hash_algorithm="sha256",
+            allowed_storage_schemes=allowed_storage_schemes,
+            storage_reference_rules=StorageReferenceRules(
+                allowed_storage_schemes=allowed_storage_schemes,
+                allowed_uri_prefixes=[f"{scheme}://" for scheme in allowed_storage_schemes],
+                credentials_allowed=False,
+                query_strings_allowed=False,
+                fragments_allowed=False,
+                path_traversal_allowed=False,
+            ),
+            maximum_file_size_bytes=self._optional_policy_non_negative_int(
+                policy,
+                "maximum_file_size_bytes",
+            ),
+            maximum_package_size_bytes=self._optional_policy_non_negative_int(
+                policy,
+                "maximum_package_size_bytes",
+            ),
+            packaging=self._policy_object(policy, "packaging"),
+        )
+
+    def _policy_list(self, policy: dict[str, Any], field: str) -> list[Any]:
+        """Return a list field from the locked policy or fail closed."""
+        value = policy.get(field, [])
+        if not isinstance(value, list):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{field}"},
+            )
+        return value
+
+    def _policy_string_list(self, policy: dict[str, Any], field: str) -> list[str]:
+        """Return a string-list field from the locked policy or fail closed."""
+        values = self._policy_list(policy, field)
+        normalized: list[str] = []
+        for value in values:
+            if not isinstance(value, str) or not value.strip():
+                raise TaskLockedContextInvalid(
+                    "task locked effective project submission artifact policy is invalid",
+                    {"field": f"effective_policy.{field}"},
+                )
+            normalized.append(value.strip())
+        return normalized
+
+    def _policy_bool(self, policy: dict[str, Any], field: str) -> bool:
+        """Return a boolean field from the locked policy or fail closed."""
+        value = policy.get(field, True)
+        if not isinstance(value, bool):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{field}"},
+            )
+        return value
+
+    def _policy_object(self, policy: dict[str, Any], field: str) -> dict[str, Any]:
+        """Return an object field from the locked policy or fail closed."""
+        value = policy.get(field, {})
+        if not isinstance(value, dict):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{field}"},
+            )
+        return dict(value)
+
+    def _optional_policy_text(self, policy: dict[str, Any], field: str) -> str | None:
+        """Return an optional text field from the locked policy or fail closed."""
+        value = policy.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{field}"},
+            )
+        return value
+
+    def _optional_policy_non_negative_int(
+        self,
+        policy: dict[str, Any],
+        field: str,
+    ) -> int | None:
+        """Return an optional non-negative integer from the locked policy."""
+        value = policy.get(field)
+        if value is None:
+            return None
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{field}"},
+            )
+        return value
+
+    def _required_packet_fields(self, policy: dict[str, Any]) -> list[str]:
+        """Return exact submission packet fields required by API and policy."""
+        required_fields: list[str] = []
+        policy_fields = policy.get("required_packet_fields", [])
+        if not isinstance(policy_fields, list):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": "effective_policy.required_packet_fields"},
+            )
+        for field in (*SUBMISSION_CREATE_REQUIRED_PACKET_FIELDS, *policy_fields):
+            if not isinstance(field, str) or not field.strip():
+                raise TaskLockedContextInvalid(
+                    "task locked effective project submission artifact policy is invalid",
+                    {"field": "effective_policy.required_packet_fields"},
+                )
+            normalized = field.strip()
+            if normalized not in required_fields:
+                required_fields.append(normalized)
+        return required_fields
+
+    def _policy_rule_text(self, rule: object, key: str, collection: str) -> str:
+        """Return a required text field from a locked policy rule or fail closed."""
+        if not isinstance(rule, dict):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}"},
+            )
+        value = rule.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}.{key}"},
+            )
+        return value
+
+    def _optional_policy_rule_text(
+        self,
+        rule: object,
+        key: str,
+        collection: str,
+    ) -> str | None:
+        """Return an optional text field from a locked policy rule."""
+        if not isinstance(rule, dict):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}"},
+            )
+        value = rule.get(key)
+        if value is None:
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}.{key}"},
+            )
+        return value
+
+    def _policy_rule_bool(
+        self,
+        rule: object,
+        key: str,
+        collection: str,
+    ) -> bool:
+        """Return a boolean field from a locked policy rule or fail closed."""
+        if not isinstance(rule, dict):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}"},
+            )
+        value = rule.get(key, True)
+        if not isinstance(value, bool):
+            raise TaskLockedContextInvalid(
+                "task locked effective project submission artifact policy is invalid",
+                {"field": f"effective_policy.{collection}.{key}"},
+            )
+        return value
+
+    def _locked_context_response(
+        self,
+        task: WorkstreamTask,
+        context: LockedTaskContext,
+    ) -> TaskLockedContextResponse:
+        """Build the operator-only locked-context response."""
+        return TaskLockedContextResponse(
+            task_id=task.id,
+            project_id=task.project_id,
+            locked_guide_version=task.locked_guide_version or "",
+            locked_guide_source_snapshot_id=task.locked_guide_source_snapshot_id or "",
+            locked_guide_source_snapshot_hash=task.locked_guide_source_snapshot_hash or "",
+            locked_effective_project_submission_artifact_policy_id=(
+                task.locked_effective_project_submission_artifact_policy_id or ""
+            ),
+            locked_effective_project_submission_artifact_policy_hash=(
+                task.locked_effective_project_submission_artifact_policy_hash or ""
+            ),
+            locked_pre_submit_checker_policy_id=task.locked_pre_submit_checker_policy_id or "",
+            locked_pre_submit_checker_bundle_hash=(
+                task.locked_pre_submit_checker_bundle_hash or ""
+            ),
+            locked_post_submit_checker_policy_id=(
+                task.locked_post_submit_checker_policy_id or ""
+            ),
+            locked_post_submit_checker_policy_version=(
+                task.locked_post_submit_checker_policy_version or ""
+            ),
+            locked_post_submit_checker_policy_hash=(
+                task.locked_post_submit_checker_policy_hash or ""
+            ),
+            locked_post_submit_checker_policy_body_summary=(
+                context.locked_post_submit_policy_body
+            ),
+            locked_review_policy_version=task.locked_review_policy_version or "",
+            locked_revision_policy_version=task.locked_revision_policy_version or "",
+            locked_payment_policy_version=task.locked_payment_policy_version or "",
+        )
+
+    def _worker_safe_task_response(self, task: WorkstreamTask) -> TaskWorkerTaskContext:
+        """Build a task summary without private source/import provenance."""
+        return TaskWorkerTaskContext(
+            id=task.id,
+            project_id=task.project_id,
+            locked_guide_version=task.locked_guide_version or "",
+            title=task.title,
+            description=task.description,
+            task_type=task.task_type,
+            difficulty=task.difficulty,
+            skill_tags=list(task.skill_tags),
+            estimated_time_minutes=task.estimated_time_minutes,
+            base_amount=task.base_amount,
+            currency=task.currency,
+            payout_type=task.payout_type,
+            status=task.status,
+            acceptance_criteria=task.acceptance_criteria,
+            rejection_criteria=task.rejection_criteria,
+            deadline_at=task.deadline_at,
+            created_at=task.created_at,
+            updated_at=task.updated_at,
+        )
+
+    def _worker_lifecycle_context(
+        self,
+        actor: ActorContext,
+        task: WorkstreamTask,
+    ) -> TaskWorkerLifecycleContext:
+        """Build worker-facing lifecycle booleans and next actions."""
+        assigned_to_current_actor = task.assigned_to == actor.actor_id
+        can_submit = assigned_to_current_actor and task.status in {
+            TASK_STATUS_IN_PROGRESS,
+            TASK_STATUS_NEEDS_REVISION,
+        }
+        next_actions: list[str] = []
+        if task.status == TASK_STATUS_READY and task.assigned_to is None:
+            next_actions.append("claim")
+        elif task.status == TASK_STATUS_CLAIMED and assigned_to_current_actor:
+            next_actions.append("start")
+        elif can_submit:
+            next_actions.extend(["run_pre_submit_check", "submit"])
+        return TaskWorkerLifecycleContext(
+            status=task.status,
+            assigned_to_current_actor=assigned_to_current_actor,
+            can_run_pre_submit_check=can_submit,
+            can_submit=can_submit,
+            next_actions=next_actions,
+        )
+
     def _validate_task_contract_fields(self, task: WorkstreamTask) -> None:
         """Validate task source and reviewability fields before screening.
 
@@ -992,26 +1735,7 @@ class TaskService:
         Raises:
             TaskTransitionBlocked: If any context field is missing.
         """
-        missing = [
-            field
-            for field in (
-                "locked_guide_version",
-                "locked_post_submit_checker_policy_id",
-                "locked_post_submit_checker_policy_version",
-                "locked_post_submit_checker_policy_hash",
-                "locked_post_submit_checker_policy_body",
-                "locked_review_policy_version",
-                "locked_revision_policy_version",
-                "locked_payment_policy_version",
-                "locked_guide_source_snapshot_id",
-                "locked_guide_source_snapshot_hash",
-                "locked_effective_project_submission_artifact_policy_id",
-                "locked_effective_project_submission_artifact_policy_hash",
-                "locked_pre_submit_checker_policy_id",
-                "locked_pre_submit_checker_bundle_hash",
-            )
-            if not getattr(task, field)
-        ]
+        missing = self._missing_locked_context_fields(task)
         if missing:
             raise TaskTransitionBlocked(f"task missing locked context: {', '.join(missing)}")
 
@@ -1195,6 +1919,12 @@ class TaskService:
         """
         response = TaskResponse.model_validate(task)
         if not set(actor.roles).intersection(PROJECT_OPERATOR_ROLES):
+            response.source_ref = None
+            response.source_payload_hash = None
+            response.import_batch_id = None
+            response.external_task_id = None
+            response.created_by = None
+            response.assigned_to = None
             response.locked_guide_source_snapshot_id = None
             response.locked_guide_source_snapshot_hash = None
             response.locked_effective_project_submission_artifact_policy_id = None

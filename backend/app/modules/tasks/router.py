@@ -16,10 +16,13 @@ from app.modules.actors.service import ActorRegistryError, ActorService
 from app.modules.tasks.schemas import (
     AuditEventResponse,
     SubmissionCreate,
+    SubmissionRequirementsResponse,
     SubmissionResponse,
     TaskCreate,
+    TaskLockedContextResponse,
     TaskResponse,
     TaskTransitionRequest,
+    TaskWorkContextResponse,
     TaskWithAssignmentResponse,
 )
 from app.modules.tasks.service import TaskService, TaskServiceError
@@ -27,7 +30,7 @@ from app.schemas.auth import ActorContext
 
 router = APIRouter(tags=["tasks"])
 
-DOMAIN_ERROR_RESPONSE_SCHEMA = {
+PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
     "oneOf": [
         {
             "type": "object",
@@ -36,6 +39,23 @@ DOMAIN_ERROR_RESPONSE_SCHEMA = {
                 "code": {
                     "type": "string",
                     "enum": ["pre_submission_checker_failed"],
+                },
+                "details": {"type": "object"},
+            },
+            "additionalProperties": False,
+        },
+        {"$ref": "#/components/schemas/HTTPValidationError"},
+    ]
+}
+TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA = {
+    "oneOf": [
+        {
+            "type": "object",
+            "required": ["code", "details"],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "enum": ["task_locked_context_invalid"],
                 },
                 "details": {"type": "object"},
             },
@@ -141,6 +161,99 @@ async def get_task(
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
     except TaskServiceError as exc:
+        raise task_http_error(exc) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/work-context",
+    response_model=TaskWorkContextResponse,
+    response_model_exclude_none=True,
+    responses={
+        422: {
+            "description": "Locked task context is missing or inconsistent.",
+            "content": {
+                "application/json": {
+                    "schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA
+                }
+            },
+        }
+    },
+)
+async def get_task_work_context(
+    task_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> TaskWorkContextResponse | JSONResponse:
+    """Return worker-safe locked guide, policy, and lifecycle context."""
+    try:
+        return await TaskService(session).get_task_work_context(actor, task_id)
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except TaskServiceError as exc:
+        if getattr(exc, "code", None) is not None:
+            return task_domain_error_response(exc)
+        raise task_http_error(exc) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/submission-requirements",
+    response_model=SubmissionRequirementsResponse,
+    response_model_exclude_none=True,
+    responses={
+        422: {
+            "description": "Locked task context is missing or inconsistent.",
+            "content": {
+                "application/json": {
+                    "schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA
+                }
+            },
+        }
+    },
+)
+async def get_task_submission_requirements(
+    task_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubmissionRequirementsResponse | JSONResponse:
+    """Return exact worker submission requirements from locked policy context."""
+    try:
+        return await TaskService(session).get_task_submission_requirements(actor, task_id)
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except TaskServiceError as exc:
+        if getattr(exc, "code", None) is not None:
+            return task_domain_error_response(exc)
+        raise task_http_error(exc) from exc
+
+
+@router.get(
+    "/tasks/{task_id}/locked-context",
+    response_model=TaskLockedContextResponse,
+    response_model_exclude_none=True,
+    responses={
+        422: {
+            "description": "Locked task context is missing or inconsistent.",
+            "content": {
+                "application/json": {
+                    "schema": TASK_LOCKED_CONTEXT_DOMAIN_ERROR_RESPONSE_SCHEMA
+                }
+            },
+        }
+    },
+)
+async def get_task_locked_context(
+    task_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> TaskLockedContextResponse | JSONResponse:
+    """Return operator-only locked task provenance."""
+    try:
+        return await TaskService(session).get_task_locked_context(actor, task_id)
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except TaskServiceError as exc:
+        if getattr(exc, "code", None) is not None:
+            return task_domain_error_response(exc)
         raise task_http_error(exc) from exc
 
 
@@ -250,7 +363,7 @@ async def start_task(
             "description": "Pre-submit domain failure or request validation error.",
             "content": {
                 "application/json": {
-                    "schema": DOMAIN_ERROR_RESPONSE_SCHEMA,
+                    "schema": PRE_SUBMIT_DOMAIN_ERROR_RESPONSE_SCHEMA,
                 }
             },
         }

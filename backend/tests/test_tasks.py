@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -29,8 +30,12 @@ from app.modules.actors.schemas import ActorProfileActivationRequest
 from app.modules.actors.service import ActorService
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
+    GuideSourceSnapshot,
+    PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    ReviewPolicy,
+    RevisionPolicy,
     SubmissionArtifactPolicy,
 )
 from app.modules.tasks.lifecycle import InvalidTaskTransition, ensure_allowed_transition
@@ -255,6 +260,7 @@ async def create_policy_bundle_for_guide(
     client: AsyncClient,
     project_id: str,
     guide_id: str,
+    policy_body: dict | None = None,
 ) -> dict:
     snapshot_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
@@ -292,7 +298,7 @@ async def create_policy_bundle_for_guide(
         json={
             "source_snapshot_id": snapshot["id"],
             "policy_version": "v1",
-            "policy_body": policy_body_for_task_tests(),
+            "policy_body": policy_body or policy_body_for_task_tests(),
         },
     )
     assert policy_response.status_code == 201, policy_response.text
@@ -611,6 +617,19 @@ def test_submission_create_openapi_documents_domain_error() -> None:
     assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
     domain_schema = next(option for option in response_422["oneOf"] if "properties" in option)
     assert domain_schema["properties"]["code"]["enum"] == ["pre_submission_checker_failed"]
+    assert "details" in domain_schema["properties"]
+
+
+def test_task_context_openapi_documents_locked_context_domain_error() -> None:
+    schema = create_app().openapi()
+    responses = schema["paths"]["/api/v1/tasks/{task_id}/work-context"]["get"][
+        "responses"
+    ]
+    response_422 = responses["422"]["content"]["application/json"]["schema"]
+
+    assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
+    domain_schema = next(option for option in response_422["oneOf"] if "properties" in option)
+    assert domain_schema["properties"]["code"]["enum"] == ["task_locked_context_invalid"]
     assert "details" in domain_schema["properties"]
 
 
@@ -1080,7 +1099,10 @@ async def test_worker_task_response_redacts_locked_policy_hashes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     project = await create_active_project(task_client)
-    ready_task = await create_ready_task(task_client, project["id"])
+    payload = complete_task_payload()
+    payload["import_batch_id"] = "private-import-batch"
+    payload["external_task_id"] = "private-external-task"
+    ready_task = await create_ready_task(task_client, project["id"], payload=payload)
     operator_response = await task_client.get(
         f"/api/v1/tasks/{ready_task['id']}",
         headers=auth_headers(),
@@ -1110,8 +1132,427 @@ async def test_worker_task_response_redacts_locked_policy_hashes(
         "locked_post_submit_checker_policy_version",
         "locked_post_submit_checker_policy_hash",
         "locked_post_submit_checker_policy_body",
+        "source_ref",
+        "source_payload_hash",
+        "import_batch_id",
+        "external_task_id",
+        "created_by",
+        "assigned_to",
     ):
         assert internal_field not in body
+
+
+async def test_task_context_apis_return_worker_requirements_and_operator_provenance(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    payload = complete_task_payload()
+    payload["import_batch_id"] = "private-import-batch"
+    payload["external_task_id"] = "private-external-task"
+    started_task = await create_started_task(task_client, project["id"], monkeypatch, payload=payload)
+
+    work_context = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+    assert work_context.status_code == 200, work_context.text
+    work_body = work_context.json()
+    assert work_body["task"]["locked_guide_version"] == "v1"
+    assert work_body["guide"]["version"] == "v1"
+    assert "# Task Guide v1" in work_body["guide"]["content_markdown"]
+    assert work_body["payment_policy"]["base_amount"] == "25.00"
+    assert work_body["lifecycle"]["can_submit"] is True
+    worker_context_json = json.dumps(work_body, sort_keys=True)
+    for internal_field in (
+        "locked_guide_source_snapshot_hash",
+        "locked_effective_project_submission_artifact_policy_hash",
+        "locked_pre_submit_checker_bundle_hash",
+        "compiled_bundle",
+        "checker_configs",
+    ):
+        assert internal_field not in worker_context_json
+    for private_field in (
+        "source_ref",
+        "source_payload_hash",
+        "import_batch_id",
+        "external_task_id",
+        "created_by",
+        "assigned_to",
+    ):
+        assert private_field not in work_body["task"]
+
+    requirements = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/submission-requirements",
+        headers=auth_headers(),
+    )
+    assert requirements.status_code == 200, requirements.text
+    requirements_body = requirements.json()
+    assert requirements_body["guide_version"] == "v1"
+    assert requirements_body["required_packet_fields"] == [
+        "summary",
+        "package_hash",
+        "artifact_hash_manifest",
+        "worker_attestation",
+    ]
+    assert requirements_body["required_artifacts"] == [
+        {
+            "key": "answer",
+            "path": "answer.md",
+            "hash_required": True,
+            "required": True,
+            "description": "Main task answer.",
+        }
+    ]
+    assert requirements_body["required_evidence"] == [
+        {
+            "key": "checker_log",
+            "label": "checker log",
+            "hash_required": True,
+            "required": True,
+            "description": "Evidence used by the reviewer.",
+        }
+    ]
+    assert requirements_body["artifact_hash_algorithm"] == "sha256"
+    assert set(requirements_body["allowed_storage_schemes"]) == {"local", "s3", "r2"}
+    assert requirements_body["storage_reference_rules"]["credentials_allowed"] is False
+    assert requirements_body["storage_reference_rules"]["query_strings_allowed"] is False
+    requirements_json = json.dumps(requirements_body, sort_keys=True)
+    for internal_field in (
+        "source_snapshot_hash",
+        "compiled_bundle",
+        "checker_configs",
+        "celery",
+    ):
+        assert internal_field not in requirements_json
+    assert "source" not in requirements_body["forbidden_artifacts"][0]
+
+    worker_locked_context = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        headers=auth_headers(),
+    )
+    assert worker_locked_context.status_code == 403
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    locked_context = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/locked-context",
+        headers=auth_headers(),
+    )
+    assert locked_context.status_code == 200, locked_context.text
+    locked_body = locked_context.json()
+    assert locked_body["locked_guide_version"] == "v1"
+    assert locked_body["locked_guide_source_snapshot_hash"].startswith("sha256:")
+    assert locked_body[
+        "locked_effective_project_submission_artifact_policy_hash"
+    ].startswith("sha256:")
+    assert locked_body["locked_pre_submit_checker_bundle_hash"].startswith("sha256:")
+    assert locked_body["locked_post_submit_checker_policy_hash"].startswith("sha256:")
+    assert locked_body["locked_post_submit_checker_policy_body_summary"][
+        "required_checkers"
+    ] == ["check_policy_context_present"]
+
+
+async def test_ready_worker_work_context_omits_private_task_source_fields(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    payload = complete_task_payload()
+    payload["import_batch_id"] = "ready-private-import"
+    payload["external_task_id"] = "ready-private-external"
+    ready_task = await create_ready_task(task_client, project["id"], payload)
+    await seed_worker_profile("worker-one")
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+
+    response = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["lifecycle"]["next_actions"] == ["claim"]
+    for private_field in (
+        "source_ref",
+        "source_payload_hash",
+        "import_batch_id",
+        "external_task_id",
+        "created_by",
+        "assigned_to",
+    ):
+        assert private_field not in body["task"]
+
+
+async def test_work_context_uses_stamped_policy_values_after_same_version_policy_mutation(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    before_response = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+    assert before_response.status_code == 200, before_response.text
+    before = before_response.json()
+
+    async with db_session.get_session_factory()() as session:
+        review_policy = await session.scalar(
+            select(ReviewPolicy).where(
+                ReviewPolicy.project_id == project["id"],
+                ReviewPolicy.guide_version == "v1",
+            )
+        )
+        revision_policy = await session.scalar(
+            select(RevisionPolicy).where(
+                RevisionPolicy.project_id == project["id"],
+                RevisionPolicy.guide_version == "v1",
+            )
+        )
+        payment_policy = await session.scalar(
+            select(PaymentPolicy).where(
+                PaymentPolicy.project_id == project["id"],
+                PaymentPolicy.guide_version == "v1",
+            )
+        )
+        assert review_policy is not None
+        assert revision_policy is not None
+        assert payment_policy is not None
+        review_policy.requires_second_review = True
+        review_policy.allowed_decisions = ["reject"]
+        revision_policy.max_revision_rounds = 1
+        revision_policy.revision_deadline_hours = 1
+        payment_policy.base_amount = Decimal("999.00")
+        payment_policy.currency = "EUR"
+        payment_policy.payout_type = "manual"
+        await session.commit()
+
+    after_response = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+
+    assert after_response.status_code == 200, after_response.text
+    after = after_response.json()
+    assert after["review_policy"] == before["review_policy"]
+    assert after["revision_policy"] == before["revision_policy"]
+    assert after["payment_policy"] == before["payment_policy"]
+    assert after["payment_policy"]["base_amount"] == "25.00"
+    assert after["payment_policy"]["currency"] == "USD"
+    assert after["payment_policy"]["payout_type"] == "fixed"
+
+
+async def test_task_context_apis_fail_closed_when_locked_context_is_missing(
+    task_client: AsyncClient,
+) -> None:
+    project = await create_active_project(task_client)
+    task = await create_draft_task(task_client, project["id"])
+
+    response = await task_client.get(
+        f"/api/v1/tasks/{task['id']}/submission-requirements",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "task_locked_context_invalid"
+    assert "locked_guide_version" in response.json()["details"]["missing_fields"]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "source_snapshot_manifest",
+        "effective_policy_body",
+        "pre_submit_bundle",
+        "post_submit_body",
+    ],
+)
+async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
+    task_client: AsyncClient,
+    mutation: str,
+) -> None:
+    project = await create_active_project(task_client)
+    ready_task = await create_ready_task(task_client, project["id"])
+
+    async with db_session.get_session_factory()() as session:
+        persisted_task = await session.get(WorkstreamTask, ready_task["id"])
+        assert persisted_task is not None
+        if mutation == "source_snapshot_manifest":
+            snapshot = await session.get(
+                GuideSourceSnapshot,
+                persisted_task.locked_guide_source_snapshot_id,
+            )
+            assert snapshot is not None
+            snapshot.manifest_json = {**snapshot.manifest_json, "tampered": True}
+        elif mutation == "effective_policy_body":
+            effective_policy = await session.get(
+                EffectiveProjectSubmissionArtifactPolicy,
+                persisted_task.locked_effective_project_submission_artifact_policy_id,
+            )
+            assert effective_policy is not None
+            effective_policy.effective_policy = {
+                **effective_policy.effective_policy,
+                "required_artifacts": [],
+            }
+        elif mutation == "pre_submit_bundle":
+            pre_submit_policy = await session.get(
+                PreSubmitCheckerPolicy,
+                persisted_task.locked_pre_submit_checker_policy_id,
+            )
+            assert pre_submit_policy is not None
+            pre_submit_policy.compiled_bundle = {
+                **pre_submit_policy.compiled_bundle,
+                "rules": [],
+            }
+        else:
+            persisted_task.locked_post_submit_checker_policy_body = {
+                **persisted_task.locked_post_submit_checker_policy_body,
+                "blocking_severities": [],
+            }
+        await session.commit()
+
+    response = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "task_locked_context_invalid"
+
+
+async def test_submission_requirements_fail_closed_on_hash_consistent_malformed_policy_shape(
+    task_client: AsyncClient,
+) -> None:
+    project = await create_active_project(task_client)
+    async with db_session.get_session_factory()() as session:
+        effective_policy = await session.scalar(
+            select(EffectiveProjectSubmissionArtifactPolicy).where(
+                EffectiveProjectSubmissionArtifactPolicy.project_id == project["id"],
+                EffectiveProjectSubmissionArtifactPolicy.guide_version == "v1",
+                EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
+            )
+        )
+        assert effective_policy is not None
+        pre_submit_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy.id,
+                PreSubmitCheckerPolicy.lifecycle_status == "compiled",
+            )
+        )
+        assert pre_submit_policy is not None
+        replacement_checker_names = list(pre_submit_policy.checker_names)
+        replacement_checker_configs = dict(pre_submit_policy.checker_configs)
+        compiler_version = pre_submit_policy.compiler_version
+        await session.delete(pre_submit_policy)
+        await session.flush()
+
+        malformed_policy = {
+            **effective_policy.effective_policy,
+            "schema_version": ["not", "a", "string"],
+        }
+        malformed_policy_hash = canonical_json_hash(malformed_policy)
+        malformed_bundle = {
+            **pre_submit_policy.compiled_bundle,
+            "effective_policy_hash": malformed_policy_hash,
+        }
+        malformed_bundle_hash = canonical_json_hash(malformed_bundle)
+
+        effective_policy.effective_policy = malformed_policy
+        effective_policy.effective_policy_hash = malformed_policy_hash
+        session.add(
+            PreSubmitCheckerPolicy(
+                id=str(uuid4()),
+                project_id=effective_policy.project_id,
+                guide_id=effective_policy.guide_id,
+                guide_version=effective_policy.guide_version,
+                source_snapshot_id=effective_policy.source_snapshot_id,
+                source_snapshot_hash=effective_policy.source_snapshot_hash,
+                effective_policy_id=effective_policy.id,
+                effective_policy_hash=malformed_policy_hash,
+                lifecycle_status="compiled",
+                compiler_version=compiler_version,
+                compiled_bundle=malformed_bundle,
+                compiled_bundle_hash=malformed_bundle_hash,
+                checker_names=replacement_checker_names,
+                checker_configs=replacement_checker_configs,
+                created_by="test",
+            )
+        )
+        await session.commit()
+
+    ready_task = await create_ready_task(task_client, project["id"])
+    response = await task_client.get(
+        f"/api/v1/tasks/{ready_task['id']}/submission-requirements",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["code"] == "task_locked_context_invalid"
+    assert body["details"]["field"] == "effective_policy.schema_version"
+
+
+async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+
+    v1_requirements = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/submission-requirements",
+        headers=auth_headers(),
+    )
+    assert v1_requirements.status_code == 200, v1_requirements.text
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    guide_v2 = await task_client.post(
+        f"/api/v1/projects/{project['id']}/guides",
+        headers=auth_headers(),
+        json=complete_guide_payload("v2"),
+    )
+    assert guide_v2.status_code == 201, guide_v2.text
+    policy_v2 = policy_body_for_task_tests()
+    policy_v2["required_artifacts"] = [
+        {
+            "key": "v2_answer",
+            "path": "v2-answer.md",
+            "hash_required": True,
+            "required": True,
+            "description": "New v2 artifact.",
+        }
+    ]
+    await create_policy_bundle_for_guide(
+        task_client,
+        project["id"],
+        guide_v2.json()["id"],
+        policy_v2,
+    )
+    activate_v2 = await task_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide_v2.json()['id']}/activate",
+        headers=auth_headers(),
+    )
+    assert activate_v2.status_code == 200, activate_v2.text
+    assert activate_v2.json()["guide"]["version"] == "v2"
+
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    work_context = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+    requirements = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/submission-requirements",
+        headers=auth_headers(),
+    )
+
+    assert work_context.status_code == 200, work_context.text
+    assert requirements.status_code == 200, requirements.text
+    assert work_context.json()["guide"]["version"] == "v1"
+    assert requirements.json()["guide_version"] == "v1"
+    assert requirements.json()["required_artifacts"] == v1_requirements.json()[
+        "required_artifacts"
+    ]
+    assert requirements.json()["required_artifacts"][0]["path"] == "answer.md"
 
 
 async def test_tasks_under_same_active_guide_share_project_pre_submit_checker(
@@ -1770,7 +2211,17 @@ async def test_assigned_worker_submits_v1_and_task_moves_to_submitted(
 
     task = await task_client.get(f"/api/v1/tasks/{started_task['id']}", headers=auth_headers())
     assert task.status_code == 200, task.text
-    assert task.json()["status"] == "submitted"
+    task_body = task.json()
+    assert task_body["status"] == "submitted"
+    for internal_field in (
+        "source_ref",
+        "source_payload_hash",
+        "import_batch_id",
+        "external_task_id",
+        "created_by",
+        "assigned_to",
+    ):
+        assert internal_field not in task_body
 
     audit = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/audit-events",

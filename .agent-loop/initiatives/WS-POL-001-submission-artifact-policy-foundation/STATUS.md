@@ -4,20 +4,22 @@
 
 `WS-POL-001-01`, `WS-POL-001-02`, `WS-POL-001-03`, `WS-POL-001-04`,
 `WS-POL-001-05`, `WS-POL-001-06`, `WS-POL-001-07`, `WS-POL-001-08`,
-`WS-POL-001-09`, `WS-POL-001-10`, and `WS-POL-001-11` are merged to `main`.
+`WS-POL-001-09`, `WS-POL-001-10`, `WS-POL-001-11`, and `WS-POL-001-12` are
+merged to `main`.
 The post-actor-registry Terminal Benchmark live API drill passed through real
-HTTP calls, but it required DB inspection for project setup outputs and locked
-context verification. `WS-POL-001-12` is implemented in PR #76 to expose the
-first project setup and project policy visibility APIs. `WS-POL-001-13` and
-`WS-POL-001-14` remain the next visibility/finalize chunks before rerunning the
-drill without DB inspection.
+HTTP calls, but it still needs task context visibility, submission finalize
+wording, and system-actor audit semantics before being accepted as a no-DB
+proof. `WS-POL-001-13` is active to expose worker-safe task context, exact
+submission requirements, and operator-only locked provenance. `WS-POL-001-14`
+remains the finalize/no-DB proof chunk before rerunning the Terminal Benchmark
+drill as accepted evidence.
 
 ## Active Chunk
 
-`WS-POL-001-12` is implemented on branch
-`codex/ws-pol-001-12-project-setup-policy-visibility` in PR #76. Internal
-review is complete, CodeRabbit feedback is being addressed, and the chunk is
-not merged until the user explicitly approves PR #76.
+`WS-POL-001-13` is active on branch
+`codex/ws-pol-001-13-task-context-apis`. It adds task work-context,
+submission-requirements, and operator locked-context APIs before the next
+Terminal Benchmark drill.
 
 ## Chunk Status
 
@@ -34,16 +36,15 @@ not merged until the user explicitly approves PR #76.
 | `WS-POL-001-09` | Merged | `codex/ws-pol-001-09-openai-agent-sdk-only` | 71 | Removes the production `local_fixture` project setup runtime and old runtime selector; keeps deterministic test behavior in explicit test-local fakes only. |
 | `WS-POL-001-10` | Merged | `codex/ws-pol-001-10-pre-submit-hardening` | 72 | Hardens duplicate guide-version conflicts, guide-create source snapshots, active-guide checker summaries, worker self-profile onboarding, and failed pre-submit audit evidence. |
 | `WS-POL-001-11` | Merged | `codex/ws-pol-001-11-actor-profile-registry-impl` | 74 | Implements local Workstream actor identity and actor profile registries for verified Flow actors before the next live API drill. |
-| `WS-POL-001-12` | PR open | `codex/ws-pol-001-12-project-setup-policy-visibility` | 76 | Adds project setup-run and project policy visibility APIs for setup runs, sufficiency reports, submission artifact policies, effective policy, and compiled project pre-submit checker policy; awaiting human merge review after external feedback fixes. |
-| `WS-POL-001-13` | Proposed | - | - | Add task work-context, worker submission-requirements, and operator locked-context APIs. |
+| `WS-POL-001-12` | Merged | `codex/ws-pol-001-12-project-setup-policy-visibility` | 76 | Adds project setup-run and project policy visibility APIs for setup runs, sufficiency reports, submission artifact policies, effective policy, and compiled project pre-submit checker policy. |
+| `WS-POL-001-13` | Active | `codex/ws-pol-001-13-task-context-apis` | - | Add task work-context, worker submission-requirements, and operator locked-context APIs. |
 | `WS-POL-001-14` | Proposed | - | - | Replace public submission lock with finalize, define system actor audit semantics, and rerun the Terminal Benchmark proof without DB inspection. |
 
 ## Blockers
 
 | Blocker | Owner | Next action |
 |---|---|---|
-| PR #76 human merge review | Human reviewer | Review and explicitly approve or request changes for `WS-POL-001-12`. |
-| Missing task context visibility APIs | Workstream | Implement `WS-POL-001-13`. |
+| Missing task context visibility APIs | Workstream | Implement and review `WS-POL-001-13`. |
 | Public lock wording and no-DB drill proof | Workstream | Implement `WS-POL-001-14` before rerunning Terminal Benchmark as accepted proof. |
 
 ## Follow-Ups

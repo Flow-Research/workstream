@@ -884,6 +884,90 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert worker_profile["status"] == "active"
         assert set(worker_profile["skill_tags"]) == {"stem", "proofs"}
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
+        ready_work_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/work-context",
+            worker_token,
+        )
+        ensure(
+            ready_work_context["guide"]["version"] == "v1",
+            "worker work context did not use locked guide v1",
+        )
+        ensure(
+            ready_work_context["lifecycle"]["next_actions"] == ["claim"],
+            "ready worker context did not expose claim as next action",
+        )
+        ensure(
+            "locked_guide_source_snapshot_hash"
+            not in json.dumps(ready_work_context, sort_keys=True),
+            "worker work context leaked source snapshot hash",
+        )
+        for private_field in (
+            "source_ref",
+            "source_payload_hash",
+            "import_batch_id",
+            "external_task_id",
+            "created_by",
+            "assigned_to",
+        ):
+            ensure(
+                private_field not in ready_work_context["task"],
+                f"worker work context leaked {private_field}",
+            )
+        submission_requirements = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/submission-requirements",
+            worker_token,
+        )
+        ensure(
+            submission_requirements["required_artifacts"][0]["path"] == "answer.md",
+            "submission requirements did not expose the locked artifact path",
+        )
+        ensure(
+            submission_requirements["required_evidence"][0]["key"] == "checker_log",
+            "submission requirements did not expose the locked evidence key",
+        )
+        ensure(
+            submission_requirements["artifact_hash_algorithm"] == "sha256",
+            "submission requirements did not expose platform hash algorithm",
+        )
+        ensure(
+            submission_requirements["required_packet_fields"]
+            == [
+                "summary",
+                "package_hash",
+                "artifact_hash_manifest",
+                "worker_attestation",
+            ],
+            "submission requirements did not expose exact submission request fields",
+        )
+        ensure(
+            "compiled_bundle" not in json.dumps(submission_requirements, sort_keys=True),
+            "submission requirements leaked compiled checker bundle",
+        )
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/locked-context",
+            worker_token,
+            expected_status=403,
+        )
+        locked_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/locked-context",
+            manager_token,
+        )
+        ensure(
+            locked_context["locked_guide_source_snapshot_hash"].startswith("sha256:"),
+            "operator locked context omitted source snapshot hash",
+        )
+        ensure(
+            locked_context["locked_pre_submit_checker_bundle_hash"].startswith("sha256:"),
+            "operator locked context omitted pre-submit checker hash",
+        )
         await request_json(
             client,
             "GET",
@@ -911,6 +995,16 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             f"/api/v1/tasks/{task['id']}/start",
             worker_token,
             {"reason": "real worker start"},
+        )
+        active_work_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/tasks/{task['id']}/work-context",
+            worker_token,
+        )
+        ensure(
+            active_work_context["lifecycle"]["can_submit"] is True,
+            "in-progress worker context did not expose submit readiness",
         )
         submission = await request_json(
             client,

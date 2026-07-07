@@ -4,18 +4,16 @@
 
 - Active initiative: `WS-POL-001` - Submission Artifact Policy Foundation
 - Active planning chunk: none
-- Active implementation chunk: `WS-POL-001-12`
-- Branch: `codex/ws-pol-001-12-project-setup-policy-visibility`
-- Status: `WS-POL-001-12` is implemented in PR #76 on branch
-  `codex/ws-pol-001-12-project-setup-policy-visibility`. Internal review is
-  complete, CodeRabbit feedback is being addressed in a follow-up commit, and
-  the chunk is waiting for human merge review after external-review fixes are
-  verified.
-- Last merged implementation SHA: `0729531`
-- Last merge commit: `5cec0e0`
-- Current gate: verify CodeRabbit fixes on PR #76, update trust evidence, then
-  wait for explicit human merge approval.
-- Next chunk: inactive until `WS-POL-001-12` receives human review and merge.
+- Active implementation chunk: `WS-POL-001-13`
+- Branch: `codex/ws-pol-001-13-task-context-apis`
+- Status: `WS-POL-001-13` is implementing worker-safe task work context,
+  exact submission requirements, and operator-only locked task provenance APIs
+  after PR #76 merged to `main`.
+- Last merged implementation SHA: `46e74de`
+- Last merge commit: `46e74de`
+- Current gate: implement Chunk 13, run deterministic proof, run required
+  internal reviewer tracks, then open a PR for human review.
+- Next chunk: inactive until `WS-POL-001-13` receives human review and merge.
 
 ## Operating Rule
 
@@ -115,3 +113,7 @@ blockchain, frontend, or agent-runtime behavior.
   actors before the next Terminal Benchmark live API drill.
 - `WS-POL-001-11` internal review evidence is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-11-internal-review-evidence.md`.
 - `WS-POL-001-11` PR trust bundle is tracked at `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-11-pr-trust-bundle.md`.
+- PR #76 merged into `main` as `46e74de`; it implemented `WS-POL-001-12`
+  project setup-run and policy visibility APIs.
+- `WS-POL-001-13` started on branch `codex/ws-pol-001-13-task-context-apis`
+  after the user's explicit start signal.
