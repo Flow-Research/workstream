@@ -43,6 +43,7 @@ from app.modules.projects.models import (
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
+    ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
@@ -55,11 +56,11 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.setup_queue import (
     ProjectSetupQueueError,
-    ensure_pre_submit_setup_pipeline_queue_ready,
     enqueue_pre_submit_setup_pipeline,
 )
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
+    ActiveGuidePreSubmitCheckerPolicyResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
     GuideSourceSnapshotCreate,
     GuideSourceSnapshotItemResponse,
@@ -77,6 +78,7 @@ from app.modules.projects.schemas import (
     ProjectGuideResponse,
     ProjectGuideUpdate,
     ProjectResponse,
+    ProjectSetupRunResponse,
     RevisionPolicyInput,
     RevisionPolicyResponse,
     ReviewPolicyInput,
@@ -91,6 +93,7 @@ from app.schemas.auth import ActorContext
 
 logger = logging.getLogger(__name__)
 
+PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = "project setup failed; inspect server logs with the setup run id"
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
 ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
@@ -118,6 +121,13 @@ SECRET_ARTIFACT_NAME_PATTERN = re.compile(
     r")($|[._/\-])",
     re.IGNORECASE,
 )
+
+
+def safe_project_setup_error_summary(summary: str | None) -> str:
+    """Return the only public setup-run error summary allowed by APIs/log results."""
+    if summary is None or not " ".join(summary.split()):
+        return "project setup failed"
+    return PROJECT_SETUP_PUBLIC_ERROR_SUMMARY
 SECRET_ARTIFACT_TOKEN_SETS = [
     {"access", "key"},
     {"api", "key"},
@@ -157,6 +167,13 @@ AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS = {
 REPORT_STATUS_TO_AGENT_SUFFICIENCY_STATUS = {
     report_status: agent_status
     for agent_status, report_status in AGENT_SUFFICIENCY_STATUS_TO_REPORT_STATUS.items()
+}
+PROJECT_SETUP_TERMINAL_STATUSES = {
+    "enqueue_failed",
+    "sufficiency_blocked",
+    "policy_draft_ready",
+    "setup_blocked",
+    "failed",
 }
 
 
@@ -300,6 +317,12 @@ class SourceSnapshotNotFound(ProjectServiceError):
     status_code = 404
 
 
+class ProjectSetupRunNotFound(ProjectServiceError):
+    """Raised when a project setup run cannot be found for a guide."""
+
+    status_code = 404
+
+
 class SourceSnapshotInvalid(ProjectServiceError):
     """Raised when guide-source snapshot input is unsafe or inconsistent."""
 
@@ -314,6 +337,18 @@ class SufficiencyReportNotFound(ProjectServiceError):
 
 class SubmissionArtifactPolicyNotFound(ProjectServiceError):
     """Raised when a submission artifact policy cannot be found."""
+
+    status_code = 404
+
+
+class EffectiveProjectSubmissionArtifactPolicyNotFound(ProjectServiceError):
+    """Raised when an effective project submission artifact policy cannot be found."""
+
+    status_code = 404
+
+
+class PreSubmitCheckerPolicyNotFound(ProjectServiceError):
+    """Raised when a pre-submit checker policy cannot be found."""
 
     status_code = 404
 
@@ -338,12 +373,6 @@ class PolicyEditBlocked(ProjectServiceError):
 
 class AgentRuntimeUnavailable(ProjectServiceError):
     """Raised when the configured project-agent runtime cannot run."""
-
-    status_code = 503
-
-
-class ProjectSetupQueueUnavailable(ProjectServiceError):
-    """Raised when automatic project setup cannot be queued."""
 
     status_code = 503
 
@@ -454,7 +483,6 @@ class ProjectService:
         project = await self._repo.get_project(project_id)
         if project is None:
             raise ProjectNotFound("project not found")
-        await self._ensure_project_setup_queue_ready_if_needed()
         guide = ProjectGuide(
             id=str(uuid4()),
             project_id=project_id,
@@ -466,6 +494,7 @@ class ProjectService:
         )
         source_snapshot_payload = payload.source_snapshot
         source_snapshot: GuideSourceSnapshot | None = None
+        setup_run: ProjectSetupRun | None = None
         try:
             guide = await self._repo.add_guide(guide)
         except IntegrityError as exc:
@@ -482,13 +511,20 @@ class ProjectService:
                 guide,
                 source_snapshot_payload or GuideSourceSnapshotCreate(),
             )
+            if get_settings().project_setup_pipeline_autostart:
+                setup_run = await self._create_project_setup_run_model(
+                    actor,
+                    guide,
+                    source_snapshot,
+                )
         await self._session.commit()
         await self._session.refresh(guide)
-        if source_snapshot is not None and get_settings().project_setup_pipeline_autostart:
+        if source_snapshot is not None and setup_run is not None:
             await self._enqueue_pre_submit_setup_pipeline_after_commit(
                 project_id=project_id,
                 guide_id=guide.id,
                 source_snapshot_id=source_snapshot.id,
+                setup_run_id=setup_run.id,
             )
         return ProjectGuideResponse.model_validate(guide)
 
@@ -573,14 +609,15 @@ class ProjectService:
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         if guide.status != "draft":
             raise GuideEditBlocked("only draft guides can receive source snapshots")
-        await self._ensure_project_setup_queue_ready_if_needed()
-
         snapshot = await self._create_guide_source_snapshot_model(
             actor,
             project_id,
             guide,
             payload,
         )
+        setup_run: ProjectSetupRun | None = None
+        if get_settings().project_setup_pipeline_autostart:
+            setup_run = await self._create_project_setup_run_model(actor, guide, snapshot)
         try:
             await self._session.commit()
         except IntegrityError as exc:
@@ -588,13 +625,155 @@ class ProjectService:
             raise PolicySetupConflict(
                 "guide source snapshot conflicted with concurrent setup; retry"
             ) from exc
-        if get_settings().project_setup_pipeline_autostart:
+        if setup_run is not None:
             await self._enqueue_pre_submit_setup_pipeline_after_commit(
                 project_id=project_id,
                 guide_id=guide.id,
                 source_snapshot_id=snapshot.id,
+                setup_run_id=setup_run.id,
             )
         return await self._source_snapshot_response(snapshot)
+
+    async def get_latest_project_setup_run(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+    ) -> ProjectSetupRunResponse:
+        """Return the latest automatic setup run for one project guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        setup_run = await self._repo.get_latest_project_setup_run(project_id, guide.id)
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
+        return ProjectSetupRunResponse.model_validate(setup_run)
+
+    async def list_guide_sufficiency_reports(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+    ) -> list[GuideSufficiencyReportResponse]:
+        """List guide sufficiency reports for one project guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        reports = await self._repo.list_guide_sufficiency_reports(project_id, guide.id)
+        return [GuideSufficiencyReportResponse.model_validate(report) for report in reports]
+
+    async def get_guide_sufficiency_report(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+        report_id: str,
+    ) -> GuideSufficiencyReportResponse:
+        """Return one guide sufficiency report scoped to a project guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        report = await self._repo.get_guide_sufficiency_report(report_id)
+        if report is None or report.project_id != project_id or report.guide_id != guide.id:
+            raise SufficiencyReportNotFound("guide sufficiency report not found")
+        return GuideSufficiencyReportResponse.model_validate(report)
+
+    async def list_submission_artifact_policies(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+    ) -> list[SubmissionArtifactPolicyResponse]:
+        """List submission artifact policies for one project guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        policies = await self._repo.list_submission_artifact_policies(project_id, guide.id)
+        return [SubmissionArtifactPolicyResponse.model_validate(policy) for policy in policies]
+
+    async def get_submission_artifact_policy(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+        policy_id: str,
+    ) -> SubmissionArtifactPolicyResponse:
+        """Return one submission artifact policy scoped to a project guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        policy = await self._repo.get_submission_artifact_policy(policy_id)
+        if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
+            raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
+        return SubmissionArtifactPolicyResponse.model_validate(policy)
+
+    async def get_current_effective_submission_artifact_policy(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+    ) -> EffectiveProjectSubmissionArtifactPolicyResponse:
+        """Return the current effective submission artifact policy for a guide."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        try:
+            snapshot = await self._repo.get_latest_guide_source_snapshot(
+                project_id,
+                guide.id,
+                guide.version,
+            )
+            if snapshot is None:
+                raise EffectiveProjectSubmissionArtifactPolicyNotFound(
+                    "effective project submission artifact policy not found"
+                )
+            policy = await self._repo.get_effective_submission_artifact_policy(
+                project_id,
+                guide.version,
+                snapshot.id,
+            )
+        except ProjectRepositoryIntegrityError as exc:
+            raise PolicySetupConflict(
+                "effective project submission artifact policy chain is ambiguous"
+            ) from exc
+        if policy is None or policy.guide_id != guide.id:
+            raise EffectiveProjectSubmissionArtifactPolicyNotFound(
+                "effective project submission artifact policy not found"
+            )
+        return EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(policy)
+
+    async def get_current_pre_submit_checker_policy(
+        self,
+        actor: ActorContext,
+        project_id: str,
+        guide_id: str,
+    ) -> PreSubmitCheckerPolicySummaryResponse:
+        """Return the current project pre-submit checker policy summary."""
+        require_any_role(actor, PROJECT_SETUP_ROLES)
+        guide = await self._get_project_guide(project_id, guide_id)
+        try:
+            snapshot = await self._repo.get_latest_guide_source_snapshot(
+                project_id,
+                guide.id,
+                guide.version,
+            )
+            if snapshot is None:
+                raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
+            effective_policy = await self._repo.get_effective_submission_artifact_policy(
+                project_id,
+                guide.version,
+                snapshot.id,
+            )
+            if effective_policy is None or effective_policy.guide_id != guide.id:
+                raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
+            policy = await self._repo.get_pre_submit_checker_policy_for_effective_policy(
+                effective_policy.id
+            )
+        except ProjectRepositoryIntegrityError as exc:
+            raise PolicySetupConflict("pre-submit checker policy chain is ambiguous") from exc
+        if (
+            policy is None
+            or policy.guide_id != guide.id
+            or policy.source_snapshot_id != snapshot.id
+            or policy.lifecycle_status != "compiled"
+            or policy.compiled_bundle_hash is None
+        ):
+            raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
+        return PreSubmitCheckerPolicySummaryResponse.model_validate(policy)
 
     async def create_guide_sufficiency_report(
         self,
@@ -1549,12 +1728,33 @@ class ProjectService:
         ]
         return await self._repo.add_guide_source_snapshot(snapshot, item_models)
 
+    async def _create_project_setup_run_model(
+        self,
+        actor: ActorContext,
+        guide: ProjectGuide,
+        snapshot: GuideSourceSnapshot,
+    ) -> ProjectSetupRun:
+        """Create a queued setup-run ledger row without committing."""
+        setup_run = ProjectSetupRun(
+            id=str(uuid4()),
+            project_id=guide.project_id,
+            guide_id=guide.id,
+            guide_version=guide.version,
+            source_snapshot_id=snapshot.id,
+            source_snapshot_hash=snapshot.bundle_hash,
+            status="queued",
+            current_step="queued",
+            created_by=actor.actor_id,
+        )
+        return await self._repo.add_project_setup_run(setup_run)
+
     async def _enqueue_pre_submit_setup_pipeline_after_commit(
         self,
         *,
         project_id: str,
         guide_id: str,
         source_snapshot_id: str,
+        setup_run_id: str,
     ) -> str | None:
         """Enqueue automatic pre-submit setup for an immutable source snapshot.
 
@@ -1567,39 +1767,143 @@ class ProjectService:
             project_id: Project that owns the guide.
             guide_id: Guide whose snapshot should be processed.
             source_snapshot_id: Immutable source snapshot to process.
+            setup_run_id: Ledger row that should receive the Celery task id.
 
         Returns:
             Celery task id when enqueue succeeds; otherwise ``None``.
         """
         try:
-            return await asyncio.to_thread(
+            task_id = await asyncio.to_thread(
                 enqueue_pre_submit_setup_pipeline,
                 project_id=project_id,
                 guide_id=guide_id,
                 source_snapshot_id=source_snapshot_id,
+                setup_run_id=setup_run_id,
             )
         except ProjectSetupQueueError as exc:
+            safe_summary = self._safe_project_setup_error_summary(str(exc))
             logger.warning(
                 "project setup pipeline enqueue failed after commit",
                 extra={
                     "project_id": project_id,
                     "guide_id": guide_id,
                     "source_snapshot_id": source_snapshot_id,
+                    "setup_run_id": setup_run_id,
+                    "error_code": exc.__class__.__name__,
+                    "error_summary": safe_summary,
                 },
-                exc_info=exc,
+            )
+            await self.update_project_setup_run_status(
+                setup_run_id,
+                status="enqueue_failed",
+                current_step="enqueue",
+                error_code=exc.__class__.__name__,
+                error_summary=safe_summary,
             )
             return None
+        setup_run = await self._repo.get_project_setup_run(setup_run_id)
+        if setup_run is not None:
+            setup_run.celery_task_id = task_id
+            await self._session.commit()
+        return task_id
 
-    async def _ensure_project_setup_queue_ready_if_needed(self) -> None:
-        """Fail before mutation when automatic setup has no usable queue."""
-        if not get_settings().project_setup_pipeline_autostart:
-            return
-        try:
-            await asyncio.to_thread(ensure_pre_submit_setup_pipeline_queue_ready)
-        except ProjectSetupQueueError as exc:
-            raise ProjectSetupQueueUnavailable(
-                "project setup pipeline queue is unavailable"
-            ) from exc
+    async def update_project_setup_run_status(
+        self,
+        setup_run_id: str,
+        *,
+        status: str,
+        current_step: str,
+        output_sufficiency_report_id: str | None = None,
+        output_submission_artifact_policy_id: str | None = None,
+        error_code: str | None = None,
+        error_summary: str | None = None,
+    ) -> ProjectSetupRunResponse:
+        """Update the setup-run ledger from the internal project setup worker."""
+        setup_run = await self._repo.get_project_setup_run(setup_run_id)
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
+        await self._validate_project_setup_run_outputs(
+            setup_run,
+            output_sufficiency_report_id=output_sufficiency_report_id,
+            output_submission_artifact_policy_id=output_submission_artifact_policy_id,
+        )
+        now = datetime.now(UTC)
+        setup_run.status = status
+        setup_run.current_step = current_step
+        if setup_run.started_at is None and status != "queued":
+            setup_run.started_at = now
+        if status in PROJECT_SETUP_TERMINAL_STATUSES:
+            setup_run.finished_at = now
+        if output_sufficiency_report_id is not None:
+            setup_run.output_sufficiency_report_id = output_sufficiency_report_id
+        if output_submission_artifact_policy_id is not None:
+            setup_run.output_submission_artifact_policy_id = output_submission_artifact_policy_id
+        setup_run.error_code = error_code
+        setup_run.error_summary = (
+            self._safe_project_setup_error_summary(error_summary)
+            if error_summary is not None
+            else None
+        )
+        await self._session.commit()
+        await self._session.refresh(setup_run)
+        return ProjectSetupRunResponse.model_validate(setup_run)
+
+    async def validate_project_setup_run_context(
+        self,
+        setup_run_id: str,
+        *,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+    ) -> ProjectSetupRunResponse:
+        """Validate that a worker payload matches the setup-run ledger row."""
+        setup_run = await self._repo.get_project_setup_run(setup_run_id)
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
+        if (
+            setup_run.project_id != project_id
+            or setup_run.guide_id != guide_id
+            or setup_run.source_snapshot_id != source_snapshot_id
+        ):
+            raise PolicySetupConflict("project setup run context mismatch")
+        return ProjectSetupRunResponse.model_validate(setup_run)
+
+    async def _validate_project_setup_run_outputs(
+        self,
+        setup_run: ProjectSetupRun,
+        *,
+        output_sufficiency_report_id: str | None,
+        output_submission_artifact_policy_id: str | None,
+    ) -> None:
+        """Require setup-run output ids to belong to the same setup context."""
+        if output_sufficiency_report_id is not None:
+            report = await self._repo.get_guide_sufficiency_report(output_sufficiency_report_id)
+            if report is None or not self._is_project_setup_run_output_match(setup_run, report):
+                raise PolicySetupConflict("project setup run sufficiency output mismatch")
+        if output_submission_artifact_policy_id is not None:
+            policy = await self._repo.get_submission_artifact_policy(
+                output_submission_artifact_policy_id
+            )
+            if policy is None or not self._is_project_setup_run_output_match(setup_run, policy):
+                raise PolicySetupConflict("project setup run policy output mismatch")
+
+    def _is_project_setup_run_output_match(
+        self,
+        setup_run: ProjectSetupRun,
+        output: GuideSufficiencyReport | SubmissionArtifactPolicy,
+    ) -> bool:
+        """Return whether an output row belongs to the setup-run context."""
+        return (
+            output.project_id == setup_run.project_id
+            and output.guide_id == setup_run.guide_id
+            and output.guide_version == setup_run.guide_version
+            and output.source_snapshot_id == setup_run.source_snapshot_id
+            and output.source_snapshot_hash == setup_run.source_snapshot_hash
+        )
+
+    def _safe_project_setup_error_summary(self, summary: str) -> str:
+        """Return a bounded setup error summary safe for API responses."""
+        return safe_project_setup_error_summary(summary)
 
     async def _ensure_snapshot_is_latest(
         self,
@@ -2825,7 +3129,7 @@ class ProjectService:
             effective_submission_artifact_policy=(
                 EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective_policy)
             ),
-            pre_submit_checker_policy=PreSubmitCheckerPolicySummaryResponse.model_validate(
+            pre_submit_checker_policy=ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
                 pre_submit_checker_policy
             ),
             post_submit_checker_policy=PostSubmitCheckerPolicyResponse.model_validate(

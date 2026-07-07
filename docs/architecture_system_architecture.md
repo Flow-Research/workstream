@@ -117,6 +117,7 @@ Owns:
 
 - project metadata
 - guide
+- project setup run ledger
 - submission artifact policy
 - generated project pre-submit checker policy
 - post-submit checker policy
@@ -124,6 +125,12 @@ Owns:
 - revision policy
 - payment policy
 - skill taxonomy
+
+Project setup visibility APIs expose the latest setup run, sufficiency reports,
+submission artifact policies, the current effective project policy, and the
+compiled project pre-submit checker policy summary to `admin` and
+`project_manager` actors. These reads replace operator DB inspection for setup
+drills, but they do not make `ProjectSetupRun` a policy source of truth.
 
 ### Source/Import Service
 

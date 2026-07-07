@@ -500,25 +500,6 @@ def sha256_token(seed: str) -> str:
     return f"sha256:{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
 
 
-async def load_pre_submit_checker_policy(effective_policy: dict) -> dict:
-    """Load the project pre-submit checker policy compiled during approval."""
-    async with db_session.get_session_factory()() as session:
-        pre_submit_checker_policy = await session.scalar(
-            select(PreSubmitCheckerPolicy).where(
-                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"]
-            )
-        )
-        ensure(pre_submit_checker_policy is not None, "pre-submit checker policy missing")
-        ensure(
-            pre_submit_checker_policy.lifecycle_status == "compiled",
-            "pre-submit checker policy was not compiled during approval",
-        )
-        return {
-            "compiled_bundle": pre_submit_checker_policy.compiled_bundle,
-            "compiled_bundle_hash": pre_submit_checker_policy.compiled_bundle_hash,
-        }
-
-
 def submission_artifact_policy_body() -> dict:
     """Build the project submission artifact policy used by the API contract drill.
 
@@ -593,7 +574,7 @@ async def create_policy_bundle_for_guide(
         },
         201,
     )
-    await request_json(
+    report = await request_json(
         client,
         "POST",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
@@ -605,6 +586,21 @@ async def create_policy_bundle_for_guide(
             "summary": "Guide is sufficient for the API contract real API drill.",
         },
         201,
+    )
+    reports = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        manager_token,
+    )
+    ensure(isinstance(reports, list), "sufficiency report list did not return a list")
+    ensure(len(reports) == 1, f"expected one sufficiency report, got {len(reports)}")
+    ensure(reports[0]["id"] == report["id"], "sufficiency report list returned wrong report")
+    await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report['id']}",
+        manager_token,
     )
     policy = await request_json(
         client,
@@ -618,6 +614,21 @@ async def create_policy_bundle_for_guide(
         },
         201,
     )
+    policies = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        manager_token,
+    )
+    ensure(isinstance(policies, list), "submission artifact policy list did not return a list")
+    ensure(len(policies) == 1, f"expected one submission artifact policy, got {len(policies)}")
+    ensure(policies[0]["id"] == policy["id"], "submission policy list returned wrong policy")
+    await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy['id']}",
+        manager_token,
+    )
     effective_policy = await request_json(
         client,
         "POST",
@@ -626,7 +637,30 @@ async def create_policy_bundle_for_guide(
         manager_token,
         {"approval_note": "Approved for API contract real API drill."},
     )
-    await load_pre_submit_checker_policy(effective_policy)
+    visible_effective_policy = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
+        manager_token,
+    )
+    ensure(
+        visible_effective_policy["id"] == effective_policy["id"],
+        "effective policy visibility endpoint returned the wrong policy",
+    )
+    pre_submit_checker_policy = await request_json(
+        client,
+        "GET",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
+        manager_token,
+    )
+    ensure(
+        pre_submit_checker_policy["lifecycle_status"] == "compiled",
+        "pre-submit checker policy was not compiled during approval",
+    )
+    ensure(
+        pre_submit_checker_policy["effective_policy_id"] == effective_policy["id"],
+        "pre-submit checker visibility endpoint returned the wrong effective policy",
+    )
     return effective_policy
 
 

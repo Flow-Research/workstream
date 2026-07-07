@@ -13,34 +13,12 @@ class ProjectSetupQueueError(RuntimeError):
     """Raised when Workstream cannot enqueue project setup automation."""
 
 
-def ensure_pre_submit_setup_pipeline_queue_ready() -> None:
-    """Validate that the project setup queue can accept work.
-
-    Raises:
-        ProjectSetupQueueError: If the queue is not configured or reachable.
-    """
-    try:
-        from app.workers.project_setup import run_pre_submit_setup_pipeline
-
-        _sync_task_settings()
-        settings = get_settings()
-        if settings.celery_task_always_eager:
-            return
-        if settings.celery_broker_url is None:
-            raise CeleryConfigurationError(
-                "WORKSTREAM_CELERY_BROKER_URL must be set for project setup queue"
-            )
-        with run_pre_submit_setup_pipeline.app.connection_for_write() as connection:
-            connection.ensure_connection(max_retries=0)
-    except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
-        raise ProjectSetupQueueError("project setup pipeline queue is unavailable") from exc
-
-
 def enqueue_pre_submit_setup_pipeline(
     *,
     project_id: str,
     guide_id: str,
     source_snapshot_id: str,
+    setup_run_id: str,
 ) -> str:
     """Enqueue the Celery project setup pipeline.
 
@@ -48,6 +26,7 @@ def enqueue_pre_submit_setup_pipeline(
         project_id: Project that owns the guide.
         guide_id: Guide whose source snapshot should be processed.
         source_snapshot_id: Immutable source snapshot to analyze.
+        setup_run_id: Project setup run ledger row to update from the worker.
 
     Returns:
         Celery task id.
@@ -60,7 +39,7 @@ def enqueue_pre_submit_setup_pipeline(
 
         _sync_task_settings()
         result = run_pre_submit_setup_pipeline.apply_async(
-            args=(project_id, guide_id, source_snapshot_id)
+            args=(project_id, guide_id, source_snapshot_id, setup_run_id)
         )
     except (CeleryConfigurationError, CeleryError, KombuError, OSError) as exc:
         raise ProjectSetupQueueError("project setup pipeline could not be enqueued") from exc

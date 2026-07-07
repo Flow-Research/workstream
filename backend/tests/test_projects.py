@@ -45,6 +45,7 @@ from app.modules.projects.models import (
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectGuide,
+    ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
@@ -518,13 +519,20 @@ async def test_create_guide_autostart_enqueues_without_inline_agent_execution(
 
     enqueued: list[dict[str, str]] = []
 
-    def capture_enqueue(*, project_id: str, guide_id: str, source_snapshot_id: str) -> str:
+    def capture_enqueue(
+        *,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+        setup_run_id: str,
+    ) -> str:
         """Capture queue arguments without running Celery."""
         enqueued.append(
             {
                 "project_id": project_id,
                 "guide_id": guide_id,
                 "source_snapshot_id": source_snapshot_id,
+                "setup_run_id": setup_run_id,
             }
         )
         return "captured-task-id"
@@ -549,6 +557,7 @@ async def test_create_guide_autostart_enqueues_without_inline_agent_execution(
     assert len(enqueued) == 1
     assert enqueued[0]["project_id"] == project["id"]
     assert enqueued[0]["guide_id"] == guide["id"]
+    assert enqueued[0]["setup_run_id"]
     async with db_session.get_session_factory()() as session:
         snapshots = (
             await session.scalars(
@@ -570,41 +579,6 @@ async def test_create_guide_autostart_enqueues_without_inline_agent_execution(
     assert enqueued[0]["source_snapshot_id"] == snapshots[0].id
     assert reports == []
     assert policies == []
-
-
-async def test_create_guide_autostart_requires_queue_before_persisting(
-    project_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Prove queue failure does not leave guide setup half-created."""
-    project = await create_project(project_client)
-    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
-    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
-    monkeypatch.delenv("WORKSTREAM_CELERY_BROKER_URL", raising=False)
-    get_settings.cache_clear()
-
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides",
-        headers=auth_headers(),
-        json=complete_guide_payload(),
-    )
-
-    assert response.status_code == 503, response.text
-    assert response.json()["detail"] == "project setup pipeline queue is unavailable"
-    async with db_session.get_session_factory()() as session:
-        guides = (
-            await session.scalars(
-                select(ProjectGuide).where(ProjectGuide.project_id == project["id"])
-            )
-        ).all()
-        snapshots = (
-            await session.scalars(
-                select(GuideSourceSnapshot).where(GuideSourceSnapshot.project_id == project["id"])
-            )
-        ).all()
-
-    assert guides == []
-    assert snapshots == []
 
 
 async def test_get_project_does_not_require_project_setup_queue(
@@ -634,21 +608,19 @@ async def test_create_guide_returns_created_when_post_commit_enqueue_fails(
     """A late broker failure cannot turn a durable guide create into a false 503."""
     project = await create_project(project_client)
 
-    def queue_ready() -> None:
-        """Pretend the pre-mutation readiness check succeeded."""
-
-    def enqueue_failure(*, project_id: str, guide_id: str, source_snapshot_id: str) -> str:
+    def enqueue_failure(
+        *,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+        setup_run_id: str,
+    ) -> str:
         """Simulate a broker outage after the guide transaction commits."""
         raise ProjectSetupQueueError("queue failed after commit")
 
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
     get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_service_module,
-        "ensure_pre_submit_setup_pipeline_queue_ready",
-        queue_ready,
-    )
     monkeypatch.setattr(
         project_service_module,
         "enqueue_pre_submit_setup_pipeline",
@@ -754,13 +726,20 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
 ) -> None:
     enqueued: list[dict[str, str]] = []
 
-    def capture_enqueue(*, project_id: str, guide_id: str, source_snapshot_id: str) -> str:
+    def capture_enqueue(
+        *,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+        setup_run_id: str,
+    ) -> str:
         """Capture queue arguments without running Celery."""
         enqueued.append(
             {
                 "project_id": project_id,
                 "guide_id": guide_id,
                 "source_snapshot_id": source_snapshot_id,
+                "setup_run_id": setup_run_id,
             }
         )
         return "captured-task-id"
@@ -783,6 +762,7 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
             "project_id": project["id"],
             "guide_id": guide["id"],
             "source_snapshot_id": snapshot["id"],
+            "setup_run_id": enqueued[0]["setup_run_id"],
         }
     ]
 
@@ -795,20 +775,18 @@ async def test_create_source_snapshot_returns_created_when_post_commit_enqueue_f
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
-    def queue_ready() -> None:
-        """Pretend the pre-mutation readiness check succeeded."""
-
-    def enqueue_failure(*, project_id: str, guide_id: str, source_snapshot_id: str) -> str:
+    def enqueue_failure(
+        *,
+        project_id: str,
+        guide_id: str,
+        source_snapshot_id: str,
+        setup_run_id: str,
+    ) -> str:
         """Simulate a broker outage after the snapshot transaction commits."""
         raise ProjectSetupQueueError("queue failed after commit")
 
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     get_settings.cache_clear()
-    monkeypatch.setattr(
-        project_service_module,
-        "ensure_pre_submit_setup_pipeline_queue_ready",
-        queue_ready,
-    )
     monkeypatch.setattr(
         project_service_module,
         "enqueue_pre_submit_setup_pipeline",
@@ -1068,6 +1046,559 @@ async def create_approved_policy_bundle(
         "effective_policy": effective,
         "pre_submit_checker_policy": compiled_pre_submit_checker,
     }
+
+
+def test_project_setup_run_status_constraint_metadata() -> None:
+    status_constraint = next(
+        constraint
+        for constraint in ProjectSetupRun.__table__.constraints
+        if constraint.name is not None
+        and constraint.name.endswith("ck_project_setup_runs_status")
+    )
+
+    constraint_sql = str(status_constraint.sqltext)
+
+    for status in (
+        "queued",
+        "enqueue_failed",
+        "running_sufficiency_agent",
+        "sufficiency_blocked",
+        "running_policy_derivation_agent",
+        "policy_draft_ready",
+        "setup_blocked",
+        "failed",
+    ):
+        assert status in constraint_sql
+
+
+def test_project_setup_error_summary_redacts_sensitive_diagnostics() -> None:
+    service = ProjectService.__new__(ProjectService)
+
+    unsafe_summaries = [
+        "broker rejected https://storage.flow.test/signed?token=secret",
+        "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature",
+        "Basic d29ya3N0cmVhbTpzZWNyZXQ=",
+        "aws access key AKIAIOSFODNN7EXAMPLE failed",
+        "failed reading projects/acme/snapshots/source.md",
+        "path=/home/abiorh/workstream/private.py failed",
+        'Traceback most recent call last File "/srv/app/project_setup.py", line 10',
+        r"worker failed at C:\Users\alice\secret\guide.md",
+        r"worker failed at \\server\share\guide.md",
+        "object key s3://private-bucket/customer/path failed",
+    ]
+
+    for summary in unsafe_summaries:
+        assert service._safe_project_setup_error_summary(summary) == (
+            "project setup failed; inspect server logs with the setup run id"
+        )
+
+    assert service._safe_project_setup_error_summary("broker temporarily unavailable") == (
+        "project setup failed; inspect server logs with the setup run id"
+    )
+    assert service._safe_project_setup_error_summary("   ") == "project setup failed"
+
+
+async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    project = await create_project(project_client)
+    guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+
+    setup_run_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+
+    assert setup_run_response.status_code == 200, setup_run_response.text
+    setup_run = setup_run_response.json()
+    assert setup_run["status"] == "policy_draft_ready"
+    assert setup_run["current_step"] == "submission_artifact_policy_derivation"
+    assert setup_run["source_snapshot_hash"].startswith("sha256:")
+    assert setup_run["celery_task_id"]
+    assert setup_run["output_sufficiency_report_id"]
+    assert setup_run["output_submission_artifact_policy_id"]
+    assert setup_run["error_code"] is None
+    assert setup_run["error_summary"] is None
+
+    reports_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+    )
+    assert reports_response.status_code == 200, reports_response.text
+    reports = reports_response.json()
+    assert [report["id"] for report in reports] == [setup_run["output_sufficiency_report_id"]]
+
+    report_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{reports[0]['id']}",
+        headers=auth_headers(),
+    )
+    assert report_response.status_code == 200, report_response.text
+    assert report_response.json()["source_snapshot_id"] == setup_run["source_snapshot_id"]
+
+    policies_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+    )
+    assert policies_response.status_code == 200, policies_response.text
+    policies = policies_response.json()
+    assert [policy["id"] for policy in policies] == [
+        setup_run["output_submission_artifact_policy_id"]
+    ]
+
+    policy_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{policies[0]['id']}",
+        headers=auth_headers(),
+    )
+    assert policy_response.status_code == 200, policy_response.text
+    assert policy_response.json()["source_snapshot_hash"] == setup_run["source_snapshot_hash"]
+
+    missing_effective = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    missing_pre_submit = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+    assert missing_effective.status_code == 404
+    assert missing_pre_submit.status_code == 404
+
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policies[0]["id"],
+    )
+    effective_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    assert effective_response.status_code == 200, effective_response.text
+    assert effective_response.json()["id"] == effective["id"]
+
+    checker_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+    assert checker_response.status_code == 200, checker_response.text
+    checker_policy = checker_response.json()
+    assert checker_policy["effective_policy_id"] == effective["id"]
+    assert checker_policy["compiled_bundle_hash"].startswith("sha256:")
+    assert "compiled_bundle" not in checker_policy
+    assert "checker_configs" not in checker_policy
+
+    second_project_response = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers(),
+        json={
+            "name": "STEM Eval Visibility Two",
+            "slug": "stem-eval-visibility-two",
+            "description": "Second project for visibility scoping checks",
+        },
+    )
+    assert second_project_response.status_code == 201, second_project_response.text
+    second_project = second_project_response.json()
+    second_guide = await create_guide(
+        project_client,
+        second_project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(
+                durable_ref="https://docs.flow.test/stem/second-guide.md"
+            ),
+        },
+    )
+    second_setup_response = await project_client.get(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
+        "setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert second_setup_response.status_code == 200, second_setup_response.text
+    second_setup_run = second_setup_response.json()
+    second_policies_response = await project_client.get(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
+        "submission-artifact-policies",
+        headers=auth_headers(),
+    )
+    assert second_policies_response.status_code == 200, second_policies_response.text
+    second_policy = second_policies_response.json()[0]
+    second_effective = await approve_submission_artifact_policy(
+        project_client,
+        second_project["id"],
+        second_guide["id"],
+        second_policy["id"],
+    )
+
+    first_setup_again_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert first_setup_again_response.status_code == 200, first_setup_again_response.text
+    assert first_setup_again_response.json()["id"] == setup_run["id"]
+    first_reports_again_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        headers=auth_headers(),
+    )
+    assert first_reports_again_response.status_code == 200, first_reports_again_response.text
+    assert [report["id"] for report in first_reports_again_response.json()] == [
+        setup_run["output_sufficiency_report_id"]
+    ]
+    first_policies_again_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        headers=auth_headers(),
+    )
+    assert first_policies_again_response.status_code == 200, first_policies_again_response.text
+    assert [policy["id"] for policy in first_policies_again_response.json()] == [
+        setup_run["output_submission_artifact_policy_id"]
+    ]
+    wrong_report_context_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{second_setup_run['output_sufficiency_report_id']}",
+        headers=auth_headers(),
+    )
+    wrong_policy_context_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{second_setup_run['output_submission_artifact_policy_id']}",
+        headers=auth_headers(),
+    )
+    assert wrong_report_context_response.status_code == 404
+    assert wrong_policy_context_response.status_code == 404
+    second_effective_response = await project_client.get(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    assert second_effective_response.status_code == 200, second_effective_response.text
+    assert second_effective_response.json()["id"] == second_effective["id"]
+    second_checker_response = await project_client.get(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
+        "pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+    assert second_checker_response.status_code == 200, second_checker_response.text
+    assert second_checker_response.json()["effective_policy_id"] == second_effective["id"]
+
+    same_project_other_guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(version="v2"),
+            "source_snapshot": source_snapshot_payload(
+                durable_ref="https://docs.flow.test/stem/same-project-other-guide.md"
+            ),
+        },
+    )
+    same_project_other_setup_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
+        "setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert (
+        same_project_other_setup_response.status_code == 200
+    ), same_project_other_setup_response.text
+    same_project_other_setup_run = same_project_other_setup_response.json()
+    same_project_other_policies_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
+        "submission-artifact-policies",
+        headers=auth_headers(),
+    )
+    assert (
+        same_project_other_policies_response.status_code == 200
+    ), same_project_other_policies_response.text
+    same_project_other_policy = same_project_other_policies_response.json()[0]
+    same_project_other_effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        same_project_other_guide["id"],
+        same_project_other_policy["id"],
+    )
+    first_setup_after_same_project_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert (
+        first_setup_after_same_project_response.status_code == 200
+    ), first_setup_after_same_project_response.text
+    assert first_setup_after_same_project_response.json()["id"] == setup_run["id"]
+    wrong_same_project_report_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{same_project_other_setup_run['output_sufficiency_report_id']}",
+        headers=auth_headers(),
+    )
+    wrong_same_project_policy_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{same_project_other_setup_run['output_submission_artifact_policy_id']}",
+        headers=auth_headers(),
+    )
+    assert wrong_same_project_report_response.status_code == 404
+    assert wrong_same_project_policy_response.status_code == 404
+    same_project_other_effective_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    assert (
+        same_project_other_effective_response.status_code == 200
+    ), same_project_other_effective_response.text
+    assert same_project_other_effective_response.json()["id"] == same_project_other_effective["id"]
+    same_project_other_checker_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
+        "pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+    assert (
+        same_project_other_checker_response.status_code == 200
+    ), same_project_other_checker_response.text
+    assert (
+        same_project_other_checker_response.json()["effective_policy_id"]
+        == same_project_other_effective["id"]
+    )
+
+    newer_snapshot_response = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
+        headers=auth_headers(),
+        json=source_snapshot_payload(durable_ref="https://docs.flow.test/stem/new-guide.md"),
+    )
+    assert newer_snapshot_response.status_code == 201, newer_snapshot_response.text
+
+    stale_effective_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    stale_checker_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+
+    assert stale_effective_response.status_code == 404
+    assert stale_checker_response.status_code == 404
+
+
+async def test_pre_submit_visibility_requires_compiled_policy(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    await create_approved_policy_bundle(
+        project_client,
+        project["id"],
+        guide["id"],
+        compile_pre_submit_checker=False,
+    )
+
+    response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_project_setup_run_records_enqueue_failure_without_leaking_error(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    get_settings.cache_clear()
+
+    def fail_enqueue(**_: object) -> str:
+        raise ProjectSetupQueueError(
+            "broker rejected https://storage.flow.test/signed?token=secret"
+        )
+
+    monkeypatch.setattr(project_service_module, "enqueue_pre_submit_setup_pipeline", fail_enqueue)
+    project = await create_project(project_client)
+    guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+
+    response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "enqueue_failed"
+    assert body["current_step"] == "enqueue"
+    assert body["celery_task_id"] is None
+    assert body["error_code"] == "ProjectSetupQueueError"
+    assert body["error_summary"] == (
+        "project setup failed; inspect server logs with the setup run id"
+    )
+    assert "token" not in body["error_summary"]
+    assert "https://" not in body["error_summary"]
+
+
+async def test_project_setup_run_rejects_cross_context_worker_updates(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+
+    first_project = await create_project(project_client)
+    first_guide = await create_guide(
+        project_client,
+        first_project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+    first_setup_response = await project_client.get(
+        f"/api/v1/projects/{first_project['id']}/guides/{first_guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert first_setup_response.status_code == 200, first_setup_response.text
+    first_setup_run = first_setup_response.json()
+
+    second_project_response = await project_client.post(
+        "/api/v1/projects",
+        headers=auth_headers(),
+        json={
+            "name": "STEM Eval Two",
+            "slug": "stem-eval-two",
+            "description": "Second internal STEM evaluation project",
+        },
+    )
+    assert second_project_response.status_code == 201, second_project_response.text
+    second_project = second_project_response.json()
+    second_guide = await create_guide(
+        project_client,
+        second_project["id"],
+        {
+            **complete_guide_payload(version="v1"),
+            "source_snapshot": {
+                **source_snapshot_payload(),
+                "items": [
+                    {
+                        **source_snapshot_payload()["items"][0],
+                        "durable_ref": "inline:/guides/second/v1",
+                        "content_hash": "sha256:"
+                        + hashlib.sha256(b"second-guide").hexdigest(),
+                    }
+                ],
+            },
+        },
+    )
+    second_setup_response = await project_client.get(
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert second_setup_response.status_code == 200, second_setup_response.text
+    second_setup_run = second_setup_response.json()
+
+    async with db_session.get_session_factory()() as session:
+        service = ProjectService(session)
+        with pytest.raises(project_service_module.PolicySetupConflict):
+            await service.validate_project_setup_run_context(
+                first_setup_run["id"],
+                project_id=second_project["id"],
+                guide_id=second_guide["id"],
+                source_snapshot_id=second_setup_run["source_snapshot_id"],
+            )
+        with pytest.raises(project_service_module.PolicySetupConflict):
+            await service.update_project_setup_run_status(
+                first_setup_run["id"],
+                status="policy_draft_ready",
+                current_step="submission_artifact_policy_derivation",
+                output_sufficiency_report_id=second_setup_run["output_sufficiency_report_id"],
+            )
+        with pytest.raises(project_service_module.PolicySetupConflict):
+            await service.update_project_setup_run_status(
+                first_setup_run["id"],
+                status="policy_draft_ready",
+                current_step="submission_artifact_policy_derivation",
+                output_submission_artifact_policy_id=second_setup_run[
+                    "output_submission_artifact_policy_id"
+                ],
+            )
+
+
+async def test_project_setup_visibility_apis_require_project_setup_role(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    deterministic_project_agent_runtime: None,
+) -> None:
+    monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    project = await create_project(project_client)
+    guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+    setup_run_response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        headers=auth_headers(),
+    )
+    assert setup_run_response.status_code == 200, setup_run_response.text
+    setup_run = setup_run_response.json()
+
+    endpoints = [
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
+        f"{setup_run['output_sufficiency_report_id']}",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
+        f"{setup_run['output_submission_artifact_policy_id']}",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "effective-submission-artifact-policy",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+    ]
+    monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "admin")
+    get_settings.cache_clear()
+    admin_responses = [
+        await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
+    ]
+    assert [response.status_code for response in admin_responses] == [
+        200,
+        200,
+        200,
+        200,
+        200,
+        404,
+        404,
+    ]
+
+    for role in ("worker", "reviewer", "finance", "auditor"):
+        monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", role)
+        get_settings.cache_clear()
+        responses = [
+            await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
+        ]
+
+        assert [response.status_code for response in responses] == [403] * len(endpoints)
 
 
 async def test_project_can_be_created(project_client: AsyncClient) -> None:

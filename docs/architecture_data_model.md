@@ -14,6 +14,7 @@ Project
   ProjectGuide
   GuideSourceSnapshot
   GuideSourceSnapshotItem
+  ProjectSetupRun
   GuideSufficiencyReport
   SubmissionArtifactPolicy
   EffectiveProjectSubmissionArtifactPolicy
@@ -217,8 +218,8 @@ Every task records the guide version active at creation or screening time before
 
 When a task is claimed or moved to `IN_PROGRESS`, its locked guide and policy context does not change silently. A newer upstream guide version can only affect unclaimed work or a controlled revision path when policy allows it and the audit log records the reason.
 
-Material changes require a new guide version or policy version. Material changes
-include guide source material, submission artifact policy, pre-submit checker
+Material changes require a new guide version or policy version. They include
+guide source material, submission artifact policy, pre-submit checker
 generation rules, post-submit checker policy, review policy, revision policy,
 and payment policy.
 
@@ -307,6 +308,53 @@ checker bundles, acknowledgements, and approvals for activation.
 A new guide-source snapshot invalidates prior setup records for new activation
 and unlocked tasks only. Tasks already locked to an earlier snapshot retain
 that policy context unless an explicit audited rebase occurs.
+
+## ProjectSetupRun
+
+Fields:
+
+- `id`
+- `project_id`
+- `guide_id`
+- `guide_version`
+- `source_snapshot_id`
+- `source_snapshot_hash`
+- `celery_task_id`
+- `status`
+- `current_step`
+- `output_sufficiency_report_id`
+- `output_submission_artifact_policy_id`
+- `error_code`
+- `error_summary`
+- `created_by`
+- `created_at`
+- `updated_at`
+- `started_at`
+- `finished_at`
+
+`ProjectSetupRun` is a non-authoritative orchestration ledger for automatic
+project setup. It records that Workstream queued or attempted the guide
+sufficiency and submission artifact policy derivation pipeline for one guide
+source snapshot. It does not replace the source snapshot, sufficiency report,
+submission artifact policy, effective project policy, or pre-submit checker
+policy rows.
+
+Statuses:
+
+- `queued`
+- `enqueue_failed`
+- `running_sufficiency_agent`
+- `sufficiency_blocked`
+- `running_policy_derivation_agent`
+- `policy_draft_ready`
+- `setup_blocked`
+- `failed`
+
+The run references downstream truth by id/hash. Operators can read the latest
+run through the project setup API to understand whether setup is still queued,
+blocked by guide sufficiency, waiting on policy approval, or failed at the
+queue/worker layer. Error summaries are bounded and redacted; server logs remain
+the source for sensitive diagnostics.
 
 ## GuideSufficiencyReport
 

@@ -11,3 +11,9 @@
 | Worker enqueue durability gap | Medium | Current Celery enqueue semantics are honest after commit; add a durable outbox later if guaranteed eventual enqueue is required. |
 | Agent scope creep | Medium | Project setup agent execution is now isolated behind Celery; future agent expansion must stay behind chunk contracts and must not run inline in request handlers. |
 | Insufficient real API proof | High | Require Postgres-backed API tests and real API drill before closing the initiative. |
+| Hidden setup state forces DB inspection | High | Persist project setup runs and expose sufficiency, policy, effective policy, checker policy, task requirements, and locked context through authorized APIs before rerunning the live drill. |
+| Overexposing policy/compiler internals to workers | Medium | Split worker-facing requirements/work-context endpoints from operator-only locked-context and checker-policy endpoints. |
+| Ambiguous submission lock wording | Medium | Replace the public `/lock` endpoint with `/finalize` while keeping `locked_at` as internal persistence terminology. |
+| Audit actor confusion for automated gates | Medium | Use a Workstream internal system actor for pre-review checker execution and keep requester provenance in audit payload. |
+| Visibility API mega-PR becomes unreviewable | High | Split the 14 API surfaces into project setup visibility, task context visibility, and finalize/no-DB proof chunks. |
+| Worker endpoints accidentally recompute from current guide | High | Task context endpoints must read stamped locked context only and fail closed when required lock fields are missing. |

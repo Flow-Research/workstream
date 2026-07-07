@@ -229,3 +229,65 @@ runtime rewiring until immutable guide-source snapshots, guide sufficiency
 reports, project policy objects, defaults, effective project submission artifact policy hash,
 generated project pre-submit checker bundle, task locked-context fields, and
 activation/ready guards are accepted.
+
+## Visibility API Extension
+
+The post-actor-registry Terminal Benchmark live API drill proved the lifecycle
+but required direct database inspection to continue through project setup and
+policy approval. The next implementation sequence closes that gap before the
+drill is rerun. The work is split across narrow chunks because it crosses
+project setup, task worker visibility, submission finalization, checker reads,
+and audit proof.
+
+The target API surface is:
+
+| # | API | Status |
+|---:|---|---|
+| 1 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest` | New |
+| 2 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports` | New |
+| 3 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}` | New |
+| 4 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` | New |
+| 5 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` | New |
+| 6 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | New |
+| 7 | `GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | New |
+| 8 | `GET /api/v1/tasks/{task_id}/work-context` | New |
+| 9 | `GET /api/v1/tasks/{task_id}/submission-requirements` | New |
+| 10 | `GET /api/v1/tasks/{task_id}/locked-context` | New |
+| 11 | `POST /api/v1/submissions/{submission_id}/finalize` | New replacement for public `/lock` |
+| 12 | `GET /api/v1/submissions/{submission_id}/checker-runs` | Existing; keep and cover |
+| 13 | `GET /api/v1/checker-runs/{checker_run_id}` | Existing; keep and cover |
+| 14 | `GET /api/v1/tasks/{task_id}/audit-events` | Existing; keep and cover |
+
+Implementation sequence:
+
+| Chunk | Scope | APIs |
+|---|---|---|
+| `WS-POL-001-12` | Project setup-run and project policy visibility | 1-7 |
+| `WS-POL-001-13` | Task work context, submission requirements, and operator locked context | 8-10 |
+| `WS-POL-001-14` | Submission finalize, system actor audit semantics, and no-DB drill coverage | 11-14 plus existing pre-submit preflight |
+
+`ProjectSetupRun` is a non-authoritative orchestration ledger. It records that
+automatic setup was queued and how far the Celery job progressed, but policy
+truth remains in `GuideSufficiencyReport`, `SubmissionArtifactPolicy`,
+`EffectiveProjectSubmissionArtifactPolicy`, and `PreSubmitCheckerPolicy`.
+The setup run records the Celery task id, lifecycle status, current step,
+output report/policy ids, bounded errors, and timestamps. Enqueue writes
+`queued`; enqueue failure writes `enqueue_failed`; the Celery worker updates
+`running_sufficiency_agent`, `sufficiency_blocked`,
+`running_policy_derivation_agent`, `policy_draft_ready`, `setup_blocked`, or
+`failed`.
+
+Project setup and policy APIs require project setup operator access. For v0.1,
+that means a verified token with `admin` or `project_manager`.
+
+Worker-facing visibility must be useful without leaking internal compiler
+authority. Workers can see guide/work context and exact submission
+requirements only for tasks they can work on. Operators can see full locked
+provenance and compiled checker policy summaries.
+
+Submission finalization should be the public handoff into the pre-review gate.
+For v0.1, finalization is an `admin` or `project_manager` operation and is
+idempotent for the latest submitted version. The external actor authorizes the
+request and receives the API response, but pre-review checker execution is
+audited as `workstream-system:pre-review-gate` with requester provenance in
+the event payload. The system actor never authorizes HTTP requests.

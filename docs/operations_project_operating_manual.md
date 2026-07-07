@@ -29,6 +29,7 @@ Before releasing tasks:
 - project guide imported
 - guide source snapshot captured
 - project owner setup material captured
+- latest project setup run visible to `admin` or `project_manager`
 - payment policy base amount configured
 - payment policy currency configured
 - allowed task types listed
@@ -51,6 +52,21 @@ The guide source snapshot freezes guide/source material only. While the guide is
 still draft, an `admin` or `project_manager` may attach or update checker,
 review, revision, and payment policy records after snapshot capture because
 those records are activated as separate policy context.
+
+Project setup operators inspect setup state through API reads, not direct
+database queries. These endpoints require `admin` or `project_manager` access:
+
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy`
+
+`ProjectSetupRun` is only a setup ledger. Policy truth remains in the guide
+source snapshot, sufficiency report, submission artifact policy, effective
+project policy, and compiled project pre-submit checker policy rows.
 
 ## v0.1 Quality Gates
 

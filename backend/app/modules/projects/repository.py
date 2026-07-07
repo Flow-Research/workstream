@@ -18,6 +18,7 @@ from app.modules.projects.models import (
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
+    ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
@@ -267,6 +268,42 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
+    async def add_project_setup_run(
+        self,
+        setup_run: ProjectSetupRun,
+    ) -> ProjectSetupRun:
+        """Persist a project setup run ledger row."""
+        self._session.add(setup_run)
+        await self._session.flush()
+        await self._session.refresh(setup_run)
+        return setup_run
+
+    async def get_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
+        """Load one project setup run by primary key."""
+        return await self._session.get(ProjectSetupRun, setup_run_id)
+
+    async def get_latest_project_setup_run(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> ProjectSetupRun | None:
+        """Load the latest setup run for one project guide."""
+        result = await self._session.execute(
+            select(ProjectSetupRun)
+            .join(GuideSourceSnapshot, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id)
+            .where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+            )
+            .order_by(
+                GuideSourceSnapshot.captured_at.desc(),
+                ProjectSetupRun.created_at.desc(),
+                ProjectSetupRun.id.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def add_guide_sufficiency_report(
         self,
         report: GuideSufficiencyReport,
@@ -290,6 +327,22 @@ class ProjectRepository:
     ) -> GuideSufficiencyReport | None:
         """Load one guide sufficiency report by primary key."""
         return await self._session.get(GuideSufficiencyReport, report_id)
+
+    async def list_guide_sufficiency_reports(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> Sequence[GuideSufficiencyReport]:
+        """List sufficiency reports for one project guide."""
+        result = await self._session.execute(
+            select(GuideSufficiencyReport)
+            .where(
+                GuideSufficiencyReport.project_id == project_id,
+                GuideSufficiencyReport.guide_id == guide_id,
+            )
+            .order_by(GuideSufficiencyReport.created_at.desc(), GuideSufficiencyReport.id.desc())
+        )
+        return result.scalars().all()
 
     async def get_sufficiency_report_for_snapshot(
         self,
@@ -326,6 +379,25 @@ class ProjectRepository:
     ) -> SubmissionArtifactPolicy | None:
         """Load one submission artifact policy by primary key."""
         return await self._session.get(SubmissionArtifactPolicy, policy_id)
+
+    async def list_submission_artifact_policies(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> Sequence[SubmissionArtifactPolicy]:
+        """List submission artifact policies for one project guide."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy)
+            .where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_id == guide_id,
+            )
+            .order_by(
+                SubmissionArtifactPolicy.created_at.desc(),
+                SubmissionArtifactPolicy.id.desc(),
+            )
+        )
+        return result.scalars().all()
 
     async def get_agent_derived_submission_artifact_policy_for_snapshot(
         self,

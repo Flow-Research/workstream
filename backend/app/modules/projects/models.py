@@ -256,6 +256,70 @@ class GuideSourceSnapshotItem(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ProjectSetupRun(Base):
+    """Non-authoritative ledger for automatic project setup execution."""
+
+    __tablename__ = "project_setup_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ("
+            "'queued', "
+            "'enqueue_failed', "
+            "'running_sufficiency_agent', "
+            "'sufficiency_blocked', "
+            "'running_policy_derivation_agent', "
+            "'policy_draft_ready', "
+            "'setup_blocked', "
+            "'failed'"
+            ")",
+            name="ck_project_setup_runs_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_project_setup_runs_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_project_setup_runs_source_snapshot_hash",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    celery_task_id: Mapped[str | None] = mapped_column(String(155), index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    current_step: Mapped[str] = mapped_column(String(100), nullable=False)
+    output_sufficiency_report_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_sufficiency_reports.id"),
+        index=True,
+    )
+    output_submission_artifact_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_artifact_policies.id"),
+        index=True,
+    )
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class GuideSufficiencyReport(Base):
     """Workstream assessment of whether a guide snapshot is usable."""
 

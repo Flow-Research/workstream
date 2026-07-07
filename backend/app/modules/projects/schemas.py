@@ -113,6 +113,31 @@ class GuideSourceSnapshotResponse(BaseModel):
     items: list[GuideSourceSnapshotItemResponse] = Field(default_factory=list)
 
 
+class ProjectSetupRunResponse(BaseModel):
+    """Response schema for automatic project setup run ledger rows."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash: str
+    celery_task_id: str | None
+    status: str
+    current_step: str
+    output_sufficiency_report_id: str | None
+    output_submission_artifact_policy_id: str | None
+    error_code: str | None
+    error_summary: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
 class GuideSufficiencyFindingInput(BaseModel):
     """Input schema for one guide sufficiency finding."""
 
@@ -371,11 +396,16 @@ class PreSubmitCheckerPolicySummaryResponse(BaseModel):
     compiler_version: str | None
     compiled_bundle_hash: str | None
     checker_names: list[str]
-    checker_configs: dict[str, Any]
     created_by: str
     created_at: datetime
     supersedes_pre_submit_checker_policy_id: str | None
     superseded_at: datetime | None
+
+
+class ActiveGuidePreSubmitCheckerPolicyResponse(PreSubmitCheckerPolicySummaryResponse):
+    """Active-guide response schema for project pre-submit checker context."""
+
+    checker_configs: dict[str, Any]
 
 
 class ProjectCreate(BaseModel):
@@ -520,7 +550,7 @@ class ActiveGuideResponse(BaseModel):
     guide_sufficiency_report: GuideSufficiencyReportResponse
     submission_artifact_policy: SubmissionArtifactPolicyResponse
     effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
-    pre_submit_checker_policy: PreSubmitCheckerPolicySummaryResponse
+    pre_submit_checker_policy: ActiveGuidePreSubmitCheckerPolicyResponse
     post_submit_checker_policy: PostSubmitCheckerPolicyResponse
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse

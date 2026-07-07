@@ -96,3 +96,52 @@ project owner does not approve Workstream's internal policy controls.
 - Review decision stored values only `accept`, `needs_revision`, `reject`.
 - Internal checker routes are not review decisions.
 - CodeRabbit and CI supplement, but do not replace, internal reviewer tracks.
+
+## Post-Actor-Registry Live API Drill Findings
+
+The 2026-07-07 Terminal Benchmark live API drill completed through real HTTP
+calls and proved the core setup and submission path:
+
+```text
+Flow-token auth
+-> project create
+-> guide/source snapshot create
+-> Celery project setup
+-> OpenAI Agents SDK sufficiency report
+-> OpenAI Agents SDK submission artifact policy derivation
+-> policy approval
+-> effective project policy merge
+-> deterministic project PreSubmitCheckerPolicy compilation
+-> guide activation
+-> task screen/release
+-> worker profile activation
+-> claim/start
+-> pre-submit failure creates no submission
+-> pre-submit pass creates submission
+-> current submission lock route triggers pre-review gate
+-> review_pending
+```
+
+The drill also exposed visibility gaps:
+
+| Gap | Current state | Needed API behavior |
+|---|---|---|
+| Project setup run status | Celery returns task state, but Workstream does not persist a setup-run record. | Persist and expose latest setup run with status, current step, Celery task id, timestamps, and output ids. |
+| Sufficiency report discovery | Creation and acknowledgement endpoints exist, but list/get read endpoints are missing. | Operators can list and inspect reports by API. |
+| Submission artifact policy discovery | Create/update/approve endpoints exist, but list/get read endpoints are missing. | Operators can inspect the generated draft before approval without DB access. |
+| Effective policy discovery | Approval response shows the effective policy, but there is no stable current-policy GET. | Operators can fetch current effective policy by project/guide. |
+| Pre-submit checker policy discovery | Active guide response includes a summary, but no focused checker-policy GET exists. | Operators can fetch checker names, configs, compiler version, and compiled bundle hash. |
+| Worker submission requirements | Workers can run pre-submit, but cannot fetch the exact required artifacts/evidence/attestation concepts first. | Worker-facing requirements endpoint shows the locked intake contract without internal-only compiler details. |
+| Operator locked context | Some task responses redact or omit internal lock fields depending on actor. | Operator endpoint exposes full task locked provenance for support and drill verification. |
+| Public submission lock wording | Public endpoint is `/submissions/{id}/lock`; the worker cannot call it and the name sounds like a storage action. | Replace with `/submissions/{id}/finalize` as the public handoff into pre-review gate. |
+| Gate audit actor | Current lock/finalize requester appears as the actor on pre-review gate execution. | Use an internal Workstream system actor for checker gate execution while retaining requester provenance. |
+
+Already-existing APIs from the desired drill surface:
+
+- `POST /api/v1/tasks/{task_id}/submission-precheck`
+- `GET /api/v1/submissions/{submission_id}/checker-runs`
+- `GET /api/v1/checker-runs/{checker_run_id}`
+- `GET /api/v1/tasks/{task_id}/audit-events`
+
+These should stay covered by the new no-DB drill but do not need duplicate
+routes.

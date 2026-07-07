@@ -11,7 +11,11 @@ from celery.utils.log import get_task_logger
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.session import get_database_url
-from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.modules.projects.service import (
+    ProjectService,
+    ProjectServiceError,
+    safe_project_setup_error_summary,
+)
 from app.schemas.auth import ActorContext
 from app.workers.celery_app import celery_app
 
@@ -42,6 +46,7 @@ def run_pre_submit_setup_pipeline(
     project_id: str,
     guide_id: str,
     source_snapshot_id: str,
+    setup_run_id: str,
 ) -> dict[str, Any]:
     """Run guide sufficiency and policy derivation for a source snapshot.
 
@@ -49,12 +54,18 @@ def run_pre_submit_setup_pipeline(
         project_id: Project that owns the guide.
         guide_id: Guide whose latest source snapshot should be processed.
         source_snapshot_id: Immutable source snapshot to analyze.
+        setup_run_id: Project setup run ledger row to update.
 
     Returns:
         Machine-readable terminal pipeline state.
     """
     return _run_async_task(
-        lambda: _run_pre_submit_setup_pipeline(project_id, guide_id, source_snapshot_id)
+        lambda: _run_pre_submit_setup_pipeline(
+            project_id,
+            guide_id,
+            source_snapshot_id,
+            setup_run_id,
+        )
     )
 
 
@@ -78,6 +89,7 @@ async def _run_pre_submit_setup_pipeline(
     project_id: str,
     guide_id: str,
     source_snapshot_id: str,
+    setup_run_id: str,
 ) -> dict[str, Any]:
     """Execute the project setup pipeline using async service contracts."""
     actor = project_setup_pipeline_actor()
@@ -87,6 +99,17 @@ async def _run_pre_submit_setup_pipeline(
         async with session_factory() as session:
             service = ProjectService(session)
             try:
+                await service.validate_project_setup_run_context(
+                    setup_run_id,
+                    project_id=project_id,
+                    guide_id=guide_id,
+                    source_snapshot_id=source_snapshot_id,
+                )
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="running_sufficiency_agent",
+                    current_step="guide_sufficiency",
+                )
                 sufficiency_report, _ = await service.run_guide_sufficiency_agent(
                     actor,
                     project_id,
@@ -94,16 +117,35 @@ async def _run_pre_submit_setup_pipeline(
                     source_snapshot_id,
                 )
                 if sufficiency_report.status == "blocked":
+                    await service.update_project_setup_run_status(
+                        setup_run_id,
+                        status="sufficiency_blocked",
+                        current_step="guide_sufficiency",
+                        output_sufficiency_report_id=sufficiency_report.id,
+                    )
                     return {
                         "status": "sufficiency_blocked",
                         "guide_sufficiency_report_id": sufficiency_report.id,
                         "submission_artifact_policy_id": None,
                     }
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="running_policy_derivation_agent",
+                    current_step="submission_artifact_policy_derivation",
+                    output_sufficiency_report_id=sufficiency_report.id,
+                )
                 policy, _ = await service.run_submission_artifact_policy_derivation_agent(
                     actor,
                     project_id,
                     guide_id,
                     source_snapshot_id,
+                )
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="policy_draft_ready",
+                    current_step="submission_artifact_policy_derivation",
+                    output_sufficiency_report_id=sufficiency_report.id,
+                    output_submission_artifact_policy_id=policy.id,
                 )
                 return {
                     "status": "policy_draft_ready",
@@ -111,18 +153,51 @@ async def _run_pre_submit_setup_pipeline(
                     "submission_artifact_policy_id": policy.id,
                 }
             except ProjectServiceError as exc:
+                public_error = safe_project_setup_error_summary(str(exc))
                 logger.warning(
                     "project setup pipeline stopped",
                     extra={
                         "project_id": project_id,
                         "guide_id": guide_id,
                         "source_snapshot_id": source_snapshot_id,
-                        "error": str(exc),
+                        "setup_run_id": setup_run_id,
+                        "error_code": exc.__class__.__name__,
+                        "error_summary": public_error,
                     },
+                )
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="setup_blocked",
+                    current_step="project_setup",
+                    error_code=exc.__class__.__name__,
+                    error_summary=public_error,
                 )
                 return {
                     "status": "setup_blocked",
-                    "error": str(exc),
+                    "error": public_error,
+                    "guide_sufficiency_report_id": None,
+                    "submission_artifact_policy_id": None,
+                }
+            except Exception as exc:
+                logger.exception(
+                    "project setup pipeline failed",
+                    extra={
+                        "project_id": project_id,
+                        "guide_id": guide_id,
+                        "source_snapshot_id": source_snapshot_id,
+                        "setup_run_id": setup_run_id,
+                    },
+                )
+                await service.update_project_setup_run_status(
+                    setup_run_id,
+                    status="failed",
+                    current_step="project_setup",
+                    error_code=exc.__class__.__name__,
+                    error_summary="unexpected project setup pipeline failure",
+                )
+                return {
+                    "status": "failed",
+                    "error": "unexpected project setup pipeline failure",
                     "guide_sufficiency_report_id": None,
                     "submission_artifact_policy_id": None,
                 }

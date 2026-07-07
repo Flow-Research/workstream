@@ -75,6 +75,15 @@ whether the guide passed, is blocked by gaps, or passed with warnings that an
 clear only the manual policy path; agent derivation requires an agent-created
 sufficiency report for the same snapshot.
 
+## Project Setup Run
+
+A non-authoritative orchestration ledger for automatic project setup. It records
+queue status, current setup step, Celery task id, bounded errors, and output
+record ids for guide sufficiency and submission artifact policy derivation. The
+actual policy truth remains in the source snapshot, sufficiency report,
+submission artifact policy, effective project policy, and pre-submit checker
+policy rows.
+
 ## Submission Artifact Policy
 
 The Workstream-derived, admin-or-project-manager-approved machine-readable

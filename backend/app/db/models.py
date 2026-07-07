@@ -12,6 +12,7 @@ from app.modules.projects.models import (  # noqa: F401
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
+    ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,

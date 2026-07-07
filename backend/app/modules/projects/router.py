@@ -18,11 +18,13 @@ from app.modules.projects.schemas import (
     GuideSufficiencyAcknowledgement,
     GuideSufficiencyReportCreate,
     GuideSufficiencyReportResponse,
+    PreSubmitCheckerPolicySummaryResponse,
     ProjectCreate,
     ProjectGuideCreate,
     ProjectGuideResponse,
     ProjectGuideUpdate,
     ProjectResponse,
+    ProjectSetupRunResponse,
     SubmissionArtifactPolicyApprove,
     SubmissionArtifactPolicyCreate,
     SubmissionArtifactPolicyResponse,
@@ -152,6 +154,77 @@ async def create_guide_source_snapshot(
         raise project_http_error(exc) from exc
 
 
+@router.get(
+    "/{project_id}/guides/{guide_id}/setup-runs/latest",
+    response_model=ProjectSetupRunResponse,
+)
+async def get_latest_project_setup_run(
+    project_id: str,
+    guide_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ProjectSetupRunResponse:
+    """Return the latest automatic setup run for one project guide."""
+    try:
+        return await ProjectService(session).get_latest_project_setup_run(
+            actor,
+            project_id,
+            guide_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/sufficiency-reports",
+    response_model=list[GuideSufficiencyReportResponse],
+)
+async def list_guide_sufficiency_reports(
+    project_id: str,
+    guide_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[GuideSufficiencyReportResponse]:
+    """List guide sufficiency reports for one project guide."""
+    try:
+        return await ProjectService(session).list_guide_sufficiency_reports(
+            actor,
+            project_id,
+            guide_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}",
+    response_model=GuideSufficiencyReportResponse,
+)
+async def get_guide_sufficiency_report(
+    project_id: str,
+    guide_id: str,
+    report_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideSufficiencyReportResponse:
+    """Return one guide sufficiency report for one project guide."""
+    try:
+        return await ProjectService(session).get_guide_sufficiency_report(
+            actor,
+            project_id,
+            guide_id,
+            report_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
 @router.post(
     "/{project_id}/guides/{guide_id}/sufficiency-reports",
     response_model=GuideSufficiencyReportResponse,
@@ -171,6 +244,54 @@ async def create_guide_sufficiency_report(
             project_id,
             guide_id,
             payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/submission-artifact-policies",
+    response_model=list[SubmissionArtifactPolicyResponse],
+)
+async def list_submission_artifact_policies(
+    project_id: str,
+    guide_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> list[SubmissionArtifactPolicyResponse]:
+    """List submission artifact policies for one project guide."""
+    try:
+        return await ProjectService(session).list_submission_artifact_policies(
+            actor,
+            project_id,
+            guide_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
+    response_model=SubmissionArtifactPolicyResponse,
+)
+async def get_submission_artifact_policy(
+    project_id: str,
+    guide_id: str,
+    policy_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> SubmissionArtifactPolicyResponse:
+    """Return one submission artifact policy for one project guide."""
+    try:
+        return await ProjectService(session).get_submission_artifact_policy(
+            actor,
+            project_id,
+            guide_id,
+            policy_id,
         )
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc
@@ -348,6 +469,52 @@ async def approve_submission_artifact_policy(
             guide_id,
             policy_id,
             payload,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
+    response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
+)
+async def get_current_effective_submission_artifact_policy(
+    project_id: str,
+    guide_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> EffectiveProjectSubmissionArtifactPolicyResponse:
+    """Return the current effective submission artifact policy for a guide."""
+    try:
+        return await ProjectService(session).get_current_effective_submission_artifact_policy(
+            actor,
+            project_id,
+            guide_id,
+        )
+    except PermissionDenied as exc:
+        raise permission_http_error(exc) from exc
+    except ProjectServiceError as exc:
+        raise project_http_error(exc) from exc
+
+
+@router.get(
+    "/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
+    response_model=PreSubmitCheckerPolicySummaryResponse,
+)
+async def get_current_pre_submit_checker_policy(
+    project_id: str,
+    guide_id: str,
+    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> PreSubmitCheckerPolicySummaryResponse:
+    """Return the current project pre-submit checker policy summary."""
+    try:
+        return await ProjectService(session).get_current_pre_submit_checker_policy(
+            actor,
+            project_id,
+            guide_id,
         )
     except PermissionDenied as exc:
         raise permission_http_error(exc) from exc

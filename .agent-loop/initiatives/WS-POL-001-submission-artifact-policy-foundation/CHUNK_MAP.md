@@ -895,3 +895,356 @@ Human review focus:
 
 The shared actor/profile model removes duplicated profile storage without
 turning persisted profiles into auth or permission authority.
+
+### WS-POL-001-12: Project Setup And Policy Visibility APIs
+
+Goal:
+
+Expose project setup and project policy state needed to continue a real setup
+drill without database inspection. This chunk covers APIs 1-7 only.
+
+Risk:
+
+L1
+
+Depends on:
+
+`WS-POL-001-11` and the post-merge Terminal Benchmark live API drill findings.
+
+Allowed files:
+
+```text
+backend/alembic/versions/**
+backend/app/db/models.py
+backend/app/modules/projects/**
+backend/app/workers/project_setup.py
+backend/tests/test_projects.py
+backend/scripts/api_contract_e2e.py
+docs/architecture_data_model.md
+docs/architecture_system_architecture.md
+docs/glossary.md
+docs/operations_project_operating_manual.md
+docs/roadmap_status.md
+.agent-loop/LOOP_STATE.md
+.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
+```
+
+Not allowed:
+
+```text
+backend/app/modules/tasks/**
+backend/app/modules/checkers/**
+Workstream-owned login, signup, password reset, password storage, primary auth sessions, or API-key auth
+Flow token verifier replacement
+frontend/demo UI work
+payment/reputation/blockchain settlement
+agent prompt redesign or new project setup agent behavior
+unrestricted generated checker code
+review decision token changes
+project owner-authored SubmissionArtifactPolicy schema
+DB-only drill steps as accepted proof
+```
+
+API contract:
+
+```text
+1. GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest
+2. GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports
+3. GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}
+4. GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies
+5. GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}
+6. GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy
+7. GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy
+```
+
+Authorization:
+
+- All endpoints require verified token auth.
+- All endpoints require project setup operator access: `admin` or
+  `project_manager`.
+- Worker, reviewer, finance, and auditor roles do not gain these project setup
+  endpoints in v0.1.
+
+Acceptance criteria:
+
+- `ProjectSetupRun` persistence exists for automatic project setup jobs.
+- `ProjectSetupRun` is a non-authoritative orchestration ledger. It references
+  downstream truth by id/hash but does not replace sufficiency report, policy,
+  effective policy, or pre-submit checker policy records.
+- Creating a guide/source snapshot with automatic setup enabled creates a setup
+  run before enqueue.
+- Successful enqueue records the Celery task id. Enqueue failure records
+  `enqueue_failed` with a bounded error summary.
+- The project setup worker updates setup-run status and current step as it runs
+  guide sufficiency and policy derivation.
+- Setup-run statuses are explicit: `queued`, `enqueue_failed`,
+  `running_sufficiency_agent`, `sufficiency_blocked`,
+  `running_policy_derivation_agent`, `policy_draft_ready`, `setup_blocked`,
+  and `failed`.
+- `GET .../setup-runs/latest` returns the latest setup run scoped to the
+  requested project and guide with source snapshot id/hash, Celery task id,
+  status, current step, output ids, bounded error code/summary, and timestamps.
+- Setup-run errors must not expose signed URLs, credential-bearing refs,
+  token-bearing refs, local filesystem paths, private object keys, or raw stack
+  traces.
+- Sufficiency report list/get endpoints return only reports for the requested
+  project and guide.
+- Submission artifact policy list/get endpoints return only policies for the
+  requested project and guide.
+- Effective policy GET returns the current approved effective project
+  submission artifact policy for the guide/source snapshot.
+- Pre-submit checker policy GET returns the current compiled project
+  `PreSubmitCheckerPolicy` summary for the guide/effective policy.
+- The pre-submit checker policy response can include checker names, compiler
+  version, compiled bundle hash, lifecycle status, source snapshot id/hash, and
+  effective policy id/hash. It must not expose mutable authority beyond the
+  persisted compiled bundle summary.
+
+Verification:
+
+- Postgres-backed project tests cover setup-run creation, enqueue task id,
+  enqueue failure, worker status updates, latest setup-run reads,
+  sufficiency report list/get, submission artifact policy list/get, effective
+  policy GET, pre-submit checker policy GET, scoping, and unauthorized roles.
+- `backend/scripts/api_contract_e2e.py` may be updated only to consume the new
+  APIs through HTTP, not to add DB inspection as proof.
+- Stale wording scan covers DB-inspection instructions in docs, scripts, and
+  examples.
+- Markdown link check passes for changed docs.
+
+Required reviewers:
+
+senior engineering, QA/test, security/auth, product/ops, architecture, docs,
+reuse/dedup, test delta.
+
+Human review focus:
+
+Setup-run status names, project setup operator access, redaction, and keeping
+`ProjectSetupRun` as a ledger rather than a policy source of truth.
+
+### WS-POL-001-13: Task Context And Submission Requirement APIs
+
+Goal:
+
+Expose worker-safe task context, exact submission requirements, and
+operator-only locked provenance. This chunk covers APIs 8-10 only.
+
+Risk:
+
+L1
+
+Depends on:
+
+`WS-POL-001-12`
+
+Allowed files:
+
+```text
+backend/app/modules/tasks/**
+backend/app/modules/projects/schemas.py
+backend/tests/test_tasks.py
+backend/scripts/api_contract_e2e.py
+docs/architecture_data_model.md
+docs/architecture_system_architecture.md
+docs/glossary.md
+docs/operations_project_operating_manual.md
+docs/roadmap_status.md
+.agent-loop/LOOP_STATE.md
+.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
+```
+
+Not allowed:
+
+```text
+backend/alembic/versions/**
+backend/app/modules/checkers/**
+backend/app/workers/project_setup.py
+Workstream-owned login, signup, password reset, password storage, primary auth sessions, or API-key auth
+Flow token verifier replacement
+frontend/demo UI work
+payment/reputation/blockchain settlement
+agent prompt redesign or new project setup agent behavior
+review decision token changes
+DB-only drill steps as accepted proof
+```
+
+API contract:
+
+```text
+8.  GET /api/v1/tasks/{task_id}/work-context
+9.  GET /api/v1/tasks/{task_id}/submission-requirements
+10. GET /api/v1/tasks/{task_id}/locked-context
+```
+
+Authorization:
+
+- `work-context` and `submission-requirements` require existing task visibility
+  for `admin`, `project_manager`, or the worker currently allowed to work the
+  task.
+- `locked-context` is operator-only for `admin` or `project_manager`.
+- Persisted actor profiles do not grant route authorization. Token-derived role
+  checks remain the route gate.
+
+Acceptance criteria:
+
+- `work-context` returns the task, project/guide summary, active locked guide
+  content, review/revision/payment summary, and worker-facing lifecycle state.
+- `submission-requirements` returns exact required artifacts, required evidence
+  keys/labels/descriptions, forbidden artifact rules, allowed storage schemes,
+  packaging rules, hash algorithm, storage reference rules, and required
+  attestation concepts from the task's locked effective project policy.
+- Worker-facing responses omit raw compiled checker bundles, checker configs,
+  internal route tokens, private source refs, full source snapshot hashes,
+  Celery task ids, and internal setup errors.
+- `locked-context` returns full operator provenance: guide source snapshot
+  id/hash, effective policy id/hash, pre-submit checker policy id/hash,
+  post-submit checker policy id/hash/body summary, review policy version,
+  revision policy version, and payment policy version.
+- All task context APIs read already-stamped task locked context. They must not
+  recompute policy from the current active guide or current project policy.
+- If required locked context is missing or inconsistent, task context endpoints
+  fail closed with a structured setup/locked-context error.
+- Tests prove guide v2 activation does not silently change work-context or
+  submission requirements for a task already locked to v1.
+
+Verification:
+
+- Postgres-backed task tests cover worker/operator visibility, redaction,
+  missing locked context, stale active-guide drift, and unauthorized roles.
+- API-contract script updates use only HTTP responses for task context proof.
+- Stale wording scan covers `task binding`, task-owned policy, and DB-only
+  proof wording in changed files.
+- Markdown link check passes for changed docs.
+
+Required reviewers:
+
+senior engineering, QA/test, security/auth, product/ops, architecture, docs,
+reuse/dedup, test delta.
+
+Human review focus:
+
+Whether worker-facing requirements are complete enough for a real submitter
+without exposing internal compiler authority.
+
+### WS-POL-001-14: Submission Finalize And No-DB Drill Proof
+
+Goal:
+
+Replace the public submission `lock` route with `finalize`, clarify system
+actor audit semantics, and prove the full 14-API Terminal Benchmark drill
+through HTTP only.
+
+Risk:
+
+L1
+
+Depends on:
+
+`WS-POL-001-13`
+
+Allowed files:
+
+```text
+backend/app/modules/tasks/**
+backend/app/modules/checkers/**
+backend/tests/test_tasks.py
+backend/tests/test_checkers.py
+backend/scripts/api_contract_e2e.py
+examples/terminal_benchmark/terminal_benchmark_api_e2e.py
+docs/architecture_data_model.md
+docs/architecture_system_architecture.md
+docs/glossary.md
+docs/operations_project_operating_manual.md
+docs/roadmap_status.md
+.agent-loop/LOOP_STATE.md
+.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/**
+```
+
+Not allowed:
+
+```text
+backend/alembic/versions/**
+backend/app/modules/projects/**
+backend/app/workers/project_setup.py
+Workstream-owned login, signup, password reset, password storage, primary auth sessions, or API-key auth
+Flow token verifier replacement
+frontend/demo UI work
+payment/reputation/blockchain settlement
+agent prompt redesign or new project setup agent behavior
+review decision token changes
+DB-only drill steps as accepted proof
+```
+
+API contract:
+
+```text
+11. POST /api/v1/submissions/{submission_id}/finalize
+12. GET  /api/v1/submissions/{submission_id}/checker-runs
+13. GET  /api/v1/checker-runs/{checker_run_id}
+14. GET  /api/v1/tasks/{task_id}/audit-events
+```
+
+The existing `POST /api/v1/tasks/{task_id}/submission-precheck` remains part of
+the no-DB drill proof.
+
+Authorization:
+
+- `finalize` requires verified `admin` or `project_manager`.
+- The requester must be authorized against the submission's project/task.
+- The internal pre-review gate system actor cannot authorize HTTP requests and
+  cannot be supplied by the client.
+- Checker-run and audit reads retain their existing route permissions unless a
+  test proves a visibility mismatch.
+
+Acceptance criteria:
+
+- Public `POST /submissions/{submission_id}/finalize` replaces public
+  `POST /submissions/{submission_id}/lock` in code, tests, scripts, examples,
+  and docs. No v0.1 compatibility alias is kept.
+- `finalize` is idempotent for the latest submitted version and returns the
+  existing finalized response on repeat calls.
+- `finalize` fails for non-latest submission versions, unfinished submissions,
+  unauthorized roles, and submissions whose task locked context is missing or
+  inconsistent.
+- Persistence may keep `locked_at` as the internal timestamp field.
+- Public audit event wording uses `submission_finalized` for the requester
+  handoff. Old public `submission_locked` wording is removed from current docs,
+  scripts, and tests.
+- Pre-review checker execution is audited under
+  `workstream-system:pre-review-gate` and includes requester actor id, issuer,
+  subject, and auth source in the event payload.
+- Existing checker-run list/get endpoints remain stable and expose durable
+  post-submit checker results for the finalized submission.
+- Existing task audit-event endpoint remains stable and exposes the finalization
+  and pre-review gate path.
+- The Terminal Benchmark drill proceeds from guide creation through
+  `review_pending` using HTTP API responses only. Direct DB reads are allowed
+  only for test setup/cleanup and migration reset, not for proving lifecycle
+  state or finding ids.
+- The drill explicitly proves both paths: pre-submit preflight failure returns
+  `200 PreSubmitCheckResponse` with `eligible_to_submit: false`, and blocked
+  submission creation returns `pre_submission_checker_failed` without creating
+  a submission.
+
+Verification:
+
+- Postgres-backed task/checker tests cover finalize success, idempotency,
+  authorization, non-latest rejection, system actor audit, checker-run reads,
+  and audit-event reads.
+- `backend/scripts/api_contract_e2e.py` uses `/finalize`, not `/lock`.
+- `examples/terminal_benchmark/terminal_benchmark_api_e2e.py` uses APIs 1-14
+  plus pre-submit preflight and contains no DB inspection as proof.
+- Stale wording scan covers `/submissions/.*/lock`, `submission_locked`,
+  `lock endpoint`, and DB-inspection proof wording in backend, docs, scripts,
+  examples, and `.agent-loop`.
+- Markdown link check passes for changed docs.
+
+Required reviewers:
+
+senior engineering, QA/test, security/auth, product/ops, architecture, docs,
+reuse/dedup, test delta.
+
+Human review focus:
+
+Public `finalize` wording, operator-only authorization, system actor audit
+provenance, and whether the live drill is genuinely API-only.
