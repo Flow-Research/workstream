@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import inspect
 import json
-import logging
 import sys
 import types
 from collections.abc import AsyncIterator, Iterator
@@ -1482,7 +1481,6 @@ async def test_project_setup_run_records_enqueue_failure_without_leaking_error(
 async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Unexpected worker failures keep secrets out of logs, results, and setup runs."""
     from app.workers import project_setup as project_setup_worker_module
@@ -1525,7 +1523,12 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
         "run_guide_sufficiency_agent",
         raise_raw_secret_error,
     )
-    caplog.set_level(logging.ERROR, logger=project_setup_worker_module.logger.name)
+    error_logs: list[dict[str, object]] = []
+
+    def capture_error(message: str, *, extra: dict[str, object]) -> None:
+        error_logs.append({"message": message, "extra": extra})
+
+    monkeypatch.setattr(project_setup_worker_module.logger, "error", capture_error)
 
     result = await project_setup_worker_module._run_pre_submit_setup_pipeline(
         project["id"],
@@ -1549,18 +1552,23 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     assert persisted.error_summary == (
         "project setup failed; inspect server logs with the setup run id"
     )
-    error_records = [
-        record
-        for record in caplog.records
-        if record.levelno == logging.ERROR and record.message == "project setup pipeline failed"
+    assert error_logs == [
+        {
+            "message": "project setup pipeline failed",
+            "extra": {
+                "project_id": project["id"],
+                "guide_id": guide["id"],
+                "source_snapshot_id": snapshot_id,
+                "setup_run_id": setup_run_id,
+                "error_code": "RuntimeError",
+                "error_summary": "unexpected project setup pipeline failure",
+            },
+        }
     ]
-    assert len(error_records) == 1
-    assert error_records[0].setup_run_id == setup_run_id
-    assert error_records[0].error_code == "RuntimeError"
-    assert error_records[0].error_summary == "unexpected project setup pipeline failure"
-    assert "raw-token" not in caplog.text
-    assert "secret" not in caplog.text
-    assert "/srv/private" not in caplog.text
+    logged_payload = json.dumps(error_logs, sort_keys=True)
+    assert "raw-token" not in logged_payload
+    assert "secret" not in logged_payload
+    assert "/srv/private" not in logged_payload
 
 
 async def test_project_setup_run_rejects_cross_context_worker_updates(
