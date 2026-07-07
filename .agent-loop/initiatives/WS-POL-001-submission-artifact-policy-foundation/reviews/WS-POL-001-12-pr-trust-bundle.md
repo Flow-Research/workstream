@@ -43,6 +43,8 @@ cd backend && .venv/bin/pytest tests/test_projects.py::test_project_setup_error_
 cd backend && .venv/bin/pytest tests/test_projects.py -q
 cd backend && .venv/bin/pytest tests/test_projects.py::test_project_setup_visibility_apis_show_automatic_setup_outputs tests/test_projects.py::test_project_setup_visibility_apis_require_project_setup_role -q
 cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/api_contract_e2e.py
+cd backend && .venv/bin/pytest tests/test_projects.py::test_create_guide_autostart_enqueues_without_inline_agent_execution tests/test_projects.py::test_create_source_snapshot_autostart_enqueues_latest_snapshot tests/test_projects.py::test_project_setup_worker_unexpected_error_does_not_leak_raw_exception -q
+cd backend && .venv/bin/python -m ruff check app/workers/project_setup.py tests/test_projects.py
 ```
 
 Key results:
@@ -51,6 +53,10 @@ Key results:
 - Full project suite: 206 passed before the last optional test hardening.
 - Final post-hardening visibility tests: 2 passed.
 - API contract real API E2E: passed.
+- External-review regression tests: 3 passed in 29.13s on final local run.
+- Focused ruff check for worker/test changes: passed.
+- Final stale wording scan: passed.
+- Final Markdown link check: passed for 18 changed Markdown files.
 
 ## Internal Review
 
@@ -67,7 +73,14 @@ All sub-agent sessions were closed.
 
 ## External Review
 
-External review not yet run for this PR state.
+CodeRabbit completed review on PR #76. Valid comments were addressed in
+`WS-POL-001-12-external-review-response.md`:
+
+- strengthened the captured `setup_run_id` tests with persisted
+  `ProjectSetupRun.id` and Celery task id checks
+- updated Chunk 12 roadmap/status wording to open PR #76 under human review
+- clarified the API contract drill wording
+- fixed the internal security finding on raw unexpected worker exception logs
 
 ## Human Review Focus
 
