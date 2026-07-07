@@ -1549,6 +1549,15 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     assert persisted.error_summary == (
         "project setup failed; inspect server logs with the setup run id"
     )
+    error_records = [
+        record
+        for record in caplog.records
+        if record.levelno == logging.ERROR and record.message == "project setup pipeline failed"
+    ]
+    assert len(error_records) == 1
+    assert error_records[0].setup_run_id == setup_run_id
+    assert error_records[0].error_code == "RuntimeError"
+    assert error_records[0].error_summary == "unexpected project setup pipeline failure"
     assert "raw-token" not in caplog.text
     assert "secret" not in caplog.text
     assert "/srv/private" not in caplog.text
