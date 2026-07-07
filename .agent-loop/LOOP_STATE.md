@@ -6,14 +6,15 @@
 - Active planning chunk: none
 - Active implementation chunk: `WS-POL-001-12`
 - Branch: `codex/ws-pol-001-12-project-setup-policy-visibility`
-- Status: `WS-POL-001-11` merged through PR #74 on 2026-07-07.
-  The shared actor identity/profile registry is now on `main`; GitHub Agent
-  Gates, Backend, and CodeRabbit passed before merge. The post-merge Terminal
-  Benchmark live API drill passed, but exposed missing visibility APIs that
-  forced direct DB inspection.
+- Status: `WS-POL-001-12` is implemented in PR #76 on branch
+  `codex/ws-pol-001-12-project-setup-policy-visibility`. Internal review is
+  complete, CodeRabbit feedback is being addressed in a follow-up commit, and
+  the chunk is waiting for human merge review after external-review fixes are
+  verified.
 - Last merged implementation SHA: `0729531`
 - Last merge commit: `5cec0e0`
-- Current gate: implement, verify, and review `WS-POL-001-12` before opening PR.
+- Current gate: verify CodeRabbit fixes on PR #76, update trust evidence, then
+  wait for explicit human merge approval.
 - Next chunk: inactive until `WS-POL-001-12` receives human review and merge.
 
 ## Operating Rule

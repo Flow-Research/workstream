@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import inspect
 import json
+import logging
 import sys
 import types
 from collections.abc import AsyncIterator, Iterator
@@ -574,9 +575,20 @@ async def test_create_guide_autostart_enqueues_without_inline_agent_execution(
                 select(SubmissionArtifactPolicy).where(SubmissionArtifactPolicy.guide_id == guide["id"])
             )
         ).all()
+        setup_runs = (
+            await session.scalars(
+                select(ProjectSetupRun).where(
+                    ProjectSetupRun.guide_id == guide["id"],
+                    ProjectSetupRun.source_snapshot_id == snapshots[0].id,
+                )
+            )
+        ).all()
 
     assert len(snapshots) == 1
     assert enqueued[0]["source_snapshot_id"] == snapshots[0].id
+    assert len(setup_runs) == 1
+    assert enqueued[0]["setup_run_id"] == setup_runs[0].id
+    assert setup_runs[0].celery_task_id == "captured-task-id"
     assert reports == []
     assert policies == []
 
@@ -757,6 +769,8 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
 
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
 
+    assert len(enqueued) == 1
+    assert enqueued[0]["setup_run_id"]
     assert enqueued == [
         {
             "project_id": project["id"],
@@ -765,6 +779,19 @@ async def test_create_source_snapshot_autostart_enqueues_latest_snapshot(
             "setup_run_id": enqueued[0]["setup_run_id"],
         }
     ]
+    async with db_session.get_session_factory()() as session:
+        setup_runs = (
+            await session.scalars(
+                select(ProjectSetupRun).where(
+                    ProjectSetupRun.guide_id == guide["id"],
+                    ProjectSetupRun.source_snapshot_id == snapshot["id"],
+                )
+            )
+        ).all()
+
+    assert len(setup_runs) == 1
+    assert enqueued[0]["setup_run_id"] == setup_runs[0].id
+    assert setup_runs[0].celery_task_id == "captured-task-id"
 
 
 async def test_create_source_snapshot_returns_created_when_post_commit_enqueue_fails(
@@ -1450,6 +1477,81 @@ async def test_project_setup_run_records_enqueue_failure_without_leaking_error(
     )
     assert "token" not in body["error_summary"]
     assert "https://" not in body["error_summary"]
+
+
+async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Unexpected worker failures keep secrets out of logs, results, and setup runs."""
+    from app.workers import project_setup as project_setup_worker_module
+
+    project = await create_project(project_client)
+    guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+    async with db_session.get_session_factory()() as session:
+        snapshot = await session.scalar(
+            select(GuideSourceSnapshot).where(GuideSourceSnapshot.guide_id == guide["id"])
+        )
+        assert snapshot is not None
+        setup_run = ProjectSetupRun(
+            id=str(uuid4()),
+            project_id=project["id"],
+            guide_id=guide["id"],
+            guide_version=guide["version"],
+            source_snapshot_id=snapshot.id,
+            source_snapshot_hash=snapshot.bundle_hash,
+            status="queued",
+            current_step="queued",
+            created_by="test-project-manager",
+        )
+        session.add(setup_run)
+        await session.commit()
+        setup_run_id = setup_run.id
+        snapshot_id = snapshot.id
+
+    async def raise_raw_secret_error(*_: object, **__: object) -> object:
+        raise RuntimeError("raw-token=secret at /srv/private/guide.md")
+
+    monkeypatch.setattr(
+        project_setup_worker_module.ProjectService,
+        "run_guide_sufficiency_agent",
+        raise_raw_secret_error,
+    )
+    caplog.set_level(logging.ERROR, logger=project_setup_worker_module.logger.name)
+
+    result = await project_setup_worker_module._run_pre_submit_setup_pipeline(
+        project["id"],
+        guide["id"],
+        snapshot_id,
+        setup_run_id,
+    )
+
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(ProjectSetupRun, setup_run_id)
+
+    assert result == {
+        "status": "failed",
+        "error": "unexpected project setup pipeline failure",
+        "guide_sufficiency_report_id": None,
+        "submission_artifact_policy_id": None,
+    }
+    assert persisted is not None
+    assert persisted.status == "failed"
+    assert persisted.error_code == "RuntimeError"
+    assert persisted.error_summary == (
+        "project setup failed; inspect server logs with the setup run id"
+    )
+    assert "raw-token" not in caplog.text
+    assert "secret" not in caplog.text
+    assert "/srv/private" not in caplog.text
 
 
 async def test_project_setup_run_rejects_cross_context_worker_updates(

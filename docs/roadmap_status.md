@@ -63,7 +63,7 @@ Current phase: Week 3 review and revision preparation.
 - Week 3 must keep review decisions canonical: `accept`, `needs_revision`, and `reject`.
 - `needs_revision` from human review must carry `outcome_source = human_review` and a review decision id; checker-caused `needs_revision` keeps `outcome_source = auto_checker`.
 - Review findings, revision replay, and reviewer-quality metrics are the next backend contracts to lock.
-- Chunk 12 project setup-run and project policy visibility APIs are in implementation.
+- Chunk 12 project setup-run and project policy visibility APIs are implemented in open PR #76 and under human review.
 - Before the next Terminal Benchmark drill, operators need HTTP visibility for
   setup runs, sufficiency reports, submission artifact policies, effective
   policy, and compiled project pre-submit checker policy instead of direct DB
@@ -84,7 +84,7 @@ Run from the backend directory against local Postgres:
 WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/api_contract_e2e.py
 ```
 
-The script runs migrations forward and exercises project setup visibility plus:
+The script runs migrations forward and exercises project policy visibility plus the following flow:
 
 `Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Submit -> Lock submission`
 

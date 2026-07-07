@@ -179,13 +179,16 @@ async def _run_pre_submit_setup_pipeline(
                     "submission_artifact_policy_id": None,
                 }
             except Exception as exc:
-                logger.exception(
+                public_error = "unexpected project setup pipeline failure"
+                logger.error(
                     "project setup pipeline failed",
                     extra={
                         "project_id": project_id,
                         "guide_id": guide_id,
                         "source_snapshot_id": source_snapshot_id,
                         "setup_run_id": setup_run_id,
+                        "error_code": exc.__class__.__name__,
+                        "error_summary": public_error,
                     },
                 )
                 await service.update_project_setup_run_status(
@@ -193,11 +196,11 @@ async def _run_pre_submit_setup_pipeline(
                     status="failed",
                     current_step="project_setup",
                     error_code=exc.__class__.__name__,
-                    error_summary="unexpected project setup pipeline failure",
+                    error_summary=public_error,
                 )
                 return {
                     "status": "failed",
-                    "error": "unexpected project setup pipeline failure",
+                    "error": public_error,
                     "guide_sufficiency_report_id": None,
                     "submission_artifact_policy_id": None,
                 }
