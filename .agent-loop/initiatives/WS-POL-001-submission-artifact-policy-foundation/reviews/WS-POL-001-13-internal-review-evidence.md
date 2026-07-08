@@ -10,11 +10,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 449b68093fb62d54a64adab32517cca33f17cb59
+Reviewed code SHA: 7f0c0ecb2107cb706150f82c71f32255fb99e14e
 
-Reviewed at: 2026-07-07T23:04:55Z
+Reviewed at: 2026-07-08T02:09:55Z
 
-Reviewer run IDs: senior-engineering-final-019f3ecb-6123-7581-9b08-a1812b789d57, qa-test-final-019f3ecb-a018-7e02-81a7-3a7fd102a4ba, security-auth-final-019f3ecb-d5a9-7800-94b3-e4358974f0cd, product-ops-final-019f3ecc-0e2d-7e90-873a-af311a10fd59, architecture-final-019f3ecc-5034-7da0-a53e-1cb66880535b, docs-final-019f3ecc-87cf-75a3-b806-d694cf0f8114, reuse-dedup-final-019f3ed0-bdf1-7ae3-99ae-a33db36dea1c, test-delta-final-019f3ed0-f9d9-7590-a829-de92b9296105
+Reviewer run IDs: senior-engineering-final-019f3ecb-6123-7581-9b08-a1812b789d57, qa-test-final-019f3ecb-a018-7e02-81a7-3a7fd102a4ba, security-auth-final-019f3ecb-d5a9-7800-94b3-e4358974f0cd, product-ops-final-019f3ecc-0e2d-7e90-873a-af311a10fd59, architecture-final-019f3ecc-5034-7da0-a53e-1cb66880535b, docs-final-019f3ecc-87cf-75a3-b806-d694cf0f8114, reuse-dedup-final-019f3ed0-bdf1-7ae3-99ae-a33db36dea1c, test-delta-final-019f3ed0-f9d9-7590-a829-de92b9296105, senior-engineering-external-019f3f6d-441f-7340-9bcc-ef92155d956d, qa-test-external-019f3f6d-4986-7612-a7a7-9457a2182d0b, security-auth-external-019f3f6d-4fea-7890-a372-a261d2482b91, product-ops-external-019f3f6d-5758-79d3-a7d4-3d58933064da, docs-external-final-019f3f76-dd39-74f3-8cf3-d551908fa058, test-delta-external-019f3f6d-685a-7300-82ab-966c3c034976
 
 After the reviewed SHA, only evidence files changed.
 
@@ -57,6 +57,9 @@ Scope:
 - Centralized locked-context required fields and reused the shared missing-field helper.
 - Added tests for worker-safe redaction, operator-only locked context, exact submission requirements, malformed policy fail-closed behavior, same-version policy mutation, and v1 locked context after v2 guide activation.
 - Updated the real API contract drill to call `work-context`, `submission-requirements`, and `locked-context`.
+- Addressed CodeRabbit's test-maintainability nitpick by capturing the compiled
+  bundle before deleting the ORM row in the malformed locked-context
+  regression.
 
 ## Commands Run
 

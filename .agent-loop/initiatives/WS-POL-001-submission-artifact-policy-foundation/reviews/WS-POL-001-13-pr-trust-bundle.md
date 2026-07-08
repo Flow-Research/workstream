@@ -99,10 +99,7 @@ Authorization:
 
 ### Files outside scope
 
-- `.agent-loop/REVIEW_LOG.md`: governance tracking update added after external
-  review so the repository-level review log points to the separate CodeRabbit
-  response artifact. It does not change product behavior, tests, CI, or chunk
-  implementation scope.
+None.
 
 ## Product Behavior
 
@@ -200,9 +197,9 @@ External review response file:
 
 ## Reviewer results
 
-Reviewed implementation SHA: `449b68093fb62d54a64adab32517cca33f17cb59`
+Reviewed implementation SHA: `7f0c0ecb2107cb706150f82c71f32255fb99e14e`
 
-Reviewed at: 2026-07-07 through 2026-07-08
+Reviewed at: 2026-07-08T02:09:55Z
 
 Reviewer run IDs:
 
