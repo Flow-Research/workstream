@@ -337,3 +337,35 @@ no-backward-compatibility chunk decision.
 Next gate: rerun the Terminal Benchmark live API drill through real HTTP calls
 using `POST /api/v1/workers/me/profile`, then review findings before starting
 the next product chunk.
+
+## WS-POL-001-13
+
+Status: PR #77 open for human review.
+
+Branch: `codex/ws-pol-001-13-task-context-apis`
+
+Reviewed implementation SHA: `449b68093fb62d54a64adab32517cca33f17cb59`
+
+Required reviewer tracks:
+
+- senior engineering
+- QA/test
+- security/auth
+- product/ops
+- architecture
+- docs
+- reuse/dedup
+- test delta
+
+Result: internal review passed; CodeRabbit external review produced one valid
+test-maintainability nitpick and one PR-description warning, both addressed.
+
+Scope: worker-safe task work context, exact submission requirements, and
+operator-only locked task provenance APIs.
+
+Evidence: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-13-internal-review-evidence.md`
+
+External review response: `.agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/reviews/WS-POL-001-13-external-review-response.md`
+
+Next gate: wait for CodeRabbit and GitHub checks to rerun on the external
+review response commit, then wait for the user's merge decision.

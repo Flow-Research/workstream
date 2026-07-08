@@ -1443,6 +1443,7 @@ async def test_submission_requirements_fail_closed_on_hash_consistent_malformed_
         replacement_checker_names = list(pre_submit_policy.checker_names)
         replacement_checker_configs = dict(pre_submit_policy.checker_configs)
         compiler_version = pre_submit_policy.compiler_version
+        original_compiled_bundle = dict(pre_submit_policy.compiled_bundle)
         await session.delete(pre_submit_policy)
         await session.flush()
 
@@ -1452,7 +1453,7 @@ async def test_submission_requirements_fail_closed_on_hash_consistent_malformed_
         }
         malformed_policy_hash = canonical_json_hash(malformed_policy)
         malformed_bundle = {
-            **pre_submit_policy.compiled_bundle,
+            **original_compiled_bundle,
             "effective_policy_hash": malformed_policy_hash,
         }
         malformed_bundle_hash = canonical_json_hash(malformed_bundle)
