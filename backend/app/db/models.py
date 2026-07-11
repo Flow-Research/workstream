@@ -17,6 +17,7 @@ from app.modules.projects.models import (  # noqa: F401
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.review.models import Review, ReviewFinding  # noqa: F401
 from app.modules.tasks.models import (  # noqa: F401
     AuditEvent,
     EvidenceItem,
