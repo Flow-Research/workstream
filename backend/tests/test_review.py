@@ -108,6 +108,7 @@ async def _create_locked_submission(client: AsyncClient, monkeypatch: pytest.Mon
 
 
 def _finding_payload(severity: str = "medium") -> dict:
+    """Build a minimal finding payload for review creation."""
     return {
         "severity": severity,
         "area": "logic",
@@ -118,6 +119,7 @@ def _finding_payload(severity: str = "medium") -> dict:
 
 
 def _review_payload(submission_id: str, decision: str, **overrides) -> dict:
+    """Build a minimal review create payload with default empty findings/evidence."""
     body = {
         "submission_id": submission_id,
         "decision": decision,
