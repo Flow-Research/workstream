@@ -7,6 +7,7 @@ from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models import AuditEvent
 from app.modules.checkers.models import CheckerResult
@@ -103,7 +104,8 @@ class ReviewService:
         self.session.add(audit)
 
         await self.session.flush()
-        result = await self.session.get(Review, review_id)
+        # Eager-load findings before returning
+        result = await self.session.get(Review, review_id, options=[selectinload(Review.findings)])
         return ReviewSchema.model_validate(result)
 
     def _validate_decision_requirements(self, review_in: ReviewCreate) -> None:
@@ -133,7 +135,13 @@ class ReviewService:
             )
 
     async def get_review(self, review_id: str) -> ReviewSchema | None:
-        review = await self.session.get(Review, review_id)
+        stmt = (
+            select(Review)
+            .options(selectinload(Review.findings))
+            .where(Review.id == review_id)
+        )
+        res = await self.session.execute(stmt)
+        review = res.scalar_one_or_none()
         if not review:
             return None
         return ReviewSchema.model_validate(review)
@@ -143,6 +151,7 @@ class ReviewService:
     ) -> Sequence[ReviewSchema]:
         stmt = (
             select(Review)
+            .options(selectinload(Review.findings))
             .where(Review.submission_id == submission_id)
             .order_by(Review.created_at.desc())
         )

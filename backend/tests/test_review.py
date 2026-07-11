@@ -200,11 +200,45 @@ class TestAcceptRequiresEvidence:
         set_dev_actor(monkeypatch, roles="project_manager,reviewer", subject="reviewer-actor")
         submission = await _create_locked_submission(review_client, monkeypatch)
 
-        # Seed a blocking checker result directly
+        # Seed a CheckerRun and a blocking CheckerResult with valid FK references
         async with db_session.get_session_factory()() as session:
+            checker_run = CheckerRun(
+                id=str(uuid4()),
+                task_id=submission["task_id"],
+                submission_id=submission["id"],
+                submission_version=submission["version"],
+                trigger_source="manual",
+                status="completed",
+                routing_recommendation="not_evaluated",
+                outcome_source="manual",
+                triggered_by="reviewer-actor",
+                triggered_by_subject="reviewer-actor",
+                triggered_by_issuer="flow-test",
+                trigger_auth_source="dev_mock",
+                attempt_number=1,
+                is_current_for_submission=True,
+                locked_guide_version=submission["locked_guide_version"],
+                locked_post_submit_checker_policy_id=submission["locked_post_submit_checker_policy_id"],
+                locked_post_submit_checker_policy_version=submission["locked_post_submit_checker_policy_version"],
+                locked_post_submit_checker_policy_hash=submission["locked_post_submit_checker_policy_hash"],
+                locked_post_submit_checker_policy_body=submission["locked_post_submit_checker_policy_body"],
+                locked_review_policy_version=submission["locked_review_policy_version"],
+                locked_revision_policy_version=submission["locked_revision_policy_version"],
+                locked_payment_policy_version=submission["locked_payment_policy_version"],
+                package_hash=submission["package_hash"],
+                artifact_hash_manifest=submission.get("artifact_hash_manifest", []),
+                artifact_manifest_hash="sha256:test",
+                passed_count=0,
+                warning_count=0,
+                failed_count=1,
+                blocking_count=1,
+            )
+            session.add(checker_run)
+            await session.flush()
+
             session.add(CheckerResult(
                 id=str(uuid4()),
-                checker_run_id=str(uuid4()),  # orphaned run id is fine for this test
+                checker_run_id=checker_run.id,
                 task_id=submission["task_id"],
                 submission_id=submission["id"],
                 checker_name="blocking-checker",
