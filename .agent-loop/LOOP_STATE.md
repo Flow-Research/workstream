@@ -4,25 +4,24 @@
 
 - Active initiative: `WS-AUTH-001` - Workstream Authorization Service
 - Active planning chunk: none
-- Active implementation chunk: `WS-AUTH-001-05B` - Authority Idempotency And
-  Invalidation Foundation
-- Branch: `codex/ws-auth-001-05b-idempotency-invalidation`
+- Active implementation chunk: none
+- Branch: `codex/ws-auth-001-05b-post-merge-memory`
 - Worktree: `/home/abiorh/flow/workstream-authorization-service`
-- Status: CAT post-merge memory merged through PR #118 as `eba7e2b` on
-  2026-07-14. `WS-AUTH-001-05B` implementation and repair are complete at
-  reviewed runtime SHA `e083890`; every required internal review track passed.
+- Status: `WS-AUTH-001-05B` merged through PR #119 as `ad71c7e` on
+  2026-07-14 after every required internal and external gate passed.
 - Prior `WS-AUTH-001-01` reviewed implementation SHA: `be0b836`
 - Prior `WS-AUTH-001-01` final merged branch head: `b5217e1`
-- Latest integrated `main` merge commit: `eba7e2b`
-- Current gate: PR publication, GitHub checks, CodeRabbit, and human review.
+- Latest integrated `main` merge commit: `ad71c7e`
+- Current gate: publish post-merge memory, then stop.
 - Scope checkpoint: the 52 approved identifiers and `/api/v1` namespace remain
   unchanged. AUTH-05A's 49-identifier audit base remains runtime truth until the
   three planned recovery identifiers receive typed/SQL parity in AUTH-13/14.
-- Next chunk: `WS-AUTH-001-06` remains inactive. Do not start it automatically.
-- Focused evidence: 26 AUTH-05B authorization/audit/migration tests passed at
-  96.88 percent authorization-subsystem coverage. The prior main Backend result
-  remains 949 tests at 82.77 percent global coverage and 91.07 percent
-  artifact-foundation coverage; GitHub CI will produce the new full result.
+- Next chunk: `WS-AUTH-001-06` remains inactive until this memory merges and the
+  user gives a separate explicit start signal.
+- Evidence: focused AUTH-05B proof passed 26 tests at 96.88 percent subsystem
+  coverage. GitHub Backend passed 965 tests at 83.26 percent global coverage
+  and 91.07 percent artifact-foundation coverage; Agent Gates and CodeRabbit
+  also passed.
 - Parallel initiative: `WS-QUAL-001-01B2` is paused at the user's direction so
   AUTH receives the laptop's test capacity. Its last official whole-app result
   remains `6466/8159` statements (`79.249908%`); no replacement evidence exists.

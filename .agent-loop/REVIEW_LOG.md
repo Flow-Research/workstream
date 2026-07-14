@@ -1,5 +1,13 @@
 # Review Log
 
+## 2026-07-14 - WS-AUTH-001-05B Merged
+
+PR #119 merged through explicit human approval as `ad71c7e`. Final branch head
+`83ca3e2` passed Backend with 965 tests at 83.26 percent global coverage and
+91.07 percent artifact-foundation coverage; Agent Gates and CodeRabbit also
+passed. AUTH-05B is complete. AUTH-06 remains inactive until post-merge memory
+merges and the user gives a separate explicit start signal.
+
 ## 2026-07-14 - WS-AUTH-001-05B Internal Review Passed
 
 Reviewed runtime SHA `e083890` passed senior engineering, architecture,

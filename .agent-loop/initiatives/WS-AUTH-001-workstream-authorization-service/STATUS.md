@@ -61,22 +61,22 @@ That docs-only work passed required internal reviews, Backend, Agent Gates, and
 CodeRabbit; explicit human approval merged PR #117 as `4c5d4fc` on 2026-07-14.
 Its post-merge memory merged through PR #118 as `eba7e2b`. AUTH-05B's repaired
 L1 plan passed before runtime edits. Implementation, repair, focused evidence,
-and all required internal review tracks now pass at reviewed runtime SHA
-`e083890`; PR publication is pending.
+and all required internal review tracks passed at reviewed runtime SHA
+`e083890`. Backend passed 965 tests at 83.26 percent global coverage and 91.07
+percent artifact-foundation coverage; Agent Gates and CodeRabbit passed. The
+user explicitly approved PR #119, which merged as `ad71c7e` on 2026-07-14.
 
 ## Active planning chunk
 
-None. AUTH-05B implementation is internally reviewed under its approved
-repaired contract.
+None. AUTH-05B is merged; AUTH-06 remains inactive.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-05B` is implemented and internally reviewed. GitHub checks,
-CodeRabbit, and explicit human review remain pending.
+None. This branch records AUTH-05B post-merge memory only.
 
 ## Current implementation branch
 
-`codex/ws-auth-001-05b-idempotency-invalidation` in
+`codex/ws-auth-001-05b-post-merge-memory` in
 `/home/abiorh/flow/workstream-authorization-service`.
 
 ## Chunk status
@@ -93,7 +93,7 @@ CodeRabbit, and explicit human review remain pending.
 | `WS-AUTH-001-05` | Split | `codex/ws-auth-001-05-authority-evidence` | - | Parent split before implementation into 05A and 05B. |
 | `WS-AUTH-001-05A` | Merged | `codex/ws-auth-001-05-authority-evidence` | #115 | Merged as `8e1cde6`; reviewed code `ea16fd8`; final branch head `d023952`. |
 | `WS-AUTH-001-CAT` | Merged | `codex/ws-auth-001-action-catalogue-reconciliation` | #117 | Merged as `4c5d4fc`; final branch head `5b4ec96`. |
-| `WS-AUTH-001-05B` | In review | `codex/ws-auth-001-05b-idempotency-invalidation` | - | Reviewed runtime SHA `e083890`; PR publication pending. |
+| `WS-AUTH-001-05B` | Merged | `codex/ws-auth-001-05b-idempotency-invalidation` | #119 | Merged as `ad71c7e`; reviewed runtime `e083890`; final branch head `83ca3e2`. |
 | `WS-AUTH-001-06` | Proposed | - | - | Canonical actor profile and identity link. |
 | `WS-AUTH-001-07` | Proposed | - | - | Authorization kernel and permissions. |
 | `WS-AUTH-001-08` | Proposed | - | - | Bootstrap and administrative grants. |
@@ -108,11 +108,12 @@ CodeRabbit, and explicit human review remain pending.
 
 ## Blockers
 
-AUTH-05A and CAT post-merge memory have no remaining blocker and are merged.
+AUTH-05A, CAT post-merge memory, and AUTH-05B have no remaining blocker and are
+merged.
 The combined AUTH-05 contract
 was rejected before runtime changes because shared audit evidence and
 idempotency/invalidation were not reviewable as one L1 change. AUTH-05A owns
-migration `0018`; active AUTH-05B owns migration `0019`. Non-test
+migration `0018`; merged AUTH-05B owns migration `0019`. Non-test
 operators must later supply explicit classification evidence rather than
 inferred kinds before the owning canonical actor migration.
 
@@ -124,9 +125,8 @@ permission identifiers remain approved, including
 `operations.checker.retry`; the three recovery identifiers receive persisted
 parity only in their owning later chunks. `WS-AUTH-001-CAT` retains only safe
 registry/conformance rules. This is a scope decision, not an AUTH-05B runtime
-blocker. PR #118 is merged, and AUTH-05B runtime SHA `e083890` is internally
-reviewed. Its current gate is PR publication and external checks; AUTH-06 and
-POL-002-04 remain inactive.
+blocker. PR #119 is merged as `ad71c7e`. AUTH-06 and POL-002-04 remain inactive
+pending their recorded prerequisites and separate explicit user start signals.
 
 AUTH-04B review evidence and its PR trust bundle are recorded at
 `reviews/WS-AUTH-001-04B-internal-review-evidence.md` and

@@ -21,7 +21,7 @@ stopped.
 | `WS-AUTH-001-05` | Authority Evidence And Idempotency Foundation | L1 | Split before implementation into 05A and 05B |
 | `WS-AUTH-001-05A` | Shared Audit Ownership And Append-Only Authority Evidence | L1 | Merged through PR #115 as `8e1cde6` |
 | `WS-AUTH-001-CAT` | Action And Resource Catalogue Reconciliation | L1 | Merged through PR #117 as `4c5d4fc` |
-| `WS-AUTH-001-05B` | Authority Idempotency And Invalidation Foundation | L1 | Implemented and internally reviewed; PR publication pending |
+| `WS-AUTH-001-05B` | Authority Idempotency And Invalidation Foundation | L1 | Merged through PR #119 as `ad71c7e` |
 | `WS-AUTH-001-06` | Canonical Actor Profile And Identity Link | L1 | Proposed |
 | `WS-AUTH-001-07` | Authorization Kernel And Permission Registry | L1 | Proposed |
 | `WS-AUTH-001-08` | Bootstrap And Administrative Role Grants | L1 | Proposed |
@@ -109,6 +109,6 @@ the semantic AUTH-05A boundary. Required reviews and checks passed, and explicit
 human approval merged PR #115 as `8e1cde6` on 2026-07-14, followed by merged
 post-merge memory. `WS-AUTH-001-CAT` then merged through PR #117 as `4c5d4fc`
 after Backend, Agent Gates, CodeRabbit, and explicit human approval passed. The
-CAT post-merge memory merged through PR #118 as `eba7e2b`; AUTH-05B runtime SHA
-`e083890` is internally reviewed, and PR publication is pending. Do not start
-AUTH-06 or POL-002-04.
+CAT post-merge memory merged through PR #118 as `eba7e2b`; AUTH-05B then merged
+through PR #119 as `ad71c7e` after required internal and external gates passed.
+Do not start AUTH-06 or POL-002-04 automatically.
