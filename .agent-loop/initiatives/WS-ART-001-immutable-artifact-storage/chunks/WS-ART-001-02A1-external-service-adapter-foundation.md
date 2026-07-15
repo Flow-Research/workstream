@@ -1,6 +1,7 @@
 # Chunk Contract: WS-ART-001-02A1 External Service Adapter Foundation
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after amendment merge
+Initiative: `WS-ART-001` | Risk: L1 | Status: Inactive until amendment
+post-merge memory and a separate explicit user start
 
 Artifact contract phase: `foundation`
 
