@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29420444289/job/87369232411"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29442493721/job/87444681923"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29420444367/job/87369233033"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29442493897/job/87444682508"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-07A",
-    "chunk_title": "Closed Permission And Action Catalogue",
+    "chunk_id": "WS-AUTH-001-07B",
+    "chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
     "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-07B",
-    "next_chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
+    "next_chunk_id": "WS-AUTH-001-08",
+    "next_chunk_title": "Bootstrap And Administrative Role Grants",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-07B",
-    "next_chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
+    "next_chunk_id": "WS-AUTH-001-08",
+    "next_chunk_title": "Bootstrap And Administrative Role Grants",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "f64a8e5b80f0da9d59f6373bc0a6b915e3dd6b7f",
-    "head_ref": "codex/ws-auth-001-07-authorization-kernel",
-    "head_sha": "3ab25cf3b1e99336c635a318101375bb4bebdf91",
-    "intent_blob_sha": "334b8bcee2a86be4eb900c4cb21f1324283406dd",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-07A.json",
-    "main_sha": "e9d72a16d95e704f2af514a97d37623940854d95",
-    "merged_at": "2026-07-15T16:22:11Z",
+    "first_parent_sha": "e9d72a16d95e704f2af514a97d37623940854d95",
+    "head_ref": "codex/ws-auth-001-07b-deny-default-kernel",
+    "head_sha": "9fd3bb45a0b7340f073bfdf7440cd0e01f1bd56c",
+    "intent_blob_sha": "fc5938cbbbcc0a4078b47525f5e63a5a24eaeee7",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-07B.json",
+    "main_sha": "90eca12f6398f2ef168e634244d912765572c3e5",
+    "merged_at": "2026-07-15T19:21:53Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 126,
-    "pr_title": "Add closed authorization action catalogue and audit parity",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/126"
+    "pr_number": 130,
+    "pr_title": "Add deny-by-default actor self authorization kernel",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/130"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-15T16:22:11Z"
+  "updated_at": "2026-07-15T19:21:53Z"
 }
