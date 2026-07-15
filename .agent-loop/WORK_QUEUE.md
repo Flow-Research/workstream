@@ -2,9 +2,7 @@
 
 ## In Progress
 
-| Chunk | Title | Risk | Status |
-|---|---|---:|---|
-| `WS-ART-001-OBJECT-STORAGE-AMENDMENT` | AWS-First Object Storage Planning Amendment | L1 | Publication branch updated from `main`; merge-resolution review pending |
+None.
 
 ## Planned Next
 
@@ -14,7 +12,7 @@
 | `WS-QUAL-001-01B2` | Baseline Evidence And CI Ratchet | L1 | Paused for AUTH priority; no valid replacement baseline yet |
 | `WS-QUAL-001-02` | Project Service Coverage | L1 | Inactive until 01B2 merge/memory plus explicit user start |
 | `WS-POL-002-04` | Locked Runtime Execution And Routing Hardening | L1 | Inactive pending relevant authorization proof and a separate explicit user start |
-| `WS-ART-001-02A1` | External Service Adapter Foundation | L1 | Proposed only after amendment merge and explicit user start |
+| `WS-ART-001-02A1` | External Service Adapter Foundation | L1 | Inactive until amendment post-merge memory and a separate explicit user start |
 | `WS-ART-001-02A2` | Committed Source And Local Preparation | L1 | Inactive until 02A1 merge and explicit user start |
 | `WS-ART-001-02A3` | ArtifactStore v2 Local Clean Cut | L1 | Inactive until 02A2 merge and explicit user start |
 | `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Inactive until 02A3 merge and explicit user start |
@@ -66,6 +64,7 @@
 | `WS-AUTH-001-CAT` | Action And Resource Catalogue Reconciliation | L1 | Merged through PR #117 as `4c5d4fc` on 2026-07-14 |
 | `WS-AUTH-001-CAT-MEMORY` | Catalogue Post-Merge Memory | L1 | Merged through PR #118 as `eba7e2b` on 2026-07-14 |
 | `WS-AUTH-001-05B` | Authority Idempotency And Invalidation Foundation | L1 | Merged through PR #119 as `ad71c7e` on 2026-07-14 |
+| `WS-ART-001-OBJECT-STORAGE-AMENDMENT` | AWS-First Object Storage Planning Amendment | L1 | Merged through PR #120 as `4408256` on 2026-07-15 |
 
 ## Proposed Next
 
@@ -76,9 +75,10 @@ Do not start AUTH-06 or POL-002-04 automatically.
 Coverage R10 merged through PR #108. Do not start 01B2, chunk 02, or another
 coverage implementation chunk from this worktree.
 
-`WS-ART-001-01` is merged. The parallel planning amendment makes AWS S3 the
-only v0.1 production provider. R2 and Flow Node are deferred. Do not start 02A1
-until the amendment merges and the user gives a separate explicit start signal.
+`WS-ART-001-01` and the AWS-first planning amendment are merged. AWS S3 is the
+only v0.1 production provider; R2 and Flow Node are deferred. Do not start 02A1
+until this post-merge memory update merges and the user gives a separate
+explicit start signal.
 
 Coverage work proceeds independently in its own worktree and is not owned by
 this AUTH queue update.

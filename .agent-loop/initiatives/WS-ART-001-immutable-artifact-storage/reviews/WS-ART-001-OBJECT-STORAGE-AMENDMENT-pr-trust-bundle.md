@@ -161,14 +161,14 @@ Diff hygiene passed; runtime-scope guard printed no paths.
 
 ## External Review
 
-External review response file will be created after external comments exist:
+External review response:
 
 - `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-external-review-response.md`
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | Must be reviewed separately from internal evidence. |
-| GitHub checks | Pending | Must pass on the published evidence-bound head. |
+| CodeRabbit | Skipped | The final-head comment reports the account review limit was reached; no review or findings are claimed. |
+| GitHub checks | PASS | Agent Gates and Backend passed on final head `f57dad8`. |
 
 ## Reviewer Results
 

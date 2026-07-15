@@ -2,19 +2,17 @@
 
 ## Current State
 
-- Active initiative in this worktree: `WS-ART-001` - Immutable Artifact Storage
-- Active planning chunk: `WS-ART-001-OBJECT-STORAGE-AMENDMENT`
+- Active initiative: none
+- Active planning chunk: none
 - Active implementation chunk: none
-- Branch: `codex/ws-art-001-object-storage-planning-amendment`
+- Branch: `codex/ws-art-001-object-storage-amendment-post-merge-memory`
 - Worktree: `/home/abiorh/flow/workstream`
-- Latest integrated `main` merge commit: `ad71c7e` from PR #119.
-- Status: PR #120's branch integrates AUTH-05B PR #119 through merge SHA
-  `1545d9aa37329c13efa53f7ad9076ffca1fbfaf6`. The bounded three-file conflict
-  resolution passed deterministic proof and every required `gpt-5.5` high
-  reviewer track; all reviewer sessions are closed.
-- Current gate: publish the evidence-bound branch, wait for fresh GitHub checks
-  and external review, then stop for explicit human review and merge approval.
-  No storage runtime implementation is active.
+- Latest integrated `main` merge commit: `440825642e9788d9aad7858dc4afc7cec07c9d44`
+  from PR #120.
+- Status: the AWS-first object-storage planning amendment merged through PR
+  #120 on 2026-07-15. No artifact implementation chunk is active.
+- Current gate: publish and merge this post-merge memory update, then stop.
+  Do not start artifact implementation from this memory branch.
 - Scope checkpoint: AWS S3 is the only v0.1 production provider; MinIO is
   local/CI S3 protocol proof; LocalStorage is focused development/test; R2 and
   Flow Node are deferred. Product modules receive narrow artifact capabilities,
@@ -23,8 +21,8 @@
   including 21 artifact permissions. AUTH-07 registers them, AUTH-08 defines
   applicable Operator grants, AUTH-09 provisions fixed service principals, and
   each owning WS-ART feature chunk activates only its own canonical actions.
-- Next artifact chunk: `WS-ART-001-02A1` remains inactive until this amendment
-  merges and the user gives a separate explicit start signal.
+- Next artifact chunk: `WS-ART-001-02A1` remains inactive until this memory
+  update merges and the user gives a separate explicit start signal.
 - Parallel authorization work: `WS-AUTH-001-05B` merged through PR #119 as
   `ad71c7e`. `WS-AUTH-001-06` remains inactive pending post-merge memory and a
   separate explicit user start.

@@ -1,5 +1,32 @@
 # Review Log
 
+## 2026-07-15 - WS-ART-001 Object Storage Amendment Merged
+
+PR #120 merged into `main` as
+`440825642e9788d9aad7858dc4afc7cec07c9d44` at
+`2026-07-15T00:11:33Z`.
+
+Reviewed planning SHA:
+`1545d9aa37329c13efa53f7ad9076ffca1fbfaf6`.
+
+Final evidence-bound branch head:
+`f57dad846f7170680ffcdc7bc4c7aa6585d87813`.
+
+Agent Gates and Backend passed on the final head. CodeRabbit's status context
+was green, but its published comment states that the fresh review was skipped
+because the account review limit had been reached; no CodeRabbit findings are
+claimed. The user explicitly approved and merged the PR.
+
+The merge establishes the AWS-first artifact-storage implementation sequence.
+It changes no artifact runtime. `WS-ART-001-02A1` remains inactive until this
+post-merge memory update merges and the user gives a separate explicit start.
+
+Evidence: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-internal-review-evidence.md`
+
+External review response: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-external-review-response.md`
+
+Trust bundle: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-pr-trust-bundle.md`
+
 ## 2026-07-14 - WS-ART-001 Object Storage Amendment Internal Review Passed
 
 Planning candidate `74301e87d1490506b11e1546245f389c3211d12b` passed
