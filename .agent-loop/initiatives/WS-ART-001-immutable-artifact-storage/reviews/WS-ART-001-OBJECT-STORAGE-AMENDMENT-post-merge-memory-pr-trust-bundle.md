@@ -38,6 +38,10 @@ open.
 - CodeRabbit: fresh review skipped because its review limit was reached; no
   findings are claimed.
 - Human checkpoint: the user explicitly approved and merged PR #120.
+- PR #123 CodeRabbit review found one stale evidence link in `REVIEW_LOG.md`;
+  that link and the adjacent post-merge artifact links were corrected.
+- PR #123 CodeRabbit description check passes after the PR body was aligned
+  with the repository trust-bundle template.
 
 ## Human Review Focus
 

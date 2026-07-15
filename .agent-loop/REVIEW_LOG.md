@@ -21,11 +21,11 @@ The merge establishes the AWS-first artifact-storage implementation sequence.
 It changes no artifact runtime. `WS-ART-001-02A1` remains inactive until this
 post-merge memory update merges and the user gives a separate explicit start.
 
-Evidence: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-internal-review-evidence.md`
+Evidence: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-post-merge-memory-internal-review-evidence.md`
 
-External review response: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-external-review-response.md`
+External review response: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-post-merge-memory-external-review-response.md`
 
-Trust bundle: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-pr-trust-bundle.md`
+Trust bundle: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-post-merge-memory-pr-trust-bundle.md`
 
 ## 2026-07-14 - WS-ART-001 Object Storage Amendment Internal Review Passed
 
