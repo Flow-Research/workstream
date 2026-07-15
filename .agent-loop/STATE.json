@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29391974451/job/87277234669"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29401519135/job/87306922565"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29391931695/job/87277102984"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29401409155/job/87306571692"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-001-03",
-    "chunk_title": "Initiative-Local Loop Gates",
-    "initiative_id": "WS-ENG-001",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "chunk_id": "WS-AUTH-001-06",
+    "chunk_title": "Canonical Actor Profile And Identity Link",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-07",
+    "next_chunk_title": "Authorization Kernel And Permission Registry",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-07",
+    "next_chunk_title": "Authorization Kernel And Permission Registry",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "fc89fb688689d9bc8b95811d43ec460b22f753ab",
-    "head_ref": "codex/ws-eng-001-03-initiative-local-next-gate",
-    "head_sha": "c03d51c670c92242789c38cd07fa564539edf7cd",
-    "intent_blob_sha": "ab1c3b83dbef93a5deb3032b1fccf20b08b98e92",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-001-03.json",
-    "main_sha": "cb76badc93c8c00cef0a8881c9f15a4df636416f",
-    "merged_at": "2026-07-15T05:59:14Z",
+    "first_parent_sha": "cb76badc93c8c00cef0a8881c9f15a4df636416f",
+    "head_ref": "codex/ws-auth-001-06-canonical-actor-profile",
+    "head_sha": "4a2193fd91ff78cde6c8f64a12f9e8f2211640e6",
+    "intent_blob_sha": "71b1b6f97e98770835c0c6d90946fe15b37646d0",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-06.json",
+    "main_sha": "f5995518a0d1723be5600d4bb306d99d3ba077a7",
+    "merged_at": "2026-07-15T08:54:01Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 125,
-    "pr_title": "Enforce initiative-local loop memory gates",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/125"
+    "pr_number": 124,
+    "pr_title": "Add canonical actor profile and identity resolution",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/124"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-15T05:59:14Z"
+  "updated_at": "2026-07-15T08:54:01Z"
 }
