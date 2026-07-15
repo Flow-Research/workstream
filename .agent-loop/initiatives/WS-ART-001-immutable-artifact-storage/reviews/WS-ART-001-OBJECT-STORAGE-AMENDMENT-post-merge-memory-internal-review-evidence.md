@@ -10,11 +10,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 17efa65ba01cdd1040afc5e51be427ad304cdb39
+Reviewed code SHA: e1fc4818cb5d0d45f280cbe3b181a4795da4df0f
 
-Reviewed at: 2026-07-15T00:42:16Z
+Reviewed at: 2026-07-15T01:01:40Z
 
-Reviewer run IDs: senior-engineering=019f6321-4da2-76b1-b6b2-b11189811b22; QA/test=019f6321-5532-7521-bab7-fe08fa5f881d; security/auth=019f6321-5edf-7170-83c3-f7054db1a633; product/ops=019f6321-655d-7c82-8004-4f695628ade6; architecture=019f6333-e741-7413-92c8-5510eb8b6356; docs=019f6333-ed39-7f82-8bdd-cfca7550cf80
+Reviewer run IDs: senior-engineering=019f6346-4625-79d3-8b19-5de960d6ab93; QA/test=019f6346-4e1b-7453-8924-c2d7affd9ea9; security/auth=019f6346-57d2-7963-b338-4b11c1709207; product/ops=019f6346-6042-7431-9c04-a549473c8f86; architecture=019f6346-6ab9-7692-8b17-bd6f9052779f; docs=019f6346-7301-75b1-a860-9a48461acdab
 
 After the reviewed SHA, only evidence and status files may change:
 
@@ -42,12 +42,12 @@ After the reviewed SHA, only evidence and status files may change:
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | None | Confirmed completion state, provenance, and no runtime drift after stale status repairs. |
-| QA/test | PASS | None | Confirmed merge graph, check results, nine-file scope, and exact start gates. |
-| security/auth | PASS | None | Confirmed no authority/runtime change and truthful CodeRabbit reporting. |
-| product/ops | PASS | None | Confirmed no product lifecycle change and no automatic next-chunk activation. |
-| architecture | PASS | None | Confirmed memory-only boundaries and no adapter/runtime activation. |
-| docs | PASS | None | Confirmed all durable state and initiative-local status records agree. |
+| senior engineering | PASS AFTER FIXES | None | Found stale evidence binding and missing initiative-local external-response link; both were corrected. |
+| QA/test | PASS AFTER FIXES | None | Confirmed exact links, inactive start gates, memory-only scope, and the evidence/status repairs. |
+| security/auth | PASS AFTER FIXES | None | Confirmed exact-head evidence reconciliation and no authority/runtime change. |
+| product/ops | PASS AFTER FIXES | None | Confirmed no product lifecycle change and no automatic next-chunk activation. |
+| architecture | PASS AFTER FIXES | None | Confirmed memory-only boundaries, the repaired status link, and no adapter/runtime activation. |
+| docs | PASS AFTER FIXES | None | Confirmed separated review records, corrected SHA, and corrected file-count wording. |
 | CI integrity | N/A - WITH APPROVED REASON | None | No workflow, package script, dependency, lint, typecheck, test, or coverage configuration changed. |
 | test delta | N/A - WITH APPROVED REASON | None | No test file or assertion changed. |
 | reuse/dedup | N/A - WITH APPROVED REASON | None | No helper, abstraction, implementation, or reusable code changed. |
@@ -58,6 +58,11 @@ After the reviewed SHA, only evidence and status files may change:
 - Changed the amendment chunk-map row from active planning to merged.
 - Changed both `02A1` initiative-local status locations to require this
   post-merge memory plus a separate explicit user start.
+- Corrected `REVIEW_LOG.md` to reference the post-merge internal evidence,
+  external response, and trust bundle.
+- Added the missing post-merge external-response link to initiative `STATUS.md`.
+- Rebound this evidence and the trust bundle to reviewed code SHA `e1fc481` and
+  corrected the reviewed file count.
 - Ran a broad stale-state scan after the repairs; no current amendment or
   `02A1` pre-merge wording remains.
 
@@ -73,7 +78,7 @@ python3 scripts/check_markdown_links.py --changed-only origin/main...HEAD
 test -z "$(git diff --name-only origin/main...HEAD -- backend/app backend/alembic backend/pyproject.toml docker-compose.yml .github scripts)"
 ```
 
-Results: all passed. The reviewed diff contains nine Markdown files under
+Results: all passed. The reviewed diff contains twelve Markdown files under
 `.agent-loop/` and no runtime or architecture implementation path.
 
 ## Stop Condition
