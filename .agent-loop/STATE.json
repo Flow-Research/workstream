@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29401519135/job/87306922565"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29418091729/job/87361249914"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29401409155/job/87306571692"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29416447081/job/87355676662"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-06",
-    "chunk_title": "Canonical Actor Profile And Identity Link",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-07",
-    "next_chunk_title": "Authorization Kernel And Permission Registry",
+    "chunk_id": "WS-ART-001-02A1",
+    "chunk_title": "External Service Adapter Foundation",
+    "initiative_id": "WS-ART-001",
+    "next_chunk_id": "WS-ART-001-02A2",
+    "next_chunk_title": "Committed Source And Local Preparation",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-07",
-    "next_chunk_title": "Authorization Kernel And Permission Registry",
+    "next_chunk_id": "WS-ART-001-02A2",
+    "next_chunk_title": "Committed Source And Local Preparation",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "cb76badc93c8c00cef0a8881c9f15a4df636416f",
-    "head_ref": "codex/ws-auth-001-06-canonical-actor-profile",
-    "head_sha": "4a2193fd91ff78cde6c8f64a12f9e8f2211640e6",
-    "intent_blob_sha": "71b1b6f97e98770835c0c6d90946fe15b37646d0",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-06.json",
-    "main_sha": "f5995518a0d1723be5600d4bb306d99d3ba077a7",
-    "merged_at": "2026-07-15T08:54:01Z",
+    "first_parent_sha": "f5995518a0d1723be5600d4bb306d99d3ba077a7",
+    "head_ref": "codex/ws-art-001-02a1-external-service-adapter-foundation",
+    "head_sha": "e0ebe1bb28717819cb90df22fb4a2bc92ebe3381",
+    "intent_blob_sha": "21c91eb5efc61d4f6d6f971c6fe8bbfa9b144560",
+    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02A1.json",
+    "main_sha": "f64a8e5b80f0da9d59f6373bc0a6b915e3dd6b7f",
+    "merged_at": "2026-07-15T13:11:33Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 124,
-    "pr_title": "Add canonical actor profile and identity resolution",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/124"
+    "pr_number": 127,
+    "pr_title": "Install typed external service adapter foundation",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/127"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-15T08:54:01Z"
+  "updated_at": "2026-07-15T13:11:33Z"
 }
