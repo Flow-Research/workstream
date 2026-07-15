@@ -6,7 +6,7 @@ Each chunk is one PR. No later chunk starts automatically.
 |---|---|---:|---|
 | `WS-ART-001-PLAN` | Original artifact planning. | L1 | Merged through PR #97 |
 | `WS-ART-001-01` | Artifact domain and LocalStorage v1 foundation. | L1 | Merged through PR #101 |
-| `WS-ART-001-OBJECT-STORAGE-AMENDMENT` | Make AWS S3 the v0.1 production provider with MinIO local/CI protocol proof; keep optional providers outside v0.1. | L1 | Active planning only |
+| `WS-ART-001-OBJECT-STORAGE-AMENDMENT` | Make AWS S3 the v0.1 production provider with MinIO local/CI protocol proof; keep optional providers outside v0.1. | L1 | Merged through PR #120 as `4408256` on 2026-07-15 |
 | `WS-ART-001-02A1` | Install only ADR 0014's small typed external-service adapter/factory foundation without migrating a capability. | L1 | Proposed after amendment merge and explicit start |
 | `WS-ART-001-02A2` | Add bounded committed-source preparation and inactive scratch-cleanup mechanics without changing the active v1 port. | L1 | Proposed after 02A1 |
 | `WS-ART-001-02A3` | Replace ArtifactStore v1 with byte-only v2, activate API-startup and Celery Beat scratch cleanup, migrate schema/callers/factory, and remove `flow_node` in one atomic clean cut. | L1 | Proposed after 02A2 |
