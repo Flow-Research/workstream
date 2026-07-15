@@ -55,6 +55,9 @@ Evidence:
 
 - `reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-internal-review-evidence.md`
 - `reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-pr-trust-bundle.md`
+- `reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-external-review-response.md`
+- `reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-post-merge-memory-internal-review-evidence.md`
+- `reviews/WS-ART-001-OBJECT-STORAGE-AMENDMENT-post-merge-memory-pr-trust-bundle.md`
 
 The current gate is to merge this post-merge memory update and stop. Do not
 start `WS-ART-001-02A1` automatically.
