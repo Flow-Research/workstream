@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29418091729/job/87361249914"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29420444289/job/87369232411"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29416447081/job/87355676662"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29420444367/job/87369233033"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ART-001-02A1",
-    "chunk_title": "External Service Adapter Foundation",
-    "initiative_id": "WS-ART-001",
-    "next_chunk_id": "WS-ART-001-02A2",
-    "next_chunk_title": "Committed Source And Local Preparation",
+    "chunk_id": "WS-AUTH-001-07A",
+    "chunk_title": "Closed Permission And Action Catalogue",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-07B",
+    "next_chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ART-001-02A2",
-    "next_chunk_title": "Committed Source And Local Preparation",
+    "next_chunk_id": "WS-AUTH-001-07B",
+    "next_chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "f5995518a0d1723be5600d4bb306d99d3ba077a7",
-    "head_ref": "codex/ws-art-001-02a1-external-service-adapter-foundation",
-    "head_sha": "e0ebe1bb28717819cb90df22fb4a2bc92ebe3381",
-    "intent_blob_sha": "21c91eb5efc61d4f6d6f971c6fe8bbfa9b144560",
-    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02A1.json",
-    "main_sha": "f64a8e5b80f0da9d59f6373bc0a6b915e3dd6b7f",
-    "merged_at": "2026-07-15T13:11:33Z",
+    "first_parent_sha": "f64a8e5b80f0da9d59f6373bc0a6b915e3dd6b7f",
+    "head_ref": "codex/ws-auth-001-07-authorization-kernel",
+    "head_sha": "3ab25cf3b1e99336c635a318101375bb4bebdf91",
+    "intent_blob_sha": "334b8bcee2a86be4eb900c4cb21f1324283406dd",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-07A.json",
+    "main_sha": "e9d72a16d95e704f2af514a97d37623940854d95",
+    "merged_at": "2026-07-15T16:22:11Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 127,
-    "pr_title": "Install typed external service adapter foundation",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/127"
+    "pr_number": 126,
+    "pr_title": "Add closed authorization action catalogue and audit parity",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/126"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-15T13:11:33Z"
+  "updated_at": "2026-07-15T16:22:11Z"
 }
