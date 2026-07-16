@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29482246184/job/87568441426"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29487194116/job/87584382995"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29481047118/job/87564624568"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29487194049/job/87584382741"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-08",
-    "chunk_title": "Bootstrap And Administrative Role Grants",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-09",
-    "next_chunk_title": "Actor State, Identity Revocation, And Service Actors",
+    "chunk_id": "WS-ART-001-02A2",
+    "chunk_title": "Committed Source And Local Preparation",
+    "initiative_id": "WS-ART-001",
+    "next_chunk_id": "WS-ART-001-02A3",
+    "next_chunk_title": "ArtifactStore v2 Local Clean Cut",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-09",
-    "next_chunk_title": "Actor State, Identity Revocation, And Service Actors",
+    "next_chunk_id": "WS-ART-001-02A3",
+    "next_chunk_title": "ArtifactStore v2 Local Clean Cut",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "90eca12f6398f2ef168e634244d912765572c3e5",
-    "head_ref": "codex/ws-auth-001-08-bootstrap-admin-grants",
-    "head_sha": "0832358a0262805f553d05b50b0d778e6e6ad995",
-    "intent_blob_sha": "fc22da147b500025f5c2f726e511fd5610541f37",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-08.json",
-    "main_sha": "aa0fdcd6912e66609e39a2fbd7b65f67be6c62f3",
-    "merged_at": "2026-07-16T08:14:06Z",
+    "first_parent_sha": "aa0fdcd6912e66609e39a2fbd7b65f67be6c62f3",
+    "head_ref": "codex/ws-art-001-02a2-committed-source-local-preparation",
+    "head_sha": "32aab89262a3944f305e9e5dc4c65a2d31e2e144",
+    "intent_blob_sha": "ac2ae864d891c8033d3f66649d019d554b6a35d5",
+    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02A2.json",
+    "main_sha": "9a04434e2f23c5dec8939dadb943bba4d85110c0",
+    "merged_at": "2026-07-16T10:07:03Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 131,
-    "pr_title": "Add bootstrap and administrative role grants",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/131"
+    "pr_number": 129,
+    "pr_title": "Add committed artifact source preparation",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/129"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-16T08:14:06Z"
+  "updated_at": "2026-07-16T10:07:03Z"
 }
