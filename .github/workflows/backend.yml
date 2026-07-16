@@ -135,8 +135,19 @@ jobs:
       - name: API contract real API e2e
         working-directory: backend
         env:
-          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+**********************************************/postgres
         run: |
           metadata_dir="$(mktemp -d)"
           trap 'rm -rf "$metadata_dir"' EXIT
           python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 3600 -- python scripts/api_contract_e2e.py
+
+  credential-scan:
+    name: Credential Scanner
+    uses: Flow-Research/.github/.github/workflows/credential-scanner.yml@e519272096a29214dc6f4f36f1a7de2fc6fba96a
+
+  pr-lint:
+    name: PR Template Check
+    if: github.event_name == 'pull_request'
+    uses: Flow-Research/.github/.github/workflows/pr-template-linter.yml@e519272096a29214dc6f4f36f1a7de2fc6fba96a
+    with:
+      pr-body: ${{ github.event.pull_request.body }}
