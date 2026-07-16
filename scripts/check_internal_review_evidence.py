@@ -28,6 +28,7 @@ RELEVANT_PREFIXES = (
     "backend/app/",
     "backend/tests/",
     "docs/",
+    "mcp_server/",
     "scripts/",
 )
 RELEVANT_EXACT_PATHS = {
@@ -150,10 +151,20 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
             required.append(track)
 
     for path in paths:
-        if path.startswith((".agent-loop/", ".agents/", ".codex/", "backend/app/", "backend/alembic/")):
+        if path.startswith(
+            (
+                ".agent-loop/",
+                ".agents/",
+                ".codex/",
+                "backend/app/",
+                "backend/alembic/",
+                "mcp_server/workstream_mcp/",
+            )
+        ):
             add("architecture")
         if path.startswith((".github/", "scripts/")) or path in {
             "backend/pyproject.toml",
+            "mcp_server/pyproject.toml",
         }:
             add("ci integrity")
         if path.endswith(".md") or path.startswith(("docs/", ".agent-loop/", ".agents/")) or path in {
@@ -161,7 +172,9 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
             "README.md",
         }:
             add("docs")
-        if path.startswith((".agents/skills/", ".codex/agents/", "backend/app/", "scripts/")):
+        if path.startswith(
+            (".agents/skills/", ".codex/agents/", "backend/app/", "mcp_server/workstream_mcp/", "scripts/")
+        ):
             add("reuse/dedup")
         if path.startswith("backend/tests/") or "/tests/" in path or Path(path).name.startswith("test_"):
             add("test delta")

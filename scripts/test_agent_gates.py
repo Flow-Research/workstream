@@ -246,6 +246,8 @@ def test_backend_config_paths_require_review_evidence() -> None:
     assert gate.is_relevant("backend/alembic/versions/0001_init.py")
     assert gate.is_relevant("backend/alembic.ini")
     assert gate.is_relevant("backend/pyproject.toml")
+    assert gate.is_relevant("mcp_server/workstream_mcp/server.py")
+    assert gate.is_relevant("mcp_server/pyproject.toml")
 
     backend_tracks = gate.required_tracks_for(["backend/alembic/versions/0001_init.py"])
     assert "architecture" in backend_tracks
@@ -253,6 +255,18 @@ def test_backend_config_paths_require_review_evidence() -> None:
 
     backend_config_tracks = gate.required_tracks_for(["backend/pyproject.toml"])
     assert "ci integrity" in backend_config_tracks
+
+    mcp_tracks = gate.required_tracks_for(
+        [
+            "mcp_server/workstream_mcp/server.py",
+            "mcp_server/tests/test_catalogue.py",
+            "mcp_server/pyproject.toml",
+        ]
+    )
+    assert "architecture" in mcp_tracks
+    assert "ci integrity" in mcp_tracks
+    assert "reuse/dedup" in mcp_tracks
+    assert "test delta" in mcp_tracks
 
 
 def test_review_evidence_files_are_not_relevant_changes() -> None:
