@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29442493721/job/87444681923"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29482246184/job/87568441426"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29442493897/job/87444682508"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29481047118/job/87564624568"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-07B",
-    "chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
+    "chunk_id": "WS-AUTH-001-08",
+    "chunk_title": "Bootstrap And Administrative Role Grants",
     "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-08",
-    "next_chunk_title": "Bootstrap And Administrative Role Grants",
+    "next_chunk_id": "WS-AUTH-001-09",
+    "next_chunk_title": "Actor State, Identity Revocation, And Service Actors",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-08",
-    "next_chunk_title": "Bootstrap And Administrative Role Grants",
+    "next_chunk_id": "WS-AUTH-001-09",
+    "next_chunk_title": "Actor State, Identity Revocation, And Service Actors",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "e9d72a16d95e704f2af514a97d37623940854d95",
-    "head_ref": "codex/ws-auth-001-07b-deny-default-kernel",
-    "head_sha": "9fd3bb45a0b7340f073bfdf7440cd0e01f1bd56c",
-    "intent_blob_sha": "fc5938cbbbcc0a4078b47525f5e63a5a24eaeee7",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-07B.json",
-    "main_sha": "90eca12f6398f2ef168e634244d912765572c3e5",
-    "merged_at": "2026-07-15T19:21:53Z",
+    "first_parent_sha": "90eca12f6398f2ef168e634244d912765572c3e5",
+    "head_ref": "codex/ws-auth-001-08-bootstrap-admin-grants",
+    "head_sha": "0832358a0262805f553d05b50b0d778e6e6ad995",
+    "intent_blob_sha": "fc22da147b500025f5c2f726e511fd5610541f37",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-08.json",
+    "main_sha": "aa0fdcd6912e66609e39a2fbd7b65f67be6c62f3",
+    "merged_at": "2026-07-16T08:14:06Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 130,
-    "pr_title": "Add deny-by-default actor self authorization kernel",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/130"
+    "pr_number": 131,
+    "pr_title": "Add bootstrap and administrative role grants",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/131"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-15T19:21:53Z"
+  "updated_at": "2026-07-16T08:14:06Z"
 }
