@@ -2,7 +2,7 @@
 
 ## Current status
 
-`WS-MCP-001-01` is active on branch
+`WS-MCP-001-01` is implemented and internally reviewed on branch
 `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
 
 ## Active implementation chunk
@@ -17,7 +17,7 @@
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Active | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | First contributor MCP server foundation. |
+| `WS-MCP-001-01` | Reviewed | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Internal review complete; ready for PR publication. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace temporary service methods after review/contribution APIs exist. |
 
 ## Blockers
