@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29616942742/job/88003962467"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29619760997/job/88012283722"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29615854486/job/88000679459"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29619697158/job/88012097583"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-09B",
-    "chunk_title": "Controlled Service Actor Provisioning",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-09C",
-    "next_chunk_title": "Actor And Identity-Link Administration Reads",
+    "chunk_id": "WS-CON-001-01",
+    "chunk_title": "Canonical Contract Adoption And Architecture Decision",
+    "initiative_id": "WS-CON-001",
+    "next_chunk_id": "WS-CON-001-02A",
+    "next_chunk_title": "Shared Transactional Outbox Persistence",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-09C",
-    "next_chunk_title": "Actor And Identity-Link Administration Reads",
+    "next_chunk_id": "WS-CON-001-02A",
+    "next_chunk_title": "Shared Transactional Outbox Persistence",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "a947b8693a97bdb94c9dc63202a51e197834d613",
-    "head_ref": "codex/ws-auth-001-09b-controlled-service-provisioning",
-    "head_sha": "9ee5646b8c42f36ca1084bf3f2c759d6c28d1919",
-    "intent_blob_sha": "f67c9f6062e966835a83808273e730346508deec",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09B.json",
-    "main_sha": "053242b90d927ace3fab92eeca72da27a61cecec",
-    "merged_at": "2026-07-17T22:40:57Z",
+    "first_parent_sha": "053242b90d927ace3fab92eeca72da27a61cecec",
+    "head_ref": "codex/ws-con-001-01",
+    "head_sha": "88e4ac75f0ae1d5c3b00a5a6ff4e8cd147931e0f",
+    "intent_blob_sha": "48c3777765427728585c2cc51aa4385ecb982dfd",
+    "intent_path": ".agent-loop/merge-intents/WS-CON-001-01.json",
+    "main_sha": "e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9",
+    "merged_at": "2026-07-17T23:47:57Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 143,
-    "pr_title": "Add controlled service actor provisioning",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/143"
+    "pr_number": 144,
+    "pr_title": "WS-CON-001-01: Adopt canonical contribution and compensation contract",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/144"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-17T22:40:57Z"
+  "updated_at": "2026-07-17T23:47:57Z"
 }
