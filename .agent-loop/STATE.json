@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29587067024/job/87906568684"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29608231110/job/87976518679"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29587065385/job/87906562977"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29603564732/job/87961217748"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-REV-001-PLAN",
-    "chunk_title": "Review And Revision Lifecycle Planning",
-    "initiative_id": "WS-REV-001",
-    "next_chunk_id": "WS-REV-001-01",
-    "next_chunk_title": "Canonical Contract Adoption And Dependency Conformance",
+    "chunk_id": "WS-CON-001-PLAN3",
+    "chunk_title": "AUTH And REV Current-Main Reconciliation",
+    "initiative_id": "WS-CON-001",
+    "next_chunk_id": "WS-CON-001-01",
+    "next_chunk_title": "Canonical Contract Adoption And Architecture Decision",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-REV-001-01",
-    "next_chunk_title": "Canonical Contract Adoption And Dependency Conformance",
+    "next_chunk_id": "WS-CON-001-01",
+    "next_chunk_title": "Canonical Contract Adoption And Architecture Decision",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "299363af5d9e8a68bcc9b17457188048483caeed",
-    "head_ref": "codex/ws-rev-001-plan",
-    "head_sha": "31162dee467ffc9f8e7eb49a9283e0b9e5e7f45f",
-    "intent_blob_sha": "5da2a7693c44619090a345f56c81f96d7e61ca78",
-    "intent_path": ".agent-loop/merge-intents/WS-REV-001-PLAN.json",
-    "main_sha": "0302bcf854a565d429e232ad6b076a1931ea74e4",
-    "merged_at": "2026-07-17T14:49:54Z",
+    "first_parent_sha": "0302bcf854a565d429e232ad6b076a1931ea74e4",
+    "head_ref": "codex/ws-con-001-plan",
+    "head_sha": "4b13c3ee28ecddd7c92be70ad2059c130604f9d1",
+    "intent_blob_sha": "926058d8892b686e4d6f3c37c8a4e2710c2d403b",
+    "intent_path": ".agent-loop/merge-intents/WS-CON-001-PLAN3.json",
+    "main_sha": "a947b8693a97bdb94c9dc63202a51e197834d613",
+    "merged_at": "2026-07-17T19:38:11Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 128,
-    "pr_title": "Plan review and revision lifecycle",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/128"
+    "pr_number": 142,
+    "pr_title": "Plan contribution and compensation boundary",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/142"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-17T14:49:54Z"
+  "updated_at": "2026-07-17T19:38:11Z"
 }
