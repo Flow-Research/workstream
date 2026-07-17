@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29608231110/job/87976518679"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29616942742/job/88003962467"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29603564732/job/87961217748"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29615854486/job/88000679459"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-CON-001-PLAN3",
-    "chunk_title": "AUTH And REV Current-Main Reconciliation",
-    "initiative_id": "WS-CON-001",
-    "next_chunk_id": "WS-CON-001-01",
-    "next_chunk_title": "Canonical Contract Adoption And Architecture Decision",
+    "chunk_id": "WS-AUTH-001-09B",
+    "chunk_title": "Controlled Service Actor Provisioning",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-09C",
+    "next_chunk_title": "Actor And Identity-Link Administration Reads",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-CON-001-01",
-    "next_chunk_title": "Canonical Contract Adoption And Architecture Decision",
+    "next_chunk_id": "WS-AUTH-001-09C",
+    "next_chunk_title": "Actor And Identity-Link Administration Reads",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "0302bcf854a565d429e232ad6b076a1931ea74e4",
-    "head_ref": "codex/ws-con-001-plan",
-    "head_sha": "4b13c3ee28ecddd7c92be70ad2059c130604f9d1",
-    "intent_blob_sha": "926058d8892b686e4d6f3c37c8a4e2710c2d403b",
-    "intent_path": ".agent-loop/merge-intents/WS-CON-001-PLAN3.json",
-    "main_sha": "a947b8693a97bdb94c9dc63202a51e197834d613",
-    "merged_at": "2026-07-17T19:38:11Z",
+    "first_parent_sha": "a947b8693a97bdb94c9dc63202a51e197834d613",
+    "head_ref": "codex/ws-auth-001-09b-controlled-service-provisioning",
+    "head_sha": "9ee5646b8c42f36ca1084bf3f2c759d6c28d1919",
+    "intent_blob_sha": "f67c9f6062e966835a83808273e730346508deec",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09B.json",
+    "main_sha": "053242b90d927ace3fab92eeca72da27a61cecec",
+    "merged_at": "2026-07-17T22:40:57Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 142,
-    "pr_title": "Plan contribution and compensation boundary",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/142"
+    "pr_number": 143,
+    "pr_title": "Add controlled service actor provisioning",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/143"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-17T19:38:11Z"
+  "updated_at": "2026-07-17T22:40:57Z"
 }
