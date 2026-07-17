@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29563584061/job/87831101541"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29573025795/job/87861032407"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29563584063/job/87831101293"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29572917159/job/87860671620"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-XINT",
-    "chunk_title": "Lifecycle Boundary Plan Reconciliation",
+    "chunk_id": "WS-AUTH-001-09A",
+    "chunk_title": "Fixed Service Identity Foundation",
     "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-09B",
+    "next_chunk_title": "Controlled Service Actor Provisioning",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-09B",
+    "next_chunk_title": "Controlled Service Actor Provisioning",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "5d353b6d3f8a36b9b9ffdc1959487a150ac25fd1",
-    "head_ref": "codex/ws-auth-001-xint-reconciliation",
-    "head_sha": "b80e89837d5204bb2ba59bb1ee0cbc3fe59b1ad5",
-    "intent_blob_sha": "e83ad172c07cc9378293665e8f7c39209b9a4641",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-XINT.json",
-    "main_sha": "d541521790a0441cfd2193f466e00ef81248ec31",
-    "merged_at": "2026-07-17T08:37:16Z",
+    "first_parent_sha": "d541521790a0441cfd2193f466e00ef81248ec31",
+    "head_ref": "codex/ws-auth-001-09-actor-state-service-actors",
+    "head_sha": "d4b65400d35c1036f8d6f15bb81fe5e0b81f10be",
+    "intent_blob_sha": "fe0d6a3c790bdf46bc5f82a641ef728c736f1b42",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09A.json",
+    "main_sha": "299363af5d9e8a68bcc9b17457188048483caeed",
+    "merged_at": "2026-07-17T12:57:06Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 140,
-    "pr_title": "Reconcile AUTH plan with merged lifecycle boundaries",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/140"
+    "pr_number": 132,
+    "pr_title": "Add fixed service identity foundation",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/132"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-17T08:37:16Z"
+  "updated_at": "2026-07-17T12:57:06Z"
 }
