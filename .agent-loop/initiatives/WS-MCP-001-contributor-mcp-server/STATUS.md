@@ -21,7 +21,7 @@ WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Foundation ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production fails closed for unavailable/incompatible surfaces; foundation evidence is current at `950afda`. |
+| `WS-MCP-001-01` | Foundation ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production fails closed for unavailable/incompatible surfaces; foundation evidence is current at `4438f4a`. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers

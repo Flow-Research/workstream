@@ -24,6 +24,7 @@ closed.
 - Added authoritative `/api/v1/auth/me` validation before unavailable production surfaces, stable-reference/path hardening, and safe backend error-code preservation.
 - Scoped temporary idempotency and leases to the actor and completed the temporary resource representations needed for foundation testing.
 - Added a real MCP SDK client test for the Submitter and Reviewer journeys and proved no subscriptions or event-like capability is advertised.
+- Published MCP tool annotations that distinguish the read-only pre-submit check from the six state-changing lifecycle tools.
 
 ## Why It Changed
 
@@ -91,6 +92,7 @@ git diff --check
 - [x] Temporary replay and task/review leases are actor-scoped: `test_scenario_gateway.py`.
 - [x] One temporary happy path for each journey works through a real MCP client session: `test_protocol_journeys.py`.
 - [x] No resource subscriptions, list-change events, experimental channels, or MCP tasks are advertised: `test_catalogue.py`.
+- [x] Tool annotations identify `run_pre_submit_check` as read-only and the six lifecycle tools as state-changing: `test_catalogue.py`.
 - [x] Checker failure remains a valid structured outcome: `test_http_gateway.py`.
 - [x] Exactly one schema-v2 merge intent exists: `.agent-loop/merge-intents/WS-MCP-001-01.json`.
 
@@ -112,11 +114,11 @@ Modified: `test_auth.py`, `test_catalogue.py`, `test_http_gateway.py`,
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 950afda1b9a1c1a93fd47318f4a08fe0d047cdad
+Reviewed code SHA: 4438f4ac9375485b409cf2a7f944e179e6f6421b
 
-Reviewed at: 2026-07-18T17:34:01Z
+Reviewed at: 2026-07-18T17:37:04Z
 
-Reviewer run IDs: senior-engineering-mcp-spec-alignment-local-review, qa-test-mcp-spec-alignment-local-review, security-auth-mcp-spec-alignment-local-review, product-ops-mcp-spec-alignment-local-review, architecture-mcp-spec-alignment-local-review, ci-integrity-mcp-spec-alignment-local-review, docs-mcp-spec-alignment-local-review, reuse-dedup-mcp-spec-alignment-local-review, test-delta-mcp-spec-alignment-local-review
+Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-mcp-tool-annotation-local-review, security-auth-mcp-tool-annotation-local-review, product-ops-mcp-tool-annotation-local-review, architecture-mcp-tool-annotation-local-review, ci-integrity-mcp-tool-annotation-local-review, docs-mcp-tool-annotation-local-review, reuse-dedup-mcp-tool-annotation-local-review, test-delta-mcp-tool-annotation-local-review
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|

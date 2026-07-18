@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 950afda1b9a1c1a93fd47318f4a08fe0d047cdad
+Reviewed code SHA: 4438f4ac9375485b409cf2a7f944e179e6f6421b
 
-Reviewed at: 2026-07-18T17:34:01Z
+Reviewed at: 2026-07-18T17:37:04Z
 
-Reviewer run IDs: senior-engineering-mcp-spec-alignment-local-review, qa-test-mcp-spec-alignment-local-review, security-auth-mcp-spec-alignment-local-review, product-ops-mcp-spec-alignment-local-review, architecture-mcp-spec-alignment-local-review, ci-integrity-mcp-spec-alignment-local-review, docs-mcp-spec-alignment-local-review, reuse-dedup-mcp-spec-alignment-local-review, test-delta-mcp-spec-alignment-local-review
+Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-mcp-tool-annotation-local-review, security-auth-mcp-tool-annotation-local-review, product-ops-mcp-tool-annotation-local-review, architecture-mcp-tool-annotation-local-review, ci-integrity-mcp-tool-annotation-local-review, docs-mcp-tool-annotation-local-review, reuse-dedup-mcp-tool-annotation-local-review, test-delta-mcp-tool-annotation-local-review
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -54,6 +54,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Temporary resource representations now include the locked task context, status outcomes/actions, compensation context, lease timing, checker context, and revision context needed to exercise the v0.1 foundation shapes.
 - The runtime explicitly proves no resource subscriptions, list-change notifications, experimental channels, or MCP tasks are advertised.
 - A real in-memory MCP SDK client exercises one temporary Submitter happy path and one temporary Reviewer happy path over the registered protocol surface.
+- `run_pre_submit_check` is published as read-only and non-destructive; the six lifecycle tools are published as state-changing. All seven tools publish their retry-safe idempotency hint.
 
 ## WS-MCP-001 Specification Status
 
