@@ -1,4 +1,7 @@
-# PR Trust Bundle
+# Workstream PR Trust Bundle
+
+This PR body follows `.github/pull_request_template.md` and
+`.agent-loop/templates/PR_TRUST_BUNDLE.md`.
 
 ## Chunk
 
@@ -12,6 +15,13 @@ Add the WS-MCP-001 contributor MCP foundation without duplicating Workstream
 authority or exposing backend lifecycle endpoints with incompatible contributor
 semantics. This PR does not claim that the complete Sections 18 and 20 gate is
 closed.
+
+## Human-Approved Intent
+
+Link the initiative and chunk contract:
+
+- Intent: `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/INTENT.md`
+- Chunk contract: `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/chunks/WS-MCP-001-01-contributor-mcp-foundation.md`
 
 ## What Changed
 
@@ -40,12 +50,25 @@ metadata, and holds no workflow or business state. The scenario fixture exists
 only for tests that exercise the public MCP contract while backend APIs are
 unavailable or incompatible.
 
+## Alternatives Rejected
+
+- Direct database access, because it would bypass Workstream authority.
+- A generic API-call tool, because the v0.1 catalogue is closed.
+- Mapping contributor tools to backend routes with incompatible actor,
+  lifecycle, or idempotency semantics.
+- Runtime scenario configuration, because temporary data must never become
+  production truth.
+
 ## Scope Control
 
 ### Allowed Files Changed
 
 - `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/**`
+- `.agent-loop/merge-intents/WS-MCP-001-01.json`
+- `.github/workflows/backend.yml`
 - `mcp_server/**`
+- `scripts/check_internal_review_evidence.py`
+- `scripts/test_agent_gates.py`
 
 ### Files Outside Contract
 
@@ -53,9 +76,28 @@ unavailable or incompatible.
 
 ## Product Behavior
 
+- [ ] No Workstream product behavior changed.
 - [x] Product behavior changed and is explained here: the MCP advertises the approved catalogue but truthfully returns `workstream_temporarily_unavailable` for surfaces that current backend APIs cannot safely implement.
 
 ## Evidence
+
+### Commands Run
+
+```bash
+(cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m ruff check .)
+(cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m pytest -q)
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_workstream_wording.py
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_markdown_links.py
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_authorization_docs.py
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_artifact_contracts.py
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/test_agent_gates.py
+/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_internal_review_evidence.py
+git diff --check
+(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts)
+(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
+```
+
+### Result Summary
 
 ```text
 MCP tests: 44 passed.
@@ -67,22 +109,10 @@ Focused backend API contract: 15 passed.
 git diff --check: passed.
 ```
 
-Commands:
+## Acceptance Criteria Proof
 
-```bash
-(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m ruff check .)
-(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m pytest -q)
-python3 scripts/check_stale_workstream_wording.py
-python3 scripts/check_markdown_links.py
-python3 scripts/check_stale_authorization_docs.py
-python3 scripts/check_stale_artifact_contracts.py
-python3 scripts/test_agent_gates.py
-git diff --check
-(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts)
-(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
-```
-
-## Foundation Acceptance Criteria Proof
+The checked items below prove the foundation chunk criteria, not complete
+WS-MCP-001 Sections 18 and 20 acceptance.
 
 - [x] Seven resource types, seven tools, zero prompts: `mcp_server/tests/test_catalogue.py`.
 - [x] Tokens stay transport/session scoped and are redacted from results and logs: `test_auth.py`, `test_http_gateway.py`, and `test_runtime_safety.py`.
@@ -107,10 +137,22 @@ Inspector/client capture remain follow-up evidence.
 
 ## Test Delta
 
-Added: `mcp_server/tests/test_protocol_journeys.py`.
+### Tests Added
 
-Modified: `test_auth.py`, `test_catalogue.py`, `test_http_gateway.py`,
-`test_runtime_safety.py`, and `test_scenario_gateway.py`.
+- `mcp_server/tests/test_auth.py`
+- `mcp_server/tests/test_catalogue.py`
+- `mcp_server/tests/test_http_gateway.py`
+- `mcp_server/tests/test_protocol_journeys.py`
+- `mcp_server/tests/test_runtime_safety.py`
+- `mcp_server/tests/test_scenario_gateway.py`
+
+### Tests Modified
+
+- `scripts/test_agent_gates.py`
+
+### Tests Removed Or Skipped
+
+- None
 
 ## Internal Reviewer Results
 
@@ -134,10 +176,23 @@ Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-m
 
 ## External Review
 
+External review response file:
+
+- `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/reviews/WS-MCP-001-01-external-review-response.md`
+
 | Source | Status | Notes |
 |---|---:|---|
 | CodeRabbit | Pending | PR not opened yet. |
 | GitHub checks | Pending | PR not opened yet. |
+
+## CI And Gate Integrity
+
+- [x] No workflow weakening.
+- [x] No lint/test/docstring gate weakening.
+- [x] No coverage threshold weakening.
+- [x] No package script weakening.
+- [x] No unpinned new GitHub Action.
+- [x] Checkout credential persistence disabled where checkout is used.
 
 ## Remaining Risks
 
@@ -148,14 +203,20 @@ Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-m
 
 ## Follow-Up Work
 
-Replace test-only scenario methods with real HTTP gateway calls when the required
-backend API contracts land.
+Replace every test-only scenario method with real HTTP gateway calls when the
+required contributor-list, lifecycle, contribution, and review API contracts
+land, then close the remaining Sections 18 and 20 evidence.
 
 ## Human Review Focus
 
-Inspect the fail-closed lifecycle boundaries, token/redaction behavior,
-Streamable HTTP allowlists, and the distinction between production gateway and
-test-only scenario fixture.
+Please inspect:
+
+- fail-closed lifecycle boundaries;
+- token propagation and redaction behavior;
+- stable-reference and actor-lease isolation;
+- Streamable HTTP host/origin allowlists;
+- the distinction between the production gateway and test-only scenario fixture;
+- the explicit boundary between foundation readiness and full v0.1 acceptance.
 
 ## Human Merge Ownership
 
