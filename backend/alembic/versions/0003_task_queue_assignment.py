@@ -57,7 +57,6 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("project_id", sa.String(length=36), nullable=False),
         sa.Column("locked_guide_version", sa.String(length=50), nullable=True),
-        sa.Column("locked_checker_policy_version", sa.String(length=50), nullable=True),
         sa.Column("locked_review_policy_version", sa.String(length=50), nullable=True),
         sa.Column("locked_revision_policy_version", sa.String(length=50), nullable=True),
         sa.Column("locked_payment_policy_version", sa.String(length=50), nullable=True),
@@ -78,8 +77,6 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=30), nullable=False),
         sa.Column("acceptance_criteria", sa.Text(), nullable=True),
         sa.Column("rejection_criteria", sa.Text(), nullable=True),
-        sa.Column("required_files", sa.JSON(), nullable=False),
-        sa.Column("required_evidence", sa.JSON(), nullable=False),
         sa.Column("deadline_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by", sa.String(length=100), nullable=False),
         sa.Column("assigned_to", sa.String(length=100), nullable=True),
@@ -90,11 +87,6 @@ def upgrade() -> None:
             ["project_id", "locked_guide_version"],
             ["project_guides.project_id", "project_guides.version"],
             name="fk_workstream_tasks_locked_guide",
-        ),
-        sa.ForeignKeyConstraint(
-            ["project_id", "locked_checker_policy_version"],
-            ["checker_policies.project_id", "checker_policies.guide_version"],
-            name="fk_workstream_tasks_locked_checker_policy",
         ),
         sa.ForeignKeyConstraint(
             ["project_id", "locked_review_policy_version"],

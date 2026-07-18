@@ -27,7 +27,10 @@ Every active project guide version must have a complete guide-policy bundle:
 - `PostSubmitCheckerPolicy`
 - `ReviewPolicy`
 - `RevisionPolicy`
-- `PaymentPolicy`
+
+Publication of a `ContributionPolicyVersion` is independent of this guide-policy
+activation bundle. `TaskAssignment` and `ReviewLease` records freeze their applicable
+published `ContributionPolicyVersion` values at their own lifecycle boundaries.
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.
@@ -68,15 +71,21 @@ opaque sanitized source ref plus content hash or future content id.
 `ProjectGuideSufficiencyAgent` evaluates whether the guide is sufficient for
 submitters, reviewers, and Workstream quality control. Blocking guide gaps stop
 activation and create clarification requests back to the project owner. Warnings
-remain visible to Workstream actors with the `admin` or `project_manager` role
+remain visible to authorized covered Project Managers
 and must be acknowledged before activation.
 
 `SubmissionArtifactPolicyDerivationAgent` derives
 `SubmissionArtifactPolicy` from the guide material after sufficiency
 passes or passes with warnings. The project owner does not approve this
-internal policy. A Workstream actor with the `admin` or `project_manager` role
+internal policy. An authorized covered Project Manager
 reviews and approves the derived policy before guide activation, and any
 sufficiency warnings must be acknowledged before approval or activation.
+This setup pipeline is automatic. When Workstream captures a guide-source
+snapshot, it enqueues a Celery project setup job. The job runs
+`ProjectGuideSufficiencyAgent`; a blocked report stops the pipeline and no
+submission artifact policy is created. A passed or passed-with-warnings report
+continues to `SubmissionArtifactPolicyDerivationAgent`, which creates a draft
+policy for human Workstream review.
 Agent-derived policy versioning is server-owned and deterministic from the
 guide source snapshot hash. Provider-returned policy versions are not trusted
 for idempotency and cannot create multiple current policies for the same
@@ -91,7 +100,9 @@ the default path. It produces a machine-readable artifact-intake contract.
 Workstream's trusted compiler builds and validates the constrained pre-submit
 checker specification using Workstream-approved primitives.
 
-`SubmissionArtifactPolicy` is the Workstream-derived, admin-or-project-manager-approved machine-readable contract for worker submissions. It defines:
+`SubmissionArtifactPolicy` is the Workstream-derived,
+covered-Project-Manager-approved machine-readable contract for contributor
+submissions. It defines:
 
 - required artifacts
 - required evidence references
@@ -100,7 +111,7 @@ checker specification using Workstream-approved primitives.
 - maximum file and package size rules
 - allowed storage reference forms
 - forbidden artifacts
-- worker attestation requirements
+- contributor attestation requirements
 - project-specific packaging requirements
 
 Workstream owns a default submission artifact policy. Every project inherits it.
@@ -138,11 +149,11 @@ or the work is split into another project/guide. Workstream does not hide guide
 coverage problems by generating new task-specific policies.
 
 `PreSubmitCheckerPolicy` is locked to the effective project submission artifact policy hash. It is
-not derived on read, manually edited by workers, or supplied by clients. Workers
+not derived on read, manually edited by contributors, or supplied by clients. Contributors
 submit only draft packet fields. They do not choose checker names, policy
 versions, blocking rules, severities, or outcomes. Each task stores locked
 references to the applicable guide snapshot, effective project submission artifact policy hash, and
-pre-submit checker bundle hash before entering the worker pipeline. Task-specific
+pre-submit checker bundle hash before entering the contributor pipeline. Task-specific
 values are constrained runtime parameters consumed by the shared checker, not
 new checker generation. For v0.1, those parameters come only from trusted
 task-contract fields already owned by Workstream; there is no free-form
@@ -179,13 +190,13 @@ Approved pre-submit checker primitives include:
 
 The trusted compiler must keep `warn_low_quality_generated_artifact`
 warning-only; escalating that primitive to blocking is rejected because it would
-change worker-facing intake semantics.
+change contributor-facing intake semantics.
 
 Project-specific executable checker code is not part of the default path. If a
 future project requires logic that cannot fit the constrained checker
 specification, the extension path must require static validation, generated
 tests, sandboxed execution, no network, no shell, no secrets, no database access,
-`admin` or `project_manager` approval of the exact code hash after those checks
+covered Project Manager approval of the exact code hash after those checks
 pass, and a locked code hash.
 
 Blocking pre-submit failures prevent submission creation. When blocking pre-submit checks fail:
@@ -194,6 +205,8 @@ Blocking pre-submit failures prevent submission creation. When blocking pre-subm
 - no submission version is assigned
 - no task transition to `submitted` occurs
 - no submission-created audit event is written
+- a task audit event named `pre_submission_check_failed` is written with the
+  structured checker result for project operators
 - the response does not use review decision values: `accept`, `needs_revision`, or `reject`
 
 Pre-submit has two API contracts:
@@ -224,7 +237,7 @@ POST /tasks/{id}/submissions
 `pre_submission_checker_failed` is the submission-creation error code. It is not
 a review decision and is not the response type for the preflight endpoint.
 
-Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a locked submission.
+Pre-submit checks are authoritative for submission intake. They are not authoritative proof for human review readiness. Review readiness still requires post-submit internal checker runs against a finalized submission.
 
 ## Implementation Enforcement Contract
 
@@ -238,7 +251,7 @@ points before they can be marked complete:
 
 - API response schemas for `pre_submission_checker_failed` must exclude review
   decision fields and values such as `accept`, `needs_revision`, and `reject`.
-- Worker-facing UI or demo surfaces that render pre-submit results must use
+- Contributor-facing UI or demo surfaces that render pre-submit results must use
   pre-submit pass/fail/warning language, not human review decision terminology.
 - Pre-submit intake feedback must not be persisted as human review decisions or
   durable post-submit checker results.
@@ -251,7 +264,7 @@ points before they can be marked complete:
 
 Chunk `WS-POL-001-03` must prove the API response and no-row/no-version/no-task
 transition behavior. Chunk `WS-POL-001-04` must prove post-submit checker
-records remain separate from pre-submit feedback and that worker-facing
+records remain separate from pre-submit feedback and that contributor-facing
 responses do not expose internal-only routes. If any UI or demo surface renders
 pre-submit results, a later frontend/demo chunk must prove the same wording
 separation before this ADR can be closed as fully implemented.
@@ -263,7 +276,7 @@ Every submission must include:
 - summary
 - package hash when a package reference is supplied
 - artifact hash manifest
-- worker attestation
+- contributor attestation
 
 Every artifact manifest entry must include:
 
@@ -299,7 +312,7 @@ The effective policy merge is deterministic:
 | `maximum_package_size_bytes` | minimum non-null limit |
 | `packaging` | restrictive merge; conflicts block activation |
 
-Conflicts block setup before workers see tasks. A project-required artifact that
+Conflicts block setup before contributors see tasks. A project-required artifact that
 matches a forbidden rule is not accepted as a runtime edge case.
 
 Approved policy and checker content, hashes, source bindings, and approval
@@ -333,7 +346,7 @@ Task, submission, and revision provenance fields named
 
 Positive:
 
-- workers get deterministic pre-submit feedback
+- contributors get deterministic pre-submit feedback
 - invalid packets are blocked before submission records are created
 - project-specific artifact requirements are enforced without rereading guide prose at runtime
 - Workstream security defaults cannot be weakened by project configuration
@@ -342,7 +355,6 @@ Positive:
 Tradeoff:
 
 - project setup must approve one more explicit Workstream-owned policy bundle
-- existing `evidence_policy`, `required_files`, and `required_evidence` wording
-  must be replaced by `SubmissionArtifactPolicy`; no v0.1 compatibility alias
-  is required
+- project setup and task submission use `SubmissionArtifactPolicy` as the
+  artifact-intake contract from the start
 - post-submit checker policy must remain separate from generated project pre-submit checker policy

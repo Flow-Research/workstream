@@ -9,15 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
-    CheckerPolicy,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
     GuideSufficiencyReport,
     PaymentPolicy,
+    PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
     ProjectGuide,
+    ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
@@ -72,16 +73,26 @@ class ProjectRepository:
         await self._session.refresh(project)
         return project
 
-    async def get_project(self, project_id: str) -> Project | None:
+    async def get_project(
+        self,
+        project_id: str,
+        *,
+        for_update: bool = False,
+    ) -> Project | None:
         """Load one project by primary key.
 
         Args:
             project_id: Project id to load.
+            for_update: Lock the canonical project row in the caller transaction.
 
         Returns:
             Project model when found; otherwise ``None``.
         """
-        return await self._session.get(Project, project_id)
+        if not for_update:
+            return await self._session.get(Project, project_id)
+        return await self._session.scalar(
+            select(Project).where(Project.id == project_id).with_for_update()
+        )
 
     async def add_guide(self, guide: ProjectGuide) -> ProjectGuide:
         """Persist a new project guide and refresh generated database fields.
@@ -267,6 +278,51 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
+    async def add_project_setup_run(
+        self,
+        setup_run: ProjectSetupRun,
+    ) -> ProjectSetupRun:
+        """Persist a project setup run ledger row."""
+        self._session.add(setup_run)
+        await self._session.flush()
+        await self._session.refresh(setup_run)
+        return setup_run
+
+    async def get_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
+        """Load one project setup run by primary key."""
+        return await self._session.get(ProjectSetupRun, setup_run_id)
+
+    async def lock_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
+        """Load one project setup run with a transactional row lock."""
+        result = await self._session.execute(
+            select(ProjectSetupRun)
+            .where(ProjectSetupRun.id == setup_run_id)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def get_latest_project_setup_run(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> ProjectSetupRun | None:
+        """Load the latest setup run for one project guide."""
+        result = await self._session.execute(
+            select(ProjectSetupRun)
+            .join(GuideSourceSnapshot, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id)
+            .where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+            )
+            .order_by(
+                GuideSourceSnapshot.captured_at.desc(),
+                ProjectSetupRun.created_at.desc(),
+                ProjectSetupRun.id.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def add_guide_sufficiency_report(
         self,
         report: GuideSufficiencyReport,
@@ -290,6 +346,22 @@ class ProjectRepository:
     ) -> GuideSufficiencyReport | None:
         """Load one guide sufficiency report by primary key."""
         return await self._session.get(GuideSufficiencyReport, report_id)
+
+    async def list_guide_sufficiency_reports(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> Sequence[GuideSufficiencyReport]:
+        """List sufficiency reports for one project guide."""
+        result = await self._session.execute(
+            select(GuideSufficiencyReport)
+            .where(
+                GuideSufficiencyReport.project_id == project_id,
+                GuideSufficiencyReport.guide_id == guide_id,
+            )
+            .order_by(GuideSufficiencyReport.created_at.desc(), GuideSufficiencyReport.id.desc())
+        )
+        return result.scalars().all()
 
     async def get_sufficiency_report_for_snapshot(
         self,
@@ -326,6 +398,25 @@ class ProjectRepository:
     ) -> SubmissionArtifactPolicy | None:
         """Load one submission artifact policy by primary key."""
         return await self._session.get(SubmissionArtifactPolicy, policy_id)
+
+    async def list_submission_artifact_policies(
+        self,
+        project_id: str,
+        guide_id: str,
+    ) -> Sequence[SubmissionArtifactPolicy]:
+        """List submission artifact policies for one project guide."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy)
+            .where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_id == guide_id,
+            )
+            .order_by(
+                SubmissionArtifactPolicy.created_at.desc(),
+                SubmissionArtifactPolicy.id.desc(),
+            )
+        )
+        return result.scalars().all()
 
     async def get_agent_derived_submission_artifact_policy_for_snapshot(
         self,
@@ -450,6 +541,13 @@ class ProjectRepository:
             "effective project submission artifact policies",
         )
 
+    async def get_effective_submission_artifact_policy_by_id(
+        self,
+        policy_id: str,
+    ) -> EffectiveProjectSubmissionArtifactPolicy | None:
+        """Load one effective project submission artifact policy by primary key."""
+        return await self._session.get(EffectiveProjectSubmissionArtifactPolicy, policy_id)
+
     async def add_pre_submit_checker_policy(
         self,
         policy: PreSubmitCheckerPolicy,
@@ -481,6 +579,13 @@ class ProjectRepository:
         if not rows:
             return None
         return rows[0]
+
+    async def get_pre_submit_checker_policy(
+        self,
+        policy_id: str,
+    ) -> PreSubmitCheckerPolicy | None:
+        """Load one project pre-submit checker policy by primary key."""
+        return await self._session.get(PreSubmitCheckerPolicy, policy_id)
 
     async def get_current_pre_submit_checker_policy(
         self,
@@ -520,43 +625,160 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
-    async def upsert_checker_policy(self, policy: CheckerPolicy) -> CheckerPolicy:
-        """Create or replace a checker policy for one guide version.
+    async def upsert_post_submit_checker_policy(
+        self,
+        policy: PostSubmitCheckerPolicy,
+    ) -> PostSubmitCheckerPolicy:
+        """Create or replace a post-submit checker policy for one guide version.
 
         Args:
-            policy: Checker policy model carrying the desired values.
+            policy: Post-submit checker policy model carrying the desired values.
 
         Returns:
-            Persisted checker policy model.
+            Persisted post-submit checker policy model.
         """
-        existing = await self.get_checker_policy(policy.project_id, policy.guide_version)
+        existing = await self.get_post_submit_checker_policy(
+            policy.project_id,
+            policy.guide_version,
+        )
         if existing is None:
             self._session.add(policy)
             await self._session.flush()
             await self._session.refresh(policy)
             return policy
-        existing.required_checkers = policy.required_checkers
-        existing.warning_checkers = policy.warning_checkers
-        existing.blocking_severities = policy.blocking_severities
-        await self._session.flush()
-        await self._session.refresh(existing)
+        if (
+            existing.required_checkers != policy.required_checkers
+            or existing.warning_checkers != policy.warning_checkers
+            or existing.blocking_severities != policy.blocking_severities
+            or existing.policy_hash != policy.policy_hash
+            or existing.policy_body != policy.policy_body
+            or existing.guide_id != policy.guide_id
+            or existing.source_snapshot_id != policy.source_snapshot_id
+            or existing.source_snapshot_hash != policy.source_snapshot_hash
+            or existing.effective_policy_id != policy.effective_policy_id
+            or existing.effective_policy_hash != policy.effective_policy_hash
+            or existing.pre_submit_checker_policy_id != policy.pre_submit_checker_policy_id
+            or existing.pre_submit_checker_bundle_hash != policy.pre_submit_checker_bundle_hash
+        ):
+            raise ProjectRepositoryIntegrityError(
+                "post-submit checker policy already exists with different content"
+            )
         return existing
 
-    async def get_checker_policy(self, project_id: str, guide_version: str) -> CheckerPolicy | None:
-        """Load a checker policy by project and guide version.
+    async def get_post_submit_checker_policy(
+        self,
+        project_id: str,
+        guide_version: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load a post-submit checker policy by project and guide version.
 
         Args:
             project_id: Project id that owns the policy.
             guide_version: Guide version the policy applies to.
 
         Returns:
-            Checker policy when found; otherwise ``None``.
+            Post-submit checker policy when found; otherwise ``None``.
         """
         result = await self._session.execute(
-            select(CheckerPolicy).where(
-                CheckerPolicy.project_id == project_id,
-                CheckerPolicy.guide_version == guide_version,
+            select(PostSubmitCheckerPolicy).where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
+                PostSubmitCheckerPolicy.lifecycle_status.in_(["compiled", "approved"]),
             )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_latest_superseded_post_submit_checker_policy(
+        self,
+        project_id: str,
+        guide_id: str,
+        guide_version: str,
+        source_snapshot_id: str,
+        source_snapshot_hash: str,
+        effective_policy_id: str,
+        effective_policy_hash: str,
+        pre_submit_checker_policy_id: str,
+        pre_submit_checker_bundle_hash: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load the latest rejected policy retained for correction provenance."""
+        result = await self._session.execute(
+            select(PostSubmitCheckerPolicy)
+            .where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_id == guide_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
+                PostSubmitCheckerPolicy.source_snapshot_id == source_snapshot_id,
+                PostSubmitCheckerPolicy.source_snapshot_hash == source_snapshot_hash,
+                PostSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
+                PostSubmitCheckerPolicy.effective_policy_hash == effective_policy_hash,
+                PostSubmitCheckerPolicy.pre_submit_checker_policy_id
+                == pre_submit_checker_policy_id,
+                PostSubmitCheckerPolicy.pre_submit_checker_bundle_hash
+                == pre_submit_checker_bundle_hash,
+                PostSubmitCheckerPolicy.lifecycle_status == "superseded",
+            )
+            .order_by(
+                PostSubmitCheckerPolicy.superseded_at.desc(),
+                PostSubmitCheckerPolicy.id.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_superseded_post_submit_checker_policies(
+        self,
+        project_id: str,
+        guide_id: str,
+        guide_version: str,
+        source_snapshot_id: str,
+        source_snapshot_hash: str,
+        effective_policy_id: str,
+        effective_policy_hash: str,
+        pre_submit_checker_policy_id: str,
+        pre_submit_checker_bundle_hash: str,
+    ) -> Sequence[PostSubmitCheckerPolicy]:
+        """List retained correction records newest first for operator visibility."""
+        result = await self._session.execute(
+            select(PostSubmitCheckerPolicy)
+            .where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_id == guide_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
+                PostSubmitCheckerPolicy.source_snapshot_id == source_snapshot_id,
+                PostSubmitCheckerPolicy.source_snapshot_hash == source_snapshot_hash,
+                PostSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
+                PostSubmitCheckerPolicy.effective_policy_hash == effective_policy_hash,
+                PostSubmitCheckerPolicy.pre_submit_checker_policy_id
+                == pre_submit_checker_policy_id,
+                PostSubmitCheckerPolicy.pre_submit_checker_bundle_hash
+                == pre_submit_checker_bundle_hash,
+                PostSubmitCheckerPolicy.lifecycle_status == "superseded",
+                PostSubmitCheckerPolicy.supersession_kind == "correction_requested",
+            )
+            .order_by(
+                PostSubmitCheckerPolicy.superseded_at.desc(),
+                PostSubmitCheckerPolicy.id.desc(),
+            )
+            .limit(100)
+        )
+        return result.scalars().all()
+
+    async def get_post_submit_checker_policy_by_id(
+        self,
+        policy_id: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load a post-submit checker policy by id."""
+        return await self._session.get(PostSubmitCheckerPolicy, policy_id)
+
+    async def lock_post_submit_checker_policy(
+        self,
+        policy_id: str,
+    ) -> PostSubmitCheckerPolicy | None:
+        """Load one post-submit checker policy with a transactional row lock."""
+        result = await self._session.execute(
+            select(PostSubmitCheckerPolicy)
+            .where(PostSubmitCheckerPolicy.id == policy_id)
+            .with_for_update()
         )
         return result.scalar_one_or_none()
 

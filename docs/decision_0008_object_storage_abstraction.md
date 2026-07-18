@@ -8,7 +8,9 @@ Accepted
 
 Workstream needs to store submission packages, evidence, checker logs, reports, and other artifacts.
 
-Those artifacts must be hash-bound and auditable. Local development may need simple filesystem storage, but production should be able to use R2, S3, or another compatible object store.
+Those artifacts must be hash-bound and auditable. Local development may use a
+filesystem adapter. AWS S3 is the v0.1 production object store; other providers
+require separate approved discovery and a verified maintenance cutover.
 
 If services write directly to local paths, storage semantics will drift when object storage is introduced.
 

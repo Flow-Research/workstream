@@ -38,7 +38,6 @@ def upgrade() -> None:
         sa.Column("supersedes_checker_run_id", sa.String(length=36), nullable=True),
         sa.Column("is_current_for_submission", sa.Boolean(), nullable=False),
         sa.Column("locked_guide_version", sa.String(length=50), nullable=False),
-        sa.Column("locked_checker_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_review_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_revision_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_payment_policy_version", sa.String(length=50), nullable=False),
@@ -84,11 +83,6 @@ def upgrade() -> None:
             ["task_id", "locked_guide_version"],
             ["workstream_tasks.id", "workstream_tasks.locked_guide_version"],
             name="fk_checker_runs_task_locked_guide",
-        ),
-        sa.ForeignKeyConstraint(
-            ["task_id", "locked_checker_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_checker_policy_version"],
-            name="fk_checker_runs_task_locked_checker_policy",
         ),
         sa.ForeignKeyConstraint(
             ["task_id", "locked_review_policy_version"],

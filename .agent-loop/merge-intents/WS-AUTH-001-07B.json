@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-07B",
+  "chunk_title": "Deny-By-Default Kernel And Self-Action Cutover",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-08",
+  "next_chunk_title": "Bootstrap And Administrative Role Grants",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

@@ -106,10 +106,10 @@ class CheckerRunResponse(BaseModel):
     task_id: str
     submission_id: str
     submission_version: int
-    trigger_source: str
+    trigger_source: str | None = None
     status: CheckerStatus
-    routing_recommendation: CheckerRoutingRecommendation
-    outcome_source: CheckerOutcomeSource
+    routing_recommendation: CheckerRoutingRecommendation | None = None
+    outcome_source: CheckerOutcomeSource | None = None
     triggered_by: str | None
     triggered_by_subject: str | None
     triggered_by_issuer: str | None
@@ -120,12 +120,14 @@ class CheckerRunResponse(BaseModel):
     supersedes_checker_run_id: str | None
     is_current_for_submission: bool
     locked_guide_version: str | None
-    locked_checker_policy_version: str | None
+    locked_post_submit_checker_policy_id: str | None = None
+    locked_post_submit_checker_policy_version: str | None = None
+    locked_post_submit_checker_policy_hash: str | None = None
     locked_review_policy_version: str | None
     locked_revision_policy_version: str | None
     locked_payment_policy_version: str | None
     package_hash: str | None
-    artifact_hash_manifest: list[dict[str, Any]]
+    artifact_hash_manifest: list[dict[str, Any]] | None
     artifact_manifest_hash: str | None
     passed_count: int
     warning_count: int
@@ -136,5 +138,35 @@ class CheckerRunResponse(BaseModel):
     completed_at: datetime | None
     failure_code: str | None
     failure_message: str | None
+    created_at: datetime
+    results: list[CheckerResultResponse] = Field(default_factory=list)
+
+
+class CheckerRunPublicResponse(BaseModel):
+    """Conservative public schema for worker-readable checker run endpoints.
+
+    Runtime responses are role-sensitive. Actors with checker-operation roles
+    may receive additional internal audit and provenance fields from
+    ``CheckerRunResponse``; worker-readable OpenAPI surfaces advertise only this
+    safe subset.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    task_id: str
+    submission_id: str
+    submission_version: int
+    status: CheckerStatus
+    attempt_number: int
+    supersedes_checker_run_id: str | None
+    is_current_for_submission: bool
+    passed_count: int
+    warning_count: int
+    failed_count: int
+    blocking_count: int
+    queued_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     results: list[CheckerResultResponse] = Field(default_factory=list)

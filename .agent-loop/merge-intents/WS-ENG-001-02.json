@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ENG-001-02",
+  "chunk_title": "Automated Post-Merge Memory",
+  "initiative_id": "WS-ENG-001",
+  "next_chunk_id": "WS-AUTH-001-06",
+  "next_chunk_title": "Canonical Actor Profile And Identity Link",
+  "next_requires_explicit_start": true,
+  "schema_version": 1
+}

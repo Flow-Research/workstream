@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-02A3",
+  "chunk_title": "ArtifactStore v2 Local Clean Cut",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-02B1",
+  "next_chunk_title": "S3-Compatible MinIO And AWS",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

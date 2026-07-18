@@ -1,8 +1,16 @@
 # Queue Policy
 
+## Status
+
+Review and revision lanes below are the planned v0.1 operating contract. Their
+routes and jobs remain unavailable until the owning REV chunks, exact AUTH
+activation, and REV-13 joint release complete.
+
 ## Purpose
 
-The queue is the operational truth of Workstream. It tells the team what exists, what is blocked, what needs human action, and what creates payment exposure.
+The queue is the operational truth of Workstream. It tells the team what
+exists, what is blocked, what needs human action, and what creates contribution
+or compensation-award exposure.
 
 Queue lanes must be derived from task status, not manually maintained in separate lists.
 
@@ -21,12 +29,11 @@ Exit requirement:
 
 - project guide attached
 - acceptance criteria present
-- payment policy present
 - required output defined
 
 ### Screening
 
-Tasks that look ready but need independent release review before workers can claim them.
+Tasks that look ready but need independent release review before contributors can claim them.
 
 Owner:
 
@@ -41,16 +48,17 @@ Exit requirement:
 - acceptance criteria are concrete
 - effective project submission artifact policy hash locked
 - project `PreSubmitCheckerPolicy` compiled bundle hash locked
-- post-submit checker policy is attached
+- approved generated project `PostSubmitCheckerPolicy` is locked with matching
+  guide, source snapshot, effective project policy, and pre-submit checker
+  provenance
 - review policy is attached
 - revision policy is attached
-- payment policy is attached
-- no open high-severity readiness finding
+- no open critical- or high-severity readiness finding
 
 Policy:
 
 - screening is where weak task guides and low-quality task specs fail
-- workers do not see tasks that have not passed screening
+- contributors do not see tasks that have not passed screening
 
 ### Ready
 
@@ -62,7 +70,7 @@ Owner:
 
 Exit requirement:
 
-- assigned or claimed by worker
+- assigned or claimed by contributor
 
 ### Active
 
@@ -70,7 +78,7 @@ Tasks in `CLAIMED` or `IN_PROGRESS`.
 
 Owner:
 
-- worker
+- contributor
 - operator
 
 Operational risk:
@@ -101,28 +109,36 @@ Checker run is active.
 Owner:
 
 - checker system
-- admin if checker fails unexpectedly
+- Operator when infrastructure recovery is required
 
 Policy:
 
-- checker failure because of platform/tooling stays in checker retry handling or audited admin/project manager intervention and does not move to human review
-- retry and admin actions are recorded in audit history
+- checker failure because of platform/tooling stays in checker retry handling;
+  Operator retry uses `operations.checker.retry`, while covered Project Manager
+  repair uses `project.task.manage`, and neither moves work directly to review
+- retry and repair actions record matched grant/permission, reason, attempt, and
+  immutable audit history
 
-### Pre Review Gate
+### Checker Admission Gate
 
-Optional reviewer-simulation or adversarial readiness audit after automated checks and before normal human review.
+Mandatory automated admission after post-submit checks and before human review.
 
 Owner:
 
-- reviewer lead
-- quality lead
-- assigned simulation reviewer
+- checker system
 
 Policy:
 
-- use this for high-value tasks, new project types, disputed checker outcomes, or projects still being calibrated
-- the gate records findings or explicitly clears the packet for normal review
-- unresolved blocking issues go to `NEEDS_REVISION` when worker-fixable or remain blocked from review until an admin/policy action is recorded
+- only a durable, final, current `CheckerRun` outcome of `allow_review` admits
+  the exact immutable Submission
+- admission records the exact CheckerRun and verified binding facts; retries,
+  superseded runs, and different Submissions cannot replace that anchor
+- contributor-fixable checker failures may route the Task to `needs_revision`
+  but create no Review, ReviewFinding, or reviewer contribution
+- setup or provenance defects remain blocked until the owning covered repair or
+  retry action succeeds
+- human judgment begins only after admission and is recorded as an immutable
+  Review
 
 ### Review Pending
 
@@ -134,29 +150,37 @@ Owner:
 
 Policy:
 
-- reviewers only see this lane for normal work
-- any high-severity checker failure in this lane is a system bug or admin override
+- reviewer current work returns an active lease, one server-selected offer, or
+  none; reviewers never browse the complete lane
+- any critical- or high-severity checker failure in this lane is a system bug;
+  no administrative grant can override it into review readiness
 
 ### Needs Revision
 
-Worker-facing lane for fixable issues from automated checks, pre-review gates, or human review.
+Contributor-facing lane for fixable issues from automated checks, pre-review gates, or human review.
 
 Policy:
 
-- before the worker resumes, Workstream prepares revision context against the active guide and policy records
-- revision policy decides whether the next attempt keeps the prior locked context or rebases to the current active context
-- a rebase must show the worker the prior version, next version, and change summary
+- after a human `needs_revision` Review, Workstream compares the prior
+  Submission guide identity/activation sequence with the currently active guide
+- exact match keeps; any different valid pair rebases forward or backward;
+  unsafe context blocks for manager repair
+- Task Context returns the frozen preparation and change summary; the reviewer
+  never rebases the leased Submission
 - out-of-band guidance is not enforceable until it is encoded into guide, policy, task template, or checker contracts
 
 Owner:
 
-- worker
-- operator
+- contributor
+- covered Project Manager for planned repair/obligation closure; Operator only
+  for evidence-linked legacy recovery
 
 Policy:
 
-- every task in this lane must have at least one structured finding
-- resubmission must include revision replay
+- checker-caused remediation carries CheckerResult lineage; human-review
+  revision carries an immutable Review and at least one blocking finding
+- human-review resubmission includes one immutable response per unresolved
+  blocking finding
 
 ### Accepted
 
@@ -164,12 +188,17 @@ Work satisfies the project guide and acceptance criteria.
 
 Owner:
 
-- finance/reconciliation
+- project operations
+- finance/reconciliation only for payable contribution awards
 
 Policy:
 
-- accepted task must create or update payment record immediately
-- accepted task is not confused with paid task
+- the accepting Review creates reviewer `completed_review`, REV-owned
+  FinalAcceptance, and FinalAcceptance-sourced submitter `accepted_submission`
+  contribution records atomically
+- each frozen contribution policy is evaluated independently; only payable
+  contributions create awards and fulfillment follow-up
+- accepted task is not confused with fulfilled compensation
 
 ### Rejected
 
@@ -177,24 +206,33 @@ Work is not acceptable and will not continue in the normal revision loop.
 
 Owner:
 
-- project manager
-- reviewer lead if disputed
+- project manager for terminal-state observation
+- authorized audit authority for non-mutating quality sampling only
 
 Policy:
 
-- rejection requires evidence and guide-grounded reason
+- rejection requires a bounded human, guide-grounded reason; structured
+  findings and finalized evidence are optional when they add useful support
+- the Task enters canonical `rejected`; only its same-task TaskAssignment is
+  blocked and bound to the reject Review
+- no FinalAcceptance or submitter contribution is created; no actor grant or
+  unrelated task changes
+- quality sampling cannot reopen, adjudicate, replace, or change the immutable
+  Review, rejection, task state, assignment effect, or contribution lineage
 
-### Payment Follow-Up
+### Compensation Fulfillment Follow-Up
 
-Payment follow-up is not a task queue lane. It is derived from payment records attached to accepted tasks.
+Compensation follow-up is not a task queue lane. It is derived from payable
+`CompensationAward` records and their fulfillment projections, whether the
+source contribution is `completed_review` or `accepted_submission`.
 
 Track:
 
-- accepted but no payment record
-- pending payout
-- payout submitted
-- paid
-- disputed
+- payable contribution missing its award or fulfillment projection
+- pending award delivery
+- acknowledged by adapter
+- failed fulfillment
+- fulfilled with immutable receipt
 
 ## Daily Queue Review
 
@@ -204,44 +242,46 @@ Every operating day starts with:
 2. clear screening tasks or send them back to draft
 3. inspect stale active tasks
 4. clear checker failures
-5. assign review pending tasks
-6. push needs revision tasks to workers
-7. reconcile accepted but unpaid tasks
+5. monitor server-selected review offers and active leases
+6. push needs revision tasks to contributors
+7. reconcile payable awards with pending/failed fulfillment projections
 8. record new lessons learned
 
 ## Transition Guards
 
 | Transition | Required Records |
 | --- | --- |
-| `DRAFT -> SCREENING` | project id, locked guide candidate, required task fields, payment policy |
-| `SCREENING -> READY` | screening decision, guide version lock, guide source snapshot id/hash lock, acceptance criteria, effective project submission artifact policy hash lock, project `PreSubmitCheckerPolicy` compiled bundle hash lock, post-submit checker policy, review policy, revision policy, payment policy |
-| `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed, submission packet, artifact hash manifest, evidence references, worker attestation |
-| `SUBMITTED -> AUTO_CHECKING` | immutable submission version, post-submit checker policy version derived from the locked task context |
-| `AUTO_CHECKING -> REVIEW_PENDING` | checker run for exact submission version, readiness certificate, no blocking failures |
-| `AUTO_CHECKING -> NEEDS_REVISION` | checker run id, outcome source `auto_checker`, worker-visible checker failures with severity, message, suggested fix |
-| `REVIEW_PENDING -> NEEDS_REVISION` | review decision, at least one structured finding, revision policy still permits revision |
-| `REVIEW_PENDING -> ACCEPTED` | accepted review, acceptance evidence refs, contribution record, payment record |
-| `NEEDS_REVISION -> IN_PROGRESS` | prior findings visible to worker, revision deadline active |
-| resubmission after `NEEDS_REVISION` | revision replay covering every high and medium prior finding, revision count under policy limit |
-| payment `PENDING -> PAID` | payment reference and payment audit event |
+| `DRAFT -> SCREENING` | project id, locked guide candidate, task source/description fields, acceptance and rejection criteria |
+| `SCREENING -> READY` | screening decision, guide version lock, guide source snapshot id/hash lock, acceptance criteria, effective project submission artifact policy hash lock, project `PreSubmitCheckerPolicy` compiled bundle hash lock, approved generated project `PostSubmitCheckerPolicy` with matching provenance, review policy, revision policy |
+| `READY -> CLAIMED` | active published ContributionPolicyVersion whose `accepted_submission` rule is explicit; TaskAssignment freezes that version |
+| `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed, submission packet, artifact hash manifest, evidence references, contributor attestation |
+| `SUBMITTED -> EVALUATION_PENDING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
+| `EVALUATION_PENDING -> REVIEW_PENDING` | durable, final, current CheckerRun for the exact Submission with outcome exactly `allow_review`, verified artifact bindings, no blocking failures |
+| `EVALUATION_PENDING -> NEEDS_REVISION` | durable, final, current CheckerRun for the exact Submission with outcome exactly `needs_revision`, verified artifact bindings, outcome source `auto_checker`, contributor-visible checker failures with severity, message, suggested fix |
+| `REVIEW_PENDING -> NEEDS_REVISION` | immutable Review, at least one blocking ReviewFinding, reviewer `completed_review`; no FinalAcceptance or submitter contribution |
+| `REVIEW_PENDING -> ACCEPTED` | immutable accepting Review, FinalAcceptance, reviewer `completed_review`, submitter `accepted_submission` sourced from FinalAcceptance, applicable awards |
+| `REVIEW_PENDING -> REJECTED` | immutable rejected Review, bounded reason, same-task assignment block, reviewer `completed_review`; no FinalAcceptance or submitter contribution |
+| `NEEDS_REVISION -> SUBMITTED` | exact preparation head/digest, replacement Submission, response for every unresolved blocking finding, policy limit/deadline not reached |
+| `NEEDS_REVISION -> CANCELLED` | covered manager limit/deadline closure or Operator legacy-context closure, bounded canonical reason, assignment release; no synthetic Review or contribution |
+| compensation `pending -> fulfilled` | immutable fulfillment receipt, external reference, and audit event |
 
 ## Lane Capacity
 
 Each project defines capacity limits:
 
-- maximum active tasks per worker
-- maximum review-pending tasks per reviewer
+- maximum active tasks per contributor
+- maximum active ReviewLeases per reviewer
 - maximum stale active age
-- maximum accepted-unpaid age
+- maximum pending/failed payable-award fulfillment age
 
 Capacity limits prevent the queue from looking healthy while hidden work is stuck.
 
 For early pilots, use conservative defaults:
 
-- worker active task limit: 2
-- reviewer review-pending limit: 5
+- contributor active task limit: 2
+- reviewer active ReviewLease limit: 1
 - review SLA: 24 hours
-- payment reconciliation SLA: daily
+- compensation fulfillment reconciliation SLA: daily
 
 ## Queue Health Metrics
 
@@ -251,9 +291,9 @@ For early pilots, use conservative defaults:
 - submitted awaiting checks
 - review pending age
 - needs revision age
-- accepted unpaid amount
+- unfulfilled compensation award amount
 - rejected count
-- paid total
+- fulfilled compensation total
 
 ## Failure Modes
 
@@ -276,7 +316,7 @@ Fix:
 Cause:
 
 - vague feedback
-- worker not closing findings
+- contributor not closing findings
 - task spec unclear
 
 Fix:
@@ -285,16 +325,17 @@ Fix:
 - audit reviewer wording
 - update project guide
 
-### Accepted But Unpaid Drift
+### Payable Contribution Fulfillment Drift
 
 Cause:
 
-- acceptance and finance are disconnected
+- contribution award creation and fulfillment are disconnected
 
 Fix:
 
-- accepted transition creates payment record
-- payment dashboard is reviewed daily
+- frozen contribution policy evaluation creates awards only for payable
+  contributions; explicit unpaid rules create none
+- compensation fulfillment dashboard is reviewed daily
 
 ### Ready Lane Contains Weak Tasks
 

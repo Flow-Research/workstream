@@ -24,11 +24,6 @@ def upgrade() -> None:
         ["id", "locked_guide_version"],
     )
     op.create_unique_constraint(
-        "uq_workstream_tasks_id_locked_checker_policy",
-        "workstream_tasks",
-        ["id", "locked_checker_policy_version"],
-    )
-    op.create_unique_constraint(
         "uq_workstream_tasks_id_locked_review_policy",
         "workstream_tasks",
         ["id", "locked_review_policy_version"],
@@ -57,7 +52,6 @@ def upgrade() -> None:
         sa.Column("artifact_hash_manifest", sa.JSON(), nullable=False),
         sa.Column("worker_attestation", sa.Text(), nullable=False),
         sa.Column("locked_guide_version", sa.String(length=50), nullable=False),
-        sa.Column("locked_checker_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_review_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_revision_policy_version", sa.String(length=50), nullable=False),
         sa.Column("locked_payment_policy_version", sa.String(length=50), nullable=False),
@@ -69,11 +63,6 @@ def upgrade() -> None:
             ["task_id", "locked_guide_version"],
             ["workstream_tasks.id", "workstream_tasks.locked_guide_version"],
             name="fk_submissions_task_locked_guide",
-        ),
-        sa.ForeignKeyConstraint(
-            ["task_id", "locked_checker_policy_version"],
-            ["workstream_tasks.id", "workstream_tasks.locked_checker_policy_version"],
-            name="fk_submissions_task_locked_checker_policy",
         ),
         sa.ForeignKeyConstraint(
             ["task_id", "locked_review_policy_version"],
@@ -154,11 +143,6 @@ def downgrade() -> None:
     )
     op.drop_constraint(
         "uq_workstream_tasks_id_locked_review_policy",
-        "workstream_tasks",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "uq_workstream_tasks_id_locked_checker_policy",
         "workstream_tasks",
         type_="unique",
     )

@@ -1,83 +1,94 @@
 # Review Packet Template
 
-## Task
+> Planned contract; no review route is exposed before REV-13.
 
-`<task id>`
+## Routing And Lease
 
-## Submission
-
-`<submission id>`
-
-## Reviewer
-
-`<reviewer id>`
-
-## Routing And Independence
-
-- assigned reason:
+- project ID:
+- ReviewQueueEntry ID:
+- ReviewLease ID:
+- canonical reviewer ActorProfile ID:
+- preferred/open routing reason:
+- lease issued/expires at:
 - conflict-of-interest attestation:
-- worker-reviewer pair risk:
-- second review required:
-- second review trigger:
+- contributor-reviewer pair risk:
+- offline non-mutating quality sampling selected:
+- quality sampling reason:
+
+Quality sampling cannot delay or replace the Review decision, FinalAcceptance,
+task effects, or contribution transaction.
+
+## Exact Submission Packet
+
+- task ID:
+- TaskAssignment ID:
+- Submission ID/version:
+- predecessor Submission ID:
+- admitting CheckerRun ID:
+- ReviewPacketManifest ID:
+- server-derived Submission artifact hash:
+- ART binding IDs:
+
+Artifact bytes are available only for this exact active-lease packet. History is
+bounded metadata only.
+
+## Stamped Context
+
+- Project Guide ID/version/activation sequence:
+- source snapshot reference:
+- task-execution policy references:
+- ReviewPolicy reference:
+- RevisionPolicy reference:
+- revision preparation ID/head/digest, when applicable:
+- context outcome/direction/change summary, when applicable:
+
+Use this stamped context. No guide rebase occurs during review.
 
 ## Decision
 
 `accept | needs_revision | reject`
 
-## Summary
+- immutable Review ID:
+- predecessor Review ID:
+- bounded summary:
+- reject reason, required for reject:
+- acceptance evidence, required for accept:
 
-Short decision summary.
+## Immutable Findings
 
-## Evidence Cited For Acceptance
+| ReviewFinding ID | Kind | Area | Issue/Rationale | Required Change | Evidence Binding ID |
+|---|---|---|---|---|---|
+| `<uuid>` | `blocking` or `advisory` | `<area>` | `<issue>` | `<change or null>` | `<uuid or null>` |
 
-Required when decision is `accept`.
+`needs_revision` requires at least one blocking finding. Reject requires its
+bounded reason; findings are optional when they add useful evidence.
 
-| Evidence ID | Artifact Hash | Claim Supported |
-| --- | --- | --- |
-| `<evidence id>` | `<artifact hash>` | `<claim>` |
+## Prior Responses And Resolutions
 
-## Findings
+| Prior Finding ID | SubmissionFindingResponse ID | Response Evidence | FindingResolution | Rationale |
+|---|---|---|---|---|
+| `<uuid>` | `<uuid>` | `<binding or null>` | `resolved`, `unresolved`, or `not_applicable` | `<rationale>` |
 
-| Severity | Area | Issue | Required Fix | Evidence |
-| --- | --- | --- | --- | --- |
-| high | `<area>` | `<issue>` | `<fix>` | `<evidence>` |
+## Contribution Effects
 
-## Checker Result Assessment
+Reviewer operation, required for every valid Review:
 
-State whether checker output supports the decision.
+- ContributionRecord ID/type `completed_review`:
+- source Review ID and ReviewLease ID:
+- reviewer-frozen ContributionPolicyVersion:
+- CompensationAward ID or explicit unpaid result:
 
-## Prior Revision Closure
+Accept-only effects:
 
-For resubmissions, list whether prior findings are closed.
+- FinalAcceptance ID:
+- source Review ID and Submission ID:
+- accepted submitter ActorProfile ID:
+- recording reviewer ActorProfile ID:
+- TaskAssignment completed:
+- ContributionRecord ID/type `accepted_submission`:
+- source FinalAcceptance ID and TaskAssignment ID:
+- submitter-frozen ContributionPolicyVersion:
+- CompensationAward ID or explicit unpaid result:
 
-## Revision Context
-
-Required when reviewing a resubmission.
-
-| Field | Value |
-| --- | --- |
-| context rebased | yes or no |
-| prior guide version | `<guide version>` |
-| next guide version | `<guide version>` |
-| prior policy versions | `<checker/review/revision/payment policy versions>` |
-| next policy versions | `<checker/review/revision/payment policy versions>` |
-| change summary shown to worker | `<summary>` |
-| revision context audit event | `<audit event id>` |
-
-## Payment Eligibility
-
-State whether this decision creates a pending payment.
-
-## Contribution Record
-
-Required when decision is `accept`.
-
-- contribution record id:
-- accepted submission id:
-- accepting review id:
-- guide version:
-- artifact hash manifest:
-
-## Reviewer Confidence
-
-`low | medium | high`
+`needs_revision` and `reject` contain no FinalAcceptance or submitter
+ContributionRecord.

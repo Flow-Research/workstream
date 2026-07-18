@@ -48,7 +48,7 @@ Definition fields:
 - `version`
 - `default_severity`
 - `default_blocks_review`
-- `worker_visible`
+- `contributor_visible`
 - `description`
 
 Phase:
@@ -59,7 +59,7 @@ Phase:
 - submission_quality
 - pre_review_gate
 - lifecycle_transition
-- payment_reconciliation
+- compensation_fulfillment_reconciliation
 
 Checker names must not drift between project guides, policy templates, implementation code, and checker results. New behavior uses a new checker version or a new checker id.
 
@@ -67,7 +67,7 @@ Checker names must not drift between project guides, policy templates, implement
 
 Default:
 
-- high-severity `failed` result blocks human review
+- critical- and high-severity `failed` results block human review
 - medium-severity `failed` result creates reviewer warning
 - low-severity `failed` result creates informational note
 
@@ -81,7 +81,9 @@ The checker framework is conservative. It blocks objective structural failures a
 
 ### check_policy_context_present
 
-Ensures the task has locked guide, checker, review, revision, and payment policy context, including base amount and currency where required.
+Ensures the task has locked guide, checker, review, and revision policy context.
+Compensation is frozen independently on TaskAssignment and ReviewLease and is
+not checker-policy context.
 
 ### check_submission_packet
 
@@ -119,15 +121,19 @@ Default forbidden patterns include:
 
 ### check_confidentiality_attestation
 
-Ensures the worker explicitly attests that the submission does not contain prohibited client data, private source material, credentials, or copied platform artifacts.
+Ensures the contributor explicitly attests that the submission does not contain prohibited client data, private source material, credentials, or copied platform artifacts.
 
 ### check_low_quality_generated_artifacts
 
 Flags repeated low-quality generated patterns banned by project submission artifact policy, such as generic helper files, hidden-test leakage patterns, fabricated model files, placeholder evidence, or boilerplate reports that do not prove task-specific work.
 
+This checker produces warnings by default. If a project explicitly includes it
+in required post-submit checkers, matching low-quality signals become
+contributor-fixable blocking failures and route the task to `needs_revision`.
+
 Revision closure, task lifecycle movement, task readiness, and pre-review routing are enforced as lifecycle guards in v0.1. They must not be configured as checker policy names until a registered checker exists for that contract.
 
-The pre-review gate is a checker execution phase. The persisted task status during this phase is `auto_checking`.
+The pre-review gate is a checker execution phase. The persisted task status during this phase is `evaluation_pending`.
 
 ## Gate Mapping
 
@@ -158,7 +164,7 @@ Pre-review gate phase:
 
 ## Submission Artifact Policy And Pre-Submit Generation
 
-Pre-submit intake is generated from policy. It is not manually supplied by the worker.
+Pre-submit intake is generated from policy. It is not manually supplied by the contributor.
 
 The deterministic chain is:
 
@@ -177,11 +183,11 @@ ProjectGuide
 `ProjectGuide` is open-ended human-facing project material. Workstream first
 persists a `GuideSufficiencyReport`. Blocking guide gaps stop activation and
 create clarification requests for the project owner. Warnings require
-acknowledgement by `admin` or `project_manager`.
+acknowledgement by an authorized covered Project Manager.
 
 `SubmissionArtifactPolicy` is machine-readable, derived by Workstream from
 project guide material after sufficiency passes or passes with warnings, and
-approved by a Workstream actor with the `admin` or `project_manager` role after
+approved by an authorized covered Project Manager after
 any warnings are acknowledged.
 The project owner does not approve this internal policy. Workstream combines
 that policy with the non-bypassable Workstream default submission artifact
@@ -191,10 +197,12 @@ Workstream default submission artifact rules require:
 
 - summary
 - artifact hash manifest
-- worker attestation
+- contributor attestation
 - safe relative artifact paths
 - production artifact hashes shaped as `sha256:<64 lowercase hex>`
-- validated `local://`, `s3://`, or `r2://` storage references
+- pre-cutover only: validated caller-supplied storage references;
+  `WS-ART-001-05` removes them and checkers then consume Workstream artifact
+  bindings only
 - no credentials, signed URLs, query strings, raw local filesystem paths, or token-bearing references
 - no default forbidden artifacts such as `.env`, `.git`, private keys, credentials, secrets, tokens, `.pem`, `.key`, or `node_modules`
 
@@ -202,7 +210,7 @@ Project policy adds required artifacts, evidence requirements, stricter forbidde
 
 The generated project `PreSubmitCheckerPolicy` is persisted with a compiled
 bundle hash and locked to the effective project submission artifact policy before tasks enter the
-worker pipeline. Tasks lock references to the shared project's compiled checker
+contributor pipeline. Tasks lock references to the shared project's compiled checker
 bundle hash. It runs before Workstream creates a submission. Preflight failures return
 `PreSubmitCheckResponse` with `status="failed"`,
 `eligible_to_submit=false`, and structured pass/fail/warning details in
@@ -237,10 +245,39 @@ rejects checker specifications that escalate that primitive to blocking.
 Project-specific executable checker code is a future extension path, not the
 default. That extension path must require static validation, generated tests,
 sandboxed execution, no network, no shell, no secrets, no database access,
-`admin` or `project_manager` approval of the exact code hash after those checks
+covered Project Manager approval of the exact code hash after those checks
 pass, and a locked code hash.
 
 Pre-submit checks are authoritative for intake. Post-submit checker runs are authoritative for review readiness.
+
+## Post-Submit Derivation
+
+Post-submit policy setup resumes after an authorized covered Project Manager
+approves the derived `SubmissionArtifactPolicy`. That approval
+creates the effective project submission artifact policy and compiled project
+`PreSubmitCheckerPolicy`; only then does Workstream run
+`PostSubmitCheckerPolicyDerivationAgent`.
+
+The post-submit derivation agent receives bounded guide-source material,
+sufficiency summary, effective policy summary, pre-submit checker summary, and
+the registered post-submit checker catalog. It may request only registered
+checker names and must tie project-specific requests to bounded evidence refs.
+If the guide implies a required checker that is not registered, setup records
+`post_submit_setup_blocked` with a safe unsupported-checker summary instead of
+inventing a checker or letting activation proceed.
+
+The agent output is a constrained spec. Workstream's trusted compiler owns the
+canonical `PostSubmitCheckerPolicy.policy_body`, hash, default checker list,
+and execution order. Runtime checker execution loads the locked compiled
+policy; it does not call an agent to judge a contributor submission.
+
+The compiled project `PostSubmitCheckerPolicy` is persisted with exact setup
+provenance: guide id, source snapshot id/hash, effective project policy id/hash,
+and pre-submit checker policy id/hash. A corrected submission artifact policy
+approval supersedes and retains stale post-submit setup output, then regenerates
+the compiled post-submit policy under the new provenance. Workstream must not
+reuse a policy or correction request that only happens to match the same project
+id and guide version.
 
 The first two gates replace external origin qualification and task ingestion for v0.1. Origin qualification and webhook drop notifications are future adapter concerns.
 
@@ -262,6 +299,38 @@ Examples:
 - reviewer simulation gate
 - prior feedback checklist checker
 
+## Post-Submit Compiler Boundary
+
+`PostSubmitCheckerPolicy` is produced by Workstream's trusted post-submit
+compiler from a constrained specification. The compiler owns the canonical
+runtime body and hash. Setup agents may propose registered checker names and
+routing classifications, but they do not produce executable runtime code and
+they do not decide submission outcomes at runtime.
+
+The compiler always includes the platform default durable checkers in
+`default_checkers` and `execution_checkers`:
+
+- `check_submission_packet`
+- `check_policy_context_present`
+- `check_evidence_present`
+- `check_evidence_integrity`
+- `check_required_files`
+- `check_forbidden_files`
+- `check_confidentiality_attestation`
+- `check_low_quality_generated_artifacts`
+
+Default-only projects are valid. In that case, project-specific
+`required_checkers` and `warning_checkers` are empty, while
+`execution_checkers` still contains every platform default checker. A project
+may use `required_checkers` to tighten routing for a registered checker,
+including a default checker such as `check_low_quality_generated_artifacts`.
+Project policy cannot remove, rename, reorder, or weaken the platform default
+checker list.
+
+Platform blocking severities are `critical` and `high`. Project policy may add
+stricter blocking severities, but it cannot remove those platform blocking
+severities.
+
 ## Checker Run Flow
 
 ```text
@@ -271,25 +340,45 @@ Draft packet
 -> load locked PreSubmitCheckerPolicy compiled bundle hash
 -> run pre-submit intake checks
 -> create Submission only when blocking pre-submit checks pass
--> lock submission
--> create CheckerRun
--> load locked PostSubmitCheckerPolicy
--> run required checkers
+-> automatically lock submission
+-> queue automatic pre-review CheckerRun
+-> validate locked PostSubmitCheckerPolicy id/version/hash/body
+-> execute locked PostSubmitCheckerPolicy execution_checkers
 -> store CheckerResult records
 -> calculate blocking status
 -> if no blocking failures remain: store readiness proof on CheckerRun and move to REVIEW_PENDING
--> if worker-fixable blocking failures exist: route to user-facing needs_revision with outcome_source = auto_checker
+-> if contributor-fixable blocking failures exist: route to user-facing needs_revision with outcome_source = auto_checker
 -> if locked task setup is incomplete or unsafe: route to internal task_setup_blocked
 -> if checker infrastructure fails: keep in checker retry handling
 ```
 
-The checker run must bind to one immutable submission version. If the worker uploads a replacement file, the platform creates a new submission version and reruns checks.
+The checker run must bind to one immutable submission version. If the contributor uploads a replacement file, the platform creates a new submission version and reruns checks.
 
-Checker failures are not human review decisions. They do not `accept` or `reject` work. Worker-fixable blocking failures can route the task to user-facing `needs_revision`, with `outcome_source = auto_checker` and no review decision id. Human review can also produce `needs_revision` later, but that records `outcome_source = human_review` and a review decision id.
+`evaluation_pending` is the persisted state while post-submit checker execution
+or infrastructure retry is active. After checker results, immutable output/log
+artifact bindings, and completion facts commit atomically, the checker subsystem
+preserves the routes above: passing work moves to `review_pending`, while
+contributor-fixable blocking failures may move to `needs_revision` with
+`outcome_source = auto_checker`. Artifact-storage cutover changes how exact
+bytes and checker outputs are persisted; it does not redesign these routes.
 
-If a checker crashes or cannot run because of platform infrastructure, the checker run remains failed as an infrastructure failure and the task does not move to human review. The retry or admin action is recorded in audit history.
+`review_pending` marks readiness for the separately owned WS-REV lifecycle.
+WS-REV alone creates `ReviewPacketManifest`, review queues, reviewer leases,
+assignments, and review decisions. Checker completion facts and general
+`ArtifactBinding` records are inputs to that later boundary, not review records.
 
-If a checker finds missing locked guide or policy context, missing acceptance criteria, or another task setup defect that is not worker-fixable, the run uses `task_setup_blocked`. That route is internal to project managers and must not be shown to workers as a revision request.
+Checker failures are not human review decisions. They do not `accept` or `reject` work. Contributor-fixable blocking failures can route the task to user-facing `needs_revision`, with `outcome_source = auto_checker` and no review decision id. Human review can also produce `needs_revision` later, but that records `outcome_source = human_review` and a review decision id.
+
+If a checker crashes or cannot run because of platform infrastructure, the
+checker run remains failed as an infrastructure failure and the task does not
+move to human review. A retry requires Operator
+`operations.checker.retry`, a reason, a new attempt/supersession record, and
+append-only audit evidence.
+
+If a checker finds missing locked guide or policy context, missing acceptance
+criteria, or another task setup defect that is not contributor-fixable, the run uses
+`task_setup_blocked`. That route is internal to covered Project Managers and
+authorized Operators and must not be shown to contributors as a revision request.
 
 ## Readiness Proof
 
@@ -298,7 +387,8 @@ When all blocking checks pass, the checker service stores readiness proof on the
 The checker run records:
 
 - submission id
-- post-submit checker policy version derived from the locked task context
+- post-submit checker policy id, version, hash, and internal locked body
+  stamped from the locked submission context
 - artifact hash manifest
 - blocking failure count
 - warning count
@@ -310,12 +400,16 @@ A separate `ReadinessCertificate` record may be added later if reviewer routing 
 
 ## Checker Output Visibility
 
-Workers see:
+Contributors see:
 
 - failed checker name
 - severity
 - message
 - suggested fix when safe
+
+Contributor-facing checker-run responses do not expose `routing_recommendation`,
+`outcome_source`, internal route tokens, post-submit policy provenance fields,
+locked post-submit policy body, or hidden task setup details.
 
 Reviewers see:
 
@@ -323,25 +417,34 @@ Reviewers see:
 - evidence references
 - full metadata where allowed
 
-Admins see:
+Authorized Project Manager, Operator, and Audit projections expose only their
+permission-appropriate fields. Depending on the matched permission they may
+see:
 
 - full logs
 - internal rule IDs
-- override controls
+- reasoned retry/repair controls
 
-## Admin Override
+## Recovery, Not Checker Override
 
-An admin can override a high-severity checker failure only with:
+Critical- and high-severity checker failures cannot be converted into review
+readiness by an administrative grant. A covered Project Manager may repair task
+setup under `project.task.manage`; an Operator may use
+`operations.submission_gate.repair` or `operations.checker.retry` only for the
+registered recovery purpose.
+
+Recovery requires:
 
 - reason
 - actor
 - timestamp
-- affected checker
+- exact project/task/submission/checker resource
+- matched grant and permission
 - evidence
 
-Overrides are rare and visible in audit logs.
-
-Overrides cannot delete checker results. They only create an auditable exception record.
+Recovery cannot delete checker results, mutate an immutable submission, create
+a human review decision, or bypass a blocking content failure. It creates a new
+audited repair/retry attempt while preserving prior evidence.
 
 ## Checker Quality Metrics
 
@@ -369,23 +472,29 @@ Look for:
 
 - reviewer findings that no checker predicted
 - checker warnings reviewers always ignore
-- high-severity checker failures that admins repeatedly override
+- repeated infrastructure retry/repair patterns or attempts to bypass blocking
+  checker failures
 - evidence that passed structurally but did not prove the claim
 - generated or copied artifacts that evade forbidden-file rules
 
-Each blind spot becomes a guide update, checker update, reviewer policy update, revision policy update, or payment policy update.
+Each blind spot becomes a guide update, checker update, reviewer policy update,
+revision policy update, contribution policy update, template update, or
+reviewer-training change.
 
 ## First Implementation
 
 The first checker runner can be simple:
 
 - async-first execution
-- request-bound authorized manual checker trigger for the first structural checks
+- authorized checker trigger that records a run before execution
 - markdown/json output
 - attached logs
 
-The checker interface is async-first from the start so storage reads, external checks, and later agent evaluation do not require a contract rewrite.
+The checker interface is async-first from the start so storage reads, external
+checks, and later agent evaluation do not require a contract rewrite.
 
-Chunk 7 may complete the first structural checker run inside the request path because those checks are local and fast. Longer-running checker execution should create a run as `running` and complete it through FastAPI background tasks, Celery, or an equivalent worker boundary.
-
-Use Celery or an equivalent durable queue when checker execution needs retries, scheduled jobs, progress reporting, worker isolation, or distributed execution.
+Background checker execution uses Celery. FastAPI background tasks are not the
+Workstream product-job boundary. Request-bound pre-submit feedback can remain
+fast and deterministic because it runs before submission creation, but any
+long-running setup or post-submit checker work must go through the durable
+worker boundary.

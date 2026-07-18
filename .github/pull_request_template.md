@@ -7,6 +7,13 @@ in sync when the trust-bundle structure changes.
 
 `<chunk-id>` - `<title>`
 
+Merge intent: `.agent-loop/merge-intents/<chunk-id>.json`
+
+Add exactly one new schema-v2 merge-intent file in this PR. It must contain the
+chunk, title, same-initiative next chunk or JSON `null`, and explicit-start
+requirement. Trusted post-merge automation reads that immutable file from the
+reviewed final head. A merge intent never prioritizes another initiative.
+
 ## Goal
 
 ## Human-Approved Intent

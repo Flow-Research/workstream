@@ -38,13 +38,13 @@ package "Future Identity / Contract Rails" #FFF9DB {
 package "Workstream" #F8FBFF {
   rectangle "Claim /\nSubmission Gate\n----\nPolicy, identity,\nagent id, reputation,\ncontract references" as gate
   rectangle "Evaluation\nLifecycle\n----\nguide -> task ->\nsubmission -> checks ->\nreview -> revision" as lifecycle
-  rectangle "Contribution\nRecord\n----\nAccepted work\nunder locked guide\nand evidence" as contribution #E6FCF5
-  rectangle "Payment\nRecord\n----\nAmount, currency,\npolicy, status,\nreferences" as payment_record #E6FCF5
+  rectangle "Contribution\nRecord\n----\nReviewer or submitter\nwork under locked\nevidence" as contribution #E6FCF5
+  rectangle "Compensation\nAward\n----\nInstrument, unit,\nquantity, policy,\nbinding" as compensation_award #E6FCF5
   rectangle "Reputation\nEvent\n----\nHuman and\nagent-linked\noutcome signal" as reputation_record #E6FCF5
 }
 
 package "Future Settlement Rails" #FFF9DB {
-  rectangle "Payment Link /\nRequest\n----\nGenerated from\naccepted contribution" as payment_link #FFF3BF
+  rectangle "Payment Link /\nRequest\n----\nGenerated from\npayable money award" as payment_link #FFF3BF
   rectangle "x402\n----\nPayment request\nprotocol" as x402 #FFF3BF
   rectangle "OmniClaw\n----\nSettlement\norchestration" as omniclaw #FFF3BF
   rectangle "USDC\nStablecoin\n----\nPayout asset" as usdc #FFF3BF
@@ -59,15 +59,15 @@ erc8004 ..> gate : read reputation
 erc8183 ..> gate : task contract ref
 
 gate --> lifecycle : allows work
-lifecycle --> contribution : accepted work
-contribution --> payment_record : pending payment
+lifecycle --> contribution : valid human review\n+ accept adds submitter
+contribution --> compensation_award : only when payable
 contribution --> reputation_record : outcome event
 
-payment_record ..> payment_link : create request
+compensation_award ..> payment_link : create request
 payment_link ..> x402
 x402 ..> omniclaw
 omniclaw ..> usdc : settle
-usdc ..> payment_record : confirmation
+usdc ..> compensation_award : fulfillment receipt
 reputation_record ..> erc8004 : optional write
 
 @enduml

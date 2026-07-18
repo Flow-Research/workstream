@@ -3,21 +3,21 @@
 ## Current
 
 - `WS-ENG-001-01`: merged through PR #23 on 2026-06-20; complete
-- Merge commit: `b9fe19b96109e9786e1d6d89488abfbe68a05d4a`
-- Reviewed code SHA: `b22b940ee50956c9c7bfd0e681ffac727b6ff82c`
-- Current gate: stopped after merge memory update
-- Next chunk: inactive
+- `WS-ENG-001-02`: merged through PR #122 as `fc89fb6`; complete
+- `WS-ENG-001-03`: corrective schema-v2 contract for initiative-local next gates
+- Current gate: canonical completion is recorded only by signed post-merge state
+- Product runtime: unchanged
 
 ## Last Update
 
-Bootstrap branch created from `origin/main`. Dirty files in the original checkout
-were left untouched in their existing branch. Internal reviewer findings were
-addressed in the internal evidence artifact. CodeRabbit, GitHub checks, and human
-PR feedback were separated into the external review response artifact. Internal
-review evidence is bound to the reviewed code SHA. PR #23 is merged, and the loop
-memory has been updated on `main`.
+The first live generated state proved signing, protected-main freshness, and
+workflow isolation, but exposed that schema v1 allowed `WS-ENG-001-02` to name
+`WS-AUTH-001-06` as a global next chunk. The corrective chunk makes successor
+authority initiative-local, rejects schema v1 without compatibility, and
+rebootstraps generated state at schema v2. No artifact, authorization, or other
+Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-No active chunk. Start the next Workstream chunk only after intent, discovery,
-plan, chunk map, and chunk contract are approved.
+Do not select a product chunk from this authored file. Read verified signed
+post-merge state, then require a separate explicit user start.

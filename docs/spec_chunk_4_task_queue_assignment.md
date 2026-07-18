@@ -8,12 +8,12 @@ It covers:
 
 - task records under active projects
 - locked guide and policy context during task screening before release to `READY`
-- worker profile records
-- reviewer profile records
+- worker actor profile records
+- reviewer actor profile records
 - assignment records
 - lifecycle guards from `DRAFT` through `IN_PROGRESS`
 - audit events for task status changes
-- skill tags on tasks and worker profiles
+- skill tags on tasks and actor profiles
 
 ## Non-Scope
 
@@ -48,13 +48,18 @@ Shared wiring:
 
 ## Data Model Impact
 
-New tables:
+Current tables after `WS-POL-001-11`:
 
-- `worker_profiles`
-- `reviewer_profiles`
+- `actor_identities`
+- `actor_profiles`
 - `workstream_tasks`
 - `task_assignments`
 - `audit_events`
+
+Note: `WS-POL-001-11` supersedes the separate worker/reviewer profile storage
+from this earlier chunk. Worker and reviewer profile behavior moves to the
+shared `ActorProfile` model, while task assignment and audit records keep using
+stable actor ids.
 
 Task records store:
 
@@ -89,6 +94,7 @@ New endpoints:
 - `POST /api/v1/tasks/{task_id}/claim`
 - `POST /api/v1/tasks/{task_id}/start`
 - `GET /api/v1/tasks/{task_id}/audit-events`
+- `POST /api/v1/workers/me/profile`
 
 Routers stay thin. Services own authorization, lifecycle checks, locked context stamping, assignment rules, and audit writes.
 
@@ -105,7 +111,7 @@ CLAIMED -> IN_PROGRESS
 
 Rules:
 
-- `DRAFT -> SCREENING` requires active project guide context and all required task fields, then locks guide and policy versions on the task.
+- `DRAFT -> SCREENING` requires active project guide context and complete task source, description, acceptance, and rejection fields, then locks guide and policy versions on the task.
 - `SCREENING -> READY` requires that guide, checker, review, revision, and payment policy context be locked.
 - `READY -> CLAIMED` creates an active assignment and blocks a second active assignment.
 - `CLAIMED -> IN_PROGRESS` requires an active assignment for the actor or an authorized operator role.
@@ -119,6 +125,9 @@ Role expectations:
 
 - admin and project manager can create, screen, release, and inspect tasks
 - workers can claim ready tasks only when an active worker profile already exists
+- workers create or refresh their own active profile through
+  `POST /api/v1/workers/me/profile` before claim; identity fields come from the
+  verified Flow token and the request may only supply normalized skill tags
 - worker claim does not self-create or overwrite worker eligibility skill state
 - workers can read ready tasks and their own assigned tasks
 - admins and project managers can start a claimed task for operational testing, but do not create worker assignments for themselves through the claim path

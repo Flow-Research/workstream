@@ -20,7 +20,7 @@ It is not the pre-submit intake contract. Pre-submit intake is generated from th
 
 `<post-submit checker policy version>`
 
-These values come from Workstream's task context and checker run records. They are not worker-provided submission fields.
+These values come from Workstream's task context and checker run records. They are not contributor-provided submission fields.
 
 ## Readiness Summary
 

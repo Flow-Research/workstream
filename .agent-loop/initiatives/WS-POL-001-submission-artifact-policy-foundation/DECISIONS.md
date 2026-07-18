@@ -40,8 +40,44 @@
 - Worker-facing task outcomes remain simple; internal routes stay internal.
 - Stored review decision values remain exactly `accept`, `needs_revision`, and
   `reject`. Display wording must not create new persisted tokens.
-- `evidence_policy`, `required_files`, and `required_evidence` are transitional
-  fields to replace, not compatibility contracts to preserve.
+- `evidence_policy`, task-owned `required_files`, task-owned
+  `required_evidence`, and generic checker-policy version locks are discarded
+  construction-state fields. They are not compatibility contracts and must not
+  be restored in current v0.1 APIs or migrations.
+- Guide/source capture starts automatic project setup through Celery. The
+  pipeline runs guide sufficiency first, stops on blocking sufficiency, and
+  creates only a draft `SubmissionArtifactPolicy` after sufficiency passes or
+  passes with warnings.
+- Project setup automation must be visible through Workstream APIs. Operators
+  should not inspect Postgres directly to learn whether sufficiency analysis,
+  policy derivation, policy approval, effective policy merge, or checker
+  compilation happened.
+- `ProjectSetupRun` is a non-authoritative orchestration ledger. It can expose
+  queue status, Celery task id, current setup step, bounded errors, and output
+  ids, but it does not replace the actual guide sufficiency, submission
+  artifact policy, effective policy, or pre-submit checker policy records.
+- Project setup and project policy visibility APIs require project setup
+  operator access. In v0.1, that means verified `admin` or `project_manager`
+  token roles.
+- Worker-facing task context APIs must read already-stamped locked context from
+  the task. They must not recompute policy from the current active guide, and
+  they must omit compiler internals, raw compiled bundles, private source refs,
+  and internal policy authority fields.
+- The Terminal Benchmark live API drill must be repeatable without direct DB
+  reads. Any state needed to continue the drill must be exposed through an
+  authorized API response.
+- Submission finalization is the public operation that locks a submitted packet
+  and starts the pre-review gate. The external requester authorizes the action;
+  Workstream records system-owned pre-review gate execution through an internal
+  system actor so audit trails distinguish human/operator requests from
+  automated checker execution.
+- In v0.1, submission finalization is an `admin` or `project_manager`
+  operation. The internal pre-review gate system actor cannot authorize HTTP
+  requests; it is only used for automated checker execution audit attribution.
+- Public API wording should prefer `finalize` for submission handoff into the
+  pre-review gate. `lock` can remain an internal persistence concept such as
+  `locked_at`, but should not remain the public endpoint name once the finalize
+  API replaces it.
 
 ## Accepted Defaults
 
@@ -62,5 +98,7 @@
 - Final review of persisted provenance field names for guide sufficiency
   reports, project submission artifact policies, effective project submission artifact policy hashes, and
   generated project pre-submit checker compiled bundle hashes.
-- Final confirmation that Chunk 1 implements records/contracts/activation guard
-  only, while full async agent execution comes later.
+- Confirm the next chunk contract before resuming the real Terminal Benchmark
+  drill through the automatic Celery setup path.
+- Confirm the visibility/finalize API contract before rerunning the Terminal
+  Benchmark drill without DB inspection.

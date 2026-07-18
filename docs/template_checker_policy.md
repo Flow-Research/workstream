@@ -20,30 +20,43 @@ Revision closure, readiness, and lifecycle movement are lifecycle guards in v0.1
 
 ## Blocking Rule
 
-High-severity failed checks block human review.
+Critical- and high-severity failed checks block human review.
 
 Medium and low severities are visible to reviewers unless this policy overrides them.
 
 ## Required Checkers
 
-Task setup and post-submit checks must stay separated from worker-fixable submission intake checks.
+Task setup and post-submit checks must stay separated from contributor-fixable submission intake checks.
 
 | Checker | Severity | Blocks Review | Purpose |
 | --- | --- | --- | --- |
-| `check_policy_context_present` | high | yes | Task must have locked guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, post-submit checker, review, revision, and payment policy context. |
+| `check_policy_context_present` | high | yes | Task must have locked guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, post-submit checker policy id/version/hash, review policy, and revision policy context. |
 | `check_submission_packet` | high | yes | Submission must include required packet fields. |
-| `check_required_files` | high | yes | Submission must include files required by the locked project pre-submit checker policy and task contract. |
+| `check_required_files` | high | yes | Submission must include artifacts required by the locked effective project policy and project pre-submit checker bundle. |
 | `check_forbidden_files` | high | yes | Submission must not include forbidden file paths. |
 | `check_evidence_present` | high | yes | Submission must include audit evidence. |
 | `check_evidence_integrity` | high | yes | Evidence and checker runs must bind to submitted artifacts. |
-| `check_confidentiality_attestation` | high | yes | Worker attestation must address confidentiality and credential handling. |
-| `check_low_quality_generated_artifacts` | low | no | Low-quality generated artifact signals create warning results by default. |
+| `check_confidentiality_attestation` | high | yes | Contributor attestation must address confidentiality and credential handling. |
+| `check_low_quality_generated_artifacts` | low/high | policy-dependent | Low-quality generated artifact signals warn by default and block review only when the project explicitly requires this post-submit checker. |
 
 Task setup checks:
 
 | Checker | Severity | Blocks Review | Owner |
 | --- | --- | --- | --- |
-| `check_acceptance_criteria_present` | high | yes | Project manager repair, not worker revision. |
+| `check_acceptance_criteria_present` | high | yes | Project manager repair, not contributor revision. |
+
+## Compiler Contract
+
+Workstream compiles this project policy into the canonical
+`PostSubmitCheckerPolicy` body. The compiler always includes Workstream default
+durable checkers in `default_checkers` and `execution_checkers`. Default-only
+projects leave project-specific `required_checkers` and `warning_checkers`
+empty, but they still execute every default checker.
+
+Project-specific `required_checkers` may add a registered checker or tighten a
+default checker's routing. `warning_checkers` must not weaken a default
+checker. Unknown checker names, duplicate classifications, conflicting
+required/warning classifications, and default-checker list drift fail closed.
 
 ## Pre-Submit Boundary
 
@@ -74,7 +87,7 @@ Each checker definition specifies:
 - version
 - default severity
 - default blocking behavior
-- worker-visible message policy
+- contributor-visible message policy
 
 ## Project-Specific Checkers
 
@@ -82,9 +95,9 @@ Each checker definition specifies:
 | --- | --- | --- | --- |
 | `<checker name>` | `<low/medium/high>` | `<yes/no>` | `<why it exists>` |
 
-## Worker-Visible Messages
+## Contributor-Visible Messages
 
-Workers may see:
+Contributors may see:
 
 - checker name
 - status
@@ -92,21 +105,30 @@ Workers may see:
 - safe failure message
 - suggested fix
 
-Workers must not see:
+Contributors must not see:
 
 - hidden evaluator logic
 - private reviewer notes
 - confidential source metadata
+- internal checker routing tokens such as `allow_review`, `checker_retry`, or
+  `task_setup_blocked`
+- post-submit checker policy provenance fields
 
-## Admin Override
+## Recovery Contract
 
-Allowed only with:
+Blocking checker outcomes are not overridden into review readiness. Registered
+Operator retry or covered Project Manager repair is allowed only with:
 
 - actor
+- matched grant and permission
+- exact resource scope
 - timestamp
 - checker name
 - reason
 - evidence
+
+Recovery creates a new attempt or repaired setup state and preserves every
+prior checker result. It cannot create a human review decision.
 
 ## Review Cadence
 

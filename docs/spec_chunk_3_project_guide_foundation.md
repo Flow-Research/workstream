@@ -55,14 +55,13 @@ Architecture target:
 - `revision_policies`
 - `payment_policies`
 
-Current v0.1 implementation note: the first project-guide foundation stores submission artifact requirements in `ProjectGuide.evidence_policy`. That is old construction state. The target replacement is `SubmissionArtifactPolicy`; no compatibility alias is required.
+Current v0.1 implementation note: project guide rows store human-facing guide
+content only. Submission artifact requirements live in `SubmissionArtifactPolicy`
+and compile into the project `PreSubmitCheckerPolicy`.
 
-There is no automatic backfill from `ProjectGuide.evidence_policy` into
-`SubmissionArtifactPolicy`. Existing local draft guides must create a fresh
-guide source snapshot, guide sufficiency report, approved submission artifact
-policy, effective project submission artifact policy, and project
-`PreSubmitCheckerPolicy` contract before activation. Already-active task policy
-context is not silently rewritten.
+Migration note: the migration history now creates the current guide and task
+contract directly. Project payment terms belong to `PaymentPolicy`; task
+artifact requirements come from the locked project policy and checker bundle.
 
 The guide version is the join key for the guide-specific policies.
 
@@ -96,9 +95,12 @@ The v0.1 contract records:
 
 - maximum revision rounds
 - revision deadline in hours
-- whether the task automatically rejects after the revision limit
 - states that allow resubmission
 - reviewer reassignment rule
+
+Limit or deadline exhaustion blocks later preparation and submission. It never
+creates a reject Review; the current active contract defines reason-bound
+manager/Operator cancellation paths.
 
 Activation requires a revision policy before the guide can become active. The active guide response returns revision policy beside submission artifact policy, checker policy, review policy, and payment policy so future task records can lock the full policy context. The Non-Scope section keeps only revision workflow execution out of this chunk, not revision policy itself.
 
@@ -121,8 +123,6 @@ status `compiled`. Tasks later lock the applicable guide snapshot, effective
 project submission artifact policy hash, and compiled pre-submit checker bundle
 hash. Blocking pre-submit failures prevent submission creation.
 
-Implementation note: the first v0.1 schema stored this as `ProjectGuide.evidence_policy`. That field is old construction state and is replaced by the dedicated policy table/API path.
-
 ## API Impact
 
 Adds protected v1 routes:
@@ -144,11 +144,19 @@ Adds protected v1 routes:
 
 These routes require an actor role allowed to manage project setup.
 
-`run-sufficiency-agent` returns `201` when it creates a new report and `200`
-when it reuses the existing sufficiency row for the same source snapshot.
-`derive-submission-artifact-policy` returns `201` when it creates a new policy
-and `200` only when it reuses an existing agent-derived policy for the same
-source snapshot.
+Normal project setup does not depend on manually calling the sufficiency or
+derivation routes. Creating a guide or a later guide-source snapshot enqueues
+the Celery project setup pipeline, which runs guide sufficiency first and only
+continues to submission artifact policy derivation when sufficiency is not
+blocked.
+
+`run-sufficiency-agent` is an admin/project_manager repair and diagnostics
+endpoint. It returns `201` when it creates a new report and `200` when it reuses
+the existing sufficiency row for the same source snapshot.
+`derive-submission-artifact-policy` is an admin/project_manager repair and
+diagnostics endpoint. It returns `201` when it creates a new policy and `200`
+only when it reuses an existing agent-derived policy for the same source
+snapshot.
 Manual policy creation does not accept derivation provenance fields. Manual
 policies persist `manual_admin_derivation`; agent-created policies persist
 `agent_derivation` and use a server-owned `agent-<snapshot-hash>` policy
@@ -176,7 +184,7 @@ setup bundle:
 - `submission_artifact_policy`
 - `effective_submission_artifact_policy`
 - `pre_submit_checker_policy`
-- `checker_policy`
+- `post_submit_checker_policy`
 - `review_policy`
 - `revision_policy`
 - `payment_policy`

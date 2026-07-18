@@ -1,116 +1,59 @@
-# Chunk 2 Auth And Actor Boundary Spec
+# Historical Chunk 2 Auth And Actor Boundary
 
-## Scope
+## Status
 
-Build the Workstream v0.1 authentication boundary.
+Implemented historical record, superseded for target authorization semantics by
+ADR 0012 and `docs/spec_authorization_service.md`.
 
-This chunk defines how FastAPI routes resolve the current actor from an external Flow-issued token without Workstream owning login, signup, password reset, password storage, or primary auth sessions.
+## Original Scope
 
-## Non-Scope
+Chunk 2 established the FastAPI boundary that verifies an externally issued
+Flow token without Workstream owning login, signup, password reset, password
+storage, or primary sessions.
 
-- password authentication
-- user registration
-- password reset
-- local session ownership
-- production Flow network verification
-- actor persistence tables
-- project/task/submission business logic
-- frontend work
+It introduced:
 
-## Expected Files And Modules
+- the `AuthVerifier` interface;
+- production and local-development adapter boundaries;
+- the current-actor FastAPI dependency;
+- stable issuer/subject-derived local attribution;
+- development-verifier fail-closed environment controls;
+- `GET /api/v1/auth/me` as a protected verification smoke endpoint.
 
-- `backend/app/interfaces/auth.py`
-- `backend/app/adapters/auth/`
-- `backend/app/api/deps/auth.py`
-- `backend/app/api/routes/auth.py`
-- `backend/app/core/permissions.py`
-- `backend/app/schemas/auth.py`
-- `backend/tests/test_auth.py`
+No database actor/grant model or Workstream login behavior belonged to that
+chunk.
 
-## Architecture Requirements
+## Superseded Authorization Semantics
 
-- Auth verifier behavior is defined by an interface.
-- Production Flow verification is represented by an adapter boundary.
-- Local development auth is a separate adapter.
-- The current actor is resolved by one FastAPI dependency.
-- Routers do not own permission logic.
-- Permission checks live in service/policy code.
-- Actor identity uses stable Flow `subject + issuer`, not email.
-- Actor context includes role/claim context for later audit writes.
-- Dev/mock auth cannot run in production.
-- Dev/mock auth is explicit opt-in only for local, dev, development, or test environments.
-- Dev/mock auth has no built-in token default.
-- Runtime database configuration comes from environment and does not expose embedded credentials in source defaults.
-- Dev/mock auth is visible through actor context and audit context fields.
+The historical response/context included observed role and claim data because
+the original runtime used it during bootstrap. Those values remain legacy
+compatibility/audit evidence only. They do not define the target verified-token
+type and cannot authorize a migrated product surface.
 
-## Data Model Impact
+WS-AUTH-001 evolves the existing verifier boundary rather than replacing it:
 
-No database tables are introduced in this chunk.
+```text
+AuthVerifier
+-> VerifiedIssuerToken (identity and coarse scope only)
+-> ActorResolver
+-> ActorProfile + ActorIdentityLink
+-> AuthorizationContext
+-> Workstream-owned grants, permissions, resources, and lifecycle guards
+```
 
-The in-request actor context must expose:
+The `/api/v1` namespace remains canonical. Workstream still owns no login,
+password, token issuance, or primary session.
 
-- `actor_id`
-- `external_subject`
-- `external_issuer`
-- `roles`
-- `claim_snapshot`
-- `auth_source`
-- `is_dev_auth`
+## Historical Proof Retained
 
-## API Impact
+The original implementation proved:
 
-Adds:
+- missing/invalid bearer tokens are rejected;
+- local development verification cannot run in production;
+- actor attribution is based on issuer/subject rather than email;
+- routers do not own product policy;
+- no local password/session routes exist.
 
-- `GET /api/v1/auth/me`
-
-This is a protected smoke endpoint used to prove actor resolution. It does not replace Flow login and does not create a session.
-
-## Lifecycle Impact
-
-No Workstream task lifecycle transitions are implemented.
-
-The actor context created here becomes the input later services use for audit attribution and permission checks.
-
-## Security/Auth Impact
-
-- Missing token returns unauthorized.
-- Invalid token returns unauthorized.
-- Valid dev token resolves an actor only outside production.
-- Flow verifier adapter boundary exists but does not fake production verification.
-- Workstream does not add local login, signup, registration, password reset, password storage, or session routes.
-
-## Tests Required
-
-- missing bearer token is rejected
-- invalid bearer token is rejected
-- valid dev token resolves actor id, external subject, external issuer, roles, auth source, and audit context
-- actor id is derived from `external_subject + external_issuer`, not email
-- dev verifier cannot be created in production
-- Flow verifier adapter boundary rejects unsupported local verification
-- permission policy allows required roles
-- permission policy rejects missing roles
-- no local auth/password/session routes exist
-
-## Conditions Of Satisfaction
-
-- protected endpoint resolves current actor
-- invalid or missing token is rejected
-- actor id is available for audit writes
-- actor identity uses stable Flow subject and issuer, not email
-- role/claim source is documented in code and tested
-- no password table or login route exists
-- dev verifier is separate from production Flow verifier
-- dev/mock auth cannot run in production and is visible in audit context
-- permission checks live outside routers
-- backend tests pass
-- stale wording scan passes
-- Markdown link check passes
-- senior engineering verifier passes
-- QA/test verifier passes
-- security/auth verifier passes
-
-## Reviewer Agents Required
-
-- security/auth
-- senior engineering
-- QA/test
+Later WS-AUTH-001 chunks must preserve those assertions while adding production
+issuer/JWKS verification, canonical actor resolution, local grant authority,
+negative token-role proof, revocation, and append-only authority evidence.

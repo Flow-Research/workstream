@@ -284,7 +284,7 @@ Conditions of satisfaction:
 - worker-provided guide or policy version fields are rejected or ignored and cannot mutate task context
 - Workstream stamps locked guide and policy versions from task context
 - task moves to `SUBMITTED`
-- submitted packet can be locked before checker execution
+- submitted packet can be finalized before checker execution
 - replacing an artifact creates a new submission version instead of mutating v1
 - submission and immutability tests pass
 

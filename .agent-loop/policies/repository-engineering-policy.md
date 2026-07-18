@@ -7,7 +7,9 @@
 - Backend: Python, FastAPI, SQLAlchemy 2.x async, Alembic, Pydantic schemas
 - Frontend: React, Vite, TypeScript
 - Record database: Postgres
-- File storage: local filesystem only behind an R2/S3-compatible abstraction
+- File storage: AWS S3 in v0.1 production behind the provider-neutral artifact
+  abstraction; MinIO proves the S3 protocol in local/CI, LocalStorage is
+  development-only, and R2 plus Flow Node are deferred
 
 ## Setup Commands
 
@@ -26,13 +28,15 @@ pytest -q
 
 | Boundary | Owner | Rule |
 |---|---|---|
-| Auth | `backend/app/adapters/auth`, `backend/app/api/deps.py` | Verify external Flow tokens only; do not add Workstream login/password/session ownership. |
-| Permissions | `backend/app/core/permissions.py`, module services | Role and object checks stay in services; routers map errors. |
+| External authentication | `backend/app/adapters/auth`, `backend/app/api/deps/auth.py` | Verify external Flow tokens only; do not add Workstream login/password/session ownership or product roles to verified-token types. |
+| Actors | `backend/app/modules/actors` | Own canonical ActorProfile and ActorIdentityLink persistence/resolution. |
+| Authorization | `backend/app/modules/authorization` | Own grants, permission registry/evaluation, idempotency, invalidation, and authority decisions; routers map stable errors. |
 | Project guide and policy context | `backend/app/modules/projects` | Guide and policy versions are explicit and locked before task/submission use. |
 | Task lifecycle | `backend/app/modules/tasks` | State transitions are policy-driven and auditable. |
 | Submission/checker lifecycle | `backend/app/modules/submissions`, `backend/app/modules/checkers` | Pre-submit blocking gates and post-submit checker records stay separate. |
 | Persistence | `backend/app/db`, module models/repositories | Use async SQLAlchemy repositories and Alembic migrations. |
 | CI/review gates | `.github/workflows`, `scripts/`, `.agent-loop/` | Gates may be strengthened; weakening requires explicit human approval. |
+| Generated merge memory | `automation/loop-memory` | Trusted `main` automation owns signed canonical live state; humans and agents do not edit this branch manually or trust it without signature verification. |
 
 ## Dependency Policy
 
@@ -45,3 +49,4 @@ pytest -q
 - Keep PRs chunk-sized.
 - Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
 - Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
+- Review and approve an implementation PR once. After merge, rely on the canonical automation branch; do not create a second PR or repeat reviewer fanout solely to restate merge metadata.

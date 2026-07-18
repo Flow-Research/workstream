@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-08",
+  "chunk_title": "Bootstrap And Administrative Role Grants",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-09",
+  "next_chunk_title": "Actor State, Identity Revocation, And Service Actors",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

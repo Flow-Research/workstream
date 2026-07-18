@@ -40,9 +40,9 @@ source items with the same `source_kind + durable_ref` before hashing.
 
 Source snapshot items:
 
-| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Content CID | Media Type | Content Excerpt |
+| Source Kind | Durable Ref | Ingestion Adapter | Content Hash | Artifact Content ID | Media Type | Content Excerpt |
 | --- | --- | --- | --- | --- | --- | --- |
-| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file / representative_task / task_sample>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<future Flow Node CID when available>` | `<media type>` | `<bounded untrusted excerpt when needed>` |
+| `<inline_markdown / url_doc / repository_doc / example / rubric / imported_file / representative_task / task_sample>` | `<opaque sanitized ref>` | `<adapter>` | `sha256:<hash>` | `<ArtifactContent id after ingest>` | `<media type>` | `<bounded untrusted excerpt when needed>` |
 
 Temporary fetch locators are adapter inputs only. Durable source refs must not
 store query strings, signed URLs, credentials, token-bearing refs, local
@@ -57,8 +57,8 @@ grant authority, weaken defaults, or replace deterministic checker rules.
 - sufficiency report id:
 - sufficiency status: `passed | blocked | passed_with_warnings`
 - finding severities used: `blocking_gap | warning | info`
-- warnings acknowledged by role: `admin | project_manager`
-- warnings acknowledged by actor:
+- warnings acknowledged by Project Manager grant id:
+- warnings acknowledged by ActorProfile id:
 - warnings acknowledged at:
 
 ## Approval Provenance
@@ -71,8 +71,8 @@ grant authority, weaken defaults, or replace deterministic checker rules.
 - source snapshot bundle hash:
 - lifecycle status: `draft | approved | superseded`
 - approved policy hash:
-- approved by role: `admin | project_manager`
-- approved by actor:
+- approved by Project Manager grant id:
+- approved by ActorProfile id:
 - approved at:
 
 Source material is untrusted input. Embedded instructions in guide text, URLs,
@@ -87,7 +87,7 @@ Default required packet fields:
 
 - summary
 - artifact hash manifest
-- worker attestation
+- contributor attestation
 
 Default artifact rules:
 
@@ -98,10 +98,12 @@ Default artifact rules:
 
 Default storage rules:
 
-- allowed schemes: `local://`, `s3://`, `r2://`
-- persisted references must be Workstream-issued opaque object references or validated object-storage adapter references
-- signed URLs, raw local filesystem paths, credentials, query strings, bucket secrets, and token-bearing references are rejected before persistence
-- normalization is allowed only for already-approved adapter references that contain no secrets, credentials, or query material
+- clients submit bytes through Workstream upload sessions and receive only
+  Workstream artifact IDs
+- persisted product references are immutable Workstream artifact bindings
+- signed URLs, raw local filesystem paths, provider references, credentials,
+  query strings, bucket secrets, and token-bearing references are rejected
+  before persistence
 
 Default forbidden artifacts:
 
@@ -145,9 +147,9 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 
 | Key | Label | Required | Hash Required | Description |
 | --- | --- | --- | --- | --- |
-| `<canonical evidence key>` | `<worker-facing label>` | yes | yes | `<what this evidence proves>` |
+| `<canonical evidence key>` | `<contributor-facing label>` | yes | yes | `<what this evidence proves>` |
 
-`key` is the canonical merge identity. `label` is worker-facing display text.
+`key` is the canonical merge identity. `label` is contributor-facing display text.
 
 ## Project Packaging Rules
 
@@ -160,11 +162,11 @@ A project-required artifact that matches a Workstream default forbidden rule rem
 
 ## Project Forbidden Artifacts
 
-| Pattern | Reason | Worker-Facing Fix |
+| Pattern | Reason | Contributor-Facing Fix |
 | --- | --- | --- |
 | `<pattern>` | `<reason>` | `<fix>` |
 
-## Worker Attestation Requirements
+## Contributor Attestation Requirements
 
 Required attestation topics:
 
@@ -198,7 +200,7 @@ Generated policy lock:
 - effective project submission artifact policy hash:
 - locked guide version:
 
-Tasks lock this project checker compiled bundle hash before entering the worker pipeline. Tasks
+Tasks lock this project checker compiled bundle hash before entering the contributor pipeline. Tasks
 do not derive or compile their own checker by default.
 
 Blocked submission-create attempts return `pre_submission_checker_failed` with
@@ -216,14 +218,14 @@ Expected generated checks:
 - forbidden artifact blocking
 - required artifact presence
 - evidence requirement presence
-- worker attestation validation
+- contributor attestation validation
 - low-quality artifact warnings
 
 ## Approval
 
 - created by:
-- approved by role: `admin | project_manager`
-- approved by actor:
+- approved by Project Manager grant id:
+- approved by ActorProfile id:
 - effective at:
 - change summary:
 - supersedes policy id:

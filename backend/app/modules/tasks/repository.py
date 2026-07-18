@@ -1,22 +1,20 @@
-"""Database access methods for tasks, assignments, profiles, and audit events."""
+"""Database access methods for tasks, assignments, submissions, and audit events."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.models import (
     AuditEvent,
     EvidenceItem,
-    ReviewerProfile,
     Submission,
     TaskAssignment,
-    WorkerProfile,
     WorkstreamTask,
 )
 
@@ -31,6 +29,7 @@ class TaskRepository:
             session: Async SQLAlchemy session for the current unit of work.
         """
         self._session = session
+        self._audit_repository = AuditRepository(session)
 
     async def add_task(self, task: WorkstreamTask) -> WorkstreamTask:
         """Persist a new task and refresh generated database fields.
@@ -102,20 +101,30 @@ class TaskRepository:
         await self._session.refresh(submission)
         return submission
 
-    async def get_submission(self, submission_id: str) -> Submission | None:
+    async def get_submission(
+        self,
+        submission_id: str,
+        *,
+        populate_existing: bool = False,
+    ) -> Submission | None:
         """Load one submission by id with evidence items.
 
         Args:
             submission_id: Submission id to load.
+            populate_existing: Whether to refresh an already-loaded ORM instance
+                from the database.
 
         Returns:
             Submission when found; otherwise ``None``.
         """
-        result = await self._session.execute(
+        statement = (
             select(Submission)
             .options(selectinload(Submission.evidence_items))
             .where(Submission.id == submission_id)
         )
+        if populate_existing:
+            statement = statement.execution_options(populate_existing=True)
+        result = await self._session.execute(statement)
         return result.scalar_one_or_none()
 
     async def get_latest_submission_for_task(self, task_id: str) -> Submission | None:
@@ -165,117 +174,31 @@ class TaskRepository:
         for evidence in result.scalars():
             evidence.locked_at = locked_at
 
-    async def get_worker_profile(self, actor_id: str) -> WorkerProfile | None:
-        """Load a worker profile by actor id.
+    async def finalize_submission_if_unlocked(
+        self,
+        submission_id: str,
+        finalized_at: datetime,
+    ) -> bool:
+        """Atomically stamp a submission as finalized if it is still open.
+
+        The persistence column remains ``locked_at`` because it represents the
+        immutable storage boundary. This repository method uses finalize
+        terminology to match the public API lifecycle.
 
         Args:
-            actor_id: Stable Workstream actor id.
+            submission_id: Submission id to finalize.
+            finalized_at: Timestamp applied to the submission row.
 
         Returns:
-            Worker profile when found; otherwise ``None``.
+            ``True`` when this call won the finalize guard; otherwise ``False``.
         """
         result = await self._session.execute(
-            select(WorkerProfile)
-            .where(WorkerProfile.actor_id == actor_id)
-            .execution_options(populate_existing=True)
+            update(Submission)
+            .where(Submission.id == submission_id, Submission.locked_at.is_(None))
+            .values(locked_at=finalized_at)
+            .returning(Submission.id)
         )
-        return result.scalar_one_or_none()
-
-    async def upsert_worker_profile(self, profile: WorkerProfile) -> WorkerProfile:
-        """Create or update a worker profile from trusted actor claims.
-
-        Args:
-            profile: Worker profile carrying latest actor metadata.
-
-        Returns:
-            Persisted worker profile.
-        """
-        await self._session.execute(
-            insert(WorkerProfile)
-            .values(
-                id=profile.id,
-                actor_id=profile.actor_id,
-                external_subject=profile.external_subject,
-                external_issuer=profile.external_issuer,
-                display_name=profile.display_name,
-                email=profile.email,
-                skill_tags=profile.skill_tags,
-                status=profile.status,
-            )
-            .on_conflict_do_update(
-                index_elements=[WorkerProfile.actor_id],
-                set_={
-                    "external_subject": profile.external_subject,
-                    "external_issuer": profile.external_issuer,
-                    "display_name": profile.display_name,
-                    "email": profile.email,
-                    "skill_tags": profile.skill_tags,
-                    "status": profile.status,
-                    "updated_at": func.now(),
-                },
-            )
-        )
-        await self._session.flush()
-        persisted = await self.get_worker_profile(profile.actor_id)
-        if persisted is None:
-            raise RuntimeError("worker profile upsert did not return a persisted row")
-        return persisted
-
-    async def get_reviewer_profile(self, actor_id: str) -> ReviewerProfile | None:
-        """Load a reviewer profile by actor id.
-
-        Args:
-            actor_id: Stable Workstream actor id.
-
-        Returns:
-            Reviewer profile when found; otherwise ``None``.
-        """
-        result = await self._session.execute(
-            select(ReviewerProfile)
-            .where(ReviewerProfile.actor_id == actor_id)
-            .execution_options(populate_existing=True)
-        )
-        return result.scalar_one_or_none()
-
-    async def upsert_reviewer_profile(self, profile: ReviewerProfile) -> ReviewerProfile:
-        """Create or update a reviewer profile from trusted actor claims.
-
-        Args:
-            profile: Reviewer profile carrying latest actor metadata.
-
-        Returns:
-            Persisted reviewer profile.
-        """
-        await self._session.execute(
-            insert(ReviewerProfile)
-            .values(
-                id=profile.id,
-                actor_id=profile.actor_id,
-                external_subject=profile.external_subject,
-                external_issuer=profile.external_issuer,
-                display_name=profile.display_name,
-                email=profile.email,
-                skill_tags=profile.skill_tags,
-                status=profile.status,
-            )
-            .on_conflict_do_update(
-                index_elements=[ReviewerProfile.actor_id],
-                set_={
-                    "external_subject": profile.external_subject,
-                    "external_issuer": profile.external_issuer,
-                    "display_name": profile.display_name,
-                    "email": profile.email,
-                    "skill_tags": profile.skill_tags,
-                    "status": profile.status,
-                    "updated_at": func.now(),
-                },
-            )
-        )
-        await self._session.flush()
-        persisted = await self.get_reviewer_profile(profile.actor_id)
-        if persisted is None:
-            raise RuntimeError("reviewer profile upsert did not return a persisted row")
-        return persisted
+        return result.scalar_one_or_none() is not None
 
     async def add_audit_event(self, event: AuditEvent) -> AuditEvent:
         """Persist an audit event.
@@ -286,10 +209,7 @@ class TaskRepository:
         Returns:
             Persisted audit event model.
         """
-        self._session.add(event)
-        await self._session.flush()
-        await self._session.refresh(event)
-        return event
+        return await self._audit_repository.add_audit_event(event)
 
     async def list_audit_events(self, entity_type: str, entity_id: str) -> Sequence[AuditEvent]:
         """List audit events for one entity in creation order.
@@ -301,9 +221,4 @@ class TaskRepository:
         Returns:
             Matching audit events ordered by creation time.
         """
-        result = await self._session.execute(
-            select(AuditEvent)
-            .where(AuditEvent.entity_type == entity_type, AuditEvent.entity_id == entity_id)
-            .order_by(AuditEvent.created_at.asc(), AuditEvent.id.asc())
-        )
-        return result.scalars().all()
+        return await self._audit_repository.list_audit_events(entity_type, entity_id)

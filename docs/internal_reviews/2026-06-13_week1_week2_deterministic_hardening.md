@@ -117,10 +117,10 @@ Result: `All checks passed!`
 Passed:
 
 ```bash
-cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/week1_api_e2e.py
+cd backend && WORKSTREAM_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/python scripts/api_contract_e2e.py
 ```
 
-Result: `Week 1 real API e2e passed` and `PASS Week 1 database invariants`.
+Result: `API contract real API e2e passed` and `PASS API contract database invariants`.
 
 Passed:
 

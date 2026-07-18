@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 240
 
     services:
       postgres:
@@ -24,9 +25,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
-    env:
-      WORKSTREAM_TEST_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -55,12 +53,90 @@ jobs:
         working-directory: backend
         run: docstr-coverage --config .docstr.yaml
 
-      - name: Test
-        working-directory: backend
-        run: pytest -q
-
-      - name: Week 1 real API e2e
+      - name: Isolated database runner test
         working-directory: backend
         env:
-          WORKSTREAM_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test
-        run: python scripts/week1_api_e2e.py
+          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+        run: python -m pytest -q tests/test_isolated_database_runner.py
+
+      - name: Backend full-suite coverage
+        working-directory: backend
+        env:
+          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+        run: |
+          metadata_dir="$(mktemp -d)"
+          trap 'rm -rf "$metadata_dir"' EXIT
+          python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78
+
+      - name: Artifact foundation coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*'
+          --precision=2
+          --fail-under=90
+
+      - name: External service adapter coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/interfaces/external_services.py'
+          --precision=2
+          --fail-under=90
+
+      - name: Artifact preparation configuration coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/core/config.py'
+          --precision=2
+          --fail-under=90
+
+      - name: Artifact worker wiring coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/workers/*'
+          --precision=2
+          --fail-under=90
+
+      - name: FastAPI startup wiring coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/main.py'
+          --precision=2
+          --fail-under=90
+
+      - name: Actor subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/actors/*'
+          --precision=2
+          --fail-under=90
+
+      - name: Authorization subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/authorization/*'
+          --precision=2
+          --fail-under=90
+
+      - name: Auth verifier boundary coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/dev.py,app/adapters/auth/flow.py'
+          --precision=2
+          --fail-under=90
+
+      - name: API contract real API e2e
+        working-directory: backend
+        env:
+          WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+        run: |
+          metadata_dir="$(mktemp -d)"
+          trap 'rm -rf "$metadata_dir"' EXIT
+          python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 3600 -- python scripts/api_contract_e2e.py

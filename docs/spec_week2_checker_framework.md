@@ -18,7 +18,7 @@ The checker framework protects reviewer time by proving that the latest locked s
 - blocking versus warning calculation
 - user-facing `needs_revision` routing from checker failures
 - backend API access to checker runs and results
-- dry-run/demo output for checker visibility
+- backend API drill/debug output for checker visibility
 - pre-review gate enforcement for `REVIEW_PENDING`
 
 ## Non-Scope
@@ -37,7 +37,7 @@ The checker framework protects reviewer time by proving that the latest locked s
 ## Core Invariant
 
 ```text
-Draft packet -> project PreSubmitCheckerPolicy -> Pre-submit checks -> Submit -> Lock -> Internal CheckerRun -> CheckerResults -> routing recommendation
+Draft packet -> project PreSubmitCheckerPolicy -> pre-submit checks -> submit -> automatic submission lock -> Celery pre-review CheckerRun -> CheckerResults -> routing recommendation
 ```
 
 A task cannot reach `REVIEW_PENDING` unless the latest locked submission has a completed checker run for the exact submission version and artifact context.
@@ -82,7 +82,11 @@ Pre-submit failures do not create review decisions, do not return `accept`,
 `needs_revision`, or `reject`, and do not create durable post-submit checker
 runs.
 
-Post-submit internal checks run after a submission is created and locked. These checks are the source of truth for review gating. They run from Workstream-owned services, use locked task guide and policy context, and persist durable checker runs/results.
+Post-submit internal checks run after Workstream creates and locks a submission
+packet that passed authoritative pre-submit validation. These checks are the
+source of truth for review gating. They run
+from Workstream-owned services, use locked task guide and policy context, and
+persist durable checker runs/results.
 
 ## User-Facing Outcome Boundary
 
@@ -92,9 +96,12 @@ Users see the same simple outcome language everywhere:
 - `rejected`
 - `needs_revision`
 
-Automated checker failures may route a submitted packet to `needs_revision` when the failure is worker-fixable. This is user-facing revision, not a human review decision.
+Automated checker failures may route the task to `needs_revision` when the
+failure is worker-fixable. The submitted packet remains an immutable submitted
+version. This is user-facing revision, not a human review decision.
 
-Week 2 may set a checker-caused task/submission outcome of `needs_revision`, but it does not create a human review decision record.
+Week 2 may set a checker-caused task outcome of `needs_revision`, but it does
+not create a human review decision record.
 
 Internally Workstream records the source:
 
@@ -137,8 +144,8 @@ Checker results are exposed through backend contracts and operational output:
 - checker run API responses
 - checker result API responses
 - task/submission API expansion where needed
-- dry-run scripts
-- Week 1 API demo/debug output when useful
+- backend API contract drills
+- operational debug output when useful
 
 Week 2 does not build the product frontend page for checker results. The planned React + Vite operations dashboard consumes these backend contracts later.
 
@@ -188,7 +195,7 @@ Conditions of satisfaction:
 
 ### Chunk 9: Pre-Review Gate
 
-Automatically triggers internal post-submit checks after submission locking and calculates whether a checked submission moves to `REVIEW_PENDING`, user-facing `needs_revision`, or an internal `task_setup_blocked` repair route.
+Automatically triggers internal post-submit checks after Workstream locks a submission and calculates whether a checked submission moves to `REVIEW_PENDING`, user-facing `needs_revision`, or an internal `task_setup_blocked` repair route.
 
 Detailed spec: [Chunk 9 Pre-Review Gate](spec_chunk_9_pre_review_gate.md).
 

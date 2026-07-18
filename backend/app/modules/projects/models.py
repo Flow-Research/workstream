@@ -27,7 +27,7 @@ from app.db.base import Base
 
 
 class Project(Base):
-    """Project container that owns guide versions and shared payout defaults."""
+    """Project container that owns guide versions."""
 
     __tablename__ = "projects"
 
@@ -36,8 +36,6 @@ class Project(Base):
     slug: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
-    base_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    currency: Mapped[str | None] = mapped_column(String(20))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -52,7 +50,7 @@ class Project(Base):
 
 
 class ProjectGuide(Base):
-    """Versioned project guide that defines task and submission expectations."""
+    """Versioned human-facing project guide material."""
 
     __tablename__ = "project_guides"
     __table_args__ = (
@@ -70,27 +68,9 @@ class ProjectGuide(Base):
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft", index=True)
     content_markdown: Mapped[str] = mapped_column(Text, nullable=False)
-    required_task_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    required_submission_fields: Mapped[list[str]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=list,
-    )
-    task_instructions: Mapped[str | None] = mapped_column(Text)
-    output_requirements: Mapped[str | None] = mapped_column(Text)
-    acceptance_criteria: Mapped[str | None] = mapped_column(Text)
-    rejection_criteria: Mapped[str | None] = mapped_column(Text)
-    reviewer_rubric: Mapped[str | None] = mapped_column(Text)
-    forbidden_actions: Mapped[str | None] = mapped_column(Text)
-    required_skills: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    difficulty_scale: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    estimated_time_policy: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    common_rejection_reasons: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    evidence_policy: Mapped[dict | None] = mapped_column(JSON)
-    unacceptable_work_policy: Mapped[str | None] = mapped_column(Text)
+    change_summary: Mapped[str | None] = mapped_column(Text)
     approved_by: Mapped[str | None] = mapped_column(String(100))
     effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    change_summary: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -103,8 +83,8 @@ class ProjectGuide(Base):
     project: Mapped[Project] = relationship(back_populates="guides")
 
 
-class CheckerPolicy(Base):
-    """Checker requirements attached to a project guide version."""
+class PostSubmitCheckerPolicy(Base):
+    """Post-submit checker requirements attached to a project guide version."""
 
     __tablename__ = "checker_policies"
     __table_args__ = (
@@ -113,15 +93,116 @@ class CheckerPolicy(Base):
             ["project_guides.project_id", "project_guides.version"],
             name="fk_checker_policies_project_guide",
         ),
-        UniqueConstraint("project_id", "guide_version", name="uq_checker_policies_project_version"),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_checker_policies_source_snapshot_hash",
+        ),
+        ForeignKeyConstraint(
+            ["effective_policy_id", "effective_policy_hash"],
+            [
+                "effective_project_submission_artifact_policies.id",
+                "effective_project_submission_artifact_policies.effective_policy_hash",
+            ],
+            name="fk_checker_policies_effective_policy_hash",
+        ),
+        ForeignKeyConstraint(
+            ["pre_submit_checker_policy_id", "pre_submit_checker_bundle_hash"],
+            [
+                "pre_submit_checker_policies.id",
+                "pre_submit_checker_policies.compiled_bundle_hash",
+            ],
+            name="fk_checker_policies_pre_submit_checker_hash",
+        ),
+        CheckConstraint(
+            "policy_hash is null or policy_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name="policy_hash_shape",
+        ),
+        CheckConstraint(
+            "lifecycle_status in ('compiled', 'approved', 'superseded')",
+            name="lifecycle_status",
+        ),
+        CheckConstraint(
+            """
+            lifecycle_status != 'approved'
+            or (
+                approved_by_role in ('admin', 'project_manager')
+                and approved_by_actor is not null
+                and approved_at is not null
+            )
+            """,
+            name="approval_provenance",
+        ),
+        CheckConstraint(
+            """
+            lifecycle_status != 'superseded'
+            or (
+                superseded_at is not null
+                and superseded_by_role in ('admin', 'project_manager')
+                and superseded_by_actor is not null
+                and supersession_kind in ('correction_requested', 'upstream_policy_changed')
+                and supersession_reason is not null
+                and length(btrim(supersession_reason)) > 0
+            )
+            """,
+            name="correction_provenance",
+        ),
+        Index(
+            "uq_checker_policies_current_project_version",
+            "project_id",
+            "guide_version",
+            unique=True,
+            postgresql_where=text("lifecycle_status in ('compiled', 'approved')"),
+        ),
+        UniqueConstraint(
+            "id",
+            "guide_version",
+            "policy_hash",
+            name="uq_checker_policies_id_version_hash",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    effective_policy_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    effective_policy_hash: Mapped[str] = mapped_column(String(71), nullable=False, index=True)
+    pre_submit_checker_policy_id: Mapped[str] = mapped_column(
+        String(36),
+        nullable=False,
+        index=True,
+    )
+    pre_submit_checker_bundle_hash: Mapped[str] = mapped_column(
+        String(71),
+        nullable=False,
+        index=True,
+    )
     required_checkers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     warning_checkers: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     blocking_severities: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    policy_hash: Mapped[str | None] = mapped_column(String(71), index=True)
+    policy_body: Mapped[dict | None] = mapped_column(JSON)
+    lifecycle_status: Mapped[str] = mapped_column(String(30), nullable=False, default="compiled")
+    approved_by_role: Mapped[str | None] = mapped_column(String(50))
+    approved_by_actor: Mapped[str | None] = mapped_column(String(100))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    supersedes_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("checker_policies.id"),
+        index=True,
+    )
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    superseded_by_role: Mapped[str | None] = mapped_column(String(50))
+    superseded_by_actor: Mapped[str | None] = mapped_column(String(100))
+    supersession_kind: Mapped[str | None] = mapped_column(String(50))
+    supersession_reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -262,6 +343,78 @@ class GuideSourceSnapshotItem(Base):
     content_cid: Mapped[str | None] = mapped_column(String(200))
     media_type: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProjectSetupRun(Base):
+    """Non-authoritative ledger for automatic project setup execution."""
+
+    __tablename__ = "project_setup_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "status in ("
+            "'queued', "
+            "'enqueue_failed', "
+            "'running_sufficiency_agent', "
+            "'sufficiency_blocked', "
+            "'running_policy_derivation_agent', "
+            "'policy_draft_ready', "
+            "'running_post_submit_derivation_agent', "
+            "'post_submit_setup_blocked', "
+            "'post_submit_policy_compiled', "
+            "'setup_blocked', "
+            "'failed'"
+            ")",
+            name="ck_project_setup_runs_status",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "guide_version"],
+            ["project_guides.project_id", "project_guides.version"],
+            name="fk_project_setup_runs_project_guide",
+        ),
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "source_snapshot_hash"],
+            ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
+            name="fk_project_setup_runs_source_snapshot_hash",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(ForeignKey("project_guides.id"), nullable=False, index=True)
+    guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    source_snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshots.id"),
+        nullable=False,
+        index=True,
+    )
+    source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    celery_task_id: Mapped[str | None] = mapped_column(String(155), index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    current_step: Mapped[str] = mapped_column(String(100), nullable=False)
+    output_sufficiency_report_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_sufficiency_reports.id"),
+        index=True,
+    )
+    output_submission_artifact_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_artifact_policies.id"),
+        index=True,
+    )
+    output_post_submit_checker_policy_id: Mapped[str | None] = mapped_column(
+        ForeignKey("checker_policies.id", name="fk_project_setup_runs_post_submit_checker_policy"),
+        index=True,
+    )
+    post_submit_derivation_summary: Mapped[dict | None] = mapped_column(JSON)
+    error_code: Mapped[str | None] = mapped_column(String(100))
+    error_summary: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class GuideSufficiencyReport(Base):
@@ -473,6 +626,11 @@ class PreSubmitCheckerPolicy(Base):
                 "effective_project_submission_artifact_policies.effective_policy_hash",
             ],
             name="fk_pre_submit_checker_policies_effective_hash",
+        ),
+        UniqueConstraint(
+            "id",
+            "compiled_bundle_hash",
+            name="uq_pre_submit_checker_policies_id_compiled_bundle_hash",
         ),
     )
 

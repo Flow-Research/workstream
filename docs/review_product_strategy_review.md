@@ -20,7 +20,9 @@ Status: fixed in `docs/architecture_system_architecture.md`. Backend is Python/F
 
 ### Medium: First customer/operator value needs sharper wording
 
-The product promise is accurate but should state the immediate value more concretely: fewer missed rules, fewer avoidable revisions, faster review readiness, and clean payout tracking.
+The product promise is accurate but should state the immediate value more
+concretely: fewer missed rules, fewer avoidable revisions, faster review
+readiness, and clean compensation fulfillment tracking.
 
 Suggested change: add a "First Operator Value" section to the product brief.
 

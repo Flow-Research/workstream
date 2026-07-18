@@ -9,7 +9,7 @@ READY
 CLAIMED
 IN_PROGRESS
 SUBMITTED
-AUTO_CHECKING
+EVALUATION_PENDING
 REVIEW_PENDING
 NEEDS_REVISION
 ACCEPTED
@@ -17,23 +17,23 @@ REJECTED
 CANCELLED
 ```
 
-Payment status is separate from task status:
+Compensation projection state is separate from task status:
 
 ```text
-NONE
-PENDING
-PAYOUT_SUBMITTED
-PAID
-DISPUTED
+delivery_status: pending_delivery | acknowledged_by_adapter
+fulfillment_status: pending | failed | fulfilled
 ```
 
-External adapter pipeline states such as `INGESTED`, `FILTERED`, `NORMALIZED`, and `ROUTED` are not v0.1 task lifecycle states. If source adapters are added later, they must normalize accepted external input into the canonical task lifecycle before workers see it.
+Explicitly unpaid contributions create no award and therefore no compensation
+projection.
+
+External adapter pipeline states such as `INGESTED`, `FILTERED`, `NORMALIZED`, and `ROUTED` are not v0.1 task lifecycle states. If source adapters are added later, they must normalize accepted external input into the canonical task lifecycle before contributors see it.
 
 ## State Definitions
 
 ### DRAFT
 
-The task is being created. It is not available to workers.
+The task is being created. It is not available to contributors.
 
 Required before leaving:
 
@@ -43,26 +43,30 @@ Required before leaving:
 - title
 - description
 - acceptance criteria
-- base amount
 - required output
 
 ### SCREENING
 
-The task is structurally prepared but not yet released. This is the pre-release quality gate used to catch weak guides, vague acceptance criteria, missing submission artifact requirements, bad payment policy, missing generated project pre-submit checker policy, missing post-submit checker policy, missing review policy, or missing revision policy before workers see the task.
+The task is structurally prepared but not yet released. This is the pre-release
+quality gate used to catch weak guides, vague acceptance criteria, missing
+submission artifact requirements, missing generated project
+pre-submit checker policy, missing approved generated project post-submit checker
+policy with matching provenance, missing review policy, or missing revision
+policy before contributors see the task.
 
 Required before entering:
 
 - draft task has required fields
 - project guide version is attached
-- payment policy is present
 - task creator believes the task is ready for independent screening
 
 Required before leaving:
 
 - screening checklist passed
-- no open high-severity readiness finding
+- no open critical- or high-severity readiness finding
 - task status snapshot created
-- release decision recorded by an authorized reviewer, project manager, or admin
+- release decision recorded by an authorized covered Project Manager under the
+  task-management permission and screening guards
 
 ### READY
 
@@ -78,25 +82,33 @@ Required before entering:
 - EffectiveProjectSubmissionArtifactPolicy hash persisted
 - project PreSubmitCheckerPolicy persisted with a compiled bundle hash and locked to that effective project submission artifact policy hash
 - task locked to GuideSourceSnapshot id/hash, EffectiveProjectSubmissionArtifactPolicy hash, and PreSubmitCheckerPolicy compiled bundle hash
-- PostSubmitCheckerPolicy present
+- approved generated project PostSubmitCheckerPolicy with matching guide,
+  source snapshot, effective project policy, and pre-submit checker provenance
+  locked in the task context
 - review policy present
 - revision policy present
-- payment policy present
 - guide version locked for this task
 - source reference recorded when imported
-- acceptance criteria frozen unless an admin records a guide-correction event
+- acceptance criteria frozen; a controlled new guide/task context follows its
+  owning policy/rebase path and never rewrites existing locked context
 
 ### CLAIMED
 
-A worker has claimed or been assigned the task.
+A contributor has claimed or been assigned the task.
+
+Required before entering:
+
+- an active published project ContributionPolicyVersion exists
+- TaskAssignment freezes that exact version for submitter compensation
+- the `accepted_submission` rule is explicit: compensated or unpaid
 
 ### IN_PROGRESS
 
-The worker is actively working on the task.
+The contributor is actively working on the task.
 
 ### SUBMITTED
 
-The worker submitted a packet.
+The contributor submitted a packet.
 
 Required before entering:
 
@@ -109,15 +121,15 @@ Required before entering:
 - immutable submission version
 - content hash for every uploaded artifact
 - evidence references bound to submitted artifact hashes
-- worker attestation that the packet does not include prohibited or confidential material
+- contributor attestation that the packet does not include prohibited or confidential material
 
-Workstream assigns the immutable submission version server-side. The worker does not provide submission version, evidence ids, checker results, checker run ids, or guide/policy versions.
+Workstream assigns the immutable submission version server-side. The contributor does not provide submission version, evidence ids, checker results, checker run ids, or guide/policy versions.
 
-### AUTO_CHECKING
+### EVALUATION_PENDING
 
 Automated checks are running inside the pre-review gate.
 
-`pre_review_gate` is a checker phase and audit label, not a separate v0.1 task status. The persisted task remains `auto_checking` until checker routing moves it to `review_pending`, `needs_revision`, or the internal `task_setup_blocked` repair route.
+`pre_review_gate` is a checker phase and audit label, not a separate v0.1 task status. The persisted task remains `evaluation_pending` until checker routing moves it to `review_pending`, `needs_revision`, or the internal `task_setup_blocked` repair route.
 
 ### REVIEW_PENDING
 
@@ -125,27 +137,39 @@ Automated checks passed or produced only non-blocking warnings. A human reviewer
 
 Required before entering:
 
-- checker run exists for the exact submission version
-- checker run references the same artifact hashes as the submission packet
-- no unresolved blocking checker failure is open under the locked post-submit checker policy
+- durable, final CheckerRun is current for the exact Submission version
+- CheckerRun outcome is exactly `allow_review`
+- CheckerRun references the same artifact hashes as the Submission packet
+- no unresolved blocking checker failure is open under the locked post-submit
+  checker policy
 
 ### NEEDS_REVISION
 
-The worker-facing state for fixable issues.
+The contributor-facing state for fixable issues.
 
 This state can be entered from:
 
-- `AUTO_CHECKING`, when automated checker results contain worker-fixable blocking failures.
+- `EVALUATION_PENDING`, when automated checker results contain contributor-fixable blocking failures.
 - `REVIEW_PENDING`, when a human reviewer records a `needs_revision` decision.
 
 Required before entering:
 
-- from `AUTO_CHECKING`: checker run id, blocking checker results, worker-visible messages, and suggested fixes
-- from `REVIEW_PENDING`: review decision id and at least one structured review finding
+- from `EVALUATION_PENDING`: checker run id, blocking checker results, contributor-visible messages, and suggested fixes
+- from `REVIEW_PENDING`: immutable `needs_revision` Review, at least one
+  unresolved blocking ReviewFinding, reviewer `completed_review` contribution,
+  and any applicable reviewer award
+- from `REVIEW_PENDING`: the same TaskAssignment remains `active`, with no
+  FinalAcceptance or submitter contribution
 
-Before the worker resumes, Workstream prepares the next revision context. That preparation checks whether the active project guide or policy context changed since the prior submission was locked. Revision policy decides whether the next attempt keeps the prior context, rebases to the current active context, or is blocked for project-manager repair.
+Before the contributor resumes from a human Review, Workstream appends an
+immutable RevisionContextPreparation. Exact prior Submission guide
+identity/activation-sequence match with the currently active guide keeps
+context. Any different valid active pair rebases forward or backward. Missing,
+inconsistent, revoked, or unsafe context blocks for Project Manager repair.
+Checker-caused remediation remains CheckerResult-rooted and creates no Review
+episode.
 
-A revision context rebase never mutates the prior submitted attempt. It only stamps the next submission attempt. The worker and reviewer must see the prior version, the next version, and the guide or policy change summary.
+A revision context rebase never mutates the prior submitted attempt. It only stamps the next submission attempt. The contributor and reviewer must see the prior version, the next version, and the guide or policy change summary.
 
 ### ACCEPTED
 
@@ -157,14 +181,22 @@ Required before entering:
 - no unresolved blocking checker failure under the locked post-submit checker policy
 - evidence present
 - reviewer cited evidence supporting acceptance
-- no unresolved high or medium prior revision finding
-- payment amount calculated from the locked project payment policy
+- no unresolved blocking prior ReviewFinding
+- applicable submitter compensation evaluated from the TaskAssignment-frozen
+  contribution policy
 
 Required side effects:
 
-- contribution record created from accepted submission, accepting review, locked guide version, artifact hash manifest, and acceptance evidence refs
-- payment record created or updated from the contribution record
-- reputation events reference the contribution record
+- reviewer `completed_review` contribution created with the Review
+- immutable FinalAcceptance created from the accepting Review and bound to the
+  existing versioned Submission, task, submitter, recording reviewer, and locked
+  ReviewPolicy
+- submitter `accepted_submission` contribution created from FinalAcceptance,
+  the exact TaskAssignment, frozen policy lineage, and artifact hash; it is not
+  inferred directly from Review.decision
+- applicable awards created independently from the reviewer and submitter
+  contribution records
+- reputation projection remains deferred
 
 ### REJECTED
 
@@ -173,11 +205,22 @@ The task or submission is rejected.
 Required before entering:
 
 - rejection review decision
-- rejection reason
+- bounded human rejection reason
+- reviewer `completed_review` contribution and any applicable reviewer award
+- the same-task TaskAssignment is blocked
+- no FinalAcceptance or submitter contribution is created
+
+Required side effects:
+
+- same-task TaskAssignment is `blocked` and bound to the source reject Review
+- no other task, assignment, or actor grant changes
+- no FinalAcceptance or submitter `accepted_submission` exists
 
 ### CANCELLED
 
-The task is cancelled before acceptance.
+The task is cancelled before acceptance. An authorized revision-limit/deadline
+or legacy-context closure uses this state with a bounded reason, releases the
+assignment, and creates no synthetic Review or contribution.
 
 ## Allowed Transitions
 
@@ -188,14 +231,15 @@ SCREENING -> DRAFT
 READY -> CLAIMED
 CLAIMED -> IN_PROGRESS
 IN_PROGRESS -> SUBMITTED
-SUBMITTED -> AUTO_CHECKING
-AUTO_CHECKING -> REVIEW_PENDING
-AUTO_CHECKING -> NEEDS_REVISION
-REVIEW_PENDING -> AUTO_CHECKING
+SUBMITTED -> EVALUATION_PENDING
+EVALUATION_PENDING -> REVIEW_PENDING
+EVALUATION_PENDING -> NEEDS_REVISION
+REVIEW_PENDING -> EVALUATION_PENDING
 REVIEW_PENDING -> ACCEPTED
 REVIEW_PENDING -> NEEDS_REVISION
 REVIEW_PENDING -> REJECTED
 NEEDS_REVISION -> SUBMITTED
+NEEDS_REVISION -> CANCELLED
 DRAFT -> CANCELLED
 SCREENING -> CANCELLED
 READY -> CANCELLED
@@ -203,20 +247,26 @@ CLAIMED -> CANCELLED
 IN_PROGRESS -> CANCELLED
 ```
 
-## Blocked Transitions
+## Forbidden Transitions
 
-These require admin override:
+No administrative or recovery grant authorizes these transitions:
 
-- `SUBMITTED -> REVIEW_PENDING` without checker run
+- `EVALUATION_PENDING -> REVIEW_PENDING` without a durable, final, current CheckerRun
+  whose outcome is exactly `allow_review`, whose Submission version is exact,
+  and whose artifact binding is verified
 - `REVIEW_PENDING -> ACCEPTED` without review decision
-- `REVIEW_PENDING -> ACCEPTED` without contribution record creation
-- `NEEDS_REVISION -> ACCEPTED` without new submission or explicit finding closure
+- `REVIEW_PENDING -> ACCEPTED` without Review, FinalAcceptance, and both required contribution-source checks
+- `NEEDS_REVISION -> ACCEPTED` directly; a replacement Submission must pass
+  checker admission and receive a later accepting Review
 - `SUBMITTED -> ACCEPTED` directly
-- `SUBMITTED -> NEEDS_REVISION` without checker run unless the submission packet cannot be parsed
+- `SUBMITTED -> NEEDS_REVISION` directly without the persisted
+  `EVALUATION_PENDING` CheckerRun outcome
 - any transition based on artifacts whose hashes differ from the checker run
-- payment `NONE -> PAID` without accepted task and payment record
-- payment exposure without a contribution record
-- payment `PENDING -> PAID` without payment reference
+- compensation projection `pending -> fulfilled` without an immutable payable
+  award and fulfillment receipt
+- compensation exposure without a contribution record and frozen policy
+- adjudication, appeal, acceptance replacement, or reopen transition in v0.1
+- fulfillment without an external reference
 
 ## Submission Versioning
 
@@ -230,30 +280,26 @@ submission v2 -> accepted
 
 Each resubmission must link to the prior submission it supersedes.
 
-Each submitted version keeps its own locked guide and policy context. If a later revision is rebased to a newer active guide, that rebase is recorded as next-attempt preparation and does not rewrite earlier submission records.
+Each submitted version keeps its own stamped guide and policy context. A later
+revision may rebase forward or backward to the currently active guide. The
+immutable preparation records that next-attempt context and never rewrites an
+earlier Submission.
 
 ## Revision Replay
 
-When a task enters NEEDS_REVISION, the next submission must include a revision replay:
+After a human Review enters NEEDS_REVISION, the next submission must include one
+immutable response for each unresolved blocking finding:
 
 ```text
-Finding A -> fixed by change X -> evidence Y -> closed
-Finding B -> fixed by change Z -> evidence W -> closed
+ReviewFinding A -> SubmissionFindingResponse X -> evidence Y
+ReviewFinding B -> SubmissionFindingResponse Z -> evidence W
 ```
 
-The worker can claim each prior finding as:
+The later Review appends one FindingResolution for each required prior finding:
 
-- fixed
-- disputed
+- resolved
+- unresolved
 - not_applicable
-
-The reviewer can mark each prior finding:
-
-- closed_fixed
-- closed_rebutted
-- partially_closed
-- still_open
-- obsolete
 
 ## Audit Requirements
 
@@ -268,16 +314,23 @@ Every transition records:
 - related submission or review
 - related guide version
 - related artifact hashes when the transition depends on submitted files
-- override id when an admin override was used
+- matched permission/grant and authority-event id when a registered recovery
+  operation participated
 
 No lifecycle change happens silently.
 
-Payment transitions are recorded in the payment ledger and audit log, not as task lifecycle states.
+Compensation-award and fulfillment transitions are recorded in their own
+records and audit events, not as task lifecycle states.
 
 ## Anti-Bypass Rules
 
-- Workers cannot edit a submitted packet in place. They must create a new submission version.
+- Contributors cannot edit a submitted packet in place. They must create a new submission version.
 - Reviewers cannot accept a submission whose checker run belongs to a different submission version.
-- Admin overrides cannot erase failed checker results, rejected reviews, or prior submissions.
-- Guide edits do not retroactively change active tasks unless policy allows the change and an admin records the affected tasks and reason.
-- A task with disputed evidence, suspected copied material, or payment conflict cannot be accepted until the issue is resolved through review, rejection, revision, payment dispute handling, or an audit-recorded admin action.
+- Registered recovery cannot erase failed checker results, rejected reviews, or
+  prior submissions.
+- Guide edits do not retroactively change active tasks; an owning policy/rebase
+  path records affected tasks, context, actor authority, and reason.
+- A task with disputed evidence, suspected copied material, or compensation conflict
+  cannot be accepted until the issue is resolved through its owning review,
+  rejection, revision, or compensation-dispute behavior. Authorization recovery does
+  not create a product resolution.

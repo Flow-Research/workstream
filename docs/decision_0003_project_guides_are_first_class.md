@@ -14,7 +14,7 @@ If project rules live only in chat or loose markdown, operators and reviewers wi
 
 Every active Workstream project must have a versioned project guide attached to its configuration.
 
-The project guide is the human-facing project source of truth. It may be markdown, an imported document, or a URL-backed guide. Workers and reviewers use it to understand the project purpose, quality bar, instructions, examples, reviewer rubric, and common rejection reasons.
+The project guide is the human-facing project source of truth. It may be markdown, an imported document, or a URL-backed guide. Contributors and reviewers use it to understand the project purpose, quality bar, instructions, examples, reviewer rubric, and common rejection reasons.
 
 Runtime enforcement uses approved machine-readable policies attached to the guide version. Workstream must not reread guide prose at submission time and guess what to enforce.
 
@@ -27,10 +27,11 @@ The guide drives:
 - post-submit checker policy
 - review policy
 - revision policy
-- payment policy
 - common rejection reasons
 
-The submission artifact, checker, review, revision, and payment policies are guide-version policies. They must be tied to the project guide version they govern, not only to the project.
+The submission artifact, checker, review, and revision policies are guide-version
+policies. They must be tied to the project guide version they govern, not only
+to the project.
 
 Project guide activation requires the guide plus its required policy context before work can lock against it:
 
@@ -42,17 +43,50 @@ Project guide activation requires the guide plus its required policy context bef
 - post-submit checker policy
 - review policy
 - revision policy
-- payment policy
 
-The Workstream-derived submission artifact policy defines project-level intake rules. Project owners provide open-ended project material and business terms. Workstream captures an immutable guide source snapshot, evaluates guide sufficiency, derives the machine policy, and a Workstream actor with the `admin` or `project_manager` role approves the internal policy bundle. Workstream combines that policy with non-bypassable Workstream default artifact rules to create the effective project submission artifact policy, then generates the project pre-submit checker policy from that effective project submission artifact policy. Tasks lock references to the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash.
+The Workstream-derived submission artifact policy defines project-level intake
+rules. Project owners provide open-ended project material and business terms.
+Workstream captures an immutable guide source snapshot, evaluates guide
+sufficiency, derives the machine policy, and an authorized covered Project
+Manager approves the internal policy bundle. Workstream combines that policy
+with non-bypassable Workstream default artifact rules to create the effective
+project submission artifact policy, then generates the project pre-submit
+checker policy from that effective project submission artifact policy. Tasks
+lock references to the applicable guide snapshot, effective project submission
+artifact policy hash, and pre-submit checker bundle hash.
+
+Authorization for this approval is governed by ADR 0012. Historical role labels
+from the pre-ADR-0012 runtime do not grant product authority.
 
 Blocking pre-submit failures prevent submission creation. They do not create durable post-submit checker runs and they do not create human review decisions.
 
-Revision policy is not optional. It defines the revision loop contract, including revision limits, revision deadlines, allowed resubmission states, and automatic rejection behavior after the limit.
+Revision policy is not optional. It defines revision limits, revision deadlines,
+allowed resubmission states, and reviewer-return preference. Reaching a limit or
+deadline blocks further preparation and submission; it never creates a reject
+Review. A covered Project Manager may later use the reason-bound administrative
+closure defined by the active review lifecycle contract.
 
-Guide and policy changes do not silently mutate submitted attempts. A submitted attempt stays tied to the guide and policy versions stamped on that submission. When a task enters `NEEDS_REVISION`, revision policy controls whether the next attempt keeps the prior context or rebases to the latest active guide and policy context.
+Guide and policy changes do not silently mutate submitted attempts. A submitted
+attempt stays tied to the guide and policy versions stamped on that Submission.
+After a human `needs_revision` Review, preparation compares the prior
+Submission's stamped Project Guide identity and activation sequence with the
+project's currently active pair. An exact match keeps context, any different
+internally consistent active pair rebases forward or backward, and missing or
+unsafe context blocks for manager repair. RevisionPolicy does not select among
+those outcomes. The reviewer always uses the context stamped on the exact leased
+Submission and performs no separate rebase.
 
-Rules that affect acceptance judgment may be encoded in the human-facing project guide, review policy, revision policy, payment policy, task template, or checker implementation. Rules that affect submission intake must be encoded in `SubmissionArtifactPolicy` and the generated project `PreSubmitCheckerPolicy`. Chat messages and informal notices are not enforceable rules until they are moved into those contracts.
+Rules that affect acceptance judgment may be encoded in the human-facing
+project guide, review policy, revision policy, task template, or checker
+implementation. Rules that affect submission intake must be encoded in
+`SubmissionArtifactPolicy` and the generated project
+`PreSubmitCheckerPolicy`. Chat messages and informal notices are not
+enforceable rules until they are moved into those contracts.
+
+Publication of a `ContributionPolicyVersion` is independent of guide activation. A
+`TaskAssignment` freezes the active submitter `ContributionPolicyVersion`, and
+a `ReviewLease` independently freezes the active reviewer version. Guide or
+revision-context changes never silently replace either frozen version.
 
 ## Consequences
 

@@ -2,38 +2,20 @@
 
 from __future__ import annotations
 
-from uuid import NAMESPACE_URL, uuid5
+from datetime import UTC, datetime, timedelta
 
 from app.core.config import Settings
 from app.interfaces.auth import AuthVerificationError
-from app.schemas.auth import ActorContext
+from app.schemas.auth import (
+    AuthVerificationResult,
+    LegacyAuthorizationCompatibilityContext,
+    MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS,
+    VerifiedIssuerToken,
+    actor_id_from_external_identity,
+    normalize_legacy_roles,
+)
 
 DEVELOPMENT_ENVIRONMENTS = {"local", "dev", "development", "test"}
-
-
-def parse_roles(raw_roles: str) -> tuple[str, ...]:
-    """Parse comma-separated role settings into normalized role names.
-
-    Args:
-        raw_roles: Comma-separated role string from configuration.
-
-    Returns:
-        Tuple of non-empty role names.
-    """
-    return tuple(role.strip() for role in raw_roles.split(",") if role.strip())
-
-
-def actor_id_from_external_identity(external_issuer: str, external_subject: str) -> str:
-    """Build a stable internal actor id from external identity claims.
-
-    Args:
-        external_issuer: Issuer that provided the external subject.
-        external_subject: Subject claim from the external identity provider.
-
-    Returns:
-        Deterministic actor id for the issuer and subject pair.
-    """
-    return str(uuid5(NAMESPACE_URL, f"{external_issuer}:{external_subject}"))
 
 
 class DevelopmentAuthVerifier:
@@ -53,20 +35,36 @@ class DevelopmentAuthVerifier:
             raise RuntimeError("development auth cannot run in production")
         if not settings.dev_auth_token:
             raise RuntimeError("WORKSTREAM_DEV_AUTH_TOKEN must be set for development auth")
-        if not settings.dev_auth_subject:
+        subject = settings.dev_auth_subject or ""
+        if (
+            not subject.strip()
+            or subject != subject.strip()
+            or len(subject) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS
+        ):
             raise RuntimeError("WORKSTREAM_DEV_AUTH_SUBJECT must be set for development auth")
-        if not settings.dev_auth_issuer:
+        issuer = settings.dev_auth_issuer or ""
+        if (
+            not issuer.strip()
+            or issuer != issuer.strip()
+            or len(issuer.encode("utf-8")) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS
+        ):
             raise RuntimeError("WORKSTREAM_DEV_AUTH_ISSUER must be set for development auth")
         self._settings = settings
+        self._subject = subject
+        self._issuer = issuer
 
-    async def verify(self, token: str) -> ActorContext:
-        """Verify a local bearer token and return the configured actor.
+    def canonical_issuer(self) -> str:
+        """Return the exact configured development issuer."""
+        return self._issuer
+
+    async def verify(self, token: str) -> AuthVerificationResult:
+        """Verify a local bearer token and return canonical and legacy views.
 
         Args:
             token: Bearer token from the incoming request.
 
         Returns:
-            Actor context built from development settings.
+            Verification result built from development settings.
 
         Raises:
             AuthVerificationError: If the token does not match the configured
@@ -75,24 +73,22 @@ class DevelopmentAuthVerifier:
         if token != self._settings.dev_auth_token:
             raise AuthVerificationError("invalid development auth token")
 
-        roles = parse_roles(self._settings.dev_auth_roles)
-        actor_id = actor_id_from_external_identity(
-            self._settings.dev_auth_issuer,
-            self._settings.dev_auth_subject,
-        )
-        claim_snapshot = {
-            "roles": roles,
-            "claim_source": "workstream_dev_settings",
-        }
-
-        return ActorContext(
-            actor_id=actor_id,
-            external_subject=self._settings.dev_auth_subject,
-            external_issuer=self._settings.dev_auth_issuer,
-            email=self._settings.dev_auth_email,
-            display_name=self._settings.dev_auth_display_name,
-            roles=roles,
-            claim_snapshot=claim_snapshot,
-            auth_source="dev_mock",
-            is_dev_auth=True,
+        roles = normalize_legacy_roles(self._settings.dev_auth_roles)
+        now = int(datetime.now(UTC).timestamp())
+        return AuthVerificationResult(
+            token=VerifiedIssuerToken(
+                issuer=self._issuer,
+                subject=self._subject,
+                audience=("workstream",),
+                expires_at=now + int(timedelta(days=1).total_seconds()),
+                issued_at=now,
+                token_id=actor_id_from_external_identity("workstream-dev-token", token),
+                subject_kind="human",
+                scopes=frozenset({"workstream:access"}),
+            ),
+            legacy=LegacyAuthorizationCompatibilityContext(
+                roles=roles,
+                auth_source="dev_mock",
+                is_dev_auth=True,
+            ),
         )

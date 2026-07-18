@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-06",
+  "chunk_title": "Canonical Actor Profile And Identity Link",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-07",
+  "next_chunk_title": "Authorization Kernel And Permission Registry",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

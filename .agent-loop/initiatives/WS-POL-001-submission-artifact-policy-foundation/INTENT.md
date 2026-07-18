@@ -45,10 +45,12 @@ Task
 
 Project owners provide open-ended project material: markdown, URLs, full
 documentation, examples, rubrics, repository docs, task instructions, domain
-requirements, business terms, base payout or payment policy inputs, or any
-other project-specific source material. Workstream must not force every project
-into one fixed intake checklist. A project guide can be a URL to a complete
-documentation set if that is the right form for the project.
+requirements, compensation business terms, or any other project-specific
+source material. Compensation business terms are untrusted
+owner input; an authorized Finance Authority publishes the independent
+`ContributionPolicyVersion`, not project creation. Workstream must not force every
+project into one fixed intake checklist. A project guide can be a URL to a
+complete documentation set if that is the right form for the project.
 
 All project-owner material is untrusted input. Guide text, imported docs, URLs,
 repository docs, and examples cannot grant tool authority, override Workstream

@@ -10,11 +10,24 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
+Reviewed code SHA: 49101d4ad3fc22ec6e6065b1e593ef04145db953
+
+Reviewed at: 2026-07-09T06:13:59Z
+
+Reviewer run IDs: senior-engineering-final-reviewer-run-id, qa-test-final-reviewer-run-id, security-auth-final-reviewer-run-id, product-ops-final-reviewer-run-id, architecture-final-reviewer-run-id, docs-final-reviewer-run-id, reuse-dedup-final-reviewer-run-id, test-delta-final-reviewer-run-id, ci-integrity-final-reviewer-run-id
+
+Current privacy-scrub chunk: `WS-POL-001-16-terminal-benchmark-live-api-drill`.
+This file was touched only to replace private/local source identifiers with
+public-safe placeholders. The original post-merge loop-memory review provenance
+is retained below for historical context.
+
+Original reviewed revision:
+
 Reviewed code SHA: f4fe5f3c4fbdd626bbc6d3f837aeca1cceb6e9ca
 
 Reviewed at: 2026-06-20T13:15:54Z
 
-Reviewer run IDs: 019ee4bd-d3d5-7830-b042-a46397b2a4f3, 019ee4be-9fd5-78d2-801a-8ccb7541ad19, 019ee4c0-e266-71e3-b65e-3f1afa8af74c, 019ee4c3-8994-7a50-9bb9-49962001a247, 019ee4dd-f49e-72d2-abd4-6391aafe95d3, 019ee4fe-9b01-7741-a130-a4a78f2054b0, 019ee500-050e-7702-99df-a38a87435281, 019ee502-a260-7e01-affe-77867dd21325, 019ee504-e427-76c1-a66f-3fc036207abe
+Reviewer run IDs: historical-senior-engineering-review, historical-qa-test-review, historical-security-auth-review, historical-product-ops-review, historical-architecture-review, historical-docs-review, historical-reuse-dedup-review, historical-test-delta-review, historical-ci-integrity-review
 
 After reviewed SHA `f4fe5f3c4fbdd626bbc6d3f837aeca1cceb6e9ca`, the only committed path changed in this PR is this internal review evidence file. No implementation, workflow, test, policy, or loop-memory state file changed after that reviewed SHA.
 
@@ -34,7 +47,7 @@ After reviewed SHA `f4fe5f3c4fbdd626bbc6d3f837aeca1cceb6e9ca`, the only committe
 
 ## Valid Findings Addressed
 
-- Local Workstream directory confusion: identified `/home/abiorh/flow/workstream` as a separate dirty feature branch, not `main`, and left unrelated checker/test changes untouched.
+- Local Workstream directory confusion: identified `<repo-root>` as a separate dirty feature branch, not `main`, and left unrelated checker/test changes untouched.
 - Stale merged-loop memory: updated `.agent-loop/LOOP_STATE.md`, initiative `STATUS.md`, `WORK_QUEUE.md`, and `REVIEW_LOG.md` to reflect that PR #23 is merged.
 - Missing main enforcement: added the verified workflow path `.github/workflows/loop-memory.yml` so merged loop memory is checked on pushes to `main`.
 - Over-broad local-state test risk: changed loop-memory regression tests to use fixture files instead of the live repository state.
@@ -54,4 +67,4 @@ git diff --check HEAD~1..HEAD
 
 ## Remaining Risks
 
-- `/home/abiorh/flow/workstream` remains dirty on `codex/submission-artifact-policy-docs` with unrelated checker/revision testing changes. Those changes were not modified here because they are outside PR #24.
+- `<repo-root>` remains dirty on `codex/submission-artifact-policy-docs` with unrelated checker/revision testing changes. Those changes were not modified here because they are outside PR #24.

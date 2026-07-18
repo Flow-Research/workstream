@@ -1,110 +1,61 @@
 # Roles And Permissions
 
-This is a supporting note. The canonical permission matrix lives in `docs/operations_roles_permissions.md`.
+This supporting note points to the canonical operator matrix in
+`docs/operations_roles_permissions.md`, ADR 0012, and
+`docs/spec_authorization_service.md`.
 
-`Operator` is a product persona, not a separate permission role. Operator work is performed by project managers, workers, reviewers, admins, or finance users depending on the action.
+## Canonical Roles
 
-## v0.1 Roles
+Administrative grants:
 
-### Admin
+- Access Administrator
+- Operator
+- Project Manager
+- Finance Authority
+- Audit Authority
 
-Can:
+Exact-project contributor grants:
 
-- create projects
-- edit project guides
-- configure checker policies
-- configure review policies
-- configure revision policies
-- configure payment policies
-- override task status with audit reason
-- assign reviewers
-- mark payments as submitted or paid
-- approve project guide versions
-- suspend workers, reviewers, or projects during fraud or confidentiality review
+- Submitter
+- Reviewer
+- Adjudicator
 
-### Worker
+The external Flow token identifies a subject and supplies verified coarse
+scope; it does not assign these roles. Workstream stores grants locally and
+evaluates them against canonical resources and lifecycle guards.
 
-Can:
+Contributor is the umbrella human product term. Independent exact-project
+Submitter, Reviewer, and Adjudicator grants determine candidate authority; one
+actor may hold all three rows. The adjudicator grant creates no adjudication
+capability in v0.1. A future separately approved initiative must define that
+lifecycle before AUTH registers or activates exact adjudication actions. Celery,
+checker, setup, and background workers are
+internal services, not human product roles. Administrative grants alone never
+authorize submission, review, or adjudication.
 
-- claim or assign tasks if project policy allows
-- create submissions
-- attach evidence
-- respond to needs-revision findings
-- add rebuttal notes
+## Independence
 
-Cannot:
+- No actor administratively grants or revokes their own authority.
+- A submitter cannot be the sole reviewer for their own work.
+- Review decisions remain `accept`, `needs_revision`, or `reject` and require an
+  exact active project reviewer grant, canonical human `ActorProfile.id`, and
+  all review lifecycle guards. No other grant substitutes.
+- Finance Authority cannot change review decisions or contribution records.
+- Audit Authority cannot mutate product state.
 
-- review own submission
-- mark task accepted
-- mark payment paid
-- edit submitted artifacts in place
-- change task acceptance criteria after claiming the task
+## Recovery
 
-### Reviewer
+Normal project repair uses covered Project Manager permission
+`project.task.manage`. The planned review/revision repair, obligation-close,
+legacy-close, and lifecycle-control actions are unavailable until their owning
+hidden behavior, AUTH activation, and REV-13 release. Existing Operator recovery
+is limited to the registered
+permissions `operations.task.start_override`,
+`operations.submission_gate.repair`, `operations.checker.retry`, and the
+WS-REV-owned `review.lease.force_release`.
 
-Can:
+Recovery requires exact resource scope, a reason, matched grant/permission, and
+append-only evidence. It does not erase prior evidence or bypass immutable
+submission, review, contribution, or contribution award rules.
 
-- review submissions assigned to them
-- create structured findings
-- accept, needs_revision, or reject
-- close or reopen revision findings
-
-Cannot:
-
-- review own submission as sole reviewer
-- edit submitted artifacts
-- change payment status
-- review a submission from a worker they directly manage unless project policy allows disclosed review
-- accept a task with unresolved high-severity checker failures unless an admin override exists
-
-### Finance
-
-Can:
-
-- view accepted tasks
-- reconcile pending payouts
-- mark payout submitted
-- mark paid with payment reference
-
-Cannot:
-
-- accept tasks unless also assigned reviewer by policy
-- change accepted amount without a payment adjustment record
-
-## Independence Rule
-
-A user cannot be the submitter and sole reviewer for the same task.
-
-Project policy may require:
-
-- one reviewer
-- two reviewers
-- admin review for high-value tasks
-- escalation review for disputed findings
-
-High-value tasks, disputed tasks, and suspected fraud/confidentiality tasks require independent second review before acceptance or payment.
-
-## Override Rule
-
-Admin overrides require:
-
-- actor
-- reason
-- old value
-- new value
-- timestamp
-- linked evidence or incident id
-
-Overrides must be visible in task history.
-
-Overrides do not change authorship, erase prior failed checks, or remove payment dispute history.
-
-## Collusion And Abuse Controls
-
-The platform flags:
-
-- repeated accept decisions between the same worker and reviewer pair
-- reviewers whose accept decisions are frequently overturned
-- workers whose evidence hashes or text patterns repeat across unrelated tasks
-- fast accept decisions with no evidence cited
-- payment edits after acceptance without adjustment records
+The complete planned review contract is `docs/spec_review_lifecycle.md`.

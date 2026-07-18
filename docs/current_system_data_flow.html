@@ -107,7 +107,7 @@
     .legend .api { background: var(--soft-blue); color: var(--blue); border-color: #bed6ff; }
     .legend .db { background: var(--soft-green); color: var(--green); border-color: #bfe7c8; }
     .legend .checker { background: var(--soft-violet); color: var(--violet); border-color: #dacbff; }
-    .legend .worker { background: var(--soft-amber); color: var(--amber); border-color: #ffdca3; }
+    .legend .contributor { background: var(--soft-amber); color: var(--amber); border-color: #ffdca3; }
     .legend .blocked { background: var(--soft-red); color: var(--red); border-color: #ffc9c2; }
 
     .layout {
@@ -410,7 +410,7 @@
       <p class="eyebrow">Current backend system only</p>
       <h1>Workstream data flow from project guide to checker-routed submission</h1>
       <p class="intro">
-        This is a static walkthrough of the system that exists now: external Flow auth,
+        This is a static walkthrough of the product flow with the adopted authorization target: external Flow authentication,
         project guides, locked policy context, task queue, submission packets, evidence,
         automatic checker runs, audit records, and the current end states before human review.
       </p>
@@ -418,7 +418,7 @@
         <span class="api">API boundary</span>
         <span class="db">Postgres record</span>
         <span class="checker">Checker runner</span>
-        <span class="worker">Worker-facing route</span>
+        <span class="contributor">Contributor-facing route</span>
         <span class="blocked">Internal setup route</span>
       </div>
     </section>
@@ -433,8 +433,8 @@
               <small>Creates projects, guides, tasks, and repairs setup defects.</small>
             </div>
             <div class="actor">
-              <strong>Worker</strong>
-              <small>Claims a ready task, submits work, and fixes worker-facing revisions.</small>
+              <strong>Contributor</strong>
+              <small>Claims a ready task, submits work, and fixes contributor-facing revisions.</small>
             </div>
             <div class="actor">
               <strong>Flow Auth</strong>
@@ -446,7 +446,7 @@
             </div>
             <div class="actor">
               <strong>Checker Runner</strong>
-              <small>Runs registered checkers after submission lock and records results.</small>
+              <small>Runs registered checkers after submission finalization and records results.</small>
             </div>
             <div class="actor">
               <strong>Postgres</strong>
@@ -461,29 +461,29 @@
             <article class="step">
               <span class="num">1</span>
               <h3>Flow token enters API</h3>
-              <p>The caller sends a Flow bearer token. Workstream verifies issuer, audience, expiry, signature, and roles.</p>
+              <p>The caller sends a Flow bearer token. Workstream verifies issuer, audience, time validity, signature, and coarse scopes, then resolves local authorization from actor links, grants, permissions, and resource guards.</p>
               <div class="data">
-                <code>ActorContext</code>
-                <code>roles</code>
+                <code>VerifiedIssuerToken</code>
+                <code>AuthorizationContext</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">2</span>
               <h3>Project guide and policy are prepared</h3>
-              <p>The project owner provides open-ended guide material and business terms. Workstream runs guide sufficiency review, derives the submission artifact policy, then an admin or project_manager approves the internal policy bundle before tasks can run.</p>
+              <p>The project owner provides open-ended guide material and business terms. Workstream runs guide sufficiency review, derives the submission artifact policy, then an authorized covered Project Manager approves the internal policy bundle before tasks can run.</p>
               <div class="data">
                 <code>Project</code>
                 <code>ProjectGuide v1</code>
                 <code>GuideSufficiencyReport</code>
-                <code>artifact/checker/review/revision/payment</code>
+                <code>artifact/checker/review/revision</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">3</span>
               <h3>Guide activation locks contract</h3>
-              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, registered post-submit checker names, review policy allowed decisions, revision states, and payment policy. Task readiness later validates that the task locks the applicable guide snapshot, effective project submission artifact policy hash, and pre-submit checker bundle hash.</p>
+              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching guide, source snapshot, effective project policy, and pre-submit checker provenance, review policy allowed decisions, and revision states. Task readiness later validates that the task locks the applicable guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, and approved provenance-matched project post-submit checker policy reference. Contribution-policy publication is outside this current-backend walkthrough and remains independent of guide activation.</p>
               <div class="data">
                 <code>status=active</code>
                 <code>one active guide</code>
@@ -503,8 +503,8 @@
 
             <article class="step">
               <span class="num">5</span>
-              <h3>Worker claims and starts</h3>
-              <p>A qualified worker claims the ready task. Object-level visibility narrows after claim.</p>
+              <h3>Contributor claims and starts</h3>
+              <p>A qualified contributor claims the ready task. Object-level visibility narrows after claim.</p>
               <div class="data">
                 <code>TaskAssignment</code>
                 <code>CLAIMED</code>
@@ -536,18 +536,18 @@
 
             <article class="step">
               <span class="num">8</span>
-              <h3>Submission is locked</h3>
-              <p>The server stamps the locked guide and policy versions, locks evidence rows, and schedules the checker run.</p>
+              <h3>Submission is finalized</h3>
+              <p>The server records finalization against the task's server-owned guide and policy context, finalizes evidence rows, and schedules the checker run.</p>
               <div class="data">
-                <code>locked_at</code>
-                <code>submission_locked</code>
+                <code>finalized_at</code>
+                <code>submission_finalized</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">9</span>
               <h3>Automatic checkers execute</h3>
-              <p>Registered checkers run against the exact locked submission, package hash, artifacts, and policy context.</p>
+              <p>Registered checkers run against the exact finalized submission, package hash, artifacts, and policy context.</p>
               <div class="data">
                 <code>CheckerRun</code>
                 <code>CheckerResult</code>
@@ -558,7 +558,7 @@
             <article class="step">
               <span class="num">10</span>
               <h3>Current system routes result</h3>
-              <p>The checker gate sends passing work to review queue, worker-fixable failures to revision, and setup defects to internal repair.</p>
+              <p>The checker gate sends passing work to review queue, contributor-fixable failures to revision, and setup defects to internal repair.</p>
               <div class="data">
                 <code>review_pending</code>
                 <code>needs_revision</code>
@@ -577,7 +577,7 @@
             </div>
             <div class="outcome revise">
               <strong>needs_revision</strong>
-              <p>Worker-fixable checker failures are shown with safe feedback. This is not a human review decision.</p>
+              <p>Contributor-fixable checker failures are shown with safe feedback. This is not a human review decision.</p>
             </div>
             <div class="outcome blocked">
               <strong>task_setup_blocked</strong>
@@ -591,11 +591,11 @@
           <div class="records">
             <div class="record">
               <strong>Project + Guide</strong>
-              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, project PreSubmitCheckerPolicy, post-submit checker policy, review policy, revision policy, payment policy.</span>
+              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, project PreSubmitCheckerPolicy, post-submit checker policy, review policy, and revision policy.</span>
             </div>
             <div class="record">
               <strong>Task Queue</strong>
-              <span>WorkstreamTask, locked guide snapshot, locked effective project submission artifact policy hash, locked pre-submit checker bundle hash, TaskAssignment, status transitions.</span>
+              <span>WorkstreamTask, locked guide snapshot, locked effective project submission artifact policy hash, locked pre-submit checker bundle hash, TaskAssignment, and status transitions.</span>
             </div>
             <div class="record">
               <strong>Submission Packet</strong>
@@ -607,15 +607,15 @@
             </div>
             <div class="record">
               <strong>Audit Events</strong>
-              <span>Task creation, status changes, submission lock, checker gate start/pass/block.</span>
+              <span>Task creation, status changes, submission finalization, checker gate start/pass/block.</span>
             </div>
             <div class="record">
               <strong>Visibility Rules</strong>
-              <span>Project managers see project scope; workers see assigned scope; unassigned workers are blocked after claim.</span>
+              <span>Project managers see project scope; contributors see assigned scope; unassigned contributors are blocked after claim.</span>
             </div>
             <div class="record">
               <strong>Auth Boundary</strong>
-              <span>External Flow token claims become ActorContext. Workstream does not own passwords or primary auth sessions.</span>
+              <span>Workstream verifies external Flow identity and coarse scope, then resolves local actor links, grants, permissions, and resource guards. Token roles are not product authority; Workstream does not own passwords or primary sessions.</span>
             </div>
             <div class="record">
               <strong>Test Database Guard</strong>
@@ -628,25 +628,25 @@
       <aside class="side-panel" aria-labelledby="invariants-title">
         <h2 id="invariants-title">Hard Invariants</h2>
         <ul class="check-list">
-          <li>Guide activation fails if the immutable guide source snapshot, guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, or required review, revision, payment, and post-submit checker policy context is missing.</li>
+          <li>Guide activation fails if the immutable guide source snapshot, guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching provenance, or required review and revision policy context is missing.</li>
           <li>Pre-submit intake failures create no submission row or submission version.</li>
           <li>Revision resubmission states are limited to needs_revision in v0.1.</li>
-          <li>Submission packet does not carry guide or policy versions from the worker.</li>
-          <li>Submission lock stamps server-owned guide and policy versions.</li>
-          <li>Evidence rows lock with the submission.</li>
+          <li>Submission packet does not carry guide or policy versions from the contributor.</li>
+          <li>Submission finalization records against the task's server-owned guide and policy context.</li>
+          <li>Evidence rows finalize with the submission.</li>
           <li>Checker runs bind to submission version, package hash, and artifact hashes.</li>
           <li>Duplicate checker results fail the real API drill.</li>
-          <li>Worker-facing review decisions stay accept, needs_revision, and reject.</li>
+          <li>Contributor-facing review decisions stay accept, needs_revision, and reject.</li>
         </ul>
 
         <div class="mini-flow">
-          <div><strong>Clean path:</strong> active guide -&gt; ready task -&gt; locked submission -&gt; checker pass -&gt; review_pending.</div>
-          <div><strong>Worker-fix path:</strong> checker failure -&gt; needs_revision -&gt; new submission version.</div>
+          <div><strong>Clean path:</strong> active guide -&gt; ready task -&gt; finalized submission -&gt; checker pass -&gt; review_pending.</div>
+          <div><strong>Contributor-fix path:</strong> checker failure -&gt; needs_revision -&gt; new submission version.</div>
           <div><strong>Setup-defect path:</strong> task_setup_blocked -&gt; project manager repair -&gt; trusted checker retry.</div>
         </div>
 
         <p class="footer-note">
-          This file is a visual explanation of the current backend system. It is not the canonical Workstream product interface.
+          This file explains the current backend evaluation flow through checker routing. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
         </p>
       </aside>
     </div>

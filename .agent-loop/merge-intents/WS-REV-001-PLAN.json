@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-REV-001-PLAN",
+  "chunk_title": "Review And Revision Lifecycle Planning",
+  "initiative_id": "WS-REV-001",
+  "next_chunk_id": "WS-REV-001-01",
+  "next_chunk_title": "Canonical Contract Adoption And Dependency Conformance",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

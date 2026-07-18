@@ -12,34 +12,46 @@ Workstream owns:
 - checker output
 - review decision
 - revision history
-- payment ledger
-- reputation ledger
+- compensation awards and fulfillment state
+- reputation projection when separately implemented
 
 Workstream is source-agnostic, but v0.1 stays manual-first. External origin adapters and automated routing stay out until the internal loop works.
 
 ## 2. Project Rules Are First-Class
 
-Every project has its own guide, quality bar, submission artifact policy, checker policy, review policy, revision policy, and payment policy.
+Every project has its own guide, quality bar, submission artifact policy,
+checker policy, review policy, revision policy, and independently published
+contribution policy.
 
 Workstream combines the approved submission artifact policy with non-bypassable default artifact rules and generates the pre-submit checker policy.
 
-The platform does not rely on memory or chat messages to enforce rules. If a rule matters, it belongs in the project guide, submission artifact policy, checker policy, review policy, revision policy, payment policy, or task template.
+The platform does not rely on memory or chat messages to enforce rules. If a
+rule matters, it belongs in the project guide, submission artifact policy,
+checker policy, review policy, revision policy, contribution policy, or task
+template.
 
-When a guide or policy changes while work is already in progress, prior submitted attempts remain tied to their locked context. If the task returns for revision, revision policy decides whether the next attempt rebases to the latest active context, and the worker must see what changed.
+Prior submitted attempts remain tied to their stamped context. Human-review
+revision preparation compares the prior Project Guide identity/activation
+sequence with the currently active pair: exact match keeps, any different valid
+pair rebases forward or backward, and unsafe context blocks. The contributor
+sees the frozen result and the reviewer consumes the context stamped on the
+leased Submission without rebasing.
 
 ## 3. Same Lifecycle, Different Domain Language
 
 Projects may differ by domain, language, task format, or review style. The lifecycle remains stable:
 
 ```text
-Guide -> Task -> Submission -> Checker -> Review -> Revision/Acceptance -> Payment -> Reputation
+Guide -> Task -> Submission -> Checker -> Review -> Revision/FinalAcceptance
+-> Contribution -> Conditional Compensation Award/Fulfillment
+-> deferred reputation projection
 ```
 
 ## 4. Automated Checks Protect Human Review
 
 Human reviewers do not spend time on submissions that fail basic gates.
 
-High-severity checker failures block review. Medium and low severity issues are visible to reviewers and can influence decisions.
+Critical- and high-severity checker failures block review. Medium and low severity issues are visible to reviewers and can influence decisions.
 
 Blocking pre-submit checker failures block submission creation before a submission version exists.
 
@@ -51,23 +63,28 @@ The system improves reviewer judgment. It does not pretend to replace it.
 
 ## 5A. Human Owners Are Accountable For Agent-Assisted Work
 
-Workstream allows humans to use agents and external tools, but the human worker or owner is accountable for the submitted packet.
+Workstream allows humans to use agents and external tools, but the human contributor or owner is accountable for the submitted packet.
 
-The first version enforces accountability through assignment ownership, worker attestation, immutable submission versions, evidence, review decisions, and reputation events. A built-in owner-agent execution workspace is later work.
+The first version enforces accountability through assignment ownership,
+contributor attestation, immutable Submission versions, Reviews, findings,
+responses, resolutions, and evidence. Reputation events and a built-in
+owner-agent execution workspace are later work.
 
 ## 6. Revision Is A State, Not A Failure
 
-Needs revision is a normal lifecycle state. The system must preserve feedback, require closure, and make resubmission easy to audit.
+Needs revision is a normal lifecycle state. The system preserves immutable
+feedback, requires one response per unresolved blocking finding and one later
+resolution, and makes resubmission auditable.
 
-Revision must also preserve context. Workers and reviewers need to know which guide and policy versions governed the prior attempt and which versions govern the next attempt.
+Revision must also preserve context. Contributors and reviewers need to know which guide and policy versions governed the prior attempt and which versions govern the next attempt.
 
 ## 7. Evidence Beats Claims
 
 Every acceptance is backed by evidence. Evidence can include checker logs, test results, screenshots, file hashes, review notes, or before/after diffs.
 
-## 8. Reputation Must Be Earned
+## 8. Future Reputation Must Be Earned
 
-Reputation comes from outcomes:
+When separately implemented, reputation comes from outcomes:
 
 - accepted work
 - revision rate
@@ -79,18 +96,20 @@ Reputation comes from outcomes:
 
 Reputation is not a manual label.
 
-## 9. Payment Must Be Traceable
+## 9. Compensation Must Be Traceable
 
-Even when payment is manual, Workstream must track:
+Even when fulfillment is manual, Workstream must track:
 
-- base amount
-- accepted amount
-- pending payout
-- paid amount
-- payment status
-- payout date
+- contribution and beneficiary
+- frozen `ContributionPolicyVersion` and `ContributionAwardDefinition`
+- instrument, unit, and exact quantity
+- delivery and fulfillment status
+- immutable fulfillment receipt and external reference
 
-Accepted work also creates a contribution record. The contribution record certifies accepted work; the payment ledger records money movement.
+Every valid human Review creates a reviewer contribution. Accept also creates
+FinalAcceptance, and only that fact creates a submitter contribution. Frozen contribution award rules create immutable
+awards only for payable contributions; explicit unpaid rules create no award.
+Fulfillment receipts and status projections track delivery separately.
 
 ## 10. Build Internal First
 

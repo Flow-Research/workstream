@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-02A2",
+  "chunk_title": "Committed Source And Local Preparation",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-02A3",
+  "next_chunk_title": "ArtifactStore v2 Local Clean Cut",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

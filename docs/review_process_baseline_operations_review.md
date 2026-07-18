@@ -4,8 +4,8 @@ Reviewer role: Operations and Review Workflow Reviewer.
 
 Scope:
 
-- markdown docs in `/home/abiorh/flow/workstream`
-- metadata-level process patterns under `/home/abiorh/snorkel`
+- markdown docs in `<repo-root>`
+- metadata-level process patterns under `local reference workspace`
 - no task content, private data, or confidential project details copied
 
 ## Findings
@@ -22,11 +22,11 @@ Add a baseline document that captures metadata-level reusable patterns and makes
 
 Status: fixed in `docs/process_pattern_baseline.md`.
 
-### High: Ready work needed a screening gate before workers see it
+### High: Ready work needed a screening gate before contributors see it
 
 Finding:
 
-The Snorkel-style projects often have review guards, simulation gates, or screening lanes before work is treated as ready. Workstream would break in daily use if weak tasks went straight from draft to ready.
+The reference evaluation projects often have review guards, simulation gates, or screening lanes before work is treated as ready. Workstream would break in daily use if weak tasks went straight from draft to ready.
 
 Suggested change:
 
@@ -50,7 +50,8 @@ Status: fixed in `docs/template_preflight_evidence.md` and `docs/architecture_ch
 
 Finding:
 
-Queue health is not just status count. A lane can look organized while review pending, active work, or accepted-unpaid records quietly pile up.
+Queue health is not just status count. A lane can look organized while review
+pending, active work, or authorized but unfulfilled awards quietly pile up.
 
 Suggested change:
 
@@ -62,7 +63,7 @@ Status: fixed in `docs/operations_queue_policy.md`.
 
 Finding:
 
-Geranium-like and review-guard-heavy workflows show the value of pretending to reject the task before release. Workstream needed this as an operational gate.
+Reference review-guard-heavy workflows show the value of pretending to reject the task before release. Workstream needed this as an operational gate.
 
 Suggested change:
 

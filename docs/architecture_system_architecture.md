@@ -2,7 +2,12 @@
 
 ## Summary
 
-Workstream is organized around projects, tasks, submissions, checks, reviews, revisions, payments, and reputation.
+Workstream is organized around projects, tasks, submissions, checks, reviews,
+revisions, contributions, compensation, and reputation.
+
+The review/revision component described below is a planned target contract. Its
+routes remain unavailable until hidden REV behavior, exact AUTH activation, and
+the REV-13 joint release complete. `docs/spec_review_lifecycle.md` is normative.
 
 The architecture stays modular enough to support different project types without becoming abstract to the point that no project can use it.
 
@@ -19,10 +24,12 @@ Frontend
   Checker results
   Review queue
   Review page
-  Payment dashboard
-  Reputation dashboard
+  Compensation dashboard
+  Reputation dashboard (deferred)
 
 Backend API
+  Actor service
+  Authorization service
   Project service
   Source/import service
   Task service
@@ -30,16 +37,15 @@ Backend API
   Checker service
   Review service
   Revision service
-  Contribution service
+  Contribution and compensation service
   Evidence service
-  Payment service
-  Reputation service
+  Reputation service (deferred)
 
 Storage
   Postgres for records
   Object storage abstraction for files and evidence
   Append-only audit log for state transitions
-  Hash-locked artifacts after submission lock
+  Hash-locked artifacts during successful submission creation
 
 Execution
   External at first
@@ -57,20 +63,22 @@ Approved stack:
 - Backend API: Python with FastAPI
 - ORM, migrations, and API schemas: SQLAlchemy 2.x async + Alembic + Pydantic schemas
 - Database: Postgres
-- File storage: local development can use filesystem-backed storage, but it must sit behind an object-storage abstraction compatible with R2/S3-style storage
+- Artifact storage: product services use ART v2 typed, provider-neutral
+  capabilities; local development may use the filesystem provider, AWS S3 is
+  the v0.1 hosted provider, and MinIO is the local/CI protocol proof
 - Auth: external Flow authentication token verification through an auth interface/adapter; Workstream does not own login, signup, password reset, password storage, or primary auth sessions
-- Jobs: async-first background execution; FastAPI background tasks are acceptable for simple local v0.1 jobs, with Celery or an equivalent durable queue when jobs need retries, scheduling, isolation, or distributed workers
+- Jobs: async-first background execution through Celery-backed workers for product lifecycle jobs
 
 Async policy:
 
 - API handlers use async FastAPI patterns where I/O is involved.
 - Database access, file storage, checker execution orchestration, notifications, and audit writes use non-blocking boundaries.
-- Long-running checker work must not block request/response paths.
-- Checker runs create records immediately, return an accepted/running state, and complete through a background worker.
-- FastAPI background tasks are acceptable only for simple local execution during early v0.1.
-- Celery or an equivalent durable queue is introduced once checker jobs need retries, progress tracking, scheduled reconciliation, or worker isolation.
+- Long-running setup and checker work must not block request/response paths.
+- Project setup automation and checker runs create records immediately, return an accepted/running state where applicable, and complete through a Celery worker.
+- FastAPI background tasks are not used for Workstream product lifecycle jobs.
+- A different durable queue can replace Celery later only with an ADR-level reason.
 
-Rust, TypeScript, or another language can be introduced later for a specific layer only with a clear reason, such as high-throughput checker execution, worker isolation, frontend integration, or a specialized SDK/runtime requirement. They do not replace the Python/FastAPI API by default.
+Rust, TypeScript, or another language can be introduced later for a specific layer only with a clear reason, such as high-throughput checker execution, execution-process isolation, frontend integration, or a specialized SDK/runtime requirement. They do not replace the Python/FastAPI API by default.
 
 Frontend policy:
 
@@ -79,18 +87,31 @@ Frontend policy:
 - The UI stays dashboard/form/workflow focused, not a marketing site.
 - Next.js is deferred unless server rendering, public pages, or full-stack React routing becomes a real requirement.
 
-The architecture avoids framework coupling in the domain model. Project, task, submission, checker, review, revision, contribution, payment, reputation, and audit behavior remain portable.
+The architecture avoids framework coupling in the domain model. Project, task,
+submission, checker, review, revision, contribution, compensation, reputation,
+and audit behavior remain portable; reputation behavior remains deferred.
 
 Auth policy:
 
 - Workstream verifies Flow-issued tokens through an `AuthVerifier` interface.
 - Production auth uses a Flow token verifier adapter.
 - Local development may use a mock verifier only outside production.
-- Actor identity is based on stable token subject and issuer, not email.
-- Workstream may keep local actor/profile records for workflow state, permissions, audit display, and reputation, but those records do not replace Flow as the auth source.
-- Role and permission checks use trusted Flow claims, local Workstream role mappings, or a documented combination of both.
-- Routers depend on a single current-actor dependency; permission checks live in service or policy code so workflow rules do not scatter across HTTP handlers.
-- Audit records preserve actor id, external subject, issuer, role/claim context, and whether dev/mock auth was used when relevant.
+- Verified tokens establish issuer/subject identity, subject kind, audience,
+  time validity, and coarse scope; token roles are not product authority.
+- `ActorProfile` and `ActorIdentityLink` provide the local actor root and
+  revocable issuer/subject binding.
+- `AdminRoleGrant` and exact-project `ProjectRoleGrant` records supply candidate
+  permissions. Actor/resource/lifecycle guards decide the final result.
+- Application services load canonical resources and call the single
+  authorization service; routers do not evaluate grants or infer scope.
+- Sensitive mutations revalidate actor/link/grant state in the same
+  `AsyncSession` transaction that writes state and append-only authority
+  evidence.
+- Internal system workers use fixed system principals and explicit system permissions,
+  never fabricated human roles.
+- Audit records preserve bounded actor, issuer, matched grant/permission,
+  resource, request/correlation, and decision context without raw tokens or
+  full claims.
 
 ## Component Responsibilities
 
@@ -100,14 +121,19 @@ Owns:
 
 - project metadata
 - guide
-- base payout
+- project setup run ledger
 - submission artifact policy
 - generated project pre-submit checker policy
 - post-submit checker policy
 - review policy
 - revision policy
-- payment policy
 - skill taxonomy
+
+Project setup visibility APIs expose the latest setup run, sufficiency reports,
+submission artifact policies, the current effective project policy, and the
+compiled project pre-submit checker policy summary through covered Project
+Manager or authorized Operator/Audit projections. These reads replace operator database reads for setup
+drills, but they do not make `ProjectSetupRun` a policy source of truth.
 
 ### Source/Import Service
 
@@ -132,6 +158,10 @@ Owns:
 - task requirements
 - task acceptance criteria
 - queue views
+- contributor-safe task work context
+- contributor-safe submission requirements derived from locked effective project policy
+- permission-scoped locked task provenance for covered Project Managers and
+  authorized Operator/Audit projections
 
 ### Submission Service
 
@@ -157,61 +187,47 @@ Owns:
 
 Owns:
 
-- review queue
-- findings
-- review decisions
-- second-review flags
-- reviewer audit history
+- server-selected ReviewQueueEntry routing and ReviewLeases
+- immutable ReviewPacketManifest and lease-bounded Review Context
+- immutable Reviews, ReviewFindings, FindingResolutions, and FinalAcceptance
+- decision orchestration, task effects, audit, and shared-outbox staging
+- reviewer history and bounded authorized chain metadata
 
 ### Revision Service
 
 Owns:
 
-- prior feedback replay
-- fix summaries
-- issue closure
-- resubmission linkage
+- immutable RevisionContextPreparation chains
+- SubmissionFindingResponse and FindingResolution lineage
+- exact Project Guide keep/forward/backward/block classification
+- resubmission and preferred-return linkage
 
-### Contribution Service
-
-Owns:
-
-- contribution record creation after acceptance
-- accepted submission linkage
-- accepted review linkage
-- acceptance evidence references
-- artifact hash manifest references
-- export status
-- payment and reputation attachment point
-
-### Evidence Service
+### Artifact Service Boundary
 
 Owns:
 
-- file attachments
-- logs
-- hashes
-- screenshots
-- checker output
-- reviewer notes
-- artifact immutability after checker execution begins
+- ART v2 immutable content, binding, verification, candidate/finalize, and recovery
+- narrow active-lease packet read
+- REV-owned packet membership and finding/response evidence semantics
+- no provider or raw byte-only ArtifactStore import in review services
 
-### Payment Service
+### Contribution And Compensation Service
 
 Owns:
 
-- base amount
-- accepted amount
-- pending payout
-- paid amount
-- payment status
-- payment references
+- immutable reviewer `completed_review` sourced from Review/ReviewLease
+- immutable submitter `accepted_submission` sourced only from FinalAcceptance
+- project ContributionPolicy and immutable published versions
+- independently frozen TaskAssignment and ReviewLease policy-version references
+- immutable CompensationAwards for payable contribution rules only
+- immutable fulfillment receipts and rebuildable status projections
+- contribution and compensation outbox events
 
-### Reputation Service
+### Reputation Service (Deferred)
 
 Owns:
 
-- worker performance
+- contributor performance
 - reviewer performance
 - skill-level score
 - revision and rejection rates
@@ -225,7 +241,7 @@ Owns:
 - checker run events
 - review decision events
 - revision submission events
-- payment transition events
+- compensation-award and fulfillment events
 - manual overrides
 - guide and policy version references
 
@@ -233,9 +249,14 @@ Owns:
 
 Use Postgres for records.
 
-Use a storage interface for large files and evidence. During local development, the implementation can store files on the local filesystem, but callers use stable object identifiers, content hashes, and an object-storage-style API so the backend will later target R2, S3, or another compatible object store without changing submission/evidence semantics.
+Use ART v2 provider-neutral capabilities for large files and evidence. During
+local development, the implementation can store files on the local filesystem;
+hosted v0.1 uses AWS S3 and local/CI integration uses MinIO without changing
+submission or evidence semantics.
 
-Submission artifacts are hash-locked once a checker run starts. Any changed artifact creates a new submission version instead of mutating the old one.
+Submission artifacts are hash-locked during successful submission creation
+before automatic checker execution is queued. Any changed artifact creates a new
+submission version instead of mutating the old one.
 
 Every important lifecycle action creates an append-only audit event. State is readable from current records, and audit history explains how the system got there.
 
@@ -243,18 +264,21 @@ Every important lifecycle action creates an append-only audit event. State is re
 
 Use explicit domain APIs rather than generic CRUD-only endpoints.
 
-Examples:
+Existing APIs follow the `/api/v1` prefix. The examples below are conceptual;
+planned review/revision routes are not registered before REV-13.
 
 ```text
 POST /projects
 POST /projects/:id/tasks
 POST /tasks/:id/claim
 POST /tasks/:id/submit
-POST /submissions/:id/run-checks
-POST /reviews/:id/decision
-POST /submissions/:id/revision-replay
+POST /submissions/:id/finalize          # operational repair for the automatic checker gate
+GET /submissions/:id/checker-runs
+planned reviewer current-work read under /api/v1
+planned active-lease decision mutation under /api/v1
+planned revision submission through canonical task submission.create
 POST /contributions/:id/export
-POST /payments/:id/mark-paid
+POST /compensation-awards/:id/fulfillment-receipts
 ```
 
 ## v0.1 Gates
@@ -265,7 +289,7 @@ Workstream has three v0.1 quality gates:
 - task screening gate
 - submission quality gate
 
-The proposal's origin qualification and task ingestion gates are future adapter concepts. In v0.1, manual, markdown, and CSV intake normalize into the same task contract and pass through project activation plus task screening before work reaches workers.
+The proposal's origin qualification and task ingestion gates are future adapter concepts. In v0.1, manual, markdown, and CSV intake normalize into the same task contract and pass through project activation plus task screening before work reaches contributors.
 
 ## Audit Log
 
@@ -275,12 +299,12 @@ Audit events cover:
 
 - task status transitions
 - assignment changes
-- submission creation and locking
+- submission creation and finalization
 - checker runs
 - review decisions
-- revision replay closure
-- payment status transitions
-- reputation events
+- immutable revision responses and later finding resolutions
+- compensation award, delivery, and fulfillment transitions
+- reputation events only after separate implementation
 - admin overrides
 
 ## Future Extension Points

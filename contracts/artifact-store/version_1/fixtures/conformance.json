@@ -1,0 +1,16 @@
+{
+  "contract_version": 1,
+  "vectors": [
+    {"name": "store_exact_replay", "operation": "store", "first_request_fixture": "store_request_empty", "replay_request_fixture": "store_request_empty", "stream_base64": "", "expected": {"provider_effect_count": 1, "same_provider_artifact_id": true, "same_receipt_id": true, "replayed": true}},
+    {"name": "store_request_digest_mismatch", "operation": "store", "identity": {"service_principal": "workstream.artifact", "operation": "store", "idempotency_key": "idem_store_empty_001"}, "original_request_digest": "sha256:946303f6164d7876bb7427736eeedc78b9a82dfcbd52a3ba46835bce3cd334c6", "replay_request_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "expected_error": "artifact_idempotency_mismatch", "consume_replay_stream": false, "provider_effect_count": 1},
+    {"name": "store_replay_byte_mismatch", "operation": "store", "request_fixture": "store_request_empty", "replay_stream_base64": "eA==", "expected_error": "artifact_integrity_failure", "consume_replay_stream": true, "provider_effect_count": 1},
+    {"name": "recover_confirmed_store", "operation": "recover_committed_store", "request_fixture": "recover_store_request", "expected": {"independent_full_read": true, "same_provider_artifact_id": true, "same_receipt_id": true, "replayed": true}},
+    {"name": "open_offset_at_eof", "operation": "open", "object_size": 4, "byte_range": {"offset": 4}, "expected_stream_base64": "", "expected_returned_byte_count": 0},
+    {"name": "open_offset_past_eof", "operation": "open", "object_size": 4, "byte_range": {"offset": 5}, "expected_error": "artifact_malformed_request"},
+    {"name": "open_exclusive_end", "operation": "open", "object_size": 4, "byte_range": {"offset": 1, "length": 2}, "expected_returned_offsets": [1, 2], "expected_returned_byte_count": 2},
+    {"name": "release_requires_exact_reference", "operation": "release", "active_retention_reference": "retention_01HZX3Q4CG8A7M3K2F9V6N1TWD", "request_retention_reference": "retention_other_01HZX4", "expected_error": "artifact_retention_conflict", "active_reference_count": 1},
+    {"name": "receipt_lookup_full_identity", "operation": "receipt_lookup", "lookup": {"service_principal": "workstream.artifact", "operation": "store", "idempotency_key": "idem_store_empty_001"}, "expected_receipt_fixture": "receipt_lookup_response"},
+    {"name": "truncated_store_stream", "operation": "store", "declared_expected_size": 4, "delivered_stream_base64": "YWJj", "expected_error": "artifact_input_mismatch", "success_receipt_count": 0},
+    {"name": "truncated_open_stream", "operation": "open", "declared_returned_byte_count": 4, "delivered_stream_base64": "YWJj", "expected_error": "artifact_integrity_failure", "success_response_allowed": false}
+  ]
+}

@@ -4,7 +4,7 @@
 
 Chunk 10 proves the Week 2 checker framework against real sample submission flows.
 
-This chunk does not add a new lifecycle state or review decision. It exercises the existing API contracts from project guide activation through task submission, lock, automatic checker run, task routing, worker-visible feedback, and trusted checker retry from an internal blocked gate.
+This chunk does not add a new lifecycle state or review decision. It exercises the existing API contracts from project guide activation through task submission, submission finalization, automatic checker run, task routing, worker-visible feedback, and trusted checker retry from an internal blocked gate.
 
 ## Scope
 
@@ -39,7 +39,7 @@ The trial must include the closeout sample submissions below:
 | Forbidden file path | `needs_revision` | `needs_revision` | Safe forbidden-file fix message |
 | Weak confidentiality attestation | `needs_revision` | `needs_revision` | Attestation fix message |
 | Low-quality generated artifact warning | `allow_review` | `review_pending` | Warning result without blocking review |
-| Locked task setup defect | `task_setup_blocked` | `auto_checking` | Internal route hidden |
+| Locked task setup defect | `task_setup_blocked` | `evaluation_pending` | Internal route hidden |
 
 The worker-facing output must keep the same public language as the rest of Workstream. Worker-fixable checker failures are `needs_revision`. Internal setup defects stay hidden from workers and are repaired by a project manager before a trusted checker retry.
 
@@ -64,8 +64,8 @@ task_setup_blocked
 - worker-visible responses do not expose internal `task_setup_blocked` routing
 - trusted checker retry from an internal blocked gate is covered
 - trusted checker retry proves attempt/current-run semantics after repair
-- submission locking is idempotent and does not create duplicate automatic checker runs
-- submission, evidence, checker run, and audit rows are verified against Postgres after the real API drill
+- submission finalization is idempotent and does not create duplicate automatic checker runs
+- submission, evidence, checker run, and audit state are verified through API-visible proof after the real API drill
 - false-positive notes are written down
 - missing-checker notes are written down
 - failure catalog links every trial scenario to the checker that produced the route
@@ -77,12 +77,12 @@ Trial evidence is stored in:
 - [Checker Trial Failure Catalog](checker_trial_failure_catalog.md)
 - backend API integration tests for the sample matrix
 
-The trial test must use real backend API calls for project creation, guide activation, task screening/release, worker claim/start, submission creation, submission locking, checker run reads, and trusted checker retry. Direct database setup is allowed only to create the controlled locked task setup defect that normal lifecycle guards are designed to prevent.
+The trial test must use real backend API calls for project creation, guide activation, task screening/release, worker claim/start, submission creation, submission finalization, checker run reads, and trusted checker retry. Direct database setup is allowed only to create the controlled locked task setup defect that normal lifecycle guards are designed to prevent.
 
-The deterministic closeout drill must then query Postgres directly and verify:
+The deterministic closeout drill must then verify through API-visible state:
 
 - task, submission, and checker run locked guide/policy context match
-- evidence rows are locked with the submission
+- evidence rows finalize with the submission
 - checker result names exactly match the expected checker set
 - checker run counters match persisted checker results
 - only one checker run is current per submission

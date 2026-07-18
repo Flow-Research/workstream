@@ -8,15 +8,15 @@ load-bearing decisions.
 - intent
 - risk classification
 - architecture direction
-- product wording that affects operators, workers, reviewers, or payments
+- product wording that affects operators, contributors, reviewers, or compensation
 - merge decision
 - accepted remaining risks
 - when the next chunk begins
 
 ## Product Wording Scope
 
-Product wording includes names or text that users, operators, workers,
-reviewers, or payment/reputation workflows rely on, including API field names,
+Product wording includes names or text that users, operators, contributors,
+reviewers, or compensation/reputation workflows rely on, including API field names,
 environment variables, UI labels, public docs, task/review templates, test
 assertion text that encodes product language, and docstrings that explain
 product behavior. Borderline cases must be flagged for human decision instead

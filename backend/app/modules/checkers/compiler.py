@@ -235,6 +235,55 @@ def compile_project_pre_submit_checker_spec(
     )
 
 
+def validate_compiled_pre_submit_checker_bundle(
+    effective_policy: dict[str, Any],
+    effective_policy_hash: str,
+    compiled_bundle: dict[str, Any],
+    *,
+    compiler_version: str | None = None,
+) -> list[str]:
+    """Validate a persisted compiled bundle against its effective policy.
+
+    Args:
+        effective_policy: Effective project submission artifact policy body.
+        effective_policy_hash: Canonical hash locked by the task/submission.
+        compiled_bundle: Persisted compiled checker bundle to validate.
+        compiler_version: Optional compiler version expected by the row.
+
+    Returns:
+        Stable checker-name projection derived from the compiled rules.
+
+    Raises:
+        PreSubmitCheckerCompilerError: If the compiled bundle cannot fully
+            enforce the effective policy.
+    """
+    if compiled_bundle.get("schema_version") != PRE_SUBMIT_BUNDLE_SCHEMA_VERSION:
+        raise PreSubmitCheckerCompilerError("compiled checker bundle schema version is invalid")
+    if compiler_version is not None and compiled_bundle.get("compiler_version") != compiler_version:
+        raise PreSubmitCheckerCompilerError("compiled checker bundle compiler version mismatch")
+    if compiled_bundle.get("primitives_version") != PRIMITIVES_VERSION:
+        raise PreSubmitCheckerCompilerError("compiled checker bundle primitives version is invalid")
+    if compiled_bundle.get("effective_policy_hash") != effective_policy_hash:
+        raise PreSubmitCheckerCompilerError(
+            "compiled checker bundle effective project submission artifact policy hash mismatch"
+        )
+    rules = compiled_bundle.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise PreSubmitCheckerCompilerError("compiled checker bundle requires rules")
+    canonical_rules = [_canonical_rule(rule) for rule in rules]
+    if canonical_rules != rules:
+        raise PreSubmitCheckerCompilerError("compiled checker bundle rules are not canonical")
+    _validate_rule_coverage(effective_policy, canonical_rules)
+    checker_names = _checker_names_for_rules(canonical_rules)
+    try:
+        default_checker_registry().require_registered(set(checker_names))
+    except UnknownChecker as exc:
+        raise PreSubmitCheckerCompilerError(
+            "compiled checker bundle references unknown checkers"
+        ) from exc
+    return checker_names
+
+
 def _rule(
     primitive: str,
     policy_fields: list[str],
@@ -490,17 +539,11 @@ def _expected_primitives(effective_policy: dict[str, Any]) -> set[str]:
         expected.add("require_manifest_field")
     if effective_policy.get("artifact_hash_required"):
         expected.add("verify_hash")
-    if [
-        artifact["key"]
-        for artifact in effective_policy.get("required_artifacts", [])
-        if artifact.get("required", True)
-    ]:
+    required_artifacts = _policy_object_list(effective_policy, "required_artifacts")
+    if [artifact["key"] for artifact in required_artifacts if artifact.get("required", True)]:
         expected.add("require_file")
-    if [
-        evidence["key"]
-        for evidence in effective_policy.get("required_evidence", [])
-        if evidence.get("required", True)
-    ]:
+    required_evidence = _policy_object_list(effective_policy, "required_evidence")
+    if [evidence["key"] for evidence in required_evidence if evidence.get("required", True)]:
         expected.add("require_minimum_evidence")
     if effective_policy.get("forbidden_artifacts", []):
         expected.add("forbid_artifact")
@@ -511,9 +554,28 @@ def _expected_primitives(effective_policy: dict[str, Any]) -> set[str]:
     if effective_policy.get("maximum_package_size_bytes") is not None:
         expected.add("limit_package_size")
     packaging = effective_policy.get("packaging", {})
+    if not isinstance(packaging, dict):
+        raise PreSubmitCheckerCompilerError(
+            "effective project submission artifact policy packaging must be an object"
+        )
     if packaging.get("package_required") or packaging.get("allowed_package_formats"):
         expected.add("require_packaging")
     return expected
+
+
+def _policy_object_list(effective_policy: dict[str, Any], field: str) -> list[dict[str, Any]]:
+    """Return a policy list that must contain object entries with keys."""
+    values = effective_policy.get(field, [])
+    if not isinstance(values, list):
+        raise PreSubmitCheckerCompilerError(
+            f"effective project submission artifact policy {field} must be a list"
+        )
+    for value in values:
+        if not isinstance(value, dict) or not isinstance(value.get("key"), str):
+            raise PreSubmitCheckerCompilerError(
+                f"effective project submission artifact policy {field} entries are invalid"
+            )
+    return values
 
 
 def _checker_names_for_rules(rules: list[dict[str, Any]]) -> list[str]:

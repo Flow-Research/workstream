@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from fnmatch import fnmatchcase
+from urllib.parse import urlparse
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Awaitable
@@ -28,6 +30,7 @@ ROUTING_TASK_SETUP_BLOCKED = "task_setup_blocked"
 
 HASH_TOKEN_PATTERN = re.compile(r"^sha256:\S+$")
 GENERIC_ATTESTATIONS = {"ok", "done", "yes", "i agree", "confirmed"}
+IGNORED_ATTESTATION_TERM_WORDS = {"a", "an", "and", "for", "of", "the", "exclusion"}
 CONFIDENTIALITY_TERMS = ("confidential", "private", "client data", "proprietary")
 CREDENTIAL_TERMS = ("credential", "secret", "token", "password", "api key")
 SOURCE_PLATFORM_TERMS = (
@@ -97,6 +100,7 @@ class CheckerContext:
     required_checker_names: frozenset[str]
     warning_checker_names: frozenset[str]
     blocking_severities: frozenset[str]
+    effective_policy: dict | None = None
 
 
 class Checker(Protocol):
@@ -105,7 +109,7 @@ class Checker(Protocol):
     name: str
 
     async def run(self, context: CheckerContext) -> CheckerOutcome:
-        """Run the checker against a locked submission context."""
+        """Run the checker against a finalized submission context."""
 
 
 CheckerHandler = Callable[[CheckerContext], Awaitable[CheckerOutcome]]
@@ -226,25 +230,48 @@ def canonical_artifact_manifest_hash(manifest: list[dict]) -> str:
 async def pre_submit_static_feedback(
     task: WorkstreamTask,
     payload: SubmissionCreate,
+    effective_policy: dict,
+    checker_names: list[str],
 ) -> list[CheckerOutcome]:
-    """Run non-authoritative structural checks before a submission is created.
+    """Run project-policy pre-submit checks before a submission is created.
 
     Args:
         task: Task receiving the draft packet.
         payload: Draft submission packet payload.
+        effective_policy: Locked effective project submission artifact policy.
+        checker_names: Compiled project pre-submit checker names in run order.
 
     Returns:
         Worker-facing checker feedback items. These are not durable gate records.
     """
-    outcomes: list[CheckerOutcome] = []
     manifest = [entry.model_dump() for entry in payload.artifact_hash_manifest]
     evidence_items = [entry.model_dump() for entry in payload.evidence_items]
-    outcomes.append(_packet_shape_outcome(payload.summary, payload.package_hash, manifest))
-    outcomes.append(_evidence_presence_outcome(len(payload.evidence_items), task.required_evidence))
-    outcomes.append(_evidence_integrity_outcome(manifest, evidence_items))
-    outcomes.append(_required_files_outcome(task.required_files, manifest))
-    outcomes.append(_forbidden_files_outcome(manifest, evidence_items))
-    outcomes.append(_confidentiality_attestation_outcome(payload.worker_attestation))
+    outcomes_by_name = {
+        "check_submission_packet": _pre_submit_packet_outcome(
+            payload,
+            manifest,
+            evidence_items,
+            effective_policy,
+        ),
+        "check_evidence_present": _evidence_presence_outcome(
+            evidence_items,
+            _required_evidence_keys(effective_policy),
+        ),
+        "check_evidence_integrity": _evidence_integrity_outcome(manifest, evidence_items),
+        "check_required_files": _required_files_outcome(
+            _required_artifact_paths(effective_policy),
+            manifest,
+        ),
+        "check_forbidden_files": _forbidden_files_outcome(
+            manifest,
+            evidence_items,
+            _forbidden_artifact_patterns(effective_policy),
+        ),
+        "check_confidentiality_attestation": _confidentiality_attestation_outcome(
+            payload.worker_attestation,
+            _required_attestation_terms(effective_policy),
+        ),
+    }
     low_quality = _low_quality_generated_artifacts_outcome(
         payload.summary,
         payload.worker_attestation,
@@ -252,8 +279,19 @@ async def pre_submit_static_feedback(
         evidence_items,
     )
     if low_quality is not None:
-        outcomes.append(low_quality)
-    return outcomes
+        outcomes_by_name["check_low_quality_generated_artifacts"] = low_quality
+    else:
+        outcomes_by_name["check_low_quality_generated_artifacts"] = _pass(
+            "check_low_quality_generated_artifacts",
+            "Submission does not contain obvious generated-output placeholder signals.",
+        )
+    missing_checkers = [name for name in checker_names if name not in outcomes_by_name]
+    if missing_checkers:
+        raise UnknownChecker(
+            "compiled pre-submit checker bundle references unsupported checker names: "
+            + ", ".join(sorted(missing_checkers))
+        )
+    return [outcomes_by_name[name] for name in checker_names]
 
 
 def _pass(name: str, message: str, *, metadata: dict | None = None) -> CheckerOutcome:
@@ -325,6 +363,59 @@ def _packet_shape_outcome(summary: str, package_hash: str, manifest: list[dict])
     return _pass("check_submission_packet", "Submission packet contains required fields.")
 
 
+def _pre_submit_packet_outcome(
+    payload: SubmissionCreate,
+    manifest: list[dict],
+    evidence_items: list[dict],
+    effective_policy: dict,
+) -> CheckerOutcome:
+    """Validate packet-level rules from the effective project policy."""
+    base_outcome = _packet_shape_outcome(payload.summary, payload.package_hash, manifest)
+    if base_outcome.blocks_review:
+        return base_outcome
+
+    required_packet_fields = set(effective_policy.get("required_packet_fields", []))
+    missing_required = []
+    field_values = {
+        "summary": payload.summary,
+        "artifact_hash_manifest": manifest,
+        "worker_attestation": payload.worker_attestation,
+    }
+    for field_name in sorted(required_packet_fields):
+        value = field_values.get(field_name)
+        if value is None or (isinstance(value, str) and not value.strip()) or value == []:
+            missing_required.append(field_name)
+    if missing_required:
+        return _fail(
+            "check_submission_packet",
+            f"Submission packet is missing required fields: {', '.join(missing_required)}.",
+            "Add the missing packet fields before submitting.",
+            metadata={"missing_fields": missing_required},
+        )
+
+    invalid_storage_refs = _invalid_storage_references(payload, evidence_items, effective_policy)
+    if invalid_storage_refs:
+        return _fail(
+            "check_submission_packet",
+            "Submission includes storage references outside the locked project policy.",
+            "Use only storage schemes allowed by the project submission artifact policy.",
+            metadata={"invalid_storage_refs": invalid_storage_refs},
+        )
+
+    size_outcome = _size_limit_outcome(manifest, effective_policy)
+    if size_outcome is not None:
+        return size_outcome
+
+    packaging_outcome = _packaging_outcome(payload, effective_policy)
+    if packaging_outcome is not None:
+        return packaging_outcome
+
+    return _pass(
+        "check_submission_packet",
+        "Submission packet satisfies locked project packet policy.",
+    )
+
+
 def _hash_token_is_valid(value: str | None) -> bool:
     """Return whether a hash value has the Chunk 8 structural token shape."""
     if value is None:
@@ -394,17 +485,56 @@ def _evidence_integrity_outcome(manifest: list[dict], evidence_items: list[dict]
     )
 
 
+def _normalize_policy_token(value: str) -> str:
+    """Normalize a policy key or machine term for deterministic comparison."""
+    normalized = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return normalized.strip("_")
+
+
+def _evidence_candidate_tokens(evidence_item: dict) -> set[str]:
+    """Return policy tokens exposed by one submitted evidence item."""
+    candidates = {
+        str(evidence_item.get("type", "")),
+        str(evidence_item.get("label", "")),
+    }
+    metadata = evidence_item.get("metadata") or evidence_item.get("metadata_json") or {}
+    if isinstance(metadata, dict):
+        for key in ("key", "policy_key", "evidence_key", "required_evidence_key"):
+            value = metadata.get(key)
+            if value is not None:
+                candidates.add(str(value))
+    return {
+        normalized
+        for candidate in candidates
+        if (normalized := _normalize_policy_token(candidate))
+    }
+
+
 def _evidence_presence_outcome(
-    evidence_count: int,
+    evidence_items: list[dict],
     required_evidence: list[str],
 ) -> CheckerOutcome:
-    """Validate that required-evidence tasks include evidence rows."""
-    if required_evidence and evidence_count == 0:
+    """Validate that required evidence keys are represented by evidence rows."""
+    required_tokens = {
+        _normalize_policy_token(required_key): required_key
+        for required_key in required_evidence
+        if _normalize_policy_token(required_key)
+    }
+    provided_tokens: set[str] = set()
+    for item in evidence_items:
+        provided_tokens.update(_evidence_candidate_tokens(item))
+
+    missing = [
+        original_key
+        for token, original_key in sorted(required_tokens.items())
+        if token not in provided_tokens
+    ]
+    if missing:
         return _fail(
             "check_evidence_present",
             "Submission is missing required evidence references.",
             "Attach evidence items required by the task before submitting.",
-            metadata={"required_evidence": required_evidence},
+            metadata={"missing_required_evidence": missing},
         )
     return _pass("check_evidence_present", "Submission includes required evidence references.")
 
@@ -437,11 +567,16 @@ def _required_files_outcome(required_files: list[str], manifest: list[dict]) -> 
     return _pass("check_required_files", "Submission includes required artifact files.")
 
 
-def _forbidden_files_outcome(manifest: list[dict], evidence_items: list[dict]) -> CheckerOutcome:
+def _forbidden_files_outcome(
+    manifest: list[dict],
+    evidence_items: list[dict],
+    forbidden_patterns: list[str] | None = None,
+) -> CheckerOutcome:
     """Validate artifact and evidence paths against default forbidden path patterns."""
     paths = [str(entry.get("artifact", "")) for entry in manifest]
     paths.extend(str(item.get("uri", "")) for item in evidence_items if item.get("uri"))
     forbidden_categories: set[str] = set()
+    patterns = forbidden_patterns or []
     for path in paths:
         try:
             normalized = _normalize_artifact_path(path)
@@ -453,6 +588,8 @@ def _forbidden_files_outcome(manifest: list[dict], evidence_items: list[dict]) -
             forbidden_categories.add("forbidden_path_segment")
         if filename.endswith(FORBIDDEN_SUFFIXES):
             forbidden_categories.add("forbidden_file_suffix")
+        if any(_path_matches_forbidden_pattern(normalized, pattern) for pattern in patterns):
+            forbidden_categories.add("forbidden_policy_pattern")
     if forbidden_categories:
         return _fail(
             "check_forbidden_files",
@@ -463,14 +600,181 @@ def _forbidden_files_outcome(manifest: list[dict], evidence_items: list[dict]) -
     return _pass("check_forbidden_files", "Submission does not include default forbidden paths.")
 
 
-def _confidentiality_attestation_outcome(worker_attestation: str) -> CheckerOutcome:
-    """Validate the deterministic Chunk 8 confidentiality attestation minimum."""
+def _required_artifact_paths(effective_policy: dict | None) -> list[str]:
+    """Return required artifact paths from the locked effective project policy."""
+    if effective_policy is None:
+        return []
+    return [
+        str(artifact["path"])
+        for artifact in effective_policy.get("required_artifacts", [])
+        if artifact.get("required", True)
+    ]
+
+
+def _required_evidence_keys(effective_policy: dict | None) -> list[str]:
+    """Return required evidence keys from the locked effective project policy."""
+    if effective_policy is None:
+        return []
+    return [
+        str(evidence["key"])
+        for evidence in effective_policy.get("required_evidence", [])
+        if evidence.get("required", True)
+    ]
+
+
+def _forbidden_artifact_patterns(effective_policy: dict | None) -> list[str]:
+    """Return forbidden artifact patterns from the locked effective project policy."""
+    if effective_policy is None:
+        return []
+    return [
+        str(rule["pattern"])
+        for rule in effective_policy.get("forbidden_artifacts", [])
+        if rule.get("pattern")
+    ]
+
+
+def _required_attestation_terms(effective_policy: dict | None) -> list[str]:
+    """Return required attestation terms from the locked effective project policy."""
+    if effective_policy is None:
+        return []
+    return [str(term) for term in effective_policy.get("attestation_terms", []) if term]
+
+
+def _attestation_term_is_satisfied(normalized_attestation: str, term: str) -> bool:
+    """Return whether an attestation satisfies one machine-readable term key."""
+    normalized_term = _normalize_policy_token(term)
+    if not normalized_term:
+        return True
+    if normalized_term in normalized_attestation:
+        return True
+    attestation_words = set(normalized_attestation.split("_"))
+    required_words = [
+        word
+        for word in normalized_term.split("_")
+        if word and word not in IGNORED_ATTESTATION_TERM_WORDS
+    ]
+    return all(word in attestation_words for word in required_words)
+
+
+def _path_matches_forbidden_pattern(path: str, pattern: str) -> bool:
+    """Return whether a normalized path matches a forbidden policy pattern."""
+    normalized = path.lower()
+    normalized_pattern = pattern.strip().lower()
+    if not normalized_pattern:
+        return False
+    filename = normalized.rsplit("/", 1)[-1]
+    segments = normalized.split("/")
+    return (
+        fnmatchcase(normalized, normalized_pattern)
+        or fnmatchcase(filename, normalized_pattern)
+        or any(fnmatchcase(segment, normalized_pattern) for segment in segments)
+    )
+
+
+def _invalid_storage_references(
+    payload: SubmissionCreate,
+    evidence_items: list[dict],
+    effective_policy: dict,
+) -> list[str]:
+    """Return storage references whose scheme is not allowed by policy."""
+    allowed_schemes = set(effective_policy.get("allowed_storage_schemes", []))
+    refs = []
+    if payload.package_uri:
+        refs.append(payload.package_uri)
+    refs.extend(str(item["uri"]) for item in evidence_items if item.get("uri"))
+    invalid = []
+    for ref in refs:
+        scheme = urlparse(ref).scheme
+        if scheme not in allowed_schemes:
+            invalid.append(ref)
+    return invalid
+
+
+def _size_limit_outcome(manifest: list[dict], effective_policy: dict) -> CheckerOutcome | None:
+    """Validate artifact and package size limits when sizes are supplied."""
+    maximum_file_size = effective_policy.get("maximum_file_size_bytes")
+    if maximum_file_size is not None:
+        oversized = [
+            str(entry.get("artifact", ""))
+            for entry in manifest
+            if entry.get("size_bytes") is not None and entry["size_bytes"] > maximum_file_size
+        ]
+        if oversized:
+            return _fail(
+                "check_submission_packet",
+                "Submission contains artifacts larger than the locked project file limit.",
+                "Remove or reduce oversized artifacts before submitting.",
+                metadata={"oversized_artifacts": oversized},
+            )
+
+    maximum_package_size = effective_policy.get("maximum_package_size_bytes")
+    known_manifest_size = sum(
+        entry.get("size_bytes") or 0
+        for entry in manifest
+    )
+    if maximum_package_size is not None and known_manifest_size > maximum_package_size:
+        return _fail(
+            "check_submission_packet",
+            "Submission package exceeds the locked project package size limit.",
+            "Reduce the submitted package before submitting.",
+            metadata={"known_manifest_size_bytes": known_manifest_size},
+        )
+    return None
+
+
+def _packaging_outcome(
+    payload: SubmissionCreate,
+    effective_policy: dict,
+) -> CheckerOutcome | None:
+    """Validate package requirements from the effective project policy."""
+    packaging = effective_policy.get("packaging") or {}
+    if packaging.get("package_required") and not payload.package_uri:
+        return _fail(
+            "check_submission_packet",
+            "Submission package is required by the locked project policy.",
+            "Attach the package reference before submitting.",
+        )
+    allowed_formats = packaging.get("allowed_package_formats") or []
+    if allowed_formats and payload.package_uri:
+        lowered_uri = payload.package_uri.lower()
+        if not any(lowered_uri.endswith(f".{str(fmt).lower().lstrip('.')}") for fmt in allowed_formats):
+            return _fail(
+                "check_submission_packet",
+                "Submission package format is not allowed by the locked project policy.",
+                "Use one of the package formats allowed by the project policy.",
+                metadata={"allowed_package_formats": allowed_formats},
+            )
+    return None
+
+
+def _missing_effective_policy_outcome(checker_name: str) -> CheckerOutcome:
+    """Build a setup-blocked outcome when locked effective policy is missing."""
+    return _fail(
+        checker_name,
+        "Task is missing locked effective project submission artifact policy context.",
+        "A project manager must re-screen the task before review can continue.",
+        worker_visible=False,
+        routing_recommendation=ROUTING_TASK_SETUP_BLOCKED,
+    )
+
+
+def _confidentiality_attestation_outcome(
+    worker_attestation: str,
+    required_terms: list[str] | None = None,
+) -> CheckerOutcome:
+    """Validate confidentiality and project-required attestation terms."""
     normalized = " ".join(worker_attestation.strip().lower().split())
+    normalized_for_terms = _normalize_policy_token(worker_attestation)
     has_required_length = len(normalized) >= 40
     has_non_generic_text = normalized not in GENERIC_ATTESTATIONS
     has_confidentiality = any(term in normalized for term in CONFIDENTIALITY_TERMS)
     has_credentials = any(term in normalized for term in CREDENTIAL_TERMS)
     has_source_platform = any(term in normalized for term in SOURCE_PLATFORM_TERMS)
+    missing_terms = [
+        term
+        for term in (required_terms or [])
+        if not _attestation_term_is_satisfied(normalized_for_terms, term)
+    ]
     if not all(
         [
             has_required_length,
@@ -478,6 +782,7 @@ def _confidentiality_attestation_outcome(worker_attestation: str) -> CheckerOutc
             has_confidentiality,
             has_credentials,
             has_source_platform,
+            not missing_terms,
         ]
     ):
         return _fail(
@@ -492,6 +797,7 @@ def _confidentiality_attestation_outcome(worker_attestation: str) -> CheckerOutc
                 "has_confidentiality_term": has_confidentiality,
                 "has_credential_term": has_credentials,
                 "has_source_or_platform_term": has_source_platform,
+                "missing_attestation_terms": missing_terms,
             },
         )
     return _pass(
@@ -537,10 +843,30 @@ async def check_policy_context_present(context: CheckerContext) -> CheckerOutcom
         name
         for name, value in {
             "locked_guide_version": context.submission.locked_guide_version,
-            "locked_checker_policy_version": context.submission.locked_checker_policy_version,
+            "locked_post_submit_checker_policy_id": (
+                context.submission.locked_post_submit_checker_policy_id
+            ),
+            "locked_post_submit_checker_policy_version": (
+                context.submission.locked_post_submit_checker_policy_version
+            ),
+            "locked_post_submit_checker_policy_hash": (
+                context.submission.locked_post_submit_checker_policy_hash
+            ),
             "locked_review_policy_version": context.submission.locked_review_policy_version,
             "locked_revision_policy_version": context.submission.locked_revision_policy_version,
             "locked_payment_policy_version": context.submission.locked_payment_policy_version,
+            "locked_guide_source_snapshot_id": context.submission.locked_guide_source_snapshot_id,
+            "locked_guide_source_snapshot_hash": context.submission.locked_guide_source_snapshot_hash,
+            "locked_effective_project_submission_artifact_policy_id": (
+                context.submission.locked_effective_project_submission_artifact_policy_id
+            ),
+            "locked_effective_project_submission_artifact_policy_hash": (
+                context.submission.locked_effective_project_submission_artifact_policy_hash
+            ),
+            "locked_pre_submit_checker_policy_id": context.submission.locked_pre_submit_checker_policy_id,
+            "locked_pre_submit_checker_bundle_hash": (
+                context.submission.locked_pre_submit_checker_bundle_hash
+            ),
         }.items()
         if not value
     ]
@@ -572,9 +898,22 @@ async def check_evidence_integrity(context: CheckerContext) -> CheckerOutcome:
 
 async def check_evidence_present(context: CheckerContext) -> CheckerOutcome:
     """Validate that evidence references exist when the task requires evidence."""
+    if context.effective_policy is None:
+        return _missing_effective_policy_outcome("check_evidence_present")
+    required_evidence = _required_evidence_keys(context.effective_policy)
+    evidence_items = [
+        {
+            "label": item.label,
+            "uri": item.uri,
+            "hash": item.hash,
+            "type": item.type,
+            "metadata_json": item.metadata_json,
+        }
+        for item in context.submission.evidence_items
+    ]
     return _evidence_presence_outcome(
-        len(context.submission.evidence_items),
-        context.task.required_evidence,
+        evidence_items,
+        required_evidence,
     )
 
 
@@ -596,8 +935,11 @@ async def check_acceptance_criteria_present(context: CheckerContext) -> CheckerO
 
 async def check_required_files(context: CheckerContext) -> CheckerOutcome:
     """Validate required task files against the artifact manifest."""
+    if context.effective_policy is None:
+        return _missing_effective_policy_outcome("check_required_files")
+    required_files = _required_artifact_paths(context.effective_policy)
     return _required_files_outcome(
-        context.task.required_files,
+        required_files,
         context.submission.artifact_hash_manifest,
     )
 
@@ -613,12 +955,24 @@ async def check_forbidden_files(context: CheckerContext) -> CheckerOutcome:
         }
         for item in context.submission.evidence_items
     ]
-    return _forbidden_files_outcome(context.submission.artifact_hash_manifest, evidence_items)
+    if context.effective_policy is None:
+        return _missing_effective_policy_outcome("check_forbidden_files")
+    forbidden_patterns = _forbidden_artifact_patterns(context.effective_policy)
+    return _forbidden_files_outcome(
+        context.submission.artifact_hash_manifest,
+        evidence_items,
+        forbidden_patterns,
+    )
 
 
 async def check_confidentiality_attestation(context: CheckerContext) -> CheckerOutcome:
     """Validate the worker confidentiality attestation."""
-    return _confidentiality_attestation_outcome(context.submission.worker_attestation)
+    if context.effective_policy is None:
+        return _missing_effective_policy_outcome("check_confidentiality_attestation")
+    return _confidentiality_attestation_outcome(
+        context.submission.worker_attestation,
+        _required_attestation_terms(context.effective_policy),
+    )
 
 
 async def check_low_quality_generated_artifacts(context: CheckerContext) -> CheckerOutcome:

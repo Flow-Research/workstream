@@ -25,8 +25,8 @@ This chunk does not run the full checker framework yet. It defines the durable p
 
 - real checker registry
 - real checker execution
-- automatic background trigger after submission locking
-- task lifecycle movement to `AUTO_CHECKING`, `REVIEW_PENDING`, or `NEEDS_REVISION`
+- automatic background trigger after submission finalization
+- task lifecycle movement to `EVALUATION_PENDING`, `REVIEW_PENDING`, or `NEEDS_REVISION`
 - readiness certificate creation; deferred to Chunk 9 when the pre-review gate is implemented
 - product frontend
 - reviewer queue UI
@@ -96,7 +96,7 @@ This chunk does not run the full checker framework yet. It defines the durable p
 
 `checker_runs.trigger_source`
 
-- `submission_locked`
+- `submission_finalized`
 - `manual_checker_trigger`
 - `retry`
 
@@ -144,7 +144,7 @@ This chunk does not run the full checker framework yet. It defines the durable p
 
 ## Record Binding
 
-Durable `checker_runs` are authoritative post-submit records only. They must bind to one locked submission version.
+Durable `checker_runs` are authoritative post-submit records only. They must bind to one finalized submission version.
 
 The run snapshots:
 
@@ -160,7 +160,7 @@ The run snapshots:
 - locked revision policy version
 - locked payment policy version
 
-Post-submit checker runs must be created only from a loaded, locked submission. The service must copy `task_id`, `submission_version`, `package_hash`, `artifact_hash_manifest`, `artifact_manifest_hash`, and locked policy versions from that submission. The client does not provide locked guide or policy versions for checker runs.
+Post-submit checker runs must be created only from a loaded, finalized submission. The service must copy `task_id`, `submission_version`, `package_hash`, `artifact_hash_manifest`, `artifact_manifest_hash`, and locked policy versions from that submission. The client does not provide locked guide or policy versions for checker runs.
 
 The migration must add enough constraints or service-level tests to prove a checker run cannot bind `submission_id` to a different task, submission version, or package hash. Prefer a composite foreign key or unique binding where practical; otherwise add explicit service validation and integration tests that fail on mismatched context.
 
@@ -215,8 +215,8 @@ Response fields:
 Pre-submit feedback binds to `task_id`, the task's locked guide source snapshot,
 effective project submission artifact policy hash, pre-submit checker bundle hash,
 draft packet fields, package hash, and artifact manifest shape. It does not
-require a locked `submission_id` or locked submission version because those do
-not exist before submission creation.
+require a finalized `submission_id` or finalized submission version because
+those do not exist before submission creation.
 
 Blocking pre-submit failures prevent submission creation. Preflight failures
 return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false,
@@ -227,7 +227,7 @@ task transition to `submitted`, and no submission-created audit event.
 
 Pre-submit results are not authoritative for `REVIEW_PENDING`, cannot create
 `NEEDS_REVISION`, and do not return review decision values: `accept`,
-`needs_revision`, or `reject`. Only post-submit runs against locked submissions
+`needs_revision`, or `reject`. Only post-submit runs against finalized submissions
 can produce routing recommendations for `REVIEW_PENDING` or user-facing
 `needs_revision`.
 
@@ -320,8 +320,8 @@ Internal services may only create new runs/results or transition a run status th
 - ORM models match migration metadata
 - checker runs reference existing task and submission records
 - migration upgrade/downgrade passes against Postgres
-- post-submit checker run creation snapshots locked submission context server-side
-- creating run for an unlocked submission fails
+- post-submit checker run creation snapshots finalized submission context server-side
+- creating run for an unfinalized submission fails
 - creating run with mismatched task/submission context fails
 - later project policy changes or audited task-context rebases do not mutate historical checker run context
 - artifact manifest hash follows the canonical SHA-256 JSON algorithm

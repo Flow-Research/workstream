@@ -2,35 +2,11 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-def reject_non_finite_json_numbers(value: Any) -> Any:
-    """Reject NaN and Infinity values from JSON-like request metadata."""
-    if isinstance(value, float) and not math.isfinite(value):
-        raise ValueError("non-finite numbers are not allowed")
-    if isinstance(value, dict):
-        for item in value.values():
-            reject_non_finite_json_numbers(item)
-    if isinstance(value, list):
-        for item in value:
-            reject_non_finite_json_numbers(item)
-    return value
-
-
-class CheckerPolicyInput(BaseModel):
-    """Input schema for checker requirements on a guide version."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    required_checkers: list[str] = Field(default_factory=list)
-    warning_checkers: list[str] = Field(default_factory=list)
-    blocking_severities: list[str] = Field(default_factory=list)
 
 
 class ReviewPolicyInput(BaseModel):
@@ -125,6 +101,32 @@ class GuideSourceSnapshotResponse(BaseModel):
     captured_by: str
     captured_at: datetime
     items: list[GuideSourceSnapshotItemResponse] = Field(default_factory=list)
+
+
+class ProjectSetupRunResponse(BaseModel):
+    """Response schema for automatic project setup run ledger rows."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    celery_task_id: str | None
+    status: str
+    current_step: str
+    output_sufficiency_report_id: str | None
+    output_submission_artifact_policy_id: str | None
+    output_post_submit_checker_policy_id: str | None
+    post_submit_derivation_summary: dict[str, Any] | None
+    error_code: str | None
+    error_summary: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 class GuideSufficiencyFindingInput(BaseModel):
@@ -384,10 +386,17 @@ class PreSubmitCheckerPolicySummaryResponse(BaseModel):
     lifecycle_status: str
     compiler_version: str | None
     compiled_bundle_hash: str | None
+    checker_names: list[str]
     created_by: str
     created_at: datetime
     supersedes_pre_submit_checker_policy_id: str | None
     superseded_at: datetime | None
+
+
+class ActiveGuidePreSubmitCheckerPolicyResponse(PreSubmitCheckerPolicySummaryResponse):
+    """Active-guide response schema for project pre-submit checker context."""
+
+    checker_configs: dict[str, Any]
 
 
 class ProjectCreate(BaseModel):
@@ -398,8 +407,6 @@ class ProjectCreate(BaseModel):
     name: str
     slug: str
     description: str | None = None
-    base_amount: Decimal | None = None
-    currency: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -412,44 +419,22 @@ class ProjectResponse(BaseModel):
     slug: str
     description: str | None
     status: str
-    base_amount: Decimal | None
-    currency: str | None
     created_at: datetime
     updated_at: datetime
 
 
 class ProjectGuideCreate(BaseModel):
-    """Request schema for creating a draft project guide."""
+    """Request schema for guide material plus optional activation policies."""
 
     model_config = ConfigDict(extra="forbid")
 
     version: str
     content_markdown: str
-    required_task_fields: list[str] = Field(default_factory=list)
-    required_submission_fields: list[str] = Field(default_factory=list)
-    task_instructions: str | None = None
-    output_requirements: str | None = None
-    acceptance_criteria: str | None = None
-    rejection_criteria: str | None = None
-    reviewer_rubric: str | None = None
-    forbidden_actions: str | None = None
-    required_skills: list[str] = Field(default_factory=list)
-    difficulty_scale: dict[str, Any] = Field(default_factory=dict)
-    estimated_time_policy: dict[str, Any] = Field(default_factory=dict)
-    common_rejection_reasons: list[str] = Field(default_factory=list)
-    evidence_policy: dict[str, Any] | None = None
-    unacceptable_work_policy: str | None = None
     change_summary: str | None = None
-    checker_policy: CheckerPolicyInput | None = None
+    source_snapshot: GuideSourceSnapshotCreate | None = None
     review_policy: ReviewPolicyInput | None = None
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
-
-    @field_validator("difficulty_scale", "estimated_time_policy", "evidence_policy")
-    @classmethod
-    def validate_finite_json_metadata(cls, value: Any) -> Any:
-        """Reject non-finite numbers from guide metadata."""
-        return reject_non_finite_json_numbers(value)
 
 
 class ProjectGuideUpdate(BaseModel):
@@ -458,31 +443,10 @@ class ProjectGuideUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content_markdown: str | None = None
-    required_task_fields: list[str] | None = None
-    required_submission_fields: list[str] | None = None
-    task_instructions: str | None = None
-    output_requirements: str | None = None
-    acceptance_criteria: str | None = None
-    rejection_criteria: str | None = None
-    reviewer_rubric: str | None = None
-    forbidden_actions: str | None = None
-    required_skills: list[str] | None = None
-    difficulty_scale: dict[str, Any] | None = None
-    estimated_time_policy: dict[str, Any] | None = None
-    common_rejection_reasons: list[str] | None = None
-    evidence_policy: dict[str, Any] | None = None
-    unacceptable_work_policy: str | None = None
     change_summary: str | None = None
-    checker_policy: CheckerPolicyInput | None = None
     review_policy: ReviewPolicyInput | None = None
     revision_policy: RevisionPolicyInput | None = None
     payment_policy: PaymentPolicyInput | None = None
-
-    @field_validator("difficulty_scale", "estimated_time_policy", "evidence_policy")
-    @classmethod
-    def validate_finite_json_metadata(cls, value: Any) -> Any:
-        """Reject non-finite numbers from guide metadata updates."""
-        return reject_non_finite_json_numbers(value)
 
 
 class ProjectGuideResponse(BaseModel):
@@ -495,31 +459,17 @@ class ProjectGuideResponse(BaseModel):
     version: str
     status: str
     content_markdown: str
-    required_task_fields: list[str]
-    required_submission_fields: list[str]
-    task_instructions: str | None
-    output_requirements: str | None
-    acceptance_criteria: str | None
-    rejection_criteria: str | None
-    reviewer_rubric: str | None
-    forbidden_actions: str | None
-    required_skills: list[str]
-    difficulty_scale: dict[str, Any]
-    estimated_time_policy: dict[str, Any]
-    common_rejection_reasons: list[str]
-    evidence_policy: dict[str, Any] | None
-    unacceptable_work_policy: str | None
+    change_summary: str | None
     approved_by: str | None
     effective_at: datetime | None
-    change_summary: str | None
     created_by: str
     created_at: datetime
     updated_at: datetime
     superseded_at: datetime | None
 
 
-class CheckerPolicyResponse(BaseModel):
-    """Response schema for checker policy records."""
+class PostSubmitCheckerPolicyResponse(BaseModel):
+    """Response schema for post-submit checker policy records."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -529,7 +479,86 @@ class CheckerPolicyResponse(BaseModel):
     required_checkers: list[str]
     warning_checkers: list[str]
     blocking_severities: list[str]
+    policy_hash: str | None
+    lifecycle_status: str
+    approved_by_role: str | None
+    approved_by_actor: str | None
+    approved_at: datetime | None
     created_at: datetime
+
+
+class PostSubmitCheckerPolicyApproval(BaseModel):
+    """Request schema for approving a compiled post-submit checker policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PostSubmitCheckerPolicyCorrectionRequest(BaseModel):
+    """Request schema for requesting correction of a compiled post-submit policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    correction_reason: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("correction_reason")
+    @classmethod
+    def normalize_correction_reason(cls, value: str) -> str:
+        """Strip correction feedback and reject an empty normalized reason."""
+        normalized = " ".join(value.split())
+        if not normalized:
+            raise ValueError("correction_reason must contain non-whitespace text")
+        return normalized
+
+
+class PostSubmitCheckerPolicySetupSummaryResponse(BaseModel):
+    """Operator-visible summary for generated post-submit checker setup."""
+
+    id: str
+    project_id: str
+    guide_id: str
+    guide_version: str
+    source_snapshot_id: str
+    source_snapshot_hash_redacted: bool = True
+    effective_policy_id: str
+    effective_policy_hash: str
+    pre_submit_checker_policy_id: str
+    pre_submit_checker_bundle_hash: str
+    required_checkers: list[str]
+    warning_checkers: list[str]
+    blocking_severities: list[str]
+    policy_hash: str | None
+    lifecycle_status: str
+    approved_by_role: str | None
+    approved_by_actor: str | None
+    approved_at: datetime | None
+    created_by: str
+    created_at: datetime
+
+
+class PostSubmitCheckerPolicyCorrectionSummaryResponse(BaseModel):
+    """Operator-visible audit summary for one rejected compiled policy."""
+
+    policy_id: str
+    policy_hash: str | None
+    required_checkers: list[str]
+    warning_checkers: list[str]
+    blocking_severities: list[str]
+    correction_reason: str
+    correction_requested_by_role: str
+    correction_requested_by_actor: str
+    correction_requested_at: datetime
+
+
+class PostSubmitCheckerPolicySetupResponse(BaseModel):
+    """Response schema for current post-submit checker policy setup state."""
+
+    project_id: str
+    guide_id: str
+    guide_version: str
+    setup_run: ProjectSetupRunResponse
+    post_submit_checker_policy: PostSubmitCheckerPolicySetupSummaryResponse | None
+    derivation_input_summary: dict[str, Any]
+    correction_history: list[PostSubmitCheckerPolicyCorrectionSummaryResponse]
 
 
 class ReviewPolicyResponse(BaseModel):
@@ -588,8 +617,8 @@ class ActiveGuideResponse(BaseModel):
     guide_sufficiency_report: GuideSufficiencyReportResponse
     submission_artifact_policy: SubmissionArtifactPolicyResponse
     effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
-    pre_submit_checker_policy: PreSubmitCheckerPolicySummaryResponse
-    checker_policy: CheckerPolicyResponse
+    pre_submit_checker_policy: ActiveGuidePreSubmitCheckerPolicyResponse
+    post_submit_checker_policy: PostSubmitCheckerPolicyResponse
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse
     payment_policy: PaymentPolicyResponse

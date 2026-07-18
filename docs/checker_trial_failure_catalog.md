@@ -14,7 +14,7 @@ The trial does not add a lifecycle state, a review decision, or a frontend surfa
 | Missing required file | Artifact manifest omits `answer.md` | `check_required_files` | `needs_revision` | `needs_revision` | Required-file message and suggested fix | Full checker result with missing file metadata |
 | Forbidden file path | Artifact manifest includes a forbidden path pattern | `check_forbidden_files` | `needs_revision` | `needs_revision` | Generic forbidden-file message without raw sensitive path leakage | Full checker result with forbidden category metadata |
 | Weak confidentiality attestation | Attestation is too short and generic | `check_confidentiality_attestation` | `needs_revision` | `needs_revision` | Attestation fix message | Full checker result with failed attestation fields |
-| Locked task setup defect | Task loses reviewable acceptance criteria after screening | `check_acceptance_criteria_present` | `task_setup_blocked` | `auto_checking` until repair | Hidden from worker as `not_evaluated` with no result rows | Full internal checker route and blocked audit event |
+| Locked task setup defect | Task loses reviewable acceptance criteria after screening | `check_acceptance_criteria_present` | `task_setup_blocked` | `evaluation_pending` until repair | Hidden from worker as `not_evaluated` with no result rows | Full internal checker route and blocked audit event |
 
 ## Routing Notes
 
@@ -34,7 +34,7 @@ task_setup_blocked
 
 ## False-Positive Notes
 
-- `check_low_quality_generated_artifacts` is warning-only in the current trial because simple placeholder wording can be legitimate during early task work.
+- `check_low_quality_generated_artifacts` is warning-only by default because simple placeholder wording can be legitimate during early task work. It blocks review only when a project explicitly requires that post-submit checker.
 - `check_forbidden_files` intentionally reports a generic worker message. A forbidden path hit could be a false positive if a project intentionally requires a file with a sensitive-looking name, but the safe default is to block and require project-manager clarification.
 - `check_confidentiality_attestation` is deterministic and text-based. It can reject a sincere but short attestation; this is acceptable for v0.1 because the required wording is part of the submission contract.
 

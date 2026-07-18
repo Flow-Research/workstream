@@ -29,9 +29,11 @@ skinparam cloud {
 
 package "People" #F8F9FA {
   rectangle "Project Manager" as project_manager #F1F3F5
-  rectangle "Human-Agent\nContributor" as worker #F1F3F5
+  rectangle "Finance Authority" as finance_authority #F1F3F5
+  rectangle "Human-Agent\nContributor" as contributor #F1F3F5
   rectangle "Reviewer" as reviewer #F1F3F5
-  rectangle "Operator / Admin" as operator #F1F3F5
+  rectangle "Operator" as operator #F1F3F5
+  rectangle "Access Administrator" as access_administrator #F1F3F5
 }
 
 cloud "Flow Auth\n----\nToken issuer and\nhuman identity source" as flow_auth
@@ -39,29 +41,34 @@ cloud "Flow Auth\n----\nToken issuer and\nhuman identity source" as flow_auth
 package "Workstream v0.1" #F8FBFF {
   rectangle "React + Vite Operations UI\n----\nPlanned internal\noperations dashboard" as frontend
   rectangle "FastAPI Backend\n----\nModular monolith API\nand workflow rules" as api
-  rectangle "Async Job Boundary\n----\nBackground tasks now;\ndurable workers later" as jobs
+  rectangle "Authorization Service\n----\nActor profiles, local grants,\nand capability checks" as authorization
+  rectangle "Celery Worker Boundary\n----\nDurable project setup,\nchecker, and product jobs" as jobs
   rectangle "Checker Runner\n----\nAutomated task and\nsubmission checks" as checker
-  rectangle "Storage Interface\n----\nObject-storage style\nAPI" as storage_adapter
+  rectangle "Artifact Storage Service\n----\nAdmission, verification,\nbinding, and provider port" as storage_adapter
 }
 
 package "Durable Records" #F2FBF7 {
-  database "Postgres\n----\nProjects, guides,\ntasks, submissions,\nchecks, reviews,\nrevisions, contribution,\npayment, reputation,\naudit events" as postgres
-  rectangle "Local File Store\nBehind Interface\n----\nR2/S3-compatible\nadapter target" as file_store #E6FCF5
+  database "Postgres\n----\nProjects, guides,\ntasks, submissions,\nchecks, reviews,\nrevisions, contribution,\ncompensation, audit events" as postgres
+  rectangle "Private Object Store\nBehind ArtifactStore\n----\nLocal / MinIO / AWS S3" as file_store #E6FCF5
 }
 
 project_manager --> frontend : uses
-worker --> frontend : uses
+finance_authority --> frontend : publishes contribution policy
+contributor --> frontend : uses
 reviewer --> frontend : uses
 operator --> frontend : uses
+access_administrator --> frontend : administers access
 
 frontend --> api : HTTP/JSON
-api --> flow_auth : verify token
+api --> flow_auth : verify identity token
+api --> authorization : authorize capability
+authorization --> postgres : profiles and grants
 api --> postgres : SQLAlchemy async
-api --> storage_adapter : object refs
+api --> storage_adapter : typed artifact operations
 api --> jobs : schedule work
 jobs --> checker : run checks
 checker --> postgres : results
-checker --> storage_adapter : read evidence
+checker --> storage_adapter : materialize exact artifacts
 storage_adapter --> file_store : store/read
 
 @enduml

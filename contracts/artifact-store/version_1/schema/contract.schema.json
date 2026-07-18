@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workstream.internal/contracts/artifact-store/version_1/contract.schema.json",
+  "title": "Workstream Provider-Neutral Artifact Store Contract v1",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "opaqueId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$"
+    },
+    "servicePrincipal": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]{1,126}[a-z0-9])$"
+    },
+    "boundedInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "mediaType": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "not": {"pattern": "[\\u0000-\\u001f\\u007f]"}
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*$"},
+        "value": {"type": "string", "maxLength": 512}
+      }
+    },
+    "details": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/detail"}
+    },
+    "metadataItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_]*$"},
+        "value": {"type": "string", "maxLength": 256}
+      }
+    },
+    "metadata": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/metadataItem"}
+    },
+    "operationIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_principal", "operation", "idempotency_key", "request_digest"],
+      "properties": {
+        "service_principal": {"$ref": "#/$defs/servicePrincipal"},
+        "operation": {"enum": ["store", "verify", "retain", "release"]},
+        "idempotency_key": {"$ref": "#/$defs/opaqueId"},
+        "request_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "byteRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset"],
+      "properties": {
+        "offset": {"$ref": "#/$defs/boundedInteger"},
+        "length": {"$ref": "#/$defs/boundedInteger"}
+      }
+    },
+    "artifactFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_artifact_id", "sha256", "byte_count", "media_type"],
+      "properties": {
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "provider_manifest_id": {"$ref": "#/$defs/opaqueId"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "byte_count": {"$ref": "#/$defs/boundedInteger"},
+        "media_type": {"$ref": "#/$defs/mediaType"}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_id", "identity", "outcome", "response_digest", "provider_artifact_id", "details"],
+      "properties": {
+        "receipt_id": {"$ref": "#/$defs/opaqueId"},
+        "identity": {"$ref": "#/$defs/operationIdentity"},
+        "outcome": {"enum": ["stored", "verified", "retained", "released"]},
+        "response_digest": {"$ref": "#/$defs/sha256"},
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "provider_operation_id": {"$ref": "#/$defs/opaqueId"},
+        "details": {"$ref": "#/$defs/details"}
+      }
+    },
+    "retentionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retention_reference", "retention_class", "state"],
+      "properties": {
+        "retention_reference": {"$ref": "#/$defs/opaqueId"},
+        "retention_class": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_-]*$"},
+        "state": {"enum": ["active", "released"]}
+      }
+    },
+    "storeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "maximum_bytes", "media_type", "metadata"],
+      "properties": {
+        "identity": {"allOf": [{"$ref": "#/$defs/operationIdentity"}, {"properties": {"operation": {"const": "store"}}}]},
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_size": {"$ref": "#/$defs/boundedInteger"},
+        "maximum_bytes": {"$ref": "#/$defs/boundedInteger"},
+        "media_type": {"$ref": "#/$defs/mediaType"},
+        "metadata": {"$ref": "#/$defs/metadata"}
+      }
+    },
+    "storeResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "receipt", "replayed"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/artifactFacts"},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "replayed": {"type": "boolean"}
+      }
+    },
+    "recoverStoreRequest": {
+      "allOf": [
+        {"$ref": "#/$defs/storeRequest"},
+        {"type": "object", "required": ["expected_sha256", "expected_size"]}
+      ]
+    },
+    "recoverStoreResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/storeResponse"},
+        {"type": "object", "properties": {"replayed": {"const": true}}}
+      ]
+    },
+    "openRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_artifact_id"],
+      "properties": {
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "byte_range": {"$ref": "#/$defs/byteRange"}
+      }
+    },
+    "openResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "range_offset", "returned_byte_count", "stream_complete"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/artifactFacts"},
+        "range_offset": {"$ref": "#/$defs/boundedInteger"},
+        "requested_length": {"$ref": "#/$defs/boundedInteger"},
+        "returned_byte_count": {"$ref": "#/$defs/boundedInteger"},
+        "stream_complete": {"type": "boolean"}
+      }
+    },
+    "statRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_artifact_id"],
+      "properties": {
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"}
+      }
+    },
+    "statResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "verification_state", "retention_state", "availability_state", "integrity_state", "active_retentions"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/artifactFacts"},
+        "verification_state": {"enum": ["pending", "verified", "failed"]},
+        "retention_state": {"enum": ["unretained", "retained", "released"]},
+        "availability_state": {"enum": ["available", "unavailable", "missing"]},
+        "integrity_state": {"enum": ["unknown", "valid", "quarantined"]},
+        "active_retentions": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/retentionSummary"}}
+      }
+    },
+    "verifyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "provider_artifact_id", "expected_sha256", "expected_size"],
+      "properties": {
+        "identity": {"allOf": [{"$ref": "#/$defs/operationIdentity"}, {"properties": {"operation": {"const": "verify"}}}]},
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_size": {"$ref": "#/$defs/boundedInteger"}
+      }
+    },
+    "verifyResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "verification_state", "receipt", "replayed"],
+      "properties": {
+        "artifact": {"$ref": "#/$defs/artifactFacts"},
+        "verification_state": {"enum": ["verified", "failed"]},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "replayed": {"type": "boolean"}
+      }
+    },
+    "retainRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "provider_artifact_id", "retention_reference", "retention_class"],
+      "properties": {
+        "identity": {"allOf": [{"$ref": "#/$defs/operationIdentity"}, {"properties": {"operation": {"const": "retain"}}}]},
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "retention_reference": {"$ref": "#/$defs/opaqueId"},
+        "retention_class": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_-]*$"}
+      }
+    },
+    "retainResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_artifact_id", "retention", "receipt", "replayed"],
+      "properties": {
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "retention": {"$ref": "#/$defs/retentionSummary"},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "replayed": {"type": "boolean"}
+      }
+    },
+    "releaseRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "provider_artifact_id", "retention_reference"],
+      "properties": {
+        "identity": {"allOf": [{"$ref": "#/$defs/operationIdentity"}, {"properties": {"operation": {"const": "release"}}}]},
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "retention_reference": {"$ref": "#/$defs/opaqueId"}
+      }
+    },
+    "releaseResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_artifact_id", "retention", "receipt", "replayed"],
+      "properties": {
+        "provider_artifact_id": {"$ref": "#/$defs/opaqueId"},
+        "retention": {"$ref": "#/$defs/retentionSummary"},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "replayed": {"type": "boolean"}
+      }
+    },
+    "receiptLookupRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["service_principal", "operation", "idempotency_key"],
+      "properties": {
+        "service_principal": {"$ref": "#/$defs/servicePrincipal"},
+        "operation": {"enum": ["store", "verify", "retain", "release"]},
+        "idempotency_key": {"$ref": "#/$defs/opaqueId"}
+      }
+    },
+    "receiptLookupResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt"],
+      "properties": {
+        "receipt": {"$ref": "#/$defs/receipt"}
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "category", "retryable", "message", "details"],
+      "properties": {
+        "code": {"enum": ["artifact_malformed_request", "artifact_limit_exceeded", "artifact_input_mismatch", "artifact_integrity_failure", "artifact_not_found", "artifact_idempotency_mismatch", "artifact_retention_conflict", "artifact_storage_unavailable", "artifact_throttled"]},
+        "category": {"enum": ["retryable", "terminal", "input_mismatch", "integrity", "not_found"]},
+        "retryable": {"type": "boolean"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 256},
+        "details": {"$ref": "#/$defs/details"}
+      }
+    }
+  }
+}

@@ -12,18 +12,17 @@ Describe what this project produces and why it matters.
 
 - `<task type>`
 
-## Base Amount
+## Business Terms Summary
 
-- currency:
-- base amount:
-- payout type:
-- payout rule:
+Describe compensation expectations in plain language when useful for project
+context. Enforceable submitter/reviewer rules live in the independently
+published ContributionPolicyVersion, not in the guide or project shell.
 
 ## Difficulty And Time Policy
 
 - difficulty scale:
 - estimated time policy:
-- maximum active tasks per worker:
+- maximum active tasks per contributor:
 - review SLA:
 
 ## Guide Versioning
@@ -61,7 +60,7 @@ Define disqualifying conditions and what fails automatically or normally leads t
 
 ## Reviewer Rubric
 
-Define how reviewers evaluate quality. Workers see the same rubric they submit against.
+Define how reviewers evaluate quality. Contributors see the same rubric they submit against.
 
 ## Forbidden Actions And Artifacts
 
@@ -76,8 +75,6 @@ Define prohibited behavior, tools, copied material, generated artifacts, confide
 - skill tags
 - task type
 - estimated time when known
-- base amount
-- payout type
 - deadline
 
 ## Required Submission Fields
@@ -86,14 +83,14 @@ Define prohibited behavior, tools, copied material, generated artifacts, confide
 - output files or package
 - evidence
 - revision replay when applicable
-- worker attestation
+- contributor attestation
 - artifact hash manifest
 
-Workstream assigns submission version server-side after blocking pre-submit checks pass. The worker does not provide a submission version or any guide/policy version.
+Workstream assigns submission version server-side after blocking pre-submit checks pass. The contributor does not provide a submission version or any guide/policy version.
 
 ## Submission Expectations Summary
 
-Summarize what workers must submit in plain language:
+Summarize what contributors must submit in plain language:
 
 - required artifacts:
 - required evidence references:
@@ -115,7 +112,11 @@ Every active guide version must have:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:
 - RevisionPolicy:
-- PaymentPolicy:
+- ContributionPolicy and active published version:
+
+ContributionPolicyVersion is the source of truth for exact
+`accepted_submission` and `completed_review` compensated/unpaid rules and any
+immutable money/project-points award definitions.
 
 Each task later locks:
 
@@ -123,12 +124,12 @@ Each task later locks:
 - EffectiveProjectSubmissionArtifactPolicy hash:
 - generated project PreSubmitCheckerPolicy compiled bundle hash:
 
-Artifact requirements shown to workers are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
+Artifact requirements shown to contributors are derived from the approved `SubmissionArtifactPolicy`. The guide may summarize those requirements, but the policy is the enforcement source.
 
 Project owners provide open-ended guide material and business terms in plain
 language. Workstream evaluates guide sufficiency, derives
-`SubmissionArtifactPolicy` from that material, and a Workstream actor
-with the `admin` or `project_manager` role approves the internal policy bundle
+`SubmissionArtifactPolicy` from that material, and an authorized covered
+Project Manager approves the internal policy bundle
 before guide activation.
 
 ## Known Checker Blind Spots
@@ -147,22 +148,22 @@ Allowed decisions:
 
 Needs revision requires:
 
-- concrete findings
-- required fix per finding
-- severity per finding
+- at least one unresolved blocking finding
+- concrete issue and required fix per blocking finding
+- optional advisory findings that do not block acceptance
 
-Second-review sampling:
+Offline post-decision reviewer-quality sampling only:
 
-- accepted:
-- rejected:
-- high-value tasks:
-
-Mandatory second review:
-
+- accepted sample rate:
+- rejected sample rate:
 - suspected copied or confidential material:
-- payment above threshold:
+- high-value criterion defined by `ReviewPolicy`:
 - reviewer conflict of interest:
-- admin override used:
+
+These criteria select non-product quality analysis only. They do not delay Review,
+FinalAcceptance, contribution creation, or task closure and do not create a
+second decision, reputation mutation, or adjudication path.
+- registered recovery operation used (permission, actor, reason, evidence):
 
 ## Revision Policy
 
@@ -171,10 +172,17 @@ Define:
 - maximum revision rounds:
 - revision deadline hours:
 - allowed resubmission states:
-- auto-reject after revision limit:
-- missed deadline behavior:
+- `RevisionPolicyInput.auto_reject_after_limit`: `false` (required explicitly
+  on project create/update; the backend schema default is not the v0.1 REV
+  contract)
+- limit/deadline exhaustion behavior: block preparation and submission pending
+  reason-bound covered-manager closure; never synthesize reject
 - reviewer reassignment rule:
-- payment effect during revision:
+
+Revision-policy activation and task screening must reject an effective policy
+whose `auto_reject_after_limit` value is not `false`. That runtime enforcement
+belongs to `WS-REV-001-02`; until it activates, this template is a required
+configuration precondition and does not claim the guard is available.
 
 ## Acceptance Policy
 
@@ -184,7 +192,8 @@ Accepted work must:
 - satisfy acceptance criteria
 - pass blocking checks
 - include evidence
-- close prior revision findings
+- preserve one immutable response and later resolution for each required prior
+  blocking finding
 
 ## Rejection Policy
 
@@ -195,7 +204,7 @@ Reject when:
 - work cannot be fixed by reasonable revision
 - prohibited content or files are included
 - evidence is fabricated or does not correspond to the submitted artifact
-- worker repeatedly resubmits without addressing prior findings
+- contributor repeatedly resubmits without addressing prior findings
 
 ## Common Rejection Reasons
 
@@ -208,19 +217,24 @@ Reject when:
 - low-quality generated artifacts banned by this guide
 - copied confidential/source material
 
-## Payment Dispute Policy
+## Compensation Business Terms Reference
 
-Define:
+Record only project-owner-supplied business terms and their durable source:
 
-- when accepted work becomes payable:
-- who can open a payment dispute:
-- evidence required for dispute:
-- dispute review owner:
-- payment hold rule:
-- final decision authority:
+- source reference:
+- intended submitter terms:
+- intended reviewer terms:
+- intended instrument/unit:
+
+This section is informational. It is not an active contribution award rule. Workstream
+publishes `ContributionPolicyVersion` independently, and `TaskAssignment` and
+`ReviewLease` freeze their applicable versions. Revision context never rebases
+compensation.
 
 ## Lessons Learned
 
 Keep this section updated as the project runs.
 
-Each repeated issue becomes a guide update, checker update, review policy update, revision policy update, payment policy update, template update, or reviewer training note.
+Each repeated issue becomes a guide update, checker update, review policy update,
+revision policy update, contribution policy update, template update, or
+reviewer training note.

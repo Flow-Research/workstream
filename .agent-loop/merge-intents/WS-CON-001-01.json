@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-CON-001-01",
+  "chunk_title": "Canonical Contract Adoption And Architecture Decision",
+  "initiative_id": "WS-CON-001",
+  "next_chunk_id": "WS-CON-001-02A",
+  "next_chunk_title": "Shared Transactional Outbox Persistence",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

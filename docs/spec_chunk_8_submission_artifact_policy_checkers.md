@@ -4,7 +4,7 @@
 
 Chunk 8 expands the checker registry from the first structural runner into the first policy-aware submission artifact gate.
 
-The goal is not to judge final work quality. The goal is to verify that required structural signals are present before Workstream can later move a locked submission toward human review.
+The goal is not to judge final work quality. The goal is to verify that required structural signals are present before Workstream can later move a finalized submission toward human review.
 
 Chunk 8 does not prove artifact content safety, confidentiality truth, absence of secrets, or hash/content equality. Those require later object-store reads, content scanning, and stronger checker adapters.
 
@@ -59,7 +59,7 @@ Internal helper function names may be implementation-specific, but API responses
 
 ### `check_evidence_present`
 
-Fails when the task requires evidence and the locked submission has no evidence rows.
+Fails when the task requires evidence and the finalized submission has no evidence rows.
 
 The checker reads:
 
@@ -114,10 +114,12 @@ Fails when required artifacts are not represented in the artifact manifest.
 
 The checker reads:
 
-- locked project `PreSubmitCheckerPolicy` required artifacts
+- required artifact paths from `context.effective_policy`
 - `submission.artifact_hash_manifest[*].artifact`
 
-`task.required_files` is legacy/transitional storage. It is not the policy source of truth once `SubmissionArtifactPolicy` is implemented.
+Task records do not define required files. Required artifact rules come from
+the locked effective project submission artifact policy loaded into
+`context.effective_policy`.
 
 Matching is exact after path normalization. Chunk 8 does not implement glob matching.
 
@@ -178,6 +180,10 @@ This checker does not prove the claim is true. It only ensures the worker made t
 
 Warns when summary, artifact names, artifact notes, or evidence labels contain obvious placeholder/generated-output signals.
 
+The checker is warning-only by default. When a project explicitly lists it in
+required post-submit checkers, matching low-quality signals become
+worker-fixable blocking failures and route the task to `needs_revision`.
+
 Default warning patterns:
 
 - `todo`
@@ -221,7 +227,13 @@ pass/fail/warning details, create no submission row, no submission version, no
 task transition to `submitted`, and no submission-created audit event. They do
 not return review decision values: `accept`, `needs_revision`, or `reject`.
 
-Durable post-submit checker runs run the canonical default submission-quality checks plus locked checker-policy names:
+Durable post-submit checker runs execute the complete `execution_checkers` list
+from the submission-stamped locked `PostSubmitCheckerPolicy` body. That locked
+body includes Workstream default durable checkers, project required checkers,
+warning checkers, and blocking severities. The durable run records the locked
+post-submit checker policy id, version, hash, and internal policy body stamped
+on the submission. Worker-facing responses do not expose those provenance
+fields.
 
 - `check_submission_packet`
 - `check_policy_context_present`
@@ -234,7 +246,10 @@ Durable post-submit checker runs run the canonical default submission-quality ch
 - additional locked `required_checkers`
 - additional locked `warning_checkers`
 
-`check_acceptance_criteria_present` is registered in Chunk 8, but it is a locked task setup checker. It is not part of the default durable submission-quality list. If a locked post-submit checker policy requires it and it fails, the run must use task setup routing, not worker revision routing.
+`check_acceptance_criteria_present` is registered in Chunk 8, but it is a
+locked task setup checker. It is not part of the default durable
+submission-quality list. If a locked `PostSubmitCheckerPolicy` requires it and
+it fails, the run must use task setup routing, not worker revision routing.
 
 ## Routing Boundary
 
@@ -265,7 +280,7 @@ Routing priority is deterministic:
 
 When one checker run contains both task setup failures and worker-fixable submission failures, `task_setup_blocked` wins because the project manager must fix the task contract before the worker can receive a meaningful revision request.
 
-Chunk 8 documents `task_setup_blocked` in its schema and implements the routing contract, but normal API flows are expected to prevent task setup defects before submission. For example, current task screening requires acceptance criteria before a task can be released. Chunk 8 tests must verify the enum/source-of-truth contract and may verify task setup routing through controlled service/repository setup if no normal FastAPI path can produce a locked submission with that defect. A later admin repair workflow can add a real API path for this route.
+Chunk 8 documents `task_setup_blocked` in its schema and implements the routing contract, but normal API flows are expected to prevent task setup defects before submission. For example, current task screening requires acceptance criteria before a task can be released. Chunk 8 tests must verify the enum/source-of-truth contract and may verify task setup routing through controlled service/repository setup if no normal FastAPI path can produce a finalized submission with that defect. A later admin repair workflow can add a real API path for this route.
 
 Chunk 9 owns applying the lifecycle transition.
 
@@ -318,6 +333,9 @@ Safe evidence references mean opaque Workstream evidence ids, sanitized labels, 
 - clean submissions keep `routing_recommendation = allow_review`
 - worker-fixable submission failures keep `routing_recommendation = needs_revision` and `outcome_source = auto_checker`
 - task setup failures keep `routing_recommendation = task_setup_blocked` and do not create worker revision outcomes
+- worker-facing checker-run responses omit `routing_recommendation`,
+  `outcome_source`, and internal route tokens such as `allow_review`,
+  `checker_retry`, and `task_setup_blocked`
 - tests use real FastAPI calls and Postgres-backed persistence, not monkeypatch-only unit tests
 - senior engineering, QA/test, security/auth, and product/ops reviewer tracks pass before PR completion
 

@@ -5,9 +5,37 @@ description: Update durable repo memory after planning, merge, rejection, blocke
 
 # Memory Update
 
-Use after important loop events.
+Use before publication to provide bounded next-state metadata, and use the
+generated state after merge.
 
-## Update as applicable
+## Before Merge
+
+- Add one `.agent-loop/merge-intents/<chunk-id>.json` file to the reviewed PR.
+- Use merge-intent schema version 2.
+- Record the initiative, completed chunk, title, next chunk or `null`, and
+  whether the next chunk requires a separate explicit start.
+- A non-null next chunk must belong to the same initiative and match exactly
+  one existing chunk contract ID and title. Use `null` when this initiative has
+  no declared successor; never use merge intent to prioritize another
+  initiative.
+- Keep implementation/specification memory in the owning PR where it can be
+  reviewed with the change.
+
+## Generated After Merge
+
+The trusted `Loop Memory` workflow records:
+
+- `.agent-loop/STATE.json`
+- `.agent-loop/LOOP_STATE.md`
+- `.agent-loop/MERGE_LOG.jsonl`
+- `.agent-loop/STATE.sig`
+
+on `automation/loop-memory`.
+
+Do not open a manual post-merge memory PR or rerun internal reviewers when this
+automation succeeds.
+
+## Manual Updates As Applicable
 
 - `.agent-loop/LOOP_STATE.md`
 - `.agent-loop/WORK_QUEUE.md`
@@ -32,3 +60,10 @@ Use after important loop events.
 - Durable repo memory beats chat memory.
 - Do not bury decisions in conversation only.
 - If a repeated issue appears, suggest policy/skill update.
+- Generated state is exempt from repeated review only on
+  `automation/loop-memory`, only when written by the trusted workflow, and only
+  while its public-key signature verifies.
+- If automation fails, send the documented `loop-memory-replay`
+  `repository_dispatch` with the current protected-main SHA after correcting
+  permissions. Stale replay targets fail closed.
+  Merge-intent content is immutable after merge; do not edit generated state.

@@ -23,10 +23,6 @@
 
 `DRAFT`
 
-## Base Amount
-
-`<amount> <currency>`
-
 ## Difficulty
 
 `<easy | medium | hard | expert>`
@@ -47,9 +43,13 @@
 
 Describe the work to be done.
 
-## Required Output
+## Output Notes
 
-List exactly what must be submitted.
+Describe task-specific work in human terms when the description needs more
+detail. Machine-enforced required files, evidence, hashes, packaging, and
+forbidden artifacts are defined by the active project
+`SubmissionArtifactPolicy` and locked project `PreSubmitCheckerPolicy`, not by
+task fields.
 
 ## Acceptance Criteria
 
@@ -61,18 +61,29 @@ List exactly what must be submitted.
 
 - Criterion 1
 
-## Required Evidence
+## Submission Artifact Policy Context
 
-- checker logs
-- output files
-- summary
-- screenshots or hashes when applicable
+These values are stamped from the active project policy bundle during
+screening. Task creators do not provide submission artifact requirement fields
+directly.
 
-## Payout
+- guide source snapshot id:
+- guide source snapshot hash:
+- effective project submission artifact policy id:
+- effective project submission artifact policy hash:
+- project pre-submit checker policy id:
+- project pre-submit checker bundle hash:
 
-- base amount:
-- currency:
-- payout type:
+## Assignment Compensation Snapshot
+
+These values are server-owned and appear only after TaskAssignment creation.
+The TaskAssignment freezes the active published ContributionPolicyVersion; task
+creators do not provide award fields directly.
+
+- submitter contribution policy version id:
+- contribution type: `accepted_submission`
+- compensation mode: `compensated | unpaid`
+- immutable award definitions when compensated:
 
 ## Deadline
 
