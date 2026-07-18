@@ -5,7 +5,15 @@ from __future__ import annotations
 import pytest
 from mcp.server.lowlevel.server import NotificationOptions
 
-from workstream_mcp.schemas import MCP_PROMPTS, RESOURCE_DEFINITIONS, TOOL_DEFINITIONS
+from workstream_mcp.schemas import (
+    ArtifactHashEntryInput,
+    ClaimTaskInput,
+    EvidenceItemInput,
+    MCP_PROMPTS,
+    RESOURCE_DEFINITIONS,
+    TOOL_DEFINITIONS,
+    SubmitReviewInput,
+)
 from workstream_mcp.server import build_fastmcp_server, create_mcp_application
 
 
@@ -85,6 +93,15 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     assert tool_schemas["claim_task"]["required"] == ["task_id", "request_id"]
     assert tool_schemas["claim_task"]["properties"]["request_id"]["format"] == "uuid"
     assert "summary" in tool_schemas["submit_task"]["$defs"]["SubmissionInput"]["properties"]
+    submission_properties = tool_schemas["submit_task"]["$defs"]["SubmissionInput"][
+        "properties"
+    ]
+    assert submission_properties["summary"]["maxLength"] == 10000
+    assert submission_properties["worker_attestation"]["maxLength"] == 20000
+    assert submission_properties["artifact_hash_manifest"]["maxItems"] == 1000
+    assert submission_properties["evidence_items"]["maxItems"] == 1000
+    review_properties = tool_schemas["submit_review"]["properties"]
+    assert review_properties["findings"]["maxItems"] == 100
     assert tool_schemas["submit_review"]["properties"]["decision"]["enum"] == [
         "accept",
         "needs_revision",
@@ -122,3 +139,46 @@ def test_runtime_does_not_advertise_resource_subscriptions_or_list_events() -> N
     assert capabilities.tools.listChanged is False
     assert capabilities.experimental == {}
     assert capabilities.tasks is None
+
+
+@pytest.mark.parametrize("relative_ref", [".", ".."])
+def test_stable_reference_validation_reports_relative_segments(relative_ref: str) -> None:
+    """Relative path segments receive the specific path-safety validation error."""
+    with pytest.raises(ValueError, match="must not be a relative path segment"):
+        ClaimTaskInput(task_id=relative_ref, request_id="11111111-1111-4111-8111-111111111111")
+
+
+def test_nested_tool_inputs_have_bounded_collections_and_metadata() -> None:
+    """Arbitrary evidence and review input cannot grow without adapter-edge bounds."""
+    deeply_nested: object = "value"
+    for _ in range(7):
+        deeply_nested = {"nested": deeply_nested}
+
+    with pytest.raises(ValueError, match="metadata nesting"):
+        EvidenceItemInput(type="note", label="evidence", metadata={"root": deeply_nested})
+    with pytest.raises(ValueError):
+        EvidenceItemInput(
+            type="note",
+            label="evidence",
+            metadata={f"key-{index}": index for index in range(101)},
+        )
+    with pytest.raises(ValueError):
+        ArtifactHashEntryInput(
+            artifact="result.txt",
+            hash="sha256:def",
+            notes="x" * 10001,
+        )
+    with pytest.raises(ValueError):
+        SubmitReviewInput(
+            review_ref="review-1",
+            decision="accept",
+            findings=[{"summary": "finding"}] * 101,
+            request_id="11111111-1111-4111-8111-111111111111",
+        )
+    with pytest.raises(ValueError):
+        SubmitReviewInput(
+            review_ref="review-1",
+            decision="accept",
+            findings=[{"summary": "finding", "evidence_refs": ["ref"] * 101}],
+            request_id="11111111-1111-4111-8111-111111111111",
+        )

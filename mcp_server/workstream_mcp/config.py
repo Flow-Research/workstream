@@ -16,6 +16,7 @@ DEFAULT_ALLOWED_ORIGINS = (
     "http://localhost:*",
     "http://[::1]:*",
 )
+INSECURE_AUTH_ISSUER_ENV = "WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,8 @@ class WorkstreamMCPConfig:
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     allowed_origins: tuple[str, ...] = DEFAULT_ALLOWED_ORIGINS
+    auth_issuer_url: str | None = None
+    allow_insecure_auth_issuer: bool = False
 
     def __post_init__(self) -> None:
         """Reject configuration that could leak bearer tokens or disable timeouts."""
@@ -60,6 +63,33 @@ class WorkstreamMCPConfig:
                 "WORKSTREAM_MCP_ALLOWED_ORIGINS",
                 DEFAULT_ALLOWED_ORIGINS,
             ),
+            auth_issuer_url=_optional_url("WORKSTREAM_MCP_AUTH_ISSUER_URL"),
+            allow_insecure_auth_issuer=_parse_boolean(INSECURE_AUTH_ISSUER_ENV),
+        )
+
+    def streamable_http_auth_issuer_url(self) -> str:
+        """Return an explicitly trusted issuer URL for Streamable HTTP."""
+        if self.auth_issuer_url is None:
+            raise ValueError(
+                "WORKSTREAM_MCP_AUTH_ISSUER_URL is required for streamable-http transport"
+            )
+        parsed = urlsplit(self.auth_issuer_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("WORKSTREAM_MCP_AUTH_ISSUER_URL must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError(
+                "WORKSTREAM_MCP_AUTH_ISSUER_URL must not contain credentials, query, or fragment"
+            )
+        if parsed.scheme == "https":
+            return self.auth_issuer_url
+        if (
+            self.allow_insecure_auth_issuer
+            and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+        ):
+            return self.auth_issuer_url
+        raise ValueError(
+            "WORKSTREAM_MCP_AUTH_ISSUER_URL must use HTTPS; local HTTP requires "
+            f"{INSECURE_AUTH_ISSUER_ENV}=true"
         )
 
 
@@ -69,3 +99,19 @@ def _split_values(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     if value is None:
         return default
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _optional_url(name: str) -> str | None:
+    """Read an optional URL without treating blank configuration as present."""
+    value = os.environ.get(name, "").strip().rstrip("/")
+    return value or None
+
+
+def _parse_boolean(name: str) -> bool:
+    """Parse one explicit development-only boolean setting."""
+    value = os.environ.get(name, "false").strip().casefold()
+    if value in {"true", "1"}:
+        return True
+    if value in {"false", "0"}:
+        return False
+    raise ValueError(f"{name} must be true or false")

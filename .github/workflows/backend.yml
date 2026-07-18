@@ -9,6 +9,8 @@ on:
 jobs:
   mcp-server:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -31,7 +33,9 @@ jobs:
 
       - name: MCP tests
         working-directory: mcp_server
-        run: python -m pytest -q
+        run: >-
+          python -m pytest -q --cov=workstream_mcp --cov-report=term-missing
+          --cov-fail-under=90 --cov-precision=2
 
   test:
     runs-on: ubuntu-latest

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -12,6 +12,10 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MCP_PROMPTS: tuple[str, ...] = ()
 STABLE_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+MAX_METADATA_DEPTH = 5
+MAX_METADATA_COLLECTION_ITEMS = 100
+MAX_METADATA_STRING_LENGTH = 10000
+BoundedEvidenceRef = Annotated[str, Field(min_length=1, max_length=1000)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,7 +156,7 @@ class ArtifactHashEntryInput(BaseModel):
     artifact: str = Field(min_length=1, max_length=1000)
     hash: str = Field(min_length=1, max_length=128)
     size_bytes: int | None = Field(default=None, ge=0)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=10000)
 
 
 class EvidenceItemInput(BaseModel):
@@ -173,7 +177,14 @@ class EvidenceItemInput(BaseModel):
     uri: str | None = Field(default=None, max_length=1000)
     hash: str | None = Field(default=None, max_length=128)
     size_bytes: int | None = Field(default=None, ge=0)
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("metadata")
+    @classmethod
+    def bound_metadata_values(cls, value: dict[str, Any]) -> dict[str, Any]:
+        """Reject deeply nested or oversized arbitrary evidence metadata."""
+        _validate_bounded_metadata(value)
+        return value
 
 
 class SubmissionInput(BaseModel):
@@ -181,12 +192,12 @@ class SubmissionInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    summary: str = Field(min_length=1)
+    summary: str = Field(min_length=1, max_length=10000)
     package_uri: str | None = Field(default=None, max_length=1000)
     package_hash: str = Field(min_length=1, max_length=128)
-    artifact_hash_manifest: list[ArtifactHashEntryInput] = Field(min_length=1)
-    worker_attestation: str = Field(min_length=1)
-    evidence_items: list[EvidenceItemInput] = Field(default_factory=list)
+    artifact_hash_manifest: list[ArtifactHashEntryInput] = Field(min_length=1, max_length=1000)
+    worker_attestation: str = Field(min_length=1, max_length=20000)
+    evidence_items: list[EvidenceItemInput] = Field(default_factory=list, max_length=1000)
 
 
 class CandidateSubmissionInput(RequestIdInput):
@@ -234,7 +245,7 @@ class ReviewFindingInput(BaseModel):
 
     summary: str = Field(min_length=1, max_length=4000)
     category: str | None = Field(default=None, max_length=100)
-    evidence_refs: list[str] = Field(default_factory=list)
+    evidence_refs: list[BoundedEvidenceRef] = Field(default_factory=list, max_length=100)
 
 
 class SubmitReviewInput(RequestIdInput):
@@ -242,7 +253,7 @@ class SubmitReviewInput(RequestIdInput):
 
     review_ref: str = Field(min_length=1, max_length=200)
     decision: Literal["accept", "needs_revision", "reject"]
-    findings: list[ReviewFindingInput] = Field(default_factory=list)
+    findings: list[ReviewFindingInput] = Field(default_factory=list, max_length=100)
 
     @field_validator("review_ref")
     @classmethod
@@ -269,10 +280,35 @@ def normalize_stable_ref(value: str, field_name: str) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError(f"{field_name} must not be blank")
+    if normalized in {".", ".."}:
+        raise ValueError(f"{field_name} must not be a relative path segment")
     if not STABLE_REF_PATTERN.fullmatch(normalized):
         raise ValueError(
             f"{field_name} must contain only letters, numbers, dot, underscore, colon, or hyphen"
         )
-    if normalized in {".", ".."}:
-        raise ValueError(f"{field_name} must not be a relative path segment")
     return normalized
+
+
+def _validate_bounded_metadata(value: Any, *, depth: int = 0) -> None:
+    """Bound arbitrary evidence metadata before it reaches a gateway."""
+    if depth > MAX_METADATA_DEPTH:
+        raise ValueError("metadata nesting exceeds the supported depth")
+    if isinstance(value, str):
+        if len(value) > MAX_METADATA_STRING_LENGTH:
+            raise ValueError("metadata string exceeds the supported length")
+        return
+    if isinstance(value, dict):
+        if len(value) > MAX_METADATA_COLLECTION_ITEMS:
+            raise ValueError("metadata object has too many entries")
+        for key, item in value.items():
+            _validate_bounded_metadata(key, depth=depth + 1)
+            _validate_bounded_metadata(item, depth=depth + 1)
+        return
+    if isinstance(value, list):
+        if len(value) > MAX_METADATA_COLLECTION_ITEMS:
+            raise ValueError("metadata list has too many items")
+        for item in value:
+            _validate_bounded_metadata(item, depth=depth + 1)
+        return
+    if value is not None and not isinstance(value, (bool, int, float)):
+        raise ValueError("metadata must contain JSON-compatible values")

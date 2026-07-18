@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import pytest
 
 from workstream_mcp.auth import RequestContext
+from workstream_mcp.auth import WorkstreamForwardingTokenVerifier
 from workstream_mcp.config import WorkstreamMCPConfig
 from workstream_mcp.observability import LOGGER, observe_operation
-from workstream_mcp.server import main
+from workstream_mcp.server import (
+    MAX_HTTP_REQUEST_BODY_BYTES,
+    _RequestBodyLimitMiddleware,
+    build_fastmcp_server,
+    main,
+)
 
 
 def test_streamable_http_allowlists_are_explicitly_configured(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -69,6 +76,68 @@ def test_main_rejects_sse_transport(monkeypatch: pytest.MonkeyPatch) -> None:
         main()
 
 
+def test_streamable_http_requires_explicit_https_auth_issuer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP transport cannot start with missing or implicit cleartext auth trust."""
+    monkeypatch.delenv("WORKSTREAM_MCP_AUTH_ISSUER_URL", raising=False)
+    monkeypatch.delenv("WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER", raising=False)
+
+    with pytest.raises(ValueError, match="AUTH_ISSUER_URL is required"):
+        build_fastmcp_server(gateway=object(), transport="streamable-http")  # type: ignore[arg-type]
+
+    monkeypatch.setenv("WORKSTREAM_MCP_AUTH_ISSUER_URL", "http://issuer.example.test")
+    with pytest.raises(ValueError, match="must use HTTPS"):
+        build_fastmcp_server(gateway=object(), transport="streamable-http")  # type: ignore[arg-type]
+
+
+def test_streamable_http_allows_https_or_explicit_local_development_issuer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only HTTPS or deliberate loopback development issuers configure HTTP auth."""
+    monkeypatch.setenv("WORKSTREAM_MCP_AUTH_ISSUER_URL", "https://issuer.example.test")
+    https_server = build_fastmcp_server(
+        gateway=object(),  # type: ignore[arg-type]
+        transport="streamable-http",
+    )
+
+    monkeypatch.setenv("WORKSTREAM_MCP_AUTH_ISSUER_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER", "true")
+    local_server = build_fastmcp_server(
+        gateway=object(),  # type: ignore[arg-type]
+        transport="streamable-http",
+    )
+
+    assert https_server is not None
+    assert local_server is not None
+    assert str(https_server.settings.auth.issuer_url).rstrip("/") == (
+        "https://issuer.example.test"
+    )
+    assert isinstance(https_server._token_verifier, WorkstreamForwardingTokenVerifier)  # noqa: SLF001
+
+    stdio_server = build_fastmcp_server(
+        gateway=object(),  # type: ignore[arg-type]
+        transport="stdio",
+    )
+    assert stdio_server.settings.auth is None
+    assert stdio_server._token_verifier is None  # noqa: SLF001
+
+
+def test_insecure_auth_issuer_override_is_strict_and_loopback_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The development override cannot enable remote cleartext issuer trust."""
+    monkeypatch.setenv("WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER", "sometimes")
+    with pytest.raises(ValueError, match="must be true or false"):
+        WorkstreamMCPConfig.from_environment()
+
+    monkeypatch.setenv("WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER", "true")
+    monkeypatch.setenv("WORKSTREAM_MCP_AUTH_ISSUER_URL", "http://issuer.example.test")
+    config = WorkstreamMCPConfig.from_environment()
+    with pytest.raises(ValueError, match="must use HTTPS"):
+        config.streamable_http_auth_issuer_url()
+
+
 @pytest.mark.asyncio
 async def test_observability_never_logs_bearer_tokens(caplog: pytest.LogCaptureFixture) -> None:
     """Operation logs contain correlation metadata but never the forwarding token."""
@@ -91,6 +160,173 @@ async def test_observability_never_logs_bearer_tokens(caplog: pytest.LogCaptureF
     assert caplog.records[0].outcome_class == "success"
     assert caplog.records[0].retryable is False
     assert caplog.records[0].idempotent_replay is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "expected_class"),
+    [
+        ("workstream_temporarily_unavailable", "infrastructure_error"),
+        ("invalid_token", "authentication_error"),
+        ("capability_not_granted", "authorization_error"),
+        ("task_not_claimable", "domain_error"),
+    ],
+)
+async def test_observability_classifies_safe_error_results(
+    caplog: pytest.LogCaptureFixture,
+    code: str,
+    expected_class: str,
+) -> None:
+    """Operation telemetry classifies only stable error metadata."""
+    caplog.set_level(logging.INFO, logger=LOGGER.name)
+    request_context = RequestContext("issuer-token", "corr-1", "stdio")
+
+    async def result() -> dict[str, object]:
+        return {"error": {"code": code, "retryable": True}}
+
+    await observe_operation(
+        request_context,
+        kind="tool",
+        identifier="test_tool",
+        action=result,
+    )
+
+    assert caplog.records[-1].outcome_class == expected_class
+    assert caplog.records[-1].retryable is True
+
+
+@pytest.mark.asyncio
+async def test_observability_marks_nested_replays_and_reraises_failures(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Replay telemetry is recursive and unexpected exceptions are not swallowed."""
+    caplog.set_level(logging.INFO, logger=LOGGER.name)
+    request_context = RequestContext("issuer-token", "corr-1", "stdio")
+
+    async def replayed() -> dict[str, object]:
+        return {"data": [{"idempotent_replay": True}]}
+
+    async def failed() -> dict[str, object]:
+        raise RuntimeError("boom")
+
+    await observe_operation(
+        request_context,
+        kind="tool",
+        identifier="replayed_tool",
+        action=replayed,
+    )
+    assert caplog.records[-1].idempotent_replay is True
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await observe_operation(
+            request_context,
+            kind="tool",
+            identifier="failed_tool",
+            action=failed,
+        )
+    assert caplog.records[-1].outcome_class == "infrastructure_error"
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_rejects_oversized_body_before_mcp_app() -> None:
+    """The HTTP adapter rejects oversized bodies before downstream JSON parsing."""
+    app_called = False
+    sent: list[dict[str, object]] = []
+
+    async def app(scope: object, receive: object, send: object) -> None:
+        nonlocal app_called
+        app_called = True
+
+    async def receive() -> dict[str, object]:
+        return {
+            "type": "http.request",
+            "body": b"x" * (MAX_HTTP_REQUEST_BODY_BYTES + 1),
+            "more_body": False,
+        }
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    middleware = _RequestBodyLimitMiddleware(app, max_bytes=MAX_HTTP_REQUEST_BODY_BYTES)
+    await middleware(
+        {"type": "http", "method": "POST", "headers": []},
+        receive,
+        send,
+    )
+
+    assert app_called is False
+    assert sent[0]["status"] == 413
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_replays_bounded_request() -> None:
+    """A bounded HTTP body reaches the MCP app unchanged."""
+    received_by_app: list[dict[str, object]] = []
+    sent: list[dict[str, object]] = []
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        received_by_app.append(await receive())
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+
+    messages = [
+        {"type": "http.request", "body": b"bounded", "more_body": False},
+    ]
+
+    async def receive() -> dict[str, object]:
+        return messages.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    middleware = _RequestBodyLimitMiddleware(app, max_bytes=MAX_HTTP_REQUEST_BODY_BYTES)
+    await middleware(
+        {
+            "type": "http",
+            "method": "POST",
+            "headers": [(b"content-length", b"invalid")],
+        },
+        receive,
+        send,
+    )
+
+    assert received_by_app == [
+        {"type": "http.request", "body": b"bounded", "more_body": False}
+    ]
+    assert sent[0]["status"] == 200
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_short_circuits_by_method_and_length() -> None:
+    """Non-body methods pass through and oversized content length fails immediately."""
+    app_calls = 0
+    sent: list[dict[str, object]] = []
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        nonlocal app_calls
+        app_calls += 1
+
+    async def receive() -> dict[str, object]:
+        raise AssertionError("oversized declared bodies must not be read")
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    middleware = _RequestBodyLimitMiddleware(app, max_bytes=MAX_HTTP_REQUEST_BODY_BYTES)
+    await middleware({"type": "http", "method": "GET", "headers": []}, receive, send)
+    await middleware(
+        {
+            "type": "http",
+            "method": "POST",
+            "headers": [
+                (b"content-length", str(MAX_HTTP_REQUEST_BODY_BYTES + 1).encode("ascii"))
+            ],
+        },
+        receive,
+        send,
+    )
+
+    assert app_calls == 1
+    assert sent[0]["status"] == 413
 
 
 async def _successful_action() -> dict[str, str]:

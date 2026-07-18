@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import httpx
 import pytest
 
 from workstream_mcp.auth import (
@@ -9,6 +12,7 @@ from workstream_mcp.auth import (
     WorkstreamForwardingTokenVerifier,
     authorization_headers,
     contains_secret,
+    context_for_transport,
     context_from_authorization_header,
     redact_secrets,
 )
@@ -63,22 +67,83 @@ def test_request_context_repr_omits_bearer_token() -> None:
 
 def test_redaction_removes_known_secret_from_structured_values() -> None:
     """Known raw secrets are removed from nested values."""
-    payload = {"message": "Bearer issuer-token", "items": ["issuer-token", "safe"]}
+    payload = {
+        "message": "Bearer issuer-token",
+        "items": ["issuer-token", "safe"],
+        "unique_items": {"issuer-token", "safe"},
+    }
 
     redacted = redact_secrets(payload, ("issuer-token",))
 
     assert not contains_secret(redacted, "issuer-token")
-    assert redacted == {"message": "Bearer [REDACTED]", "items": ["[REDACTED]", "safe"]}
+    assert redacted == {
+        "message": "Bearer [REDACTED]",
+        "items": ["[REDACTED]", "safe"],
+        "unique_items": {"[REDACTED]", "safe"},
+    }
 
 
 @pytest.mark.asyncio
-async def test_forwarding_token_verifier_requires_non_empty_token() -> None:
-    """The MCP HTTP auth shim only accepts present bearer material."""
-    verifier = WorkstreamForwardingTokenVerifier()
+async def test_forwarding_token_verifier_uses_existing_workstream_auth() -> None:
+    """HTTP sessions begin only after Workstream Auth accepts the bearer token."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.headers["authorization"])
+        status = 200 if request.headers["authorization"] == "Bearer issuer-token" else 401
+        return httpx.Response(status, json={"id": "actor-1"})
+
+    verifier = WorkstreamForwardingTokenVerifier(
+        base_url="http://workstream.test",
+        timeout_seconds=1,
+        transport=httpx.MockTransport(handler),
+    )
 
     accepted = await verifier.verify_token("issuer-token")
-    rejected = await verifier.verify_token("   ")
+    denied = await verifier.verify_token("denied-token")
+    malformed = await verifier.verify_token("   ")
 
     assert accepted is not None
     assert accepted.token == "issuer-token"
-    assert rejected is None
+    assert denied is None
+    assert malformed is None
+    assert calls == ["Bearer issuer-token", "Bearer denied-token"]
+
+
+@pytest.mark.asyncio
+async def test_forwarding_token_verifier_fails_closed_when_auth_is_unavailable() -> None:
+    """An unavailable existing Auth service cannot create an MCP HTTP session."""
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("offline", request=request)
+
+    verifier = WorkstreamForwardingTokenVerifier(
+        base_url="http://workstream.test",
+        timeout_seconds=1,
+        transport=httpx.MockTransport(unavailable),
+    )
+
+    assert await verifier.verify_token("issuer-token") is None
+
+
+def test_http_context_never_falls_back_to_stdio_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing HTTP auth context cannot consume the process-wide STDIO token."""
+    monkeypatch.setenv("WORKSTREAM_MCP_ISSUER_TOKEN", "stdio-token")
+
+    with pytest.raises(WorkstreamMCPError) as missing:
+        context_for_transport(
+            None,
+            correlation_id="corr-1",
+            transport="streamable-http",
+        )
+    stdio = context_for_transport(None, correlation_id="corr-2", transport="stdio")
+    http = context_for_transport(
+        SimpleNamespace(token="http-token"),
+        correlation_id="corr-3",
+        transport="streamable-http",
+    )
+
+    assert missing.value.code is MCPErrorCode.AUTHENTICATION_REQUIRED
+    assert stdio.bearer_token == "stdio-token"
+    assert http.bearer_token == "http-token"

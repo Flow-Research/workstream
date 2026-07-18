@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from typing import Any
+from uuid import uuid4
+
+import httpx
 
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 
@@ -81,21 +84,64 @@ def context_from_mcp_access_token(access_token: Any, *, correlation_id: str) -> 
     return RequestContext(token.strip(), correlation_id, "streamable_http")
 
 
-class WorkstreamForwardingTokenVerifier:
-    """MCP token verifier that preserves Workstream as the authority.
+def context_for_transport(
+    access_token: Any,
+    *,
+    correlation_id: str,
+    transport: str,
+) -> RequestContext:
+    """Build identity context without crossing HTTP and STDIO credential sources."""
+    if access_token is not None:
+        return context_from_mcp_access_token(access_token, correlation_id=correlation_id)
+    if transport == "stdio":
+        return context_from_stdio_environment(correlation_id=correlation_id)
+    raise WorkstreamMCPError(
+        MCPErrorCode.AUTHENTICATION_REQUIRED,
+        "Authorization bearer token is required.",
+        correlation_id=correlation_id,
+    )
 
-    The verifier accepts a syntactically present bearer token only so MCP HTTP
-    middleware can require authentication and expose the raw token to handlers.
-    Workstream API calls still perform the authoritative identity and grant
-    checks.
-    """
+
+class WorkstreamForwardingTokenVerifier:
+    """MCP token verifier backed by Workstream's existing Auth service."""
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        timeout_seconds: float,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        """Configure the authoritative identity check without owning sessions."""
+        self._base_url = base_url.rstrip("/")
+        self._timeout_seconds = timeout_seconds
+        self._transport = transport
 
     async def verify_token(self, token: str) -> Any:
-        """Return an MCP access token wrapper for a non-empty bearer token."""
+        """Return an MCP access token only after Workstream Auth accepts it."""
         if AccessToken is None or not _is_valid_bearer_token(token.strip()):
             return None
+        normalized_token = token.strip()
+        try:
+            async with httpx.AsyncClient(
+                base_url=self._base_url,
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+                trust_env=False,
+            ) as client:
+                response = await client.get(
+                    "/api/v1/auth/me",
+                    headers={
+                        "Authorization": f"Bearer {normalized_token}",
+                        "X-Correlation-ID": str(uuid4()),
+                    },
+                )
+        except httpx.HTTPError:
+            return None
+        if not response.is_success:
+            return None
         return AccessToken(
-            token=token.strip(),
+            token=normalized_token,
             client_id="workstream-forwarded-actor",
             scopes=[],
         )
@@ -127,6 +173,8 @@ def redact_secrets(value: Any, secrets: tuple[str, ...]) -> Any:
         return [redact_secrets(item, filtered) for item in value]
     if isinstance(value, tuple):
         return tuple(redact_secrets(item, filtered) for item in value)
+    if isinstance(value, set):
+        return {redact_secrets(item, filtered) for item in value}
     if isinstance(value, dict):
         return {
             redact_secrets(key, filtered): redact_secrets(item, filtered)

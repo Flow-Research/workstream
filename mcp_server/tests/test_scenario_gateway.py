@@ -164,7 +164,15 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     assert context_result["review_ref"] == "scenario-review-1"
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert accepted["outcome"] == "accept"
-    assert accepted_retry == accepted
+    assert accepted_retry["data"]["review_decision"]["idempotent_replay"] is True
+    assert "idempotent_replay" not in accepted["data"]["review_decision"]
+    assert await gateway.get_current_review(
+        context(), project_id="scenario-project-1"
+    ) == {
+        "source": "temporary_scenario_gateway",
+        "project_id": "scenario-project-1",
+        "state": "none_available",
+    }
 
 
 @pytest.mark.asyncio
@@ -204,7 +212,8 @@ async def test_temporary_submitter_flow_is_complete_and_idempotent() -> None:
     assert claimed["outcome"] == "claimed"
     assert checked["outcome"] == "passed"
     assert submitted["outcome"] == "submitted"
-    assert submitted_retry == submitted
+    assert submitted_retry["data"]["submission"]["idempotent_replay"] is True
+    assert "idempotent_replay" not in submitted["data"]["submission"]
     assert status["task"]["actor_facing_state"] == "review_pending"
     assert status["latest_submission"]["id"] == "scenario-submission-1"
 
@@ -234,7 +243,8 @@ async def test_temporary_task_release_retries_after_state_changes() -> None:
     )
 
     assert released["outcome"] == "released"
-    assert released_retry == released
+    assert released_retry["data"]["task_release"]["idempotent_replay"] is True
+    assert "idempotent_replay" not in released["data"]["task_release"]
 
 
 @pytest.mark.asyncio
@@ -264,6 +274,95 @@ async def test_idempotency_is_scoped_to_actor_tool_and_request_id() -> None:
     assert first["outcome"] == "claimed"
     assert other_actor["error"]["code"] == "task_not_claimable"
     assert conflicting_retry["error"]["code"] == "idempotency_conflict"
+
+
+@pytest.mark.asyncio
+async def test_review_claim_conflicting_retry_precedes_fixture_validation() -> None:
+    """A reused review request ID reports conflict even when new input is unavailable."""
+    gateway = ScenarioContributorGateway()
+    await claim_review(
+        gateway,
+        context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+
+    conflicting_retry = await claim_review(
+        gateway,
+        context(),
+        project_id="different-project",
+        review_routing_ref="different-route",
+        request_id=REQUEST_ID,
+    )
+
+    assert conflicting_retry["error"]["code"] == "idempotency_conflict"
+
+
+@pytest.mark.asyncio
+async def test_needs_revision_persists_findings_and_allows_revised_submission() -> None:
+    """A review revision decision drives the submitter back through task context."""
+    gateway = ScenarioContributorGateway()
+    finding = {"summary": "Correct the declared artifact hash.", "category": "evidence"}
+    await claim_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        request_id=REQUEST_ID,
+    )
+    await submit_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+    await claim_review(
+        gateway,
+        context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id="33333333-3333-4333-8333-333333333333",
+    )
+
+    decision = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="needs_revision",
+        findings=[finding],
+        request_id="44444444-4444-4444-8444-444444444444",
+    )
+    status = await gateway.get_task_status(context(), task_id="scenario-task-1")
+    task_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
+    revised = await submit_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="55555555-5555-4555-8555-555555555555",
+    )
+    revised_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
+    next_review = await gateway.get_current_review(
+        context(), project_id="scenario-project-1"
+    )
+
+    assert decision["outcome"] == "needs_revision"
+    assert status["actor_facing_state"] == "needs_revision"
+    assert status["action_required"] == "read_task_context"
+    persisted_finding = {**finding, "evidence_refs": []}
+    assert status["latest_review_outcome"]["findings"] == [persisted_finding]
+    assert task_context["revision"] == {
+        "required": True,
+        "findings": [persisted_finding],
+        "submission_ref": "scenario-submission-1",
+        "submission_version": 1,
+    }
+    assert revised["outcome"] == "submitted"
+    assert revised_context["revision"] == {"required": False, "findings": []}
+    assert next_review["state"] == "available_to_claim"
+    assert next_review["review_ref"] == "scenario-review-2"
+    assert next_review["review_routing_ref"] == "scenario-review-route-2"
 
 
 @pytest.mark.asyncio

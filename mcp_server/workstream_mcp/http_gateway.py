@@ -298,6 +298,7 @@ class HTTPContributorGateway:
             base_url=self._base_url,
             timeout=self._timeout,
             transport=self._transport,
+            trust_env=False,
         ) as client:
             try:
                 response = await client.request(

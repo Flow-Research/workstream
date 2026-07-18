@@ -76,6 +76,10 @@ class ScenarioContributorGateway:
             "lease_started_at": None,
             "lease_expires_at": None,
         }
+        self._review_task_id = "scenario-task-1"
+        self._revision_findings: dict[str, list[dict[str, Any]]] = {}
+        self._revision_submissions: dict[str, dict[str, Any]] = {}
+        self._latest_review_outcomes: dict[str, dict[str, Any]] = {}
         self._submission_count = 0
         self._submissions: list[dict[str, Any]] = []
         self._task_owner: str | None = None
@@ -149,7 +153,11 @@ class ScenarioContributorGateway:
                 "summary": "Scenario points recorded after acceptance.",
             },
             "cycle": {"number": 1, "maximum_revisions": 2},
-            "revision": {"required": False, "findings": []},
+            "revision": {
+                "required": task["actor_facing_state"] == "needs_revision",
+                "findings": deepcopy(self._revision_findings.get(task_id, [])),
+                **deepcopy(self._revision_submissions.get(task_id, {})),
+            },
             "submission_requirements": {
                 "task_id": task_id,
                 "required_packet_fields": [
@@ -182,7 +190,7 @@ class ScenarioContributorGateway:
             "latest_submission": deepcopy(task_submissions[-1]) if task_submissions else None,
             "checker_runs": [],
             "latest_check_outcome": None,
-            "latest_review_outcome": None,
+            "latest_review_outcome": deepcopy(self._latest_review_outcomes.get(task_id)),
             "action_required": (
                 "read_task_context"
                 if task["actor_facing_state"] == "needs_revision"
@@ -314,7 +322,24 @@ class ScenarioContributorGateway:
                 correlation_id=context.correlation_id,
             )
         self._submission_count += 1
+        was_revision = task["actor_facing_state"] == "needs_revision"
         task["actor_facing_state"] = "review_pending"
+        if was_revision:
+            self._revision_findings.pop(task_id, None)
+            self._revision_submissions.pop(task_id, None)
+            next_review_number = self._submission_count
+            self._review.update(
+                {
+                    "state": "available_to_claim",
+                    "review_routing_ref": f"scenario-review-route-{next_review_number}",
+                    "review_ref": f"scenario-review-{next_review_number}",
+                    "actor_facing_state": "available_to_claim",
+                    "context_resource": None,
+                    "lease_started_at": None,
+                    "lease_expires_at": None,
+                }
+            )
+            self._review_owner = None
         result = {
             "id": f"scenario-submission-{self._submission_count}",
             "task_id": task_id,
@@ -339,6 +364,12 @@ class ScenarioContributorGateway:
         """Return no more than one deterministic review view."""
         _require_context(context)
         if project_id != self._review["project_id"]:
+            return {
+                "source": "temporary_scenario_gateway",
+                "project_id": project_id,
+                "state": "none_available",
+            }
+        if self._review["state"] == "none_available":
             return {
                 "source": "temporary_scenario_gateway",
                 "project_id": project_id,
@@ -372,6 +403,15 @@ class ScenarioContributorGateway:
                 "Review context is available only for a review leased to the actor.",
                 correlation_id=context.correlation_id,
             )
+        task_submissions = [
+            submission
+            for submission in self._submissions
+            if submission["task_id"] == self._review_task_id
+        ]
+        reviewed_submission = task_submissions[-1] if task_submissions else {
+            "id": "scenario-submission-1",
+            "version": 1,
+        }
         return {
             "source": "temporary_scenario_gateway",
             "review_ref": review_ref,
@@ -385,8 +425,8 @@ class ScenarioContributorGateway:
                 "acceptance_criteria": ["The package is complete and evidence passes."],
             },
             "submission": {
-                "submission_id": "scenario-submission-1",
-                "version": 1,
+                "submission_id": reviewed_submission["id"],
+                "version": reviewed_submission["version"],
                 "summary": "Scenario candidate submission.",
                 "artifact_manifest": [
                     {"artifact": "result.txt", "hash": "sha256:def"}
@@ -418,6 +458,10 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Claim the deterministic current review."""
         _require_context(context)
+        input_key = (project_id, review_routing_ref)
+        replay = self._replay("claim_review", request_id, input_key, context)
+        if replay is not None:
+            return replay
         if (
             project_id != self._review["project_id"]
             or review_routing_ref != self._review["review_routing_ref"]
@@ -427,11 +471,6 @@ class ScenarioContributorGateway:
                 "No matching review is currently available.",
                 correlation_id=context.correlation_id,
             )
-        replay = self._replay(
-            "claim_review", request_id, (project_id, review_routing_ref), context
-        )
-        if replay is not None:
-            return replay
         if self._review["state"] != "available_to_claim":
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_AVAILABLE,
@@ -449,7 +488,7 @@ class ScenarioContributorGateway:
         return self._store_replay(
             "claim_review",
             request_id,
-            (project_id, review_routing_ref),
+            input_key,
             {
                 "operation": "claim_review",
                 "outcome": "leased_to_actor",
@@ -535,6 +574,32 @@ class ScenarioContributorGateway:
             )
         self._review["state"] = "none_available"
         self._review["actor_facing_state"] = "completed"
+        if decision == "needs_revision":
+            persisted_findings = deepcopy(findings)
+            task = self._task(self._review_task_id, context)
+            task_submissions = [
+                submission
+                for submission in self._submissions
+                if submission["task_id"] == self._review_task_id
+            ]
+            reviewed_submission = task_submissions[-1] if task_submissions else {
+                "id": "scenario-submission-1",
+                "version": 1,
+            }
+            task["actor_facing_state"] = "needs_revision"
+            task["may_claim"] = False
+            self._revision_findings[self._review_task_id] = persisted_findings
+            self._revision_submissions[self._review_task_id] = {
+                "submission_ref": reviewed_submission["id"],
+                "submission_version": reviewed_submission["version"],
+            }
+            self._latest_review_outcomes[self._review_task_id] = {
+                "decision": decision,
+                "review_ref": review_ref,
+                "submission_ref": reviewed_submission["id"],
+                "submission_version": reviewed_submission["version"],
+                "findings": persisted_findings,
+            }
         return self._store_replay(
             "submit_review",
             request_id,
@@ -595,7 +660,9 @@ class ScenarioContributorGateway:
                 "The request ID was already used for different input.",
                 correlation_id=context.correlation_id,
             )
-        return deepcopy(result)
+        replayed = deepcopy(result)
+        replayed["idempotent_replay"] = True
+        return replayed
 
     def _store_replay(
         self,
