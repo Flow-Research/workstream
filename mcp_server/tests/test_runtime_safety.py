@@ -329,6 +329,78 @@ async def test_streamable_http_body_limit_short_circuits_by_method_and_length() 
     assert sent[0]["status"] == 413
 
 
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_bounds_empty_continuation_frames() -> None:
+    """Zero-length continuation chunks cannot grow buffered ASGI state."""
+    app_called = False
+    sent: list[dict[str, object]] = []
+    frames = [
+        {"type": "http.request", "body": b"", "more_body": True},
+        {"type": "http.request", "body": b"", "more_body": True},
+        {"type": "http.request", "body": b"", "more_body": True},
+    ]
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        nonlocal app_called
+        app_called = True
+
+    async def receive() -> dict[str, object]:
+        return frames.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    middleware = _RequestBodyLimitMiddleware(
+        app,
+        max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+        max_frames=2,
+    )
+    await middleware(
+        {"type": "http", "method": "POST", "headers": []},
+        receive,
+        send,
+    )
+
+    assert app_called is False
+    assert sent[0]["status"] == 413
+    assert frames == []
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_preserves_disconnect_order() -> None:
+    """A mid-body disconnect follows the coalesced partial request downstream."""
+    replayed: list[dict[str, object]] = []
+    frames = [
+        {"type": "http.request", "body": b"partial", "more_body": True},
+        {"type": "http.disconnect"},
+    ]
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        replayed.append(await receive())
+        replayed.append(await receive())
+
+    async def receive() -> dict[str, object]:
+        return frames.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        return None
+
+    middleware = _RequestBodyLimitMiddleware(
+        app,
+        max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+    )
+    await middleware(
+        {"type": "http", "method": "POST", "headers": []},
+        receive,
+        send,
+    )
+
+    assert replayed == [
+        {"type": "http.request", "body": b"partial", "more_body": True},
+        {"type": "http.disconnect"},
+    ]
+
+
 async def _successful_action() -> dict[str, str]:
     """Return a deterministic operation result for logging tests."""
     return {"outcome": "claimed"}

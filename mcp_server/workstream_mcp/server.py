@@ -29,14 +29,16 @@ from workstream_mcp.schemas import (
 )
 
 MAX_HTTP_REQUEST_BODY_BYTES = 2 * 1024 * 1024
+MAX_HTTP_REQUEST_FRAMES = 1024
 
 
 class _RequestBodyLimitMiddleware:
     """Reject oversized HTTP bodies before MCP JSON parsing."""
 
-    def __init__(self, app: Any, *, max_bytes: int) -> None:
+    def __init__(self, app: Any, *, max_bytes: int, max_frames: int = MAX_HTTP_REQUEST_FRAMES) -> None:
         self._app = app
         self._max_bytes = max_bytes
+        self._max_frames = max_frames
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope.get("type") != "http" or scope.get("method") not in {"POST", "PUT", "PATCH"}:
@@ -51,24 +53,54 @@ class _RequestBodyLimitMiddleware:
             await self._reject(send)
             return
 
-        messages: list[dict[str, Any]] = []
-        total = 0
+        body = bytearray()
+        frames = 0
+        terminal_message: dict[str, Any] | None = None
         while True:
             message = await receive()
-            messages.append(message)
             if message.get("type") == "http.request":
-                total += len(message.get("body", b""))
-                if total > self._max_bytes:
+                frames += 1
+                if frames > self._max_frames:
+                    await self._reject(send)
+                    return
+                body.extend(message.get("body", b""))
+                if len(body) > self._max_bytes:
                     await self._reject(send)
                     return
                 if not message.get("more_body", False):
                     break
             else:
+                terminal_message = message
                 break
 
+        if terminal_message is None:
+            replay_messages = (
+                {
+                    "type": "http.request",
+                    "body": bytes(body),
+                    "more_body": False,
+                },
+            )
+        elif frames:
+            replay_messages = (
+                {
+                    "type": "http.request",
+                    "body": bytes(body),
+                    "more_body": True,
+                },
+                terminal_message,
+            )
+        else:
+            replay_messages = (terminal_message,)
+
+        replay_index = 0
+
         async def replay_receive() -> dict[str, Any]:
-            if messages:
-                return messages.pop(0)
+            nonlocal replay_index
+            if replay_index < len(replay_messages):
+                message = replay_messages[replay_index]
+                replay_index += 1
+                return message
             return {"type": "http.disconnect"}
 
         await self._app(scope, replay_receive, send)
