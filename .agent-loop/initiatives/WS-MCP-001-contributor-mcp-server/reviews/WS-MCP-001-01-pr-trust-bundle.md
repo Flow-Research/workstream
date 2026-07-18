@@ -8,45 +8,39 @@ Merge intent: `.agent-loop/merge-intents/WS-MCP-001-01.json`
 
 ## Goal
 
-Add the first Workstream contributor MCP server package with a closed v0.1 catalogue, real HTTP calls for currently available task/submission/checker APIs, and explicit temporary scenario coverage for unavailable APIs.
-
-## Human-Approved Intent
-
-- Intent: `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/INTENT.md`
-- Chunk contract: `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/chunks/WS-MCP-001-01-contributor-mcp-foundation.md`
+Add the WS-MCP-001 contributor MCP surface without duplicating Workstream
+authority or exposing backend lifecycle endpoints with incompatible contributor
+semantics.
 
 ## What Changed
 
-- Added `mcp_server/` Python package using `mcp>=1.27,<2`.
 - Added seven WS-MCP-001 resource types, seven tools, and zero prompts.
-- Added HTTP gateway calls for available Workstream task/submission/checker APIs.
-- Added explicit scenario gateway for unavailable review/contribution/list APIs.
-- Added MCP lint/test CI and internal-review gate relevance for `mcp_server/`.
+- Restricted the production HTTP gateway to semantically compatible backend APIs.
+- Made contributor `claim_task`, `release_task`, and `submit_task` fail closed until atomic claim-to-work, contributor release, and durable idempotency APIs exist.
+- Kept the complete temporary scenario gateway test-injected only; it is not selectable by runtime configuration.
+- Enforced UUID request IDs and strict submission/review input shapes.
+- Added safe upstream JSON/error handling, bearer-safe observability, and Streamable HTTP transport security. SSE is not supported.
 
 ## Why It Changed
 
-The maintainer approved starting MCP work against current APIs while using a simple temporary service layer for missing APIs.
+The original adapter could use backend endpoints whose lifecycle and authority
+semantics did not match the contributor MCP specification. Failing closed is
+the only correct MCP-side behavior until Workstream supplies compatible APIs.
 
 ## Design Chosen
 
-Thin MCP handlers validate input, propagate bearer context, redact outputs, and route all product behavior through a contributor gateway. Default HTTP mode fails closed for missing backend APIs; scenario mode is opt-in.
-
-## Alternatives Rejected
-
-- Direct database access: rejected because Workstream APIs and authorization must remain authoritative.
-- Generic API proxy tool: rejected because WS-MCP-001 requires a closed contributor catalogue.
-- Blocking all work until review/contribution APIs exist: rejected because the maintainer approved a temporary test layer.
+The MCP is a thin contributor protocol adapter. It forwards the issuer token to
+Workstream, validates stable inputs, redacts outputs, logs only safe operation
+metadata, and holds no workflow or business state. The scenario fixture exists
+only for tests that exercise the public MCP contract while backend APIs are
+unavailable or incompatible.
 
 ## Scope Control
 
 ### Allowed Files Changed
 
 - `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/**`
-- `.agent-loop/merge-intents/WS-MCP-001-01.json`
-- `.github/workflows/backend.yml`
 - `mcp_server/**`
-- `scripts/check_internal_review_evidence.py`
-- `scripts/test_agent_gates.py`
 
 ### Files Outside Contract
 
@@ -54,118 +48,90 @@ Thin MCP handlers validate input, propagate bearer context, redact outputs, and 
 
 ## Product Behavior
 
-- [x] Product behavior changed and is explained here: an additive MCP adapter is introduced. Workstream lifecycle authority remains in existing APIs.
+- [x] Product behavior changed and is explained here: the MCP advertises the approved catalogue but truthfully returns `workstream_temporarily_unavailable` for surfaces that current backend APIs cannot safely implement.
 
 ## Evidence
 
-### Commands Run
+```text
+MCP tests: 26 passed.
+MCP ruff: passed.
+Stale wording, Markdown, authorization, and artifact-contract checks: passed.
+Agent gate regression: 71 passed.
+git diff --check: passed.
+```
+
+Commands:
 
 ```bash
-(cd mcp_server && /opt/homebrew/Caskroom/miniforge/base/bin/python3.12 -m pytest -q)
-(cd mcp_server && /opt/homebrew/Caskroom/miniforge/base/bin/python3.12 -m ruff check . --output-format concise)
+(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m ruff check .)
+(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m pytest -q)
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/test_agent_gates.py
-(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts --output-format concise)
-(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
 git diff --check
-```
-
-### Result Summary
-
-```text
-MCP tests: 18 passed.
-MCP ruff: passed.
-Repo static gates: passed.
-Agent gate regression: 71 passed.
-Backend ruff: passed.
-Backend API contract e2e: 14 passed.
-git diff --check: passed.
-Database-backed full backend pytest needs WORKSTREAM_TEST_ADMIN_DATABASE_URL and is left to CI/local Postgres runner.
 ```
 
 ## Acceptance Criteria Proof
 
-- [x] Exactly seven resource types and seven tools, zero prompts: `mcp_server/tests/test_catalogue.py`.
-- [x] Bearer token is transport/session context, not tool input: `mcp_server/tests/test_auth.py` and runtime input-schema assertions.
-- [x] Available Submitter APIs call current `/api/v1` paths: `mcp_server/tests/test_http_gateway.py`.
-- [x] Temporary unavailable surfaces are explicit and fail closed by default: `HTTPContributorGateway` tests.
-- [x] `claim_task` does not invoke `start_task`: HTTP path test.
-- [x] Pre-submit checker failure is a valid structured outcome: pre-submit test.
-- [x] Exactly one schema-v2 merge intent added.
+- [x] Seven resource types, seven tools, zero prompts: `mcp_server/tests/test_catalogue.py`.
+- [x] Tokens stay transport/session scoped and are redacted from results and logs: `test_auth.py`, `test_http_gateway.py`, and `test_runtime_safety.py`.
+- [x] Only compatible backend paths are called; incompatible lifecycle routes fail closed: `test_http_gateway.py`.
+- [x] UUID request IDs and strict schemas are exposed at FastMCP runtime: `test_catalogue.py`.
+- [x] Temporary lifecycle/review behavior is replay-safe only under explicit test injection: `test_scenario_gateway.py`.
+- [x] Checker failure remains a valid structured outcome: `test_http_gateway.py`.
+- [x] Exactly one schema-v2 merge intent exists: `.agent-loop/merge-intents/WS-MCP-001-01.json`.
 
 ## Test Delta
 
-### Tests Added
+Added: `mcp_server/tests/test_runtime_safety.py`.
 
-- `mcp_server/tests/test_auth.py`
-- `mcp_server/tests/test_catalogue.py`
-- `mcp_server/tests/test_http_gateway.py`
-- `mcp_server/tests/test_scenario_gateway.py`
-- `scripts/test_agent_gates.py` coverage for `mcp_server/` review relevance.
-
-### Tests Modified
-
-- None existing product tests modified.
-
-### Tests Removed Or Skipped
-
-- None
+Modified: `test_auth.py`, `test_catalogue.py`, `test_http_gateway.py`, and
+`test_scenario_gateway.py`.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 6573bc30e054372d1391cb6f472462a8e83b6981
+Reviewed code SHA: aaff8a1400b530946e6e57a11ad2e0e753543219
 
-Reviewed at: 2026-07-16T15:59:17Z
+Reviewed at: 2026-07-18T13:46:15Z
 
-Reviewer run IDs: senior-engineering-final-local-review, qa-test-final-local-review, security-auth-final-local-review, product-ops-final-local-review, architecture-final-local-review, ci-integrity-final-local-review, docs-final-local-review, reuse-dedup-final-local-review, test-delta-final-local-review
+Reviewer run IDs: senior-engineering-mcp-remediation-local-review, qa-test-mcp-remediation-local-review, security-auth-mcp-remediation-local-review, product-ops-mcp-remediation-local-review, architecture-mcp-remediation-local-review, ci-integrity-mcp-remediation-local-review, docs-mcp-remediation-local-review, reuse-dedup-mcp-remediation-local-review, test-delta-mcp-remediation-local-review
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
-| Senior engineering | PASS | none | Valid findings fixed. |
-| QA/test | PASS | none | Valid findings fixed. |
-| Security/auth | PASS WITH LOW RISKS | none | Future hardening can make STDIO fallback explicit. |
-| Product/ops | PASS WITH LOW RISKS | none | Scenario mode is explicit. |
-| Architecture | PASS WITH LOW RISKS | none | Boundaries accepted. |
-| CI integrity | PASS AFTER FIXES | none | Evidence file added after reviewed SHA. |
-| Docs | PASS AFTER FIXES | none | Evidence file added after reviewed SHA. |
-| Reuse/dedup | PASS WITH LOW RISKS | none | Runtime registration duplication is test-guarded. |
-| Test delta | PASS | none | MCP tests and CI coverage added. |
+| Senior engineering | PASS | none | Lifecycle routes are fail-closed when they cannot meet the MCP contract. |
+| QA/test | PASS | none | 26 focused MCP tests pass. |
+| Security/auth | PASS | none | Token, transport, and safe-error boundaries are covered. |
+| Product/ops | PASS WITH LOW RISKS | none | Unavailable outcomes are truthful pending backend work. |
+| Architecture | PASS | none | No backend or persistence ownership moved into MCP. |
+| CI integrity | PASS | none | No gate weakening. |
+| Docs | PASS AFTER FIXES | none | Initiative docs describe the real capability boundary. |
+| Reuse/dedup | PASS | none | Boundary behavior is centralized. |
+| Test delta | PASS | none | New tests target the corrected risks. |
 
 ## External Review
-
-External review response file:
-
-- `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/reviews/WS-MCP-001-01-external-review-response.md`
 
 | Source | Status | Notes |
 |---|---:|---|
 | CodeRabbit | Pending | PR not opened yet. |
 | GitHub checks | Pending | PR not opened yet. |
 
-## CI And Gate Integrity
-
-- [x] No workflow weakening.
-- [x] No lint/test/docstring gate weakening.
-- [x] No coverage threshold weakening.
-- [x] No package script weakening.
-- [x] No unpinned new GitHub Action.
-- [x] Checkout credential persistence disabled where checkout is used.
-
 ## Remaining Risks
 
-- Missing backend APIs are represented only by fail-closed default behavior and explicit scenario mode.
-- Full backend database suite was not run locally because no local Postgres admin DSN is configured.
+- Review, contribution, contributor-list, atomic contributor claim/release, and durable submission-idempotency APIs are still missing.
+- This MCP chunk cannot provide those actions in production until compatible backend contracts land.
 
 ## Follow-Up Work
 
-Replace scenario gateway methods with real review, contribution, contributor project-list, and contributor task-list APIs when backend endpoints land.
+Replace test-only scenario methods with real HTTP gateway calls when the required
+backend API contracts land.
 
 ## Human Review Focus
 
-Please inspect bearer-token propagation/redaction, fail-closed missing API behavior, and the additive MCP CI job.
+Inspect the fail-closed lifecycle boundaries, token/redaction behavior,
+Streamable HTTP allowlists, and the distinction between production gateway and
+test-only scenario fixture.
 
 ## Human Merge Ownership
 

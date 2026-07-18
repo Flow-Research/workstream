@@ -2,9 +2,8 @@
 
 ## Current status
 
-`WS-MCP-001-01` has received MCP-scope remediation on branch
-`oxvictor/ws-mcp-001-01-contributor-mcp-foundation`. A fresh internal review is
-required before PR publication.
+`WS-MCP-001-01` received MCP-scope remediation and a fresh internal review on
+branch `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
 
 ## Active implementation chunk
 
@@ -18,7 +17,7 @@ required before PR publication.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Re-review required | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production gateway now fails closed for incompatible backend lifecycle routes. |
+| `WS-MCP-001-01` | Ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production gateway fails closed for incompatible backend lifecycle routes; internal review evidence is current. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace temporary service methods after review/contribution APIs exist. |
 
 ## Blockers
