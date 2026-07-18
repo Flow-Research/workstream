@@ -87,6 +87,16 @@ class ActorIdentityLinkAdminReadResourceContext(BaseModel):
     read_kind: Literal["identity_link"]
 
 
+class ActorProfileLifecycleResourceContext(BaseModel):
+    """Server-composed target for one exact profile lifecycle transition."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["actor_profile"]
+    resource_id: UUID
+    transition: Literal["suspend", "reactivate", "deactivate"]
+    existing_idempotency_record: bool = False
+
+
 class SystemResourceContext(BaseModel):
     """Non-authoritative placeholder for later fixed system actions."""
 
@@ -194,6 +204,7 @@ AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
+    | ActorProfileLifecycleResourceContext
     | SystemResourceContext
     | PermissionCatalogueResourceContext
     | AdminRoleDefinitionsResourceContext

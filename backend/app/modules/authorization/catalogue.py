@@ -170,7 +170,8 @@ class ActionOwner(StrEnum):
     AUTH_08 = "WS-AUTH-001-08"
     AUTH_09B = "WS-AUTH-001-09B"
     AUTH_09C = "WS-AUTH-001-09C"
-    AUTH_09D = "WS-AUTH-001-09D"
+    AUTH_09D_A = "WS-AUTH-001-09D-A"
+    AUTH_09D_B = "WS-AUTH-001-09D-B"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     REV_05 = "WS-REV-001-05"
@@ -272,20 +273,20 @@ ACTION_DEFINITIONS = (
         PermissionId.ACTOR_PROFILE_READ_ANY,
         ActionOwner.AUTH_09C,
     ),
-    _planned(
+    _active(
         ActionId.ACTOR_PROFILE_SUSPEND,
         PermissionId.ACTOR_PROFILE_SUSPEND,
-        ActionOwner.AUTH_09D,
+        ActionOwner.AUTH_09D_A,
     ),
-    _planned(
+    _active(
         ActionId.ACTOR_PROFILE_REACTIVATE,
         PermissionId.ACTOR_PROFILE_REACTIVATE,
-        ActionOwner.AUTH_09D,
+        ActionOwner.AUTH_09D_A,
     ),
-    _planned(
+    _active(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         PermissionId.ACTOR_PROFILE_DEACTIVATE,
-        ActionOwner.AUTH_09D,
+        ActionOwner.AUTH_09D_A,
     ),
     _active(
         ActionId.ACTOR_IDENTITY_LINK_READ,
@@ -295,12 +296,12 @@ ACTION_DEFINITIONS = (
     _planned(
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         PermissionId.ACTOR_IDENTITY_LINK_REVOKE,
-        ActionOwner.AUTH_09D,
+        ActionOwner.AUTH_09D_B,
     ),
     _planned(
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
         PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE,
-        ActionOwner.AUTH_09D,
+        ActionOwner.AUTH_09D_B,
     ),
     _active(
         ActionId.ACTOR_SERVICE_PROVISION,
@@ -581,6 +582,9 @@ def _index_actions(
         ActionId.ACTOR_PROFILE_READ,
         ActionId.ACTOR_IDENTITY_LINK_READ,
         ActionId.ACTOR_SERVICE_PROVISION,
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
     }
     if {
         definition.action_id

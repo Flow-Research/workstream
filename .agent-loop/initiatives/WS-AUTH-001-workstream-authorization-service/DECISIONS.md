@@ -457,7 +457,7 @@ idempotency hashes the requested role; revoke derives the role from the locked
 grant. Same key/different role mismatches, new-key duplicate same-role issue is
 a stable audited conflict, and replay reauthorizes before disclosure.
 
-AUTH-10 replaces current typed and PostgreSQL validators in migration `0026`
+AUTH-10 replaces current typed and PostgreSQL validators in migration `0027`
 without editing `0018`, `0019`, or `0022`. It fails closed if obsolete combined
 or replacement evidence exists and refuses an unsafe downgrade rather than
 converting or deleting evidence. Only issued and revoked success events remain.
@@ -574,8 +574,8 @@ PermissionId mapping, canonical target, principal class, candidates, guards,
 surface, and revalidation rule before runtime edits. Each owning migration
 updates current typed and PostgreSQL audit validation; no chunk may promise an
 active surface whose ActionId is absent. AUTH-11 therefore owns migration
-`0027`, and later migration reservations shift through AUTH-15 as recorded in
-D29. AUTH-16 aggregates proof; it does not discover or backfill missing
+`0028`, and later migration reservations shift through AUTH-15 as superseded
+by D30. AUTH-16 aggregates proof; it does not discover or backfill missing
 registrations.
 
 ## D28: Service provisioning records an unverified issuer binding
@@ -632,3 +632,29 @@ AUTH-15 owns `0031`.
 This decision supersedes only the future migration-number allocations in D15,
 D27, and D28. It does not modify any merged migration, action ownership,
 authorization behavior, or feature activation boundary.
+
+## D30: Split lifecycle mutations and repair evidence before activation
+
+Status: accepted preimplementation repair on 2026-07-18.
+
+Required L1 review rejected the combined AUTH-09D contract before runtime
+edits. The parent is split semantically: AUTH-09D-A owns lifecycle evidence
+repair plus profile suspend, reactivate, and terminal deactivate; AUTH-09D-B
+later owns identity-link revoke/reactivate plus the mixed profile/link/grant
+race closure. Each child requires its own explicit gate, review, merge intent,
+PR, merge, and signed-memory stop.
+
+The existing database and typed lifecycle evidence force every non-admin
+transition from effective to ineffective. That is false for profile and link
+reactivation, and ActorProfile lacks durable reactivation provenance. AUTH-09D-A
+therefore owns forward migration `0026_actor_profile_lifecycle`; historical
+migrations remain immutable. AUTH-10 through AUTH-15 shift to `0027` through
+`0032`. This supersedes only D29's future inactive reservations.
+
+Lifecycle routes reserve idempotency before authorization, retain the canonical
+singleton/caller-first authorization locks, and disclose target existence only
+after an exact permission match. The singleton serializes every lifecycle or
+grant path that can remove the final effective Access Administrator, so no
+target-first alternate lock path is introduced. Profile and link reactivation
+invalidate from ineffective to effective; loss transitions invalidate from
+effective to ineffective.

@@ -16,25 +16,29 @@
 - AUTH-09B merged through PR #143 as `053242b`; it adds controlled service
   actor provisioning and leaves service runtime admission plus feature actions
   inactive.
+- AUTH-09C merged through PR #146 as `0ffdabf`; signed schema-v2 memory at
+  `eeb3dc2` recorded its two administrative reads and stopped.
 - PR #141 merged `WS-ART-001-02A3` into `main` as `a10d901` on
   2026-07-18; ART-02B1 remains inactive pending a separate explicit start.
-- Active implementation chunk: `WS-AUTH-001-09C` on
-  `codex/ws-auth-001-09c-actor-identity-admin-reads`.
-- AUTH-09C is bounded to two exact administrative read routes and activates
-  only `actor.profile.read` and `actor.identity_link.read`. AUTH-09D remains
-  inactive.
-- Start basis: trusted `main` at `a10d901` after PR #141.
+- Active implementation chunk: `WS-AUTH-001-09D-A`. The explicitly started parent
+  `WS-AUTH-001-09D` failed required preimplementation review and was split
+  before runtime edits into `WS-AUTH-001-09D-A` and `WS-AUTH-001-09D-B`.
+- Active branch: `WS-AUTH-001-09D-A` on
+  `codex/ws-auth-001-09d-actor-identity-lifecycle`. It owns lifecycle evidence
+  repair plus three exact profile lifecycle mutations. `WS-AUTH-001-09D-B`
+  remains inactive until 09D-A merge, signed memory, and explicit user start.
+- Start basis: trusted `main` at `0ffdabf` after PR #146.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
-- Current gate: PR #146's original Backend, Agent Gates, and CodeRabbit checks
-  passed. All five valid CodeRabbit proof findings are repaired at `c64bcc7`,
-  trusted `main` through PR #141 is integrated, and focused unit, real
-  PostgreSQL, and Agent Gates proof passes. All required exact integrated-head
-  internal repair tracks pass at `c47d627`; push and replacement external
-  checks remain. No service caller becomes executable before AUTH-09E.
+- Current gate: PR #148 external repair aligns database lifecycle-reason
+  whitespace with the API and repairs stale reviewer evidence. PostgreSQL proof
+  plus required exact-head internal review pass at `7c33e64`; canonical evidence
+  is refreshed against that SHA after repairing the Backend fixture cascade.
+  Replacement external checks and explicit human approval remain. No service
+  caller becomes executable before AUTH-09E.
 - Scope checkpoint: AWS S3 is the only v0.1 production provider; MinIO is
   local/CI S3 protocol proof; LocalStorage is focused development/test; R2 and
   Flow Node are deferred. Product modules receive narrow artifact capabilities,
@@ -50,9 +54,9 @@
   neither reconciliation PR activates feature behavior.
 - Parallel artifact checkpoint: ART-02A1, ART-02A2, and ART-02A3 merged through
   PRs #127, #129, and #141. ART-02B1 remains inactive.
-- Authorization checkpoint: AUTH-07B through AUTH-09B merged through PRs #130,
-  #131, #132, and #143. Signed memory stopped after 09B, and the user explicitly
-  started AUTH-09C.
+- Authorization checkpoint: AUTH-07B through AUTH-09C merged through PRs #130,
+  #131, #132, #143, and #146. Signed memory stopped after 09C, and the user
+  explicitly started AUTH-09D; required review split it before runtime edits.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

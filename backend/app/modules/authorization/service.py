@@ -92,21 +92,21 @@ _EVIDENCE = {
     ),
     AuthorityOperation.ACTOR_PROFILE_SUSPEND: _OperationEvidence(
         "actor.profile.suspend",
-        None,
+        ActionId.ACTOR_PROFILE_SUSPEND,
         AuthorityResourceType.ACTOR_PROFILE,
         200,
         (AuthorityEventType.ACTOR_PROFILE_SUSPENDED,),
     ),
     AuthorityOperation.ACTOR_PROFILE_REACTIVATE: _OperationEvidence(
         "actor.profile.reactivate",
-        None,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
         AuthorityResourceType.ACTOR_PROFILE,
         200,
         (AuthorityEventType.ACTOR_PROFILE_REACTIVATED,),
     ),
     AuthorityOperation.ACTOR_PROFILE_DEACTIVATE: _OperationEvidence(
         "actor.profile.deactivate",
-        None,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
         AuthorityResourceType.ACTOR_PROFILE,
         200,
         (AuthorityEventType.ACTOR_PROFILE_DEACTIVATED,),
@@ -216,22 +216,32 @@ class AuthorityMutationService:
             mutation,
             (AdminRoleGrantIssueRequest, AdminRoleGrantRevokeRequest),
         )
+        identity_link_mutation = isinstance(
+            mutation,
+            (ActorIdentityLinkRevokeRequest, ActorIdentityLinkReactivateRequest),
+        )
         invalidation_target_kind = spec.resource_type.value
         invalidation_target_ref = success.resource_id
         invalidation_resource_type = success.resource_type
         invalidation_resource_id = success.resource_id
         before_facts = {"effective": True}
         after_facts = {"effective": False}
-        if admin_mutation:
+        if admin_mutation or identity_link_mutation:
             if success.target_actor_ref is None:
-                raise TypeError("admin grant success requires target actor")
+                raise TypeError("projected authority success requires target actor")
             invalidation_target_kind = AuthorityResourceType.ACTOR_PROFILE.value
             invalidation_target_ref = success.target_actor_ref
             invalidation_resource_type = AuthorityResourceType.ACTOR_PROFILE.value
             invalidation_resource_id = success.target_actor_ref
-            if isinstance(mutation, AdminRoleGrantIssueRequest):
+            if isinstance(
+                mutation,
+                (AdminRoleGrantIssueRequest, ActorIdentityLinkReactivateRequest),
+            ):
                 before_facts = {"effective": False}
                 after_facts = {"effective": True}
+        elif isinstance(mutation, ActorProfileReactivateRequest):
+            before_facts = {"effective": False}
+            after_facts = {"effective": True}
         invalidation_input = AuthorityAuditEventInput(
             event_id=invalidation.event_id,
             event_type=AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
@@ -365,5 +375,10 @@ def _request_matches_success(
     ):
         return resource_id == request.actor_profile_id and success.project_id is None
     if isinstance(request, (ActorIdentityLinkRevokeRequest, ActorIdentityLinkReactivateRequest)):
-        return resource_id == request.identity_link_id and success.project_id is None
+        return (
+            resource_id == request.identity_link_id
+            and success.project_id is None
+            and success.target_actor_ref_kind == ActorReferenceKind.ACTOR_PROFILE
+            and success.target_actor_ref is not None
+        )
     return False

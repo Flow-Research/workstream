@@ -4102,7 +4102,7 @@ def test_activation_custody_discovery_includes_canonical_handoffs() -> None:
 
 
 def test_auth_spec_orders_service_admission_before_project_roles() -> None:
-    """AUTH-09A through 09E precede project contributor grants."""
+    """AUTH-09A through both 09D children and 09E precede project grants."""
     spec = Path("docs/spec_authorization_service.md").read_text(encoding="utf-8")
     order = spec.split("## Migration And Compatibility", maxsplit=1)[1].split(
         "## Error And Privacy Contract",
@@ -4112,7 +4112,8 @@ def test_auth_spec_orders_service_admission_before_project_roles() -> None:
         "WS-AUTH-001-09A",
         "WS-AUTH-001-09B",
         "WS-AUTH-001-09C",
-        "WS-AUTH-001-09D",
+        "WS-AUTH-001-09D-A",
+        "WS-AUTH-001-09D-B",
         "WS-AUTH-001-09E",
         "WS-AUTH-001-10",
     )
@@ -4145,15 +4146,15 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
 
     assert "Merged through PR #131 as `aa0fdcd`" in auth_map
     assert "Merged through PR #143 as `053242b`" in auth_map
-    assert (
-        "`WS-AUTH-001-09C` - Actor And Identity-Link Administration Reads"
-        in auth_status
-    )
+    assert "Merged through PR #146 as `0ffdabf`" in auth_map
     assert "| `WS-AUTH-001-08` | Merged |" in auth_status
     assert "| `WS-AUTH-001-XINT` | Merged |" in auth_status
     assert "| `WS-AUTH-001-09A` | Merged |" in auth_status
     assert "| `WS-AUTH-001-09B` | Merged |" in auth_status
-    assert "| `WS-AUTH-001-09C` | In review |" in auth_status
+    assert "| `WS-AUTH-001-09C` | Merged |" in auth_status
+    assert "| `WS-AUTH-001-09D` | Split |" in auth_status
+    assert "| `WS-AUTH-001-09D-A` | Active |" in auth_status
+    assert "| `WS-AUTH-001-09D-B` | Inactive |" in auth_status
     assert "Merged through PR #129 as `9a04434`" in artifact_map
     artifact_phases = (
         "Deterministic proof passed; exact-SHA internal review in progress",

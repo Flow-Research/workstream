@@ -69,6 +69,7 @@ def test_actor_admin_response_requires_exact_service_identity_pair() -> None:
         "updated_at": now,
         "last_seen_at": None,
         "suspended_at": None,
+        "reactivated_at": None,
         "deactivated_at": None,
     }
     human = ActorProfileAdminResponse(
@@ -157,9 +158,10 @@ async def test_actor_admin_reads_are_bounded_and_reuse_exact_repository_lookups(
         "display_name",
         "created_at",
         "updated_at",
-        "last_seen_at",
-        "suspended_at",
-        "deactivated_at",
+            "last_seen_at",
+            "suspended_at",
+            "reactivated_at",
+            "deactivated_at",
     }
     assert set(link_response.model_dump()) == {
         "identity_link_id",

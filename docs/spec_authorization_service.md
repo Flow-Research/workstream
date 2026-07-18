@@ -119,7 +119,7 @@ The active model has no `both`, replacement field, replacement event, or
 replacement reason. Qualification evidence is bound to the same actor, project,
 and exact requested role. One active row is permitted per
 actor/project/role. Issue idempotency includes the requested role; revoke derives
-the role from the locked grant. Migration `0026` refuses upgrade when obsolete
+the role from the locked grant. Migration `0027` refuses upgrade when obsolete
 combined or replacement evidence exists and never converts or deletes those
 rows. It replaces current typed and PostgreSQL validators without changing
 historical migrations.
@@ -238,13 +238,14 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 65 rows after AUTH-09C: 12 active actions
-and 53 planned rows. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 65 rows after AUTH-09D-A: 15 active actions
+and 50 planned rows. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
-`actor.service.provision`, and AUTH-09C activates only `actor.profile.read` and
-`actor.identity_link.read`. The other planned rows cover
+`actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
+`actor.identity_link.read`, and AUTH-09D-A activates only the three profile
+lifecycle actions. The other planned rows cover
 three Operator recovery actions, 25 artifact actions, canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
@@ -270,19 +271,20 @@ AUTH-09A registers these exact planned actions through migration `0023`:
 | ActionId | PermissionId | Activation owner |
 |---|---|---|
 | `actor.profile.read` | `actor.profile.read_any` | `WS-AUTH-001-09C` |
-| `actor.profile.suspend` | `actor.profile.suspend` | `WS-AUTH-001-09D` |
-| `actor.profile.reactivate` | `actor.profile.reactivate` | `WS-AUTH-001-09D` |
-| `actor.profile.deactivate` | `actor.profile.deactivate` | `WS-AUTH-001-09D` |
+| `actor.profile.suspend` | `actor.profile.suspend` | `WS-AUTH-001-09D-A` |
+| `actor.profile.reactivate` | `actor.profile.reactivate` | `WS-AUTH-001-09D-A` |
+| `actor.profile.deactivate` | `actor.profile.deactivate` | `WS-AUTH-001-09D-A` |
 | `actor.identity_link.read` | `actor.identity_link.read` | `WS-AUTH-001-09C` |
-| `actor.identity_link.revoke` | `actor.identity_link.revoke` | `WS-AUTH-001-09D` |
-| `actor.identity_link.reactivate` | `actor.identity_link.reactivate` | `WS-AUTH-001-09D` |
+| `actor.identity_link.revoke` | `actor.identity_link.revoke` | `WS-AUTH-001-09D-B` |
+| `actor.identity_link.reactivate` | `actor.identity_link.reactivate` | `WS-AUTH-001-09D-B` |
 | `actor.service.provision` | `actor.service.provision` | `WS-AUTH-001-09B` |
 
 AUTH-09B activates only `actor.service.provision` through the controlled route
 described below. AUTH-09C activates only the two bounded actor-registry reads.
-The other five remain unavailable until AUTH-09D supplies the mutation route,
-typed resource context, evaluator, guards, transaction proof, and availability
-change. AUTH-09A supplies none of those runtime paths.
+AUTH-09D-A activates profile suspend, reactivate, and terminal deactivate. The
+two identity-link mutations remain unavailable until AUTH-09D-B supplies their
+route, typed resource context, evaluator, guards, transaction proof, and
+availability change. AUTH-09A supplies none of those runtime paths.
 
 The submission/review dependency matrix is closed. AUTH-07A registers only the
 four stable planned fields shown here; resource facts, candidates, guards, and
@@ -637,6 +639,9 @@ effective count.
 Suspension, deactivation, identity-link revocation, and grant revocation take
 effect on the next request and on the next sensitive transaction recheck. Each
 mutation writes an invalidation event atomically with state and evidence.
+Profile reactivation writes the inverse `effective=false -> effective=true`
+component invalidation. That fact describes the profile only: a revoked link,
+missing grant, or unadmitted fixed service can still make the actor ineffective.
 
 Assignment reconciliation preserves immutable work history. A revoked actor's
 ordinary claimed/in-progress assignment may be released by the owning later
@@ -707,7 +712,10 @@ AUTH-07B cuts existing `GET|PATCH /api/v1/actors/me` behavior over to the
 kernel. AUTH-08 activates the two definition reads, scoped grant/history reads,
 issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
 and identity-link reads for effective system Access Administrator or Audit
-Authority grants. Project-scoped
+Authority grants. AUTH-09D-A activates the three profile lifecycle routes for
+effective system Access Administrators only. The two identity-link lifecycle
+routes remain unavailable until AUTH-09D-B; the project-role route family also
+remains planned. Project-scoped
 `GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
 exact-project grant and canonical project capability composition exists.
 
@@ -728,17 +736,20 @@ The implementation order is fixed by the WS-AUTH-001 chunk map:
     provisioning with an unverified service link until AUTH-09E verifies the
     service token;
 11. `WS-AUTH-001-09C`: actor and identity-link administrative reads;
-12. `WS-AUTH-001-09D`: actor and identity-link lifecycle mutations;
-13. `WS-AUTH-001-09E`: fixed service runtime admission without human grant
+12. `WS-AUTH-001-09D-A`: lifecycle evidence repair and actor-profile suspend,
+    reactivate, and terminal deactivate;
+13. `WS-AUTH-001-09D-B`: identity-link revoke/reactivate and mixed lifecycle
+    race closure;
+14. `WS-AUTH-001-09E`: fixed service runtime admission without human grant
     evaluation or feature action activation;
-14. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
+15. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
     availability-neutral transfer to exact AUTH activation owners;
-15. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
-16. `WS-AUTH-001-10`: independent project contributor grants;
-17. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
+16. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
+17. `WS-AUTH-001-10`: independent project contributor grants;
+18. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
     cutovers;
-18. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
-19. `WS-AUTH-001-16`: conformance, observability, concurrency, and live API
+19. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
+20. `WS-AUTH-001-16`: conformance, observability, concurrency, and live API
     proof.
 
 No implementation may add a compatibility alias, fallback authority source,

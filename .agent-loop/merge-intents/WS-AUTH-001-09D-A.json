@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-09D-A",
+  "chunk_title": "Profile Lifecycle And Evidence Repair",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-09D-B",
+  "next_chunk_title": "Identity-Link Lifecycle And Race Closure",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

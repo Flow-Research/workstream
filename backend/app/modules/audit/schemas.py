@@ -45,7 +45,8 @@ _DENIAL_CODES = frozenset(
     scope_not_authorized self_grant_forbidden self_role_revoke_forbidden resource_guard_denied
     actor_not_found grant_not_found resource_not_found actor_already_suspended actor_not_suspended
     actor_deactivated_terminal last_access_administrator admin_role_grant_exists
-    project_role_grant_exists identity_link_conflict resource_project_mismatch idempotency_mismatch
+    project_role_grant_exists identity_link_conflict identity_link_already_revoked
+    identity_link_not_revoked resource_project_mismatch idempotency_mismatch
     invalid_role_scope invalid_project_role qualification_snapshot_invalid""".split()
 )
 _ADMIN_ROLES = frozenset(
@@ -395,9 +396,14 @@ class AuthorityAuditEventInput(BaseModel):
         elif self.event_type == AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED:
             if self.invalidation_cause_event_id is None or self.invalidation_target_kind is None or self.denial_code:
                 raise ValueError("invalid authority invalidation evidence")
+            restoration = self.permission_id in {
+                PermissionId.ADMIN_ROLE_GRANT,
+                PermissionId.ACTOR_PROFILE_REACTIVATE,
+                PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+            }
             expected_direction = (
                 ({"effective": False}, {"effective": True})
-                if self.permission_id is PermissionId.ADMIN_ROLE_GRANT
+                if restoration
                 else ({"effective": True}, {"effective": False})
             )
             if (before, after) != expected_direction:

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed and inactive. Exact ActionIds and migration `0029` must be enumerated
+Proposed and inactive. Exact ActionIds and migration `0030` must be enumerated
 before implementation; AUTH-PREP is required for mutations.
 
 ## Parent initiative
@@ -44,7 +44,7 @@ backend/app/modules/tasks/repository.py
 backend/app/modules/tasks/schemas.py
 backend/app/modules/tasks/models.py
 backend/app/modules/tasks/lifecycle.py
-backend/alembic/versions/0029_*.py
+backend/alembic/versions/0030_*.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/app/api/deps/auth.py
@@ -97,7 +97,7 @@ token role or legacy active-worker-profile fallback
   `operations.task.start_override` PermissionId/ActionId typed and PostgreSQL
   parity as planned metadata. This chunk promotes the action only with its task
   resource composer, Operator candidate, guards, surface declaration, reason,
-  evidence, and behavior tests. Migration `0029` owns task/assignment,
+  evidence, and behavior tests. Migration `0030` owns task/assignment,
   Contributor-field, and exact new ActionId evidence parity; it changes no
   PermissionId mapping.
 - Operator `operations.status.read` exposes a read-only cross-project task-queue
@@ -138,7 +138,7 @@ token role or legacy active-worker-profile fallback
   remains bounded only because chunk 14 still owns the final submission
   compatibility consumer; task queue/claim/start no longer depend on it.
 - The assignment persistence column, model/schema/service fields, response
-  contract, and new audit payload keys use `contributor_id`. Migration `0029`
+  contract, and new audit payload keys use `contributor_id`. Migration `0030`
   preserves every existing assignment owner, supports downgrade, and removes
   the legacy storage name without exposing a public compatibility alias.
 - Full backend suite and API contract drill pass.

@@ -28,6 +28,14 @@ LEGACY_PROFILE_TYPES = ("worker", "reviewer", "admin", "project_manager", "proje
 LEGACY_PROFILE_STATUSES = ("observed", "active", "disabled")
 GLOBAL_PROFILE_SCOPE_TYPE = "global"
 GLOBAL_PROFILE_SCOPE_ID = "global"
+# PostgreSQL equivalent of str.strip() across the supported Python runtimes.
+_PYTHON_STRIP_CHARACTERS_SQL = (
+    "(E' \\t\\n\\r\\f\\013'"
+    "||chr(28)||chr(29)||chr(30)||chr(31)||chr(133)||chr(160)||chr(5760)"
+    "||chr(8192)||chr(8193)||chr(8194)||chr(8195)||chr(8196)||chr(8197)"
+    "||chr(8198)||chr(8199)||chr(8200)||chr(8201)||chr(8202)||chr(8232)"
+    "||chr(8233)||chr(8239)||chr(8287)||chr(12288))"
+)
 
 
 def _sql_values(values: tuple[str, ...]) -> str:
@@ -68,6 +76,20 @@ class ActorProfile(Base):
             "and deactivation_reason is not null)",
             name="lifecycle_fields",
         ),
+        CheckConstraint(
+            "(reactivated_by is null and reactivated_at is null and reactivation_reason is null) or "
+            "(reactivated_by is not null and reactivated_at is not null and reactivation_reason is not null)",
+            name="reactivation_fields",
+        ),
+        CheckConstraint(
+            f"(suspension_reason is null or (suspension_reason = btrim(suspension_reason, {_PYTHON_STRIP_CHARACTERS_SQL}) and "
+            "octet_length(suspension_reason) between 1 and 500)) and "
+            f"(reactivation_reason is null or (reactivation_reason = btrim(reactivation_reason, {_PYTHON_STRIP_CHARACTERS_SQL}) and "
+            "octet_length(reactivation_reason) between 1 and 500)) and "
+            f"(deactivation_reason is null or (deactivation_reason = btrim(deactivation_reason, {_PYTHON_STRIP_CHARACTERS_SQL}) and "
+            "octet_length(deactivation_reason) between 1 and 500))",
+            name="lifecycle_reason_bounds",
+        ),
         Index("ix_actor_profiles_status_actor_kind", "status", "actor_kind"),
         Index("ix_actor_profiles_last_seen_at", "last_seen_at"),
         UniqueConstraint("service_identity", name="service_identity"),
@@ -87,6 +109,9 @@ class ActorProfile(Base):
     suspended_by: Mapped[str | None] = mapped_column(String(120))
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     suspension_reason: Mapped[str | None] = mapped_column(String(500))
+    reactivated_by: Mapped[str | None] = mapped_column(String(120))
+    reactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reactivation_reason: Mapped[str | None] = mapped_column(String(500))
     deactivated_by: Mapped[str | None] = mapped_column(String(120))
     deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     deactivation_reason: Mapped[str | None] = mapped_column(String(500))
@@ -116,6 +141,18 @@ class ActorIdentityLink(Base):
         CheckConstraint(
             "subject_kind = 'service' or last_verified_at is not null",
             name="human_verified",
+        ),
+        CheckConstraint(
+            "(reactivated_by is null and reactivated_at is null and reactivation_reason is null) or "
+            "(reactivated_by is not null and reactivated_at is not null and reactivation_reason is not null)",
+            name="reactivation_fields",
+        ),
+        CheckConstraint(
+            f"(revoked_reason is null or (revoked_reason = btrim(revoked_reason, {_PYTHON_STRIP_CHARACTERS_SQL}) and "
+            "octet_length(revoked_reason) between 1 and 500)) and "
+            f"(reactivation_reason is null or (reactivation_reason = btrim(reactivation_reason, {_PYTHON_STRIP_CHARACTERS_SQL}) and "
+            "octet_length(reactivation_reason) between 1 and 500))",
+            name="lifecycle_reason_bounds",
         ),
         UniqueConstraint("issuer", "subject", name="external_identity"),
         UniqueConstraint("actor_profile_id", name="actor_profile"),

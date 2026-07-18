@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed and inactive. Exact ActionIds and migration `0030` must be enumerated
+Proposed and inactive. Exact ActionIds and migration `0031` must be enumerated
 before implementation; AUTH-PREP is required for mutations.
 
 ## Parent initiative
@@ -46,7 +46,7 @@ backend/app/modules/checkers/**
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/app/adapters/project_agents/openai_agent_sdk.py
-backend/alembic/versions/0030_*.py
+backend/alembic/versions/0031_*.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/app/api/deps/auth.py
@@ -101,7 +101,7 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   PermissionId/ActionId typed and PostgreSQL parity as planned metadata. This
   chunk promotes each action only with its feature resource composer, Operator
   candidate, guards, surface declaration, reason, evidence, and behavior tests.
-  Migration `0030` owns submission/checker Contributor-field schema changes and
+  Migration `0031` owns submission/checker Contributor-field schema changes and
   exact new ActionId evidence parity; it changes no PermissionId mapping.
 - Contributor reads preserve ownership, hidden-result redaction, and concealed
   not-found behavior.
@@ -121,7 +121,7 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   `contributor_suggested_fix`, `contributor_evidence_refs`, and
   `contributor_visible` across persistence, models, schemas, services, runner
   contracts, audit payloads, and tests. Submission-policy JSON and derivation
-  contracts use `contributor_facing_fix`. Migration `0030` preserves all values,
+  contracts use `contributor_facing_fix`. Migration `0031` preserves all values,
   supports downgrade, and removes legacy storage/property names without public
   API aliases.
 - With the final consumer removed, the legacy `/api/v1/workers/me/profile`

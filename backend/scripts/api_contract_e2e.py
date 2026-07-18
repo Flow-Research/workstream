@@ -1035,6 +1035,40 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert service_payload["subject"] not in serialized_service_reads
         assert flow_issuer not in serialized_service_reads
 
+        lifecycle_reason = "Real HTTP service profile lifecycle proof"
+        suspended_service = await client.post(
+            f"/api/v1/actors/{service_actor_id}/suspend",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": lifecycle_reason},
+        )
+        assert suspended_service.status_code == 200, suspended_service.text
+        assert suspended_service.json() == {
+            "resource_type": "actor_profile",
+            "resource_id": service_actor_id,
+            "version": None,
+            "http_status": 200,
+        }
+        assert lifecycle_reason not in suspended_service.text
+        reactivated_service = await client.post(
+            f"/api/v1/actors/{service_actor_id}/reactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Real HTTP service profile correction"},
+        )
+        assert reactivated_service.status_code == 200, reactivated_service.text
+        deactivated_service = await client.post(
+            f"/api/v1/actors/{service_actor_id}/deactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Real HTTP terminal service profile response"},
+        )
+        assert deactivated_service.status_code == 200, deactivated_service.text
+        terminal_service = await client.post(
+            f"/api/v1/actors/{service_actor_id}/reactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Terminal profiles remain terminal"},
+        )
+        assert terminal_service.status_code == 409, terminal_service.text
+        assert terminal_service.json()["error"]["code"] == "actor_deactivated_terminal"
+
         project = await request_json(
             client,
             "POST",

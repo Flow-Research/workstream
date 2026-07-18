@@ -264,6 +264,7 @@ class ActorService:
             updated_at=profile.updated_at,
             last_seen_at=profile.last_seen_at,
             suspended_at=profile.suspended_at,
+            reactivated_at=profile.reactivated_at,
             deactivated_at=profile.deactivated_at,
         )
 

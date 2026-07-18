@@ -31,9 +31,11 @@ stopped.
 | `WS-AUTH-001-09` | Actor State, Identity Revocation, And Service Actors | L1 | Split before runtime implementation |
 | `WS-AUTH-001-09A` | Fixed Service Identity Foundation | L1 | Merged through PR #132 as `299363a` |
 | `WS-AUTH-001-09B` | Controlled Service Actor Provisioning | L1 | Merged through PR #143 as `053242b` |
-| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | Active after explicit user start from signed 09B memory |
-| `WS-AUTH-001-09D` | Actor And Identity-Link Lifecycle Mutations | L1 | Inactive until 09C merge/memory and explicit start |
-| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Inactive until 09D merge/memory and explicit start |
+| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | Merged through PR #146 as `0ffdabf` |
+| `WS-AUTH-001-09D` | Actor And Identity-Link Lifecycle Mutations | L1 | Split before runtime implementation into 09D-A and 09D-B |
+| `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | Implementation and deterministic proof passed; exact-head internal review pending |
+| `WS-AUTH-001-09D-B` | Identity-Link Lifecycle And Race Closure | L1 | Inactive until 09D-A merge/memory and explicit start |
+| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Inactive until 09D-B merge/memory and explicit start |
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Inactive until 09E merge/memory and explicit start |
@@ -93,7 +95,8 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-09A
 -> WS-AUTH-001-09B
 -> WS-AUTH-001-09C
--> WS-AUTH-001-09D
+-> WS-AUTH-001-09D-A
+-> WS-AUTH-001-09D-B
 -> WS-AUTH-001-09E
 -> WS-AUTH-001-ART-CUSTODY and WS-AUTH-001-REV-CUSTODY
 -> WS-AUTH-001-PREP
@@ -189,6 +192,9 @@ PR #140 merged the required XINT planning reconciliation as `d541521`. PR #132
 then merged seven identities, eleven static matrix memberships, eight planned
 actions, and migration `0023` as `299363a`; signed memory stopped. The user
 explicitly started AUTH-09B. PR #143 merged it as `053242b`; signed memory
-stopped, and the user explicitly started AUTH-09C. It must pass exact-head
-review and checks, then stop for human merge. Do not start AUTH-09D or
-POL-002-04 automatically.
+stopped, and the user explicitly started AUTH-09C. PR #146 merged it as
+`0ffdabf`; signed memory at `eeb3dc2` stopped. The user explicitly started
+AUTH-09D. Required preimplementation review rejected the combined lifecycle
+contract before runtime edits, so it is split into 09D-A and 09D-B. Only 09D-A
+may proceed after its repaired contract passes exact review. Do not start
+09D-B, 09E, or POL-002-04 automatically.

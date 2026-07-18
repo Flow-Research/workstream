@@ -36,10 +36,20 @@ from app.modules.authorization.admin_service import (
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.lifecycle_schemas import (
+    ActorLifecycleBody,
+    ActorLifecycleMutationResponse,
+)
+from app.modules.authorization.lifecycle_service import (
+    ActorLifecycleConflict,
+    ActorLifecycleRequest,
+    ActorLifecycleService,
+)
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
     ActorProfileAdminReadResourceContext,
+    ActorProfileLifecycleResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -51,6 +61,9 @@ from app.modules.authorization.schemas import (
     AdminRole,
     AdminRoleGrantIssueRequest,
     AdminRoleGrantRevokeRequest,
+    ActorProfileDeactivateRequest,
+    ActorProfileReactivateRequest,
+    ActorProfileSuspendRequest,
     AdminScope,
     AuthorityOperation,
     ServiceActorCreateRequest,
@@ -123,6 +136,24 @@ def _revoke_request(grant_id: UUID, reason: str) -> AdminRoleGrantRevokeRequest:
     )
 
 
+def _lifecycle_request(
+    actor_profile_id: UUID,
+    reason: str,
+    operation: AuthorityOperation,
+) -> ActorLifecycleRequest:
+    values = {
+        "operation": operation,
+        "actor_profile_id": actor_profile_id,
+        "reason_digest": derive_reason_digest(reason),
+    }
+    request_type = {
+        AuthorityOperation.ACTOR_PROFILE_SUSPEND: ActorProfileSuspendRequest,
+        AuthorityOperation.ACTOR_PROFILE_REACTIVATE: ActorProfileReactivateRequest,
+        AuthorityOperation.ACTOR_PROFILE_DEACTIVATE: ActorProfileDeactivateRequest,
+    }[operation]
+    return request_type(**values)
+
+
 def _service_actor_request(
     payload: ServiceActorProvisionBody,
     issuer: str,
@@ -162,6 +193,98 @@ async def _database_call(session: AsyncSession, operation: Awaitable[T]) -> T:
     """Map feature-owned SQL failures without relabeling authorization evidence errors."""
     try:
         return await operation
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise service_unavailable_error() from exc
+
+
+async def _mutate_actor_lifecycle(
+    *,
+    actor_profile_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: UUID,
+    resolved: ResolvedActor,
+    authorization: AuthorizationService,
+    session: AsyncSession,
+    operation: AuthorityOperation,
+    action: ActionId,
+    transition: Literal["suspend", "reactivate", "deactivate"],
+) -> ActorLifecycleMutationResponse:
+    canonical = _lifecycle_request(actor_profile_id, payload.reason, operation)
+    caller_id = UUID(resolved.profile.id)
+    service = ActorLifecycleService(session)
+    reservation = await _database_call(
+        session,
+        service.reserve(
+            idempotency_key=idempotency_key,
+            actor_profile_id=caller_id,
+            request=canonical,
+        ),
+    )
+    decision = await _database_call(
+        session,
+        authorization.require(
+            action,
+            ActorProfileLifecycleResourceContext(
+                resource_type="actor_profile",
+                resource_id=actor_profile_id,
+                transition=transition,
+                existing_idempotency_record=reservation.outcome in {"replay", "mismatch"},
+            ),
+        ),
+    )
+    if reservation.outcome == "mismatch":
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_mismatch(
+                actor_profile_id=caller_id,
+                request=canonical,
+                decision=decision,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
+    if reservation.outcome == "replay":
+        response = ActorLifecycleMutationResponse(
+            resource_type="actor_profile",
+            resource_id=reservation.response.resource_id,
+            version=None,
+            http_status=200,
+        )
+        await _database_call(session, ActorService(session).touch_after_authorization(resolved))
+        await _commit_or_unavailable(session)
+        return response
+    try:
+        await ActorService(session).touch_after_authorization(resolved)
+        response = await service.complete(
+            claim=reservation.claim,
+            request=canonical,
+            decision=decision,
+            actor_profile_id=caller_id,
+            reason=payload.reason,
+        )
+        await session.commit()
+        return response
+    except ActorLifecycleConflict as exc:
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_conflict(
+                actor_profile_id=caller_id,
+                request=canonical,
+                decision=decision,
+                code=exc.code,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        messages = {
+            "actor_already_suspended": "Actor is already suspended",
+            "actor_not_suspended": "Actor is not suspended",
+            "actor_deactivated_terminal": "Actor is permanently deactivated",
+            "last_access_administrator": "Final Access Administrator cannot be disabled",
+        }
+        raise _domain_error(409, exc.code, messages[exc.code]) from exc
     except SQLAlchemyError as exc:
         await session.rollback()
         raise service_unavailable_error() from exc
@@ -299,6 +422,95 @@ def _service_actor_conflict(conflict: ServiceActorConflict) -> StructuredHTTPExc
     if conflict is ServiceActorConflict.SERVICE_IDENTITY:
         return _domain_error(409, conflict.value, "Service identity is already provisioned")
     return _domain_error(409, conflict.value, "Identity subject is already linked")
+
+
+_LIFECYCLE_CONFLICT_RESPONSE = {
+    409: {"model": ApiErrorResponse, "description": "Actor lifecycle conflict."}
+}
+
+
+@router.post(
+    "/actors/{actor_profile_id}/suspend",
+    response_model=ActorLifecycleMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    responses=_LIFECYCLE_CONFLICT_RESPONSE,
+    openapi_extra={"x-workstream-action-id": ActionId.ACTOR_PROFILE_SUSPEND.value},
+)
+async def suspend_actor_profile(
+    actor_profile_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ActorLifecycleMutationResponse:
+    return await _mutate_actor_lifecycle(
+        actor_profile_id=actor_profile_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        resolved=resolved,
+        authorization=authorization,
+        session=session,
+        operation=AuthorityOperation.ACTOR_PROFILE_SUSPEND,
+        action=ActionId.ACTOR_PROFILE_SUSPEND,
+        transition="suspend",
+    )
+
+
+@router.post(
+    "/actors/{actor_profile_id}/reactivate",
+    response_model=ActorLifecycleMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    responses=_LIFECYCLE_CONFLICT_RESPONSE,
+    openapi_extra={"x-workstream-action-id": ActionId.ACTOR_PROFILE_REACTIVATE.value},
+)
+async def reactivate_actor_profile(
+    actor_profile_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ActorLifecycleMutationResponse:
+    return await _mutate_actor_lifecycle(
+        actor_profile_id=actor_profile_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        resolved=resolved,
+        authorization=authorization,
+        session=session,
+        operation=AuthorityOperation.ACTOR_PROFILE_REACTIVATE,
+        action=ActionId.ACTOR_PROFILE_REACTIVATE,
+        transition="reactivate",
+    )
+
+
+@router.post(
+    "/actors/{actor_profile_id}/deactivate",
+    response_model=ActorLifecycleMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    responses=_LIFECYCLE_CONFLICT_RESPONSE,
+    openapi_extra={"x-workstream-action-id": ActionId.ACTOR_PROFILE_DEACTIVATE.value},
+)
+async def deactivate_actor_profile(
+    actor_profile_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ActorLifecycleMutationResponse:
+    return await _mutate_actor_lifecycle(
+        actor_profile_id=actor_profile_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        resolved=resolved,
+        authorization=authorization,
+        session=session,
+        operation=AuthorityOperation.ACTOR_PROFILE_DEACTIVATE,
+        action=ActionId.ACTOR_PROFILE_DEACTIVATE,
+        transition="deactivate",
+    )
 
 
 @router.get(

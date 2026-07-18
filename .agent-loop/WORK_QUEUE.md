@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | PR #146 open; all valid CodeRabbit findings repaired; integrated exact-head review passed; replacement external checks pending |
+| `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | PR #148 external repair and exact-head review pass at `efc4e6c`; canonical evidence refresh pending |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.
@@ -14,7 +14,7 @@ output. This authored queue records the separately approved parallel chunks.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-QUAL-001-01B2` | Baseline Evidence And CI Ratchet | L1 | Paused for AUTH priority; no valid replacement baseline yet |
-| `WS-AUTH-001-09D` | Actor And Identity-Link Lifecycle Mutations | L1 | Inactive until 09C merge/memory and explicit user start |
+| `WS-AUTH-001-09D-B` | Identity-Link Lifecycle And Race Closure | L1 | Inactive until 09D-A merge/memory and explicit user start |
 | `WS-QUAL-001-02` | Project Service Coverage | L1 | Inactive until 01B2 merge/memory plus explicit user start |
 | `WS-POL-002-04` | Locked Runtime Execution And Routing Hardening | L1 | Inactive pending relevant authorization proof and a separate explicit user start |
 | `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Inactive until 02A3 merge and explicit user start |
@@ -89,8 +89,11 @@ merged through PRs #126, #130, and #131. WS-XINT planning merged through PR #139
 and its AUTH owner reconciliation merged through PR #140 as `d541521`.
 AUTH-09A merged through PR #132 as `299363a`, and signed schema-v2 memory
 stopped. AUTH-09B merged through PR #143 as `053242b`; the user then explicitly
-started AUTH-09C, whose PR #146 is in external repair. Do not start AUTH-09D or
-POL-002-04 automatically.
+started AUTH-09C. PR #146 merged it as `0ffdabf`; signed memory at `eeb3dc2`
+stopped. The user explicitly started AUTH-09D, and required review split it
+before runtime edits. Only 09D-A implementation is active after exact-SHA
+preimplementation review passed. Do not start 09D-B,
+09E, or POL-002-04 automatically.
 
 Coverage R10 merged through PR #108. Do not start 01B2, chunk 02, or another
 coverage implementation chunk from this worktree.

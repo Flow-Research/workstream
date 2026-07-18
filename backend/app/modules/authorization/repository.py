@@ -188,6 +188,39 @@ class AdminAuthorizationRepository:
             is not None
         )
 
+    async def lock_actor_lifecycle_target(
+        self,
+        actor_profile_id: UUID,
+    ) -> tuple[ActorIdentityLink, ActorProfile, AdminRoleGrant | None] | None:
+        """Lock one lifecycle target in profile, link, then exact grant order."""
+        profile = await self._session.scalar(
+            select(ActorProfile)
+            .where(ActorProfile.id == str(actor_profile_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if profile is None:
+            return None
+        link = await self._session.scalar(
+            select(ActorIdentityLink)
+            .where(ActorIdentityLink.actor_profile_id == str(actor_profile_id))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if link is None:
+            raise RuntimeError("actor lifecycle target is missing its identity link")
+        grant = await self._session.scalar(
+            select(AdminRoleGrant)
+            .where(
+                AdminRoleGrant.target_actor_profile_id == str(actor_profile_id),
+                AdminRoleGrant.role == AdminRole.ACCESS_ADMINISTRATOR.value,
+                AdminRoleGrant.scope_type == AdminScope.SYSTEM.value,
+                AdminRoleGrant.status == "active",
+            )
+            .with_for_update()
+        )
+        return link, profile, grant
+
     async def has_effective_permission_any_scope(
         self,
         actor_profile_id: UUID,

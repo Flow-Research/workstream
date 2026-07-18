@@ -1,5 +1,85 @@
 # Review Log
 
+## 2026-07-18 - WS-AUTH-001-09D-A External Repair Review Passed
+
+- PR #148 CodeRabbit correctly found an API/database normalization mismatch:
+  one-argument PostgreSQL `btrim` allowed tab and newline padding rejected or
+  normalized by the public lifecycle schema.
+- The repair applies one explicit whitespace contract to both lifecycle
+  tables, migration `0026` dirty-row refusal, and installed constraints.
+  Direct-write and previous-head migration behavior tests pass.
+- CodeRabbit and GitHub checks also correctly rejected stale internal-review
+  evidence. All required tracks pass the repaired exact head `efc4e6c`; the
+  evidence now requires canonical rows and that exact reviewed SHA.
+  Replacement external checks and human approval remain required.
+
+## 2026-07-18 - WS-AUTH-001-09D-A Exact-Head Internal Review Passed
+
+- Senior engineering, QA/test, security/auth, product/ops, architecture,
+  migration/data integrity, CI integrity, docs, reuse/dedup, and test delta pass
+  exact integrated head `cc7e6cc` against trusted main `f18b620`.
+- All valid findings are repaired. Exact owner parity is 65 actions, 15 active,
+  and 50 planned; identity-link mutations remain inactive under 09D-B.
+- Internal evidence and the PR trust bundle record the behavior, migration,
+  coverage, CI-integrity, and reviewer proof. Ready PR #148 is open; external
+  checks and explicit human merge approval are the current gate.
+
+## 2026-07-18 - WS-AUTH-001-09D-A Deterministic Evidence Repaired
+
+- Initial exact-head QA/test-delta review rejected `43192d` because lifecycle
+  denial rows retained matched-grant IDs, database guards permitted missing or
+  stale reactivation provenance, the service/failure matrix was incomplete,
+  and ordered races did not observe a PostgreSQL waiter.
+- Candidate `b025460` removes matched-grant internals from lifecycle denials,
+  requires fresh complete profile/link reactivation provenance, covers a fixed
+  service target and nine injected transaction stages, and observes every
+  ordered second request in PostgreSQL `wait_event_type='Lock'`.
+- A second exact-head architecture/migration review rejected `e1ea98f` because
+  code-owned activation custody still named the retired 09D parent and the
+  migration tests did not exercise every upgrade/downgrade refusal branch.
+- Candidate `3d68933` assigns profile actions to exact owner 09D-A and inactive
+  link actions to 09D-B, then proves partial attribution, padded and multibyte
+  reason refusal, profile/link success evidence, and both link-denial tokens.
+- The next exact-head review found four historical Alembic catalogue assertions
+  still using the removed parent owner. Candidate `e64b03f` clean-cuts all four
+  to the two child owners; the three affected migration tests pass in 199.52
+  seconds and still assert exactly eight AUTH-09 definitions.
+- All five exact migration proofs pass in 181.50 seconds. The expanded real
+  PostgreSQL matrix passes in 100.36 seconds and the blocker-controlled race
+  proof passes in 140.69 seconds. No timing sleeps establish race order.
+- Focused branch coverage passes at 90.70 percent for actors and 91.78 percent
+  for authorization; the clean authorization selection passes all 110 tests and
+  the new lifecycle service is 100 percent branch-covered.
+- Ruff, the real HTTP API contract, stale scans, Markdown links, 87 Agent
+  Gates, merge-intent validation, and diff integrity pass. Exact-head internal
+  review remains before PR publication. External checks and explicit human
+  merge approval follow.
+  `WS-AUTH-001-09D-B` and `WS-AUTH-001-09E` remain inactive.
+
+## 2026-07-18 - WS-AUTH-001-09D-A Preimplementation Review Passed
+
+- Exact reviewed contract SHA: `7f941a53b4a30e6116d9a13fce6246f7aa943ac3`.
+- Senior, security/auth, product/ops, QA/test, test-delta, architecture,
+  migration, CI integrity, docs, and reuse/dedup tracks passed after three
+  bounded repair rounds.
+- Runtime implementation may begin for 09D-A only. 09D-B and 09E remain
+  inactive behind separate merge, signed-memory, and explicit-start gates.
+
+## 2026-07-18 - WS-AUTH-001-09D Preimplementation Review Failed And Split
+
+- Basis: trusted `main` at `0ffdabf` after PR #146 and signed memory
+  `eeb3dc2`.
+- Result: the combined lifecycle contract failed required L1 review before any
+  runtime edit. It mixed profile and identity-link mutations, omitted required
+  forward migration ownership, conflicted with canonical reserve-first and
+  singleton/caller-first ordering, and did not close reactivation evidence,
+  provenance, conflict, response, or final-admin concurrency semantics.
+- Repair: split the parent into active contract-review child
+  `WS-AUTH-001-09D-A` and inactive child `WS-AUTH-001-09D-B`. The first child
+  owns migration `0026`, lifecycle evidence repair, and only profile suspend,
+  reactivate, and terminal deactivate. Runtime implementation remains gated on
+  exact repaired-contract review.
+
 ## 2026-07-18 - WS-AUTH-001-09C External Repair Evidence Passed
 
 PR #146's original Backend, Agent Gates, and CodeRabbit checks passed.

@@ -45,7 +45,7 @@ backend/app/modules/projects/repository.py
 backend/app/api/router.py
 backend/app/db/models.py
 backend/app/modules/audit/**
-backend/alembic/versions/0026_*.py
+backend/alembic/versions/0027_*.py
 backend/tests/test_actors.py
 backend/tests/test_projects.py
 backend/tests/test_auth.py
@@ -140,9 +140,9 @@ editing migrations `0018`, `0019`, or `0022`
   project deny, pagination/count concealment, minimal-field, rate-limit, and
   inactive/non-human exclusion tests; no UUID must be recovered from logs or
   direct database access.
-- Migration `0026` enforces exact three-role checks, composite snapshot/grant
+- Migration `0027` enforces exact three-role checks, composite snapshot/grant
   ownership, partial unique/supporting indexes, database-time fields, and
-  immutability. Migration `0026` refuses upgrade when obsolete combined or
+  immutability. Migration `0027` refuses upgrade when obsolete combined or
   replacement evidence exists and never converts or deletes those rows. It
   replaces current audit/idempotency validators without editing historical
   migrations and refuses an unsafe downgrade without mutating evidence.

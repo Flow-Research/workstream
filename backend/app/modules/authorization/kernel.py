@@ -25,6 +25,7 @@ from app.modules.authorization.runtime import (
     ActorIdentityLinkAdminReadResourceContext,
     ActorKind,
     ActorProfileAdminReadResourceContext,
+    ActorProfileLifecycleResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
     AdminRoleDefinitionsResourceContext,
@@ -60,6 +61,9 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.ACTOR_SERVICE_PROVISION,
         ActionId.ACTOR_PROFILE_READ,
         ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
@@ -73,6 +77,9 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ACTOR_SERVICE_PROVISION,
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
     }
 )
 
@@ -251,6 +258,14 @@ class AuthorizationService:
                 return AuthorizationDenialCode.GRANT_NOT_FOUND
             if grant.target_actor_profile_id == str(context.actor_profile_id):
                 return AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN
+        elif isinstance(resource, ActorProfileLifecycleResourceContext):
+            if (
+                resource.resource_id == context.actor_profile_id
+                and resource.transition in {"suspend", "deactivate"}
+            ):
+                return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if await self._admin.lock_actor_lifecycle_target(resource.resource_id) is None:
+                return AuthorizationDenialCode.ACTOR_NOT_FOUND
         elif isinstance(
             resource,
             (AdminRoleGrantCollectionResourceContext, ActorAdminRoleGrantHistoryResourceContext),
@@ -280,8 +295,18 @@ class AuthorizationService:
             ActionId.ACTOR_SERVICE_PROVISION: ServiceActorProvisionResourceContext,
             ActionId.ACTOR_PROFILE_READ: ActorProfileAdminReadResourceContext,
             ActionId.ACTOR_IDENTITY_LINK_READ: ActorIdentityLinkAdminReadResourceContext,
+            ActionId.ACTOR_PROFILE_SUSPEND: ActorProfileLifecycleResourceContext,
+            ActionId.ACTOR_PROFILE_REACTIVATE: ActorProfileLifecycleResourceContext,
+            ActionId.ACTOR_PROFILE_DEACTIVATE: ActorProfileLifecycleResourceContext,
         }.get(action_id)
-        return expected is not None and isinstance(resource, expected)
+        if expected is None or not isinstance(resource, expected):
+            return False
+        transition = {
+            ActionId.ACTOR_PROFILE_SUSPEND: "suspend",
+            ActionId.ACTOR_PROFILE_REACTIVATE: "reactivate",
+            ActionId.ACTOR_PROFILE_DEACTIVATE: "deactivate",
+        }.get(action_id)
+        return transition is None or resource.transition == transition
 
     @staticmethod
     def _resource_project_id(resource: AuthorizationResourceContext):
@@ -400,7 +425,7 @@ class AuthorizationService:
                     target_actor_ref=str(decision.resource_id) if target_is_actor else None,
                     matched_grant_id=(
                         str(decision.matched_grant_id)
-                        if decision.matched_grant_id is not None
+                        if decision.allowed and decision.matched_grant_id is not None
                         else None
                     ),
                     permission_id=decision.permission_id,

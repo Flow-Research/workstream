@@ -17,8 +17,8 @@ product/ops, architecture, CI integrity, docs, reuse/dedup, and test delta.
   merged;
 - AUTH-09B controlled provisioning can create the exact service ActorProfile
   and one active identity link;
-- AUTH-09C administrative reads and AUTH-09D actor/link lifecycle mutations are
-  merged;
+- AUTH-09C administrative reads plus AUTH-09D-A profile lifecycle and 09D-B
+  identity-link lifecycle are merged;
 - service lifecycle state is canonical and no feature service action is active
   merely because this chunk starts.
 

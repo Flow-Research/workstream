@@ -26,8 +26,9 @@ mutations, service admission, and concurrency. Required L1 review split it into
 09A through 09E before runtime implementation. AUTH-09A takes migration `0023`;
 09B requires forward migration `0024` so provisioned service links remain
 unverified until a token is actually verified. ART owns `0025` for the
-ArtifactStore v2 clean cut. AUTH-10 through AUTH-15 therefore shift to `0026`
-through `0031`, without allocating migrations to the
+ArtifactStore v2 clean cut. AUTH-09D-A requires `0026` for lifecycle evidence
+and profile reactivation provenance repair. AUTH-10 through AUTH-15 therefore
+shift to `0027` through `0032`, without allocating migrations to the
 availability-neutral custody or PREP chunks.
 
 ## Current behavior
@@ -303,7 +304,7 @@ need an independently reviewable contract and production-code budget.
   `replaced_grant_id`, replacement events, and replacement reasons.
 - Migration `0022_bootstrap_admin_grants.py` recreates current PostgreSQL audit
   and linked-idempotency validators with the same combined/replacement values.
-  Historical migrations remain immutable; AUTH-10 `0026` must replace current
+  Historical migrations remain immutable; AUTH-10 `0027` must replace current
   validators and fail closed on incompatible evidence.
 - The current kernel has request-scoped `require()` but no AUTH-first prepared
   mutation handle. Cross-module mutations therefore lack the merged lock,

@@ -88,6 +88,7 @@ class ActorProfileAdminResponse(BaseModel):
     updated_at: datetime
     last_seen_at: datetime | None
     suspended_at: datetime | None
+    reactivated_at: datetime | None
     deactivated_at: datetime | None
 
     @model_validator(mode="after")

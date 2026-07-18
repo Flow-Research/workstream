@@ -77,13 +77,23 @@ Fields include:
 - `status` (`active`, `suspended`, `deactivated`)
 - permitted display/profile metadata
 - database-time creation/update fields
+- bounded suspension and reactivation attribution plus immutable terminal
+  deactivation attribution after AUTH-09D-A migration `0026`
 
 Profile status is a guard, not a role or project grant.
+Lifecycle invalidation effectiveness is component-scoped. Reactivating a
+profile records `effective=false -> effective=true` for that profile projection
+without asserting that its identity link, grants, or fixed-service admission
+make the whole actor effective.
 
 ### ActorIdentityLink
 
 An identity link binds one canonical external issuer and opaque subject to one
-ActorProfile. It has active/revoked state plus immutable revocation provenance.
+ActorProfile. It has active/revoked state plus state-transition-guarded current
+revocation and reactivation attribution. AUTH-09D-A migration `0026` enforces
+complete attribution and bounded lifecycle reasons before AUTH-09D-B activates
+link mutations. Append-only audit evidence preserves immutable transition
+history; the current row carries only the latest state-compatible attribution.
 Raw tokens, provider credentials, and full claim payloads are not stored.
 The database enforces a unique `(issuer, subject)` pair across all links and, in
 v0.1, at most one active identity link per ActorProfile. Revocation preserves
