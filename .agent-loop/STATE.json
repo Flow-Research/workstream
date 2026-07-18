@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29639652904/job/88067928581"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29647537908/job/88088186293"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29639652908/job/88067928585"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29645771323/job/88083651593"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-REV-001-01",
-    "chunk_title": "Canonical Contract Adoption And Dependency Conformance",
+    "chunk_id": "WS-REV-001-02",
+    "chunk_title": "Locked Review Policy And Task Lifecycle Alignment",
     "initiative_id": "WS-REV-001",
-    "next_chunk_id": "WS-REV-001-02",
-    "next_chunk_title": "Locked Review Policy And Task Lifecycle Alignment",
+    "next_chunk_id": "WS-REV-001-02A",
+    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-REV-001-02",
-    "next_chunk_title": "Locked Review Policy And Task Lifecycle Alignment",
+    "next_chunk_id": "WS-REV-001-02A",
+    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "0ffdabf3dbb77e4e066683fde1a095d744ff1f43",
-    "head_ref": "codex/ws-rev-001-01",
-    "head_sha": "79c22e33417f3dc17b3c0f4541f2d563599b1578",
-    "intent_blob_sha": "8575ab333a25f20f62e53c48dd2d6c4c37cd2d21",
-    "intent_path": ".agent-loop/merge-intents/WS-REV-001-01.json",
-    "main_sha": "b2b9016d5fee33ddca40882c97620a178d8e52f0",
-    "merged_at": "2026-07-18T10:07:25Z",
+    "first_parent_sha": "b2b9016d5fee33ddca40882c97620a178d8e52f0",
+    "head_ref": "codex/ws-rev-001-02",
+    "head_sha": "e10575bd0a6887ac6f0e4751e279b0291d07d019",
+    "intent_blob_sha": "586a230e25dc11c37f0b89b085d684e7eadd31d3",
+    "intent_path": ".agent-loop/merge-intents/WS-REV-001-02.json",
+    "main_sha": "f18b620932bb257dc1dc355bc0504271813dc6b1",
+    "merged_at": "2026-07-18T14:11:14Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 145,
-    "pr_title": "docs(review): adopt canonical review lifecycle contract",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/145"
+    "pr_number": 147,
+    "pr_title": "docs(rev): split REV-02 lifecycle alignment",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/147"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-18T10:07:25Z"
+  "updated_at": "2026-07-18T14:11:14Z"
 }

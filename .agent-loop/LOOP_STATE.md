@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#145](https://github.com/Flow-Research/workstream/pull/145) - docs(review): adopt canonical review lifecycle contract
-- Merge commit: `b2b9016d5fee33ddca40882c97620a178d8e52f0`
-- Final PR head: `79c22e33417f3dc17b3c0f4541f2d563599b1578`
-- Merged at: `2026-07-18T10:07:25Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-REV-001-01.json` at blob `8575ab333a25f20f62e53c48dd2d6c4c37cd2d21`
-- Completed chunk: `WS-REV-001-01` - Canonical Contract Adoption And Dependency Conformance
+- Last merged PR: [#147](https://github.com/Flow-Research/workstream/pull/147) - docs(rev): split REV-02 lifecycle alignment
+- Merge commit: `f18b620932bb257dc1dc355bc0504271813dc6b1`
+- Final PR head: `e10575bd0a6887ac6f0e4751e279b0291d07d019`
+- Merged at: `2026-07-18T14:11:14Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-REV-001-02.json` at blob `586a230e25dc11c37f0b89b085d684e7eadd31d3`
+- Completed chunk: `WS-REV-001-02` - Locked Review Policy And Task Lifecycle Alignment
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-REV-001-02` - Locked Review Policy And Task Lifecycle Alignment; requires a separate explicit start.
+- Next chunk: `WS-REV-001-02A` - Project Guide Activation Sequence And Publication Locking; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
