@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -14,6 +15,7 @@ from workstream_mcp.errors import (
     map_http_status,
 )
 from workstream_mcp.gateway import ContributorGateway
+from workstream_mcp.schemas import normalize_stable_ref
 
 
 class HTTPContributorGateway:
@@ -45,6 +47,7 @@ class HTTPContributorGateway:
     async def get_my_projects(self, context: RequestContext) -> dict[str, Any]:
         """Return project capabilities through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "my_projects")
         return await self._fallback.get_my_projects(context)
 
@@ -56,6 +59,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Return contribution records through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "my_contributions")
         return await self._fallback.get_my_contributions(context, project_id=project_id)
 
@@ -67,19 +71,29 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Return contributor task views through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "tasks")
         return await self._fallback.list_tasks(context, project_id=project_id)
 
     async def get_task_context(self, context: RequestContext, *, task_id: str) -> dict[str, Any]:
         """Return task context by composing available Workstream task APIs."""
-        task = await self._request(context, "GET", f"/api/v1/tasks/{task_id}")
-        work_context = await self._request(context, "GET", f"/api/v1/tasks/{task_id}/work-context")
+        task_segment = _path_segment(task_id)
+        task = await self._request(context, "GET", f"/api/v1/tasks/{task_segment}")
+        work_context = await self._request(
+            context,
+            "GET",
+            f"/api/v1/tasks/{task_segment}/work-context",
+        )
         requirements = await self._request(
             context,
             "GET",
-            f"/api/v1/tasks/{task_id}/submission-requirements",
+            f"/api/v1/tasks/{task_segment}/submission-requirements",
         )
-        submissions = await self._request(context, "GET", f"/api/v1/tasks/{task_id}/submissions")
+        submissions = await self._request(
+            context,
+            "GET",
+            f"/api/v1/tasks/{task_segment}/submissions",
+        )
         return {
             "task": task,
             "work_context": work_context,
@@ -89,8 +103,13 @@ class HTTPContributorGateway:
 
     async def get_task_status(self, context: RequestContext, *, task_id: str) -> dict[str, Any]:
         """Return actor-facing task status from available task and submission APIs."""
-        task = await self._request(context, "GET", f"/api/v1/tasks/{task_id}")
-        submissions = await self._request(context, "GET", f"/api/v1/tasks/{task_id}/submissions")
+        task_segment = _path_segment(task_id)
+        task = await self._request(context, "GET", f"/api/v1/tasks/{task_segment}")
+        submissions = await self._request(
+            context,
+            "GET",
+            f"/api/v1/tasks/{task_segment}/submissions",
+        )
         latest_submission = (
             submissions[-1] if isinstance(submissions, list) and submissions else None
         )
@@ -99,7 +118,7 @@ class HTTPContributorGateway:
             checker_runs = await self._request(
                 context,
                 "GET",
-                f"/api/v1/submissions/{latest_submission['id']}/checker-runs",
+                f"/api/v1/submissions/{_path_segment(str(latest_submission['id']))}/checker-runs",
             )
         return {
             "task_id": task_id,
@@ -120,6 +139,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Use a complete temporary adapter until Workstream merges claim and start."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "claim_task")
         return await self._fallback.claim_task(context, task_id=task_id, request_id=request_id)
 
@@ -133,6 +153,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Use a complete temporary adapter until contributor release is available."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "release_task")
         return await self._fallback.release_task(
             context,
@@ -150,10 +171,11 @@ class HTTPContributorGateway:
         request_id: str,
     ) -> dict[str, Any]:
         """Run non-authoritative pre-submit checks."""
+        task_segment = _path_segment(task_id)
         return await self._request(
             context,
             "POST",
-            f"/api/v1/tasks/{task_id}/submission-precheck",
+            f"/api/v1/tasks/{task_segment}/submission-precheck",
             request_id=request_id,
             json={"submission": submission},
         )
@@ -168,6 +190,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Use a complete temporary adapter until submissions have durable request idempotency."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "submit_task")
         return await self._fallback.submit_task(
             context,
@@ -184,6 +207,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Return current review through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "current_review")
         return await self._fallback.get_current_review(context, project_id=project_id)
 
@@ -195,6 +219,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Return review context through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "review_context")
         return await self._fallback.get_review_context(context, review_ref=review_ref)
 
@@ -208,6 +233,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Claim current review through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "claim_review")
         return await self._fallback.claim_review(
             context,
@@ -225,6 +251,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Release current review through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "release_review")
         return await self._fallback.release_review(
             context,
@@ -243,6 +270,7 @@ class HTTPContributorGateway:
     ) -> dict[str, Any]:
         """Submit a review decision through an explicitly injected temporary gateway."""
         if self._fallback is None:
+            await self._require_authoritative_identity(context)
             raise _missing_backend_api(context, "submit_review")
         return await self._fallback.submit_review(
             context,
@@ -251,6 +279,10 @@ class HTTPContributorGateway:
             findings=findings,
             request_id=request_id,
         )
+
+    async def _require_authoritative_identity(self, context: RequestContext) -> None:
+        """Ask Workstream Auth to validate identity before a fail-closed response."""
+        await self._request(context, "GET", "/api/v1/auth/me")
 
     async def _request(
         self,
@@ -312,3 +344,8 @@ def _missing_backend_api(context: RequestContext, surface: str) -> WorkstreamMCP
         correlation_id=context.correlation_id,
         details={"surface": surface, "temporary_gateway_required": True},
     )
+
+
+def _path_segment(value: str) -> str:
+    """Encode one opaque Workstream reference without allowing path traversal."""
+    return quote(normalize_stable_ref(value, "reference"), safe="")

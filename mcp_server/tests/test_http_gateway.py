@@ -9,7 +9,9 @@ import httpx
 import pytest
 
 from workstream_mcp.auth import RequestContext
+from workstream_mcp.errors import map_http_error_response
 from workstream_mcp.http_gateway import HTTPContributorGateway
+from workstream_mcp.resources import read_task_context
 from workstream_mcp.scenario_gateway import ScenarioContributorGateway
 from workstream_mcp.tools import (
     claim_review,
@@ -56,13 +58,19 @@ async def test_claim_task_fails_closed_until_backend_claim_starts_work() -> None
 
     assert result["error"]["code"] == "workstream_temporarily_unavailable"
     assert result["error"]["details"]["surface"] == "claim_task"
-    assert calls == []
+    assert [(method, path) for method, path, _headers in calls] == [
+        ("GET", "/api/v1/auth/me")
+    ]
+    assert calls[0][2]["authorization"] == "Bearer issuer-token"
 
 
 @pytest.mark.asyncio
 async def test_default_http_gateway_fails_closed_for_missing_surfaces() -> None:
     """Runtime HTTP mode must not serve scenario data by default."""
-    gateway = HTTPContributorGateway(base_url="http://workstream.test")
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, json={"id": "actor-1"})),
+    )
 
     result = await claim_review(
         gateway,
@@ -110,10 +118,12 @@ async def test_tool_validation_rejects_invalid_review_decision_and_blank_request
     )
     blank_request = await claim_task(gateway, context(), task_id="task-1", request_id=" ")
     blank_task = await claim_task(gateway, context(), task_id=" ", request_id=REQUEST_ID)
+    path_task = await claim_task(gateway, context(), task_id="../auth/me", request_id=REQUEST_ID)
 
     assert invalid_decision["error"]["code"] == "invalid_tool_input"
     assert blank_request["error"]["code"] == "invalid_tool_input"
     assert blank_task["error"]["code"] == "invalid_tool_input"
+    assert path_task["error"]["code"] == "invalid_tool_input"
 
 
 @pytest.mark.asyncio
@@ -213,7 +223,7 @@ async def test_submit_task_fails_closed_until_backend_supports_idempotency() -> 
 
     async def handler(request: httpx.Request) -> httpx.Response:
         seen["path"] = request.url.path
-        seen["body"] = json.loads(request.content)
+        seen["body"] = json.loads(request.content) if request.content else None
         return httpx.Response(201, json={"id": "submission-1", "task_id": "task-1"})
 
     gateway = HTTPContributorGateway(
@@ -229,7 +239,7 @@ async def test_submit_task_fails_closed_until_backend_supports_idempotency() -> 
         request_id=REQUEST_ID,
     )
 
-    assert seen == {}
+    assert seen == {"path": "/api/v1/auth/me", "body": None}
     assert result["error"]["code"] == "workstream_temporarily_unavailable"
     assert result["error"]["details"]["surface"] == "submit_task"
 
@@ -237,7 +247,16 @@ async def test_submit_task_fails_closed_until_backend_supports_idempotency() -> 
 @pytest.mark.asyncio
 async def test_release_task_fails_closed_without_contributor_backend_api() -> None:
     """The operator release endpoint must not be exposed as a contributor tool."""
-    gateway = HTTPContributorGateway(base_url="http://workstream.test")
+    seen_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_paths.append(request.url.path)
+        return httpx.Response(200, json={"id": "actor-1"})
+
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(handler),
+    )
 
     result = await release_task(
         gateway,
@@ -249,6 +268,7 @@ async def test_release_task_fails_closed_without_contributor_backend_api() -> No
 
     assert result["error"]["code"] == "workstream_temporarily_unavailable"
     assert result["error"]["details"]["surface"] == "release_task"
+    assert seen_paths == ["/api/v1/auth/me"]
 
 
 @pytest.mark.asyncio
@@ -269,3 +289,54 @@ async def test_invalid_upstream_json_becomes_safe_mcp_error() -> None:
     )
 
     assert result["error"]["code"] == "unexpected_server_error"
+
+
+@pytest.mark.asyncio
+async def test_invalid_token_is_reported_before_missing_surface() -> None:
+    """Unavailable APIs still authenticate through the existing Workstream Auth service."""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/auth/me"
+        return httpx.Response(401, json={"error": {"code": "invalid_token"}})
+
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await claim_task(gateway, context(), task_id="task-1", request_id=REQUEST_ID)
+
+    assert result["error"]["code"] == "invalid_token"
+    assert result["error"]["details"] == {}
+
+
+@pytest.mark.asyncio
+async def test_resource_identifier_cannot_escape_http_path_segment() -> None:
+    """Hostile resource references are rejected before any Workstream HTTP call."""
+    calls: list[str] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(200, json={})
+
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await read_task_context(gateway, context(), task_id="../auth/me")
+
+    assert result["error"]["code"] == "resource_not_found_or_not_visible"
+    assert calls == []
+
+
+def test_safe_backend_error_codes_are_preserved() -> None:
+    """Known authorization classifications survive the HTTP adapter boundary."""
+    denied = map_http_error_response(
+        403,
+        {"error": {"code": "project_access_denied"}},
+        correlation_id="corr-1",
+    )
+
+    assert denied.code.value == "project_access_denied"
+    assert denied.correlation_id == "corr-1"

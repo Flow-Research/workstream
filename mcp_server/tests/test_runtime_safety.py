@@ -38,6 +38,29 @@ def test_streamable_http_defaults_are_limited_to_loopback(monkeypatch: pytest.Mo
     )
 
 
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("WORKSTREAM_API_BASE_URL", "http://api.example.test", "must use HTTPS"),
+        ("WORKSTREAM_API_BASE_URL", "https://user:secret@api.example.test", "credentials"),
+        ("WORKSTREAM_MCP_REQUEST_TIMEOUT_SECONDS", "0", "positive and finite"),
+        ("WORKSTREAM_MCP_REQUEST_TIMEOUT_SECONDS", "nan", "positive and finite"),
+        ("WORKSTREAM_MCP_ALLOWED_HOSTS", " , ", "allowlists must not be empty"),
+    ],
+)
+def test_runtime_configuration_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+    message: str,
+) -> None:
+    """Unsafe token destinations, timeouts, and empty transport allowlists are rejected."""
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ValueError, match=message):
+        WorkstreamMCPConfig.from_environment()
+
+
 def test_main_rejects_sse_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only the WS-MCP-001-supported transports may run the server."""
     monkeypatch.setenv("WORKSTREAM_MCP_TRANSPORT", "sse")
@@ -64,6 +87,10 @@ async def test_observability_never_logs_bearer_tokens(caplog: pytest.LogCaptureF
     assert "issuer-token" not in caplog.text
     assert caplog.records[0].correlation_id == "corr-1"
     assert caplog.records[0].request_id == "11111111-1111-4111-8111-111111111111"
+    assert caplog.records[0].started_at.endswith("+00:00")
+    assert caplog.records[0].outcome_class == "success"
+    assert caplog.records[0].retryable is False
+    assert caplog.records[0].idempotent_replay is None
 
 
 async def _successful_action() -> dict[str, str]:

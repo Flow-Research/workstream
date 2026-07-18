@@ -111,17 +111,27 @@ def map_http_status(status_code: int, *, correlation_id: str | None = None) -> W
 
 
 _BACKEND_ERROR_CODES: dict[str, MCPErrorCode] = {
+    "authentication_required": MCPErrorCode.AUTHENTICATION_REQUIRED,
+    "invalid_token": MCPErrorCode.INVALID_TOKEN,
+    "project_access_denied": MCPErrorCode.PROJECT_ACCESS_DENIED,
+    "capability_not_granted": MCPErrorCode.CAPABILITY_NOT_GRANTED,
+    "resource_not_found_or_not_visible": MCPErrorCode.RESOURCE_NOT_FOUND_OR_NOT_VISIBLE,
     "idempotency_mismatch": MCPErrorCode.IDEMPOTENCY_CONFLICT,
+    "idempotency_conflict": MCPErrorCode.IDEMPOTENCY_CONFLICT,
     "pre_submission_checker_failed": MCPErrorCode.PRE_SUBMIT_CHECK_FAILED,
     "pre_submit_check_failed": MCPErrorCode.PRE_SUBMIT_CHECK_FAILED,
     "submission_version_unchanged": MCPErrorCode.SUBMISSION_UNCHANGED,
     "task_assignment_conflict": MCPErrorCode.TASK_NOT_CLAIMABLE,
     "task_not_claimable": MCPErrorCode.TASK_NOT_CLAIMABLE,
     "task_not_releasable": MCPErrorCode.TASK_NOT_RELEASABLE,
+    "submission_not_allowed": MCPErrorCode.SUBMISSION_NOT_ALLOWED,
+    "submission_unchanged": MCPErrorCode.SUBMISSION_UNCHANGED,
     "review_not_available": MCPErrorCode.REVIEW_NOT_AVAILABLE,
     "review_not_leased_to_actor": MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
     "review_lease_expired": MCPErrorCode.REVIEW_LEASE_EXPIRED,
     "findings_required": MCPErrorCode.FINDINGS_REQUIRED,
+    "workstream_temporarily_unavailable": MCPErrorCode.WORKSTREAM_TEMPORARILY_UNAVAILABLE,
+    "unexpected_server_error": MCPErrorCode.UNEXPECTED_SERVER_ERROR,
 }
 
 
@@ -138,6 +148,7 @@ def map_http_error_response(
         return WorkstreamMCPError(
             mcp_code,
             "Workstream rejected the requested operation.",
+            retryable=mcp_code is MCPErrorCode.WORKSTREAM_TEMPORARILY_UNAVAILABLE,
             correlation_id=correlation_id,
         )
     return map_http_status(status_code, correlation_id=correlation_id)

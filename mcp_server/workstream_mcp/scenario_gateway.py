@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+import hashlib
+import json
 from typing import Any
 
 from workstream_mcp.auth import RequestContext
@@ -30,6 +32,7 @@ class ScenarioContributorGateway:
                 "name": "Scenario Project",
                 "summary": "Temporary project fixture for MCP conformance.",
                 "capability": "both",
+                "granted_capabilities": ["submitter", "reviewer"],
                 "availability_state": "approved",
             }
         ]
@@ -42,6 +45,8 @@ class ScenarioContributorGateway:
                 "summary": "Temporary task fixture for MCP conformance.",
                 "actor_facing_state": "available",
                 "may_claim": True,
+                "available_from": SCENARIO_TIMESTAMP,
+                "claim_by": "2026-07-17T00:00:00+00:00",
                 "context_resource": "workstream://tasks/scenario-task-1/context",
                 "status_resource": "workstream://tasks/scenario-task-1/status",
             }
@@ -56,6 +61,8 @@ class ScenarioContributorGateway:
                 "outcome": "accepted",
                 "recorded_at": _now(),
                 "compensation_status": "recorded",
+                "compensation_policy_ref": "scenario-policy-1:v1",
+                "compensation_summary": "Scenario points recorded after acceptance.",
             }
         ]
         self._review = {
@@ -66,10 +73,16 @@ class ScenarioContributorGateway:
             "task_summary": "Scenario review task",
             "actor_facing_state": "available_to_claim",
             "context_resource": None,
+            "lease_started_at": None,
+            "lease_expires_at": None,
         }
         self._submission_count = 0
         self._submissions: list[dict[str, Any]] = []
-        self._replays: dict[tuple[str, str], tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        self._task_owner: str | None = None
+        self._review_owner: str | None = None
+        self._replays: dict[
+            tuple[str, str, str], tuple[tuple[Any, ...], dict[str, Any]]
+        ] = {}
 
     async def get_my_projects(self, context: RequestContext) -> dict[str, Any]:
         """Return deterministic project capabilities for tests and local demos."""
@@ -110,6 +123,7 @@ class ScenarioContributorGateway:
         """Return deterministic locked task context for the test Submitter journey."""
         _require_context(context)
         task = self._task(task_id, context)
+        self._require_task_visibility(task, context)
         return {
             "source": "temporary_scenario_gateway",
             "task": deepcopy(task),
@@ -117,6 +131,25 @@ class ScenarioContributorGateway:
                 "task": {"id": task_id, "instructions": "Scenario instructions."},
                 "lifecycle": {"status": task["actor_facing_state"]},
             },
+            "locked_context": {
+                "guide_ref": "scenario-guide-1",
+                "guide_version": 1,
+                "policy_ref": "scenario-policy-1",
+                "policy_version": 1,
+                "locked_at": SCENARIO_TIMESTAMP,
+            },
+            "expected_output": "A complete scenario result package.",
+            "acceptance_criteria": ["The package is complete and checker evidence passes."],
+            "artifact_requirements": ["result.txt with a declared SHA-256 hash"],
+            "evidence_requirements": ["pre-submit checker result"],
+            "pre_submit_checks": ["scenario-checker-1"],
+            "review_criteria": ["Correctness", "Evidence completeness"],
+            "compensation": {
+                "policy_ref": "scenario-policy-1:v1",
+                "summary": "Scenario points recorded after acceptance.",
+            },
+            "cycle": {"number": 1, "maximum_revisions": 2},
+            "revision": {"required": False, "findings": []},
             "submission_requirements": {
                 "task_id": task_id,
                 "required_packet_fields": [
@@ -137,6 +170,7 @@ class ScenarioContributorGateway:
         """Return deterministic actor-facing state without a read side effect."""
         _require_context(context)
         task = self._task(task_id, context)
+        self._require_task_visibility(task, context)
         task_submissions = [
             submission for submission in self._submissions if submission["task_id"] == task_id
         ]
@@ -144,8 +178,17 @@ class ScenarioContributorGateway:
             "source": "temporary_scenario_gateway",
             "task_id": task_id,
             "task": deepcopy(task),
+            "actor_facing_state": task["actor_facing_state"],
             "latest_submission": deepcopy(task_submissions[-1]) if task_submissions else None,
             "checker_runs": [],
+            "latest_check_outcome": None,
+            "latest_review_outcome": None,
+            "action_required": (
+                "read_task_context"
+                if task["actor_facing_state"] == "needs_revision"
+                else None
+            ),
+            "final_outcome": None,
             "next_resource": (
                 f"workstream://tasks/{task_id}/context"
                 if task["actor_facing_state"] == "needs_revision"
@@ -174,11 +217,13 @@ class ScenarioContributorGateway:
             )
         task["actor_facing_state"] = "in_progress"
         task["may_claim"] = False
+        self._task_owner = _actor_key(context)
         return self._store_replay(
             "claim_task",
             request_id,
             (task_id,),
             {"task": deepcopy(task), "assignment": {"id": "scenario-assignment-1"}},
+            context,
         )
 
     async def release_task(
@@ -195,7 +240,10 @@ class ScenarioContributorGateway:
         if replay is not None:
             return replay
         task = self._task(task_id, context)
-        if task["actor_facing_state"] != "in_progress":
+        if (
+            task["actor_facing_state"] != "in_progress"
+            or self._task_owner != _actor_key(context)
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.TASK_NOT_RELEASABLE,
                 "The task is not currently releasable.",
@@ -203,8 +251,13 @@ class ScenarioContributorGateway:
             )
         task["actor_facing_state"] = "available"
         task["may_claim"] = True
+        self._task_owner = None
         return self._store_replay(
-            "release_task", request_id, (task_id, reason), {"task": deepcopy(task)}
+            "release_task",
+            request_id,
+            (task_id, reason),
+            {"task": deepcopy(task)},
+            context,
         )
 
     async def run_pre_submit_check(
@@ -217,7 +270,16 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Return a deterministic non-mutating checker outcome."""
         _require_context(context)
-        self._task(task_id, context)
+        task = self._task(task_id, context)
+        if self._task_owner != _actor_key(context) or task["actor_facing_state"] not in {
+            "in_progress",
+            "needs_revision",
+        }:
+            raise WorkstreamMCPError(
+                MCPErrorCode.SUBMISSION_NOT_ALLOWED,
+                "The task is not ready for submission.",
+                correlation_id=context.correlation_id,
+            )
         return {
             "task_id": task_id,
             "authoritative": False,
@@ -237,12 +299,15 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Record one temporary immutable submission for conformance testing."""
         _require_context(context)
-        input_key = (task_id, repr(sorted(submission.items())))
+        input_key = (task_id, _canonical_json(submission))
         replay = self._replay("submit_task", request_id, input_key, context)
         if replay is not None:
             return replay
         task = self._task(task_id, context)
-        if task["actor_facing_state"] not in {"in_progress", "needs_revision"}:
+        if (
+            self._task_owner != _actor_key(context)
+            or task["actor_facing_state"] not in {"in_progress", "needs_revision"}
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.SUBMISSION_NOT_ALLOWED,
                 "The task is not ready for submission.",
@@ -262,6 +327,7 @@ class ScenarioContributorGateway:
             request_id,
             input_key,
             result,
+            context,
         )
 
     async def get_current_review(
@@ -278,6 +344,14 @@ class ScenarioContributorGateway:
                 "project_id": project_id,
                 "state": "none_available",
             }
+        if self._review["state"] == "leased_to_actor" and self._review_owner != _actor_key(
+            context
+        ):
+            return {
+                "source": "temporary_scenario_gateway",
+                "project_id": project_id,
+                "state": "none_available",
+            }
         return {"source": "temporary_scenario_gateway", **deepcopy(self._review)}
 
     async def get_review_context(
@@ -288,7 +362,11 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Return deterministic review context only for the leased fixture."""
         _require_context(context)
-        if review_ref != self._review["review_ref"] or self._review["state"] != "leased_to_actor":
+        if (
+            review_ref != self._review["review_ref"]
+            or self._review["state"] != "leased_to_actor"
+            or self._review_owner != _actor_key(context)
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
                 "Review context is available only for a review leased to the actor.",
@@ -299,7 +377,33 @@ class ScenarioContributorGateway:
             "review_ref": review_ref,
             "project_id": self._review["project_id"],
             "task": {"title": "Scenario review task"},
-            "submission": {"submission_id": "scenario-submission-1", "version": 1},
+            "task_context": {
+                "task_id": "scenario-task-1",
+                "guide_ref": "scenario-guide-1:v1",
+                "policy_ref": "scenario-policy-1:v1",
+                "expected_output": "A complete scenario result package.",
+                "acceptance_criteria": ["The package is complete and evidence passes."],
+            },
+            "submission": {
+                "submission_id": "scenario-submission-1",
+                "version": 1,
+                "summary": "Scenario candidate submission.",
+                "artifact_manifest": [
+                    {"artifact": "result.txt", "hash": "sha256:def"}
+                ],
+                "evidence_items": [],
+            },
+            "checker_results": {"status": "passed", "results": []},
+            "revision_chain": [],
+            "review_criteria": ["Correctness", "Evidence completeness"],
+            "compensation": {
+                "policy_ref": "scenario-policy-1:v1",
+                "summary": "Scenario points recorded after acceptance.",
+            },
+            "lease": {
+                "started_at": self._review["lease_started_at"],
+                "expires_at": self._review["lease_expires_at"],
+            },
             "allowed_decisions": ["accept", "needs_revision", "reject"],
             "findings_required_for": ["needs_revision"],
         }
@@ -336,16 +440,26 @@ class ScenarioContributorGateway:
             )
         self._review["state"] = "leased_to_actor"
         self._review["actor_facing_state"] = "leased_to_actor"
+        self._review_owner = _actor_key(context)
+        self._review["lease_started_at"] = SCENARIO_TIMESTAMP
+        self._review["lease_expires_at"] = "2026-07-10T00:30:00+00:00"
         self._review["context_resource"] = (
             f"workstream://reviews/{self._review['review_ref']}/context"
         )
-        return self._store_replay("claim_review", request_id, (project_id, review_routing_ref), {
-            "operation": "claim_review",
-            "outcome": "leased_to_actor",
-            "review_ref": self._review["review_ref"],
-            "request_id": request_id,
-            "next_resource": self._review["context_resource"],
-        })
+        return self._store_replay(
+            "claim_review",
+            request_id,
+            (project_id, review_routing_ref),
+            {
+                "operation": "claim_review",
+                "outcome": "leased_to_actor",
+                "review_ref": self._review["review_ref"],
+                "request_id": request_id,
+                "next_resource": self._review["context_resource"],
+                "lease_expires_at": self._review["lease_expires_at"],
+            },
+            context,
+        )
 
     async def release_review(
         self,
@@ -359,7 +473,11 @@ class ScenarioContributorGateway:
         replay = self._replay("release_review", request_id, (review_ref,), context)
         if replay is not None:
             return replay
-        if review_ref != self._review["review_ref"] or self._review["state"] != "leased_to_actor":
+        if (
+            review_ref != self._review["review_ref"]
+            or self._review["state"] != "leased_to_actor"
+            or self._review_owner != _actor_key(context)
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
                 "The review is not leased to the current actor.",
@@ -368,12 +486,21 @@ class ScenarioContributorGateway:
         self._review["state"] = "available_to_claim"
         self._review["actor_facing_state"] = "available_to_claim"
         self._review["context_resource"] = None
-        return self._store_replay("release_review", request_id, (review_ref,), {
-            "operation": "release_review",
-            "outcome": "released",
-            "review_ref": review_ref,
-            "request_id": request_id,
-        })
+        self._review["lease_started_at"] = None
+        self._review["lease_expires_at"] = None
+        self._review_owner = None
+        return self._store_replay(
+            "release_review",
+            request_id,
+            (review_ref,),
+            {
+                "operation": "release_review",
+                "outcome": "released",
+                "review_ref": review_ref,
+                "request_id": request_id,
+            },
+            context,
+        )
 
     async def submit_review(
         self,
@@ -392,11 +519,15 @@ class ScenarioContributorGateway:
                 "needs_revision requires actionable findings.",
                 correlation_id=context.correlation_id,
             )
-        input_key = (review_ref, decision, repr(findings))
+        input_key = (review_ref, decision, _canonical_json(findings))
         replay = self._replay("submit_review", request_id, input_key, context)
         if replay is not None:
             return replay
-        if review_ref != self._review["review_ref"] or self._review["state"] != "leased_to_actor":
+        if (
+            review_ref != self._review["review_ref"]
+            or self._review["state"] != "leased_to_actor"
+            or self._review_owner != _actor_key(context)
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
                 "The review is not leased to the current actor.",
@@ -404,13 +535,19 @@ class ScenarioContributorGateway:
             )
         self._review["state"] = "none_available"
         self._review["actor_facing_state"] = "completed"
-        return self._store_replay("submit_review", request_id, input_key, {
-            "operation": "submit_review",
-            "outcome": decision,
-            "review_ref": review_ref,
-            "request_id": request_id,
-            "findings_count": len(findings),
-        })
+        return self._store_replay(
+            "submit_review",
+            request_id,
+            input_key,
+            {
+                "operation": "submit_review",
+                "outcome": decision,
+                "review_ref": review_ref,
+                "request_id": request_id,
+                "findings_count": len(findings),
+            },
+            context,
+        )
 
     def _task(self, task_id: str, context: RequestContext) -> dict[str, Any]:
         """Return the one scenario task or fail without revealing other data."""
@@ -423,6 +560,23 @@ class ScenarioContributorGateway:
             correlation_id=context.correlation_id,
         )
 
+    def _require_task_visibility(
+        self,
+        task: dict[str, Any],
+        context: RequestContext,
+    ) -> None:
+        """Hide an actor-owned task context from every other test actor."""
+        if (
+            self._task_owner is not None
+            and self._task_owner != _actor_key(context)
+            and task["actor_facing_state"] != "available"
+        ):
+            raise WorkstreamMCPError(
+                MCPErrorCode.RESOURCE_NOT_FOUND_OR_NOT_VISIBLE,
+                "The requested Workstream resource was not found or is not visible.",
+                correlation_id=context.correlation_id,
+            )
+
     def _replay(
         self,
         operation: str,
@@ -431,7 +585,7 @@ class ScenarioContributorGateway:
         context: RequestContext,
     ) -> dict[str, Any] | None:
         """Return a prior temporary result or reject conflicting retry input."""
-        existing = self._replays.get((operation, request_id))
+        existing = self._replays.get((_actor_key(context), operation, request_id))
         if existing is None:
             return None
         prior_input, result = existing
@@ -449,9 +603,13 @@ class ScenarioContributorGateway:
         request_id: str,
         input_key: tuple[Any, ...],
         result: dict[str, Any],
+        context: RequestContext,
     ) -> dict[str, Any]:
         """Store a deterministic temporary result for a repeated test request."""
-        self._replays[(operation, request_id)] = (input_key, deepcopy(result))
+        self._replays[(_actor_key(context), operation, request_id)] = (
+            input_key,
+            deepcopy(result),
+        )
         return result
 
 
@@ -468,3 +626,13 @@ def _require_context(context: RequestContext) -> None:
 def _now() -> str:
     """Return a stable UTC timestamp string for scenario records."""
     return datetime.fromisoformat(SCENARIO_TIMESTAMP).astimezone(UTC).isoformat()
+
+
+def _actor_key(context: RequestContext) -> str:
+    """Return a process-local actor key without storing raw bearer material."""
+    return hashlib.sha256(context.bearer_token.encode("utf-8")).hexdigest()
+
+
+def _canonical_json(value: Any) -> str:
+    """Canonicalize temporary logical input for deterministic replay checks."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)

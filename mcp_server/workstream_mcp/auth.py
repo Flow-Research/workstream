@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover
 
 
 STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
-AUTHORIZATION_PREFIX = "Bearer "
+MAX_BEARER_TOKEN_LENGTH = 8192
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,17 +40,18 @@ def context_from_authorization_header(
             "Authorization bearer token is required.",
             correlation_id=correlation_id,
         )
-    if not authorization.startswith(AUTHORIZATION_PREFIX):
+    scheme, separator, supplied_token = authorization.partition(" ")
+    if not separator or scheme.casefold() != "bearer":
         raise WorkstreamMCPError(
             MCPErrorCode.INVALID_TOKEN,
             "Authorization header must use bearer authentication.",
             correlation_id=correlation_id,
         )
-    token = authorization.removeprefix(AUTHORIZATION_PREFIX).strip()
-    if not token:
+    token = supplied_token.strip()
+    if not _is_valid_bearer_token(token):
         raise WorkstreamMCPError(
             MCPErrorCode.INVALID_TOKEN,
-            "Bearer token is empty.",
+            "Bearer token is malformed.",
             correlation_id=correlation_id,
         )
     return RequestContext(token, correlation_id, transport)
@@ -59,7 +60,7 @@ def context_from_authorization_header(
 def context_from_stdio_environment(*, correlation_id: str) -> RequestContext:
     """Build local STDIO context from a secure process/session environment value."""
     token = os.environ.get(STDIO_TOKEN_ENV, "").strip()
-    if not token:
+    if not _is_valid_bearer_token(token):
         raise WorkstreamMCPError(
             MCPErrorCode.AUTHENTICATION_REQUIRED,
             "STDIO token configuration is missing.",
@@ -71,7 +72,7 @@ def context_from_stdio_environment(*, correlation_id: str) -> RequestContext:
 def context_from_mcp_access_token(access_token: Any, *, correlation_id: str) -> RequestContext:
     """Build context from the MCP SDK authenticated request context."""
     token = getattr(access_token, "token", "")
-    if not isinstance(token, str) or not token.strip():
+    if not isinstance(token, str) or not _is_valid_bearer_token(token.strip()):
         raise WorkstreamMCPError(
             MCPErrorCode.AUTHENTICATION_REQUIRED,
             "Authorization bearer token is required.",
@@ -91,7 +92,7 @@ class WorkstreamForwardingTokenVerifier:
 
     async def verify_token(self, token: str) -> Any:
         """Return an MCP access token wrapper for a non-empty bearer token."""
-        if AccessToken is None or not token.strip():
+        if AccessToken is None or not _is_valid_bearer_token(token.strip()):
             return None
         return AccessToken(
             token=token.strip(),
@@ -153,3 +154,11 @@ def contains_secret(value: Any, secret: str) -> bool:
     if isinstance(value, (list, tuple, set)):
         return any(contains_secret(item, secret) for item in value)
     return False
+
+
+def _is_valid_bearer_token(token: str) -> bool:
+    """Apply syntax and size bounds before forwarding opaque bearer material."""
+    return bool(token) and len(token) <= MAX_BEARER_TOKEN_LENGTH and not any(
+        character.isspace() or ord(character) < 32 or ord(character) == 127
+        for character in token
+    )

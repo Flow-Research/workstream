@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Literal
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 MCP_PROMPTS: tuple[str, ...] = ()
+STABLE_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,12 +117,6 @@ class RequestIdInput(BaseModel):
 
     request_id: UUID
 
-    @field_validator("request_id")
-    @classmethod
-    def normalize_request_id(cls, value: UUID) -> UUID:
-        """Keep the request identifier compatible with Workstream's API middleware."""
-        return value
-
 
 class ClaimTaskInput(RequestIdInput):
     """Input for claim_task."""
@@ -130,8 +126,8 @@ class ClaimTaskInput(RequestIdInput):
     @field_validator("task_id")
     @classmethod
     def normalize_task_id(cls, value: str) -> str:
-        """Reject blank task identifiers."""
-        return _normalize_non_blank(value, "task_id")
+        """Validate a task identifier used as one URI or HTTP path segment."""
+        return normalize_stable_ref(value, "task_id")
 
 
 class ReleaseTaskInput(RequestIdInput):
@@ -143,8 +139,8 @@ class ReleaseTaskInput(RequestIdInput):
     @field_validator("task_id")
     @classmethod
     def normalize_task_id(cls, value: str) -> str:
-        """Reject blank task identifiers."""
-        return _normalize_non_blank(value, "task_id")
+        """Validate a task identifier used as one URI or HTTP path segment."""
+        return normalize_stable_ref(value, "task_id")
 
 
 class ArtifactHashEntryInput(BaseModel):
@@ -201,8 +197,8 @@ class CandidateSubmissionInput(RequestIdInput):
     @field_validator("task_id")
     @classmethod
     def normalize_task_id(cls, value: str) -> str:
-        """Reject blank task identifiers."""
-        return _normalize_non_blank(value, "task_id")
+        """Validate a task identifier used as one URI or HTTP path segment."""
+        return normalize_stable_ref(value, "task_id")
 
 
 class ClaimReviewInput(RequestIdInput):
@@ -214,8 +210,8 @@ class ClaimReviewInput(RequestIdInput):
     @field_validator("project_id", "review_routing_ref")
     @classmethod
     def normalize_string_ids(cls, value: str, info: Any) -> str:
-        """Reject blank review claim identifiers."""
-        return _normalize_non_blank(value, info.field_name)
+        """Validate review claim identifiers used as URI or HTTP path segments."""
+        return normalize_stable_ref(value, info.field_name)
 
 
 class ReleaseReviewInput(RequestIdInput):
@@ -226,8 +222,8 @@ class ReleaseReviewInput(RequestIdInput):
     @field_validator("review_ref")
     @classmethod
     def normalize_review_ref(cls, value: str) -> str:
-        """Reject blank review identifiers."""
-        return _normalize_non_blank(value, "review_ref")
+        """Validate a review identifier used as one URI or HTTP path segment."""
+        return normalize_stable_ref(value, "review_ref")
 
 
 class ReviewFindingInput(BaseModel):
@@ -250,8 +246,9 @@ class SubmitReviewInput(RequestIdInput):
     @field_validator("review_ref")
     @classmethod
     def normalize_review_ref(cls, value: str) -> str:
-        """Reject blank review identifiers."""
-        return _normalize_non_blank(value, "review_ref")
+        """Validate a review identifier used as one URI or HTTP path segment."""
+        return normalize_stable_ref(value, "review_ref")
+
 
 class OperationResult(BaseModel):
     """Structured MCP operation result."""
@@ -266,9 +263,15 @@ class OperationResult(BaseModel):
     summary: str
 
 
-def _normalize_non_blank(value: str, field_name: str) -> str:
-    """Strip and reject blank identifier values."""
+def normalize_stable_ref(value: str, field_name: str) -> str:
+    """Validate an opaque Workstream reference carried in one path segment."""
     normalized = value.strip()
     if not normalized:
         raise ValueError(f"{field_name} must not be blank")
+    if not STABLE_REF_PATTERN.fullmatch(normalized):
+        raise ValueError(
+            f"{field_name} must contain only letters, numbers, dot, underscore, colon, or hyphen"
+        )
+    if normalized in {".", ".."}:
+        raise ValueError(f"{field_name} must not be a relative path segment")
     return normalized

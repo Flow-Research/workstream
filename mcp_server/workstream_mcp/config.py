@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
+from urllib.parse import urlsplit
 
 
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
@@ -24,6 +26,20 @@ class WorkstreamMCPConfig:
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
     allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS
     allowed_origins: tuple[str, ...] = DEFAULT_ALLOWED_ORIGINS
+
+    def __post_init__(self) -> None:
+        """Reject configuration that could leak bearer tokens or disable timeouts."""
+        parsed = urlsplit(self.workstream_api_base_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("WORKSTREAM_API_BASE_URL must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("WORKSTREAM_API_BASE_URL must not contain credentials, query, or fragment")
+        if parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("WORKSTREAM_API_BASE_URL must use HTTPS outside the local machine")
+        if not math.isfinite(self.request_timeout_seconds) or self.request_timeout_seconds <= 0:
+            raise ValueError("WORKSTREAM_MCP_REQUEST_TIMEOUT_SECONDS must be positive and finite")
+        if not self.allowed_hosts or not self.allowed_origins:
+            raise ValueError("MCP HTTP host and origin allowlists must not be empty")
 
     @classmethod
     def from_environment(cls) -> "WorkstreamMCPConfig":

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from mcp.server.lowlevel.server import NotificationOptions
 
 from workstream_mcp.schemas import MCP_PROMPTS, RESOURCE_DEFINITIONS, TOOL_DEFINITIONS
 from workstream_mcp.server import build_fastmcp_server, create_mcp_application
@@ -92,3 +93,21 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
         "findings",
         "request_id",
     ]
+
+
+def test_runtime_does_not_advertise_resource_subscriptions_or_list_events() -> None:
+    """The v0.1 server is pull-based and exposes no subscription/event channel."""
+    server = build_fastmcp_server(gateway=object())  # type: ignore[arg-type]
+
+    capabilities = server._mcp_server.get_capabilities(  # noqa: SLF001
+        NotificationOptions(),
+        {},
+    )
+
+    assert capabilities.resources is not None
+    assert capabilities.resources.subscribe is False
+    assert capabilities.resources.listChanged is False
+    assert capabilities.tools is not None
+    assert capabilities.tools.listChanged is False
+    assert capabilities.experimental == {}
+    assert capabilities.tasks is None

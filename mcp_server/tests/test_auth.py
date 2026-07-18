@@ -26,6 +26,15 @@ def test_context_from_authorization_header_requires_bearer_token() -> None:
     assert malformed.value.code == MCPErrorCode.INVALID_TOKEN
 
 
+@pytest.mark.parametrize("token", ["", "two words", "line\nbreak", "x" * 8193])
+def test_context_rejects_malformed_bearer_material(token: str) -> None:
+    """Opaque tokens are still bounded by bearer syntax and a safe header size."""
+    with pytest.raises(WorkstreamMCPError) as malformed:
+        context_from_authorization_header(f"Bearer {token}", correlation_id="corr-1")
+
+    assert malformed.value.code == MCPErrorCode.INVALID_TOKEN
+
+
 def test_authorization_headers_forward_token_without_tool_schema_exposure() -> None:
     """The gateway receives auth headers, not token tool parameters."""
     context = context_from_authorization_header("Bearer issuer-token", correlation_id="corr-1")
@@ -36,6 +45,13 @@ def test_authorization_headers_forward_token_without_tool_schema_exposure() -> N
     assert headers["X-Correlation-ID"] == "corr-1"
     assert headers["X-Request-ID"] == "11111111-1111-4111-8111-111111111111"
     assert headers["Idempotency-Key"] == "11111111-1111-4111-8111-111111111111"
+
+
+def test_bearer_scheme_is_case_insensitive() -> None:
+    """HTTP authentication scheme matching follows case-insensitive semantics."""
+    context = context_from_authorization_header("bearer issuer-token", correlation_id="corr-1")
+
+    assert context.bearer_token == "issuer-token"
 
 
 def test_request_context_repr_omits_bearer_token() -> None:
