@@ -2,157 +2,93 @@
 
 ## Current status
 
-`WS-REV-001-01` merged through PR #145 at trusted main
-`b2b9016d5fee33ddca40882c97620a178d8e52f0`. The user explicitly started
-parent `WS-REV-001-02` on 2026-07-18. Required L1 plan review failed the
-combined implementation boundary and required a 02A/02B/02C split before any
-runtime or migration edit.
+Trusted main is `99ae4c963e53f317175dcb308b9e47c93ccf19ed`, which includes REV
+parent chunk 02 through PR #147 and AUTH-09D-A through PR #148. Parent 02 is a
+merged non-executable split record. `WS-REV-001-PLAN2` is the active planning/
+specification-only refresh. No backend runtime, migration, model, repository,
+service, route, or persistence test is authorized in this chunk.
 
-REV may continue planning and test design only. AUTH currently owns migration
-`0026` for AUTH-09D-A profile lifecycle. After AUTH-09D-A merges, AUTH owns the
-next-priority, separately reviewed contributor-field foundation from the
-then-current migration head. That foundation must clean-cut both retired
-task-subsystem contributor-identity fields to `contributor_id`, preserve
-existing behavior, establish
-database-backed canonical-human ActorProfile lineage, and provide an exact
-merged PR/SHA. REV runtime remains blocked until that merge.
+The user previously started 02A preparation, then accepted AUTH's runtime block
+and explicitly authorized continued planning/read-only work. After this refresh,
+02A requires a renewed explicit start because its exact runtime dependencies are
+not all merged.
 
-The parent 02 contract is now non-executable. Planning defines 02A guide
-activation chronology/publication locking, 02B immutable policy and dormant
-task/assignment lifecycle compatibility, and 02C Submission
-attribution/context/lineage. No backend model, service, migration, or persistence
-test has changed.
+## Trusted dependency truth
 
-Planning candidate `0292825a52f884f42d82e1522637f2ff2bf4bb7a` passed the
-repaired circuit breaker, all required internal reviewer tracks, mandatory
-contract scanners, Markdown links, 87 agent gates, and schema-v2 merge-intent
-validation. It is planning-publication ready, not runtime-ready.
+- Single Alembic head: `0026_actor_profile_lifecycle`.
+- Both retired task-subsystem contributor-identity fields remain on trusted main.
+- AUTH catalogue: 74 PermissionIds, 65 ActionIds, 15 active, 50 planned.
+- All 24 REV lifecycle action dependencies remain unavailable.
+- AUTH-09D-A merged through PR #148 at
+  `99ae4c963e53f317175dcb308b9e47c93ccf19ed` with reviewed head
+  `9c5ef8a1feffd6324acfd947e67042921955320b`. Its ActorProfile lifecycle
+  status/provenance and direct-SQL guards are trusted dependencies. The separate
+  human-approved contributor clean cut still has no trusted-main chunk
+  ID/PR/SHA/migration, and both retired task fields remain.
+- ART v2 LocalStorage merged through PR #141 at `a10d901`, but ART has no
+  scheduled review packet-read, review-evidence candidate/finalize, or
+  server-derived Submission artifact-digest owner chunk.
+- CON-01 merged its specification. CON runtime chunks 02A onward remain
+  proposed on trusted main. Any unmerged CON work that previously claimed
+  `0026` must rebase from AUTH-09D-A's merged head before it is consumable.
+- Sibling AUTH/ART/CON status files contain stale post-merge wording. REV records
+  actual merge facts but does not edit owner initiative memory.
 
-## Chunk 01 merge history
+## Plan-refresh results
 
-While Chunk 01 was under review, CON planning PR #142 merged to main at
-`a947b8693a97bdb94c9dc63202a51e197834d613`. The branch pulled that merge and
-reconciled its shared active documents. PR #142 changes planning/contracts only;
-no CON runtime behavior became active.
+- 02A now owns only activation sequence, Project-first publication/screening,
+  immutable Task guide triplet, and unchanged superseded-candidate denial.
+- Proposed 02A2 owns prepared-authorized, `If-Match` protected superseded-guide
+  reactivation after AUTH-PREP and AUTH-12. This preserves backward rebase
+  without broadening the legacy public route.
+- Existing oversized parent contracts are non-executable split records. Only
+  the children in `CHUNK_MAP.md` may later receive implementation contracts.
+- Chunk 08 is pure contract/validation only. Chunk 10 remains the first canonical
+  Review/FinalAcceptance/CON transaction.
+- Controlled revision preparation remains task-owned and rooted in an exact
+  human `Review(needs_revision)`. Checker-caused `needs_revision` remains a
+  distinct supported CheckerRun path, keeps existing task context, and never
+  fabricates Review/finding/reviewer contribution or consumes human rebase/D6.
+- Limit/deadline exhaustion cannot be repaired around; only exact D6 close may
+  terminate that frozen human revision episode.
+- Persisted release phase denies command execution. It does not unregister
+  routers, change AUTH action availability/static membership, or replace
+  scheduler operations.
 
-AUTH-09B PR #143 then merged to main at
-`053242b90d927ace3fab92eeca72da27a61cecec`. The branch pulled it cleanly;
-only the shared agent-gate test file overlapped. AUTH-09B activates controlled
-`actor.service.provision`, not service admission or any REV action.
+## Canonical lifecycle
 
-CON-01 PR #144 then merged to main at
-`e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9`. The branch reconciled its
-`architecture_data_model.md` overlap by retaining the exact shared
-FinalAcceptance fields and ActorProfile/ReviewPolicy lineage. CON-01 publishes
-the active CON contract and ADR 0016 but changes no runtime.
+- Every valid reviewer decision appends immutable Review history; findings and
+  later resolutions are also immutable.
+- Every decision creates reviewer `completed_review` through CON.
+- Accept alone creates immutable FinalAcceptance, accepts Task/completes exact
+  assignment, and creates submitter `accepted_submission` from that fact.
+- Needs revision creates no FinalAcceptance/submitter contribution and atomically
+  appends the Review-rooted task-owned initial preparation.
+- Reject blocks the exact reviewed Submission assignment and rejects Task; it
+  creates no FinalAcceptance/submitter contribution.
+- Checker needs revision atomically records the final CheckerRun transition with
+  the Task's existing locked context and creates no Review, preparation, or CON
+  record. Corrected N+1 persists the unique server-derived
+  `remediation_source_checker_run_id`; later human N+1 instead persists its
+  preparation ID, never both.
+- Adjudication and reputation mutation remain deferred and unimplemented.
 
-ART-02A3 PR #141 then merged to main at
-`a10d9018007d2e847b4870e9b26cbd24e24c7bb4`. It atomically removes
-ArtifactStore v1 and activates the byte-only ART v2 LocalStorage clean cut plus
-typed product capability composition. It does not implement S3/MinIO,
-submission/checker artifact cutovers, lease-scoped review packet reads, or
-review-evidence candidate/finalize behavior.
+## Human-owned gates
 
-AUTH-09C PR #146 then merged to main at
-`0ffdabf3dbb77e4e066683fde1a095d744ff1f43`. The sole REV conflict was in the
-shared agent-gate lifecycle assertions. The resolution retains REV's
-branch-sensitive ART proof while adopting main's merged ART-02A3 and AUTH-09C
-state. AUTH-09C activates only two bounded actor-registry reads and no REV
-action.
-
-Chunk 01 adopts `docs/spec_review_lifecycle.md` as the active normative
-contract, preserves the supplied WS-REV and WS-IMP archival Markdown/PDF bytes,
-reconciles active documentation, and adds a fail-closed stale review-contract
-gate. It changes no backend, migration, AUTH, ART, or CON runtime code.
-
-## Dependency state
-
-- AUTH-08 remains the historical 74-PermissionId, 57-ActionId snapshot: 9
-  active and 48 planned. Current trusted main after AUTH-09C has 74
-  PermissionIds and 65 ActionIds: 12 active and 53 planned.
-- All 24 REV lifecycle action dependencies remain unavailable: planned
-  `submission.create`, 19 planned review actions, and four approved but
-  unregistered REV additions. The separately proposed ART evidence-binding
-  service action is not included in those 24.
-- AUTH owns registration, service identity admission, evaluator integration,
-  activation, and prepared-mutation authority. REV publishes immutable feature
-  manifests and hidden behavior evidence; it does not activate actions.
-- Merged AUTH-09B supplies controlled provisioning only for identities already
-  in AUTH's closed registry. None of REV's six identities exists yet; their
-  exact extensions, provisioning, AUTH-09E admission, and feature activation
-  remain downstream gates.
-- Merged AUTH-09C supplies only bounded system-authorized actor-profile and
-  identity-link reads. It adds no REV identity or action and changes none of
-  REV's lifecycle, lease, artifact, or contribution boundaries.
-- Merged ART-02A3 supplies the active byte-only ART v2 store beneath typed
-  product capabilities. Review still consumes only later approved packet-read
-  and evidence candidate/finalize ports; it never imports the raw byte store,
-  ART scratch/source types, a concrete provider, or repository APIs.
-- Merged CON-01 publishes the canonical frozen-policy, ContributionRecord,
-  FinalAcceptance trigger, award, and ordered two-operation participant
-  contracts. It implements none of them.
-- Later CON chunks must provide frozen contribution-policy persistence and the
-  ordered flush-only participant before a canonical Review can commit. Every
-  valid Review creates reviewer contribution; only an accept-created
-  FinalAcceptance creates submitter contribution.
-- AUTH-09D-A is in progress and owns migration `0026`. No AUTH contributor
-  foundation PR/SHA or migration exists on this REV base. REV assigns no
-  migration number and performs no runtime preparation against retired
-  contributor-identity storage.
-- After AUTH-09D-A, AUTH must merge the bounded contributor-field foundation.
-  ART submission commitment/packet-read contracts, CON
-  persistence/participant contracts, and the remaining per-child gates stay
-  external prerequisites exactly as listed in `CHUNK_MAP.md`.
-- Two product values remain human-owned before 02B implementation:
-  `review_preference_window_seconds` and
-  `review_lease_duration_seconds`. Neither is inferred from `sla_hours`.
-
-## Canonical lifecycle boundary
-
-- Every valid reviewer decision appends an immutable Review. Submitted findings
-  and later finding resolutions are also immutable history.
-- `accept` additionally creates one internal immutable FinalAcceptance. The
-  submitter `accepted_submission` contribution consumes that fact rather than
-  inferring acceptance from `Review.decision`.
-- `needs_revision` prepares a controlled next-attempt context. An exact match
-  with the currently active Project Guide identity and activation sequence keeps
-  context; any different internally consistent active pair rebases forward or
-  backward; missing or inconsistent active context blocks preparation.
-- The reviewer always uses the Project Guide context stamped on the exact leased
-  Submission and never performs a separate review-guide rebase.
-- `reject` blocks the submitter assignment and sets the Task to `rejected`.
-  Approved administrative revision-obligation closure uses `cancelled` with a
-  bounded reason.
-- Adjudication remains disabled and unimplemented in v0.1. Reputation mutation
-  is deferred to its owning future initiative. Interfaces retain typed lineage
-  so either can be added later without changing the immutable Review contract.
-
-## Chunk 01 evidence state
-
-Candidate `6da45b2765de68dc5a0628024bdfeacb98d1ea85` passed all nine required
-tracks against trusted current main
-`053242b90d927ace3fab92eeca72da27a61cecec`: senior engineering, QA/test,
-security/auth, product/ops, architecture, docs, reuse/dedup, test delta, and CI
-integrity. All 80 current-main agent tests and seven REV additions are retained;
-87 agent-gate tests and the deterministic contract gates pass.
-
-Chunk 01 was published and merged as PR #145. CodeRabbit's nine actionable findings and one
-Markdown lint nit were repaired without runtime or successor-scope expansion.
-After ART-02A3 PR #141 advanced main, the branch merged and reconciled its
-active byte-only v2 LocalStorage clean cut while retaining every later
-review-facing ART gate. Candidate
-`e239282e7d2a2b4d46137707f673f76fda55e4b8` passed the plan gate and all nine
-internal reviewer tracks against
-`0ffdabf3dbb77e4e066683fde1a095d744ff1f43`; 87 agent gates, Ruff, scanners,
-links, checksums, renderer checks, merge-intent validation, and the exact
-71-entry A/M reviewed-scope comparison passed. Status-change, removal,
-rename-as-D+A, and addition probes failed closed. This chunk activated no review
-action or endpoint.
+- A real merged AUTH contributor/canonical-human foundation with exact ID,
+  PR/SHA, migration, constraints, and tests before 02A.
+- Separate 02A start after this refresh merges.
+- Exact positive `review_preference_window_seconds` and
+  `review_lease_duration_seconds` before 02B. Neither derives from `sla_hours`.
+- Exact human Review revision-round counting, deadline anchor, and boundary
+  before 09A1; checker retries are excluded unless a separate product/ADR
+  amendment is explicitly approved.
+- Exact merged AUTH-14 contract amendment before 09A4 must leave REV ownership
+  of Submission revision-source columns/constraints intact and limit AUTH to
+  public request acknowledgement, authorization cutover, and activation.
+- Every later external owner dependency and child start as listed in the map.
 
 ## Stop condition
 
-Complete parent-02 planning review only. Do not edit backend runtime, migration,
-or persistence tests. After the exact AUTH contributor-foundation merge and
-human approval of the planning split, 02A still requires a separate explicit
-start. The duration defaults gate 02B. No child starts its successor
-automatically.
+Publish only `WS-REV-001-PLAN2`, let automated memory name 02A with an
+explicit-start gate, and stop. Do not implement 02A, 02A2, or 02B from this PR.

@@ -45,6 +45,12 @@ outcomes.
   Exact match keeps context; any different active identity or sequence rebases
   forward or backward; missing, incomplete, or unsafe active context blocks.
   Return routing prefers the prior reviewer before falling back to open FIFO.
+- A supported checker-caused `needs_revision` remains a distinct CheckerRun-
+  rooted remediation that keeps task context and persists a unique server-
+  derived immutable source-CheckerRun relation on corrected N+1. It creates no
+  synthetic Review, finding, reviewer contribution, or human actor. Controlled
+  preparation/rebase, finding replay, human revision policy, and D6 closure apply
+  only to an exact `Review(needs_revision)`.
 - Artifact outage or integrity failure blocks judgment without creating an
   adverse contributor outcome.
 - Every committed Review joins the `WS-CON-001` contribution and conditional
@@ -105,8 +111,8 @@ outcomes.
    visibility uses the frozen preparation, and no reviewer-side guide exists.
 3. D6's recommendation is approved: limit/deadline blocks further submission while
    leaving `needs_revision` active, with only the covered Project Manager's
-   explicit reason-bound revision-obligation closure and never a fabricated
-   human `reject` Review.
+   explicit reason-bound `review.revision_obligation.close` command and never a
+   fabricated human `reject` Review.
 4. The revised reviewer `current` endpoint controls over
    the older WS-IMP full-backlog reviewer response.
 5. Production enables the coherent lifecycle route set only after the
@@ -132,7 +138,12 @@ outcomes.
 10. Merged AUTH reconciliation PR #140 is planning authority, not runtime proof.
     Exact AUTH custody, PREP, registration, service-identity, and activation gates
     apply per consumer so hidden REV work can proceed while every action remains
-    unavailable; REV-13 alone releases product surfaces.
+    unavailable; REV-13C alone releases product surfaces.
+11. Guide chronology/task locking lands before hidden superseded-guide
+    reactivation. Reactivation uses AUTH PREP plus a current-active If-Match
+    precondition and must merge before AUTH-12 evaluator/cutover/activation.
+12. Persisted release phase denies execution but does not dynamically unregister
+    routers, deactivate AUTH mappings, or replace operational scheduler control.
 
 Items 3-5 and the proposed chunk sequence were approved by the human on
 2026-07-15 for planning publication. This approval does not activate a successor

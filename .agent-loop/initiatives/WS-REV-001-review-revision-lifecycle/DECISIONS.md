@@ -111,9 +111,10 @@ to append a successor rather than editing it. Database constraints enforce
 one root per episode, one child per preparation, same task/reviewed-assignment/
 prior-Submission/episode across an edge, and a sequence increment of exactly one.
 The target assignment normally remains the reviewed assignment. After AUTH-13
-closes it for authority loss and a covered manager creates a replacement on the
-durable `needs_revision` obligation, the same caller transaction appends one
-successor bound to that replacement assignment and recomputes the current guide
+closes it for authority loss and a covered manager creates a replacement while
+the Task remains in durable human-review `needs_revision`, the same caller
+transaction appends one successor bound to that replacement assignment and
+recomputes the current guide
 classification. No edit or branch occurs, and the prior contributor loses
 submission authority. Submission N+1 binds to that successor's target
 TaskAssignment.
@@ -153,7 +154,10 @@ Normal blocked/revoked/invalid preparation is recoverable only by a reason-bound
 idempotent covered Project Manager repair command that acknowledges the current
 head and appends one validated successor after project setup correction. It
 cannot create a root or rewrite a prior preparation. A legacy `needs_revision`
-task with no originating Review/root cannot be repaired this way; an Operator
+task is eligible only when neither an unambiguous human Review root nor an exact
+final `needs_revision` CheckerRun exists. Valid CheckerRun-rooted remediation is
+never legacy even when no human Review exists. The legacy state cannot be
+repaired this way; an Operator
 may close it through the separately authorized, evidence-linked legacy closure
 with terminal reason `legacy_revision_context_unrecoverable`. That closure
 releases the assignment and creates no Review or WS-CON record.
@@ -184,7 +188,7 @@ effect.
 The normal D6 command maps to existing `project.task.manage` and is not an
 Operator reconciliation shortcut. Operator-only `review.queue.close` and
 `review.revision_context.legacy_close` remain distinct recovery commands and
-cannot close a healthy Review-rooted obligation merely because a limit or
+cannot close a healthy Review-rooted revision merely because a limit or
 deadline exists.
 
 ### D7 - Artifact Preflight Does Not Hold Review Locks Across Remote Calls
@@ -228,7 +232,7 @@ exposes current-work, claim, release, decline, context,
 decision, revision preparation/resubmission, chain reads, and authorized admin
 operations together only when AUTH, ART, WS-CON, audit, outbox, recovery,
 reconciliation, projection jobs, and live preflight are mandatory and
-proven. REV-13 changes product composition, not AUTH availability.
+proven. REV-13C changes product composition, not AUTH availability.
 
 **Human confirmed 2026-07-15.**
 
@@ -420,7 +424,7 @@ freeze. A later lease may independently freeze the then-current reviewer terms.
 ### D18 - Authority-Loss Replacement Preserves Source And Changes Target
 
 Normal `needs_revision` returns to the same contributor. The AUTH-13/14 final
-contract nevertheless preserves a durable unassigned revision obligation when
+contract nevertheless preserves a durable unassigned human revision episode when
 that contributor loses authority and permits a covered manager to assign a
 replacement. WS-REV adopts that dependency rather than stranding the task.
 
@@ -435,7 +439,8 @@ Submission, assignment, Review, finding, or preparation is rewritten.
 ### D19 - Joint Release Control Is A Hidden Persisted Foundation
 
 Safe product release/shutdown is product infrastructure, not proof-script state.
-Chunk 12A owns one PostgreSQL-canonical `JointLifecycleReleaseControl`, the
+Chunks 12A1 through 12A4 own one PostgreSQL-canonical
+`JointLifecycleReleaseControl`, the
 hidden behavior and resource facts for the Operator-only
 `review.lifecycle.activation.manage` action, advisory-lock-based
 mutation fencing, typed internal fence ports, bounded drain observations, and
@@ -443,7 +448,7 @@ crash-resumable phase history. Every canonical phase change is a fresh
 Operator-authorized adjacent transition; no background job replays the initiating human
 or advances phase. It lands with no production lifecycle route and no action
 availability change. `WS-AUTH-001-REV-LIFECYCLE` activates that exact action only
-after 12A and all other additive hidden manifests merge.
+after 12A1 through 12A4 and all other additive hidden manifests merge.
 
 Review, every task submission, review-queue admission, authority-loss
 replacement, every CON fulfillment-obligation root creation, requeue, successor,
@@ -457,7 +462,7 @@ allocates its server-derived monotonic ordinal. The exclusive
 atomically stores the CON-derived maximum ordinal as the immutable generation
 cutoff. During `delivery_draining`, dispatch and callbacks may only complete a
 same-generation root at or below that cutoff; root creation, requeue, successor,
-and repair work remains denied. REV-13 exposes and exercises the merged,
+and repair work remains denied. REV-13C exposes and exercises the merged,
 AUTH-active foundation, performs the ordered writer fence, migration, and
 process cutover, and prohibits downgrade after protected rows exist.
 
@@ -477,7 +482,7 @@ hidden behavior and feature-manifest deltas; the exact
 `WS-AUTH-001-REV-05/06/07/08/09A/11/12` gates later activate their action groups.
 `WS-AUTH-001-REV-REG` registers the four approved additions and
 `WS-AUTH-001-REV-LIFECYCLE` activates them only after all hidden manifests merge.
-REV-13 performs the separate product-surface release. The 24 REV dependencies
+REV-13C performs the separate product-surface release. The 24 REV dependencies
 are one registered planned submission action, 19 registered planned review
 actions, and four approved but unregistered additions; none is active. The
 separate ART review-evidence binding proposal is not one of the 24, so future
@@ -495,8 +500,12 @@ chunk. Parent 02 is therefore a non-executable split record:
 -> 02C Submission attribution/context/immediate-predecessor immutability
 ```
 
-AUTH owns migration `0026` for AUTH-09D-A. After 09D-A merges, AUTH owns the
-separately reviewed contributor-field foundation from the then-current head.
+Trusted main does not assign REV a migration and does not contain the contributor
+foundation. AUTH-09D-A merged through PR #148 as
+`99ae4c963e53f317175dcb308b9e47c93ccf19ed`, establishing migration
+`0026_actor_profile_lifecycle` and database-backed ActorProfile lifecycle
+provenance without renaming either retired task field. AUTH next owns the
+separately reviewed contributor-field foundation from that then-current head.
 That foundation clean-cuts both retired task-subsystem contributor-identity
 fields to `contributor_id`, preserves current behavior, and supplies database-backed
 canonical-human ActorProfile lineage. REV records its exact merged PR/SHA and
@@ -512,3 +521,65 @@ persistence exists. The later reason-bound administrative command owns the
 The review preference and lease durations are independent positive policy
 values. Neither may be inferred from `ReviewPolicy.sla_hours`; their exact v0.1
 migration defaults remain a human decision before 02B can start.
+
+### D22 - Checker Remediation Remains Distinct From Human Revision Rebase
+
+D22 preserves the existing CheckerRun-rooted `needs_revision` path without
+expanding ADR 0010. Checker remediation keeps the Task's locked guide context,
+creates no Review/finding/reviewer contribution, consumes no human ReviewPolicy
+revision round/deadline, and does not use finding replay or D6 close. Controlled
+RevisionContextPreparation remains rooted in an exact
+`Review(needs_revision)`. Corrected Submission N+1 persists the server-derived,
+unique, immutable `remediation_source_checker_run_id` for the exact completed,
+needs-revision, current-at-selection CheckerRun on its immediate predecessor.
+Treating exact checker history as legacy or inferring it from a later current run
+is prohibited.
+
+### D23 - Human Revision Exhaustion Semantics Require Explicit Approval
+
+D6 fixes the outcome of an exhausted human Review revision but does not define
+the round counting source, deadline anchor, or inclusive/exclusive boundary.
+Those values remain a human-owned decision before 09A1. They cannot be inferred
+from checker retries, task SLA, current time, or archival examples. Whatever is
+approved freezes on the Review-rooted episode, uses database time, and cannot be
+bypassed through context repair.
+
+### D24 - Guide Chronology Precedes Hidden Authorized Reactivation
+
+02A adds activation sequence, Project-first publication/screening locking, and
+immutable Task guide stamps while preserving public superseded-candidate denial.
+After AUTH-PREP/custody and an AUTH-12 contract amendment, 02A2 adds hidden
+bodyless `If-Match` reactivation while `project.guide.activate` remains
+unavailable. Its complete resource manifest gates AUTH-12 evaluator/cutover/
+activation. This prevents new behavior from appearing under legacy local roles
+or an already-active centralized action.
+
+### D25 - Decision Lock Order Is Command Specific
+
+The decision command computes its canonical request key/digest without a
+database lock, then locks AUTH authority, ReviewDecisionRequest, the review
+lifecycle fence, ReviewLease, ReviewQueueEntry, WorkstreamTask, exact
+`Submission.task_assignment_id`, exact
+Submission, and subordinate immutable lineage rows in stable ID order. This
+preserves AUTH-first semantics and the user-confirmed ReviewLease-before-queue
+order. Other commands publish their own orders; no vague universal lock order
+substitutes.
+
+### D26 - Lifecycle Phase Denies Execution, Not Static Registration
+
+D26 narrows D19. Persisted lifecycle phase controls command execution through
+mandatory database fences. It does not unregister FastAPI routers, deactivate
+AUTH actions, rewrite fixed-service memberships, or replace operational
+scheduler suspension. Product reads and mutation classes are separate.
+Checker revision routing is allowed wherever checker completion is allowed
+through `revision_cutover_fenced`, then denied from `admission_fenced`; it creates
+no preparation. Human Review preparation remains inside the already leased
+decision command.
+
+### D27 - Oversized Parent Contracts Are Non-Executable
+
+Parents 03, 04, 05, 06, 07, 09A, 11, 12, 12A, and 13 are split records. Only
+the unique children in `CHUNK_MAP.md` may receive future implementation
+contracts. Chunk 08 is pure contracts/validation only; chunk 10 is the first
+canonical Review/FinalAcceptance/CON commit. Active release docs and router
+registration occur together only in 13C.

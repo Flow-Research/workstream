@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-REV-001-PLAN2",
+  "chunk_title": "REV-02A Runtime Readiness Plan Refresh",
+  "initiative_id": "WS-REV-001",
+  "next_chunk_id": "WS-REV-001-02A",
+  "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

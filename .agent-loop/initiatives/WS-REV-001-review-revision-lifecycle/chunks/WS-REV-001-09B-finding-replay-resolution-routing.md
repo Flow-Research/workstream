@@ -1,4 +1,4 @@
-# Chunk Contract: WS-REV-001-09B
+# Chunk Contract: WS-REV-001-09B - Finding Replay, Resolution, And Preferred Return Routing
 
 ## Goal
 
@@ -31,15 +31,18 @@ production `/api/v1` review-router registration
 
 ## Acceptance criteria
 
-- Checker admission requires one immutable response and any policy-required
-  verified evidence for every unresolved blocking finding from the immediate
-  predecessor Review.
+- Human-origin checker admission requires one immutable response and any
+  policy-required verified evidence for every unresolved blocking finding from
+  the immediate predecessor Review. Checker-origin remediation requires no fake
+  ReviewFinding response or resolution and instead revalidates its exact
+  contributor-safe CheckerRun failure lineage.
 - The review-owned admission participant established in chunk 05 extends its
   behavior inside the existing durable checker transaction; no checker/task
   repository import, polling path, or second admission service is added.
-- Admission creates at most one queue entry preferred to the prior reviewer,
+- Human-origin admission creates at most one queue entry preferred to the prior reviewer,
   preserves original queue age across preference expiry/decline/invalidation,
-  and preserves chain identity after takeover.
+  and preserves chain identity after takeover. Checker-origin admission creates
+  one ordinary open entry with no fabricated preferred reviewer.
 - A later Review records exactly one required immutable FindingResolution per
   prior blocking finding and cannot accept while any remains unresolved.
 - Missing/duplicate/cross-chain responses or resolutions, quarantined evidence,

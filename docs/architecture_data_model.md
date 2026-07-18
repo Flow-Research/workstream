@@ -202,6 +202,7 @@ Fields:
 - `project_id`
 - `version`
 - `status`
+- `activation_sequence` (nullable only while draft; immutable after allocation)
 - `content_markdown`
 - `change_summary`
 - `approved_by`
@@ -217,6 +218,13 @@ snapshot may include URL-backed docs, repository docs, examples, rubrics, task
 instructions, reviewer guidance, or other project-specific source material.
 `approved_by` and `effective_at` are server-written activation provenance, not
 request-body fields and not contributor-facing guide content.
+
+Guide status is exactly `draft | active | superseded`. Draft rows have null
+activation sequence/approval/effective/superseded provenance. Active and
+superseded rows retain one positive per-project activation sequence plus original
+approval/effective provenance; superseded rows additionally retain
+`superseded_at`. The planned 02A migration enforces this shape and immutable
+chronology before Task stamping consumes it.
 
 Runtime enforcement uses machine-readable policies attached to the guide version. Workstream does not parse guide prose at submission time to decide which artifact checks to run.
 
@@ -1060,7 +1068,9 @@ Fields:
 
 - `id`
 - `project_id`
+- `locked_guide_id`
 - `locked_guide_version`
+- `locked_guide_activation_sequence`
 - `locked_guide_source_snapshot_id`
 - `locked_guide_source_snapshot_hash`
 - `locked_effective_project_submission_artifact_policy_id`
@@ -1116,8 +1126,9 @@ Source type:
 
 External origin adapters are later work. When added, they normalize into this task shape instead of creating a separate task lifecycle.
 
-The task id points to the locked task contract. That contract includes the guide
-version, guide source snapshot id/hash, effective project submission artifact
+The task id points to the locked task contract. That contract includes the exact
+same-project guide ID/version/activation-sequence triplet, guide source snapshot
+id/hash, effective project submission artifact
 policy id/hash, generated project pre-submit checker policy id/bundle hash,
 post-submit checker policy id/version/hash, review policy version, revision
 policy version, acceptance criteria, derived display summaries, and skill tags.
@@ -1177,7 +1188,8 @@ Fields:
 - `submitted_at`
 - `locked_at`
 - `supersedes_submission_id`
-- `revision_context_preparation_id` (revision submissions only)
+- `remediation_source_checker_run_id` (checker-remediation submissions only)
+- `revision_context_preparation_id` (human-Review revision submissions only)
 
 The contributor submission packet supplies the task id, summary, outputs,
 artifact hashes, evidence references, and contributor attestation. Workstream assigns the
@@ -1191,6 +1203,16 @@ post-submit checker policy ids/versions/hashes, review policy versions, or
 revision policy versions. Submitter award eligibility remains governed by the
 immutable TaskAssignment-frozen `ContributionPolicyVersion` and is not restated
 on the submission.
+
+Version 1 has neither revision-source field. Every later version has exactly one:
+a checker-remediation version stores the server-derived
+`remediation_source_checker_run_id`, while a human-Review revision stores the
+server-selected `revision_context_preparation_id`. The checker source must be the
+completed, needs-revision, current-at-selection CheckerRun for the immediate
+predecessor Submission and same Task. PostgreSQL enforces same-task/immediate-
+predecessor lineage, one successor per source CheckerRun, source-field XOR, and
+post-finalization immutability. A later CheckerRun retry cannot rewrite committed
+Submission lineage. Contributor requests supply neither authoritative source ID.
 
 Implementation note: submissions stamp explicit post-submit checker provenance
 from the task. Durable `CheckerRun` creation uses those
@@ -1496,8 +1518,9 @@ Fields:
 
 Purpose:
 
-This immutable Review-rooted record is created before a contributor resumes a
-human-review revision. Exact prior Submission guide identity/activation-sequence
+This immutable Review-rooted record is created atomically before a contributor
+can observe human-review-caused revision. Checker remediation retains the Task's
+locked context and creates no preparation. Exact prior Submission guide identity/activation-sequence
 match with the currently active guide keeps context. Any different valid active
 pair rebases forward or backward. Missing, inconsistent, revoked, or unsafe
 context blocks for manager repair. Task Context returns the validated chain

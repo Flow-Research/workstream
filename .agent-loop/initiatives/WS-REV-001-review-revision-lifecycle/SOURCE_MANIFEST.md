@@ -52,9 +52,9 @@ On 2026-07-17 the human explicitly amended the merged REV/CON handoff for v0.1:
   work.
 
 This explicit amendment supersedes conflicting contribution-trigger and
-audit/outbox-staging wording in the original merged handoff. This planning PR
-updates the shared handoff text; the corresponding CON owner changes must still
-merge before any runtime REV consumer starts.
+audit/outbox-staging wording in the original merged handoff. The merged handoff
+already records this boundary; this planning PR does not edit it. Corresponding
+CON runtime changes must still merge before any REV consumer starts.
 
 ## Merged AUTH reconciliation authority
 
@@ -94,7 +94,7 @@ controlled route may provision only identities already present in AUTH's closed
 registry. It adds none of REV's six identities, admits no service token, and
 activates no review action; all 24 REV dependencies remain unavailable.
 
-AUTH-09C PR #146 later merged to current trusted main
+AUTH-09C PR #146 later merged as an ancestor of current trusted main
 `0ffdabf3dbb77e4e066683fde1a095d744ff1f43` from final branch head
 `a3d6babc`. It keeps 74 PermissionIds and 65 ActionIds while activating only
 `actor.profile.read` and `actor.identity_link.read`, moving the split to 12
@@ -111,7 +111,7 @@ dependencies remain unavailable.
 
 ## Merged CON planning authority
 
-WS-CON-001 planning PR #142 merged to current main
+WS-CON-001 planning PR #142 merged as an ancestor of current main
 `a947b8693a97bdb94c9dc63202a51e197834d613` from final branch head
 `4b13c3ee28ecddd7c92be70ad2059c130604f9d1`. Its PLAN3 reconciliation is now
 the repository-owned CON planning authority. It confirms:
@@ -129,7 +129,7 @@ chunks remain proposed/inactive and continue to gate REV implementation.
 
 ## Merged CON canonical contract
 
-CON-01 PR #144 later merged to current trusted main
+CON-01 PR #144 later merged as an ancestor of current trusted main
 `e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9`. It publishes
 `docs/spec_contribution_compensation.md` and ADR 0016 as repository-owned CON
 authority. It preserves the ordered reviewer and accept-only submitter
@@ -209,6 +209,38 @@ Planning merged through PR #128 at trusted main
 `docs/spec_review_lifecycle.md` the active normative contract while the four
 archival files remain literal-hash and trusted-base-diff protected inputs.
 
+## Parent 02 merge and planning-refresh base
+
+Parent `WS-REV-001-02` merged through PR #147 at trusted main
+`f18b620932bb257dc1dc355bc0504271813dc6b1`. It is a non-executable split
+record. `WS-REV-001-PLAN2` refreshes planning/specification only from that
+base and was rebased after AUTH-09D-A merged.
+
+AUTH-09D-A merged through PR #148 at trusted main
+`99ae4c963e53f317175dcb308b9e47c93ccf19ed` from reviewed branch head
+`9c5ef8a1feffd6324acfd947e67042921955320b`. Its exact migration
+`0026_actor_profile_lifecycle`, ActorProfile lifecycle fields/constraints,
+direct-SQL history guards, service behavior, and tests are merged authority.
+
+The following are explicitly unmerged discovery evidence and not authority:
+
+- the human-directed but unnamed AUTH contributor/canonical-human foundation;
+- any unmerged CON outbox work that still claims the now-consumed `0026` number.
+
+Trusted main has the single head `0026_actor_profile_lifecycle`, retains both
+retired task contributor storage names, and contains no merged contributor
+foundation.
+Current Submission storage also has no immutable causal field for the exact
+needs-revision CheckerRun that admits a corrected checker-remediation N+1. 02C
+owns the planned server-derived `remediation_source_checker_run_id`, exact
+backfill, PostgreSQL lineage/uniqueness/immutability, and currentness locking;
+09A4 later adds the human preparation binding and final source XOR. AUTH-14 must
+own only public request acknowledgement, authorization cutover, and activation
+for that path after an exact contract amendment, not these REV lifecycle
+columns or constraints.
+Every runtime gate must replace worktree prose with exact owner chunk ID,
+merged PR/SHA, migration head, typed symbol/manifest, and tests.
+
 The active contract, its four-action registration manifest, and its six-service
 identity manifest become immutable inputs for downstream AUTH gates only after
 this chunk is reviewed and merged. Until their owning chunks and AUTH activation
@@ -219,4 +251,7 @@ After the initial exact-SHA review, the branch pulled merged CON PR #142 at
 archive-integrity proofs remain fixed. The branch then pulled merged AUTH-09B
 PR #143 at `053242b90d927ace3fab92eeca72da27a61cecec` and merged CON-01 PR
 #144 at `e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9`; final PR scope and
-exact-SHA review use the newest merged-main boundary.
+exact-SHA review use the newest merged-main boundary. The branch then rebased
+cleanly onto merged AUTH-09D-A PR #148 at
+`99ae4c963e53f317175dcb308b9e47c93ccf19ed`; the post-rebase review base is
+that trusted commit.

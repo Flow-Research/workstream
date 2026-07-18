@@ -1,197 +1,162 @@
-# Test Design: WS-REV-001-02 Split
+# Test Design: WS-REV-001 Runtime Foundation And Revision Cutover
 
 ## Status
 
-Planning-only test design. No backend test or fixture is implemented until the
-AUTH-owned contributor-field foundation merges and the relevant child receives
-a separate human start.
+Planning-only. No backend test/fixture/migration is implemented until the exact
+child dependency and separate human-start gates are satisfied.
 
-## Shared dependency gate
+## Dependency gate fixture
 
-Every child begins with a deterministic dependency test that records:
+Every runtime child records and asserts:
 
-- trusted-main SHA and single Alembic head;
-- merged AUTH-09D-A PR/SHA;
-- merged AUTH contributor-foundation PR/SHA and migration ID;
-- absence of both retired task-subsystem contributor-identity storage names;
-- presence of canonical `contributor_id` on TaskAssignment and Submission;
-- database-backed canonical-human ActorProfile lineage;
-- preserved task, submission, checker, and legacy-revision regression tests.
+- trusted-main SHA and one Alembic head;
+- exact owner chunk IDs, merged PR/SHAs, migrations, typed contracts, and tests;
+- canonical `contributor_id` on TaskAssignment/Submission with no retired
+  contributor storage names;
+- database-backed canonical-human ActorProfile constraints;
+- preserved task/submission/checker regressions, especially
+  `test_checker_caused_revision_resubmits_fixed_version_through_api`.
 
-Any missing proof stops before a REV migration is generated.
+Missing evidence stops before REV generates a migration.
 
-## 02A - Guide Activation And Task Context
+## 02A chronology and Task locking
 
-### Migration fixtures
+### Migration/data
 
-| Case | Expected proof |
-|---|---|
-| Multiple projects with draft, active, and superseded guides | Active/superseded rows number independently per project; drafts remain null. |
-| Historical rows with different effective times | Sequence follows `effective_at`, `created_at`, then `id`. |
-| Activated guide missing required provenance | Upgrade fails and names the project/guide plus remediation. |
-| Non-draft Task with exact same-project guide version | Task guide ID and activation sequence backfill exactly. |
-| Task with missing, cross-project, or ambiguous guide context | Upgrade fails; current active guide is never substituted. |
-| Protected Task stamps present | Downgrade refuses with destructive-remediation guidance. |
+- Number active/superseded guides independently per project by effective time,
+  created time, then ID; drafts remain null.
+- Fail on missing activation provenance, unknown/inconsistent status, duplicate
+  ordering/sequence facts, or ambiguous Task guide context with row-specific
+  remediation and no partial DDL/data effects.
+- Backfill non-draft Task only from an exact same-project guide/version/sequence.
+- Prove prior-head preflight, one head, upgrade, safe downgrade/re-upgrade,
+  protected-row downgrade refusal, and failure rollback on real PostgreSQL.
 
-### Direct SQL constraints
+### Direct SQL
 
-- Reject zero/negative activation sequence.
-- Reject draft with sequence.
-- Reject active/superseded without sequence.
-- Reject duplicate project/sequence.
-- Reject mutation or clearing of an allocated sequence.
-- Preserve sequence across active -> superseded -> active.
-- Reject partial Task guide triplets and mixed guide ID/version/sequence.
+- Reject nonpositive/duplicate/mutable sequence.
+- Enforce exact draft/active/superseded provenance shapes and canonical-human
+  approver.
+- Reject partial, crossed, cross-project, or valid-to-valid changed Task guide
+  triplet.
 
-### Concurrency
+### Concurrency/service
 
-- Two first-time activations for one project serialize on the Project row and
-  allocate distinct monotonically increasing sequences.
-- Activations in different projects proceed independently.
-- Reactivation racing with a new activation retains the old sequence and does
-  not allocate twice.
-- Publication locks all generation rows in deterministic type/ID order and a
-  concurrent mutation of ProjectGuide, GuideSourceSnapshot,
-  GuideSufficiencyReport, ProjectSetupRun, SubmissionArtifactPolicy,
-  EffectiveProjectSubmissionArtifactPolicy, PreSubmitCheckerPolicy,
-  PostSubmitCheckerPolicy, ReviewPolicy, RevisionPolicy, or transitional
-  compensation-context row cannot create a mixed generation.
+- Project-first publication and task screening run against activation, setup
+  mutation, and setup-job completion in both commit orders.
+- First activations serialize and allocate distinct monotonic sequences.
+- Draft activation succeeds; sole-active repeat is no-write idempotent;
+  superseded candidate remains denied in 02A.
+- Screening audit contains complete triplet; audit fault rolls back stamp.
+- No external I/O occurs while locks are held; timestamp is post-lock DB time.
 
-### Service behavior
+## 02A2 hidden reactivation
 
-- Draft creation allocates no sequence.
-- First activation allocates once.
-- Repeated activation of the sole active guide is a no-write idempotent return.
-- Superseded-guide reactivation preserves original approval/effective
-  provenance and sequence, clears superseded time, supersedes the current guide,
-  and writes the reactivation audit with server-owned reason
-  `older_guide_reactivated`; the route accepts no new caller reason/body.
-- Draft, active-repeat, superseded-reactivation, invalid-state, and both
-  competing-reactivation request/commit permutations have separate tests under
-  the one canonical lock order.
-- Task screening copies one complete guide identity.
-- No semantic or lexical version comparison is used.
-- No external call occurs while publication locks are held.
+- AUTH action remains unavailable while hidden behavior is built.
+- Missing If-Match -> 428; stale/mismatched current active -> 412; no feature
+  mutation/audit.
+- Valid reactivation preserves original approver/effective time/sequence, clears
+  only restored superseded time, supersedes expected current at DB time, and
+  appends exact shared audit.
+- Exact retry, delayed retry, two reactivations, activation/reactivation,
+  authority loss, audit failure, and both commit orders leave one active guide.
 
-## 02B - Review Policy And Dormant Lifecycle
+## 02B policy and dormant lifecycle
 
-### Migration fixtures
+- Approved positive preference/lease defaults are explicit and independent of
+  `sla_hours`.
+- Enforce capacity one, no self-review, exact decisions, blocking/advisory
+  finding vocabulary, no second review, and immutable activated policy.
+- Remove legacy auto-reject policy without creating Review/task terminal/
+  assignment terminal/CON/audit/outbox effects.
+- Add dormant accepted/rejected/cancelled and completed/blocked storage shapes
+  but no service transition or reject FK.
+- Unknown/inconsistent historical policy/status fails preflight with no partial
+  migration.
 
-| Case | Expected proof |
-|---|---|
-| Safe ReviewPolicy row | Approved duration defaults plus capacity 1, self-review false, close-task reject, optional evidence backfill. |
-| `requires_second_review=true` | Upgrade refuses with guide/policy remediation. |
-| Missing canonical decisions or finding fields | Upgrade refuses rather than broadening policy. |
-| Existing RevisionPolicy with either legacy auto-reject value | Column is removed; no product row or lifecycle effect is created. |
-| Existing normal Task/Assignment statuses | Values and timestamps are preserved. |
-| Unknown or inconsistent historical status shape | Upgrade refuses with row IDs and remediation. |
+## 02C Submission lineage
 
-### Direct SQL constraints
+- Backfill exact responsible assignment using one inclusive historical interval;
+  zero or multiple candidates fail without choosing current/latest.
+- Enforce exact assignment contributor, same task, canonical human actor,
+  immediate N-1 predecessor, one successor, and exact immutable guide context.
+- Finalized identity/attribution/context/evidence is immutable. The only future
+  digest exception is the separately owned set-once server-derived
+  `artifact_hash`; overwrite/caller promotion fails.
+- Concurrent initial creates yield exactly one v1; loser exact replay/conflict.
+  They never yield v2.
+- Concurrent creates against one human preparation head yield exactly one N+1;
+  loser exact replay/conflict. Concurrent checker-remediation creates likewise
+  yield one N+1 from the exact current CheckerRun state. The winner persists the
+  server-derived `remediation_source_checker_run_id`; direct SQL cannot cross the
+  source run's task/immediate predecessor or reuse it for a second N+1. Neither
+  path yields N+2; that requires a later committed human Review/preparation or
+  final needs-revision CheckerRun.
 
-- Reject nonpositive preference/lease duration.
-- Reject capacity other than one.
-- Reject self-review true.
-- Reject reject policy other than `close_task`.
-- Reject unknown finding-evidence requirement.
-- Reject malformed/duplicate/missing canonical decisions and finding fields.
-- Reject `requires_second_review=true`.
-- Reject activated ReviewPolicy and RevisionPolicy update or delete.
-- Allow both draft-policy replacements before first activation.
-- Reject unknown Task and TaskAssignment status values.
-- Reject terminal Task without mapped reason/time and nonterminal Task with
-  terminal fields.
-- Reject Assignment status/timestamp mismatch.
+## Human Review preparation and distinct checker remediation
 
-### Service and lifecycle behavior
+### Human preparation constraints
 
-- New guide policy validates the exact v0.1 values.
-- Activated ReviewPolicy/RevisionPolicy upserts fail without modifying the row.
-- Either changed policy is created only under a new draft guide version.
-- Lifecycle constants include accepted/rejected/cancelled and
-  completed/blocked, but transition guards still reject attempts to enter them.
-- Removal of `auto_reject_after_limit` creates no Review, finding, Task terminal
-  status, Assignment terminal status, contribution, award, audit, or outbox
-  effect. Executable limit/deadline block tests remain required in 09A.
-- Checker paths cannot select `rejected` or `cancelled`.
-- All three dormant cancellation reasons, including
-  `legacy_revision_context_unrecoverable`, satisfy storage constraints but no
-  02B service transition can create them.
+- Bind one root to the exact Review(needs_revision), project/task/prior
+  Submission/source assignment.
+- Reject accept/reject Review, crossed/duplicate source, duplicate prior
+  Submission episode, mutable source, and service-as-human actor.
+- A CheckerRun cannot be used as a RevisionContextPreparation root.
+- Version 1 has neither source relation. After human prepared cutover, every N+1
+  has exactly one of `revision_context_preparation_id` or
+  `remediation_source_checker_run_id`; null/null and both-set rows fail migration,
+  service creation, and direct SQL.
 
-## 02C - Submission Attribution And Lineage
+### Atomic creation
 
-### Migration fixtures
+- Existing checker transaction remains CheckerRun -> Task needs_revision ->
+  audit/outbox -> one commit using unchanged task context. Fault rolls back its
+  state; no Review/finding/CON/preparation record exists.
+- Human transaction in 10: immutable Review + reviewer CON operation -> initial
+  preparation -> Task needs_revision -> audit/outbox -> one commit.
+  Fault rolls back all review/contribution/revision effects.
+- No contributor-readable human-review needs_revision state lacks a head; unsafe
+  context creates a blocked head. Exact CheckerRun lineage distinguishes the
+  separate checker path from rootless legacy human state.
 
-| Case | Expected proof |
-|---|---|
-| One assignment satisfying the exact inclusive temporal predicate | Submission receives that assignment ID. |
-| No responsible assignment | Upgrade fails with submission/task IDs. |
-| Multiple plausible assignments | Upgrade fails; current or latest assignment is not selected. |
-| Assignment belongs to another task | Upgrade fails. |
-| Submission contributor differs from assignment contributor | Upgrade fails. |
-| Submission time equals assigned/accepted/released boundary | Inclusive predicate is applied exactly. |
-| Missing acceptance, invalid interval, or overlapping reassignment intervals | Upgrade fails with responsible row IDs. |
-| Same contributor assigned twice with non-overlapping intervals | The one interval containing submitted time is selected. |
-| Timestamp tie yields two qualifying assignments | Upgrade fails as ambiguous. |
-| Exact historical guide context | Guide ID/sequence backfill from locked version and task context. |
-| Missing or inconsistent historical guide context | Upgrade fails; active guide is not substituted. |
-| Valid N-1 chain | Upgrade succeeds and preserves every ID/version. |
-| Cross-task, skipped, branched, or self-linked chain | Upgrade fails with chain remediation. |
-| Protected lineage in use | Downgrade refuses. |
+### Path-specific behavior
 
-### Direct SQL constraints and immutability
+- Human Review revision requires responses for unresolved blocking ReviewFindings,
+  response evidence where policy requires it, later resolutions, and preferred
+  prior-reviewer return.
+- Checker remediation exposes only contributor-safe checker message/fix, keeps
+  existing guide/task context, consumes no human revision limit/deadline, requires
+  no fake ReviewFinding/response/resolution, and returns to open routing.
 
-- Reject assignment from another task.
-- Reject contributor unequal to exact assignment contributor.
-- Reject nonhuman contributor through the merged AUTH foundation.
-- Reject version 1 with a predecessor.
-- Reject version greater than one without predecessor.
-- Reject predecessor whose task or version is not exact N-1.
-- Reject a second successor for the same predecessor.
-- Reject mutation/deletion of a finalized Submission's identity, attribution,
-  version, predecessor, context, packet, evidence, or attestation.
-- Reject EvidenceItem insert, update, or delete when its parent
-  `Submission.locked_at` is non-null; `finalized_at` remains only the API alias.
-- Permit only the separately owned set-once `artifact_hash` extension after
-  finalization when that ART amendment later exists; reject overwrite.
+### Limits and deadline
 
-### Concurrency and service behavior
+- No test is locked until the human approves exact human Review round count,
+  deadline anchor, and inclusive/exclusive boundary.
+- Approved semantics exclude checker retries and freeze/use database time.
+- Limit/deadline blocked head cannot use repair; exact D6 close only.
+- Context invalid/revoked head may append one authorized repair successor.
 
-- Two concurrent creates for one task serialize on Task/current head; one
-  receives N and the other either receives N+1 under valid lifecycle state or
-  fails with the stable conflict. They never create duplicate N or branches.
-- Concurrent reassignment cannot change the assignment selected for a
-  submission already being finalized.
-- Release, authority revocation, and later reassignment preserve prior
-  attribution.
-- Suspended/deactivated human and service ActorProfiles are denied by the
-  transaction-local AUTH revalidation. External subject, email, legacy typed
-  profile ID, and token role are rejected as contributor substitutes.
-- Submission request input never supplies assignment ID, contributor ID,
-  version, predecessor, or guide context.
-- TaskAssignment gains no guide/context field.
-- No duplicate SubmissionVersion model/table/API appears.
+### Legacy
 
-## Regression and negative-scope proof
+- Prove exact CheckerRun + Submission + matching durable audit lineage remains a
+  valid checker-remediation path and is never classified as legacy human state.
+- Classify valid human Review root, valid checker remediation, ambiguous claimed
+  human source, and truly rootless human legacy separately. Never fabricate Review.
 
-For every child:
+## Release phase
 
-- existing project-guide, task claim/start, submission finalization, checker,
-  and legacy revision tests remain enabled;
-- no assertion is weakened, skipped, or rewritten to accept unsafe lineage;
-- no AUTH, ART, CON, compensation, contribution, reputation, adjudication, queue,
-  lease, Review, finding, or public review-route file changes;
-- migration upgrade is tested against real PostgreSQL, not only metadata;
-- unsafe upgrades leave no partial DDL/data effects; safe fixtures prove
-  upgrade/downgrade/upgrade, and protected-row fixtures prove downgrade refusal;
-- full isolated suite remains at or above 78 percent repository coverage;
-- each materially changed backend module remains at or above 90 percent;
-- stale wording and Markdown-link checks pass.
+- Checker allow_review and checker needs_revision routing share the
+  allowed checker-completion phases through `revision_cutover_fenced`; both deny
+  from `admission_fenced`.
+- Human preparation is inseparable from leased review.decision completion and
+  remains allowed only where that completion class is allowed.
+- Phase tests prove static routes/AUTH memberships do not change, denied commands
+  fail at the database fence, scheduler suspension is operational, and crash
+  resume is forward-only.
 
-## Human decisions still required
+## Per-child proof
 
-1. Exact positive v0.1 default for
-   `review_preference_window_seconds`.
-2. Exact positive v0.1 default for `review_lease_duration_seconds`.
-
-These values are product policy. They are not inferred from the unrelated
-`ReviewPolicy.sla_hours`, and no migration may start while either is unset.
+Every child runs focused tests/Ruff, real-PostgreSQL isolated full suite at 78
+percent, 90 percent changed-subsystem coverage, stale contract scans, Markdown
+links, agent gates including merge intent/internal review evidence, and
+`git diff --check`. No test is skipped or weakened to accommodate new schema.

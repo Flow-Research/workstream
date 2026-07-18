@@ -3,7 +3,7 @@
 ## Status And Purpose
 
 This is the planned v0.1 operating contract. Revision behavior remains
-unavailable until its owning REV chunks, exact AUTH activation, and REV-13 joint
+unavailable until its owning REV chunks, exact AUTH activation, and REV-13C joint
 release complete.
 
 Revision replay preserves an immutable answer to three questions: what the
@@ -13,8 +13,10 @@ resolution.
 
 ## Review-Rooted Preparation
 
-Human revision begins only from an immutable `Review(needs_revision)`. Checker
-remediation remains CheckerResult-rooted and does not fabricate a Review episode.
+Controlled revision replay begins only from one immutable
+`Review(needs_revision)`. Checker remediation remains a separate CheckerRun-
+rooted resubmission path using the Task's existing locked context; it does not
+fabricate a Review, finding, preparation, reviewer contribution, or human actor.
 
 Before contributor access, Workstream appends a RevisionContextPreparation. It
 compares the prior Submission's stamped Project Guide identity and activation
@@ -46,16 +48,21 @@ immutable SubmissionFindingResponse containing:
 
 Advisory findings may be answered but do not block resubmission unless the locked
 policy explicitly requires a response. Vague aggregate “fixed all” text cannot
-replace per-finding responses.
+replace per-finding responses. The distinct checker-remediation path uses only
+contributor-safe checker messages/fixes and requires no fabricated
+ReviewFinding response or resolution.
 
 ## Resubmission And Checks
 
-Submission N+1 acknowledges the exact preparation head/digest, links its
-immediate predecessor, and stamps the frozen context. The normal finalization
-and checker spine reruns. Only a current successful `allow_review` may create a
-new queue entry.
+A human-Review Submission N+1 acknowledges the exact preparation head/digest,
+links its immediate predecessor, and stamps the frozen context. A checker-
+remediation Submission N+1 instead binds the exact final needs-revision
+CheckerRun and the Task's existing locked context; it carries no preparation or
+ReviewFinding response. Both paths rerun the normal finalization and checker
+spine. Only a current successful `allow_review` may create a new queue entry.
 
-The queue initially prefers the reviewer who requested revision. Expiry,
+Human Review return initially prefers the reviewer who requested revision. The
+distinct corrected checker path enters open routing. Expiry,
 decline, or invalidation opens the entry without resetting queue age.
 
 ## Reviewer Resolution
@@ -72,21 +79,33 @@ new ReviewFinding on the later Review.
 
 ## Limits And Recovery
 
-A reached revision limit or deadline blocks further preparation and
+Exact human Review round counting, deadline anchor, and boundary require human
+approval before implementation and exclude checker retries. Approved values use
+database time and freeze on the Review-rooted episode. A reached revision limit
+or deadline blocks further preparation and
 `submission.create`; it does not automatically reject or cancel the task. The
 task remains `needs_revision` until a covered Project Manager explicitly invokes
-the planned reason-bound obligation-close command. That administrative closure
-uses task `cancelled`, releases the assignment, and creates no synthetic Review
-or contribution.
+the planned reason-bound `review.revision_obligation.close` command. That
+administrative closure uses task `cancelled`, releases the assignment, and
+creates no synthetic Review or contribution.
 
-A blocked or invalid Review-rooted preparation can be repaired only by appending
-one successor through the planned covered-manager repair command. Legacy
-`needs_revision` state with no Review/root requires an Operator evidence-linked
-legacy close and cannot enter normal revision replay.
+A blocked or invalid context preparation can be repaired only by appending one
+successor through the planned covered-manager repair command. Repair cannot
+bypass limit/deadline exhaustion. Exact durable CheckerRun remediation is not
+legacy; only ambiguous or truly rootless claimed human Review state uses
+Operator evidence-linked close.
 
 ## Required Proof
 
-A revision cannot return to human review unless every unresolved blocking
-finding has one response, the exact preparation is still current, Submission
-lineage is immediate and same-task, evidence bindings are finalized, and the
-new CheckerRun is current for that Submission.
+A human-Review revision cannot return to human review unless every unresolved
+blocking finding has one response, the exact preparation is still current,
+Submission lineage is immediate and same-task, evidence bindings are finalized,
+and the new `allow_review` CheckerRun is current for that Submission.
+
+A checker-remediation submission cannot enter human review unless it binds the
+exact final needs-revision CheckerRun that caused remediation through immutable
+`remediation_source_checker_run_id`, preserves the Task's existing locked
+context, has immediate same-task Submission lineage, and has a new current
+`allow_review` CheckerRun. The source relation is server-derived, unique, and
+cannot be rewritten by a later retry. It has no preparation or ReviewFinding
+response requirement.

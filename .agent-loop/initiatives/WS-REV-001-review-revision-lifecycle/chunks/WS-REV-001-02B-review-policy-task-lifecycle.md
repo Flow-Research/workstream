@@ -132,16 +132,22 @@ synthetic reject from checker, revision limit, deadline, or administrative close
 
 ```text
 cd backend && alembic upgrade head
+cd backend && alembic heads
 cd backend && pytest -q tests/test_alembic.py tests/test_projects.py tests/test_tasks.py
 cd backend && ruff check app/modules/projects app/modules/tasks tests/test_alembic.py tests/test_projects.py tests/test_tasks.py
 cd backend && docstr-coverage --config .docstr.yaml
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 backend/.venv/bin/python scripts/test_agent_gates.py
+git diff --check
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78)
+cd backend && coverage report --include='app/modules/projects/*' --precision=2 --fail-under=90
+cd backend && coverage report --include='app/modules/tasks/*' --precision=2 --fail-under=90
 ```
 
-The full isolated PostgreSQL suite must preserve the repository-wide 78 percent
-floor. Every materially changed projects/tasks module must remain at or above
-90 percent coverage.
+Migration proof also covers prior-head preflight, safe downgrade/re-upgrade,
+protected-row refusal, failed-preflight rollback/no partial DDL, direct SQL, and
+a single head on real PostgreSQL.
 
 ## Required reviewers
 

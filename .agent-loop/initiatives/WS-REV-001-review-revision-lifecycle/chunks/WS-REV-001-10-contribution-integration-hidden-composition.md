@@ -1,4 +1,4 @@
-# Chunk Contract: WS-REV-001-10
+# Chunk Contract: WS-REV-001-10 - Canonical Review, Final Acceptance, And CON Atomic Integration
 
 ## Goal
 
@@ -51,7 +51,10 @@ reputation scoring
   versioned Submission, predecessor Review, and packet/evidence facts; REV
   recomposes final context and calls AUTH; AUTH validates every binding/current
   authority, consumes once, evaluates once, and stages evidence before the first
-  feature mutation; REV appends
+  feature mutation. The exact order after AUTH authority is
+  ReviewDecisionRequest, review lifecycle fence, ReviewLease,
+  ReviewQueueEntry, Task, the exact Submission.task_assignment_id row,
+  Submission, and stable subordinate lineage rows. REV appends
   the immutable Review, findings, and resolutions; consumes the lease; closes
   the queue entry; and then calls the CON reviewer operation. That operation
   creates `completed_review` and evaluates the reviewer policy. REV then applies
@@ -68,7 +71,7 @@ reputation scoring
   protocol and leaves no Review, lifecycle, CON, or feature/shared audit/outbox
   mutation.
   This hidden service has no public route or background-command entry point.
-  REV-12A later installs the mandatory lifecycle fence before REV-13 releases
+  REV-12A1 through 12A4 later install the mandatory lifecycle control before 13C releases
   any decision surface.
 - Every committed review decision creates exactly one reviewer
   `contribution_type=completed_review` directly from Review and ReviewLease.
@@ -135,9 +138,14 @@ reputation scoring
   revocation, binding-state drift, and duplicate/changed replay in both orders.
   Fault injection after every REV, task, CON, audit, and outbox stage proves
   zero partial state and bounded database retry behavior.
-- Initial revision-preparation failure on `needs_revision` rolls back Review,
-  Task and TaskAssignment, lease, preparation, reviewer contribution and award,
-  audit, and outbox state together.
+- The needs-revision branch consumes the mandatory task-owned preparation
+  participant delivered by 09A2 and invokes it after the reviewer CON
+  operation. Chunk 10 adds no task-owned implementation file or second
+  participant path. The participant appends the exact Review-rooted initial
+  preparation through the caller's session before Task becomes
+  contributor-readable. Failure rolls
+  back Review, Task/Assignment, lease/queue, initial preparation, reviewer
+  contribution/award, audit, and outbox together.
 - Same-reviewer and takeover matrices prove v1 `needs_revision` then v2
   accept/reject follows exact Submission/Review predecessors, attributes each
   reviewer record to the actual Review author. The v1 Review/findings remain
@@ -182,4 +190,4 @@ contribution creation matrix, replay, rollback, and route absence.
 
 ## Stop condition
 
-Merge, record automated memory, and stop. Do not start 11.
+Merge, record automated memory, and stop. Do not start 11A.
