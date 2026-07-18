@@ -8,12 +8,15 @@ available product behavior through the existing Workstream HTTP API.
 
 Unavailable review, contribution, and contributor-list reads are represented by
 a temporary scenario gateway that is explicit, deterministic, and replaceable.
+The HTTP gateway must also fail closed for any existing route whose actor scope,
+lifecycle semantics, or idempotency guarantees do not satisfy WS-MCP-001.
 
 ## Design chosen
 
 - `workstream_mcp.server` owns MCP registration.
 - `workstream_mcp.gateway` defines the contributor gateway interface.
-- `workstream_mcp.http_gateway` calls real Workstream HTTP APIs.
+- `workstream_mcp.http_gateway` calls only semantically compatible Workstream
+  HTTP APIs and fails closed for incompatible lifecycle routes.
 - `workstream_mcp.scenario_gateway` supplies temporary deterministic behavior
   only where APIs are unavailable.
 - `workstream_mcp.auth` owns token propagation and redaction helpers.
@@ -53,8 +56,9 @@ blocking current MCP work.
 ## Rollout/migration strategy
 
 Land the MCP package as an additive contributor adapter. When Workstream adds
-review, contribution, and list APIs, replace temporary scenario-gateway methods
-with real HTTP gateway calls without changing the MCP public catalogue.
+review, contribution, list, atomic contributor claim/release, and durably
+idempotent submission APIs, replace temporary scenario-gateway methods with
+real HTTP gateway calls without changing the MCP public catalogue.
 
 ## Verification strategy
 

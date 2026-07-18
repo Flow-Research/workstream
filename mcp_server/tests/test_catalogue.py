@@ -79,6 +79,13 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
         assert "bearer_token" not in schema["properties"]
         assert "authorization" not in schema["properties"]
     assert tool_schemas["claim_task"]["required"] == ["task_id", "request_id"]
+    assert tool_schemas["claim_task"]["properties"]["request_id"]["format"] == "uuid"
+    assert "summary" in tool_schemas["submit_task"]["$defs"]["SubmissionInput"]["properties"]
+    assert tool_schemas["submit_review"]["properties"]["decision"]["enum"] == [
+        "accept",
+        "needs_revision",
+        "reject",
+    ]
     assert tool_schemas["submit_review"]["required"] == [
         "review_ref",
         "decision",

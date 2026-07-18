@@ -19,8 +19,9 @@ The repository contains a contributor MCP server package that:
 - publishes only the WS-MCP-001 v0.1 resources and tools;
 - forwards authenticated contributor requests to Workstream APIs where they
   exist;
-- isolates unavailable review, contribution, and task-list surfaces behind a
-  temporary replaceable service for tests;
+- isolates unavailable review, contribution, and task-list surfaces, plus
+  lifecycle calls whose current routes cannot meet the MCP contract, behind a
+  temporary replaceable test service;
 - preserves existing Workstream auth and lifecycle authority.
 
 ## Non-goals
@@ -41,8 +42,8 @@ workflow engine.
 ## Human judgment required
 
 Maintainers must confirm the temporary service layer remains acceptable until
-review and contribution APIs land, and must explicitly approve the final PR for
-merge.
+review, contribution, and compatible contributor lifecycle APIs land, and must
+explicitly approve the final PR for merge.
 
 ## Initial risk class
 

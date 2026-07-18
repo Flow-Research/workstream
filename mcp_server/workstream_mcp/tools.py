@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from workstream_mcp.auth import RequestContext, redact_context_secrets
-from workstream_mcp.errors import WorkstreamMCPError
+from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError, unexpected_server_error
 from workstream_mcp.gateway import ContributorGateway
 from workstream_mcp.schemas import (
     CandidateSubmissionInput,
@@ -35,7 +35,7 @@ async def claim_task(
         data = await gateway.claim_task(
             context,
             task_id=parsed.task_id,
-            request_id=parsed.request_id,
+            request_id=str(parsed.request_id),
         )
         return _safe_result(
             context,
@@ -50,6 +50,8 @@ async def claim_task(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def release_task(
@@ -74,7 +76,7 @@ async def release_task(
         data = await gateway.release_task(
             context,
             task_id=parsed.task_id,
-            request_id=parsed.request_id,
+            request_id=str(parsed.request_id),
             reason=parsed.reason,
         )
         return _safe_result(
@@ -90,6 +92,8 @@ async def release_task(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def run_pre_submit_check(
@@ -114,8 +118,8 @@ async def run_pre_submit_check(
         data = await gateway.run_pre_submit_check(
             context,
             task_id=parsed.task_id,
-            submission=parsed.submission,
-            request_id=parsed.request_id,
+            submission=parsed.submission.model_dump(exclude_none=True),
+            request_id=str(parsed.request_id),
         )
         passed = data.get("status") == "passed" or data.get("eligible_to_submit") is True
         return _safe_result(
@@ -139,6 +143,8 @@ async def run_pre_submit_check(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def submit_task(
@@ -163,8 +169,8 @@ async def submit_task(
         data = await gateway.submit_task(
             context,
             task_id=parsed.task_id,
-            submission=parsed.submission,
-            request_id=parsed.request_id,
+            submission=parsed.submission.model_dump(exclude_none=True),
+            request_id=str(parsed.request_id),
         )
         submission_ref = data.get("id") if isinstance(data, dict) else None
         return _safe_result(
@@ -180,6 +186,8 @@ async def submit_task(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def claim_review(
@@ -205,7 +213,7 @@ async def claim_review(
             context,
             project_id=parsed.project_id,
             review_routing_ref=parsed.review_routing_ref,
-            request_id=parsed.request_id,
+            request_id=str(parsed.request_id),
         )
         review_ref = data.get("review_ref")
         return _safe_result(
@@ -221,6 +229,8 @@ async def claim_review(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def release_review(
@@ -243,7 +253,7 @@ async def release_review(
         data = await gateway.release_review(
             context,
             review_ref=parsed.review_ref,
-            request_id=parsed.request_id,
+            request_id=str(parsed.request_id),
         )
         return _safe_result(
             context,
@@ -258,6 +268,8 @@ async def release_review(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 async def submit_review(
@@ -280,13 +292,22 @@ async def submit_review(
     )
     if isinstance(parsed, dict):
         return parsed
+    if parsed.decision == "needs_revision" and not parsed.findings:
+        return _safe_result(
+            context,
+            WorkstreamMCPError(
+                MCPErrorCode.FINDINGS_REQUIRED,
+                "needs_revision requires actionable findings.",
+                correlation_id=context.correlation_id,
+            ).to_result(),
+        )
     try:
         data = await gateway.submit_review(
             context,
             review_ref=parsed.review_ref,
             decision=parsed.decision,
-            findings=parsed.findings,
-            request_id=parsed.request_id,
+            findings=[finding.model_dump(exclude_none=True) for finding in parsed.findings],
+            request_id=str(parsed.request_id),
         )
         return _safe_result(
             context,
@@ -301,6 +322,8 @@ async def submit_review(
         )
     except WorkstreamMCPError as exc:
         return _safe_result(context, exc.to_result())
+    except Exception:
+        return _safe_result(context, unexpected_server_error(correlation_id=context.correlation_id).to_result())
 
 
 def _safe_result(context: RequestContext, result: dict[str, Any]) -> dict[str, Any]:

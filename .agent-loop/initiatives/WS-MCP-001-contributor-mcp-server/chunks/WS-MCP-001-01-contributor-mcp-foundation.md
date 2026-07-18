@@ -61,8 +61,8 @@ CI or gate weakening
 - [ ] The MCP package exposes exactly the approved v0.1 resource types and tool names.
 - [ ] No prompts are exposed.
 - [ ] Workstream bearer tokens are transport/session context, never tool inputs or resource URI values.
-- [ ] HTTP gateway maps available Submitter APIs to current `/api/v1` endpoints.
-- [ ] Temporary scenario gateway covers unavailable review, contribution, and contributor-list surfaces.
+- [ ] HTTP gateway maps only semantically compatible Submitter APIs to current `/api/v1` endpoints and fails closed otherwise.
+- [ ] Temporary scenario gateway covers unavailable review, contribution, contributor-list, and incompatible lifecycle surfaces in tests only.
 - [ ] `claim_task` does not invoke `start_task`.
 - [ ] Pre-submit checker failures are returned as valid structured outcomes.
 - [ ] Tests cover catalogue closure, auth forwarding, Submitter behavior, temporary reviewer/contribution behavior, and token redaction.

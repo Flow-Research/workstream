@@ -108,3 +108,58 @@ def map_http_status(status_code: int, *, correlation_id: str | None = None) -> W
         "Unexpected Workstream response.",
         correlation_id=correlation_id,
     )
+
+
+_BACKEND_ERROR_CODES: dict[str, MCPErrorCode] = {
+    "idempotency_mismatch": MCPErrorCode.IDEMPOTENCY_CONFLICT,
+    "pre_submission_checker_failed": MCPErrorCode.PRE_SUBMIT_CHECK_FAILED,
+    "pre_submit_check_failed": MCPErrorCode.PRE_SUBMIT_CHECK_FAILED,
+    "submission_version_unchanged": MCPErrorCode.SUBMISSION_UNCHANGED,
+    "task_assignment_conflict": MCPErrorCode.TASK_NOT_CLAIMABLE,
+    "task_not_claimable": MCPErrorCode.TASK_NOT_CLAIMABLE,
+    "task_not_releasable": MCPErrorCode.TASK_NOT_RELEASABLE,
+    "review_not_available": MCPErrorCode.REVIEW_NOT_AVAILABLE,
+    "review_not_leased_to_actor": MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
+    "review_lease_expired": MCPErrorCode.REVIEW_LEASE_EXPIRED,
+    "findings_required": MCPErrorCode.FINDINGS_REQUIRED,
+}
+
+
+def map_http_error_response(
+    status_code: int,
+    payload: Any,
+    *,
+    correlation_id: str | None = None,
+) -> WorkstreamMCPError:
+    """Preserve safe Workstream domain classifications when the API provides one."""
+    backend_code = _extract_error_code(payload)
+    mcp_code = _BACKEND_ERROR_CODES.get(backend_code or "")
+    if mcp_code is not None:
+        return WorkstreamMCPError(
+            mcp_code,
+            "Workstream rejected the requested operation.",
+            correlation_id=correlation_id,
+        )
+    return map_http_status(status_code, correlation_id=correlation_id)
+
+
+def unexpected_server_error(*, correlation_id: str | None = None) -> WorkstreamMCPError:
+    """Return a secret-safe envelope for an unexpected adapter failure."""
+    return WorkstreamMCPError(
+        MCPErrorCode.UNEXPECTED_SERVER_ERROR,
+        "The MCP server could not complete the request.",
+        retryable=False,
+        correlation_id=correlation_id,
+    )
+
+
+def _extract_error_code(payload: Any) -> str | None:
+    """Read a stable code from the canonical Workstream error envelope."""
+    if not isinstance(payload, dict):
+        return None
+    error = payload.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        return error["code"]
+    if isinstance(payload.get("code"), str):
+        return payload["code"]
+    return None

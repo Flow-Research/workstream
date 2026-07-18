@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from workstream_mcp.auth import RequestContext, redact_context_secrets
-from workstream_mcp.errors import WorkstreamMCPError
+from workstream_mcp.errors import WorkstreamMCPError, unexpected_server_error
 from workstream_mcp.gateway import ContributorGateway
 
 
@@ -85,3 +85,8 @@ async def _safe_resource(awaitable: Any, context: RequestContext) -> dict[str, A
         return redact_context_secrets(await awaitable, context)
     except WorkstreamMCPError as exc:
         return redact_context_secrets(exc.to_result(), context)
+    except Exception:
+        return redact_context_secrets(
+            unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            context,
+        )

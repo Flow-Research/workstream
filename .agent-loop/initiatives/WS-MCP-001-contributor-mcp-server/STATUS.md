@@ -2,8 +2,9 @@
 
 ## Current status
 
-`WS-MCP-001-01` is implemented and internally reviewed on branch
-`oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
+`WS-MCP-001-01` has received MCP-scope remediation on branch
+`oxvictor/ws-mcp-001-01-contributor-mcp-foundation`. A fresh internal review is
+required before PR publication.
 
 ## Active implementation chunk
 
@@ -17,11 +18,14 @@
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Reviewed | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Internal review complete; ready for PR publication. |
+| `WS-MCP-001-01` | Re-review required | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production gateway now fails closed for incompatible backend lifecycle routes. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace temporary service methods after review/contribution APIs exist. |
 
 ## Blockers
 
-No implementation blocker. Review, contribution, and contributor-list backend
-APIs are unavailable on current main, so this chunk uses a bounded temporary
-service layer for those MCP surfaces.
+Production completion is blocked on compatible Workstream APIs. Review,
+contribution, and contributor-list APIs are unavailable on current main; the
+current task claim, release, and submission routes also do not meet the MCP's
+actor, lifecycle, or durable-idempotency contract. The production HTTP gateway
+returns a structured unavailable result for those surfaces. The bounded
+scenario gateway is test-injected only and is not a production fallback.

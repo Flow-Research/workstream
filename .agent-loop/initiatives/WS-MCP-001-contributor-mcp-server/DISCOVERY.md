@@ -16,10 +16,16 @@ Current FastAPI routers expose:
 - task lifecycle, task context, submission, and audit routes;
 - pre-submit checker and checker-run routes.
 
-Current backend APIs can support MCP Submitter operations for task-by-id,
-locked task context, submission requirements, task claim, task release,
-pre-submit check, submission creation, submission listing, and checker-run
-reads.
+Current backend APIs can support MCP task-by-id, locked task context,
+submission requirements, pre-submit check, submission listing, and checker-run
+reads. The MCP uses only those compatible calls.
+
+The current task claim route leaves work in `claimed` while WS-MCP-001 exposes
+one task-claim operation and cannot expose the separate start route. The current
+task release route is operator-scoped, not contributor-scoped. Submission
+creation does not provide the durable request-idempotency contract required by
+the MCP. The HTTP gateway must fail closed for all three until compatible
+contributor APIs exist.
 
 ## Missing backend API surface for WS-MCP-001
 
@@ -31,6 +37,10 @@ No backend route currently exposes:
 - contribution record reads;
 - current review, review context, review claim, review release, or review
   decision APIs.
+
+Additionally, no current backend API provides an atomic contributor
+claim-to-work transition, contributor task release, or durable request replay
+for submission creation.
 
 The maintainer approved using a simple temporary service layer for unavailable
 APIs so MCP tool and resource shape can be implemented and tested now.

@@ -7,8 +7,13 @@ from typing import Any
 import httpx
 
 from workstream_mcp.auth import RequestContext, authorization_headers
-from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError, map_http_status
-from workstream_mcp.scenario_gateway import ScenarioContributorGateway
+from workstream_mcp.errors import (
+    MCPErrorCode,
+    WorkstreamMCPError,
+    map_http_error_response,
+    map_http_status,
+)
+from workstream_mcp.gateway import ContributorGateway
 
 
 class HTTPContributorGateway:
@@ -19,7 +24,7 @@ class HTTPContributorGateway:
         *,
         base_url: str,
         timeout_seconds: float = 30.0,
-        fallback: ScenarioContributorGateway | None = None,
+        fallback: ContributorGateway | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         """Create an HTTP gateway.
@@ -113,14 +118,10 @@ class HTTPContributorGateway:
         task_id: str,
         request_id: str,
     ) -> dict[str, Any]:
-        """Claim a task without invoking start_task."""
-        return await self._request(
-            context,
-            "POST",
-            f"/api/v1/tasks/{task_id}/claim",
-            request_id=request_id,
-            json={},
-        )
+        """Use a complete temporary adapter until Workstream merges claim and start."""
+        if self._fallback is None:
+            raise _missing_backend_api(context, "claim_task")
+        return await self._fallback.claim_task(context, task_id=task_id, request_id=request_id)
 
     async def release_task(
         self,
@@ -130,14 +131,14 @@ class HTTPContributorGateway:
         request_id: str,
         reason: str | None,
     ) -> dict[str, Any]:
-        """Release a task through the existing task release endpoint."""
-        payload = {} if reason is None else {"reason": reason}
-        return await self._request(
+        """Use a complete temporary adapter until contributor release is available."""
+        if self._fallback is None:
+            raise _missing_backend_api(context, "release_task")
+        return await self._fallback.release_task(
             context,
-            "POST",
-            f"/api/v1/tasks/{task_id}/release",
+            task_id=task_id,
             request_id=request_id,
-            json=payload,
+            reason=reason,
         )
 
     async def run_pre_submit_check(
@@ -165,13 +166,14 @@ class HTTPContributorGateway:
         submission: dict[str, Any],
         request_id: str,
     ) -> dict[str, Any]:
-        """Create an initial or revised submission version."""
-        return await self._request(
+        """Use a complete temporary adapter until submissions have durable request idempotency."""
+        if self._fallback is None:
+            raise _missing_backend_api(context, "submit_task")
+        return await self._fallback.submit_task(
             context,
-            "POST",
-            f"/api/v1/tasks/{task_id}/submissions",
+            task_id=task_id,
+            submission=submission,
             request_id=request_id,
-            json=submission,
         )
 
     async def get_current_review(
@@ -280,10 +282,25 @@ class HTTPContributorGateway:
                     correlation_id=context.correlation_id,
                 ) from exc
         if response.status_code >= 400:
-            raise map_http_status(response.status_code, correlation_id=context.correlation_id)
+            try:
+                error_payload = response.json()
+            except ValueError:
+                error_payload = None
+            raise map_http_error_response(
+                response.status_code,
+                error_payload,
+                correlation_id=context.correlation_id,
+            )
         if not response.content:
             return {}
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise WorkstreamMCPError(
+                MCPErrorCode.UNEXPECTED_SERVER_ERROR,
+                "Workstream returned an invalid response.",
+                correlation_id=context.correlation_id,
+            ) from exc
 
 
 def _missing_backend_api(context: RequestContext, surface: str) -> WorkstreamMCPError:
@@ -293,5 +310,5 @@ def _missing_backend_api(context: RequestContext, surface: str) -> WorkstreamMCP
         "This MCP surface is waiting on a Workstream backend API.",
         retryable=False,
         correlation_id=context.correlation_id,
-        details={"surface": surface, "temporary_scenario_gateway_required": True},
+        details={"surface": surface, "temporary_gateway_required": True},
     )

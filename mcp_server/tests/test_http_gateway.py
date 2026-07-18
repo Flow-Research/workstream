@@ -14,10 +14,23 @@ from workstream_mcp.scenario_gateway import ScenarioContributorGateway
 from workstream_mcp.tools import (
     claim_review,
     claim_task,
+    release_task,
     run_pre_submit_check,
     submit_review,
     submit_task,
 )
+
+REQUEST_ID = "11111111-1111-4111-8111-111111111111"
+
+
+def submission() -> dict[str, Any]:
+    """Return a valid current Workstream submission packet."""
+    return {
+        "summary": "candidate",
+        "package_hash": "sha256:abc",
+        "artifact_hash_manifest": [{"artifact": "result.txt", "hash": "sha256:def"}],
+        "worker_attestation": "I attest this packet is complete.",
+    }
 
 
 def context() -> RequestContext:
@@ -26,8 +39,8 @@ def context() -> RequestContext:
 
 
 @pytest.mark.asyncio
-async def test_claim_task_calls_claim_endpoint_only_and_forwards_auth() -> None:
-    """claim_task must not call the backend start transition."""
+async def test_claim_task_fails_closed_until_backend_claim_starts_work() -> None:
+    """The legacy claim endpoint cannot back the MCP's single claim operation."""
     calls: list[tuple[str, str, dict[str, str]]] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -39,15 +52,11 @@ async def test_claim_task_calls_claim_endpoint_only_and_forwards_auth() -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    result = await claim_task(gateway, context(), task_id="task-1", request_id="req-1")
+    result = await claim_task(gateway, context(), task_id="task-1", request_id=REQUEST_ID)
 
-    assert result["outcome"] == "claimed"
-    assert [(method, path) for method, path, _headers in calls] == [
-        ("POST", "/api/v1/tasks/task-1/claim")
-    ]
-    assert all("/start" not in path for _method, path, _headers in calls)
-    assert calls[0][2]["authorization"] == "Bearer issuer-token"
-    assert calls[0][2]["x-request-id"] == "req-1"
+    assert result["error"]["code"] == "workstream_temporarily_unavailable"
+    assert result["error"]["details"]["surface"] == "claim_task"
+    assert calls == []
 
 
 @pytest.mark.asyncio
@@ -60,7 +69,7 @@ async def test_default_http_gateway_fails_closed_for_missing_surfaces() -> None:
         context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
-        request_id="req-1",
+        request_id=REQUEST_ID,
     )
 
     assert result["error"]["code"] == "workstream_temporarily_unavailable"
@@ -80,7 +89,7 @@ async def test_temporary_gateway_is_explicitly_injected() -> None:
         context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
-        request_id="req-1",
+        request_id=REQUEST_ID,
     )
 
     assert result["outcome"] == "leased_to_actor"
@@ -97,10 +106,10 @@ async def test_tool_validation_rejects_invalid_review_decision_and_blank_request
         review_ref="scenario-review-1",
         decision="approve_anything",
         findings=[],
-        request_id="req-1",
+        request_id=REQUEST_ID,
     )
     blank_request = await claim_task(gateway, context(), task_id="task-1", request_id=" ")
-    blank_task = await claim_task(gateway, context(), task_id=" ", request_id="req-1")
+    blank_task = await claim_task(gateway, context(), task_id=" ", request_id=REQUEST_ID)
 
     assert invalid_decision["error"]["code"] == "invalid_tool_input"
     assert blank_request["error"]["code"] == "invalid_tool_input"
@@ -117,7 +126,7 @@ async def test_tool_validation_rejects_invalid_input_shapes() -> None:
         context(),
         task_id="task-1",
         submission=["not", "a", "dict"],  # type: ignore[arg-type]
-        request_id="req-1",
+        request_id=REQUEST_ID,
     )
     invalid_findings = await submit_review(
         gateway,
@@ -125,7 +134,7 @@ async def test_tool_validation_rejects_invalid_input_shapes() -> None:
         review_ref="review-1",
         decision="accept",
         findings=["not-a-finding"],  # type: ignore[list-item]
-        request_id="req-2",
+        request_id="22222222-2222-4222-8222-222222222222",
     )
 
     assert invalid_submission["error"]["code"] == "invalid_tool_input"
@@ -147,10 +156,16 @@ async def test_tool_results_redact_echoed_bearer_token() -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    result = await claim_task(gateway, context(), task_id="task-1", request_id="req-1")
+    result = await run_pre_submit_check(
+        gateway,
+        context(),
+        task_id="task-1",
+        submission=submission(),
+        request_id=REQUEST_ID,
+    )
 
     assert "issuer-token" not in json.dumps(result)
-    assert result["data"]["task_claim"]["echoed_authorization"] == "Bearer [REDACTED]"
+    assert result["data"]["pre_submit_check"]["echoed_authorization"] == "Bearer [REDACTED]"
 
 
 @pytest.mark.asyncio
@@ -159,8 +174,10 @@ async def test_pre_submit_failure_is_valid_tool_outcome() -> None:
 
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/tasks/task-1/submission-precheck"
+        assert request.headers["authorization"] == "Bearer issuer-token"
+        assert request.headers["x-request-id"] == REQUEST_ID
         body = json.loads(request.content)
-        assert body == {"submission": {"summary": "candidate"}}
+        assert body == {"submission": {**submission(), "evidence_items": []}}
         return httpx.Response(
             200,
             json={
@@ -181,8 +198,8 @@ async def test_pre_submit_failure_is_valid_tool_outcome() -> None:
         gateway,
         context(),
         task_id="task-1",
-        submission={"summary": "candidate"},
-        request_id="req-1",
+        submission=submission(),
+        request_id=REQUEST_ID,
     )
 
     assert result["outcome"] == "pre_submit_check_failed"
@@ -190,8 +207,8 @@ async def test_pre_submit_failure_is_valid_tool_outcome() -> None:
 
 
 @pytest.mark.asyncio
-async def test_submit_task_uses_submission_creation_endpoint() -> None:
-    """submit_task maps to the existing task submission endpoint."""
+async def test_submit_task_fails_closed_until_backend_supports_idempotency() -> None:
+    """The legacy submit endpoint cannot satisfy the MCP retry contract."""
     seen: dict[str, Any] = {}
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -208,10 +225,47 @@ async def test_submit_task_uses_submission_creation_endpoint() -> None:
         gateway,
         context(),
         task_id="task-1",
-        submission={"summary": "final"},
-        request_id="req-1",
+        submission=submission(),
+        request_id=REQUEST_ID,
     )
 
-    assert seen == {"path": "/api/v1/tasks/task-1/submissions", "body": {"summary": "final"}}
-    assert result["outcome"] == "submitted"
-    assert result["next_resource"] == "workstream://tasks/task-1/status"
+    assert seen == {}
+    assert result["error"]["code"] == "workstream_temporarily_unavailable"
+    assert result["error"]["details"]["surface"] == "submit_task"
+
+
+@pytest.mark.asyncio
+async def test_release_task_fails_closed_without_contributor_backend_api() -> None:
+    """The operator release endpoint must not be exposed as a contributor tool."""
+    gateway = HTTPContributorGateway(base_url="http://workstream.test")
+
+    result = await release_task(
+        gateway,
+        context(),
+        task_id="task-1",
+        request_id=REQUEST_ID,
+        reason="No longer available.",
+    )
+
+    assert result["error"]["code"] == "workstream_temporarily_unavailable"
+    assert result["error"]["details"]["surface"] == "release_task"
+
+
+@pytest.mark.asyncio
+async def test_invalid_upstream_json_becomes_safe_mcp_error() -> None:
+    """Malformed upstream data must not escape as an MCP stack trace."""
+
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(lambda _request: httpx.Response(200, text="not-json")),
+    )
+
+    result = await run_pre_submit_check(
+        gateway,
+        context(),
+        task_id="task-1",
+        submission=submission(),
+        request_id=REQUEST_ID,
+    )
+
+    assert result["error"]["code"] == "unexpected_server_error"

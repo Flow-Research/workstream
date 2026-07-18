@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -112,13 +113,13 @@ class RequestIdInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    request_id: str = Field(min_length=1, max_length=100)
+    request_id: UUID
 
     @field_validator("request_id")
     @classmethod
-    def normalize_request_id(cls, value: str) -> str:
-        """Reject blank request identifiers."""
-        return _normalize_non_blank(value, "request_id")
+    def normalize_request_id(cls, value: UUID) -> UUID:
+        """Keep the request identifier compatible with Workstream's API middleware."""
+        return value
 
 
 class ClaimTaskInput(RequestIdInput):
@@ -146,11 +147,56 @@ class ReleaseTaskInput(RequestIdInput):
         return _normalize_non_blank(value, "task_id")
 
 
+class ArtifactHashEntryInput(BaseModel):
+    """One declared artifact hash in a contributor submission packet."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    artifact: str = Field(min_length=1, max_length=1000)
+    hash: str = Field(min_length=1, max_length=128)
+    size_bytes: int | None = Field(default=None, ge=0)
+    notes: str | None = None
+
+
+class EvidenceItemInput(BaseModel):
+    """One contributor-supplied evidence reference."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal[
+        "log",
+        "screenshot",
+        "test_result",
+        "package",
+        "diff",
+        "note",
+        "external_reference",
+    ]
+    label: str = Field(min_length=1, max_length=200)
+    uri: str | None = Field(default=None, max_length=1000)
+    hash: str | None = Field(default=None, max_length=128)
+    size_bytes: int | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SubmissionInput(BaseModel):
+    """The Workstream submission packet accepted by existing Submitter APIs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1)
+    package_uri: str | None = Field(default=None, max_length=1000)
+    package_hash: str = Field(min_length=1, max_length=128)
+    artifact_hash_manifest: list[ArtifactHashEntryInput] = Field(min_length=1)
+    worker_attestation: str = Field(min_length=1)
+    evidence_items: list[EvidenceItemInput] = Field(default_factory=list)
+
+
 class CandidateSubmissionInput(RequestIdInput):
     """Input for run_pre_submit_check and submit_task."""
 
     task_id: str = Field(min_length=1, max_length=100)
-    submission: dict[str, Any]
+    submission: SubmissionInput
 
     @field_validator("task_id")
     @classmethod
@@ -184,19 +230,28 @@ class ReleaseReviewInput(RequestIdInput):
         return _normalize_non_blank(value, "review_ref")
 
 
+class ReviewFindingInput(BaseModel):
+    """Portable, actionable finding supplied with a human review decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(min_length=1, max_length=4000)
+    category: str | None = Field(default=None, max_length=100)
+    evidence_refs: list[str] = Field(default_factory=list)
+
+
 class SubmitReviewInput(RequestIdInput):
     """Input for submit_review."""
 
     review_ref: str = Field(min_length=1, max_length=200)
     decision: Literal["accept", "needs_revision", "reject"]
-    findings: list[dict[str, Any]] = Field(default_factory=list)
+    findings: list[ReviewFindingInput] = Field(default_factory=list)
 
     @field_validator("review_ref")
     @classmethod
     def normalize_review_ref(cls, value: str) -> str:
         """Reject blank review identifiers."""
         return _normalize_non_blank(value, "review_ref")
-
 
 class OperationResult(BaseModel):
     """Structured MCP operation result."""

@@ -30,12 +30,12 @@ def test_authorization_headers_forward_token_without_tool_schema_exposure() -> N
     """The gateway receives auth headers, not token tool parameters."""
     context = context_from_authorization_header("Bearer issuer-token", correlation_id="corr-1")
 
-    headers = authorization_headers(context, request_id="req-1")
+    headers = authorization_headers(context, request_id="11111111-1111-4111-8111-111111111111")
 
     assert headers["Authorization"] == "Bearer issuer-token"
     assert headers["X-Correlation-ID"] == "corr-1"
-    assert headers["X-Request-ID"] == "req-1"
-    assert headers["Idempotency-Key"] == "req-1"
+    assert headers["X-Request-ID"] == "11111111-1111-4111-8111-111111111111"
+    assert headers["Idempotency-Key"] == "11111111-1111-4111-8111-111111111111"
 
 
 def test_request_context_repr_omits_bearer_token() -> None:
