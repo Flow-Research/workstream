@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29630618370/job/88043309977"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29631958866/job/88047309503"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29625491655/job/88028938745"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29631958856/job/88047309406"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ART-001-02A3",
-    "chunk_title": "ArtifactStore v2 Local Clean Cut",
-    "initiative_id": "WS-ART-001",
-    "next_chunk_id": "WS-ART-001-02B1",
-    "next_chunk_title": "S3-Compatible MinIO And AWS",
+    "chunk_id": "WS-AUTH-001-09C",
+    "chunk_title": "Actor And Identity-Link Administration Reads",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-09D",
+    "next_chunk_title": "Actor And Identity-Link Lifecycle Mutations",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ART-001-02B1",
-    "next_chunk_title": "S3-Compatible MinIO And AWS",
+    "next_chunk_id": "WS-AUTH-001-09D",
+    "next_chunk_title": "Actor And Identity-Link Lifecycle Mutations",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9",
-    "head_ref": "codex/ws-art-001-02a3-artifact-store-v2-local-clean-cut",
-    "head_sha": "7606798e751abf40218d23886779c3659b76e974",
-    "intent_blob_sha": "4231255208c4d71eb303dcb21e25d1d3052bc449",
-    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02A3.json",
-    "main_sha": "a10d9018007d2e847b4870e9b26cbd24e24c7bb4",
-    "merged_at": "2026-07-18T04:29:41Z",
+    "first_parent_sha": "a10d9018007d2e847b4870e9b26cbd24e24c7bb4",
+    "head_ref": "codex/ws-auth-001-09c-actor-identity-admin-reads",
+    "head_sha": "a3d6babc0679595f4571c6a3f7bdd2f0961f3ac5",
+    "intent_blob_sha": "a7c67a2552aff303c4d96ca8b115a8fb9ce8bd7f",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09C.json",
+    "main_sha": "0ffdabf3dbb77e4e066683fde1a095d744ff1f43",
+    "merged_at": "2026-07-18T06:40:55Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 141,
-    "pr_title": "Replace ArtifactStore v1 with byte-only v2",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/141"
+    "pr_number": 146,
+    "pr_title": "Add bounded actor and identity-link administration reads",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/146"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-18T04:29:41Z"
+  "updated_at": "2026-07-18T06:40:55Z"
 }
