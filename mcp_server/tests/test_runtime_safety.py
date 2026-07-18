@@ -469,8 +469,9 @@ async def test_streamable_http_body_limit_times_out_stalled_upload() -> None:
     assert sent[0]["status"] == 408
 
 
-def test_streamable_http_authentication_precedes_body_buffering() -> None:
-    """Unauthenticated requests are rejected before request-body buffering."""
+@pytest.mark.asyncio
+async def test_streamable_http_rejects_anonymous_request_before_body_buffering() -> None:
+    """A stalled anonymous upload receives the route's 401 without reading its body."""
     server = build_fastmcp_server(
         gateway=object(),  # type: ignore[arg-type]
         config=WorkstreamMCPConfig(
@@ -482,12 +483,41 @@ def test_streamable_http_authentication_precedes_body_buffering() -> None:
         ),
         transport="streamable-http",
     )
+    app = server.streamable_http_app()
+    body_read = False
+    sent: list[dict[str, object]] = []
 
-    middleware_names = [entry.cls.__name__ for entry in server.streamable_http_app().user_middleware]
+    async def receive() -> dict[str, object]:
+        nonlocal body_read
+        body_read = True
+        await asyncio.sleep(1)
+        return {"type": "http.request", "body": b"", "more_body": True}
 
-    assert middleware_names.index("AuthenticationMiddleware") < middleware_names.index(
-        "_RequestBodyLimitMiddleware"
-    )
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    async with asyncio.timeout(0.1):
+        await app(
+            {
+                "type": "http",
+                "asgi": {"version": "3.0"},
+                "http_version": "1.1",
+                "method": "POST",
+                "scheme": "https",
+                "path": "/mcp",
+                "raw_path": b"/mcp",
+                "query_string": b"",
+                "root_path": "",
+                "headers": [(b"host", b"mcp.example.test")],
+                "client": ("127.0.0.1", 12345),
+                "server": ("mcp.example.test", 443),
+            },
+            receive,
+            send,
+        )
+
+    assert body_read is False
+    assert sent[0]["status"] == 401
 
 
 async def _successful_action() -> dict[str, str]:

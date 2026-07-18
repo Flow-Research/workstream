@@ -54,6 +54,10 @@ class _RequestBodyLimitMiddleware:
         if scope.get("type") != "http" or scope.get("method") not in {"POST", "PUT", "PATCH"}:
             await self._app(scope, receive, send)
             return
+        user = scope.get("user")
+        if user is not None and not user.is_authenticated:
+            await self._app(scope, receive, send)
+            return
         headers = dict(scope.get("headers", []))
         try:
             content_length = int(headers.get(b"content-length", b"0"))
