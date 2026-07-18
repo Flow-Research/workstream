@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: aaff8a1400b530946e6e57a11ad2e0e753543219
+Reviewed code SHA: c4be9750d1cc123b7f98371f83fa0696946679e6
 
-Reviewed at: 2026-07-18T13:46:15Z
+Reviewed at: 2026-07-18T14:24:26Z
 
-Reviewer run IDs: senior-engineering-mcp-remediation-local-review, qa-test-mcp-remediation-local-review, security-auth-mcp-remediation-local-review, product-ops-mcp-remediation-local-review, architecture-mcp-remediation-local-review, ci-integrity-mcp-remediation-local-review, docs-mcp-remediation-local-review, reuse-dedup-mcp-remediation-local-review, test-delta-mcp-remediation-local-review
+Reviewer run IDs: senior-engineering-mcp-final-local-review, qa-test-mcp-final-local-review, security-auth-mcp-final-local-review, product-ops-mcp-final-local-review, architecture-mcp-final-local-review, ci-integrity-mcp-final-local-review, docs-mcp-final-local-review, reuse-dedup-mcp-final-local-review, test-delta-mcp-final-local-review
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -24,15 +24,15 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | none | The HTTP gateway no longer maps a contributor tool to a route with incompatible lifecycle semantics. |
-| QA/test | PASS | none | Added coverage for fail-closed lifecycle surfaces, scenario replay behavior, safe malformed upstream responses, runtime policy, and observability. MCP tests reached 26 passing. |
-| security/auth | PASS | none | UUID request identifiers match current backend middleware; bearer data is absent from schemas, results, repr, and operation logs. Streamable HTTP has host/origin protection and SSE is rejected. |
+| senior engineering | PASS | none | The adapter is current with upstream and preserves Workstream lifecycle authority while validating stable references and unavailable-surface identity. |
+| QA/test | PASS | none | Forty-four MCP tests cover the closed catalogue, real MCP protocol journeys, fail-closed production behavior, replay conflicts, and actor-separated leases. |
+| security/auth | PASS | none | Existing Workstream Auth validates tokens before unavailable responses; token syntax, path references, transport configuration, redaction, and actor ownership fail closed. |
 | product/ops | PASS WITH LOW RISKS | none | The MCP has a truthful unavailable result until compatible backend APIs exist instead of exposing an incorrect contributor action. |
 | architecture | PASS | none | Production remains a thin API adapter with no direct database access or scenario runtime configuration. |
-| CI integrity | PASS | none | No CI or gate behavior changed or weakened; focused MCP lint/tests and repository gates pass. |
+| CI integrity | PASS | none | No CI or gate behavior changed or weakened; focused MCP lint/tests, 87 agent gates, and the focused backend API contract pass. Full database tests require the unavailable `WORKSTREAM_TEST_DATABASE_URL`. |
 | docs | PASS AFTER FIXES | none | Initiative discovery, plan, risk, status, and contract record the backend capability boundary accurately. |
-| reuse/dedup | PASS | none | Error envelopes, observability, validation, and scenario replay handling remain centralized. |
-| test delta | PASS | none | Tests exercise the corrected production behavior and the test-injected fixture's complete lifecycle/idempotency behavior. |
+| reuse/dedup | PASS | none | Stable-reference validation, error mapping, observability, canonical replay input, and actor keys remain centralized. |
+| test delta | PASS | none | Tests exercise the corrected production behavior, complete temporary representations, actor-scoped replay/leases, and both journeys through an MCP SDK client. |
 
 ## Valid Findings Addressed
 
@@ -46,6 +46,14 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Tool input schemas are precise for submission packets, review findings, decisions, and UUID request IDs; `needs_revision` requires findings before the gateway call.
 - The scenario fixture now implements replay-safe task/review lifecycle behavior solely for conformance tests.
 - Secret-safe operation metadata is logged without bearer tokens or request bodies.
+- Unavailable production surfaces now validate the bearer through `/api/v1/auth/me` before returning their truthful unavailable result.
+- Stable task, project, review, and routing references reject path traversal and unsafe path characters before any downstream request.
+- Known safe Workstream authorization and domain error codes are preserved instead of collapsing every `403` into one category.
+- Runtime configuration rejects remote plaintext API URLs, credential-bearing URLs, non-positive/non-finite timeouts, and empty HTTP allowlists.
+- The temporary fixture scopes idempotency and task/review leases to the actor without storing or returning raw bearer tokens.
+- Temporary resource representations now include the locked task context, status outcomes/actions, compensation context, lease timing, checker context, and revision context required for v0.1 conformance.
+- The runtime explicitly proves no resource subscriptions, list-change notifications, experimental channels, or MCP tasks are advertised.
+- A real in-memory MCP SDK client completes the Submitter and Reviewer journeys over the registered protocol surface.
 
 ## Commands Run
 
@@ -58,23 +66,33 @@ python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/test_agent_gates.py
 git diff --check
+(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts)
+(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
 ```
 
 ## Result Summary
 
 ```text
-MCP tests: 26 passed.
+MCP tests: 44 passed.
 MCP ruff: passed.
 Stale wording: passed.
 Markdown links: passed for 10 changed Markdown files.
 Stale authorization docs: passed.
 Stale artifact contracts: passed.
-Agent gate regression: 71 tests passed.
+Agent gate regression: 87 tests passed.
+Backend ruff: passed.
+Focused backend API contract: 15 passed.
 git diff --check: passed.
 ```
+
+The full backend suite was also attempted in an isolated environment. It reached
+789 passing tests, but database-backed tests could not run because
+`WORKSTREAM_TEST_DATABASE_URL` is not configured locally; the resulting 111
+failures and 429 setup errors are outside the MCP diff.
 
 ## Remaining Risks
 
 - Current main still lacks review, contribution, contributor project-list, and contributor task-list APIs.
 - Current claim, release, and submission routes cannot meet WS-MCP-001's contributor lifecycle or durable-idempotency contract. Production returns a structured unavailable outcome for those MCP surfaces until compatible APIs land.
 - The temporary scenario gateway is a test fixture only. It must never be configured as production behavior.
+- Full backend database evidence remains delegated to CI or a local PostgreSQL environment with `WORKSTREAM_TEST_DATABASE_URL` configured.
