@@ -2,8 +2,12 @@
 
 ## Current status
 
-`WS-MCP-001-01` received a final MCP-scope review against current upstream and
-is ready for PR on branch `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
+`WS-MCP-001-01` received a final MCP-scope foundation review against current
+upstream and is ready for PR on branch
+`oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
+
+This status means the foundation chunk is PR-ready. It does not mean the full
+WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 ## Active implementation chunk
 
@@ -17,8 +21,8 @@ is ready for PR on branch `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production gateway fails closed for incompatible backend lifecycle routes; auth, actor ownership, replay, path safety, and protocol journeys have current evidence at `c4be975`. |
-| `WS-MCP-001-02` | Proposed | - | - | Replace temporary service methods after review/contribution APIs exist. |
+| `WS-MCP-001-01` | Foundation ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production fails closed for unavailable/incompatible surfaces; foundation evidence is current at `950afda`. |
+| `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers
 
@@ -28,3 +32,8 @@ current task claim, release, and submission routes also do not meet the MCP's
 actor, lifecycle, or durable-idempotency contract. The production HTTP gateway
 returns a structured unavailable result for those surfaces. The bounded
 scenario gateway is test-injected only and is not a production fallback.
+
+Full WS-MCP-001 acceptance also remains blocked on authoritative role and
+revocation cases, initial/revision/status outcomes, concurrent retry behavior,
+STDIO/Streamable HTTP equivalence, and the required Inspector/client
+demonstration.
