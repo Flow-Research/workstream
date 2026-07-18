@@ -156,11 +156,11 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 4438f4ac9375485b409cf2a7f944e179e6f6421b
+Reviewed code SHA: 1d1ffc41ac3af569289589f0867bb6b7bcc0bad1
 
-Reviewed at: 2026-07-18T17:37:04Z
+Reviewed at: 2026-07-18T17:53:56Z
 
-Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-mcp-tool-annotation-local-review, security-auth-mcp-tool-annotation-local-review, product-ops-mcp-tool-annotation-local-review, architecture-mcp-tool-annotation-local-review, ci-integrity-mcp-tool-annotation-local-review, docs-mcp-tool-annotation-local-review, reuse-dedup-mcp-tool-annotation-local-review, test-delta-mcp-tool-annotation-local-review
+Reviewer run IDs: senior-engineering-mcp-pr-base-refresh-local-review, qa-test-mcp-pr-base-refresh-local-review, security-auth-mcp-pr-base-refresh-local-review, product-ops-mcp-pr-base-refresh-local-review, architecture-mcp-pr-base-refresh-local-review, ci-integrity-mcp-pr-base-refresh-local-review, docs-mcp-pr-base-refresh-local-review, reuse-dedup-mcp-pr-base-refresh-local-review, test-delta-mcp-pr-base-refresh-local-review
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
@@ -169,7 +169,7 @@ Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-m
 | Security/auth | PASS | none | Token, transport, path, actor-ownership, and safe-error boundaries are covered. |
 | Product/ops | PASS WITH LOW RISKS | none | Unavailable outcomes are truthful pending backend work; full v0.1 acceptance is not claimed. |
 | Architecture | PASS | none | No backend or persistence ownership moved into MCP. |
-| CI integrity | PASS | none | No gate weakening. |
+| CI integrity | PASS | none | No gate weakening; focused checks pass after synchronization with upstream `f18b620`. |
 | Docs | PASS AFTER FIXES | none | Initiative docs distinguish foundation PR readiness from full specification acceptance. |
 | Reuse/dedup | PASS | none | Boundary behavior is centralized. |
 | Test delta | PASS WITH LOW RISKS | none | New tests cover temporary protocol happy paths, resource context, replay conflicts, and actor-separated leases; authoritative conformance remains follow-up work. |
@@ -182,8 +182,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | PR not opened yet. |
-| GitHub checks | Pending | PR not opened yet. |
+| CodeRabbit | Pending | PR #149 is open; review pending on the refreshed head. |
+| GitHub checks | Pending | PR #149 is open; checks pending on the refreshed head. |
 
 ## CI And Gate Integrity
 

@@ -3,7 +3,8 @@
 ## Current status
 
 `WS-MCP-001-01` received a final MCP-scope foundation review against current
-upstream and is ready for PR on branch
+upstream and is open as [PR #149](https://github.com/Flow-Research/workstream/pull/149)
+from branch
 `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
 
 This status means the foundation chunk is PR-ready. It does not mean the full
@@ -21,7 +22,7 @@ WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Foundation ready for PR | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | - | Production fails closed for unavailable/incompatible surfaces; foundation evidence is current at `4438f4a`. |
+| `WS-MCP-001-01` | PR open - checks pending | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Production fails closed for unavailable/incompatible surfaces; refreshed-base evidence is current at `1d1ffc4`. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers

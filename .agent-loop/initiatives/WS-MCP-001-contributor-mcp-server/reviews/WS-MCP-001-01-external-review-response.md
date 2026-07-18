@@ -6,16 +6,18 @@
 
 ## Status
 
-Pending external review.
+[PR #149](https://github.com/Flow-Research/workstream/pull/149) is open. External
+review and GitHub checks are pending on the refreshed head.
 
 ## CodeRabbit
 
-Pending. PR not opened yet.
+Pending on PR #149.
 
 ## GitHub Checks
 
-Pending. PR not opened yet.
+Pending on PR #149.
 
 ## Notes
 
-Address valid external findings after the PR is opened. Do not merge without explicit human approval.
+Address valid external findings after they appear. Refresh the reviewed SHA and
+evidence after any code change. Do not merge without explicit human approval.

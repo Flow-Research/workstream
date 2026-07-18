@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 4438f4ac9375485b409cf2a7f944e179e6f6421b
+Reviewed code SHA: 1d1ffc41ac3af569289589f0867bb6b7bcc0bad1
 
-Reviewed at: 2026-07-18T17:37:04Z
+Reviewed at: 2026-07-18T17:53:56Z
 
-Reviewer run IDs: senior-engineering-mcp-tool-annotation-local-review, qa-test-mcp-tool-annotation-local-review, security-auth-mcp-tool-annotation-local-review, product-ops-mcp-tool-annotation-local-review, architecture-mcp-tool-annotation-local-review, ci-integrity-mcp-tool-annotation-local-review, docs-mcp-tool-annotation-local-review, reuse-dedup-mcp-tool-annotation-local-review, test-delta-mcp-tool-annotation-local-review
+Reviewer run IDs: senior-engineering-mcp-pr-base-refresh-local-review, qa-test-mcp-pr-base-refresh-local-review, security-auth-mcp-pr-base-refresh-local-review, product-ops-mcp-pr-base-refresh-local-review, architecture-mcp-pr-base-refresh-local-review, ci-integrity-mcp-pr-base-refresh-local-review, docs-mcp-pr-base-refresh-local-review, reuse-dedup-mcp-pr-base-refresh-local-review, test-delta-mcp-pr-base-refresh-local-review
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -29,7 +29,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 | security/auth | PASS | none | Existing Workstream Auth validates tokens before unavailable responses; token syntax, path references, transport configuration, redaction, and actor ownership fail closed. |
 | product/ops | PASS WITH LOW RISKS | none | The foundation has truthful unavailable results until compatible backend APIs exist and does not claim full v0.1 acceptance. |
 | architecture | PASS | none | Production remains a thin API adapter with no direct database access or scenario runtime configuration. |
-| CI integrity | PASS | none | No CI or gate behavior changed or weakened; focused MCP lint/tests, 87 agent gates, and the focused backend API contract pass. Full database tests require the unavailable `WORKSTREAM_TEST_DATABASE_URL`. |
+| CI integrity | PASS | none | The branch was synchronized with upstream `f18b620`; focused MCP lint/tests and 87 agent gates pass after the refresh. Full database tests require the unavailable `WORKSTREAM_TEST_DATABASE_URL`. |
 | docs | PASS AFTER FIXES | none | Initiative records now distinguish foundation readiness from the complete Sections 18 and 20 conformance and acceptance gates. |
 | reuse/dedup | PASS | none | Stable-reference validation, error mapping, observability, canonical replay input, and actor keys remain centralized. |
 | test delta | PASS WITH LOW RISKS | none | Tests exercise corrected production behavior, temporary representations, actor-scoped replay/leases, and one temporary happy path per journey through an MCP SDK client; remaining conformance cases are explicit follow-up work. |
@@ -55,6 +55,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - The runtime explicitly proves no resource subscriptions, list-change notifications, experimental channels, or MCP tasks are advertised.
 - A real in-memory MCP SDK client exercises one temporary Submitter happy path and one temporary Reviewer happy path over the registered protocol surface.
 - `run_pre_submit_check` is published as read-only and non-destructive; the six lifecycle tools are published as state-changing. All seven tools publish their retry-safe idempotency hint.
+- The PR branch was refreshed from upstream `f18b620`; the intervening changes are unrelated review-lifecycle planning records and introduce no MCP conflict.
 
 ## WS-MCP-001 Specification Status
 
