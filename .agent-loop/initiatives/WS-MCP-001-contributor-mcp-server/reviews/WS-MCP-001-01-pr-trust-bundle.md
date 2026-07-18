@@ -35,8 +35,9 @@ Link the initiative and chunk contract:
 - Scoped temporary idempotency and leases to the actor and completed the temporary resource representations needed for foundation testing.
 - Added a real MCP SDK client test for the Submitter and Reviewer journeys and proved no subscriptions or event-like capability is advertised.
 - Published MCP tool annotations that distinguish the read-only pre-submit check from the six state-changing lifecycle tools.
-- Addressed CodeRabbit's ten findings with least-privilege CI, strict 90 percent coverage, complete redaction, revision/replay fixes, secure HTTP auth configuration, and bounded inputs.
-- Made Streamable HTTP verify tokens through existing Workstream Auth, isolated HTTP from the STDIO token, disabled bearer proxy inheritance, and capped request bodies before parsing.
+- Addressed CodeRabbit's eleven findings with least-privilege CI, strict 90 percent coverage, complete redaction, revision/replay fixes, secure HTTP auth configuration, bounded inputs, and constant-space ASGI request replay.
+- Made Streamable HTTP verify tokens through existing Workstream Auth, isolated HTTP from the STDIO token, disabled bearer proxy inheritance, rejected anonymous streams before body buffering, and capped authenticated bodies by bytes, frames, and receive time.
+- Preserved the real ASGI receiver after bounded replay and added a real MCP SDK Streamable HTTP SSE journey.
 - Added an MCP operator README and completed the test-only revision-to-review loop with reviewed-submission references.
 
 ## Why It Changed
@@ -89,21 +90,21 @@ unavailable or incompatible.
 ```bash
 (cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m ruff check .)
 (cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m pytest -q --cov=workstream_mcp --cov-report=term-missing --cov-fail-under=90 --cov-precision=2)
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_workstream_wording.py
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_markdown_links.py
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_authorization_docs.py
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_stale_artifact_contracts.py
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/test_agent_gates.py
-/opt/homebrew/Caskroom/miniforge/base/bin/python3.12 scripts/check_internal_review_evidence.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_workstream_wording.py
+/tmp/workstream-backend-validation/bin/python scripts/check_markdown_links.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_authorization_docs.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_artifact_contracts.py
+/tmp/workstream-backend-validation/bin/python scripts/test_agent_gates.py
+/tmp/workstream-backend-validation/bin/python scripts/check_internal_review_evidence.py
 git diff --check
-(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts)
-(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
+(cd backend && /tmp/workstream-backend-validation/bin/python -m ruff check app tests scripts)
+(cd backend && /tmp/workstream-backend-validation/bin/python -m pytest -q tests/test_api_contract_e2e.py)
 ```
 
 ### Result Summary
 
 ```text
-MCP tests: 76 passed at 93.71 percent statement coverage.
+MCP tests: 82 passed at 94.18 percent statement coverage.
 MCP ruff: passed.
 Stale wording, Markdown, authorization, and artifact-contract checks: passed.
 Agent gate regression: 87 passed.
@@ -127,7 +128,8 @@ WS-MCP-001 Sections 18 and 20 acceptance.
 - [x] No resource subscriptions, list-change events, experimental channels, or MCP tasks are advertised: `test_catalogue.py`.
 - [x] Tool annotations identify `run_pre_submit_check` as read-only and the six lifecycle tools as state-changing: `test_catalogue.py`.
 - [x] Streamable HTTP tokens are verified through existing Workstream Auth and cannot fall back to STDIO credentials: `test_auth.py`, `test_runtime_safety.py`.
-- [x] Submission, review, metadata, and HTTP body sizes are bounded before gateway work: `test_catalogue.py`, `test_runtime_safety.py`.
+- [x] Submission, review, metadata, and authenticated HTTP body bytes, frames, and receive time are bounded before gateway work; anonymous streams reach immediate `401`: `test_catalogue.py`, `test_runtime_safety.py`.
+- [x] Bounded request replay preserves real ASGI disconnect delivery and an official SDK client completes Streamable HTTP initialization and `tools/list`: `test_runtime_safety.py`, `test_protocol_journeys.py`.
 - [x] `needs_revision` persists findings and reviewed submission version, permits resubmission, and requeues review: `test_scenario_gateway.py`.
 - [x] Checker failure remains a valid structured outcome: `test_http_gateway.py`.
 - [x] Exactly one schema-v2 merge intent exists: `.agent-loop/merge-intents/WS-MCP-001-01.json`.
@@ -162,20 +164,20 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: a9504ea9fe4c70fa021bd9e306aa0e8b26372a10
+Reviewed code SHA: 7ec41264510ae68989ea07308e36723afb690ec6
 
-Reviewed at: 2026-07-18T19:20:59Z
+Reviewed at: 2026-07-18T20:43:50Z
 
-Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2
+Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
 | Senior engineering | PASS AFTER FIXES | none | Lifecycle, replay, input, and safe-error findings were repaired. |
-| QA/test | PASS AFTER FIXES | none | 76 tests pass at 93.71 percent coverage; remaining authoritative Section 18 cases are recorded. |
-| Security/auth | PASS AFTER FIXES | none | Existing Auth verification, credential isolation, proxy safety, body bounds, redaction, and actor ownership are covered. |
+| QA/test | PASS AFTER FIXES | none | 82 tests pass at 94.18 percent coverage, including the real SDK HTTP journey; remaining authoritative Section 18 cases are recorded. |
+| Security/auth | PASS AFTER FIXES | none | Existing Auth verification, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, SSE-safe replay, redaction, and actor ownership are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS AFTER FIXES | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced. |
+| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `99ae4c9` integrates cleanly. |
 | Docs | PASS AFTER FIXES | none | Initiative docs distinguish foundation PR readiness from full specification acceptance. |
 | Reuse/dedup | PASS AFTER FIXES | none | Boundary validation, mapping, replay, and observability remain centralized. |
 | Test delta | PASS AFTER FIXES | none | Every external and internal remediation finding has focused regression evidence. |
@@ -188,8 +190,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Findings addressed locally; re-review pending | Ten findings are addressed in `a9504ea`; rerun after push. |
-| GitHub checks | Pending | Checks must run against `a9504ea` after push. |
+| CodeRabbit | Findings addressed locally; re-review pending | Eleven findings are addressed through `7ec4126`; rerun after push. |
+| GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity
 

@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: a9504ea9fe4c70fa021bd9e306aa0e8b26372a10
+Reviewed code SHA: 7ec41264510ae68989ea07308e36723afb690ec6
 
-Reviewed at: 2026-07-18T19:20:59Z
+Reviewed at: 2026-07-18T20:43:50Z
 
-Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2
+Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -25,11 +25,11 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS AFTER FIXES | none | Input limits, lifecycle propagation, replay ordering, and error boundaries were repaired without moving authority into MCP. |
-| QA/test | PASS AFTER FIXES | none | Seventy-six MCP tests prove the external findings, auth wiring, revision loop, safe errors, and a strict 93.71 percent package coverage result. |
-| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; transport credentials are isolated; proxy inheritance is disabled; body/input limits and redaction fail closed. |
+| QA/test | PASS AFTER FIXES | none | Eighty-two MCP tests prove the external findings, auth wiring, revision loop, safe errors, Streamable HTTP response lifecycle, and a strict 94.18 percent package coverage result. |
+| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; anonymous requests reach immediate `401`; authenticated body bytes, frames, and receive time are bounded; credential isolation, proxy safety, and redaction fail closed. |
 | product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
 | architecture | PASS AFTER FIXES | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
-| CI integrity | PASS AFTER FIXES | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; all local gates pass. |
+| CI integrity | PASS AFTER FIXES | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `99ae4c9` integrates cleanly and all local gates pass. |
 | docs | PASS AFTER FIXES | none | Initiative records now distinguish foundation readiness from the complete Sections 18 and 20 conformance and acceptance gates. |
 | reuse/dedup | PASS AFTER FIXES | none | Stable-reference validation, metadata bounds, error mapping, observability, replay input, and actor keys remain centralized. |
 | test delta | PASS AFTER FIXES | none | Tests now cover every CodeRabbit finding and internal follow-up; remaining authoritative Section 18 cases are explicit follow-up work. |
@@ -56,11 +56,13 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - A real in-memory MCP SDK client exercises one temporary Submitter happy path and one temporary Reviewer happy path over the registered protocol surface.
 - `run_pre_submit_check` is published as read-only and non-destructive; the six lifecycle tools are published as state-changing. All seven tools publish their retry-safe idempotency hint.
 - The PR branch was refreshed from upstream `f18b620`; the intervening changes are unrelated review-lifecycle planning records and introduce no MCP conflict.
-- CodeRabbit's ten findings were addressed with least-privilege MCP CI, strict 90 percent coverage, complete recursive redaction, minimal completed-review output, replay ordering/telemetry, revision propagation, reachable path errors, secure issuer configuration, and bounded input shapes.
+- CodeRabbit's eleven findings were addressed with least-privilege MCP CI, strict 90 percent coverage, complete recursive redaction, minimal completed-review output, replay ordering/telemetry, revision propagation, reachable path errors, secure issuer configuration, bounded inputs, and bounded constant-space ASGI replay.
 - Streamable HTTP now verifies bearer tokens through existing Workstream Auth before creating request context and cannot consume the STDIO process token.
-- HTTP bearer forwarding ignores environment proxies and request bodies are capped before MCP JSON parsing.
+- HTTP bearer forwarding ignores environment proxies. Anonymous streams reach immediate `401`; authenticated request bodies are capped by bytes, frames, and receive time before MCP JSON parsing.
+- Bounded replay delegates to the original ASGI receiver after the coalesced body, preserving real disconnect delivery and the Streamable HTTP SSE response lifecycle.
 - Revision context records the reviewed submission reference/version, and a revised submission creates the next deterministic review offer in the test-only scenario.
-- An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, timeout, body cap, and scenario isolation.
+- An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, API timeout, body byte/frame/deadline caps, and scenario isolation.
+- Current upstream `main` at `99ae4c9` was merged cleanly as `618f356`. Exact-head reviewers confirmed at `7ec4126` that upstream auth integration, immediate token rejection, bounded request replay, SSE lifecycle, MCP authority boundaries, CI coverage, and agent-gate integration remain correct.
 
 ## WS-MCP-001 Specification Status
 
@@ -74,7 +76,7 @@ Sections 18 and 20 conformance or acceptance.
 | Identity transport and token secrecy | Forwarding, redaction, invalid-token, and schema tests | Partially proven; production role/revocation matrix remains |
 | Submitter and Reviewer journeys | Temporary in-memory happy paths | Partial; authoritative APIs and remaining lifecycle cases are unavailable |
 | Retry and concurrency | Temporary actor-scoped replay/conflict tests | Partial; authoritative concurrent outcomes remain |
-| STDIO and Streamable HTTP equivalence | Shared registration and HTTP security configuration | Open end-to-end |
+| STDIO and Streamable HTTP equivalence | Shared registration plus in-memory and real HTTP SDK journeys | Partial; broader end-to-end outcome matrix remains |
 | Inspector/client demonstration | In-memory MCP SDK client test | Partial; Inspector capture remains |
 
 ## Commands Run
@@ -82,11 +84,11 @@ Sections 18 and 20 conformance or acceptance.
 ```bash
 (cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m ruff check .)
 (cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m pytest -q --cov=workstream_mcp --cov-report=term-missing --cov-fail-under=90 --cov-precision=2)
-python3 scripts/check_stale_workstream_wording.py
-python3 scripts/check_markdown_links.py
-python3 scripts/check_stale_authorization_docs.py
-python3 scripts/check_stale_artifact_contracts.py
-python3 scripts/test_agent_gates.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_workstream_wording.py
+/tmp/workstream-backend-validation/bin/python scripts/check_markdown_links.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_authorization_docs.py
+/tmp/workstream-backend-validation/bin/python scripts/check_stale_artifact_contracts.py
+/tmp/workstream-backend-validation/bin/python scripts/test_agent_gates.py
 git diff --check
 (cd backend && /tmp/workstream-backend-validation/bin/python -m ruff check app tests scripts)
 (cd backend && /tmp/workstream-backend-validation/bin/python -m pytest -q tests/test_api_contract_e2e.py)
@@ -95,10 +97,10 @@ git diff --check
 ## Result Summary
 
 ```text
-MCP tests: 76 passed at 93.71 percent statement coverage.
+MCP tests: 82 passed at 94.18 percent statement coverage.
 MCP ruff: passed.
 Stale wording: passed.
-Markdown links: passed for 10 changed Markdown files.
+Markdown links: passed for 11 changed Markdown files.
 Stale authorization docs: passed.
 Stale artifact contracts: passed.
 Agent gate regression: 87 tests passed.
