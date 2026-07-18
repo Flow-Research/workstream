@@ -85,6 +85,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
     ToolDefinition(
         "run_pre_submit_check",
         "Run Pre-Submit Check",
+        mutating=False,
         input_fields=("task_id", "submission", "request_id"),
     ),
     ToolDefinition(

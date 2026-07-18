@@ -78,6 +78,7 @@ def build_fastmcp_server(
         from mcp.server.auth.middleware.auth_context import get_access_token
         from mcp.server.auth.settings import AuthSettings
         from mcp.server.transport_security import TransportSecuritySettings
+        from mcp.types import ToolAnnotations
     except ImportError as exc:
         raise RuntimeError("Install the mcp package to run the Workstream MCP server") from exc
 
@@ -218,7 +219,19 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    state_changing = ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+    read_only_check = ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+
+    @server.tool(annotations=state_changing)
     async def claim_task(task_id: str, request_id: UUID) -> dict[str, Any]:
         """Claim one currently available task; Workstream decides the outcome."""
         request_context = context()
@@ -232,7 +245,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=state_changing)
     async def release_task(
         task_id: str,
         request_id: UUID,
@@ -254,7 +267,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=read_only_check)
     async def run_pre_submit_check(
         task_id: str,
         submission: SubmissionInput,
@@ -276,7 +289,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=state_changing)
     async def submit_task(
         task_id: str,
         submission: SubmissionInput,
@@ -298,7 +311,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=state_changing)
     async def claim_review(
         project_id: str,
         review_routing_ref: str,
@@ -320,7 +333,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=state_changing)
     async def release_review(review_ref: str, request_id: UUID) -> dict[str, Any]:
         """Release the actor's current review lease when Workstream permits it."""
         request_context = context()
@@ -334,7 +347,7 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool()
+    @server.tool(annotations=state_changing)
     async def submit_review(
         review_ref: str,
         decision: Literal["accept", "needs_revision", "reject"],

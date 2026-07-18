@@ -45,7 +45,9 @@ def test_catalogue_contains_no_token_inputs_or_mutating_resources() -> None:
     assert len(RESOURCE_DEFINITIONS) == 7
     assert len(TOOL_DEFINITIONS) == 7
     assert all(resource.mutating is False for resource in RESOURCE_DEFINITIONS)
-    assert all(tool.mutating is True for tool in TOOL_DEFINITIONS)
+    assert [tool.name for tool in TOOL_DEFINITIONS if tool.mutating is False] == [
+        "run_pre_submit_check"
+    ]
     assert not any("token" in template.lower() for template in all_resource_templates)
     assert "bearer_token" not in all_tool_fields
     assert "authorization" not in all_tool_fields
@@ -63,6 +65,7 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
 
     tool_names = [tool.name for tool in tools]
     tool_schemas = {tool.name: tool.inputSchema for tool in tools}
+    tool_annotations = {tool.name: tool.annotations for tool in tools}
     resource_uris = [str(resource.uri) for resource in resources]
     template_uris = [str(template.uriTemplate) for template in resource_templates]
 
@@ -93,6 +96,14 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
         "findings",
         "request_id",
     ]
+    assert tool_annotations["run_pre_submit_check"] is not None
+    assert tool_annotations["run_pre_submit_check"].readOnlyHint is True
+    assert tool_annotations["run_pre_submit_check"].destructiveHint is False
+    for tool_name in set(tool_names) - {"run_pre_submit_check"}:
+        annotations = tool_annotations[tool_name]
+        assert annotations is not None
+        assert annotations.readOnlyHint is False
+        assert annotations.idempotentHint is True
 
 
 def test_runtime_does_not_advertise_resource_subscriptions_or_list_events() -> None:
