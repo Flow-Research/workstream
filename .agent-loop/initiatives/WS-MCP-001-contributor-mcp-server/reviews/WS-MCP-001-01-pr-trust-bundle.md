@@ -164,9 +164,9 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 7ec41264510ae68989ea07308e36723afb690ec6
+Reviewed code SHA: 32099eb8ede12e3da89d511ffcf2e1c1c87001d0
 
-Reviewed at: 2026-07-18T20:43:50Z
+Reviewed at: 2026-07-18T22:06:10Z
 
 Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
@@ -177,7 +177,7 @@ Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-
 | Security/auth | PASS AFTER FIXES | none | Existing Auth verification, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, SSE-safe replay, redaction, and actor ownership are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS AFTER FIXES | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `99ae4c9` integrates cleanly. |
+| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `983b9e5` integrates cleanly without changing MCP runtime. |
 | Docs | PASS AFTER FIXES | none | Initiative docs distinguish foundation PR readiness from full specification acceptance. |
 | Reuse/dedup | PASS AFTER FIXES | none | Boundary validation, mapping, replay, and observability remain centralized. |
 | Test delta | PASS AFTER FIXES | none | Every external and internal remediation finding has focused regression evidence. |

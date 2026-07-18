@@ -9,9 +9,9 @@
 [PR #149](https://github.com/Flow-Research/workstream/pull/149) received an
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by one ASGI buffering finding. All eleven findings are addressed by
-the implementation through `7ec4126`. Current upstream `main` at `99ae4c9` was
-merged cleanly as `618f356`; CodeRabbit and GitHub checks must rerun after the
-final remediation head is pushed.
+the implementation through `7ec4126`. Current upstream `main` at `983b9e5` was
+merged cleanly as `32099eb`; CodeRabbit and GitHub checks must rerun after the
+refreshed head is pushed.
 
 ## CodeRabbit Findings
 
@@ -51,6 +51,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until `7ec4126` and its evidence commit
-are pushed and CodeRabbit/GitHub checks report against that head. Do not merge
-without explicit human approval.
+Do not resolve the review as complete until merge head `32099eb` and its
+evidence commit are pushed and CodeRabbit/GitHub checks report against that
+head. Do not merge without explicit human approval.
