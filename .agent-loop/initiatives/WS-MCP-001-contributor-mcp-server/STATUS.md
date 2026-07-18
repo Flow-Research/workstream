@@ -2,8 +2,9 @@
 
 ## Current status
 
-`WS-MCP-001-01` received a final MCP-scope foundation review against current
-upstream and is open as [PR #149](https://github.com/Flow-Research/workstream/pull/149)
+`WS-MCP-001-01` addressed CodeRabbit's MCP-scope review and received final
+internal PASS results at remediation commit `a9504ea`. It is open as
+[PR #149](https://github.com/Flow-Research/workstream/pull/149)
 from branch
 `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`.
 
@@ -22,7 +23,7 @@ WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | PR open - checks pending | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Production fails closed for unavailable/incompatible surfaces; refreshed-base evidence is current at `1d1ffc4`. |
+| `WS-MCP-001-01` | Review fixes ready to push | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | CodeRabbit findings are addressed at `a9504ea`; 76 tests pass at 93.71 percent coverage. External re-review and checks remain pending after push. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers

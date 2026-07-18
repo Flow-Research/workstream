@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 1d1ffc41ac3af569289589f0867bb6b7bcc0bad1
+Reviewed code SHA: a9504ea9fe4c70fa021bd9e306aa0e8b26372a10
 
-Reviewed at: 2026-07-18T17:53:56Z
+Reviewed at: 2026-07-18T19:20:59Z
 
-Reviewer run IDs: senior-engineering-mcp-pr-base-refresh-local-review, qa-test-mcp-pr-base-refresh-local-review, security-auth-mcp-pr-base-refresh-local-review, product-ops-mcp-pr-base-refresh-local-review, architecture-mcp-pr-base-refresh-local-review, ci-integrity-mcp-pr-base-refresh-local-review, docs-mcp-pr-base-refresh-local-review, reuse-dedup-mcp-pr-base-refresh-local-review, test-delta-mcp-pr-base-refresh-local-review
+Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -24,15 +24,15 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | none | The adapter is current with upstream and preserves Workstream lifecycle authority while validating stable references and unavailable-surface identity. |
-| QA/test | PASS WITH LOW RISKS | none | Forty-four MCP tests cover the foundation catalogue, temporary happy paths, fail-closed production behavior, replay conflicts, and actor-separated leases; they do not close every Section 18 case. |
-| security/auth | PASS | none | Existing Workstream Auth validates tokens before unavailable responses; token syntax, path references, transport configuration, redaction, and actor ownership fail closed. |
-| product/ops | PASS WITH LOW RISKS | none | The foundation has truthful unavailable results until compatible backend APIs exist and does not claim full v0.1 acceptance. |
-| architecture | PASS | none | Production remains a thin API adapter with no direct database access or scenario runtime configuration. |
-| CI integrity | PASS | none | The branch was synchronized with upstream `f18b620`; focused MCP lint/tests and 87 agent gates pass after the refresh. Full database tests require the unavailable `WORKSTREAM_TEST_DATABASE_URL`. |
+| senior engineering | PASS AFTER FIXES | none | Input limits, lifecycle propagation, replay ordering, and error boundaries were repaired without moving authority into MCP. |
+| QA/test | PASS AFTER FIXES | none | Seventy-six MCP tests prove the external findings, auth wiring, revision loop, safe errors, and a strict 93.71 percent package coverage result. |
+| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; transport credentials are isolated; proxy inheritance is disabled; body/input limits and redaction fail closed. |
+| product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
+| architecture | PASS AFTER FIXES | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
+| CI integrity | PASS AFTER FIXES | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; all local gates pass. |
 | docs | PASS AFTER FIXES | none | Initiative records now distinguish foundation readiness from the complete Sections 18 and 20 conformance and acceptance gates. |
-| reuse/dedup | PASS | none | Stable-reference validation, error mapping, observability, canonical replay input, and actor keys remain centralized. |
-| test delta | PASS WITH LOW RISKS | none | Tests exercise corrected production behavior, temporary representations, actor-scoped replay/leases, and one temporary happy path per journey through an MCP SDK client; remaining conformance cases are explicit follow-up work. |
+| reuse/dedup | PASS AFTER FIXES | none | Stable-reference validation, metadata bounds, error mapping, observability, replay input, and actor keys remain centralized. |
+| test delta | PASS AFTER FIXES | none | Tests now cover every CodeRabbit finding and internal follow-up; remaining authoritative Section 18 cases are explicit follow-up work. |
 
 ## Valid Findings Addressed
 
@@ -56,6 +56,11 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - A real in-memory MCP SDK client exercises one temporary Submitter happy path and one temporary Reviewer happy path over the registered protocol surface.
 - `run_pre_submit_check` is published as read-only and non-destructive; the six lifecycle tools are published as state-changing. All seven tools publish their retry-safe idempotency hint.
 - The PR branch was refreshed from upstream `f18b620`; the intervening changes are unrelated review-lifecycle planning records and introduce no MCP conflict.
+- CodeRabbit's ten findings were addressed with least-privilege MCP CI, strict 90 percent coverage, complete recursive redaction, minimal completed-review output, replay ordering/telemetry, revision propagation, reachable path errors, secure issuer configuration, and bounded input shapes.
+- Streamable HTTP now verifies bearer tokens through existing Workstream Auth before creating request context and cannot consume the STDIO process token.
+- HTTP bearer forwarding ignores environment proxies and request bodies are capped before MCP JSON parsing.
+- Revision context records the reviewed submission reference/version, and a revised submission creates the next deterministic review offer in the test-only scenario.
+- An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, timeout, body cap, and scenario isolation.
 
 ## WS-MCP-001 Specification Status
 
@@ -75,22 +80,22 @@ Sections 18 and 20 conformance or acceptance.
 ## Commands Run
 
 ```bash
-(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m ruff check .)
-(cd mcp_server && /tmp/workstream-mcp-venv/bin/python -m pytest -q)
+(cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m ruff check .)
+(cd mcp_server && /tmp/workstream-mcp-validation/bin/python -m pytest -q --cov=workstream_mcp --cov-report=term-missing --cov-fail-under=90 --cov-precision=2)
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/test_agent_gates.py
 git diff --check
-(cd backend && /tmp/workstream-backend-venv/bin/python -m ruff check app tests scripts)
-(cd backend && /tmp/workstream-backend-venv/bin/python -m pytest -q tests/test_api_contract_e2e.py)
+(cd backend && /tmp/workstream-backend-validation/bin/python -m ruff check app tests scripts)
+(cd backend && /tmp/workstream-backend-validation/bin/python -m pytest -q tests/test_api_contract_e2e.py)
 ```
 
 ## Result Summary
 
 ```text
-MCP tests: 44 passed.
+MCP tests: 76 passed at 93.71 percent statement coverage.
 MCP ruff: passed.
 Stale wording: passed.
 Markdown links: passed for 10 changed Markdown files.
