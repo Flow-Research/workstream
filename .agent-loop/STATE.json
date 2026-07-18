@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29647537908/job/88088186293"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29655437464/job/88108765948"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29645771323/job/88083651593"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29655432398/job/88108748309"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-REV-001-02",
-    "chunk_title": "Locked Review Policy And Task Lifecycle Alignment",
-    "initiative_id": "WS-REV-001",
-    "next_chunk_id": "WS-REV-001-02A",
-    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
+    "chunk_id": "WS-AUTH-001-09D-A",
+    "chunk_title": "Profile Lifecycle And Evidence Repair",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-09D-B",
+    "next_chunk_title": "Identity-Link Lifecycle And Race Closure",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-REV-001-02A",
-    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
+    "next_chunk_id": "WS-AUTH-001-09D-B",
+    "next_chunk_title": "Identity-Link Lifecycle And Race Closure",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "b2b9016d5fee33ddca40882c97620a178d8e52f0",
-    "head_ref": "codex/ws-rev-001-02",
-    "head_sha": "e10575bd0a6887ac6f0e4751e279b0291d07d019",
-    "intent_blob_sha": "586a230e25dc11c37f0b89b085d684e7eadd31d3",
-    "intent_path": ".agent-loop/merge-intents/WS-REV-001-02.json",
-    "main_sha": "f18b620932bb257dc1dc355bc0504271813dc6b1",
-    "merged_at": "2026-07-18T14:11:14Z",
+    "first_parent_sha": "f18b620932bb257dc1dc355bc0504271813dc6b1",
+    "head_ref": "codex/ws-auth-001-09d-actor-identity-lifecycle",
+    "head_sha": "9c5ef8a1feffd6324acfd947e67042921955320b",
+    "intent_blob_sha": "3672c280c235dffa2de9e3eea7f3c04319a1357a",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09D-A.json",
+    "main_sha": "99ae4c963e53f317175dcb308b9e47c93ccf19ed",
+    "merged_at": "2026-07-18T18:47:04Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 147,
-    "pr_title": "docs(rev): split REV-02 lifecycle alignment",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/147"
+    "pr_number": 148,
+    "pr_title": "Add actor profile lifecycle and evidence repair",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/148"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-18T14:11:14Z"
+  "updated_at": "2026-07-18T18:47:04Z"
 }
