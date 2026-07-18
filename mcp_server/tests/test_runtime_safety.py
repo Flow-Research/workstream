@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -399,6 +400,94 @@ async def test_streamable_http_body_limit_preserves_disconnect_order() -> None:
         {"type": "http.request", "body": b"partial", "more_body": True},
         {"type": "http.disconnect"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_delegates_after_replay() -> None:
+    """Response listeners receive the real client disconnect after body replay."""
+    replayed: list[dict[str, object]] = []
+    frames = [
+        {"type": "http.request", "body": b"complete", "more_body": False},
+        {"type": "http.disconnect", "reason": "client_closed"},
+    ]
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        replayed.append(await receive())
+        replayed.append(await receive())
+
+    async def receive() -> dict[str, object]:
+        return frames.pop(0)
+
+    async def send(message: dict[str, object]) -> None:
+        return None
+
+    middleware = _RequestBodyLimitMiddleware(
+        app,
+        max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+    )
+    await middleware(
+        {"type": "http", "method": "POST", "headers": []},
+        receive,
+        send,
+    )
+
+    assert replayed == [
+        {"type": "http.request", "body": b"complete", "more_body": False},
+        {"type": "http.disconnect", "reason": "client_closed"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_body_limit_times_out_stalled_upload() -> None:
+    """An incomplete request body cannot hold the MCP receiver indefinitely."""
+    app_called = False
+    sent: list[dict[str, object]] = []
+
+    async def app(scope: object, receive: Any, send: Any) -> None:
+        nonlocal app_called
+        app_called = True
+
+    async def receive() -> dict[str, object]:
+        await asyncio.sleep(1)
+        return {"type": "http.request", "body": b"", "more_body": True}
+
+    async def send(message: dict[str, object]) -> None:
+        sent.append(message)
+
+    middleware = _RequestBodyLimitMiddleware(
+        app,
+        max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+        receive_timeout_seconds=0.001,
+    )
+    await middleware(
+        {"type": "http", "method": "POST", "headers": []},
+        receive,
+        send,
+    )
+
+    assert app_called is False
+    assert sent[0]["status"] == 408
+
+
+def test_streamable_http_authentication_precedes_body_buffering() -> None:
+    """Unauthenticated requests are rejected before request-body buffering."""
+    server = build_fastmcp_server(
+        gateway=object(),  # type: ignore[arg-type]
+        config=WorkstreamMCPConfig(
+            workstream_api_base_url="https://api.example.test",
+            request_timeout_seconds=1,
+            allowed_hosts=("mcp.example.test",),
+            allowed_origins=("https://client.example.test",),
+            auth_issuer_url="https://auth.example.test",
+        ),
+        transport="streamable-http",
+    )
+
+    middleware_names = [entry.cls.__name__ for entry in server.streamable_http_app().user_middleware]
+
+    assert middleware_names.index("AuthenticationMiddleware") < middleware_names.index(
+        "_RequestBodyLimitMiddleware"
+    )
 
 
 async def _successful_action() -> dict[str, str]:

@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
+import httpx
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
+from mcp.server.auth.provider import AccessToken
 from mcp.shared.memory import create_connected_server_and_client_session
 from pydantic import AnyUrl
 import pytest
+from sse_starlette.sse import AppStatus
 
-from workstream_mcp.auth import STDIO_TOKEN_ENV
+from workstream_mcp.auth import STDIO_TOKEN_ENV, WorkstreamForwardingTokenVerifier
+from workstream_mcp.config import WorkstreamMCPConfig
 from workstream_mcp.scenario_gateway import ScenarioContributorGateway
 from workstream_mcp.server import build_fastmcp_server
 
@@ -116,3 +123,53 @@ def _structured(result: Any) -> dict[str, Any]:
     assert result.isError is False
     assert isinstance(result.structuredContent, dict)
     return result.structuredContent
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_returns_sdk_response_after_body_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Buffered HTTP input does not synthesize a disconnect that cancels the response."""
+
+    async def accept_token(
+        self: WorkstreamForwardingTokenVerifier,
+        token: str,
+    ) -> AccessToken:
+        return AccessToken(token=token, client_id="actor-1", scopes=[])
+
+    monkeypatch.setattr(WorkstreamForwardingTokenVerifier, "verify_token", accept_token)
+    server = build_fastmcp_server(
+        gateway=ScenarioContributorGateway(),
+        config=WorkstreamMCPConfig(
+            workstream_api_base_url="https://api.example.test",
+            request_timeout_seconds=1,
+            allowed_hosts=("mcp.example.test",),
+            allowed_origins=("https://client.example.test",),
+            auth_issuer_url="https://auth.example.test",
+        ),
+        transport="streamable-http",
+    )
+    app = server.streamable_http_app()
+    client = httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://mcp.example.test",
+        headers={"Authorization": "Bearer issuer-token"},
+    )
+
+    try:
+        async with app.router.lifespan_context(app), client:
+            async with asyncio.timeout(3):
+                async with streamable_http_client(
+                    "http://mcp.example.test/mcp",
+                    http_client=client,
+                    terminate_on_close=False,
+                ) as (read_stream, write_stream, _):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        catalogue = await session.list_tools()
+    finally:
+        AppStatus.should_exit = True
+        await asyncio.sleep(0.6)
+        AppStatus.should_exit = False
+
+    assert len(catalogue.tools) == 7

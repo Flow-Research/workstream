@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import os
 from typing import Annotated, Any, Literal
@@ -30,15 +31,24 @@ from workstream_mcp.schemas import (
 
 MAX_HTTP_REQUEST_BODY_BYTES = 2 * 1024 * 1024
 MAX_HTTP_REQUEST_FRAMES = 1024
+MAX_HTTP_REQUEST_RECEIVE_SECONDS = 30.0
 
 
 class _RequestBodyLimitMiddleware:
     """Reject oversized HTTP bodies before MCP JSON parsing."""
 
-    def __init__(self, app: Any, *, max_bytes: int, max_frames: int = MAX_HTTP_REQUEST_FRAMES) -> None:
+    def __init__(
+        self,
+        app: Any,
+        *,
+        max_bytes: int,
+        max_frames: int = MAX_HTTP_REQUEST_FRAMES,
+        receive_timeout_seconds: float = MAX_HTTP_REQUEST_RECEIVE_SECONDS,
+    ) -> None:
         self._app = app
         self._max_bytes = max_bytes
         self._max_frames = max_frames
+        self._receive_timeout_seconds = receive_timeout_seconds
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope.get("type") != "http" or scope.get("method") not in {"POST", "PUT", "PATCH"}:
@@ -56,22 +66,28 @@ class _RequestBodyLimitMiddleware:
         body = bytearray()
         frames = 0
         terminal_message: dict[str, Any] | None = None
-        while True:
-            message = await receive()
-            if message.get("type") == "http.request":
-                frames += 1
-                if frames > self._max_frames:
-                    await self._reject(send)
-                    return
-                body.extend(message.get("body", b""))
-                if len(body) > self._max_bytes:
-                    await self._reject(send)
-                    return
-                if not message.get("more_body", False):
-                    break
-            else:
-                terminal_message = message
-                break
+        try:
+            async with asyncio.timeout(self._receive_timeout_seconds):
+                while True:
+                    message = await receive()
+                    if message.get("type") == "http.request":
+                        frames += 1
+                        if frames > self._max_frames:
+                            await self._reject(send)
+                            return
+                        chunk = message.get("body", b"")
+                        if len(chunk) > self._max_bytes - len(body):
+                            await self._reject(send)
+                            return
+                        body.extend(chunk)
+                        if not message.get("more_body", False):
+                            break
+                    else:
+                        terminal_message = message
+                        break
+        except TimeoutError:
+            await self._reject_timeout(send)
+            return
 
         if terminal_message is None:
             replay_messages = (
@@ -101,7 +117,7 @@ class _RequestBodyLimitMiddleware:
                 message = replay_messages[replay_index]
                 replay_index += 1
                 return message
-            return {"type": "http.disconnect"}
+            return await receive()
 
         await self._app(scope, replay_receive, send)
 
@@ -112,6 +128,21 @@ class _RequestBodyLimitMiddleware:
             {
                 "type": "http.response.start",
                 "status": 413,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": body})
+
+    async def _reject_timeout(self, send: Any) -> None:
+        """Return a small non-secret 408 response."""
+        body = b'{"error":"request_timeout"}'
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 408,
                 "headers": [
                     (b"content-type", b"application/json"),
                     (b"content-length", str(len(body)).encode("ascii")),
@@ -193,11 +224,16 @@ def build_fastmcp_server(
 
     class WorkstreamFastMCP(FastMCP):
         def streamable_http_app(self) -> Any:
+            from starlette.middleware import Middleware
+
             http_app = super().streamable_http_app()
-            return _RequestBodyLimitMiddleware(
-                http_app,
-                max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+            http_app.user_middleware.append(
+                Middleware(
+                    _RequestBodyLimitMiddleware,
+                    max_bytes=MAX_HTTP_REQUEST_BODY_BYTES,
+                )
             )
+            return http_app
 
     server = WorkstreamFastMCP(
         "workstream-contributor",

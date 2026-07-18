@@ -54,7 +54,8 @@ WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER=true \
 
 `WORKSTREAM_MCP_REQUEST_TIMEOUT_SECONDS` controls Workstream API timeouts.
 `WORKSTREAM_MCP_ALLOWED_HOSTS` and `WORKSTREAM_MCP_ALLOWED_ORIGINS` are
-comma-separated allowlists. HTTP request bodies are capped at 2 MiB. Proxy
+comma-separated allowlists. After authentication, HTTP request bodies are
+capped at 2 MiB, 1,024 ASGI frames, and 30 seconds of body-receive time. Proxy
 environment variables are intentionally ignored for bearer-token forwarding.
 
 The `ScenarioContributorGateway` is a deterministic test fixture only. Runtime
