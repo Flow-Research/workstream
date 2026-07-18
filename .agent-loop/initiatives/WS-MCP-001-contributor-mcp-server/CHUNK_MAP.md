@@ -10,8 +10,8 @@ approval, recorded by merge-memory automation, and stopped.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-MCP-001-01` | Contributor MCP Foundation | L1 | Active |
-| `WS-MCP-001-02` | Replace Temporary Review And Contribution Gateway | L1 | Proposed after backend APIs exist |
+| `WS-MCP-001-01` | Contributor MCP Foundation | L1 | Ready for PR |
+| `WS-MCP-001-02` | Replace Temporary Gateway And Close Conformance | L1 | Proposed after backend APIs exist |
 
 ## Dependency order
 
@@ -19,6 +19,10 @@ approval, recorded by merge-memory automation, and stopped.
 WS-MCP-001-01
 -> WS-MCP-001-02
 ```
+
+`WS-MCP-001-02` covers authoritative project/task lists, contributions,
+contributor claim/release/submission, review resources/tools, and the remaining
+Sections 18 and 20 evidence. It is not limited to review and contribution APIs.
 
 ## Stop condition
 

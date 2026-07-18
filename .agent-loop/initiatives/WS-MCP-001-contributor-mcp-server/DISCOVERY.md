@@ -3,7 +3,7 @@
 ## Current branch and base
 
 - Branch: `oxvictor/ws-mcp-001-01-contributor-mcp-foundation`
-- Latest inspected upstream main: `9a04434`
+- Latest inspected upstream main: `b2b9016`
 - Fork remote: `fork https://github.com/ChuloWay/workstream.git`
 
 ## Available backend API surface
@@ -44,6 +44,28 @@ for submission creation.
 
 The maintainer approved using a simple temporary service layer for unavailable
 APIs so MCP tool and resource shape can be implemented and tested now.
+
+## WS-MCP-001 baseline findings
+
+The maintainer-provided PDF is the approved public-behavior baseline. It
+requires exactly seven resource types, seven tools, zero prompts, no queue or
+event/subscription surface, the same logical surface over STDIO and Streamable
+HTTP, current Workstream authorization on every operation, and retry-safe
+mutations.
+
+Sections 18 and 20 make conformance and acceptance conditional on evidence that
+is broader than this foundation chunk. Current gaps include:
+
+- authoritative production completion of both contributor journeys;
+- Submitter, Reviewer, Both, and revoked-access behavior through the MCP boundary;
+- initial submission, revision, identical-revision, and all Task Status outcomes;
+- concurrent task/review claims against current Workstream truth;
+- end-to-end equivalence over both STDIO and Streamable HTTP;
+- an MCP Inspector/client capture of discovery and both journeys.
+
+The in-memory scenario gateway and MCP client test exercise stable shapes and
+happy paths while APIs are missing. They are not evidence that the production
+server has passed the complete WS-MCP-001 conformance or acceptance gate.
 
 ## Repo process findings
 

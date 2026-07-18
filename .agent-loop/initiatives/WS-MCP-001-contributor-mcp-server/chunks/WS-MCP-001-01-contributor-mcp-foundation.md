@@ -9,12 +9,13 @@
 Add the first contributor-facing MCP server package with the closed WS-MCP-001
 resource and tool catalogue, real HTTP gateway calls for currently available
 Workstream APIs, and a temporary scenario gateway for unavailable review,
-contribution, and contributor-list surfaces.
+contribution, contributor-list, task-list, and incompatible lifecycle surfaces.
 
 ## Why this chunk exists
 
-This lets contributor MCP work begin without waiting for later backend review
-and contribution APIs while preserving Workstream as the authority.
+This lets contributor MCP work begin without waiting for later backend
+contributor-list, lifecycle, review, and contribution APIs while preserving
+Workstream as the authority.
 
 ## Approved plan reference
 
@@ -70,6 +71,15 @@ CI or gate weakening
 - [ ] Internal review evidence gate treats `mcp_server/` changes as review-relevant.
 - [ ] Exactly one schema-v2 merge intent is added.
 
+## WS-MCP-001 acceptance boundary
+
+These are acceptance criteria for the foundation chunk, not the complete
+WS-MCP-001 Sections 18 and 20 gate. The foundation may merge with production
+surfaces failing closed, but full v0.1 acceptance still requires authoritative
+end-to-end journeys, role/revocation behavior, revision and status cases,
+concurrency and retry evidence, equivalent STDIO and Streamable HTTP behavior,
+and the required Inspector/client demonstration.
+
 ## Verification commands
 
 ```bash
@@ -108,7 +118,9 @@ schemas, resource URIs, stdout, logs, or results.
 Stop and escalate if:
 
 - the MCP catalogue needs to expand beyond WS-MCP-001 v0.1;
-- backend review or contribution APIs become required to finish this chunk;
+- backend API implementation becomes required to finish this MCP-only chunk;
+- any unavailable contributor-list, task-list, lifecycle, review, or
+  contribution API is treated as production-ready through scenario data;
 - auth or idempotency behavior needs product-service changes;
 - CI/test weakening is required to pass;
 - secrets or production data are needed.

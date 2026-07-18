@@ -6,10 +6,12 @@ Create a separate Python MCP server package in this repository. Keep the public
 MCP catalogue closed to the approved WS-MCP-001 v0.1 surface and route all
 available product behavior through the existing Workstream HTTP API.
 
-Unavailable review, contribution, and contributor-list reads are represented by
-a temporary scenario gateway that is explicit, deterministic, and replaceable.
-The HTTP gateway must also fail closed for any existing route whose actor scope,
-lifecycle semantics, or idempotency guarantees do not satisfy WS-MCP-001.
+Unavailable contributor project/task lists, contributions, review surfaces, and
+incompatible contributor lifecycle actions are represented by a temporary
+scenario gateway that is explicit, deterministic, test-injected, and
+replaceable. The HTTP gateway must fail closed for any existing route whose
+actor scope, lifecycle semantics, or idempotency guarantees do not satisfy
+WS-MCP-001.
 
 ## Design chosen
 
@@ -49,9 +51,20 @@ blocking current MCP work.
   payment state.
 - Persistence/data: MCP adds no database or durable business state.
 - Presentation/API: no frontend work.
-- CI/deployment: no workflow or gate weakening.
 - CI/deployment: additive MCP checks only; no existing workflow or gate
   weakening.
+
+## Specification acceptance boundary
+
+This chunk establishes the closed public catalogue, boundary architecture,
+stable schemas, safe production degradation, and temporary protocol fixtures.
+It is PR-ready as a foundation chunk, but it is not a claim that WS-MCP-001 v0.1
+has passed the complete conformance or acceptance gates in Sections 18 and 20.
+
+Full acceptance remains dependent on authoritative backend APIs and evidence
+for role variants and revocation, initial and revised submissions, all status
+outcomes, concurrent claims, retry behavior, STDIO/Streamable HTTP equivalence,
+and an Inspector/client demonstration.
 
 ## Rollout/migration strategy
 
@@ -62,9 +75,12 @@ real HTTP gateway calls without changing the MCP public catalogue.
 
 ## Verification strategy
 
-Use focused MCP unit tests for catalogue closure, token safety, HTTP API path
-mapping, Submitter flow behavior, temporary review/contribution behavior, and
-safe error envelopes. Run repository gate scripts before PR.
+Use focused MCP tests for catalogue closure, token safety, HTTP API path
+mapping, temporary Submitter/Reviewer happy paths, actor-scoped leases and
+replay, safe error envelopes, protocol registration, and the absence of
+subscriptions/events. Run repository gate scripts before PR. Record remaining
+WS-MCP-001 conformance cases as follow-up evidence rather than treating the
+temporary fixture as production proof.
 
 ## Review strategy
 
@@ -73,6 +89,7 @@ architecture, CI integrity, docs, reuse/dedup, and test delta.
 
 ## Sequencing
 
-`WS-MCP-001-01` installs the contributor MCP foundation. Later chunks may replace
-temporary service methods with real review and contribution API calls after
-those backend APIs land.
+`WS-MCP-001-01` installs the contributor MCP foundation. A later explicit chunk
+replaces every temporary method with authoritative project/task list,
+contribution, contributor lifecycle, and review API calls, then closes the
+remaining Sections 18 and 20 evidence.
