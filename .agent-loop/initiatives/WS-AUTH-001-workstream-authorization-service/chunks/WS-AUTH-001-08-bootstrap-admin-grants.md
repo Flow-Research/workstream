@@ -120,8 +120,9 @@ administrative grant/idempotency history exists.
 
 The implementation exposes one immutable typed mapping from each role to the
 following exact PermissionIds. These are permission candidates only; planned
-actions remain non-executable until their owning chunks activate them and add
-canonical resources and guards. System scope is never superuser authority.
+actions remain non-executable while feature owners add hidden canonical
+resources/guards and until dedicated AUTH custodians integrate evaluators and
+change availability. System scope is never superuser authority.
 
 ### `access_administrator`
 
@@ -263,8 +264,9 @@ by their existing WS-ART/AUTH-09 contracts.
   permission, whose system/project scope covers the canonical resource, whose
   target is an active human ActorProfile with at least one active identity
   link, and whose request identity link remains active.
-- Reads reload candidates per request. Mutations lock and revalidate the exact
-  caller identity link, caller profile, and matched Access Administrator grant
+- Reads reload candidates per request. Under D28, mutations lock and revalidate
+  the caller ActorProfile, exact caller identity link, and matched Access
+  Administrator grant
   in the committing transaction. Replays reauthorize current authority before
   returning the stored response reference.
 - Evaluation order is link lifecycle, actor lifecycle, registered/active
@@ -292,8 +294,9 @@ consumers:
   feature routes and cannot be relabeled as evidence failures.
 - For an existing actor, successful protected GET/PATCH access advances both
   `ActorProfile.last_seen_at` and `ActorIdentityLink.last_verified_at` once in
-  the route-owned transaction after authorization. The update follows the
-  declared identity-link-then-profile lock order and uses execution-time
+  the route-owned transaction after authorization. D28 supersedes this
+  contract's original lock-order clause: current helpers lock ActorProfile then
+  the exact ActorIdentityLink and use execution-time
   `GREATEST(current_value, clock_timestamp())`, never transaction-start
   `now()`. Kernel denial or evidence/business persistence failure rolls both
   back. First-access provisioning retains its existing atomic actor/link
@@ -319,9 +322,10 @@ All bootstrap and admin grant mutations intentionally serialize in this order:
 ```text
 idempotency reservation when HTTP
 -> AuthorityControl(id=1) FOR UPDATE
--> exact caller identity link and ActorProfile when HTTP
+-> exact caller ActorProfile then exact caller identity link when HTTP
 -> exact matched Access Administrator grant when HTTP
--> target grant, target ActorProfile/identity-link selector, then project row
+-> target grant, target ActorProfile then exact target identity-link selector,
+   then project row
 -> state, evidence, invalidation, and idempotency completion
 -> one route/command-owned commit
 ```

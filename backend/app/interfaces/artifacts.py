@@ -1,173 +1,188 @@
-"""Provider-neutral contracts for immutable artifact storage."""
+"""Provider-neutral contracts for immutable artifact byte storage."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable, AsyncIterator, Mapping
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import datetime
-from enum import StrEnum
 from typing import Protocol
 
 from app.core.hashing import canonical_json_hash
+from app.interfaces.external_services import (
+    ExternalServiceAdapter,
+    ExternalServiceAdapterIdentity,
+)
+from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
 
 
-class ArtifactOperation(StrEnum):
-    """Storage operations with independent idempotency scopes."""
-
-    STORE = "store"
-    VERIFY = "verify"
-    RETAIN = "retain"
-    RELEASE = "release"
-
-
-class VerificationState(StrEnum):
-    """Provider observation of full-object verification."""
-
-    PENDING = "pending"
-    VERIFIED = "verified"
-    FAILED = "failed"
+ARTIFACT_STORE_CAPABILITY_KEY = "artifact_store"
+_MAXIMUM_PROVIDER_OBJECT_REF_LENGTH = 1024
+_RESERVED_NAMESPACE_DESCRIPTOR_KEYS = frozenset(
+    {"adapter", "backend", "provider_profile"}
+)
+_NAMESPACE_DESCRIPTOR_KEYS_BY_PROFILE = {
+    "local-v2": frozenset({"private_prefix", "private_root_identity"}),
+}
 
 
-class RetentionState(StrEnum):
-    """Provider observation of active retention references."""
-
-    UNRETAINED = "unretained"
-    RETAINED = "retained"
-    RELEASED = "released"
-
-
-class AvailabilityState(StrEnum):
-    """Provider observation of object availability."""
-
-    AVAILABLE = "available"
-    UNAVAILABLE = "unavailable"
-    MISSING = "missing"
-
-
-class IntegrityState(StrEnum):
-    """Provider observation of object integrity."""
-
-    UNKNOWN = "unknown"
-    VALID = "valid"
-    QUARANTINED = "quarantined"
-
-
-class ReceiptOutcome(StrEnum):
-    """Successful immutable provider operation facts."""
-
-    STORED = "stored"
-    VERIFIED = "verified"
-    RETAINED = "retained"
-    RELEASED = "released"
-
-
-@dataclass(frozen=True, slots=True)
-class IdempotencyIdentity:
-    """Complete identity and commitment for one provider operation."""
-
-    service_principal: str
-    operation: ArtifactOperation
-    key: str
-    request_digest: str
+def _validate_provider_object_ref(provider_object_ref: str) -> None:
+    """Require one bounded opaque provider reference without control characters."""
+    if (
+        not isinstance(provider_object_ref, str)
+        or not provider_object_ref
+        or len(provider_object_ref) > _MAXIMUM_PROVIDER_OBJECT_REF_LENGTH
+        or any(ord(character) < 32 or ord(character) == 127 for character in provider_object_ref)
+    ):
+        raise ValueError("artifact provider object reference is invalid")
 
 
 @dataclass(frozen=True, slots=True)
 class ArtifactByteRange:
-    """Zero-based byte range with an exclusive end."""
+    """Zero-based byte range whose optional length defines an exclusive end."""
 
     offset: int = 0
     length: int | None = None
 
     def __post_init__(self) -> None:
-        """Reject negative offsets and lengths."""
-        if self.offset < 0 or (self.length is not None and self.length < 0):
-            raise ValueError("artifact byte range values must be nonnegative")
+        """Reject negative, boolean, and non-integer range values."""
+        if type(self.offset) is not int or self.offset < 0:
+            raise ValueError("artifact byte range offset is invalid")
+        if self.length is not None and (type(self.length) is not int or self.length < 0):
+            raise ValueError("artifact byte range length is invalid")
 
 
 @dataclass(frozen=True, slots=True)
-class StoreArtifactRequest:
-    """Immutable metadata for one streamed store operation."""
+class ArtifactPutResult:
+    """Provider-neutral result of immutable publication or an exact replay."""
 
-    expected_sha256: str | None
-    expected_size: int | None
-    maximum_bytes: int
-    media_type: str
-    metadata: Mapping[str, str]
-    idempotency: IdempotencyIdentity
-
-
-@dataclass(frozen=True, slots=True)
-class ReceiptDetail:
-    """One bounded provider receipt detail entry."""
-
-    name: str
-    value: str
-
-
-@dataclass(frozen=True, slots=True)
-class OperationReceipt:
-    """Bounded provider evidence for one authoritative operation."""
-
-    receipt_id: str
-    provider_operation_reference: str
-    identity: IdempotencyIdentity
-    response_digest: str
-    outcome: ReceiptOutcome
-    provider_artifact_id: str | None
-    sha256: str | None
-    byte_count: int | None
-    recorded_at: datetime
-    retention_reference: str | None = None
-    retention_class: str | None = None
-    details: tuple[ReceiptDetail, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class RetentionSummary:
-    """One provider retention reference and its current state."""
-
-    retention_reference: str
-    retention_class: str
-    state: str
-
-
-@dataclass(frozen=True, slots=True)
-class StoredArtifact:
-    """Provider-neutral result of a successful store operation."""
-
-    provider_artifact_id: str
-    sha256: str
-    byte_count: int
-    media_type: str
-    receipt: OperationReceipt
+    provider_object_ref: str
     replayed: bool
 
-
-@dataclass(frozen=True, slots=True)
-class ArtifactOperationResult:
-    """One immutable receipt plus response-time replay information."""
-
-    receipt: OperationReceipt
-    replayed: bool
+    def __post_init__(self) -> None:
+        """Validate the bounded provider result."""
+        _validate_provider_object_ref(self.provider_object_ref)
+        if type(self.replayed) is not bool:
+            raise ValueError("artifact put replay observation is invalid")
 
 
 @dataclass(frozen=True, slots=True)
-class ArtifactStatus:
-    """Current provider observations for an immutable object."""
+class ArtifactPutObservation:
+    """Read-only exact observation of one commitment-derived provider object."""
 
-    provider_artifact_id: str
-    sha256: str
-    byte_count: int
-    media_type: str
-    verification_state: VerificationState
-    retention_state: RetentionState
-    availability_state: AvailabilityState
-    integrity_state: IntegrityState
-    active_retentions: tuple[RetentionSummary, ...] = ()
+    provider_object_ref: str
+    committed: bool
+
+    def __post_init__(self) -> None:
+        """Validate the bounded provider observation."""
+        _validate_provider_object_ref(self.provider_object_ref)
+        if type(self.committed) is not bool:
+            raise ValueError("artifact put observation is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactObjectHead:
+    """Safe provider observation for an existing or missing immutable object."""
+
+    provider_object_ref: str
+    exists: bool
+    byte_count: int | None = None
+    media_type: str | None = None
+
+    def __post_init__(self) -> None:
+        """Keep missing and existing head observations unambiguous."""
+        _validate_provider_object_ref(self.provider_object_ref)
+        if type(self.exists) is not bool:
+            raise ValueError("artifact head existence observation is invalid")
+        if self.exists:
+            if type(self.byte_count) is not int or self.byte_count < 0:
+                raise ValueError("existing artifact head requires an exact byte count")
+        elif self.byte_count is not None or self.media_type is not None:
+            raise ValueError("missing artifact head cannot contain object metadata")
+        if self.media_type is not None:
+            ArtifactCommitment.validate_media_type(self.media_type)
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactStoreNamespaceIdentity:
+    """Provider-owned, non-secret identity for one immutable byte namespace."""
+
+    provider_profile: str
+    descriptor_items: tuple[tuple[str, str], ...]
+
+    def __post_init__(self) -> None:
+        """Require a canonical closed descriptor without duplicate keys."""
+        if not self.provider_profile or len(self.provider_profile) > 100:
+            raise ValueError("artifact provider profile is invalid")
+        if type(self.descriptor_items) is not tuple:
+            raise ValueError("artifact namespace descriptor is not immutable")
+        expected_keys = _NAMESPACE_DESCRIPTOR_KEYS_BY_PROFILE.get(self.provider_profile)
+        if expected_keys is None:
+            raise ValueError("artifact provider profile is unsupported")
+        keys: list[str] = []
+        for item in self.descriptor_items:
+            if (
+                type(item) is not tuple
+                or len(item) != 2
+                or not all(isinstance(value, str) and value for value in item)
+            ):
+                raise ValueError("artifact namespace descriptor is invalid")
+            keys.append(item[0])
+        if (
+            keys != sorted(keys)
+            or len(keys) != len(set(keys))
+            or not _RESERVED_NAMESPACE_DESCRIPTOR_KEYS.isdisjoint(keys)
+            or set(keys) != expected_keys
+        ):
+            raise ValueError("artifact namespace descriptor is not canonical")
+
+    def as_dict(self) -> dict[str, str]:
+        """Return a fresh JSON-compatible descriptor projection."""
+        return dict(self.descriptor_items)
+
+
+def artifact_store_namespace_material(
+    *,
+    backend: str,
+    adapter_identity: ExternalServiceAdapterIdentity,
+    namespace_identity: ArtifactStoreNamespaceIdentity,
+) -> tuple[dict[str, object], str]:
+    """Build one canonical namespace descriptor and its matching fingerprint."""
+    descriptor: dict[str, object] = {
+        "backend": backend,
+        "adapter": adapter_identity.provider_key,
+        "provider_profile": namespace_identity.provider_profile,
+        **namespace_identity.as_dict(),
+    }
+    return descriptor, canonical_json_hash(descriptor)
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactStoreNamespaceClaim:
+    """Proof that PostgreSQL accepted one exact adapter namespace identity."""
+
+    adapter_identity: ExternalServiceAdapterIdentity
+    namespace_identity: ArtifactStoreNamespaceIdentity
+    namespace_fingerprint: str
+
+    def __post_init__(self) -> None:
+        """Reject malformed or mismatched startup proof values."""
+        if type(self.adapter_identity) is not ExternalServiceAdapterIdentity:
+            raise ValueError("artifact namespace adapter identity is invalid")
+        if type(self.namespace_identity) is not ArtifactStoreNamespaceIdentity:
+            raise ValueError("artifact namespace identity is invalid")
+        if (
+            not isinstance(self.namespace_fingerprint, str)
+            or not self.namespace_fingerprint.startswith("sha256:")
+            or len(self.namespace_fingerprint) != 71
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.namespace_fingerprint[7:]
+            )
+        ):
+            raise ValueError("artifact namespace fingerprint is invalid")
 
 
 class ArtifactStoreError(Exception):
-    """Base class for stable artifact-store failures."""
+    """Base class for stable, provider-secret-safe artifact failures."""
 
     code = "artifact_storage_error"
     category = "terminal"
@@ -175,184 +190,104 @@ class ArtifactStoreError(Exception):
 
 
 class ArtifactStoreUnavailableError(ArtifactStoreError):
-    """Raised when a retryable provider operation is unavailable."""
+    """Raised when provider availability prevents an exact result."""
 
     code = "artifact_storage_unavailable"
     category = "retryable"
     retryable = True
 
 
-class ArtifactMalformedRequestError(ArtifactStoreError):
-    """Raised when a provider request is structurally invalid."""
+class ArtifactObjectMissingError(ArtifactStoreError):
+    """Raised when an operation requires an object that does not exist."""
 
-    code = "artifact_malformed_request"
+    code = "artifact_object_missing"
+    category = "not_found"
+
+
+class ArtifactPreconditionFailedError(ArtifactStoreError):
+    """Raised when immutable provider publication loses its condition."""
+
+    code = "artifact_precondition_failed"
+    category = "conflict"
 
 
 class ArtifactInputMismatchError(ArtifactStoreError):
-    """Raised when supplied bytes violate their initial commitment."""
+    """Raised when supplied bytes violate their server-owned commitment."""
 
     code = "artifact_input_mismatch"
     category = "input_mismatch"
 
 
-class ArtifactLimitExceededError(ArtifactStoreError):
-    """Raised when bounded artifact input exceeds a declared limit."""
-
-    code = "artifact_limit_exceeded"
-    category = "terminal"
-
-
 class ArtifactIntegrityError(ArtifactStoreError):
-    """Raised when persisted or replayed provider facts are inconsistent."""
+    """Raised when provider or prepared bytes violate immutable facts."""
 
     code = "artifact_integrity_failure"
     category = "integrity"
 
 
-class ArtifactIdempotencyMismatchError(ArtifactStoreError):
-    """Raised when one operation identity is reused with a changed request."""
+class ArtifactRangeInvalidError(ArtifactStoreError):
+    """Raised when a requested range starts past the object end."""
 
-    code = "artifact_idempotency_mismatch"
-
-
-class ArtifactNotFoundError(ArtifactStoreError):
-    """Raised when an opaque provider artifact is unknown or unavailable."""
-
-    code = "artifact_not_found"
-    category = "not_found"
-
-
-class ArtifactRetentionConflictError(ArtifactStoreError):
-    """Raised when an exact retention reference cannot be changed."""
-
-    code = "artifact_retention_conflict"
+    code = "artifact_range_invalid"
     category = "input_mismatch"
 
 
-class ArtifactThrottledError(ArtifactStoreError):
-    """Raised when a retryable provider throttle prevents an operation."""
+class ArtifactOperationConflictError(ArtifactStoreError):
+    """Raised when an opaque provider reference is invalid for an operation."""
 
-    code = "artifact_throttled"
-    category = "retryable"
-    retryable = True
+    code = "artifact_operation_conflict"
+    category = "conflict"
+
+
+class ArtifactLimitExceededError(ArtifactStoreError):
+    """Raised when bounded artifact input exceeds its hard limit."""
+
+    code = "artifact_limit_exceeded"
+    category = "terminal"
 
 
 class ArtifactConfigurationError(ArtifactStoreError):
-    """Raised when a configured artifact adapter cannot be resolved."""
+    """Raised when artifact adapter construction or selection is invalid."""
 
     code = "artifact_storage_configuration_invalid"
+    category = "configuration"
 
 
-class ArtifactStore(Protocol):
-    """Port implemented by development and production artifact providers."""
+class ArtifactStore(ExternalServiceAdapter, Protocol):
+    """Immutable byte-provider capability used only by artifact orchestration."""
 
-    async def store(
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        """Publish one sealed committed source or prove an exact replay."""
+
+    async def observe_put_result(
         self,
-        stream: AsyncIterable[bytes],
-        request: StoreArtifactRequest,
-    ) -> StoredArtifact:
-        """Store one bounded stream or return its exact replay result."""
-
-    async def recover_committed_store(
-        self, request: StoreArtifactRequest
-    ) -> StoredArtifact:
-        """Recover one committed store effect from exact persisted commitments."""
+        commitment: ArtifactCommitment,
+    ) -> ArtifactPutObservation:
+        """Observe one commitment-derived object without replaying a write."""
 
     def open(
         self,
-        provider_artifact_id: str,
+        provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
     ) -> AsyncIterator[bytes]:
-        """Stream one available object or range in bounded chunks."""
+        """Stream one object or bounded range in bounded chunks."""
 
-    async def stat(self, provider_artifact_id: str) -> ArtifactStatus:
-        """Return current provider observations for one object."""
+    async def head(self, provider_object_ref: str) -> ArtifactObjectHead:
+        """Return a safe existing or missing object observation."""
 
-    async def verify(
+
+class ArtifactStoreBootstrap(ExternalServiceAdapter, Protocol):
+    """Composition-only lifecycle that cannot publish bytes before DB claim."""
+
+    @property
+    def namespace_identity(self) -> ArtifactStoreNamespaceIdentity:
+        """Return the identity of the already-open provider namespace."""
+
+    def initialize_after_namespace_claim(
         self,
-        provider_artifact_id: str,
-        expected_sha256: str,
-        expected_size: int,
-        idempotency: IdempotencyIdentity,
-    ) -> ArtifactOperationResult:
-        """Independently hash and count one complete provider object."""
+        claim: ArtifactStoreNamespaceClaim,
+    ) -> ArtifactStore:
+        """Initialize provider layout only after accepting the exact DB claim."""
 
-    async def retain(
-        self,
-        provider_artifact_id: str,
-        retention_reference: str,
-        retention_class: str,
-        idempotency: IdempotencyIdentity,
-    ) -> ArtifactOperationResult:
-        """Add an exact reference-counted retention intent."""
-
-    async def release(
-        self,
-        provider_artifact_id: str,
-        retention_reference: str,
-        idempotency: IdempotencyIdentity,
-    ) -> ArtifactOperationResult:
-        """Release only the exact retention reference supplied."""
-
-    async def get_operation_receipt(
-        self,
-        service_principal: str,
-        operation: ArtifactOperation,
-        idempotency_key: str,
-    ) -> OperationReceipt | None:
-        """Load the authoritative receipt for one complete operation identity."""
-
-
-def canonical_store_request_digest(request: StoreArtifactRequest) -> str:
-    """Return the canonical digest for all authoritative store request fields."""
-    payload: dict[str, object] = {
-        "maximum_bytes": request.maximum_bytes,
-        "media_type": request.media_type,
-        "metadata": [
-            {"name": name, "value": value}
-            for name, value in sorted(request.metadata.items())
-        ],
-    }
-    if request.expected_sha256 is not None:
-        payload["expected_sha256"] = request.expected_sha256
-    if request.expected_size is not None:
-        payload["expected_size"] = request.expected_size
-    return canonical_json_hash(payload)
-
-
-def canonical_verify_request_digest(
-    provider_artifact_id: str, expected_sha256: str, expected_size: int
-) -> str:
-    """Return the canonical digest for one verify request."""
-    return canonical_json_hash(
-        {
-            "provider_artifact_id": provider_artifact_id,
-            "expected_sha256": expected_sha256,
-            "expected_size": expected_size,
-        }
-    )
-
-
-def canonical_retain_request_digest(
-    provider_artifact_id: str, retention_reference: str, retention_class: str
-) -> str:
-    """Return the canonical digest for one retain request."""
-    return canonical_json_hash(
-        {
-            "provider_artifact_id": provider_artifact_id,
-            "retention_reference": retention_reference,
-            "retention_class": retention_class,
-        }
-    )
-
-
-def canonical_release_request_digest(
-    provider_artifact_id: str, retention_reference: str
-) -> str:
-    """Return the canonical digest for one release request."""
-    return canonical_json_hash(
-        {
-            "provider_artifact_id": provider_artifact_id,
-            "retention_reference": retention_reference,
-        }
-    )
+    def close(self) -> None:
+        """Release provider startup and operation resources."""

@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -25,7 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException
 
 from app.adapters.auth.dev import DevelopmentAuthVerifier
-from app.adapters.auth.flow import FlowAuthVerifier
+from app.adapters.auth.flow import (
+    FlowAuthVerifier,
+    _normalize_audience,
+    _normalize_scopes,
+    actor_id_from_flow_identity,
+)
 from app.adapters.auth.metrics import InProcessAuthVerifierMetrics
 from app.api.deps.auth import get_registered_actor
 from app.core.auth import clear_auth_verifier_cache
@@ -35,13 +41,21 @@ from app.db import session as db_session
 from app.db.session import get_db_session
 from app.interfaces.auth import AuthVerificationError, AuthVerificationUnavailableError
 from app.main import create_app
+from app.modules.audit.schemas import AuthorityEventType
+from app.modules.audit.service import AuditService
 from app.modules.actors.service import ActorService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.repository import ActorRepository
+from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.models import AdminRoleGrant, AuthorityIdempotencyRecord
+from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.repository import (
     AdminAuthorizationRepository,
     AuthorityIdempotencyRepository,
+)
+from app.modules.authorization.service_actor_service import (
+    ServiceActorProvisioningService,
+    ServiceActorProvisioningUnavailable,
 )
 from app.modules.projects.models import Project
 from app.modules.tasks.models import AuditEvent
@@ -338,6 +352,7 @@ async def test_local_hmac_fixture_uses_final_claim_shape() -> None:
 
     result = await verifier.verify(token)
 
+    assert verifier.canonical_issuer() == result.token.issuer
     assert result.token.token_id == "local-token-id"
     assert result.legacy is not None
     assert result.legacy.roles == ("reviewer",)
@@ -428,6 +443,7 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
 
     result = await verifier.verify(issue_asymmetric_token(private_key))
 
+    assert verifier.canonical_issuer() == result.token.issuer
     assert result.token.model_dump().keys() == {
         "issuer",
         "subject",
@@ -802,6 +818,48 @@ async def test_malformed_tokens_fail_without_network(token: str) -> None:
         await verifier.verify(token)
 
     assert requests == []
+
+
+def test_flow_verifier_rejects_ambiguous_clients_and_malformed_claim_collections() -> None:
+    """Keep provider inputs bounded before token or network processing begins."""
+    assert UUID(actor_id_from_flow_identity("https://issuer.example", "opaque-subject"))
+    assert _normalize_audience(["workstream-api", "secondary-api"]) == (
+        "workstream-api",
+        "secondary-api",
+    )
+    assert _normalize_scopes(["workstream:human", "profile:read"]) == frozenset(
+        {"workstream:human", "profile:read"}
+    )
+    with pytest.raises(AuthVerificationError, match="audience"):
+        _normalize_audience(["audience"] * 17)
+    with pytest.raises(AuthVerificationError, match="audience"):
+        _normalize_audience("a" * 257)
+    with pytest.raises(AuthVerificationError, match="scope"):
+        _normalize_scopes(["embedded whitespace"])
+    with pytest.raises(AuthVerificationError, match="scope"):
+        _normalize_scopes([f"scope-{index}" for index in range(65)])
+
+    settings = production_verifier_settings()
+    transport = MockTransport(lambda _request: Response(500))
+    with pytest.raises(ValueError, match="JWKS transport"):
+        FlowAuthVerifier(
+            settings,
+            jwks_transport=transport,
+            jwks_client_factory=AsyncClient,
+        )
+    with pytest.raises(ValueError, match="introspection transport"):
+        FlowAuthVerifier(
+            settings,
+            introspection_transport=transport,
+            introspection_client_factory=AsyncClient,
+        )
+
+    with pytest.raises(ValueError, match="modulus"):
+        FlowAuthVerifier._validate_jwk_strength({}, algorithm="RS256")
+    with pytest.raises(ValueError, match="curve"):
+        FlowAuthVerifier._validate_jwk_strength({"crv": "P-384"}, algorithm="ES256")
+    with pytest.raises(ValueError, match="curve"):
+        FlowAuthVerifier._validate_jwk_strength({"crv": "X25519"}, algorithm="EdDSA")
 
 
 @pytest.mark.parametrize("limit", ["total", "header", "payload"])
@@ -1562,6 +1620,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Prove the supported bootstrap, grant, replay, scope, and revoke flow."""
     private_key, jwk = rsa_signing_material
@@ -1588,6 +1647,41 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
     audit_headers = {"Authorization": f"Bearer {audit_token}"}
     original_commit = AsyncSession.commit
     fail_feature_commit = False
+    fail_evidence_action: ActionId | None = None
+    fail_target_lookup: str | None = None
+    fail_touch = False
+    original_add_authority_event = AuditService.add_authority_event
+    original_profile_read = ActorService.read_admin_profile
+    original_link_read = ActorService.read_admin_identity_link
+    original_touch = ActorService.touch_after_authorization
+
+    async def add_authority_event_with_failure(service, value):
+        nonlocal fail_evidence_action
+        if fail_evidence_action is not None and value.action_id is fail_evidence_action:
+            fail_evidence_action = None
+            raise SQLAlchemyError("forced authorization evidence failure")
+        return await original_add_authority_event(service, value)
+
+    async def profile_read_with_failure(service, actor_profile_id):
+        nonlocal fail_target_lookup
+        if fail_target_lookup == "profile":
+            fail_target_lookup = None
+            raise SQLAlchemyError("forced profile lookup failure")
+        return await original_profile_read(service, actor_profile_id)
+
+    async def link_read_with_failure(service, actor_profile_id):
+        nonlocal fail_target_lookup
+        if fail_target_lookup == "identity_link":
+            fail_target_lookup = None
+            raise SQLAlchemyError("forced identity-link lookup failure")
+        return await original_link_read(service, actor_profile_id)
+
+    async def touch_with_failure(service, resolved):
+        nonlocal fail_touch
+        if fail_touch:
+            fail_touch = False
+            raise SQLAlchemyError("forced caller timestamp touch failure")
+        return await original_touch(service, resolved)
 
     async def commit_with_one_feature_failure(session: AsyncSession) -> None:
         nonlocal fail_feature_commit
@@ -1606,6 +1700,10 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
         await original_commit(session)
 
     monkeypatch.setattr(AsyncSession, "commit", commit_with_one_feature_failure)
+    monkeypatch.setattr(AuditService, "add_authority_event", add_authority_event_with_failure)
+    monkeypatch.setattr(ActorService, "read_admin_profile", profile_read_with_failure)
+    monkeypatch.setattr(ActorService, "read_admin_identity_link", link_read_with_failure)
+    monkeypatch.setattr(ActorService, "touch_after_authorization", touch_with_failure)
 
     async def actor_state(actor_id: UUID) -> tuple:
         async with db_session.get_session_factory()() as session:
@@ -1694,9 +1792,17 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             "suspended": uuid4(),
             "no_active_link": uuid4(),
         }
+        private_provenance = {
+            "created_by": f"auth09c-created-by-{uuid4()}",
+            "linked_by": f"auth09c-linked-by-{uuid4()}",
+            "lifecycle_by": f"auth09c-lifecycle-by-{uuid4()}",
+        }
         project_one, project_two = uuid4(), uuid4()
         now = datetime.now(UTC)
         async with db_session.get_session_factory()() as session:
+            target_row = await session.get(ActorProfile, str(target_id))
+            assert target_row is not None
+            target_row.contact_email = "auth09c-private-contact@example.test"
             session.add_all(
                 [
                     Project(
@@ -1716,15 +1822,16 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                         actor_kind="service",
                         status="active",
                         provisioning_method="manual_service_provisioning",
-                        created_by=str(admin_id),
+                        service_identity="workstream.artifact.verifier",
+                        created_by=private_provenance["created_by"],
                     ),
                     ActorProfile(
                         id=str(concealed_targets["suspended"]),
                         actor_kind="human",
                         status="suspended",
                         provisioning_method="automatic_first_access",
-                        created_by=str(admin_id),
-                        suspended_by=str(admin_id),
+                        created_by=private_provenance["created_by"],
+                        suspended_by=private_provenance["lifecycle_by"],
                         suspended_at=now,
                         suspension_reason="Concealment fixture",
                     ),
@@ -1733,7 +1840,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                         actor_kind="human",
                         status="active",
                         provisioning_method="automatic_first_access",
-                        created_by=str(admin_id),
+                        created_by=private_provenance["created_by"],
                     ),
                 ]
             )
@@ -1747,7 +1854,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                         subject="auth08-service-target",
                         subject_kind="service",
                         status="active",
-                        linked_by=str(admin_id),
+                        linked_by=private_provenance["linked_by"],
                     ),
                     ActorIdentityLink(
                         id=str(uuid4()),
@@ -1756,7 +1863,8 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                         subject="auth08-suspended-target",
                         subject_kind="human",
                         status="active",
-                        linked_by=str(admin_id),
+                        linked_by=private_provenance["linked_by"],
+                        last_verified_at=now,
                     ),
                     ActorIdentityLink(
                         id=str(uuid4()),
@@ -1765,14 +1873,254 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                         subject="auth08-revoked-link-target",
                         subject_kind="human",
                         status="revoked",
-                        linked_by=str(admin_id),
-                        revoked_by=str(admin_id),
+                        linked_by=private_provenance["linked_by"],
+                        last_verified_at=now,
+                        revoked_by=private_provenance["lifecycle_by"],
                         revoked_at=now,
                         revoked_reason="Concealment fixture",
                     ),
                 ]
             )
             await session.commit()
+
+        profile_fields = {
+            "actor_profile_id",
+            "actor_kind",
+            "status",
+            "provisioning_method",
+            "service_identity",
+            "display_name",
+            "created_at",
+            "updated_at",
+            "last_seen_at",
+            "suspended_at",
+            "deactivated_at",
+        }
+        link_fields = {
+            "identity_link_id",
+            "actor_profile_id",
+            "subject_kind",
+            "status",
+            "linked_at",
+            "last_verified_at",
+            "revoked_at",
+            "reactivated_at",
+        }
+        caplog.clear()
+        caplog.set_level(logging.DEBUG, logger="app")
+        before_admin_actor_read = await actor_state(admin_id)
+        before_target_actor_read = await actor_state(target_id)
+        target_admin_profile = await client.get(
+            f"/api/v1/actors/{target_id}",
+            headers=admin_headers,
+        )
+        target_admin_link = await client.get(
+            f"/api/v1/actors/{target_id}/identity-links",
+            headers=admin_headers,
+        )
+        service_admin_profile = await client.get(
+            f"/api/v1/actors/{concealed_targets['service']}",
+            headers=admin_headers,
+        )
+        service_admin_link = await client.get(
+            f"/api/v1/actors/{concealed_targets['service']}/identity-links",
+            headers=admin_headers,
+        )
+        suspended_admin_profile = await client.get(
+            f"/api/v1/actors/{concealed_targets['suspended']}",
+            headers=admin_headers,
+        )
+        revoked_admin_link = await client.get(
+            f"/api/v1/actors/{concealed_targets['no_active_link']}/identity-links",
+            headers=admin_headers,
+        )
+        assert [
+            response.status_code
+            for response in (
+                target_admin_profile,
+                target_admin_link,
+                service_admin_profile,
+                service_admin_link,
+                suspended_admin_profile,
+                revoked_admin_link,
+            )
+        ] == [200] * 6
+        assert set(target_admin_profile.json()) == profile_fields
+        assert set(target_admin_link.json()) == link_fields
+        assert target_admin_profile.json()["actor_kind"] == "human"
+        assert target_admin_profile.json()["service_identity"] is None
+        assert service_admin_profile.json()["actor_kind"] == "service"
+        assert service_admin_profile.json()["service_identity"] == (
+            ServiceIdentity.ARTIFACT_VERIFIER.value
+        )
+        assert service_admin_profile.json()["last_seen_at"] is None
+        assert service_admin_link.json()["last_verified_at"] is None
+        assert suspended_admin_profile.json()["status"] == "suspended"
+        assert revoked_admin_link.json()["status"] == "revoked"
+        serialized_admin_reads = json.dumps(
+            [
+                target_admin_profile.json(),
+                target_admin_link.json(),
+                service_admin_profile.json(),
+                service_admin_link.json(),
+                suspended_admin_profile.json(),
+                revoked_admin_link.json(),
+            ],
+            sort_keys=True,
+        )
+        for private_value in (
+            "auth08-target",
+            "auth08-service-target",
+            "auth08-suspended-target",
+            "auth08-revoked-link-target",
+            "https://identity.test",
+            "Concealment fixture",
+            "auth09c-private-contact@example.test",
+            admin_token,
+            target_token,
+            bootstrap["grant_id"],
+            *private_provenance.values(),
+        ):
+            assert private_value not in serialized_admin_reads
+            assert private_value not in caplog.text
+        assert await actor_state(target_id) == before_target_actor_read
+        after_admin_actor_read = await actor_state(admin_id)
+        assert after_admin_actor_read[1] > before_admin_actor_read[1]
+        assert after_admin_actor_read[2] > before_admin_actor_read[2]
+
+        async with db_session.get_session_factory()() as session:
+            target_allow_events = (
+                await session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.event_type == "SensitiveAuthorizationAllowed",
+                        AuditEvent.action_id.in_(
+                            ("actor.profile.read", "actor.identity_link.read")
+                        ),
+                        AuditEvent.resource_id == str(target_id),
+                    )
+                )
+            ).all()
+        assert len(target_allow_events) == 2
+        expected_evidence = {
+            "actor.profile.read": ("actor.profile.read_any", target_admin_profile),
+            "actor.identity_link.read": ("actor.identity_link.read", target_admin_link),
+        }
+        assert {event.action_id for event in target_allow_events} == set(expected_evidence)
+        for event in target_allow_events:
+            expected_permission, route_response = expected_evidence[event.action_id]
+            assert event.permission_id == expected_permission
+            assert event.actor_id == str(admin_id)
+            assert event.target_actor_ref == str(target_id)
+            assert event.target_ref_id == str(target_id)
+            assert event.matched_grant_id == bootstrap["grant_id"]
+            assert event.project_id is None
+            assert event.after_facts == {"allowed": True}
+            assert UUID(str(event.request_id)) == UUID(route_response.headers["x-request-id"])
+            assert UUID(str(event.correlation_id)) == UUID(
+                route_response.headers["x-correlation-id"]
+            )
+
+        async def actor_admin_state() -> tuple[datetime, datetime, datetime]:
+            async with db_session.get_session_factory()() as session:
+                return tuple(
+                    (
+                        await session.execute(
+                            text(
+                                "select p.updated_at,p.last_seen_at,l.last_verified_at "
+                                "from actor_profiles p join actor_identity_links l "
+                                "on l.actor_profile_id=p.id where p.id=:actor"
+                            ),
+                            {"actor": str(admin_id)},
+                        )
+                    ).one()
+                )
+
+        before_self_profile = await actor_admin_state()
+        before_self_profile_counts = await authority_counts()
+        self_profile = await client.get(
+            f"/api/v1/actors/{admin_id}",
+            headers=admin_headers,
+        )
+        assert self_profile.status_code == 200, self_profile.text
+        after_self_profile = await actor_admin_state()
+        assert after_self_profile[0] > before_self_profile[0]
+        assert after_self_profile[1] > before_self_profile[1]
+        assert after_self_profile[2] > before_self_profile[2]
+        assert datetime.fromisoformat(self_profile.json()["updated_at"]) == after_self_profile[0]
+        assert datetime.fromisoformat(self_profile.json()["last_seen_at"]) == after_self_profile[1]
+        after_self_profile_counts = await authority_counts()
+        assert after_self_profile_counts[:2] == before_self_profile_counts[:2]
+        assert after_self_profile_counts[2] == before_self_profile_counts[2] + 1
+
+        before_self_link = await actor_admin_state()
+        before_self_link_counts = await authority_counts()
+        self_link = await client.get(
+            f"/api/v1/actors/{admin_id}/identity-links",
+            headers=admin_headers,
+        )
+        assert self_link.status_code == 200, self_link.text
+        after_self_link = await actor_admin_state()
+        assert after_self_link[0] > before_self_link[0]
+        assert after_self_link[1] > before_self_link[1]
+        assert after_self_link[2] > before_self_link[2]
+        assert datetime.fromisoformat(self_link.json()["last_verified_at"]) == after_self_link[2]
+        after_self_link_counts = await authority_counts()
+        assert after_self_link_counts[:2] == before_self_link_counts[:2]
+        assert after_self_link_counts[2] == before_self_link_counts[2] + 1
+
+        before_missing_reads = await actor_state(admin_id)
+        before_missing_authority_counts = await authority_counts()
+        absent_id = uuid4()
+        missing_profile = await client.get(
+            f"/api/v1/actors/{absent_id}",
+            headers=admin_headers,
+        )
+        missing_link = await client.get(
+            f"/api/v1/actors/{absent_id}/identity-links",
+            headers=admin_headers,
+        )
+        assert missing_profile.status_code == missing_link.status_code == 404
+        concealed_missing_bodies = []
+        for response in (missing_profile, missing_link):
+            body = response.json()
+            UUID(body["error"].pop("correlation_id"))
+            concealed_missing_bodies.append(body)
+        assert concealed_missing_bodies[0] == concealed_missing_bodies[1]
+        assert concealed_missing_bodies[0]["error"]["code"] == "actor_resource_not_found"
+        assert await actor_state(admin_id) == before_missing_reads
+        assert await authority_counts() == before_missing_authority_counts
+
+        async def assert_failed_admin_read(path: str) -> None:
+            before_failure_state = await actor_state(admin_id)
+            before_failure_counts = await authority_counts()
+            failed_response = await client.get(path, headers=admin_headers)
+            assert_retryable_service_unavailable(failed_response)
+            assert await actor_state(admin_id) == before_failure_state
+            assert await authority_counts() == before_failure_counts
+
+        profile_path = f"/api/v1/actors/{target_id}"
+        link_path = f"/api/v1/actors/{target_id}/identity-links"
+        for action_id, path in (
+            (ActionId.ACTOR_PROFILE_READ, profile_path),
+            (ActionId.ACTOR_IDENTITY_LINK_READ, link_path),
+        ):
+            fail_evidence_action = action_id
+            await assert_failed_admin_read(path)
+
+        for lookup_kind, path in (
+            ("profile", profile_path),
+            ("identity_link", link_path),
+        ):
+            fail_target_lookup = lookup_kind
+            await assert_failed_admin_read(path)
+
+        for path in (profile_path, link_path):
+            fail_touch = True
+            await assert_failed_admin_read(path)
+
+        for path in (profile_path, link_path):
+            fail_feature_commit = True
+            await assert_failed_admin_read(path)
 
         before_read = await actor_state(admin_id)
         fail_feature_commit = True
@@ -2010,6 +2358,14 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             headers=audit_headers,
             params={"scope_type": "project", "scope_project_id": str(project_one)},
         )
+        project_audit_actor_read = await client.get(
+            f"/api/v1/actors/{target_id}",
+            headers=audit_headers,
+        )
+        project_audit_link_read = await client.get(
+            f"/api/v1/actors/{target_id}/identity-links",
+            headers=audit_headers,
+        )
         audit_wrong_scope = await client.get(
             "/api/v1/admin-role-grants",
             headers=audit_headers,
@@ -2037,6 +2393,9 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             str(project_one)
         }
         assert audit_wrong_scope.status_code == audit_mutation.status_code == 403
+        for project_audit_read in (project_audit_actor_read, project_audit_link_read):
+            assert project_audit_read.status_code == 403
+            assert project_audit_read.json()["error"]["code"] == "permission_not_granted"
         assert audit_wrong_scope.json()["error"]["code"] == "scope_not_authorized"
         assert audit_mutation.json()["error"]["code"] == "permission_not_granted"
         assert audit_history_visible.status_code == 200
@@ -2073,8 +2432,13 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
                 headers=audit_headers,
                 params={"scope_type": "system", "status": "all"},
             ),
+            await client.get(f"/api/v1/actors/{target_id}", headers=audit_headers),
+            await client.get(
+                f"/api/v1/actors/{target_id}/identity-links",
+                headers=audit_headers,
+            ),
         ]
-        assert [response.status_code for response in system_audit_reads] == [200] * 4
+        assert [response.status_code for response in system_audit_reads] == [200] * 6
         assert system_audit_reads[0].json()["total"] == 74
         assert system_audit_reads[1].json()["total"] == 5
         assert system_audit_reads[2].json()["total"] == 2
@@ -2894,6 +3258,1282 @@ async def test_admin_bootstrap_replay_and_cross_revoke_are_concurrency_safe(
     await db_session.dispose_engine()
 
 
+async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prove lifecycle and grant changes serialize after both bounded reads."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env)
+    app = create_app(settings)
+    app.state.auth_verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    reader_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09c-profile-reader", "jti": "auth09c-profile-reader-token"},
+    )
+    link_reader_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09c-link-reader", "jti": "auth09c-link-reader-token"},
+    )
+    custodian_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09c-custodian", "jti": "auth09c-custodian-token"},
+    )
+    target_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09c-target", "jti": "auth09c-target-token"},
+    )
+    reader_headers = {"Authorization": f"Bearer {reader_token}"}
+    link_reader_headers = {"Authorization": f"Bearer {link_reader_token}"}
+    custodian_headers = {"Authorization": f"Bearer {custodian_token}"}
+    pause_kind: str | None = None
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    transition_backend_pids: asyncio.Queue[int] = asyncio.Queue()
+    captured_grant_transition_tasks: set[asyncio.Task] = set()
+    original_profile_read = ActorService.read_admin_profile
+    original_link_read = ActorService.read_admin_identity_link
+    original_get_grant = AdminAuthorizationRepository.get_grant
+
+    async def pause_profile_read(service: ActorService, actor_profile_id: UUID):
+        if pause_kind == "profile":
+            entered.set()
+            await release.wait()
+        return await original_profile_read(service, actor_profile_id)
+
+    async def pause_link_read(service: ActorService, actor_profile_id: UUID):
+        if pause_kind == "identity_link":
+            entered.set()
+            await release.wait()
+        return await original_link_read(service, actor_profile_id)
+
+    async def capture_grant_transition_backend(repository, *args, **kwargs):
+        task = asyncio.current_task()
+        if (
+            task is not None
+            and task.get_name() == "auth09c-grant-revocation-transition"
+            and task not in captured_grant_transition_tasks
+        ):
+            captured_grant_transition_tasks.add(task)
+            backend_pid = await repository._session.scalar(text("select pg_backend_pid()"))
+            transition_backend_pids.put_nowait(int(backend_pid))
+        return await original_get_grant(repository, *args, **kwargs)
+
+    monkeypatch.setattr(ActorService, "read_admin_profile", pause_profile_read)
+    monkeypatch.setattr(ActorService, "read_admin_identity_link", pause_link_read)
+    monkeypatch.setattr(
+        AdminAuthorizationRepository,
+        "get_grant",
+        capture_grant_transition_backend,
+    )
+
+    async def capture_transition_backend(session: AsyncSession) -> None:
+        backend_pid = await session.scalar(text("select pg_backend_pid()"))
+        transition_backend_pids.put_nowait(int(backend_pid))
+
+    async def actor_timestamps(actor_id: UUID) -> tuple[datetime | None, datetime | None]:
+        async with db_session.get_session_factory()() as session:
+            return tuple(
+                (
+                    await session.execute(
+                        text(
+                            "select p.last_seen_at,l.last_verified_at from actor_profiles p "
+                            "join actor_identity_links l on l.actor_profile_id=p.id "
+                            "where p.id=:actor"
+                        ),
+                        {"actor": str(actor_id)},
+                    )
+                ).one()
+            )
+
+    async def set_profile_state(actor_id: UUID, custodian_id: UUID, state: str) -> None:
+        async with db_session.get_session_factory()() as session:
+            await capture_transition_backend(session)
+            if state == "suspended":
+                statement = (
+                    "update actor_profiles set status='suspended',suspended_by=:by,"
+                    "suspended_at=clock_timestamp(),suspension_reason='race proof' "
+                    "where id=:actor"
+                )
+            else:
+                statement = (
+                    "update actor_profiles set status='deactivated',deactivated_by=:by,"
+                    "deactivated_at=clock_timestamp(),deactivation_reason='race proof' "
+                    "where id=:actor"
+                )
+            await session.execute(text(statement), {"actor": str(actor_id), "by": str(custodian_id)})
+            await session.commit()
+
+    async def reset_profile(actor_id: UUID) -> None:
+        async with db_session.get_session_factory()() as session:
+            await session.execute(
+                text(
+                    "update actor_profiles set status='active',suspended_by=null,"
+                    "suspended_at=null,suspension_reason=null,deactivated_by=null,"
+                    "deactivated_at=null,deactivation_reason=null where id=:actor"
+                ),
+                {"actor": str(actor_id)},
+            )
+            await session.commit()
+
+    async def revoke_link(actor_id: UUID, custodian_id: UUID) -> None:
+        async with db_session.get_session_factory()() as session:
+            await capture_transition_backend(session)
+            await session.execute(
+                text(
+                    "update actor_identity_links set status='revoked',revoked_by=:by,"
+                    "revoked_at=clock_timestamp(),revoked_reason='race proof' "
+                    "where actor_profile_id=:actor"
+                ),
+                {"actor": str(actor_id), "by": str(custodian_id)},
+            )
+            await session.commit()
+
+    async def reset_link(actor_id: UUID) -> None:
+        async with db_session.get_session_factory()() as session:
+            await session.execute(
+                text(
+                    "update actor_identity_links set status='active',revoked_by=null,"
+                    "revoked_at=null,revoked_reason=null where actor_profile_id=:actor"
+                ),
+                {"actor": str(actor_id)},
+            )
+            await session.commit()
+
+    async def wait_for_transition_lock(
+        transition_task: asyncio.Task,
+        transition_backend_pid: int,
+    ) -> None:
+        for _ in range(250):
+            if transition_task.done():
+                raise AssertionError("disabling transition bypassed the read lock")
+            async with db_session.get_session_factory()() as session:
+                waiting = await session.scalar(
+                    text(
+                        "select coalesce(cardinality(pg_blocking_pids(:pid)),0)>0"
+                    ),
+                    {"pid": transition_backend_pid},
+                )
+            if waiting:
+                return
+            await asyncio.sleep(0.02)
+        raise AssertionError("disabling transition never reached a PostgreSQL lock wait")
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        reader = await client.get("/api/v1/actors/me", headers=reader_headers)
+        link_reader = await client.get("/api/v1/actors/me", headers=link_reader_headers)
+        custodian = await client.get("/api/v1/actors/me", headers=custodian_headers)
+        target = await client.get(
+            "/api/v1/actors/me",
+            headers={"Authorization": f"Bearer {target_token}"},
+        )
+        reader_id = UUID(reader.json()["actor_profile_id"])
+        link_reader_id = UUID(link_reader.json()["actor_profile_id"])
+        custodian_id = UUID(custodian.json()["actor_profile_id"])
+        target_id = UUID(target.json()["actor_profile_id"])
+        bootstrap_code, _bootstrap = await run_admin_bootstrap(custodian_id, execute=True)
+        assert bootstrap_code == 0
+        reader_grants: dict[UUID, str] = {}
+        for current_reader_id in (reader_id, link_reader_id):
+            reader_grant = await client.post(
+                "/api/v1/admin-role-grants",
+                headers={**custodian_headers, "Idempotency-Key": str(uuid4())},
+                json={
+                    "target_actor_profile_id": str(current_reader_id),
+                    "role": "access_administrator",
+                    "scope_type": "system",
+                    "scope_project_id": None,
+                    "reason": "AUTH-09C concurrency reader",
+                },
+            )
+            assert reader_grant.status_code == 201, reader_grant.text
+            reader_grants[current_reader_id] = reader_grant.json()["resource_id"]
+
+        for current_kind, path_suffix, current_headers, current_reader_id in (
+            ("profile", "", reader_headers, reader_id),
+            ("identity_link", "/identity-links", link_reader_headers, link_reader_id),
+        ):
+            current_grant_id = reader_grants[current_reader_id]
+            for transition in ("suspended", "link_revoked", "grant_revoked", "deactivated"):
+                pause_kind = current_kind
+                entered = asyncio.Event()
+                release = asyncio.Event()
+                read_task = asyncio.create_task(
+                    client.get(
+                        f"/api/v1/actors/{target_id}{path_suffix}",
+                        headers=current_headers,
+                    )
+                )
+                await asyncio.wait_for(entered.wait(), timeout=5)
+                if transition in {"suspended", "deactivated"}:
+                    transition_task = asyncio.create_task(
+                        set_profile_state(current_reader_id, custodian_id, transition)
+                    )
+                elif transition == "link_revoked":
+                    transition_task = asyncio.create_task(
+                        revoke_link(current_reader_id, custodian_id)
+                    )
+                else:
+                    transition_task = asyncio.create_task(
+                        client.post(
+                            f"/api/v1/admin-role-grants/{current_grant_id}/revoke",
+                            headers={
+                                **custodian_headers,
+                                "Idempotency-Key": str(uuid4()),
+                            },
+                            json={"reason": "AUTH-09C matched grant race"},
+                        ),
+                        name="auth09c-grant-revocation-transition",
+                    )
+                transition_backend_pid = await asyncio.wait_for(
+                    transition_backend_pids.get(),
+                    timeout=5,
+                )
+                await wait_for_transition_lock(transition_task, transition_backend_pid)
+                release.set()
+                read_response = await read_task
+                transition_result = await transition_task
+                assert read_response.status_code == 200, read_response.text
+                if transition == "grant_revoked":
+                    assert transition_result.status_code == 200, transition_result.text
+                disabled_timestamps = await actor_timestamps(current_reader_id)
+                denied = await client.get(
+                    f"/api/v1/actors/{target_id}{path_suffix}",
+                    headers=current_headers,
+                )
+                assert denied.status_code == 403
+                assert await actor_timestamps(current_reader_id) == disabled_timestamps
+
+                if transition in {"suspended", "deactivated"}:
+                    if transition == "suspended":
+                        await reset_profile(current_reader_id)
+                elif transition == "link_revoked":
+                    await reset_link(current_reader_id)
+                else:
+                    replacement = await client.post(
+                        "/api/v1/admin-role-grants",
+                        headers={
+                            **custodian_headers,
+                            "Idempotency-Key": str(uuid4()),
+                        },
+                        json={
+                            "target_actor_profile_id": str(current_reader_id),
+                            "role": "access_administrator",
+                            "scope_type": "system",
+                            "scope_project_id": None,
+                            "reason": "Restore AUTH-09C reader authority",
+                        },
+                    )
+                    assert replacement.status_code == 201, replacement.text
+                    current_grant_id = replacement.json()["resource_id"]
+                pause_kind = None
+
+
+async def test_controlled_service_actor_provisioning_is_atomic_private_and_concurrent(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Prove fixed service binding, replay, conflicts, rollback, and pre-admission denial."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env)
+    verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    app = create_app(settings)
+    app.state.auth_verifier = verifier
+    admin_token = issue_asymmetric_token(
+        private_key,
+        claims={
+            "sub": "auth09b-admin",
+            "email": "private-admin@example.test",
+            "jti": "auth09b-admin-token",
+        },
+    )
+    ordinary_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09b-ordinary", "jti": "auth09b-ordinary-token"},
+    )
+    service_subject = "Opaque-Service-Subject/Verifier:01"
+    service_token = issue_asymmetric_token(
+        private_key,
+        subject_kind="service",
+        scope="workstream:service",
+        claims={"sub": service_subject, "jti": "auth09b-service-token"},
+    )
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    ordinary_headers = {"Authorization": f"Bearer {ordinary_token}"}
+    service_headers = {"Authorization": f"Bearer {service_token}"}
+    nonhuman_headers = {
+        kind: {
+            "Authorization": "Bearer "
+            + issue_asymmetric_token(
+                private_key,
+                subject_kind=kind,
+                scope=f"{kind}:identity",
+                claims={"sub": f"auth09b-{kind}", "jti": f"auth09b-{kind}-token"},
+            )
+        }
+        for kind in ("agent", "space")
+    }
+
+    async def actor_timestamps(actor_id: UUID) -> tuple[datetime | None, datetime | None]:
+        async with db_session.get_session_factory()() as session:
+            return tuple(
+                (
+                    await session.execute(
+                        text(
+                            "select p.last_seen_at,l.last_verified_at "
+                            "from actor_profiles p join actor_identity_links l "
+                            "on l.actor_profile_id=p.id where p.id=:actor"
+                        ),
+                        {"actor": str(actor_id)},
+                    )
+                ).one()
+            )
+
+    async def service_state(identity: ServiceIdentity) -> tuple | None:
+        async with db_session.get_session_factory()() as session:
+            return (
+                await session.execute(
+                    text(
+                        "select p.id,p.actor_kind,p.status,p.provisioning_method,p.created_by,"
+                        "p.last_seen_at,l.issuer,l.subject,l.subject_kind,l.status,l.linked_by,"
+                        "l.last_verified_at from actor_profiles p join actor_identity_links l "
+                        "on l.actor_profile_id=p.id where p.service_identity=:identity"
+                    ),
+                    {"identity": identity.value},
+                )
+            ).one_or_none()
+
+    async def authority_counts() -> tuple[int, int, int, int]:
+        async with db_session.get_session_factory()() as session:
+            return (
+                int(await session.scalar(select(func.count()).select_from(ActorProfile)) or 0),
+                int(await session.scalar(select(func.count()).select_from(ActorIdentityLink)) or 0),
+                int(
+                    await session.scalar(
+                        select(func.count()).select_from(AuthorityIdempotencyRecord)
+                    )
+                    or 0
+                ),
+                int(await session.scalar(select(func.count()).select_from(AuditEvent)) or 0),
+            )
+
+    async def run_reservation_race(
+        calls: tuple[tuple[dict[str, Any], str], tuple[dict[str, Any], str]],
+    ) -> tuple[Response, Response]:
+        original_reserve = AuthorityIdempotencyRepository.reserve
+        ready = asyncio.Event()
+        arrivals = 0
+
+        async def barrier_reserve(self, **kwargs):
+            nonlocal arrivals
+            arrivals += 1
+            if arrivals == 2:
+                ready.set()
+            await ready.wait()
+            return await original_reserve(self, **kwargs)
+
+        monkeypatch.setattr(AuthorityIdempotencyRepository, "reserve", barrier_reserve)
+        try:
+            first, second = calls
+            return tuple(
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        client.post(
+                            "/api/v1/service-actors",
+                            headers={**admin_headers, "Idempotency-Key": first[1]},
+                            json=first[0],
+                        ),
+                        client.post(
+                            "/api/v1/service-actors",
+                            headers={**admin_headers, "Idempotency-Key": second[1]},
+                            json=second[0],
+                        ),
+                    ),
+                    timeout=60,
+                )
+            )
+        finally:
+            monkeypatch.setattr(AuthorityIdempotencyRepository, "reserve", original_reserve)
+
+    observed_response_bodies: list[str] = []
+
+    async def capture_response(response: Response) -> None:
+        await response.aread()
+        observed_response_bodies.append(response.text)
+
+    caplog.set_level(logging.DEBUG, logger="app")
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+        event_hooks={"response": [capture_response]},
+    ) as client:
+        admin_profile = await client.get("/api/v1/actors/me", headers=admin_headers)
+        ordinary_profile = await client.get("/api/v1/actors/me", headers=ordinary_headers)
+        assert admin_profile.status_code == ordinary_profile.status_code == 200
+        admin_id = UUID(admin_profile.json()["actor_profile_id"])
+        assert (await run_admin_bootstrap(admin_id, execute=True))[0] == 0
+        caller_before = await actor_timestamps(admin_id)
+
+        reason = "Bind the verifier service to its exact issuer subject"
+        payload = {
+            "service_identity": ServiceIdentity.ARTIFACT_VERIFIER.value,
+            "subject": service_subject,
+            "reason": reason,
+        }
+        key = str(uuid4())
+        created = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": key},
+            json=payload,
+        )
+        assert created.status_code == 201, created.text
+        created_body = created.json()
+        assert set(created_body) == {
+            "actor_profile_id",
+            "service_identity",
+            "actor_status",
+            "identity_link_status",
+            "provisioning_method",
+            "created_at",
+            "linked_at",
+        }
+        assert created_body["service_identity"] == ServiceIdentity.ARTIFACT_VERIFIER.value
+        assert created_body["actor_status"] == created_body["identity_link_status"] == "active"
+        assert created_body["provisioning_method"] == "manual_service_provisioning"
+        assert service_subject not in created.text
+        assert reason not in created.text
+        assert settings.token_issuer not in created.text
+
+        state = await service_state(ServiceIdentity.ARTIFACT_VERIFIER)
+        assert state is not None
+        assert state[0] == created_body["actor_profile_id"]
+        assert state[1:5] == (
+            "service",
+            "active",
+            "manual_service_provisioning",
+            str(admin_id),
+        )
+        assert state[5] is None
+        assert state[6:11] == (
+            settings.token_issuer,
+            service_subject,
+            "service",
+            "active",
+            str(admin_id),
+        )
+        assert state[11] is None
+        caller_after_create = await actor_timestamps(admin_id)
+        assert caller_after_create[0] > caller_before[0]
+        assert caller_after_create[1] > caller_before[1]
+
+        replayed = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": key},
+            json=payload,
+        )
+        assert replayed.status_code == 201
+        assert replayed.json() == created_body
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
+        caller_after_replay = await actor_timestamps(admin_id)
+        assert caller_after_replay[0] > caller_after_create[0]
+        assert caller_after_replay[1] > caller_after_create[1]
+
+        original_replay_response = ServiceActorProvisioningService.replay_response
+
+        async def unavailable_replay(self, **kwargs):
+            raise ServiceActorProvisioningUnavailable("forced unavailable replay")
+
+        monkeypatch.setattr(
+            ServiceActorProvisioningService,
+            "replay_response",
+            unavailable_replay,
+        )
+        unavailable_replay_result = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": key},
+            json=payload,
+        )
+        monkeypatch.setattr(
+            ServiceActorProvisioningService,
+            "replay_response",
+            original_replay_response,
+        )
+        assert unavailable_replay_result.status_code == 503
+        assert unavailable_replay_result.json()["error"]["code"] == "service_unavailable"
+        assert await actor_timestamps(admin_id) == caller_after_replay
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
+
+        mismatched = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": key},
+            json=payload | {"reason": "A different bounded reason"},
+        )
+        assert mismatched.status_code == 409
+        assert mismatched.json()["error"]["code"] == "idempotency_mismatch"
+        assert await actor_timestamps(admin_id) == caller_after_replay
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
+
+        fixed_identity_conflict = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload | {"subject": "another-subject"},
+        )
+        assert fixed_identity_conflict.status_code == 409
+        assert (
+            fixed_identity_conflict.json()["error"]["code"]
+            == "service_identity_already_provisioned"
+        )
+        subject_conflict = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload
+            | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
+        )
+        assert subject_conflict.status_code == 409
+        assert subject_conflict.json()["error"]["code"] == "identity_subject_already_linked"
+        assert await service_state(ServiceIdentity.ARTIFACT_PUT_RESOLVER) is None
+
+        denied = await client.post(
+            "/api/v1/service-actors",
+            headers={**ordinary_headers, "Idempotency-Key": str(uuid4())},
+            json=payload | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
+        )
+        assert denied.status_code == 403
+        assert denied.json()["error"]["code"] == "permission_not_granted"
+        for kind, headers in nonhuman_headers.items():
+            unsupported = await client.post(
+                "/api/v1/service-actors",
+                headers={**headers, "Idempotency-Key": str(uuid4())},
+                json=payload
+                | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
+            )
+            assert unsupported.status_code == 403
+            assert unsupported.json()["error"]["code"] == "unsupported_subject_kind", kind
+
+        rejected_subject = "private-" + "x" * 220
+        rejected_reason = "private-" + "y" * 520
+        invalid = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload | {"subject": rejected_subject, "reason": rejected_reason},
+        )
+        assert invalid.status_code == 422
+        assert rejected_subject not in invalid.text
+        assert rejected_reason not in invalid.text
+        whitespace_subject = " private-service-subject "
+        whitespace = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload
+            | {
+                "service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value,
+                "subject": whitespace_subject,
+            },
+        )
+        assert whitespace.status_code == 422
+        assert whitespace_subject not in whitespace.text
+        invalid_identity = "private-unknown-service-identity"
+        unknown = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload | {"service_identity": invalid_identity},
+        )
+        assert unknown.status_code == 422
+        assert invalid_identity not in unknown.text
+        invalid_key = "private-invalid-idempotency-key"
+        invalid_header = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": invalid_key},
+            json=payload,
+        )
+        assert invalid_header.status_code == 422
+        assert invalid_key not in invalid_header.text
+        assert service_subject not in invalid_header.text
+        assert reason not in invalid_header.text
+
+        for path in ("/api/v1/actors/me", "/api/v1/auth/me"):
+            service_denial = await client.get(path, headers=service_headers)
+            assert service_denial.status_code == 403
+            assert service_denial.json()["error"]["code"] == "service_actor_not_provisioned"
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
+
+        race_key = str(uuid4())
+        scheduler_payload = payload | {
+            "service_identity": ServiceIdentity.ARTIFACT_SCHEDULER.value,
+            "subject": "auth09b-scheduler",
+        }
+        same_replays = await run_reservation_race(
+            ((scheduler_payload, race_key), (scheduler_payload, race_key))
+        )
+        assert [response.status_code for response in same_replays] == [201, 201]
+        assert same_replays[0].json() == same_replays[1].json()
+
+        drift_key = str(uuid4())
+        materializer_payload = payload | {
+            "service_identity": ServiceIdentity.ARTIFACT_MATERIALIZER.value,
+            "subject": "auth09b-materializer-a",
+        }
+        drift_race = await run_reservation_race(
+            (
+                (materializer_payload, drift_key),
+                (materializer_payload | {"subject": "auth09b-materializer-b"}, drift_key),
+            )
+        )
+        assert sorted(response.status_code for response in drift_race) == [201, 409]
+        assert (
+            next(response for response in drift_race if response.status_code == 409).json()[
+                "error"
+            ]["code"]
+            == "idempotency_mismatch"
+        )
+
+        output_payload = payload | {
+            "service_identity": ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value,
+            "subject": "auth09b-output-a",
+        }
+        fixed_race = await run_reservation_race(
+            (
+                (output_payload, str(uuid4())),
+                (output_payload | {"subject": "auth09b-output-b"}, str(uuid4())),
+            )
+        )
+        assert sorted(response.status_code for response in fixed_race) == [201, 409]
+        assert (
+            next(response for response in fixed_race if response.status_code == 409).json()[
+                "error"
+            ]["code"]
+            == "service_identity_already_provisioned"
+        )
+
+        shared_subject = "auth09b-shared-external-identity"
+        external_race = await run_reservation_race(
+            (
+                (
+                    payload
+                    | {
+                        "service_identity": ServiceIdentity.ARTIFACT_BINDING.value,
+                        "subject": shared_subject,
+                    },
+                    str(uuid4()),
+                ),
+                (
+                    payload
+                    | {
+                        "service_identity": ServiceIdentity.ARTIFACT_GUIDE_READER.value,
+                        "subject": shared_subject,
+                    },
+                    str(uuid4()),
+                ),
+            )
+        )
+        assert sorted(response.status_code for response in external_race) == [201, 409]
+        assert (
+            next(response for response in external_race if response.status_code == 409).json()[
+                "error"
+            ]["code"]
+            == "identity_subject_already_linked"
+        )
+
+        failure_identity = (
+            ServiceIdentity.ARTIFACT_BINDING
+            if await service_state(ServiceIdentity.ARTIFACT_BINDING) is None
+            else ServiceIdentity.ARTIFACT_GUIDE_READER
+        )
+        failure_payload = payload | {
+            "service_identity": failure_identity.value,
+            "subject": "auth09b-evidence-retry",
+        }
+        failure_key = str(uuid4())
+        before_failure = await authority_counts()
+        original_add_authority_event = AuditService.add_authority_event
+
+        async def fail_success_evidence(self, event):
+            if event.event_type is AuthorityEventType.SERVICE_ACTOR_PROVISIONED:
+                raise SQLAlchemyError("forced service evidence failure")
+            return await original_add_authority_event(self, event)
+
+        monkeypatch.setattr(AuditService, "add_authority_event", fail_success_evidence)
+        failed = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": failure_key},
+            json=failure_payload,
+        )
+        monkeypatch.setattr(AuditService, "add_authority_event", original_add_authority_event)
+        assert failed.status_code == 503
+        assert failed.json()["error"]["code"] == "service_unavailable"
+        assert failed.json()["error"]["retryable"] is True
+        assert await authority_counts() == before_failure
+        assert await service_state(failure_identity) is None
+
+        retried = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": failure_key},
+            json=failure_payload,
+        )
+        assert retried.status_code == 201, retried.text
+
+        commit_payload = payload | {
+            "service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value,
+            "subject": "auth09b-commit-retry",
+        }
+        commit_key = str(uuid4())
+        before_commit_failure = await authority_counts()
+        original_commit = AsyncSession.commit
+        fail_next_commit = True
+
+        async def fail_service_commit(session: AsyncSession) -> None:
+            nonlocal fail_next_commit
+            if fail_next_commit:
+                fail_next_commit = False
+                raise SQLAlchemyError("forced service commit failure")
+            await original_commit(session)
+
+        monkeypatch.setattr(AsyncSession, "commit", fail_service_commit)
+        commit_failed = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": commit_key},
+            json=commit_payload,
+        )
+        monkeypatch.setattr(AsyncSession, "commit", original_commit)
+        assert commit_failed.status_code == 503
+        assert commit_failed.json()["error"]["code"] == "service_unavailable"
+        assert await authority_counts() == before_commit_failure
+        assert await service_state(ServiceIdentity.ARTIFACT_PUT_RESOLVER) is None
+        commit_retried = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": commit_key},
+            json=commit_payload,
+        )
+        assert commit_retried.status_code == 201, commit_retried.text
+
+        class CanonicalIssuerUnavailable:
+            async def verify(self, token: str):
+                return await verifier.verify(token)
+
+            def canonical_issuer(self) -> str:
+                raise AuthVerificationUnavailableError("issuer unavailable")
+
+        app.state.auth_verifier = CanonicalIssuerUnavailable()
+        unavailable = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=payload,
+        )
+        app.state.auth_verifier = verifier
+        assert unavailable.status_code == 503
+        assert unavailable.json()["error"]["code"] == "identity_verification_unavailable"
+
+    sensitive_values = {
+        admin_token,
+        ordinary_token,
+        service_token,
+        *(
+            headers["Authorization"].removeprefix("Bearer ")
+            for headers in nonhuman_headers.values()
+        ),
+        settings.token_issuer,
+        "private-admin@example.test",
+        "auth09b-admin",
+        "auth09b-admin-token",
+        "auth09b-ordinary",
+        "auth09b-ordinary-token",
+        service_subject,
+        "auth09b-service-token",
+        *(f"auth09b-{kind}" for kind in nonhuman_headers),
+        *(f"auth09b-{kind}-token" for kind in nonhuman_headers),
+        reason,
+        "A different bounded reason",
+        "another-subject",
+        rejected_subject,
+        rejected_reason,
+        invalid_identity,
+        invalid_key,
+        scheduler_payload["subject"],
+        materializer_payload["subject"],
+        "auth09b-materializer-b",
+        output_payload["subject"],
+        "auth09b-output-b",
+        shared_subject,
+        failure_payload["subject"],
+        commit_payload["subject"],
+    }
+    assert all(value not in body for value in sensitive_values for body in observed_response_bodies)
+    assert all(value not in caplog.text for value in sensitive_values)
+
+    async with db_session.get_session_factory()() as session:
+        service_profiles = (
+            await session.scalars(select(ActorProfile).where(ActorProfile.actor_kind == "service"))
+        ).all()
+        pending = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(AuthorityIdempotencyRecord)
+                .where(AuthorityIdempotencyRecord.status == "pending")
+            )
+            or 0
+        )
+        service_events = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == AuthorityEventType.SERVICE_ACTOR_PROVISIONED.value
+                )
+            )
+        ).all()
+        audit_rows = (
+            await session.scalars(text("select row_to_json(audit_events)::text from audit_events"))
+        ).all()
+        conflict_denials = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.event_type
+                    == AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED.value,
+                    AuditEvent.denial_code == "identity_link_conflict",
+                )
+            )
+        ).all()
+        service_grants = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(AdminRoleGrant)
+                .where(
+                    AdminRoleGrant.target_actor_profile_id.in_(
+                        [profile.id for profile in service_profiles]
+                    )
+                )
+            )
+            or 0
+        )
+    assert service_profiles
+    assert all(profile.last_seen_at is None for profile in service_profiles)
+    assert pending == 0
+    assert service_grants == 0
+    assert service_events
+    assert all(event.action_id is None for event in service_events)
+    assert all(event.permission_id == "actor.service.provision" for event in service_events)
+    serialized_audit = "\n".join(audit_rows)
+    assert all(value not in serialized_audit for value in sensitive_values)
+    assert conflict_denials
+    assert all(event.action_id == "actor.service.provision" for event in conflict_denials)
+    await db_session.dispose_engine()
+
+
+async def test_service_actor_provisioning_failure_and_authority_races_are_atomic(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bound evidence failures and crossed authority changes without partial state."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env)
+    verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    app = create_app(settings)
+    app.state.auth_verifier = verifier
+    first_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09b-race-admin-one", "jti": "auth09b-race-admin-one-token"},
+    )
+    second_token = issue_asymmetric_token(
+        private_key,
+        claims={"sub": "auth09b-race-admin-two", "jti": "auth09b-race-admin-two-token"},
+    )
+    first_headers = {"Authorization": f"Bearer {first_token}"}
+    second_headers = {"Authorization": f"Bearer {second_token}"}
+
+    async def snapshot(actor_id: UUID) -> tuple[int, int, int, int, datetime, datetime]:
+        async with db_session.get_session_factory()() as session:
+            timestamps = (
+                await session.execute(
+                    text(
+                        "select p.last_seen_at,l.last_verified_at "
+                        "from actor_profiles p join actor_identity_links l "
+                        "on l.actor_profile_id=p.id where p.id=:actor"
+                    ),
+                    {"actor": str(actor_id)},
+                )
+            ).one()
+            return (
+                int(await session.scalar(select(func.count()).select_from(ActorProfile)) or 0),
+                int(await session.scalar(select(func.count()).select_from(ActorIdentityLink)) or 0),
+                int(
+                    await session.scalar(
+                        select(func.count()).select_from(AuthorityIdempotencyRecord)
+                    )
+                    or 0
+                ),
+                int(await session.scalar(select(func.count()).select_from(AuditEvent)) or 0),
+                timestamps[0],
+                timestamps[1],
+            )
+
+    async def binding_count(identity: ServiceIdentity, subject: str) -> tuple[int, int]:
+        async with db_session.get_session_factory()() as session:
+            profiles = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ActorProfile)
+                    .where(ActorProfile.service_identity == identity.value)
+                )
+                or 0
+            )
+            links = int(
+                await session.scalar(
+                    select(func.count())
+                    .select_from(ActorIdentityLink)
+                    .where(
+                        ActorIdentityLink.issuer == settings.token_issuer,
+                        ActorIdentityLink.subject == subject,
+                    )
+                )
+                or 0
+            )
+            return profiles, links
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        first_profile = await client.get("/api/v1/actors/me", headers=first_headers)
+        second_profile = await client.get("/api/v1/actors/me", headers=second_headers)
+        assert first_profile.status_code == second_profile.status_code == 200
+        first_id = UUID(first_profile.json()["actor_profile_id"])
+        second_id = UUID(second_profile.json()["actor_profile_id"])
+        assert (await run_admin_bootstrap(first_id, execute=True))[0] == 0
+        second_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers={**first_headers, "Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": str(second_id),
+                "role": "access_administrator",
+                "scope_type": "system",
+                "scope_project_id": None,
+                "reason": "Independent authority for crossed mutation proof",
+            },
+        )
+        assert second_grant.status_code == 201, second_grant.text
+
+        failure_cases = (
+            (
+                ServiceIdentity.ARTIFACT_VERIFIER,
+                "auth09b-decision-evidence-failure",
+                AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+                False,
+            ),
+            (
+                ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                "auth09b-invalidation-evidence-failure",
+                AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
+                False,
+            ),
+            (
+                ServiceIdentity.ARTIFACT_BINDING,
+                "auth09b-idempotency-completion-failure",
+                None,
+                True,
+            ),
+        )
+        original_add_authority_event = AuditService.add_authority_event
+        original_complete = AuthorityIdempotencyRepository.complete
+        for identity, subject, failed_event, fail_completion in failure_cases:
+            key = str(uuid4())
+            payload = {
+                "service_identity": identity.value,
+                "subject": subject,
+                "reason": "Prove exact failure rollback and retry",
+            }
+            before = await snapshot(first_id)
+
+            async def fail_selected_evidence(self, event, *, selected=failed_event):
+                if selected is not None and event.event_type is selected:
+                    raise SQLAlchemyError("forced bounded authority evidence failure")
+                return await original_add_authority_event(self, event)
+
+            async def fail_idempotency_completion(self, claim, response):
+                raise SQLAlchemyError("forced idempotency completion failure")
+
+            if fail_completion:
+                monkeypatch.setattr(
+                    AuthorityIdempotencyRepository,
+                    "complete",
+                    fail_idempotency_completion,
+                )
+            else:
+                monkeypatch.setattr(AuditService, "add_authority_event", fail_selected_evidence)
+            try:
+                failed = await client.post(
+                    "/api/v1/service-actors",
+                    headers={**first_headers, "Idempotency-Key": key},
+                    json=payload,
+                )
+            finally:
+                monkeypatch.setattr(
+                    AuditService,
+                    "add_authority_event",
+                    original_add_authority_event,
+                )
+                monkeypatch.setattr(
+                    AuthorityIdempotencyRepository,
+                    "complete",
+                    original_complete,
+                )
+            assert failed.status_code == 503, failed.text
+            failure_error = failed.json()["error"]
+            assert failure_error["code"] == "service_unavailable"
+            assert failure_error["message"] == "Service unavailable"
+            assert failure_error["retryable"] is True
+            assert UUID(failure_error["correlation_id"])
+            assert failure_error["details"] == {}
+            assert await snapshot(first_id) == before
+            assert await binding_count(identity, subject) == (0, 0)
+
+            retried = await client.post(
+                "/api/v1/service-actors",
+                headers={**first_headers, "Idempotency-Key": key},
+                json=payload,
+            )
+            assert retried.status_code == 201, retried.text
+            assert await binding_count(identity, subject) == (1, 1)
+
+        same_pair_identity = ServiceIdentity.ARTIFACT_SCHEDULER
+        same_pair_subject = "auth09b-same-pair-distinct-keys"
+        same_pair_payload = {
+            "service_identity": same_pair_identity.value,
+            "subject": same_pair_subject,
+            "reason": "Serialize one exact binding across distinct request keys",
+        }
+        same_pair_keys = (str(uuid4()), str(uuid4()))
+        original_reserve = AuthorityIdempotencyRepository.reserve
+        reservation_ready = asyncio.Event()
+        reservation_arrivals = 0
+
+        async def barrier_reserve(self, **kwargs):
+            nonlocal reservation_arrivals
+            reservation_arrivals += 1
+            if reservation_arrivals == 2:
+                reservation_ready.set()
+            await reservation_ready.wait()
+            return await original_reserve(self, **kwargs)
+
+        monkeypatch.setattr(AuthorityIdempotencyRepository, "reserve", barrier_reserve)
+        try:
+            same_pair_responses = await asyncio.wait_for(
+                asyncio.gather(
+                    *(
+                        client.post(
+                            "/api/v1/service-actors",
+                            headers={**first_headers, "Idempotency-Key": key},
+                            json=same_pair_payload,
+                        )
+                        for key in same_pair_keys
+                    )
+                ),
+                timeout=60,
+            )
+        finally:
+            monkeypatch.setattr(AuthorityIdempotencyRepository, "reserve", original_reserve)
+        assert sorted(response.status_code for response in same_pair_responses) == [201, 409]
+        losing_response = next(
+            response for response in same_pair_responses if response.status_code == 409
+        )
+        assert losing_response.json()["error"]["code"] == "service_identity_already_provisioned"
+        winner = next(response for response in same_pair_responses if response.status_code == 201)
+        winner_actor_id = winner.json()["actor_profile_id"]
+        assert await binding_count(same_pair_identity, same_pair_subject) == (1, 1)
+        async with db_session.get_session_factory()() as session:
+            pair_records = (
+                await session.scalars(
+                    select(AuthorityIdempotencyRecord).where(
+                        AuthorityIdempotencyRecord.idempotency_key.in_(same_pair_keys)
+                    )
+                )
+            ).all()
+            pair_events = (
+                await session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.resource_id == winner_actor_id,
+                        AuditEvent.event_type.in_(
+                            [
+                                AuthorityEventType.SERVICE_ACTOR_PROVISIONED.value,
+                                AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED.value,
+                            ]
+                        ),
+                    )
+                )
+            ).all()
+        assert len(pair_records) == 1
+        assert pair_records[0].status == "committed"
+        assert [event.event_type for event in pair_events].count(
+            AuthorityEventType.SERVICE_ACTOR_PROVISIONED.value
+        ) == 1
+        assert [event.event_type for event in pair_events].count(
+            AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED.value
+        ) == 1
+
+        async with db_session.get_session_factory()() as session:
+            first_grant_id = await session.scalar(
+                select(AdminRoleGrant.id).where(
+                    AdminRoleGrant.target_actor_profile_id == str(first_id),
+                    AdminRoleGrant.role == "access_administrator",
+                    AdminRoleGrant.status == "active",
+                )
+            )
+        assert first_grant_id is not None
+        crossed_identity = ServiceIdentity.ARTIFACT_MATERIALIZER
+        crossed_subject = "auth09b-crossed-revocation"
+        crossed_key = str(uuid4())
+        crossed_payload = {
+            "service_identity": crossed_identity.value,
+            "subject": crossed_subject,
+            "reason": "Cross provisioning with matched grant revocation",
+        }
+        original_lock_control = AdminAuthorizationRepository.lock_control
+        control_ready = asyncio.Event()
+        control_arrivals = 0
+
+        async def barrier_lock_control(self):
+            nonlocal control_arrivals
+            control_arrivals += 1
+            if control_arrivals == 2:
+                control_ready.set()
+            await control_ready.wait()
+            return await original_lock_control(self)
+
+        monkeypatch.setattr(AdminAuthorizationRepository, "lock_control", barrier_lock_control)
+        try:
+            crossed_provision, crossed_revoke = await asyncio.wait_for(
+                asyncio.gather(
+                    client.post(
+                        "/api/v1/service-actors",
+                        headers={**first_headers, "Idempotency-Key": crossed_key},
+                        json=crossed_payload,
+                    ),
+                    client.post(
+                        f"/api/v1/admin-role-grants/{first_grant_id}/revoke",
+                        headers={**second_headers, "Idempotency-Key": str(uuid4())},
+                        json={"reason": "Revoke while service provisioning is queued"},
+                    ),
+                ),
+                timeout=60,
+            )
+        finally:
+            monkeypatch.setattr(
+                AdminAuthorizationRepository,
+                "lock_control",
+                original_lock_control,
+            )
+        assert crossed_revoke.status_code == 200, crossed_revoke.text
+        assert crossed_provision.status_code in {201, 403}, crossed_provision.text
+        if crossed_provision.status_code == 403:
+            assert crossed_provision.json()["error"]["code"] == "permission_not_granted"
+        expected_binding = (1, 1) if crossed_provision.status_code == 201 else (0, 0)
+        assert await binding_count(crossed_identity, crossed_subject) == expected_binding
+        crossed_actor_id = (
+            crossed_provision.json()["actor_profile_id"]
+            if crossed_provision.status_code == 201
+            else None
+        )
+
+        denied_after_revoke = await client.post(
+            "/api/v1/service-actors",
+            headers={**first_headers, "Idempotency-Key": crossed_key},
+            json=crossed_payload,
+        )
+        assert denied_after_revoke.status_code == 403
+        assert denied_after_revoke.json()["error"]["code"] == "permission_not_granted"
+        crossed_denial_request_ids = [denied_after_revoke.headers["x-request-id"]]
+        if crossed_provision.status_code == 403:
+            crossed_denial_request_ids.append(crossed_provision.headers["x-request-id"])
+
+    async with db_session.get_session_factory()() as session:
+        first_grant = await session.get(AdminRoleGrant, first_grant_id)
+        pending = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(AuthorityIdempotencyRecord)
+                .where(AuthorityIdempotencyRecord.status == "pending")
+            )
+            or 0
+        )
+        crossed_records = (
+            await session.scalars(
+                select(AuthorityIdempotencyRecord).where(
+                    AuthorityIdempotencyRecord.idempotency_key == crossed_key
+                )
+            )
+        ).all()
+        crossed_events = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.action_id == ActionId.ACTOR_SERVICE_PROVISION.value,
+                    AuditEvent.actor_id == str(first_id),
+                    AuditEvent.request_id.in_(crossed_denial_request_ids),
+                )
+            )
+        ).all()
+        revoked_events = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.resource_id == str(first_grant_id),
+                    AuditEvent.event_type == AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED.value,
+                )
+            )
+        ).all()
+        assert len(revoked_events) == 1
+        revoke_invalidations = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.event_type
+                    == AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED.value,
+                    AuditEvent.invalidation_cause_event_id == revoked_events[0].id,
+                )
+            )
+            or 0
+        )
+        crossed_success_evidence = []
+        if crossed_actor_id is not None:
+            crossed_success_evidence = (
+                await session.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.resource_id == crossed_actor_id,
+                        AuditEvent.event_type.in_(
+                            [
+                                AuthorityEventType.SERVICE_ACTOR_PROVISIONED.value,
+                                AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED.value,
+                            ]
+                        ),
+                    )
+                )
+            ).all()
+    assert first_grant is not None and first_grant.status == "revoked"
+    assert pending == 0
+    expected_success = crossed_provision.status_code == 201
+    assert len(crossed_records) == int(expected_success)
+    if crossed_records:
+        assert crossed_records[0].status == "committed"
+    expected_denials = 1 if expected_success else 2
+    assert len(crossed_events) == expected_denials
+    assert all(
+        event.event_type == AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED.value
+        and event.denial_code == "permission_not_granted"
+        for event in crossed_events
+    )
+    assert revoke_invalidations == 1
+    assert len(crossed_success_evidence) == 2 * int(expected_success)
+    if crossed_success_evidence:
+        assert {event.event_type for event in crossed_success_evidence} == {
+            AuthorityEventType.SERVICE_ACTOR_PROVISIONED.value,
+            AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED.value,
+        }
+    await db_session.dispose_engine()
+
+
 async def test_auth_me_maps_actor_registry_failure_to_service_unavailable(
     monkeypatch: pytest.MonkeyPatch,
     auth_database_env: str,
@@ -2946,11 +4586,15 @@ async def test_actor_id_uses_subject_and_issuer_not_email() -> None:
         dev_auth_email="second@example.test",
     )
 
-    first_actor = (await DevelopmentAuthVerifier(first).verify(first.dev_auth_token)).legacy_actor()
-    second_actor = (
-        await DevelopmentAuthVerifier(second).verify(second.dev_auth_token)
-    ).legacy_actor()
+    first_verifier = DevelopmentAuthVerifier(first)
+    second_verifier = DevelopmentAuthVerifier(second)
+    first_result = await first_verifier.verify(first.dev_auth_token)
+    second_result = await second_verifier.verify(second.dev_auth_token)
+    first_actor = first_result.legacy_actor()
+    second_actor = second_result.legacy_actor()
 
+    assert first_verifier.canonical_issuer() == first_result.token.issuer == "same-issuer"
+    assert second_verifier.canonical_issuer() == second_result.token.issuer == "same-issuer"
     assert first_actor.actor_id == second_actor.actor_id
     assert first_actor.email is None
     assert second_actor.email is None
@@ -3048,6 +4692,35 @@ def test_dev_auth_rejects_surrounding_identity_anchor_whitespace(field_name: str
 
     with pytest.raises(RuntimeError, match=f"WORKSTREAM_{field_name.upper()}"):
         DevelopmentAuthVerifier(Settings(**values))
+
+
+def test_dev_auth_rejects_issuer_above_persisted_utf8_bound() -> None:
+    with pytest.raises(RuntimeError, match="WORKSTREAM_DEV_AUTH_ISSUER"):
+        DevelopmentAuthVerifier(
+            Settings(
+                environment="local",
+                auth_provider="dev",
+                dev_auth_token="local-token",
+                dev_auth_subject="subject",
+                dev_auth_issuer="é" * 101,
+            )
+        )
+    with pytest.raises(RuntimeError, match="WORKSTREAM_FLOW_AUTH_ISSUER"):
+        FlowAuthVerifier(
+            Settings(
+                environment="test",
+                auth_provider="flow",
+                flow_auth_issuer="é" * 101,
+                flow_auth_audience="workstream",
+                flow_auth_local_hmac_secret="local-secret",
+            )
+        )
+    with pytest.raises(RuntimeError, match="WORKSTREAM_TOKEN_ISSUER"):
+        FlowAuthVerifier(
+            production_verifier_settings(
+                token_issuer="https://issuer.example.test/" + "é" * 100,
+            )
+        )
 
 
 async def test_flow_auth_verifier_boundary_rejects_unconfigured_verification() -> None:

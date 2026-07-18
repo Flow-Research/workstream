@@ -11,8 +11,8 @@ Operators and agents may do the actual work outside Workstream. Workstream owns 
 - review decisions
 - revision replay
 - contribution records
-- payment records
-- reputation records
+- compensation awards, fulfillment receipts, and projections
+- reputation projections when separately implemented
 
 The first product is task evaluation and contribution infrastructure, not an execution IDE.
 
@@ -23,7 +23,6 @@ Each project has a human-facing guide and approved machine-readable policies.
 The guide explains:
 
 - task types
-- base amount
 - quality bar
 - submission format
 - common rejection reasons
@@ -35,9 +34,10 @@ The policies enforce:
 - post-submit checker policy
 - review policy
 - revision policy
-- payment policy
+- contribution policy
 
-If a rule matters, it belongs in the guide, submission artifact policy, checker policy, review policy, revision policy, payment policy, or task template.
+If a rule matters, it belongs in the guide, submission artifact policy, checker
+policy, review policy, revision policy, contribution policy, or task template.
 
 Out-of-band guidance is not enforceable until it is moved into those contracts or into a checker that is governed by those contracts.
 
@@ -61,12 +61,12 @@ Blocking pre-submit failures block submission creation before a submission versi
 
 Automated checks can enforce structure. Human reviewers decide whether the work is actually good, useful, original, and aligned with the project guide.
 
-Reviewers must produce actionable findings:
+Reviewers must produce actionable immutable findings:
 
 - what failed
 - why it matters
 - what must change
-- severity
+- blocking or advisory lifecycle meaning
 - evidence
 
 ## 5. Needs Revision Is A First-Class State
@@ -77,31 +77,39 @@ Needs revision is not a side note. It is a formal loop:
 NEEDS_REVISION -> SUBMITTED -> EVALUATION_PENDING -> REVIEW_PENDING
 ```
 
-While a task is in `NEEDS_REVISION`, the assigned contributor can run pre-submit
-feedback and submit a replacement version directly. The system must preserve
-original feedback, fix notes, evidence, and closure.
+While a task is in `NEEDS_REVISION`, the assigned contributor receives the
+frozen preparation, responds to every unresolved blocking finding, and submits
+a replacement version. The system preserves immutable findings, responses,
+evidence, and later resolutions.
 
-The system must also preserve guide and policy context. Prior submissions keep their locked context; revision policy decides whether the next attempt rebases to the latest active context before the contributor resumes.
+Prior Submissions keep their stamped context. Preparation compares the prior
+guide identity/activation sequence with the currently active guide: exact match
+keeps, any different valid pair rebases forward or backward, and unsafe context
+blocks. Task Context returns the frozen preparation. No guide rebase occurs
+during review.
 
-## 6. Payment Follows Acceptance
+## 6. Compensation Follows Contribution
 
-The first version uses contribution records and a manual payment ledger. Blockchain settlement comes later.
+The first version uses immutable contribution and compensation-award records
+with manually recorded fulfillment. Blockchain settlement comes later.
 
-Accepted work creates a contribution record first. Payment and reputation updates attach to that accepted contribution.
+Every valid human Review creates a reviewer contribution. Accept additionally
+creates FinalAcceptance, and only that fact creates the submitter contribution.
+Compensation attaches to the applicable immutable contribution; explicit unpaid
+rules create no award. Reputation remains a separately implemented projection.
 
-Payment records track:
+`CompensationAward` and `CompensationFulfillmentReceipt` records track:
 
-- base amount
-- accepted amount
-- pending payout
-- paid amount
-- payment status
-- payment date
-- payment reference
+- contribution and beneficiary
+- frozen `ContributionPolicyVersion` and `ContributionAwardDefinition`
+- instrument, unit, and exact quantity
+- delivery and fulfillment status
+- immutable fulfillment receipt and external reference
 
-## 7. Reputation Must Be Earned From Outcomes
+## 7. Future Reputation Must Be Earned From Outcomes
 
-Reputation is not a profile badge. It is computed from work history:
+When separately implemented, reputation is computed from work history rather
+than assigned as a profile badge:
 
 - acceptance rate
 - revision rate

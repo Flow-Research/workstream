@@ -14,6 +14,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import api_router
+from app.adapters.artifacts import (
+    cleanup_stale_artifact_scratch,
+    create_artifact_store_bootstrap,
+)
 from app.core.api_controls import (
     ApiErrorResponse,
     RequestContextMiddleware,
@@ -23,6 +27,7 @@ from app.core.api_controls import (
 )
 from app.core.auth import build_auth_verifier, cache_auth_verifier, prepare_auth_verifier
 from app.core.config import Settings, get_settings
+from app.interfaces.artifacts import ArtifactStoreBootstrap, ArtifactStoreNamespaceClaim
 
 PRODUCTION_LIKE_ENVIRONMENTS = {"staging", "preview", "prod", "production"}
 MAX_VALIDATION_ERRORS = 20
@@ -60,7 +65,36 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
         and not app.state.auth_configuration_valid
     ):
         build_auth_verifier(settings)
+    if settings.artifact_store_backend != "disabled":
+        bootstrap = create_artifact_store_bootstrap(settings)
+        try:
+            claim = await _validate_artifact_storage_namespace_at_startup(
+                settings,
+                bootstrap,
+            )
+            bootstrap.initialize_after_namespace_claim(claim)
+            await cleanup_stale_artifact_scratch(settings)
+        finally:
+            bootstrap.close()
     yield
+
+
+async def _validate_artifact_storage_namespace_at_startup(
+    settings: Settings,
+    bootstrap: ArtifactStoreBootstrap,
+) -> ArtifactStoreNamespaceClaim:
+    """Call the artifact owner's exact startup namespace fence."""
+    try:
+        from app.modules.artifacts.service import (
+            validate_artifact_storage_namespace_at_startup,
+        )
+    except ImportError as exc:
+        raise RuntimeError("artifact namespace startup validation is unavailable") from exc
+
+    return await validate_artifact_storage_namespace_at_startup(
+        bootstrap,
+        settings,
+    )
 
 
 def _validation_error_detail(error: dict[str, Any]) -> dict[str, Any]:

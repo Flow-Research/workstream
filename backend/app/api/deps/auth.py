@@ -29,6 +29,7 @@ from app.modules.actors.service import (
     ActorService,
     ActorSuspended,
     ResolvedActor,
+    ServiceActorNotProvisioned,
     UnsupportedSubjectKind,
 )
 from app.modules.api_controls.service import (
@@ -127,7 +128,11 @@ async def get_canonical_actor(
     rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
 ) -> ResolvedActor:
     """Resolve one verified token to the canonical local actor."""
-    if result.token.subject_kind not in {"human", "service"}:
+    if result.token.subject_kind == "service":
+        raise actor_registry_http_error(
+            ServiceActorNotProvisioned("Service actor is not provisioned")
+        )
+    if result.token.subject_kind != "human":
         raise actor_registry_http_error(UnsupportedSubjectKind("Unsupported subject kind"))
     service = ActorService(session)
     try:

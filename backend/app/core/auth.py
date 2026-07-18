@@ -14,6 +14,10 @@ from app.schemas.auth import AuthVerificationResult
 class _UnavailableAuthVerifier:
     """Fail-closed verifier returned when production configuration is invalid."""
 
+    def canonical_issuer(self) -> str:
+        """Fail closed when trusted issuer configuration is unavailable."""
+        raise AuthVerificationUnavailableError("token verification is unavailable")
+
     async def verify(self, token: str) -> AuthVerificationResult:
         raise AuthVerificationUnavailableError("token verification is unavailable")
 

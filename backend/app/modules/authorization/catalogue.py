@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum, unique
 from types import MappingProxyType
 
+from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
+
 
 @unique
 class PermissionId(StrEnum):
@@ -100,6 +102,14 @@ class ActionId(StrEnum):
     ADMIN_ROLE_GRANT_ISSUE = "admin_role_grant.issue"
     ADMIN_ROLE_GRANT_REVOKE = "admin_role_grant.revoke"
     ADMIN_ROLE_GRANT_BOOTSTRAP = "admin_role_grant.bootstrap"
+    ACTOR_PROFILE_READ = "actor.profile.read"
+    ACTOR_PROFILE_SUSPEND = "actor.profile.suspend"
+    ACTOR_PROFILE_REACTIVATE = "actor.profile.reactivate"
+    ACTOR_PROFILE_DEACTIVATE = "actor.profile.deactivate"
+    ACTOR_IDENTITY_LINK_READ = "actor.identity_link.read"
+    ACTOR_IDENTITY_LINK_REVOKE = "actor.identity_link.revoke"
+    ACTOR_IDENTITY_LINK_REACTIVATE = "actor.identity_link.reactivate"
+    ACTOR_SERVICE_PROVISION = "actor.service.provision"
     OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
@@ -158,6 +168,9 @@ class ActionOwner(StrEnum):
 
     AUTH_07B = "WS-AUTH-001-07B"
     AUTH_08 = "WS-AUTH-001-08"
+    AUTH_09B = "WS-AUTH-001-09B"
+    AUTH_09C = "WS-AUTH-001-09C"
+    AUTH_09D = "WS-AUTH-001-09D"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     REV_05 = "WS-REV-001-05"
@@ -178,7 +191,7 @@ class ActionOwner(StrEnum):
 
 @unique
 class ActionAvailability(StrEnum):
-    """Whether an owning feature has activated an action."""
+    """Whether AUTH has activated an action after merged feature proof."""
 
     PLANNED = "planned"
     ACTIVE = "active"
@@ -253,6 +266,46 @@ ACTION_DEFINITIONS = (
         ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
         PermissionId.ADMIN_ROLE_GRANT,
         ActionOwner.AUTH_08,
+    ),
+    _active(
+        ActionId.ACTOR_PROFILE_READ,
+        PermissionId.ACTOR_PROFILE_READ_ANY,
+        ActionOwner.AUTH_09C,
+    ),
+    _planned(
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        PermissionId.ACTOR_PROFILE_SUSPEND,
+        ActionOwner.AUTH_09D,
+    ),
+    _planned(
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        PermissionId.ACTOR_PROFILE_REACTIVATE,
+        ActionOwner.AUTH_09D,
+    ),
+    _planned(
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
+        PermissionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionOwner.AUTH_09D,
+    ),
+    _active(
+        ActionId.ACTOR_IDENTITY_LINK_READ,
+        PermissionId.ACTOR_IDENTITY_LINK_READ,
+        ActionOwner.AUTH_09C,
+    ),
+    _planned(
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        PermissionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionOwner.AUTH_09D,
+    ),
+    _planned(
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionOwner.AUTH_09D,
+    ),
+    _active(
+        ActionId.ACTOR_SERVICE_PROVISION,
+        PermissionId.ACTOR_SERVICE_PROVISION,
+        ActionOwner.AUTH_09B,
     ),
     _planned(
         ActionId.OPERATIONS_TASK_START_OVERRIDE,
@@ -509,7 +562,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 74 or len(ACTION_IDS) != 57:
+    if len(PERMISSION_IDS) != 74 or len(ACTION_IDS) != 65:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
@@ -525,6 +578,9 @@ def _index_actions(
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
+        ActionId.ACTOR_PROFILE_READ,
+        ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.ACTOR_SERVICE_PROVISION,
     }
     if {
         definition.action_id
@@ -540,6 +596,132 @@ def _index_actions(
 
 
 ACTION_BY_ID = _index_actions(ACTION_DEFINITIONS)
+
+
+_SERVICE_ACTIONS = {
+    ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
+    ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
+    ServiceIdentity.ARTIFACT_SCHEDULER: frozenset(
+        {ActionId.ARTIFACT_PENDING_WORK_SCAN, ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE}
+    ),
+    ServiceIdentity.ARTIFACT_BINDING: frozenset(
+        {
+            ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+            ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+            ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
+        }
+    ),
+    ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset(
+        {ActionId.ARTIFACT_GUIDE_SOURCE_READ}
+    ),
+    ServiceIdentity.ARTIFACT_MATERIALIZER: frozenset(
+        {
+            ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        }
+    ),
+    ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
+        {ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}
+    ),
+}
+
+
+def _index_service_actions(
+    rows: dict[ServiceIdentity, frozenset[ActionId]],
+) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
+    """Validate the exact fixed service matrix and return an immutable view."""
+    expected_rows = {
+        ServiceIdentity.ARTIFACT_VERIFIER: frozenset(
+            {ActionId.ARTIFACT_VERIFICATION_EXECUTE}
+        ),
+        ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset(
+            {ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}
+        ),
+        ServiceIdentity.ARTIFACT_SCHEDULER: frozenset(
+            {ActionId.ARTIFACT_PENDING_WORK_SCAN, ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE}
+        ),
+        ServiceIdentity.ARTIFACT_BINDING: frozenset(
+            {
+                ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
+                ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+                ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
+            }
+        ),
+        ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset(
+            {ActionId.ARTIFACT_GUIDE_SOURCE_READ}
+        ),
+        ServiceIdentity.ARTIFACT_MATERIALIZER: frozenset(
+            {
+                ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+                ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            }
+        ),
+        ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
+            {ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}
+        ),
+    }
+    expected_metadata = {
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
+            PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
+            ActionOwner.ART_02D,
+        ),
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
+            PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            ActionOwner.ART_02D,
+        ),
+        ActionId.ARTIFACT_PENDING_WORK_SCAN: (
+            PermissionId.ARTIFACT_PENDING_WORK_SCAN,
+            ActionOwner.ART_02D,
+        ),
+        ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE: (
+            PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
+            ActionOwner.ART_04A,
+        ),
+        ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
+            PermissionId.ARTIFACT_BINDING_CREATE,
+            ActionOwner.ART_03,
+        ),
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
+            PermissionId.ARTIFACT_BINDING_CREATE,
+            ActionOwner.ART_05,
+        ),
+        ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE: (
+            PermissionId.ARTIFACT_BINDING_CREATE,
+            ActionOwner.ART_06B,
+        ),
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
+            PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
+            ActionOwner.ART_03,
+        ),
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
+            PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
+            ActionOwner.ART_04B,
+        ),
+        ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
+            PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
+            ActionOwner.ART_06A,
+        ),
+        ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE: (
+            PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+            ActionOwner.ART_06B,
+        ),
+    }
+    if set(rows) != SERVICE_IDENTITIES:
+        raise RuntimeError("service action matrix identity mismatch")
+    if rows != expected_rows:
+        raise RuntimeError("service action matrix row mismatch")
+    for action, (permission, owner) in expected_metadata.items():
+        definition = ACTION_BY_ID[action]
+        if (
+            definition.permission_id is not permission
+            or definition.owner is not owner
+            or definition.availability is not ActionAvailability.PLANNED
+        ):
+            raise RuntimeError("service action matrix metadata mismatch")
+    return MappingProxyType(dict(rows))
+
+
+SERVICE_ACTIONS_BY_IDENTITY = _index_service_actions(_SERVICE_ACTIONS)
 
 
 def resolve_executable_action(action_id: ActionId) -> ActionDefinition:

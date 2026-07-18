@@ -14,7 +14,9 @@ The plan correctly positions Workstream as a control plane. The biggest product 
 
 Suggested change:
 
-Keep v0.1 limited to manual task intake, project guides, queues, checkers, review, revision, payment ledger, and reputation events.
+Keep v0.1 limited to manual task intake, project guides, queues, checkers,
+review, revision, contribution and compensation fulfillment records, and
+reputation events.
 
 Status: addressed in `docs/product_brief.md`, `docs/roadmap_30_day_master_plan.md`, and decision records.
 
@@ -34,11 +36,11 @@ Status: fixed in `docs/roadmap_30_day_master_plan.md`.
 
 Finding:
 
-The product should be judged by fewer missed rules, fewer avoidable revisions, faster review readiness, and cleaner payout tracking.
+The product should be judged by fewer missed rules, fewer avoidable revisions,
+faster review readiness, and cleaner compensation fulfillment tracking.
 
 Suggested change:
 
 Keep these as pilot success checks, not marketing copy.
 
 Status: addressed in `docs/product_brief.md`.
-

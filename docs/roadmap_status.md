@@ -21,7 +21,7 @@ expansion.
 - Reviewer workflow.
 - Revision replay.
 - Roles and permissions.
-- Payment and reputation.
+- Compensation and reputation.
 - Workspace and packet convention.
 - Risk register.
 - Templates for guides, tasks, submissions, reviews, checkers, revision replay, and prior feedback.
@@ -33,7 +33,8 @@ expansion.
 - Week 1 backend chunk plan.
 - Chunk 1 backend scaffold.
 - Chunk 2 external Flow auth actor boundary.
-- Chunk 3 project guide foundation with checker, review, revision, and payment policy context.
+- Chunk 3 project guide foundation with checker, review, and revision policy
+  context; compensation is superseded by the independent WS-CON contract.
 - Chunk 4 task queue, contributor/reviewer profiles, assignment, claim, start, and task audit events.
 - Chunk 5 submission packet foundation with evidence items, versioning, server-stamped locked context, and submission finalization.
 - Backend API contract drill through `Project -> Guide -> Task -> Screening -> Ready -> Claim -> Start -> Submit -> automatic pre-review gate`.
@@ -100,7 +101,8 @@ expansion.
 
 - Create the first pilot project guide from the template.
 - Create the first 5 pilot task records.
-- Confirm who owns product, engineering, review, operations, and payment reconciliation during the first build cycle.
+- Confirm who owns product, engineering, review, operations, and compensation
+  fulfillment reconciliation during the first build cycle.
 - Confirm the first v0.1 project guide uses the locked guide fields, task contract fields, evidence IDs, and contribution record flow.
 
 ## Backend API Contract Drill

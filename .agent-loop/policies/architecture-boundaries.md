@@ -10,8 +10,8 @@ auditable and later adapters can be added without rewriting the core loop.
 - Repositories own persistence queries and do not make policy decisions.
 - Adapters isolate external systems such as Flow auth and future object storage.
 - Workstream product contracts remain distinct: project guide, submission
-  artifact policy, checker policy, review policy, revision policy, and payment
-  policy are not engineering-loop policy files.
+  artifact policy, checker policy, review policy, revision policy, and
+  contribution policy are not engineering-loop policy files.
 - `.agent-loop/policies/repository-engineering-policy.md` governs this
   repository's engineering loop; it does not replace or rename the product
   project guide.
@@ -24,6 +24,6 @@ auditable and later adapters can be added without rewriting the core loop.
 - Did this mix engineering process state with product runtime state?
 - Did this bypass service-layer lifecycle rules?
 - Did this hide a policy decision inside persistence, tests, or UI copy?
-- Did this create vague naming that could confuse operators, workers, reviewers,
-  or engineering reviewers?
+- Did this create vague naming that could confuse operators, contributors,
+  reviewers, or engineering reviewers?
 - Did this preserve locked v0.1 scope?

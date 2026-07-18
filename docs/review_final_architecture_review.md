@@ -6,15 +6,18 @@ Scope: markdown planning package.
 
 ## Findings
 
-### High: Task status and payment status must remain separate
+### High: Task status and compensation fulfillment status must remain separate
 
 Finding:
 
-This is now correctly handled in the core state machine. Payment follow-up is derived from payment records, not a task queue lane.
+This is now correctly handled in the core state machine. Fulfillment follow-up
+is derived from immutable CompensationAward and fulfillment records, not a task
+queue lane.
 
 Suggested change:
 
-Keep `PAID` out of task lifecycle states and enforce payment transitions in the payment ledger.
+Keep fulfillment states out of task lifecycle states and enforce their
+transitions in the compensation fulfillment ledger.
 
 Status: fixed in `docs/architecture_lifecycle_state_machine.md`, `docs/operations_payment_reputation.md`, and `docs/operations_queue_policy.md`.
 
@@ -26,7 +29,8 @@ The data model includes audit events, but the implementation must treat audit lo
 
 Suggested change:
 
-Every status transition, checker override, review decision, payment transition, and guide activation writes an audit event.
+Every status transition, checker override, review decision, compensation
+fulfillment transition, and guide activation writes an audit event.
 
 Status: documented in `docs/architecture_data_model.md` and `docs/architecture_lifecycle_state_machine.md`.
 

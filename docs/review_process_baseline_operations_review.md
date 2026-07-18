@@ -22,7 +22,7 @@ Add a baseline document that captures metadata-level reusable patterns and makes
 
 Status: fixed in `docs/process_pattern_baseline.md`.
 
-### High: Ready work needed a screening gate before workers see it
+### High: Ready work needed a screening gate before contributors see it
 
 Finding:
 
@@ -50,7 +50,8 @@ Status: fixed in `docs/template_preflight_evidence.md` and `docs/architecture_ch
 
 Finding:
 
-Queue health is not just status count. A lane can look organized while review pending, active work, or accepted-unpaid records quietly pile up.
+Queue health is not just status count. A lane can look organized while review
+pending, active work, or authorized but unfulfilled awards quietly pile up.
 
 Suggested change:
 

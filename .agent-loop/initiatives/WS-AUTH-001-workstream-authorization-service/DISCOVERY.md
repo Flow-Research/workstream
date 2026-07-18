@@ -3,6 +3,33 @@
 Discovery is read-only. No application code was changed while producing this
 artifact.
 
+## AUTH-09 delta discovery - 2026-07-16
+
+Merged AUTH-08 provides `AuthorityControl`, immutable AdminRoleGrants, seven
+active administrative actions, final-admin grant locking, shared authority
+idempotency/audit contracts, and caller-owned route transactions. ActorProfile
+already supports human/service kind and active/suspended/deactivated state;
+ActorIdentityLink already supports active/revoked state and one exact external
+issuer subject. The model has no stable local service-identity field.
+
+The inherited AUTH-09 contract required durable service-to-action matrix rows,
+but the repository has no assignment model and the policy is a fixed
+seven-identity/eleven-action matrix. Persisting each pair would duplicate static
+policy and create unnecessary reconciliation. The accepted direction stores one
+immutable `service_identity` on a service ActorProfile and derives candidate
+actions from one closed typed matrix. ActorIdentityLink remains the only opaque
+external credential binding. Services receive no human/admin/project grant.
+
+The combined contract also conflicted with canonical routes, omitted migration
+and test ownership, and combined schema, provisioning, reads, lifecycle
+mutations, service admission, and concurrency. Required L1 review split it into
+09A through 09E before runtime implementation. AUTH-09A takes migration `0023`;
+09B requires forward migration `0024` so provisioned service links remain
+unverified until a token is actually verified. ART owns `0025` for the
+ArtifactStore v2 clean cut. AUTH-10 through AUTH-15 therefore shift to `0026`
+through `0031`, without allocating migrations to the
+availability-neutral custody or PREP chunks.
+
 ## Current behavior
 
 ### Authentication
@@ -119,7 +146,7 @@ requires explicit review in the token-verifier chunk.
 
 | Risk | Why it matters | Suggested handling |
 |---|---|---|
-| Token role escalation | A valid token role currently grants product authority. | Remove role claims from authorization context and prove every protected surface uses local grants. |
+| Issuer-role escalation | Legacy issuer role metadata currently grants product authority. | Remove role claims from authorization context and prove every protected surface uses local grants. |
 | Dual authority during migration | Old and new checks could disagree. | Define a one-way cutover; never accept either path as sufficient. |
 | Legacy subject-kind ambiguity | Existing registry rows do not prove human versus service. | Fail closed on unclassified non-empty data and require an audited classification/remediation input. |
 | Actor ID rewrite | Historical task/checker/audit attribution uses strings. | Preserve valid actor IDs and avoid broad FK conversion in early chunks. |
@@ -245,3 +272,68 @@ need an independently reviewable contract and production-code budget.
   configuration failure behavior, and migration/concurrency proof.
 - 04B is not activated by this split. It requires 04A merge/memory and a
   separate explicit user start.
+
+## WS-XINT Delta Discovery (2026-07-17)
+
+### Trusted merged inputs
+
+- PR #139 merged as `5d353b6` and makes
+  `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/`
+  authoritative for AUTH/ART/REV/CON ownership, activation, transaction, role,
+  and service boundaries.
+- PR #132 remains open at `79d1989` and conflicts with current `main`. Its seven
+  service identities, eleven exact static ActionId memberships, versioned
+  migration-only `0023` contract, and no-database-assignment design remain
+  valid. Its reviewed repairs also remain mandatory: a packaged frozen migration
+  contract with zero mutable `app.modules` imports, an explicit
+  Alembic-script-owned repository root, location-independent built-wheel
+  custody/replay proof, CLI execution and engine disposal on the same event
+  loop, and original `BaseException` precedence with cancellation/cleanup tests.
+  Its loop/planning/spec conflicts must not overwrite PR #139.
+
+### Current runtime gaps
+
+- `backend/app/modules/authorization/catalogue.py` has 74 PermissionIds and 57
+  ActionIds: nine active and 48 planned. All 25 ART rows and 19 REV rows still
+  use feature-chunk `ActionOwner` values even though PR #139 now defines that
+  field as exact AUTH activation custody.
+- `backend/app/modules/authorization/schemas.py`,
+  `backend/app/modules/authorization/service.py`, and
+  `backend/app/modules/audit/schemas.py` still accept `ProjectRole.BOTH`,
+  `replaced_grant_id`, replacement events, and replacement reasons.
+- Migration `0022_bootstrap_admin_grants.py` recreates current PostgreSQL audit
+  and linked-idempotency validators with the same combined/replacement values.
+  Historical migrations remain immutable; AUTH-10 `0026` must replace current
+  validators and fail closed on incompatible evidence.
+- The current kernel has request-scoped `require()` but no AUTH-first prepared
+  mutation handle. Cross-module mutations therefore lack the merged lock,
+  recompose, evaluate-once, flush, and caller-commit protocol.
+
+### Missing planning custody
+
+- No AUTH chunk transferred the 25 ART or 19 REV owner rows, and no exact AUTH
+  activation chunks existed for their feature-gated evaluators.
+- Four approved REV lifecycle ActionIds and the ART review-evidence binding
+  ActionId are not registered. Their PermissionId mappings are known, but their
+  complete feature principal/resource/guard/transaction manifests are not, so
+  AUTH must not invent or register them yet.
+- REV timer, expiry, reconciliation, projection, artifact-reference, and
+  release-control jobs need exact fixed-service identities. The owning REV
+  contract has not yet supplied that identity-to-ActionId matrix. A catch-all
+  review service would violate the fixed-service model.
+- AUTH-10 through AUTH-15 promise protected surfaces without enumerating every
+  new ActionId and current PostgreSQL evidence change. Each contract requires
+  exact preimplementation repair; AUTH-11 now needs migration custody too.
+
+### Conventions to preserve
+
+- Feature modules own resource facts, loaders, guards, hidden behavior, and
+  lifecycle state. AUTH owns grants, evaluator integration, decision evidence,
+  and availability.
+- The route or service command owns one transaction. AUTH and feature
+  participants flush only; dependency teardown never commits shared work.
+- Hidden feature behavior may progress in parallel while the real kernel
+  returns `action_unavailable`. Only a later exact AUTH chunk activates it.
+- New service identities require an exact owning-feature manifest, closed enum
+  and matrix extension, database constraint migration, controlled provisioning,
+  AUTH-09E admission reuse, and cross-service negative proof.

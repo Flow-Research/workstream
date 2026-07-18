@@ -13,10 +13,15 @@ Use after `PLAN.md` exists and before implementation.
 2. Identify dependency order.
 3. Split work into 1-N reviewable PR-sized chunks.
 4. Keep each chunk bounded and independently reviewable.
-5. For each chunk, write a chunk contract under `chunks/`.
+5. For each chunk, start from `.agent-loop/templates/CHUNK_CONTRACT.md` and
+   write the contract under `chunks/`.
 
 ## Each chunk must include
 
+- A canonical first line in the exact template form
+  `# Chunk Contract: <CHUNK_ID> — <TITLE>`. The internal evidence gate reads
+  the complete lifecycle ID from this heading and fails closed when the heading
+  is missing or malformed.
 - Parent initiative
 - Goal
 - Why this chunk exists

@@ -95,8 +95,8 @@ class ArtifactUploadItem(Base):
     __table_args__ = (
         UniqueConstraint("session_id", "idempotency_key", name="uq_artifact_item_operation"),
         CheckConstraint(
-            "state in ('reserved', 'uploading', 'provider_committed', "
-            "'replay_required', 'ready', 'failed', 'cancelled')",
+            "state in ('reserved', 'uploading', 'replay_required', "
+            "'stored_pending_verification', 'ready', 'failed', 'cancelled')",
             name="state",
         ),
         CheckConstraint(
@@ -110,9 +110,11 @@ class ArtifactUploadItem(Base):
             name="expected_sha256_shape",
         ),
         CheckConstraint(
-            "(state = 'ready') = "
-            "(content_id is not null and provider_operation_reference is not null)",
-            name="ready_result_required",
+            "((state in ('stored_pending_verification', 'ready')) and "
+            "content_id is not null and provider_object_ref is not null) or "
+            "((state not in ('stored_pending_verification', 'ready')) and "
+            "content_id is null and provider_object_ref is null)",
+            name="stored_result_required",
         ),
         CheckConstraint(
             "state != 'failed' or error_code is not null",
@@ -134,7 +136,7 @@ class ArtifactUploadItem(Base):
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
     state: Mapped[str] = mapped_column(String(30), nullable=False, default="reserved", index=True)
     cas_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    provider_operation_reference: Mapped[str | None] = mapped_column(String(200))
+    provider_object_ref: Mapped[str | None] = mapped_column(String(1024))
     content_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_contents.id", ondelete="RESTRICT"), index=True
     )
@@ -200,37 +202,67 @@ class ArtifactBinding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ArtifactStorageNamespace(Base):
+    """Immutable singleton fencing one deployment to one storage namespace."""
+
+    __tablename__ = "artifact_storage_namespaces"
+    __table_args__ = (
+        CheckConstraint("id = 'primary'", name="singleton_id"),
+        CheckConstraint(SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"),
+        UniqueConstraint(
+            "namespace_fingerprint",
+            name="uq_artifact_storage_namespace_fingerprint",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    backend: Mapped[str] = mapped_column(String(50), nullable=False)
+    adapter: Mapped[str] = mapped_column(String(50), nullable=False)
+    provider_profile: Mapped[str] = mapped_column(String(100), nullable=False)
+    namespace_descriptor: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    namespace_fingerprint: Mapped[str] = mapped_column(String(71), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ArtifactReplica(Base):
     """Provider observation record for one immutable content object."""
 
     __tablename__ = "artifact_replicas"
     __table_args__ = (
-        UniqueConstraint("adapter", "provider_artifact_id", name="uq_artifact_replica_provider"),
-        CheckConstraint(
-            "verification_state in ('pending', 'verified', 'failed')", name="verification_state"
+        UniqueConstraint(
+            "storage_namespace_id",
+            "provider_object_ref",
+            name="uq_artifact_replica_provider_object",
         ),
         CheckConstraint(
-            "retention_state in ('unretained', 'retained', 'released')", name="retention_state"
+            "verification_state in ('pending', 'verified', 'missing', 'integrity_mismatch')",
+            name="verification_state",
         ),
         CheckConstraint(
-            "availability_state in ('available', 'unavailable', 'missing')",
+            "availability_state in ('unknown', 'available', 'unavailable')",
             name="availability_state",
         ),
         CheckConstraint(
-            "integrity_state in ('unknown', 'valid', 'quarantined')",
+            "integrity_state in ('unknown', 'valid', 'invalid')",
             name="integrity_state",
         ),
+        CheckConstraint(SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     content_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    storage_namespace_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_storage_namespaces.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    namespace_fingerprint: Mapped[str] = mapped_column(String(71), nullable=False)
     adapter: Mapped[str] = mapped_column(String(50), nullable=False)
-    provider_artifact_id: Mapped[str] = mapped_column(String(200), nullable=False)
-    provider_manifest_id: Mapped[str | None] = mapped_column(String(200))
+    provider_profile: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_object_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
     verification_state: Mapped[str] = mapped_column(String(30), nullable=False)
-    retention_state: Mapped[str] = mapped_column(String(30), nullable=False)
     availability_state: Mapped[str] = mapped_column(String(30), nullable=False)
     integrity_state: Mapped[str] = mapped_column(String(30), nullable=False)
     last_reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -241,70 +273,36 @@ class ArtifactReplica(Base):
 
 
 class ArtifactOperationReceipt(Base):
-    """Append-only Workstream copy of authoritative provider evidence."""
+    """Append-only Workstream evidence for one immutable put acknowledgement."""
 
     __tablename__ = "artifact_operation_receipts"
     __table_args__ = (
-        UniqueConstraint(
-            "adapter", "service_principal", "operation", "idempotency_key",
-            name="uq_artifact_receipt_operation",
-        ),
+        UniqueConstraint("upload_item_id", name="uq_artifact_receipt_upload_item"),
         CheckConstraint(SHA256_CHECK.format(column="request_digest"), name="request_digest_shape"),
-        CheckConstraint(SHA256_CHECK.format(column="response_digest"), name="response_digest_shape"),
-        CheckConstraint("operation in ('store', 'verify', 'retain', 'release')", name="operation"),
-        CheckConstraint(
-            "outcome in ('stored', 'verified', 'retained', 'released')", name="outcome"
-        ),
-        CheckConstraint(
-            "(operation = 'store' and outcome = 'stored') or "
-            "(operation = 'verify' and outcome = 'verified') or "
-            "(operation = 'retain' and outcome = 'retained') or "
-            "(operation = 'release' and outcome = 'released')",
-            name="operation_outcome",
-        ),
+        CheckConstraint("operation = 'put'", name="operation"),
+        CheckConstraint("outcome = 'stored_pending_verification'", name="outcome"),
         CheckConstraint("attempt_number > 0", name="attempt_positive"),
-        CheckConstraint(
-            "operation != 'retain' or "
-            "(retention_reference is not null and retention_class is not null "
-            "and retention_owner is not null)",
-            name="retain_fields",
-        ),
-        CheckConstraint(
-            "operation != 'release' or "
-            "(retention_reference is not null and retention_class is not null "
-            "and retention_owner is not null)",
-            name="release_reference",
-        ),
-        CheckConstraint(
-            "operation in ('retain', 'release') or "
-            "(retention_reference is null and retention_class is null "
-            "and retention_owner is null)",
-            name="non_retention_fields_empty",
-        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    upload_item_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_upload_items.id", ondelete="RESTRICT"), index=True
+    upload_item_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_upload_items.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
-    replica_id: Mapped[str | None] = mapped_column(
-        ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), index=True
+    replica_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_replicas.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
     )
-    adapter: Mapped[str] = mapped_column(String(50), nullable=False)
-    service_principal: Mapped[str] = mapped_column(String(200), nullable=False)
     operation: Mapped[str] = mapped_column(String(30), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    response_digest: Mapped[str] = mapped_column(String(71), nullable=False)
-    provider_receipt_id: Mapped[str] = mapped_column(String(200), nullable=False)
-    provider_operation_reference: Mapped[str] = mapped_column(String(200), nullable=False)
+    provider_object_ref: Mapped[str] = mapped_column(String(1024), nullable=False)
+    replayed: Mapped[bool] = mapped_column(nullable=False)
     outcome: Mapped[str] = mapped_column(String(30), nullable=False)
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     correlation_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    retention_reference: Mapped[str | None] = mapped_column(String(200))
-    retention_class: Mapped[str | None] = mapped_column(String(100))
-    retention_owner: Mapped[str | None] = mapped_column(String(200))
-    provider_recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     details: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

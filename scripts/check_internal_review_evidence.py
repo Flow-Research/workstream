@@ -9,6 +9,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 ALLOWED_POST_REVIEW_PREFIXES = (
     ".agent-loop/initiatives/",
     "docs/internal_reviews/",
@@ -57,9 +59,23 @@ REQUIRED_STATEMENTS = {
     "valid findings addressed": "yes",
 }
 ACTIVE_CHUNK_ENV = "INTERNAL_REVIEW_CHUNK_ID"
-CHUNK_FILE_PATTERN = re.compile(r"(?P<chunk>[A-Z]+-[A-Z]+-\d+-\d+)")
-REVIEWED_SHA_PATTERN = re.compile(r"^reviewed code sha:\s*`?([0-9a-f]{40})`?$", re.IGNORECASE | re.MULTILINE)
-PROVENANCE_VALUE_PATTERN = re.compile(r"^(reviewed at|reviewer run ids):[ \t]*(.+)$", re.IGNORECASE | re.MULTILINE)
+CHUNK_ID_PATTERN = r"[A-Z][A-Z0-9]*(?:-[A-Z0-9]+){3,}"
+CHUNK_HEADING_PATTERNS = (
+    re.compile(
+        rf"^# (?:Chunk Contract|Parent Chunk):\s+(?P<chunk>{CHUNK_ID_PATTERN})(?=\s|$)"
+    ),
+    re.compile(rf"^# (?P<chunk>{CHUNK_ID_PATTERN}):(?=\s|$)"),
+)
+CHUNK_REFERENCE_PATTERN = re.compile(
+    rf"(?<![A-Z0-9-])(?P<chunk>{CHUNK_ID_PATTERN})(?![A-Z0-9-])",
+    re.IGNORECASE,
+)
+REVIEWED_SHA_PATTERN = re.compile(
+    r"^reviewed code sha:\s*`?([0-9a-f]{40})`?$", re.IGNORECASE | re.MULTILINE
+)
+PROVENANCE_VALUE_PATTERN = re.compile(
+    r"^(reviewed at|reviewer run ids):[ \t]*(.+)$", re.IGNORECASE | re.MULTILINE
+)
 UTC_TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}(?:\.\d+)?z$")
 ACCEPTED_BLOCKING_VALUES = {"none", "none remaining", "n/a", "no"}
 ACCEPTED_PASS_RESULTS = {"pass", "pass after fixes", "pass with low risks"}
@@ -101,7 +117,9 @@ def git_ok(*args: str) -> bool:
 
 def resolve_base_ref() -> str:
     """Resolve the base ref used to compare review-relevant changes."""
-    base_ref = os.environ.get("INTERNAL_REVIEW_BASE_REF") or os.environ.get("GITHUB_BASE_REF")
+    base_ref = os.environ.get("INTERNAL_REVIEW_BASE_REF") or os.environ.get(
+        "GITHUB_BASE_REF"
+    )
     if base_ref:
         candidates = (f"origin/{base_ref}", base_ref)
         for candidate in candidates:
@@ -167,16 +185,31 @@ def required_tracks_for(paths: list[str]) -> tuple[str, ...]:
             "mcp_server/pyproject.toml",
         }:
             add("ci integrity")
-        if path.endswith(".md") or path.startswith(("docs/", ".agent-loop/", ".agents/")) or path in {
-            "AGENTS.md",
-            "README.md",
-        }:
+        if (
+            path.endswith(".md")
+            or path.startswith(("docs/", ".agent-loop/", ".agents/"))
+            or path
+            in {
+                "AGENTS.md",
+                "README.md",
+            }
+        ):
             add("docs")
         if path.startswith(
-            (".agents/skills/", ".codex/agents/", "backend/app/", "mcp_server/workstream_mcp/", "scripts/")
+            (
+                ".agents/skills/",
+                ".codex/agents/",
+                "backend/app/",
+                "mcp_server/workstream_mcp/",
+                "scripts/",
+            )
         ):
             add("reuse/dedup")
-        if path.startswith("backend/tests/") or "/tests/" in path or Path(path).name.startswith("test_"):
+        if (
+            path.startswith("backend/tests/")
+            or "/tests/" in path
+            or Path(path).name.startswith("test_")
+        ):
             add("test delta")
 
     return tuple(required)
@@ -212,7 +245,10 @@ def reviewer_rows(text: str) -> dict[str, tuple[str, str, str]]:
             in_reviewer_table = False
             continue
         notes = cells[3] if len(cells) > 3 else ""
-        rows[cells[0]] = (cells[1], cells[2], notes)
+        # Evidence addenda are newest-first, matching reviewed_sha() and
+        # provenance_value(). Preserve the first authoritative result for each
+        # track instead of letting an older table below overwrite it.
+        rows.setdefault(cells[0], (cells[1], cells[2], notes))
     return rows
 
 
@@ -353,9 +389,13 @@ def validate_reviewed_revision(text: str) -> list[str]:
         missing.append(f"review target sha does not resolve: {target_sha}")
         return missing
 
-    changed_after_review = git("diff", "--name-only", f"{sha}..{target_sha}").splitlines()
+    changed_after_review = git(
+        "diff", "--name-only", f"{sha}..{target_sha}"
+    ).splitlines()
     changed_after_review.extend(dirty_after_review_paths())
-    invalid = [path for path in changed_after_review if not is_allowed_after_review_path(path)]
+    invalid = [
+        path for path in changed_after_review if not is_allowed_after_review_path(path)
+    ]
     if invalid:
         missing.append(
             "reviewed code sha is stale; non-evidence files changed after review: "
@@ -373,11 +413,16 @@ def validate_evidence(
     """Validate one internal review evidence file."""
     text = path.read_text(encoding="utf-8").lower()
     missing = [track for track in required_tracks if track not in text]
-    chunk_ids = list(chunk_ids) if chunk_ids is not None else required_chunk_ids(changed_files())
+    chunk_ids = (
+        list(chunk_ids)
+        if chunk_ids is not None
+        else required_chunk_ids(changed_files())
+    )
     env_chunk_id = os.environ.get(ACTIVE_CHUNK_ENV, "").strip().lower()
     if env_chunk_id:
         chunk_ids.append(env_chunk_id)
-    if chunk_ids and not any(chunk_id in text for chunk_id in chunk_ids):
+    referenced_chunk_ids = evidence_chunk_ids(text)
+    if chunk_ids and referenced_chunk_ids.isdisjoint(chunk_ids):
         missing.append(f"chunk id: one of {', '.join(chunk_ids)}")
     for label, expected_value in REQUIRED_STATEMENTS.items():
         if f"{label}: {expected_value}" not in text:
@@ -394,12 +439,59 @@ def required_chunk_ids(paths: list[str]) -> list[str]:
     for path in paths:
         if "/chunks/" not in path or not path.endswith(".md"):
             continue
-        match = CHUNK_FILE_PATTERN.search(Path(path).name)
-        if match:
-            chunk_id = match.group("chunk").lower()
-            if chunk_id not in chunk_ids:
-                chunk_ids.append(chunk_id)
+        contract_path = ROOT / path
+        try:
+            if os.path.lexists(contract_path):
+                if contract_path.is_symlink() or not contract_path.is_file():
+                    raise RuntimeError("changed chunk contract is not a regular file")
+                text = contract_path.read_text(encoding="utf-8")
+            else:
+                text = historical_contract_text(path)
+            heading = text.splitlines()[0]
+        except (IndexError, OSError, UnicodeDecodeError, RuntimeError) as exc:
+            raise RuntimeError(f"cannot read changed chunk contract {path}") from exc
+        chunk_id = chunk_id_from_heading(heading)
+        if chunk_id is None:
+            raise RuntimeError(
+                f"changed chunk contract has no canonical heading: {path}"
+            )
+        if chunk_id not in chunk_ids:
+            chunk_ids.append(chunk_id)
     return chunk_ids
+
+
+def historical_contract_text(path: str) -> str:
+    """Recover a deleted contract from index, HEAD, or the review base."""
+    base_ref = resolve_base_ref()
+    object_names = (f":{path}", f"HEAD:{path}", f"{base_ref}:{path}")
+    for object_name in object_names:
+        result = subprocess.run(
+            ["git", "show", object_name],
+            cwd=ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0:
+            return result.stdout
+    raise RuntimeError(f"deleted contract has no recoverable provenance: {path}")
+
+
+def chunk_id_from_heading(heading: str) -> str | None:
+    """Return the exact chunk ID from a canonical contract heading."""
+    for pattern in CHUNK_HEADING_PATTERNS:
+        match = pattern.match(heading)
+        if match:
+            return match.group("chunk").lower()
+    return None
+
+
+def evidence_chunk_ids(text: str) -> set[str]:
+    """Return exact normalized lifecycle IDs referenced by evidence text."""
+    return {
+        match.group("chunk").lower() for match in CHUNK_REFERENCE_PATTERN.finditer(text)
+    }
 
 
 def main() -> int:
@@ -434,15 +526,23 @@ def main() -> int:
         return 1
 
     failures: list[str] = []
-    chunk_ids = required_chunk_ids(changed)
+    try:
+        chunk_ids = required_chunk_ids(changed)
+    except RuntimeError as exc:
+        print(f"Internal review evidence gate failed closed: {exc}", file=sys.stderr)
+        return 1
     for path in evidence_paths:
         if not path.is_file():
-            failures.append(f"{path}: missing evidence file in HEAD (deleted or renamed)")
+            failures.append(
+                f"{path}: missing evidence file in HEAD (deleted or renamed)"
+            )
             continue
         try:
             missing = validate_evidence(path, required_tracks, chunk_ids)
         except (OSError, UnicodeDecodeError) as exc:
-            failures.append(f"{path}: unreadable evidence file ({exc.__class__.__name__})")
+            failures.append(
+                f"{path}: unreadable evidence file ({exc.__class__.__name__})"
+            )
             continue
         if missing:
             failures.append(f"{path}: missing {', '.join(missing)}")

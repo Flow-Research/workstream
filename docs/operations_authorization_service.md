@@ -93,7 +93,12 @@ cd backend
 WORKSTREAM_DATABASE_URL="$WORKSTREAM_TEST_DATABASE_URL" \
   WORKSTREAM_TEST_DATABASE_URL="$WORKSTREAM_TEST_DATABASE_URL" \
   .venv/bin/python -m pytest -q
-WORKSTREAM_DATABASE_URL="$WORKSTREAM_TEST_DATABASE_URL" \
+: "${WORKSTREAM_TEST_ADMIN_DATABASE_URL:?set a local Postgres admin URL}"
+metadata_dir="$(mktemp -d)"
+trap 'rm -rf "$metadata_dir"' EXIT
+.venv/bin/python scripts/run_isolated_tests.py \
+  --metadata-json "$metadata_dir/result.json" \
+  --timeout-seconds 3600 -- \
   .venv/bin/python scripts/api_contract_e2e.py
 cd ..
 python3 scripts/check_stale_workstream_wording.py
@@ -178,6 +183,63 @@ Unknown services require later manual provisioning and are denied without a
 write. Agent and Space subjects are denied without a write. Operators must not
 convert token roles, email shape, subject shape, or old typed profiles into
 actor kind or authority.
+
+A provisioned service ActorProfile is the stable Workstream principal, similar
+to a Kubernetes ServiceAccount. Its immutable `service_identity` is one of the
+closed registered internal services; its identity link separately stores the
+configured issuer and opaque subject used to verify credentials. Display name,
+email, subject syntax, token role, and adapter provenance are never service
+identity evidence.
+
+Service authority is a reviewed static service-to-ActionId matrix, not a grant
+or database assignment table. A service receives no Contributor,
+AdminRoleGrant, or ProjectRoleGrant authority. Every matrix action remains
+unavailable until merged feature behavior exists and the dedicated AUTH
+activation custodian integrates its evaluator and changes only that action's
+availability.
+
+### Existing Service Identity Mapping Custody
+
+This procedure applies only when service ActorProfiles already exist before
+migration `0023`. The data-migration owner prepares a private draft containing
+the exact existing ActorProfile ID, issuer, opaque subject, and proposed fixed
+service identity for every row. A security reviewer verifies each choice from
+authoritative ownership records. Neither the tool nor an operator may infer a
+value from subject syntax, email, display name, token role, or adapter
+provenance.
+
+Run the supported tool against the exact target database. Draft and envelope
+files must be regular, non-symlink, owner-only mode `0600` files in a controlled
+directory outside the checkout, every linked worktree, and shared Git metadata.
+Zero existing service rows require no file; otherwise the envelope must cover
+the complete locked service projection and select unique values from the seven
+closed identities.
+
+```bash
+chmod 600 /secure/workstream/service-identity-draft-v1.json
+.venv/bin/python scripts/service_actor_identity_mapping.py validate \
+  --draft /secure/workstream/service-identity-draft-v1.json
+.venv/bin/python scripts/service_actor_identity_mapping.py bind \
+  --draft /secure/workstream/service-identity-draft-v1.json \
+  --output /secure/workstream/service-identity-envelope-v1.json
+chmod 600 /secure/workstream/service-identity-envelope-v1.json
+.venv/bin/python scripts/service_actor_identity_mapping.py verify \
+  --envelope /secure/workstream/service-identity-envelope-v1.json
+```
+
+`validate` and `verify` never modify PostgreSQL. `bind` refuses an existing
+output path. The tool prints only stable codes, bounded counts, and non-secret
+digests. Inject `WORKSTREAM_SERVICE_ACTOR_IDENTITY_MAPPING_FILE` only into the
+migration process immediately before `alembic upgrade head`; never commit or
+log the path or confidential contents.
+
+Migration `0023` consumes the packaged versioned contract, locks the complete
+actor/link source projection, and refuses missing, extra, stale, duplicate, or
+ambiguous mappings atomically. It retains only bounded counts and non-secret
+source, manifest, envelope, and database-binding digests. After database
+verification and the approved rollback window, securely delete the draft and
+envelope. If any row cannot truthfully map, remain on `0022` and open a reviewed
+data-remediation decision; never guess, delete history, or use manual SQL.
 
 The [approved AUTH-06 chunk contract](../.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md)
 records the exact deprecated compatibility identifier. That temporary,
@@ -490,7 +552,8 @@ For each chunk:
 2. Run focused tests plus the full backend suite/API drill required by the
    contract.
 3. Run migration upgrade, downgrade-one, and re-upgrade where applicable.
-4. Confirm the temporary compatibility allowlist only shrinks.
+4. Confirm the obsolete-path allowlist only shrinks and no compatibility path
+   was added or restored.
 5. Run required internal reviewers and repair valid findings.
 6. Publish one chunk-sized PR and stop for human merge approval.
 7. Update post-merge memory before activating the next chunk.
@@ -500,12 +563,28 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 74 PermissionIds and 57 ActionIds. The two
-AUTH-07B actor-self actions and seven AUTH-08 administrative actions are active;
-the other 48 entries remain planned and non-executable. Planned entries contain
-only action, permission, owner, and availability and must not receive deployment
-configuration, principals, resource facts, or guards. Startup validation failure
-is a release blocker, not a reason to relax catalogue checks.
+The catalogue contains exactly 74 PermissionIds and 65 ActionIds after
+AUTH-09C. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+actions, `actor.service.provision`, `actor.profile.read`, and
+`actor.identity_link.read` are active; the other 53 entries remain planned and
+non-executable. Five of those planned rows are AUTH-09D actor/link mutations
+introduced by `0023`. The target post-custody
+invariant is that planned runtime entries contain only action, permission, exact
+AUTH activation owner, and availability. Until the availability-neutral custody
+transfers merge, the 25 ART and 19 REV rows retain their historical feature
+owner values as an explicitly blocked exception.
+Their owning feature must publish the approved principal/resource/guard/surface/
+transaction contract before registration or activation, but those foreign facts
+do not become free-form catalogue fields. Startup validation failure is a release
+blocker, not a reason to relax catalogue checks.
+
+PR #139 requires availability-neutral transfer of all 25 ART and 19 REV owner
+rows to exact AUTH chunks before feature activation. Counts and mappings remain
+unchanged. Catalogue totals are derived from the trusted entry head: four later
+REV registrations add exactly four planned and zero active actions, while the
+review-evidence binding registration adds exactly one planned and zero active
+action, in either order. Neither addition is operational until its complete
+feature contract and separate reviewed AUTH registration exist.
 
 Migration `0021` preserves historical audit rows with null `action_id`. Inspect
 non-null action evidence only by bounded ActionId, request/correlation IDs, and
@@ -521,7 +600,7 @@ historical status from identifier prefixes. All submission/review rows remain
 planned. Initial and revision submission share `submission.create`, and no
 revision-specific permission or preparation action exists.
 
-Review code must consume the request-scoped public
+Review reads consume the request-scoped public
 `AuthorizationService.require(action_id, typed_resource_context)` boundary.
 The service's bound caller-owned `AsyncSession` is the only transaction source;
 the method accepts no session or `uow` argument. Review code must not query
@@ -531,6 +610,24 @@ ART-owned `artifact.verification_job.retry` action through
 `ArtifactOperatorRecoveryPort`; shared outbox dispatch/retry remains outside
 REV ownership.
 
+Review and other sensitive mutations must wait for `WS-AUTH-001-PREP`. That
+protocol locks `AuthorityControl(id=1)` first when final-admin safety applies,
+orders multiple principals by ActorProfile ID, then locks each human profile,
+exact link, and exact matched grant or each service profile and exact link.
+Service identity, static matrix membership, and action availability are
+code-owned validations, not database lock targets. Only then does AUTH create an
+internal, non-Pydantic `PreparedAuthorizationHandle` bound to the exact session,
+ActionId, actor reference kind, actor reference, idempotency key, and canonical
+request digest. It is never a route schema or caller input. Consumption matches
+every binding before the feature locks rows and recomposes final facts, then AUTH
+evaluates and stages evidence once before one route/service-command commit.
+Crossed tests must cover link revoke, actor suspend/deactivate, exact grant
+revoke, final-admin mutation, and same-session/action cross-actor or
+cross-request substitution. Never serialize or reuse the handle, let dependency
+teardown commit it, or commit AUTH evidence separately from feature state. The
+existing `AuthorityClaimHandle` is a separate idempotency-reservation contract,
+not this prepared authorization handle.
+
 Downgrade is allowed only while every action ID remains null and no permission
 outside migration `0018`'s historical 49-value set exists in the decision,
 target-reference, or invalidation-reference fields. The migration takes an
@@ -538,9 +635,32 @@ exclusive audit-table lock before these checks and keeps it through destructive
 DDL. If any forward evidence exists, stop and recover forward rather than
 discarding it.
 
-Canonical actor self-read/self-update and the seven AUTH-08 administrative
-actions are active. Project capability context waits for AUTH-10 exact-project
-grants and canonical project composition.
+Canonical actor self-read/self-update, the seven AUTH-08 administrative
+actions, AUTH-09B controlled service provisioning, and the two AUTH-09C
+actor-registry reads are active. Project capability context waits for AUTH-10
+exact-project grants and canonical project composition.
+
+AUTH-10 is a clean cut to independent `submitter`, `reviewer`, and
+`adjudicator` grants. Before rollout, scan current typed schemas, audit facts,
+idempotency records, and PostgreSQL validators for `both`, replacement fields,
+replacement events, and replacement reasons. Migration `0026` must stop on any
+incompatible evidence; operators must remediate through a separately approved
+data decision, never an automatic conversion. A safe downgrade also refuses
+rather than deleting adjudicator or new exact-role evidence.
+
+Project-role revocation is routed by exact role. Submitter invalidation may
+reach task assignment; reviewer invalidation reaches only REV; adjudicator
+invalidation remains dormant until that lifecycle exists. Verify grant ID,
+actor, project, role, and cause event before a consumer changes product state.
+Revoking one role must leave the other project roles and all AdminRoleGrants
+unchanged.
+
+The first fixed-service set remains seven artifact identities and eleven matrix
+memberships from AUTH-09A. Missing provisioned rows deny without stopping the
+application. New REV/CON service identities require an exact owning-feature
+manifest followed by AUTH-owned enum/constraint/matrix, provisioning, admission,
+and cross-service denial proof. Do not create a shared review service or a
+database service-grant table.
 
 ## Actor Self Decision Operations
 
@@ -548,7 +668,7 @@ grants and canonical project composition.
 active identity link with an active or suspended human actor and commits only
 the bounded read-decision evidence after authorization. `PATCH
 /api/v1/actors/me` declares `actor.profile.update_self`; it locks the exact
-identity link first and actor profile second, rechecks current state, mutates
+actor profile first and its exact identity link second, rechecks current state, mutates
 only `display_name` or `contact_email`, and commits mutation plus allow evidence
 once. The authorization kernel never commits or rolls back.
 
@@ -576,6 +696,29 @@ revoke. Audit Authority is read-only and sees only the system or exact-project
 scope covered by its current grant; filtering occurs before totals and cursors.
 Requested target role/scope is mutation data, never caller authority.
 
+AUTH-09C adds `GET /api/v1/actors/{actor_profile_id}` and `GET
+/api/v1/actors/{actor_profile_id}/identity-links`. Both require an effective
+system-scoped Access Administrator or Audit Authority grant; a project-scoped
+Audit Authority grant never covers the global actor registry. The link route
+returns the one v0.1 link object, not a collection. Suspended/deactivated target
+actors and revoked target links remain readable for lifecycle diagnosis.
+
+The profile response includes only canonical lifecycle state, timestamps,
+display name, provisioning method, and the closed local `service_identity` for
+a service actor (`null` for a human). The link response includes only its local
+IDs, subject kind, lifecycle state, and timestamps. Neither response includes
+issuer, subject, contact email, reason, lifecycle actor, token/claim, grant,
+assignment, or service-action-matrix data.
+
+The kernel locks and revalidates the human caller profile, exact link, and
+matched system grant before target lookup and holds those locks through
+disclosure and commit. It does not acquire `AuthorityControl` or lock a distinct
+target. Unauthorized callers are denied before lookup. Missing actor and link
+targets both roll back the staged allow and return the same
+`actor_resource_not_found` 404; they do not advance caller timestamps or leave
+allow evidence. SQL/evidence/touch/commit failure rolls back and returns the
+retryable `service_unavailable` 503.
+
 Each protected route owns one caller-session transaction. A successful read,
 exact replay, issue, or revoke commits its decision evidence and advances the
 caller's `ActorProfile.last_seen_at` and `ActorIdentityLink.last_verified_at`
@@ -590,12 +733,40 @@ any state or evidence write.
 The shared authorization dependency never commits an open feature transaction;
 it rolls back anything the route forgot to commit.
 
+### Controlled Service Provisioning
+
+`POST /api/v1/service-actors` accepts only a fixed `service_identity`, opaque
+subject with no leading or trailing whitespace, bounded reason, and UUID
+`Idempotency-Key`. Accepted subject bytes are preserved without normalization.
+The issuer comes from the configured provider-neutral verifier; operators
+cannot submit or override it.
+Only an effective system Access Administrator may call the route. A successful
+request creates one active service ActorProfile and exact identity link plus the
+allowed decision, `ServiceActorProvisioned`, linked invalidation, and committed
+idempotency result in one transaction. It creates no role, grant, assignment,
+or service admission.
+
+Treat `service_identity_already_provisioned` and
+`identity_subject_already_linked` as final 409 occupancy conflicts. Treat
+`idempotency_mismatch` as client request drift. Retry `service_unavailable` with
+the same key and exact body. Do not inspect or export issuer, subject, bearer
+token, email, or raw reason when diagnosing a failure; use bounded
+request/correlation IDs and ActionId `actor.service.provision`.
+
+Provisioning is not token verification. The new service profile's
+`last_seen_at` and link's `last_verified_at` stay null, including on replay.
+Only the human caller timestamps advance on a committed create or replay.
+Service tokens remain denied before actor lookup on both central AUTH and
+legacy dependencies until AUTH-09E explicitly activates fixed-service
+admission.
+
 If route-owned persistence or decision evidence fails, roll back the entire
 unit and return the bounded retryable `503 service_unavailable` envelope. Do
 not report a mutation as successful, retain a pending idempotency result, or
 advance verification timestamps. A retry uses the same idempotency key. Exact
 replays reauthorize current caller authority and canonical resource state before
-returning the stored response; mismatches commit only bounded denial evidence
+returning the stored response. A deactivated service profile or revoked service
+link makes replay unavailable; mismatches commit only bounded denial evidence
 from a clean transaction.
 
 ## Rollback
@@ -613,8 +784,8 @@ Stop rollout when:
 - an intermediate release cannot execute the established intake lifecycle;
 - tests, CI, privacy, or auth defaults would need weakening.
 
-Do not restore deleted authority through direct SQL or re-enable an obsolete
-token-role path outside its reviewed compatibility owner.
+Do not restore deleted authority through direct SQL or re-enable any obsolete
+token-role path.
 
 ## Recovery Permission Inventory
 
@@ -629,7 +800,7 @@ token-role path outside its reviewed compatibility owner.
 Conceptual historical “admin override” statements are not operations. No
 recovery permission may erase checker evidence, create a review decision,
 alter an immutable submission, create/alter a contribution record, or bypass
-compensation policy.
+contribution policy.
 
 ## Monitoring And Alerts
 
@@ -737,7 +908,7 @@ The final release owner coordinates a supported API/command drill proving:
 - first human access;
 - one-time bootstrap and concurrent conflict;
 - scoped administrative grants;
-- exact-project submitter/reviewer grants;
+- exact-project submitter/reviewer/adjudicator grants;
 - admin/contributor separation and self-action denial;
 - same-unexpired-token revocation;
 - suspension/reactivation and link revocation;

@@ -91,9 +91,8 @@ class Settings(BaseSettings):
     api_first_access_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
     api_admin_mutation_rate_limit: int = Field(default=30, ge=1, le=10_000)
     api_admin_mutation_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
-    artifact_store_backend: Literal["disabled", "local", "flow_node"] = "disabled"
+    artifact_store_backend: Literal["disabled", "local", "s3_compatible"] = "disabled"
     artifact_local_root: Path | None = None
-    artifact_retention_policy_version: str | None = None
     artifact_maximum_bytes: int = Field(default=512 * 1024 * 1024, gt=0)
     artifact_stream_buffer_bytes: int = Field(default=1024 * 1024, gt=0, le=1024 * 1024)
     artifact_operation_lock_timeout_seconds: float = Field(
@@ -126,6 +125,11 @@ class Settings(BaseSettings):
         default=300.0,
         gt=0.0,
         le=3600.0,
+    )
+    artifact_scratch_cleanup_interval_seconds: int = Field(
+        default=300,
+        gt=0,
+        le=86_400,
     )
 
     model_config = SettingsConfigDict(
@@ -236,10 +240,8 @@ class Settings(BaseSettings):
                 )
         if self.artifact_store_backend == "disabled":
             return self
-        if not self.artifact_retention_policy_version or not (
-            self.artifact_retention_policy_version.strip()
-        ):
-            raise ValueError("enabled artifact storage requires a retention policy version")
+        if self.artifact_scratch_root is None:
+            raise ValueError("enabled artifact storage requires an artifact scratch root")
         if self.artifact_store_backend == "local":
             if self.environment not in {"local", "dev", "development", "test"}:
                 raise ValueError("local artifact storage is restricted to development and test")

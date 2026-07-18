@@ -1,71 +1,59 @@
 # Task Status Template
 
+> Planned review/revision fields remain unavailable until their release gates.
+
 ## Task
 
-`<task id>`
+- task ID:
+- project ID:
+- current state: `DRAFT | SCREENING | READY | CLAIMED | IN_PROGRESS | SUBMITTED | EVALUATION_PENDING | REVIEW_PENDING | NEEDS_REVISION | ACCEPTED | REJECTED | CANCELLED`
+- bounded terminal reason, when applicable:
+- current TaskAssignment ID/status:
+- canonical submitter ActorProfile ID:
 
-## Project
+## Guide And Submission Context
 
-`<project id>`
+- task guide lock:
+- latest Submission ID/version:
+- Submission guide ID/version/activation sequence:
+- server-derived artifact hash:
+- current CheckerRun ID/outcome:
 
-## Current State
+## Review State
 
-`DRAFT | SCREENING | READY | CLAIMED | IN_PROGRESS | SUBMITTED | EVALUATION_PENDING | REVIEW_PENDING | NEEDS_REVISION | ACCEPTED | REJECTED | CANCELLED`
+- ReviewQueueEntry ID/state:
+- active ReviewLease ID:
+- canonical reviewer ActorProfile ID:
+- latest immutable Review ID/decision/reason:
+- current revision preparation head ID/digest/outcome/direction:
+- unresolved blocking ReviewFinding IDs:
+- latest FindingResolution IDs:
 
-## Locked Guide Version
+## Accept State
 
-`<guide version>`
+- FinalAcceptance ID, only on accept:
+- source Review ID and Submission ID:
+- accepted submitter ActorProfile ID:
+- reviewer `completed_review` ContributionRecord ID:
+- submitter `accepted_submission` ContributionRecord ID, sourced from
+  FinalAcceptance only:
 
-## Source
+## Reject Or Administrative Cancellation
 
-- source type: `manual | markdown_import | csv_import`
-- source reference:
-- source payload hash:
-- import batch id:
+- reject: source human Review ID, bounded reason, blocked TaskAssignment ID;
+- revision obligation cancellation: `revision_limit_reached` or
+  `revision_deadline_expired`, released assignment, no synthetic Review;
+- legacy revision cancellation: `legacy_revision_context_unrecoverable`,
+  evidence-linked reconciliation finding, no synthetic Review.
 
-## Owner
+## Compensation
 
-- task creator:
-- contributor:
-- reviewer:
-- queue owner:
-
-## Latest Decision
-
-- decision:
-- actor:
-- timestamp:
-- reason:
-- linked evidence:
-
-## Screening Rejection
-
-Use only when a draft/imported task fails before `READY`.
-
-- gate: `project_activation | task_screening | submission_quality`
-- reason code:
-- fix required:
-- source task id:
-- retry id:
-- notification status:
-
-External-origin webhook drop delivery is a future adapter concern. In v0.1 this section records internal screening/import rejection.
-
-## Contribution Record
-
-- contribution record id:
-- accepted submission id:
-- accepting review id:
-- payment record id:
-
-## Open Items
-
-| Item | Owner | Severity | Due | Status |
-| --- | --- | --- | --- | --- |
-| `<item>` | `<owner>` | `high` | `<date>` | `open` |
+- reviewer award ID or explicit unpaid result:
+- submitter award ID or explicit unpaid result, accept only:
+- fulfillment status remains separate from task/assignment state:
 
 ## History
 
-| Time | State | Actor | Reason |
-| --- | --- | --- | --- |
-| `<time>` | `<state>` | `<actor>` | `<reason>` |
+| Time | State | Canonical Actor/Service Reference | Reason | Audit Event |
+|---|---|---|---|---|
+| `<time>` | `<state>` | `<actor>` | `<reason>` | `<uuid>` |

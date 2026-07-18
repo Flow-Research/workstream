@@ -1,0 +1,27 @@
+# Conformance Matrix: WS-CON-001
+
+| Family | Owning chunks | Required proof | Final gate |
+|---|---|---|---|
+| Canonical policy model | 01,03B,04B | ContributionPolicy/version/rules/definitions; explicit unpaid; immutable publish; one active policy; NUMERIC(38,18) decimal-string bounds; ISO 4217 money units; project-scoped points units; stable binding references | CON-11 |
+| Adapter binding | 03A,04A,10B | one active binding per project/instrument; policy definitions and awards reference a binding with matching project/instrument identity while the binding stores no policy/award identifiers; non-secret route; suspend/resume and existing-award callback/replay behavior; retirement refuses active policy, unfinished frozen work, or unfulfilled award dependencies | CON-11 + joint live drill |
+| Legacy clean cut | 05A,05B | zero semantic consumers before schema removal; deterministic row treatment; no alias/fallback; migration upgrade/downgrade | CON-11 |
+| Authorization | AUTH + each feature | current 74-65-10-55 baseline after AUTH-09B; only `actor.service.provision` was newly activated; provisioning grants no service execution or admission; all CON mappings/identities/static rows remain unregistered; full ART/REV custody referenced; one future AUTH custodian; planned denial; exact grant/static row; AUTH-09E; prepared handle bound to session/action/actor-ref/idempotency/request digest with substitution non-consumption; no local role logic | AUTH activation + CON-11 |
+| Final acceptance | REV + 03C,07 | accept creates one immutable FinalAcceptance per task/Review/Submission; needs_revision/reject create none; no create API/action, reopen, replacement, or adjudication path | joint live drill |
+| Contribution cardinality | 03C,07 + REV | one completed_review per valid Review with direct Review/lease lineage; one accepted_submission per FinalAcceptance with assignment lineage; mutually exclusive sources; revision Reviews distinct; automated outcomes create none | joint live drill |
+| Policy freeze | 05A,06 + task/REV | exact submitter/reviewer fields; published version; no drift; publish/suspend races both orders | joint live drill |
+| Award evaluation | 03C,07 | matching frozen ContributionRule; unpaid creates none; at most one money/points; exact NUMERIC(38,18) definition copy; ISO 4217/project-scoped unit equality; no float, conversion, or rounding; replay stable | joint live drill |
+| Atomic REV/CON | 07 + REV | reviewer operation before branch; accept-only submitter operation after FinalAcceptance/accepted effects; stabilized digest; REV stages audit/outbox; CON flushes contributions/awards; zero ART calls; complete rollback | REV-10 + joint live drill |
+| Outbox isolation | 02A,02B | stable event/task IDs; claim fencing; retry/dead-letter/replay; dispatcher cannot inherit feature authority; handler returns typed outcome | CON-11 |
+| Shared lifecycle audit | 02C,07 + REV | caller-session append/flush only; no participant commit; decision/CON staging order; complete rollback; bounded canonical facts and redaction; no raw provider payload/header/message/secret persistence or export | REV-10 + CON-11 |
+| External adapter convention | 08A | typed capability extends ExternalServiceAdapter; typed factory and explicit composition registration; no concrete import, plugin discovery, service locator, fallback constructor, or provider policy ownership | joint live drill |
+| Delivery and callback | 03D,08A,08R,08B | exact feature service authority; NUMERIC(38,18) exact-quantity equality; bounded binding-scoped event/reference tokens; closed failure codes; raw provider data rejected; no I/O under locks; callback/binding/award match; replay and callback-before-ack; immutable receipts | joint live drill |
+| Product reads | 10A | PostgreSQL contribution/award truth; D11 exact role sets; stable pagination/concealment; no ART/provider data | AUTH activation + joint drill |
+| Operations requests and observation | 10B | bounded durable requests; AdminRole and prepared-protocol proof; audit redaction and no raw provider body/header/message/secret exposure; same-session outbox/fulfillment counts plus maximum immutable root ordinal; no executor authority | REV-12A + joint drill |
+| Operations executors | 10C | exact independent fixed-service authority; dispatcher/cross-executor denial; retry/replay/finding proof; projection-only rebuild mutation; immutable contribution/award/receipt truth | AUTH activation + joint drill |
+| Public release | 11 + REV | hidden before release; exact `/api/v1` manifest; provisioning-aware readiness; no optional evidence/ART gate | joint live drill |
+| Fulfillment cutoff | 03D,08A/B,10B/C,11 + REV-12A | one immutable monotonic ordinal per obligation root; shared fence before every writer; persisted generation cutoff; same-generation at-or-below-cutoff completion only; no provider I/O under fence | independent-session writer/dispatch/callback races |
+| Optional evidence | 09A,09B only if approved | separately reviewed ART/AUTH capability; independent status/failure; no effect on canonical truth or core release | separate optional release |
+| No adjudication | all core | only accept/needs_revision/reject; no adjudication grant/action/state/queue/lease/decision/contribution/branch/readiness or initiative dependency | CON-11 + joint drill |
+
+Executable node IDs and retained evidence are added by each implementation
+chunk. Planning rows are contracts, not claims that tests already ran.

@@ -6,7 +6,10 @@ Workstream
 
 ## One-Sentence Description
 
-Workstream is Flow's task evaluation and contribution infrastructure. It helps teams run project-specific task queues through automated checks, reviewer routing, evaluation sprints, human review, revision, contribution records, payment tracking, and reputation.
+Workstream is Flow's task evaluation and contribution infrastructure. It helps
+teams run project-specific task queues through automated checks, reviewer
+routing, evaluation sprints, human review, revision, contribution records,
+compensation fulfillment tracking, and reputation.
 
 ## Problem
 
@@ -15,7 +18,7 @@ High-quality task work fails for operational reasons more often than technical r
 - rules are scattered across chats, markdown, and reviewer memory
 - submissions reach reviewers before basic checks pass
 - revision feedback is not replayed carefully
-- payout status is tracked manually and inconsistently
+- compensation fulfillment status is tracked manually and inconsistently
 - reviewers disagree because the project guide is not encoded into the workflow
 - operators cannot see the true state of the pipeline
 
@@ -26,7 +29,8 @@ This creates wasted effort, delayed payments, repeated mistakes, and low trust.
 Across serious task projects, the surface language changes but the lifecycle is stable:
 
 ```text
-Guide -> Task -> Submission -> Checker -> Review -> Revision -> Acceptance -> Payment
+Guide -> Task -> Submission -> Checker -> Review -> Revision/Decision
+-> Contribution -> Conditional Compensation Award -> Fulfillment
 ```
 
 Workstream makes that lifecycle explicit and configurable.
@@ -39,14 +43,14 @@ The system is source-agnostic without becoming source-adapter-first. A task crea
 
 The person who claims assigned work, packages submissions, submits evidence,
 monitors their contribution status, and resolves revisions under an
-exact-project Submitter or Both grant.
+exact-project Submitter grant.
 
 Needs:
 
 - know what to do next
 - avoid missing project rules
 - package submissions correctly
-- track accepted, pending, paid, rejected, and needs-revision work
+- track task decisions, contributions, compensation awards, and fulfillment
 
 ### Secondary User: Reviewer
 
@@ -70,7 +74,7 @@ Needs:
 - create covered project templates
 - configure project statuses and checkers
 - inspect permission-appropriate review evidence
-- track throughput and payout exposure
+- track throughput and compensation-award exposure
 
 ## MVP Boundary
 
@@ -85,7 +89,7 @@ The first version includes:
 - human review workflow
 - revision replay
 - contribution records
-- payment ledger
+- compensation awards, fulfillment receipts, and status projections
 - reputation basics
 - status dashboard
 
@@ -97,7 +101,8 @@ The first version must make a small operator team better immediately:
 - fewer avoidable needs-revision cycles
 - faster review readiness because broken packets are blocked early
 - clearer reviewer feedback because findings are structured
-- cleaner payout tracking because accepted and paid are separate states
+- cleaner compensation tracking because contribution, award, and fulfillment
+  are separate states
 - less dependency on scattered chat memory
 
 If the product does not reduce repeat mistakes and status confusion in the first pilot, it is not yet working.
@@ -147,5 +152,8 @@ By day 30:
 - 5 review decisions recorded across accept, needs_revision, and reject
 - 3 needs-revision loops completed
 - 100 percent of submissions have checker results
-- 100 percent of accepted tasks have evidence, contribution record, and payment record
+- 100 percent of valid human reviews have reviewer contribution records
+- 100 percent of accepted tasks have evidence and submitter contribution records
+- 100 percent of payable contributions have immutable CompensationAwards and
+  fulfillment projections
 - status dashboard reconciles with manual records

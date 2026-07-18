@@ -59,7 +59,7 @@ Phase:
 - submission_quality
 - pre_review_gate
 - lifecycle_transition
-- payment_reconciliation
+- compensation_fulfillment_reconciliation
 
 Checker names must not drift between project guides, policy templates, implementation code, and checker results. New behavior uses a new checker version or a new checker id.
 
@@ -81,7 +81,9 @@ The checker framework is conservative. It blocks objective structural failures a
 
 ### check_policy_context_present
 
-Ensures the task has locked guide, checker, review, revision, and payment policy context, including base amount and currency where required.
+Ensures the task has locked guide, checker, review, and revision policy context.
+Compensation is frozen independently on TaskAssignment and ReviewLease and is
+not checker-policy context.
 
 ### check_submission_packet
 
@@ -475,7 +477,9 @@ Look for:
 - evidence that passed structurally but did not prove the claim
 - generated or copied artifacts that evade forbidden-file rules
 
-Each blind spot becomes a guide update, checker update, reviewer policy update, revision policy update, or payment policy update.
+Each blind spot becomes a guide update, checker update, reviewer policy update,
+revision policy update, contribution policy update, template update, or
+reviewer-training change.
 
 ## First Implementation
 

@@ -1,5 +1,152 @@
 # Review Log
 
+## 2026-07-18 - WS-AUTH-001-09C External Repair Evidence Passed
+
+PR #146's original Backend, Agent Gates, and CodeRabbit checks passed.
+CodeRabbit then identified five valid proof gaps: exact transition-backend lock
+correlation, exact self-target timestamp payloads, exact authorization-kernel
+facts, both missing-resource rollback routes, and both project-scoped Audit
+Authority denials. Test-only repair `c64bcc7` closes all five. Trusted `main`
+through PR #141 at `a10d901` is integrated, including migration `0025`; 10
+focused unit tests, 2 fresh real PostgreSQL lifecycle/race tests, Ruff, and all
+Agent Gates pass. All required exact integrated-head internal repair tracks pass
+at `c47d627`; replacement external checks remain. AUTH-09D is inactive.
+
+## 2026-07-18 - WS-AUTH-001-09C Internal Review Passed
+
+Current `main` at `e118e33` is integrated without reverting WS-CON. Every
+required implementation review track passes at exact SHA `4331a6a` after
+repairing self-target response freshness, stage-specific rollback evidence,
+deterministic PostgreSQL lock-wait proof, exact persisted request evidence, and
+log-privacy canaries. Focused actor and authorization branch coverage remain
+91.06 and 92.04 percent. PR publication, external checks, and explicit human
+merge approval remain; AUTH-09D is inactive.
+
+## 2026-07-18 - WS-AUTH-001-09C Deterministic Evidence Passed
+
+PR #143 merged AUTH-09B as `053242b`, signed memory stopped, and the user
+explicitly started AUTH-09C. The repaired L1 contract passed every required
+preimplementation review track at exact SHA `76c5427`. The bounded
+implementation activates only `actor.profile.read` and
+`actor.identity_link.read` for exact targets under effective system authority.
+Real PostgreSQL lifecycle, two-session disabling races, rollback/privacy tests,
+and the live HTTP contract drill pass. Focused branch coverage is 91.06 percent
+for actors and 92.04 percent for authorization. Exact-head implementation
+review, PR publication, external checks, and explicit human merge approval
+remain; AUTH-09D is inactive.
+
+## 2026-07-17 - WS-AUTH-001-09B Coverage Repair Internal Review Passed
+
+PR #143's replacement Backend run passed all 1,242 tests and measured 84.92
+percent global coverage, then the newly enforced authorization subsystem gate
+reported 1,600 statements, 164 misses, and 89.75 percent coverage. The bounded
+test-only repair at exact SHA
+`127615fde8f1b5583acf9dbbb3c606db514a455d` proves both successful definition
+read routes authorize the exact typed resource, touch the caller, and commit
+before disclosure. It also proves query and commit SQL failures each roll back
+and map to the stable retryable 503 response. The nine newly exercised
+statements project 155 misses and 90.31 percent on the unchanged denominator.
+All required internal reviewer tracks pass; replacement GitHub checks remain,
+and AUTH-09C is inactive.
+
+## 2026-07-17 - WS-AUTH-001-09B External Review Repair Passed
+
+PR #143 CodeRabbit review reported four valid fresh-row, subject-validation,
+replay-lifecycle, and CI coverage-enforcement findings. The first Backend run
+also exposed one stale exact active-action audit expectation while 1,240 other
+tests passed at 84.87 percent global coverage. The bounded repair at exact SHA
+`52d4d076c151bed3f47428b573c014e131096f4a` passed every required internal
+track. It adds real two-session stale ORM proof in both lifecycle directions,
+rejects unusable surrounding subject whitespace without normalization, denies
+inactive replay state, enforces three independent 90 percent CI reports, and
+restores exact audit parity. Replacement external checks remain; AUTH-09C is
+inactive.
+
+## 2026-07-17 - WS-AUTH-001-09B Internal Review Passed
+
+Integrated code SHA `641b439ceb370ecc792322e33c73b6668c244290` passed senior
+engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+docs, reuse/dedup, and test-delta review after every valid finding was repaired.
+The exact route provisions one fixed service principal atomically, activates
+only `actor.service.provision`, preserves unverified service timestamps, and
+continues to deny service callers before actor lookup. Focused actor,
+authorization, and verifier coverage each exceed 90 percent; all 80 agent gates
+and the isolated real HTTP contract drill pass. PR publication and external
+checks remain; AUTH-09C is inactive.
+
+## 2026-07-17 - WS-AUTH-001-09B Plan Review Passed
+
+The repaired contract passed every required preimplementation group at exact SHA
+`4a980fdd024a3311d604ec3e2cb38a8897f8a2cf`. It binds configured issuer through
+the verifier port, records service links as unverified until AUTH-09E, uses the
+canonical profile-before-link order, preserves negative-projection invalidation,
+adds migration `0024`, and requires behavior, privacy, concurrency, rollback,
+and three focused 90 percent coverage proofs. Runtime implementation may now
+begin within this boundary; AUTH-09C remains inactive.
+
+## 2026-07-17 - WS-AUTH-001-09B Initial Plan Review Failed
+
+The first exact-head L1 review rejected the inherited 09B contract before any
+runtime edit. It incorrectly derived the service issuer from the human caller,
+fabricated service verification time, inverted existing invalidation direction,
+left canonical request/resource/evidence bindings incomplete, omitted a required
+forward migration, and did not close lock ordering or concurrency proof. The
+contract is being repaired as one planning-only candidate; runtime remains
+untouched until fresh exact-head reviewer approval.
+
+## 2026-07-17 - WS-AUTH-001-09B Started
+
+PR #132 merged AUTH-09A as `299363a`; Loop Memory passed and stopped with 09B
+requiring a separate start. The user explicitly started controlled service actor
+provisioning. The L1 contract is being tightened and reviewed before runtime
+edits; AUTH-09C and service runtime admission remain inactive.
+
+## 2026-07-17 - WS-CON-001-PLAN3 External Review Repair Started
+
+CodeRabbit posted five consolidated actionable threads and one PR-description
+warning on PR #142 after the AUTH/REV current-main reconciliation became ready
+for review. The bounded planning-only repair adds deterministic executable
+verification gates to 16 active future chunks, moves AUTH registration/context/
+custody/prepared-port requirements into upstream handoffs, preserves the
+canonical registration -> hidden behavior -> activation order, and moves
+optional CON-09B out of executable `chunks/` as a zero-file deferred proposal
+pending separate ART/AUTH/human approval and a fresh contract. It also aligns
+the PR trust bundle with the repository template. No runtime successor is
+active; exact-SHA internal re-review, evidence rebind, external check rerun, and
+thread disposition remain required before merge readiness.
+
+## 2026-07-17 - WS-AUTH-001-09A Convergence Started
+
+After PR #140 merged as `d541521` and signed memory stopped, the user explicitly
+started the bounded PR #132 repair. The branch is converging migration `0023`,
+seven fixed service identities, eleven exact static matrix memberships, and
+eight planned actions onto current XINT without restoring feature-owned
+activation, combined-role, token-role, or compatibility authority. Prior
+SHA-bound evidence is stale until deterministic proof and required exact-head
+review repeat.
+
+## 2026-07-17 - WS-AUTH-001-XINT External Review Repair Passed
+
+CodeRabbit posted nine actionable comments on PR #140. Eight valid contract,
+least-privilege, migration, and Markdown findings were repaired at exact SHA
+`c4c4f2e`; the requested runtime `AuthorityClaimHandle` rewrite was rejected as
+a conflation with the distinct future PREP handle and as planning-scope creep.
+Senior, QA, security, product, architecture, CI, docs, and reuse tracks pass the
+repair. Earlier Agent Gates failures were repaired by the null schema-v2
+successor, and replacement Agent Gates and Backend runs pass. Evidence rebinding
+and replacement external checks remain; no AUTH runtime successor is active.
+
+## 2026-07-17 - WS-AUTH-001-XINT Internal Review Passed
+
+Exact planning SHA `2acabdac0658c3f0109db4235458827b8a06bf31` passed senior
+engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+docs, and reuse/dedup review after all valid findings were repaired. The final
+plan preserves merged XINT's eight ART custody owners, exact 25 ART / 19 REV
+action map, uninterrupted AUTH-09A through 09E sequence, delta-based future
+registrations, dormant adjudicator invalidation, and exact PREP lock order. All
+80 agent-gate tests, stale wording, authorization-doc, Markdown-link, and diff
+checks passed. PR publication is pending; no runtime successor is active.
+
 ## 2026-07-16 - WS-AUTH-001-08 Internal Review Passed
 
 Exact implementation SHA `34f87a5aa7d75897349f64f5e904cb1847af019b`
@@ -2007,3 +2154,190 @@ Trust bundle: `.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-serv
 
 Current gate: validate evidence, publish one ready PR, and stop for external
 checks and explicit human review. Do not merge or start `WS-AUTH-001-03`.
+
+## 2026-07-16 - WS-XINT-001-PLAN Discovery Complete
+
+Read-only discovery compared trusted main and the isolated AUTH-09, ART-02A3,
+REV, and CON worktrees. Three parallel explorer agents audited AUTH/ART custody,
+ART/REV artifact semantics, and REV/AUTH/CON atomic contribution behavior; all
+sessions were closed after their findings were incorporated.
+
+The planning draft establishes AUTH-only activation custody, transfers all 25
+current ART action mappings conceptually without changing runtime, preserves
+seven exact artifact service identities, separates REV semantics from ART byte
+custody, and removes synchronous ART/provider work from core contribution
+creation while preserving the stabilized submission artifact digest as lineage.
+
+Current gate: commit the planning baseline, run required internal plan review,
+repair valid findings, publish one planning PR, and stop. No runtime chunk starts
+from this record.
+
+## 2026-07-16 - WS-ART-001-02A3 Pre-Main Review Passed (Superseded)
+
+Reviewed code SHA: `935b1a2bb4663828ecde173b3f91c682250a1aed`.
+
+ArtifactStore v1 was replaced by the byte-only v2 contract, LocalStorage and
+the empty pre-production schema were cleanly cut over, the deployment namespace
+fence and scratch cleanup were activated, and no product ingest, verification,
+recovery, S3, or AUTH action was activated.
+
+All nine required tracks passed for that pre-main revision after repair.
+Deterministic proof includes
+real PostgreSQL cancellation state, concurrent-writer migration refusal, 90
+percent changed-subsystem coverage, stale-contract/wording checks, and the
+engineering evidence gate.
+
+Evidence: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-02A3-internal-review-evidence.md`
+
+Trust bundle: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/reviews/WS-ART-001-02A3-pr-trust-bundle.md`
+
+This review was invalidated for publication when merged-main reconciliation
+changed the candidate. The current gate is final exact-SHA review and fresh
+evidence for the merged-main ART-02A3 revision. Do not publish, merge, or start
+`WS-ART-001-02B1` from this historical record.
+
+## 2026-07-17 - WS-ART-001-02A3 Merged-Main Review Passed Before Gate Repair
+
+Reviewed code SHA: `441d39230a341f2c43dd548776a2437ae6b2395d`.
+
+All nine required tracks passed with no remaining findings after atomic
+provider-replica finalization and LocalStorage cleanup ownership were repaired.
+Every reviewer session was closed. GitHub Agent Gates then found a process-only
+successor-heading mismatch and a stale durable-state assertion. This record is
+historical; the process-only repair must receive fresh exact-SHA review and
+evidence before publication resumes.
+
+## 2026-07-17 - WS-ART-001-02A3 AUTH-Reconciled Review Repair
+
+The first internal review after merging AUTH PR #140 found four valid issues:
+provider initialization preceded the startup namespace fence, the LocalStorage
+fingerprint did not distinguish same-path root replacement, the Operator read
+port used vague generic methods, and same-item `replay_required` recovery lacked
+an end-to-end accounting/receipt regression.
+
+The repair now claims and validates the namespace before adapter construction,
+binds LocalStorage to a pre-provisioned private root's hashed filesystem
+identity, exposes exact Operator read method names, and proves one same-item
+replay produces one content, replica, receipt, and accounting transition.
+Deterministic proof passed 81 ART/PostgreSQL/conformance tests plus 177
+preparation/config/application tests with 93.35 percent combined changed-scope
+coverage. The first review results are superseded; fresh exact-SHA review and
+evidence remain mandatory before PR #141 is republished.
+
+## 2026-07-17 - WS-ART-001-02A3 Startup Claim Repair
+
+The first exact-SHA review of `ddc9dad` found a residual LocalStorage startup
+race and a typed-factory sequencing mismatch. Namespace validation observed a
+root before adapter construction, so a same-path replacement could still
+receive layout mutation. Real `s3_compatible` startup also failed in local-only
+namespace preflight instead of through the canonical typed unavailable-provider
+error. Product/ops additionally found that the planned Operator port retained
+free-form resource-type strings and one stale generic method summary.
+
+The repair keeps `ArtifactStore` byte-only and introduces a separate
+composition-only bootstrap. The typed factory first opens and holds the existing
+private root without layout mutation, PostgreSQL admits that exact namespace
+identity, and initialization rechecks the configured path before writing only
+through the held descriptor. `s3_compatible` now fails at the single typed
+factory boundary before namespace work. Operator binding and audit lookups use
+closed resource vocabularies and exact method names. All prior reviewer sessions
+were closed; this candidate requires fresh deterministic coverage and all nine
+exact-SHA reviewer tracks before evidence can be refreshed.
+
+The first review of the startup-claim candidate then found two Low issues. A
+future provider descriptor could collide with canonical `backend`, `adapter`,
+or `provider_profile` keys, and the glossary retained two v1 provider-reference
+phrases. The interface now rejects every reserved descriptor key, regression
+coverage pins that rule, and the glossary uses the exact opaque
+`provider_object_ref` term. Those reviewer sessions were closed; no prior pass
+or pass-with-risk result is reusable for the repaired revision.
+
+The next review round found one remaining Low documentation mismatch shared by
+five tracks: `ArtifactOperationReceipt` still claimed a response digest and
+provider/database timestamps that do not exist in the v2 model. The canonical
+glossary and artifact specification now enumerate the exact Workstream-owned
+put-acknowledgement fields, resolve adapter/namespace identity through the
+linked replica, and explicitly forbid a response digest or provider receipt.
+All reviewer sessions were closed, and this documentation repair requires one
+final exact-SHA review round.
+
+That review found one High and one Medium implementation issue plus one Low
+documentation mismatch. LocalStorage enforced private mode but not runtime-user
+ownership, and `ArtifactStoreNamespaceIdentity` accepted a mutable list despite
+being frozen. Local directory, marker, and object descriptor checks now require
+the current effective UID; root revalidation also requires exact `0700` mode.
+Namespace descriptor containers must be tuples, with regression tests for both
+rules. ADR 0013 and the artifact specification now describe the actual
+factory-bootstrap, PostgreSQL-claim, byte-store initialization sequence. All
+reviewer sessions were closed; the repaired SHA requires fresh review.
+
+The next exact-SHA review found that provider descriptor keys were only
+canonicalized, not closed by provider profile; the local layout marker accepted
+owner-executable mode; and three active summaries still named direct
+`ExternalServiceAdapterFactory[ArtifactStore]` construction. The namespace
+identity now rejects unsupported profiles and any missing or unknown
+`local-v2` key, the marker requires exact `0600`, and all active summaries use
+the bootstrap -> PostgreSQL namespace claim -> byte-store initialization
+sequence. The stale-evidence finding raised during the review was a sequencing
+false positive: exact-SHA evidence is written only after reviewer sessions
+complete. All reviewer sessions were closed; this repair requires fresh review.
+
+The next exact-SHA review found one Low LocalStorage layout issue: a root with a
+valid v2 marker could retain unknown top-level entries. Initialization now
+accepts only the marker, `objects`, `tmp`, and `locks` entries, with regression
+proof that an added legacy directory fails closed. All reviewer sessions were
+closed; the repaired SHA requires fresh review.
+
+During the next exact-SHA review, `origin/main` advanced through AUTH-09A PR
+#132. Review stopped immediately because the ART branch still carried a sibling
+`0023` migration and its diff would have obscured merged AUTH history. The
+latest `main` is now merged in full. AUTH's `0023_service_actor_identity`,
+service-identity runtime, merge intent, tests, and evidence remain unchanged;
+At that checkpoint ART was renumbered to `0024_artifact_store_v2` and descended
+from AUTH-09A. The
+authored queue records AUTH-09A complete and ART-02A3 at its independent gate.
+All reviewer sessions were closed; the merged candidate requires fresh
+deterministic proof and exact-SHA review.
+
+The final CI-integrity review found that the cumulative artifact-foundation
+coverage source set omitted the new closed product-capability interface module.
+The 90 percent workflow gate and its deterministic command-shape assertion now
+include `app/interfaces/artifact_operations.py`. All reviewer sessions were
+closed; the repaired SHA requires fresh exact-SHA review.
+
+The next review found two Low closure gaps. The active and next ART focused
+commands did not explicitly measure the operations interface, and bootstrap
+initialization closed descriptors for configuration and operating-system errors
+but not every sanitized `ArtifactStoreError`. Both focused commands now include
+the operations interface, and initialization closes on all store errors with a
+regression test for an integrity failure. All reviewer sessions were closed;
+the repaired SHA requires fresh review.
+
+The next review found that claim validation still occurred before the cleanup
+guard and that exact root names did not constrain nested LocalStorage contents.
+All namespace-claim failures now close pinned descriptors. Existing marked
+stores are validated before mutation against the real local grammar: one
+`objects/sha256` tree with canonical digest names, bounded private put
+temporaries, canonical digest locks, and matched crash-recovery hard links.
+Foreign nested entries, owners, modes, link counts, and recovery links fail
+closed. Regression proof covers mismatched/repeated claims, foreign entries at
+every level, and reopening a valid populated store. All reviewer sessions were
+closed; the repaired SHA requires fresh review.
+
+## 2026-07-17 - WS-ART-001-02A3 Merged-Main Final Review
+
+The branch merged trusted `main` at `0302bcf`, preserving the independently
+owned REV planning and the canonical AUTH `0023_service_actor_identity` -> ART
+then-current `0024_artifact_store_v2` migration order. Deterministic proof then
+passed 268
+ART-focused tests at 93.18 percent changed-scope coverage, 56 byte-store
+contract tests at 91.08 percent, four real PostgreSQL migration-safety cases,
+Ruff, 92.0 percent docstring coverage, 80 agent-gate tests, stale-contract and
+wording scans, Markdown links, and diff hygiene.
+
+The final internal review found no remaining implementation, architecture, QA,
+security, product/ops, reuse, or test-delta defect. Docs and CI correctly
+rejected the stale pre-final evidence record. This state-transition commit is
+therefore the exact review target; its evidence-only descendant must bind the
+reviewed SHA, record every reviewer run, pass the evidence gate, and then receive
+final CI/docs confirmation before external checks resume.

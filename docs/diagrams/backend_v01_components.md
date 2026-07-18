@@ -30,7 +30,11 @@ Projects and guides
 -> submission packets and evidence
 -> checker runs
 -> review and revision
--> contribution record
--> payment status
--> reputation event
+-> reviewer contribution for every valid Review
+-> FinalAcceptance on accept only
+-> submitter contribution sourced only from FinalAcceptance
+-> conditional compensation award and fulfillment status
 ```
+
+Reputation remains a future separate consumer and is not written by the v0.1
+review lifecycle.

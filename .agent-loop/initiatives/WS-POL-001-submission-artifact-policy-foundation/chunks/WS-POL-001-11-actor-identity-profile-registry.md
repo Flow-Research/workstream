@@ -1,5 +1,10 @@
 # Chunk Contract: WS-POL-001-11 - Actor Identity And Profile Registry
 
+Historical implemented chunk contract. It records the transitional authority
+model used by PR #74 and is not a current authorization source. ADR 0012,
+ADR 0015, `docs/spec_authorization_service.md`, and WS-XINT-001 supersede its
+token-role and typed-profile authorization language.
+
 ## Parent initiative
 
 WS-POL-001 - Submission Artifact Policy Foundation
@@ -7,7 +12,7 @@ WS-POL-001 - Submission Artifact Policy Foundation
 ## Goal
 
 Add local Workstream actor identity and actor profile registries for verified
-Flow actors so every operator, worker, reviewer, project manager, project
+Flow actors so every operator, contributor, reviewer, project manager, project
 owner, and system actor has a durable Workstream identity anchor and a shared
 profile model for workflow metadata before task assignments, audit events, and
 later reputation records attach to them.

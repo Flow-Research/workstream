@@ -20,8 +20,9 @@ Project Guide
 -> Review Packet
 -> Evidence / Verification Log
 -> Needs Revision Replay
--> Accepted / Rejected / Payment Status
+-> Accepted / Rejected
 -> Contribution Record
+-> Conditional Compensation Award / Fulfillment Status
 -> Workflow Lessons
 ```
 
@@ -50,7 +51,7 @@ Tracks:
 - needs revision
 - accepted
 - rejected
-- payment state
+- compensation fulfillment state
 
 Some projects also use explicit lane capacity rules, such as keeping only one live execution active while preparing future tasks in a ready lane.
 
@@ -114,9 +115,10 @@ Workstream must support:
 - review-readiness evidence before review
 - submission and review packet records
 - revision replay tied to prior findings
-- contribution records created from accepted evidence-backed work
+- reviewer contribution records created from every valid human review
+- submitter contribution records created from accepted evidence-backed work
 - lessons learned promoted into guides, checkers, or templates
-- payment status separate from task status
+- compensation fulfillment status separate from task status
 
 ## Non-Goals
 

@@ -17,8 +17,8 @@ Source: [future_identity_payment_reputation.puml](future_identity_payment_reputa
 | Agent reputation read/write | ERC-8004, through a future Workstream adapter |
 | Task contract and escrow reference | ERC-8183 |
 | Evaluation lifecycle | Workstream |
-| Accepted-work certification | Workstream contribution record |
-| Payment policy and payment status | Workstream payment record |
+| Reviewer/submitter contribution recognition | Workstream contribution record |
+| Contribution policy, compensation award, and fulfillment status | Workstream contribution and compensation records |
 | Payment request and settlement execution | x402, OmniClaw, USDC settlement rails |
 
 ## Future Flow
@@ -29,11 +29,12 @@ Flow human identity + ERC-8004 agent identity
 -> locked guide and policy context
 -> submitted artifact packet with human id and agent id references
 -> checks and human review
--> accepted contribution record
--> payment record from locked payment policy
--> payment link / x402 request
+-> reviewer contribution for every valid human Review
+-> submitter contribution only on accept
+-> compensation award only when the frozen rule is payable
+-> payment link / x402 request only for a payable money award
 -> OmniClaw / USDC settlement
--> payment status update
+-> immutable fulfillment receipt and status projection
 -> reputation event
 -> optional ERC-8004 agent reputation write
 ```

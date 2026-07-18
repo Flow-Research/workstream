@@ -86,8 +86,9 @@ starting AUTH-05B runtime implementation in this chunk
   transition ownership.
 - AUTH-07 through AUTH-16 retain at least 90 percent authorization-subsystem
   coverage; the repository-wide 78 percent baseline remains unchanged.
-- AUTH-05A retains migration `0018`, AUTH-05B solely owns `0019`, and the later
-  AUTH schema chunks use the non-conflicting `0020` through `0026` sequence.
+- AUTH-05A retains migration `0018`, AUTH-05B solely owns `0019`, and merged
+  AUTH schema chunks through AUTH-09B use `0020` through `0024`. Future
+  migration custody follows the current AUTH plan and trusted main.
 - The rejected root proposal is absent from the working tree and patch.
 
 ## Verification commands

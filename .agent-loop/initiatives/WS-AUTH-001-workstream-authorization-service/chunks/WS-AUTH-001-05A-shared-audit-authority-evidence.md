@@ -174,7 +174,7 @@ required and event-compatible as follows:
 | actor reactivate | `administrative_correction` |
 | initial Access Administrator bootstrap | `initial_access_bootstrap` |
 | admin/project grant issue | `authority_assignment` |
-| project grant replacement | `authority_replacement` |
+| project grant replacement | `authority_replacement` (historical foundation value; AUTH-10 removes current emission/validation under D21) |
 | admin/project grant revoke | `authority_revocation` |
 | admin grant/last-admin denial | `authorization_policy_denial` |
 | qualification snapshot | `qualification_evidence_captured` |
@@ -187,10 +187,10 @@ values are: `status` in `active`, `suspended`, `deactivated`, `revoked`, or
 `captured`; `subject_kind` in `human` or `service`; `provisioning_method` in
 `automatic_first_access` or `manual_service_provisioning`; `role` in
 `access_administrator`, `operator`, `project_manager`, `finance_authority`,
-`audit_authority`, `submitter`, `reviewer`, or `both`; `scope_type` in `system`
-or `project`; `scope_id` as a canonical UUID; and `effective` and `allowed` as
-booleans. `effective` describes persisted authority state; `allowed` describes
-an authorization decision and they are not interchangeable.
+`audit_authority`, `submitter`, `reviewer`, or `adjudicator`; `scope_type` in
+`system` or `project`; `scope_id` as a canonical UUID; and `effective` and
+`allowed` as booleans. `effective` describes persisted authority state;
+`allowed` describes an authorization decision and they are not interchangeable.
 
 The event-specific fact matrix is exact:
 
@@ -203,7 +203,6 @@ The event-specific fact matrix is exact:
 | actor deactivated | `status=active` or `suspended` | `status=deactivated` |
 | initial admin bootstrap | `NULL` | `status=active`, `role=access_administrator`, `scope_type=system`, `effective=true` |
 | admin/project grant issued | `NULL` | `status=active`, applicable `role`/scope, `effective=true` |
-| project grant replaced | prior active role/scope with `effective=true` | replacement active role/scope with `effective=true` |
 | admin/project grant revoked | active role/scope with `effective=true` | same role/scope, `status=revoked`, `effective=false` |
 | qualification snapshot captured | `NULL` | `status=captured` |
 | grant operation denied or last-admin denial | `NULL` | `NULL`; `denial_code` carries the attempted-operation result |
@@ -212,16 +211,20 @@ The event-specific fact matrix is exact:
 
 For grant facts, `access_administrator` and `operator` use only `system`;
 `project_manager`, `finance_authority`, and `audit_authority` use `system` or
-`project`; `submitter`, `reviewer`, and `both` use only `project`. `scope_id` is
-absent for system scope and required for project scope. System-scope grant
-evidence has `project_id = NULL`. Project-scope grant evidence requires
-`project_id`, and every before/after `scope_id` equals that envelope value;
-replacement retains the same scope ID before and after. When
+`project`; `submitter`, `reviewer`, and `adjudicator` use only `project`.
+`scope_id` is absent for system scope and required for project scope.
+System-scope grant evidence has `project_id = NULL`. Project-scope grant evidence requires
+`project_id`, and every before/after `scope_id` equals that envelope value. When
 `resource_type = project` and `resource_id` is present, `resource_id` also
 equals `project_id`. Typed and direct-SQL paths enforce these cross-field rules.
 Typed validation and database constraints enforce the identical envelope and
 fact matrices. Table-driven tests execute the same positive and negative cases
 through Pydantic and direct SQL; lexical bounds alone are insufficient.
+
+AUTH-10 supersedes the original combined-role and cross-role replacement
+contract for new evidence. Previously persisted audit evidence remains
+readable, but new issue/revoke evidence uses one independent submitter,
+reviewer, or adjudicator grant.
 
 The typed admission layer inspects every `collections.abc.Mapping`, including
 non-dict mappings, before Pydantic owns rejected values. Unknown fields and

@@ -20,6 +20,9 @@ class AuthVerificationUnavailableError(AuthVerificationError):
 class AuthVerifier(Protocol):
     """Protocol implemented by external auth verifier adapters."""
 
+    def canonical_issuer(self) -> str:
+        """Return the exact configured issuer used for successful verification."""
+
     async def verify(self, token: str) -> AuthVerificationResult:
         """Verify a bearer token and return canonical and compatibility views."""
 

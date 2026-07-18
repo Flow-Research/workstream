@@ -30,8 +30,11 @@ Do not add recovery attempts, Operator routes, or product cutovers.
 - guide, task, submission, checker, or review cutover;
 - provider mutation replay, overwrite, delete, retain, or release;
 - task-claim or reviewer-lease changes;
-- production dispatch before AUTH-07 and AUTH-09 register the exact service
-  principals/actions and 02D attaches and activates their enforcement.
+- production dispatch before AUTH registers the exact planned actions and
+  static service-action matrix, provisions the exact service ActorProfiles and
+  ActorIdentityLinks, admits them through AUTH-09E, 02C2/02D merge hidden
+  behavior/resource composition, and the later AUTH activation checkpoint
+  integrates their evaluators.
 
 ## Acceptance Criteria
 
@@ -65,8 +68,9 @@ Do not add recovery attempts, Operator routes, or product cutovers.
   `integrity_mismatch/available/invalid` and cannot reset;
 - complete reads enforce a total deadline shorter than the lease by a tested
   persistence margin, including continuously progressing slow streams;
-- mechanics remain inactive until 02D registers and tests exact internal
-  authorization;
+- mechanics remain inactive through 02D while ART builds and tests hidden
+  resource/behavior composition; only the later AUTH internal-action activation
+  checkpoint can make them executable;
 - migrations prove fresh, prior-head, populated, and empty round-trip behavior;
 - changed subsystem coverage is at least 90 percent and repository coverage
   remains at least 78 percent;
@@ -77,7 +81,7 @@ Do not add recovery attempts, Operator routes, or product cutovers.
 ## Exact CI Coverage Gates
 
 ```bash
-coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
+coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
 coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90
 coverage report --include='app/core/config.py' --precision=2 --fail-under=90
 coverage report --include='app/workers/*' --precision=2 --fail-under=90
@@ -89,7 +93,7 @@ coverage report --include='app/modules/audit/*' --precision=2 --fail-under=90
 
 ```bash
 docker compose up -d --wait postgres redis minio
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_artifact_verification.py tests/test_config.py -q --cov=app.modules.artifacts --cov=app.modules.audit --cov=app.core.config --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_artifact_verification.py tests/test_config.py -q --cov=app.interfaces.artifact_operations --cov=app.modules.artifacts --cov=app.modules.audit --cov=app.core.config --cov-report=term-missing --cov-fail-under=90)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 (cd backend && .venv/bin/ruff check app tests)
 python3 scripts/check_stale_artifact_contracts.py

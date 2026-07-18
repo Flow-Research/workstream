@@ -24,7 +24,7 @@ tokens and owns product authorization.
 | Grants, permissions, idempotency, invalidation, decisions | `backend/app/modules/authorization` | Deny by default; no token-role product authority. |
 | Resource facts | Owning feature services/repositories | Repositories return domain records; application services compose `ResourceContext`. |
 | Review lifecycle | WS-REV-001 | Authorization supplies actors and permissions but does not invent review outcomes. |
-| Contribution and compensation | WS-CON-001 | Authorization does not redefine contribution or payment behavior. |
+| Contribution and compensation | WS-CON-001 | Authorization does not redefine contribution or compensation behavior. |
 
 All public routes use `/api/v1`. The archival short prefix is not an alias.
 
@@ -60,12 +60,17 @@ Required concepts:
 
 - UUID identifier;
 - kind: human or explicitly provisioned service;
+- fixed unique `service_identity` for a service and null for a human;
 - status: active, suspended, or deactivated;
 - contributor domain for human self-service;
 - database-time creation/update and immutable historical attribution.
 
 A profile status is a guard, not a grant. Active humans receive only self
 profile capability until an administrative or exact-project grant exists.
+For a service, the profile is the stable local principal. Its immutable
+`service_identity` selects one closed typed service-action matrix row; it is
+never inferred from display data, token claims, issuer, or subject. Profile ID,
+service identity, and external credential binding remain separate concepts.
 
 ### ActorIdentityLink
 
@@ -82,10 +87,10 @@ Legacy typed workflow-profile IDs are unrelated and never promoted.
 
 | Grant | Scope | Purpose |
 |---|---|---|
-| `access_administrator` | system | Actor, identity-link, administrative-grant, and permission-catalog administration. |
+| `access_administrator` | system | Actor, identity-link, and administrative-grant administration. It does not edit the closed permission/action catalog or action availability. |
 | `operator` | system | Runtime inspection and explicit recovery operations against canonically resolved resources. |
-| `project_manager` | system or exact covered project | Project configuration, task management, and contributor grants. System scope covers all projects but remains resource- and lifecycle-guarded; exact-project scope covers only that project. |
-| `finance_authority` | system or exact covered project | Compensation configuration and fulfillment observation owned by WS-CON. |
+| `project_manager` | system or exact covered project | Project, task, guide/setup, submission/checker, review, and revision configuration plus contributor grants. It cannot mutate contribution policy or compensation-adapter bindings. System scope covers all projects but remains resource- and lifecycle-guarded; exact-project scope covers only that project. |
+| `finance_authority` | system or exact covered project | Contribution policy, compensation-adapter binding, and fulfillment observation owned by WS-CON. |
 | `audit_authority` | system or exact covered project | Read-only evidence access and authorized export. |
 
 Administrative grants do not imply contributor capability. An administrator
@@ -97,17 +102,33 @@ cannot submit or review by administrative role alone.
 |---|---|
 | `submitter` | Minimal project read, task queue read/claim, own submission create/read, own review-chain read. |
 | `reviewer` | Minimal project read, review queue/claim/release/decision, submission read for review, review-chain read. |
-| `both` | Union of submitter and reviewer candidates, still subject to separation-of-duties and lifecycle guards. |
+| `adjudicator` | Minimal project read only; this is shared resource visibility, not adjudication capability. WS-REV must define adjudication resources and AUTH must activate exact actions before adjudication is available. |
 
-Contributor is the umbrella human product term. A contributor has an
-exact-project `submitter`, `reviewer`, or `both` grant. Celery, checker, setup,
-and background workers are internal services, not human product roles.
+Contributor is the umbrella human product term. A contributor may hold
+independent exact-project `submitter`, `reviewer`, and `adjudicator` grants.
+Holding multiple rows does not bypass separation-of-duties or lifecycle guards.
+Celery, checker, setup, and background workers are internal services, not human
+product roles.
 
-Grants are immutable history. Replacement revokes the prior active grant and
-creates a new row atomically. No observed token role, typed profile, skill,
-qualification, or reputation value creates a grant automatically.
+Grants are immutable history. Issue and revoke target one exact role; one role
+never replaces another. Regrant after revocation creates a new immutable row.
+No observed token role, typed profile, skill, qualification, or reputation
+value creates a grant automatically.
+
+The active model has no `both`, replacement field, replacement event, or
+replacement reason. Qualification evidence is bound to the same actor, project,
+and exact requested role. One active row is permitted per
+actor/project/role. Issue idempotency includes the requested role; revoke derives
+the role from the locked grant. Migration `0026` refuses upgrade when obsolete
+combined or replacement evidence exists and never converts or deletes those
+rows. It replaces current typed and PostgreSQL validators without changing
+historical migrations.
 
 ## Permission Catalog
+
+AUTH owns the closed PermissionId/ActionId catalog, exact mappings, and action
+availability. No human administrative grant edits catalog definitions or moves
+an action between `planned` and `active`.
 
 The initial registered catalog includes:
 
@@ -202,11 +223,13 @@ Artifact permissions are deliberately resource- and operation-specific.
 Operator permissions do not authorize internal execution, and internal service
 permissions do not authorize Operator APIs. AUTH-07A owns this closed registry,
 AUTH-07B introduces the central kernel, AUTH-08 owns the Operator grant
-definitions, AUTH-09 owns the service
-principals, and WS-ART consumes the resulting decisions without registering
-permissions or inferring authority. Artifact actions activate only through the
-paired feature model below; AUTH-12, AUTH-14, and AUTH-15 do not activate or
-attach artifact actions on behalf of WS-ART.
+definitions, AUTH-09A owns the static service-action matrix, AUTH-09B provisions
+service ActorProfiles and ActorIdentityLinks, AUTH-09E admits fixed services,
+and WS-ART consumes the resulting decisions without registering permissions or
+inferring authority. Artifact actions follow AUTH planned
+registration, hidden ART behavior/resource composition, then dedicated AUTH
+evaluator integration and activation. ART never writes availability. AUTH-12,
+AUTH-14, and AUTH-15 are not alternate artifact activation paths.
 
 These are 74 approved `PermissionId` values. `ActionId` values are a separate
 closed registry layer and are not included in that permission count. AUTH-05A's
@@ -215,25 +238,61 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 57 rows: nine active actions and 48 planned
-rows. AUTH-08 adds seven active administrative definition, grant-history,
-issue, revoke, and local-bootstrap actions without adding a permission. The
-planned rows cover three Operator recovery actions, 25 artifact actions,
-canonical `submission.create`, and 19 review actions. An action becomes active only when
-its owning chunk supplies its canonical resource composer, guards, surface or
+The closed action registry contains 65 rows after AUTH-09C: 12 active actions
+and 53 planned rows. AUTH-08 adds seven active administrative definition,
+grant-history, issue, revoke, and local-bootstrap actions without adding a
+permission. AUTH-09A adds eight planned actor, identity-link, and service
+provisioning actions without activating a route; AUTH-09B activates only
+`actor.service.provision`, and AUTH-09C activates only `actor.profile.read` and
+`actor.identity_link.read`. The other planned rows cover
+three Operator recovery actions, 25 artifact actions, canonical
+`submission.create`, and 19 review actions. An action becomes active only when
+its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
-required. Both halves are mandatory; registry presence alone never grants
-authority.
+required, and its dedicated AUTH activation custodian has integrated the exact
+evaluator and changed availability. Both halves are mandatory; registry or
+feature presence alone never grants authority.
+
+The four proposed REV lifecycle actions and
+`artifact.review_evidence.binding.create` are not part of the current runtime
+registry. Catalogue totals are derived from trusted `main` when each gate runs:
+REV registration adds exactly four planned and zero active actions, while the
+review-evidence registration adds exactly one planned and zero active action, in
+either order. Both retain 74 PermissionIds and stay blocked until complete
+feature-owned typed and transaction manifests exist.
 
 AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.
 AUTH-08 activates exactly seven administrative actions through migration
 `0022`; all other registered actions remain planned.
 
+AUTH-09A registers these exact planned actions through migration `0023`:
+
+| ActionId | PermissionId | Activation owner |
+|---|---|---|
+| `actor.profile.read` | `actor.profile.read_any` | `WS-AUTH-001-09C` |
+| `actor.profile.suspend` | `actor.profile.suspend` | `WS-AUTH-001-09D` |
+| `actor.profile.reactivate` | `actor.profile.reactivate` | `WS-AUTH-001-09D` |
+| `actor.profile.deactivate` | `actor.profile.deactivate` | `WS-AUTH-001-09D` |
+| `actor.identity_link.read` | `actor.identity_link.read` | `WS-AUTH-001-09C` |
+| `actor.identity_link.revoke` | `actor.identity_link.revoke` | `WS-AUTH-001-09D` |
+| `actor.identity_link.reactivate` | `actor.identity_link.reactivate` | `WS-AUTH-001-09D` |
+| `actor.service.provision` | `actor.service.provision` | `WS-AUTH-001-09B` |
+
+AUTH-09B activates only `actor.service.provision` through the controlled route
+described below. AUTH-09C activates only the two bounded actor-registry reads.
+The other five remain unavailable until AUTH-09D supplies the mutation route,
+typed resource context, evaluator, guards, transaction proof, and availability
+change. AUTH-09A supplies none of those runtime paths.
+
 The submission/review dependency matrix is closed. AUTH-07A registers only the
 four stable planned fields shown here; resource facts, candidates, guards, and
-runtime activation remain with the listed owner.
+hidden behavior remain with the listed feature owner. The current owner values
+are planned pre-transfer catalogue state, not permission for a feature chunk to
+activate. Before any review action activates, AUTH must transfer activation
+custody according to `ACTIVATION_CUSTODY.md` and the reviewed
+`.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_REV_HANDOFF.md`.
 
-| ActionId | PermissionId | Owner |
+| ActionId | PermissionId | Historical pre-transfer owner value |
 |---|---|---|
 | `submission.create` | `submission.create` | `WS-AUTH-001-14` |
 | `review.queue.read` | `review.queue.read` | `WS-REV-001-05` |
@@ -272,12 +331,13 @@ subsystem and is not represented as a REV-owned projection action.
 Migration `0021` is availability-neutral. PostgreSQL enforces the closed
 ActionId set, authorization-decision event shape, exact ActionId-to-PermissionId
 mapping, and the requirement that every post-`0018` permission carry a mapped
-action. Typed catalogue validation separately rejects allowed evidence until an
-owning chunk changes an action from `planned` to `active`.
+action. Typed catalogue validation separately rejects allowed evidence until the
+dedicated AUTH activation custodian changes an action from `planned` to `active`
+after merged feature behavior proof.
 
-The paired artifact activation matrix is closed:
+The paired artifact hidden-behavior matrix is closed:
 
-| Owning WS-ART chunk | Actions activated by that chunk |
+| Resource-owning WS-ART chunk | Hidden actions/resources implemented by that chunk |
 |---|---|
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, and `artifact.guide_source.binding.create` mapped to `artifact.binding.create` |
@@ -289,19 +349,26 @@ The paired artifact activation matrix is closed:
 
 Every row requires AUTH-07A's registry and AUTH-07B's kernel first. A row with an Operator principal
 also requires its AUTH-08 grant definition; a row with a fixed service
-principal also requires its AUTH-09 service-actor assignment. Feature code
-receives centralized decisions; it never queries grants or constructs
-permission identifiers dynamically.
+principal also requires AUTH-09A's static matrix, AUTH-09B's provisioned service
+ActorProfile and ActorIdentityLink, and AUTH-09E fixed service runtime
+admission. After the named ART behavior merges, the dedicated AUTH custodian
+integrates and activates the exact evaluator. Feature code receives centralized
+decisions; it never queries grants, constructs permission identifiers
+dynamically, or changes availability.
 
-The following table is the single source of truth for the owning WS-ART activation blueprint for
-artifact-related `ActionId` values. AUTH-07A registers only each row's stable
-`ActionId`, approved `PermissionId`, owning WS-ART chunk, and `planned`
+The following table is the single source of truth for artifact ActionId-to-
+PermissionId mappings, principal/resource facts, and ART hidden-behavior
+ownership. AUTH-07A registers only each row's stable `ActionId`, approved
+  `PermissionId`, historical pre-transfer owner value, and `planned`
 availability. Its principal-class and canonical-resource columns are not AUTH
-registry fields and are not executable authority; the owning WS-ART chunk must
-adopt them with its canonical resource composer, guards, surface declaration,
-and behavior tests before activation. A mapping is not a permission alias.
+registry fields and are not executable authority; the owning WS-ART chunk adopts
+them with its hidden canonical resource composer, guards, surface declaration,
+and behavior tests. The complete AUTH activation-custody transfer is separately
+canonical in
+`.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md`.
+A mapping is not a permission alias.
 
-| ActionId | PermissionId | Principal class | Canonical resource | Owning WS-ART chunk |
+| ActionId | PermissionId | Principal class | Canonical resource | Resource-owning WS-ART chunk |
 |---|---|---|---|---|
 | `artifact.binding.read` | `artifact.binding.read` | Operator | artifact binding | `02D` |
 | `artifact.replica.read` | `artifact.replica.read` | Operator | artifact replica | `02D` |
@@ -342,13 +409,23 @@ are also closed:
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
 
-AUTH-09 persists these exact service actors and assignments before any WS-ART
-execution chunk activates them. Composition startup proves registry, service
-actor, action, and PermissionId parity and fails closed on a missing or extra
-assignment. Negative authorization tests prove each service identity is denied
-every artifact action outside its row. Human authorization remains attached to
-the initiating product command; an internal service identity never inherits a
-human grant or role.
+AUTH-09B lets a system Access Administrator bind an exact configured-issuer
+subject with no leading or trailing whitespace to one of these fixed identities
+through `POST /api/v1/service-actors`. Accepted subject bytes are preserved
+without normalization.
+It creates the service ActorProfile and ActorIdentityLink, but creates no role,
+grant, assignment, or executable service authority. A newly provisioned service
+profile has null `last_seen_at`, and its link has null `last_verified_at` until
+AUTH-09E verifies and admits that exact service token. The service-action matrix
+is typed code, not a database assignment or grant table. Its rows remain inert
+while their actions are planned. After the ART execution behavior merges, the
+dedicated AUTH activation custodian integrates the evaluator and changes only
+the exact action to active. Composition startup proves registry, service actor,
+matrix row, action, and PermissionId parity and fails closed on missing or extra
+matrix membership. Negative authorization tests prove each service identity is
+denied every artifact action outside its row. Human authorization remains
+attached to the initiating product command; an internal service identity never
+inherits a human grant or role.
 
 Adding a permission requires a specification/ADR update and human approval.
 Routers cannot invent identifiers or evaluate grant unions.
@@ -401,11 +478,14 @@ and first active self-actions. Reserved action metadata contains only the
 stable `ActionId`, approved `PermissionId`, owning specification/chunk, and
 `planned` availability; it is not executable and does not predefine a
 foreign-domain target, facts, or guards. Every route-owning chunk from 07B
-through 15 may promote an action to active only when its owning domain contract,
-feature-owned resource composition, surface declaration, and behavior tests
-exist. Each such chunk generates a manifest-delta proof for every surface it
-migrates. Chunk 16 aggregates and verifies the complete route/command manifest
-rather than first discovering missing declarations there.
+through 15 supplies hidden behavior, feature-owned resource composition,
+surface declarations, and behavior proof while its action remains planned and
+fails closed. Only the action's dedicated AUTH activation custodian may promote
+it to active after integrating the evaluator and verifying that proof. Each
+feature chunk generates a manifest-delta proof for every surface it prepares;
+the matching AUTH activation chunk records the availability delta. Chunk 16
+aggregates and verifies the complete route/command manifest rather than first
+discovering missing declarations there.
 Resources and transitions owned by WS-REV, WS-CON, or the artifact-storage
 specification are not invented by AUTH; their owning specification must first
 approve the resource facts and operation before a corresponding permission is
@@ -433,6 +513,39 @@ Authorization decisions are request-scoped and are not cached across requests.
 Each decision carries a bounded SHA-256 digest of its complete typed resource
 context so feature code cannot reuse it with substituted role, scope, target,
 or replay facts. List filtering occurs before counts and pagination cursors.
+
+Sensitive mutations use the prepared protocol instead of evaluating final
+authority against unlocked feature facts:
+
+```text
+AUTH locks AuthorityControl first when final-admin safety applies
+-> AUTH orders principals by ActorProfile ID
+-> human: ActorProfile -> exact ActorIdentityLink -> exact matched grant
+-> service: ActorProfile -> exact ActorIdentityLink -> code-owned validations
+-> AUTH creates one internal non-Pydantic PreparedAuthorizationHandle bound to
+   session, action, actor reference, idempotency key, and request digest
+-> feature locks its canonical rows and recomposes final typed facts
+-> AUTH consumes the handle, evaluates once, and stages decision evidence
+-> feature participants flush
+-> route or service command commits once
+```
+
+Service identity, static service-action matrix membership, and action
+availability are immutable code-owned validations after the service profile and
+link locks; they are not database rows or lock targets. Existing actor-self,
+administrative, and lifecycle mutations must use the same authority-row order
+before any prepared consumer ships.
+
+The handle is single-use, nonserializable, and never a route schema or caller
+input. Consumption matches the exact session, action, actor reference kind,
+actor reference, idempotency key, and request digest before feature mutation.
+Reuse, same-session/action cross-actor or cross-request substitution, authority
+loss, evidence failure, participant failure, cancellation, or commit failure
+leaves no feature mutation or partial authority evidence. Reads continue to use
+request-scoped `require()`. AUTH never imports feature repositories, and
+dependency teardown never commits shared feature work.
+Crossed PostgreSQL tests cover PREP against link revocation, actor suspension or
+deactivation, exact grant revocation, and final-admin mutation.
 
 For the two active self actions, the default human authority source is
 `actor_self`; token roles and client-supplied permissions never enter the
@@ -489,6 +602,21 @@ registered system permissions. They never receive fabricated human grants.
 Serialized requester identity is provenance only. Actor-attributed jobs reload
 current actor/link/grant state before committing.
 
+Fixed service callers use a dedicated AUTH service-admission path. It resolves
+the verified service subject to one active identity link and service
+ActorProfile, validates the immutable `service_identity`, and selects only that
+identity's exact static ActionId row. It never enters human provisioning or
+human grant evaluation. Feature actions remain unavailable until their owning
+feature supplies canonical resource facts, guards, hidden behavior, and proof
+and AUTH separately activates them.
+
+New fixed services are added only after the owning feature publishes an exact
+identity-to-ActionId manifest. AUTH then owns one closed enum/constraint/matrix
+extension, controlled provisioning, admission reuse, and all-pairs
+cross-service denial. REV timer, expiry, reconciliation, projection,
+artifact-reference, and release-control identities are not pre-created, and no
+catch-all review service exists.
+
 ## Bootstrap And Final-Administrator Safety
 
 The first Access Administrator is created through a local management command
@@ -514,6 +642,13 @@ Assignment reconciliation preserves immutable work history. A revoked actor's
 ordinary claimed/in-progress assignment may be released by the owning later
 chunk. A `needs_revision` task retains a durable revision obligation and cannot
 be returned as ordinary ready work.
+
+Project-role invalidation is exact-role-specific. Submitter revocation alone can
+enter task-assignment reconciliation. Reviewer revocation creates only the
+REV-owned review obligation; adjudicator invalidation remains dormant until its
+lifecycle is enabled. Revoking any one project role leaves the other roles and
+all AdminRoleGrants unchanged. Consumers verify the cause event, grant ID,
+actor, project, and role before changing product state.
 
 ## Idempotency And Authority Evidence
 
@@ -549,7 +684,7 @@ Canonical route families use `/api/v1`:
 GET|PATCH /api/v1/actors/me
 GET /api/v1/authorization/permissions
 GET /api/v1/authorization/admin-role-definitions
-GET|PATCH /api/v1/actors/{actor_profile_id}
+GET /api/v1/actors/{actor_profile_id}
 POST /api/v1/actors/{actor_profile_id}/suspend|reactivate|deactivate
 GET /api/v1/actors/{actor_profile_id}/identity-links
 POST /api/v1/actor-identity-links/{link_id}/revoke|reactivate
@@ -570,7 +705,9 @@ selection is only the requested grant; it never supplies the caller's authority.
 
 AUTH-07B cuts existing `GET|PATCH /api/v1/actors/me` behavior over to the
 kernel. AUTH-08 activates the two definition reads, scoped grant/history reads,
-issue/revoke APIs, and local bootstrap command. Project-scoped
+issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
+and identity-link reads for effective system Access Administrator or Audit
+Authority grants. Project-scoped
 `GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
 exact-project grant and canonical project capability composition exists.
 
@@ -578,25 +715,38 @@ exact-project grant and canonical project capability composition exists.
 
 The implementation order is fixed by the WS-AUTH-001 chunk map:
 
-1. canonical docs and ADR;
-2. verified issuer token/JWKS boundary;
-3. legacy actor classification;
-4. request/error/rate controls;
-5. authority evidence/idempotency;
-6. canonical actor/link migration;
-7. authorization kernel;
-8. bootstrap/admin grants;
-9. actor/link state and service actors;
-10. project contributor grants;
-11-14. complete resource-family cutovers;
-15. obsolete authority removal and scanner enforcement;
-16. conformance, observability, concurrency, and live API proof.
+1. `WS-AUTH-001-01`: canonical docs and ADR;
+2. `WS-AUTH-001-02`: verified issuer token/JWKS boundary;
+3. `WS-AUTH-001-03`: legacy actor classification;
+4. `WS-AUTH-001-04`: request/error/rate controls;
+5. `WS-AUTH-001-05`: authority evidence/idempotency;
+6. `WS-AUTH-001-06`: canonical actor/link migration;
+7. `WS-AUTH-001-07`: authorization kernel;
+8. `WS-AUTH-001-08`: bootstrap/admin grants;
+9. `WS-AUTH-001-09A`: fixed service identity and static matrix foundation;
+10. `WS-AUTH-001-09B`: controlled service ActorProfile/ActorIdentityLink
+    provisioning with an unverified service link until AUTH-09E verifies the
+    service token;
+11. `WS-AUTH-001-09C`: actor and identity-link administrative reads;
+12. `WS-AUTH-001-09D`: actor and identity-link lifecycle mutations;
+13. `WS-AUTH-001-09E`: fixed service runtime admission without human grant
+    evaluation or feature action activation;
+14. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
+    availability-neutral transfer to exact AUTH activation owners;
+15. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
+16. `WS-AUTH-001-10`: independent project contributor grants;
+17. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
+    cutovers;
+18. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
+19. `WS-AUTH-001-16`: conformance, observability, concurrency, and live API
+    proof.
 
-Temporary compatibility mechanisms are explicitly named, enumerated, and
-shrinking. They grant no canonical product authority and are deleted by their
-assigned removal chunk. No implementation chunk may create a second canonical
-actor root, verifier hierarchy, audit ledger, unit-of-work abstraction, or
-authorization engine.
+No implementation may add a compatibility alias, fallback authority source,
+dual route, or translation into canonical grants. The remaining explicitly
+enumerated legacy paths are removal-only: their allowlist may only shrink, and
+their assigned cutover must delete them rather than preserve an alternate path.
+No implementation chunk may create a second canonical actor root, verifier
+hierarchy, audit ledger, unit-of-work abstraction, or authorization engine.
 
 ## Error And Privacy Contract
 
@@ -645,6 +795,6 @@ authorization claims. ADR 0006 still controls authentication ownership.
 WS-REV-001 and WS-CON-001 control their own product behavior.
 
 This specification does not add Workstream login, implement runtime code,
-change review decision values, define contribution/payment behavior, add a
+change review decision values, define contribution/compensation behavior, add a
 frontend, enable blockchain settlement, add source adapters, automate routing,
 or create an agent workspace.

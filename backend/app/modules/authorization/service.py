@@ -54,7 +54,7 @@ class _OperationEvidence:
 _EVIDENCE = {
     AuthorityOperation.SERVICE_ACTOR_CREATE: _OperationEvidence(
         "actor.service.provision",
-        None,
+        ActionId.ACTOR_SERVICE_PROVISION,
         AuthorityResourceType.ACTOR_PROFILE,
         201,
         (AuthorityEventType.SERVICE_ACTOR_PROVISIONED,),

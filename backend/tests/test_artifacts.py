@@ -1,1926 +1,1107 @@
+"""PostgreSQL integration tests for the ArtifactStore v2 orchestration boundary."""
+
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
-from dataclasses import replace
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-import hashlib
-import json
-import os
 from pathlib import Path
-import stat as stat_module
-import threading
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
-from jsonschema import Draft202012Validator
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.adapters.artifacts.local import LocalStorageAdapter
+from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
+from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifacts import (
     ArtifactByteRange,
-    ArtifactIdempotencyMismatchError,
+    ArtifactConfigurationError,
     ArtifactInputMismatchError,
     ArtifactIntegrityError,
-    ArtifactLimitExceededError,
-    ArtifactNotFoundError,
-    ArtifactRetentionConflictError,
-    ArtifactOperation,
-    ArtifactMalformedRequestError,
+    ArtifactObjectHead,
+    ArtifactPutObservation,
+    ArtifactPutResult,
     ArtifactStoreUnavailableError,
-    ArtifactThrottledError,
-    IdempotencyIdentity,
-    IntegrityState,
-    StoreArtifactRequest,
-    canonical_release_request_digest,
-    canonical_retain_request_digest,
-    canonical_store_request_digest,
-    canonical_verify_request_digest,
+    ArtifactStoreNamespaceIdentity,
 )
+from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.models import (
-    ArtifactBinding,
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactReplica,
+    ArtifactStorageNamespace,
     ArtifactUploadItem,
     ArtifactUploadSession,
 )
-from app.modules.artifacts.service import ArtifactIngestService
-from app.modules.projects.models import Project
-from app.modules.tasks.models import AuditEvent
-
-
-async def byte_stream(*chunks: bytes) -> AsyncIterator[bytes]:
-    """Yield exact byte chunks for adapter tests."""
-    for chunk in chunks:
-        yield chunk
-
-
-def store_request(
-    *,
-    key: str = "store-1",
-    request_value: str = "same",
-    expected_sha256: str | None = None,
-    expected_size: int | None = None,
-    maximum_bytes: int = 64,
-) -> StoreArtifactRequest:
-    """Build one canonical store request."""
-    identity = IdempotencyIdentity(
-        service_principal="workstream.artifact.ingest",
-        operation=ArtifactOperation.STORE,
-        key=key,
-        request_digest="sha256:" + "0" * 64,
-    )
-    request = StoreArtifactRequest(
-        expected_sha256=expected_sha256,
-        expected_size=expected_size,
-        maximum_bytes=maximum_bytes,
-        media_type="application/octet-stream",
-        metadata={"request": request_value},
-        idempotency=identity,
-    )
-    return replace(
-        request,
-        idempotency=replace(identity, request_digest=canonical_store_request_digest(request)),
-    )
-
-
-def verify_identity(
-    provider_artifact_id: str,
-    expected_sha256: str,
-    expected_size: int,
-    *,
-    key: str = "verify-1",
-    principal: str = "workstream.artifact.ingest",
-) -> IdempotencyIdentity:
-    """Build one canonical verify identity."""
-    return IdempotencyIdentity(
-        principal,
-        ArtifactOperation.VERIFY,
-        key,
-        canonical_verify_request_digest(provider_artifact_id, expected_sha256, expected_size),
-    )
-
-
-def retain_identity(
-    provider_artifact_id: str,
-    reference: str,
-    retention_class: str,
-    *,
-    key: str = "retain-1",
-    principal: str = "workstream.artifact.ingest",
-) -> IdempotencyIdentity:
-    """Build one canonical retain identity."""
-    return IdempotencyIdentity(
-        principal,
-        ArtifactOperation.RETAIN,
-        key,
-        canonical_retain_request_digest(provider_artifact_id, reference, retention_class),
-    )
-
-
-def release_identity(
-    provider_artifact_id: str,
-    reference: str,
-    *,
-    key: str = "release-1",
-    principal: str = "workstream.artifact.ingest",
-) -> IdempotencyIdentity:
-    """Build one canonical release identity."""
-    return IdempotencyIdentity(
-        principal,
-        ArtifactOperation.RELEASE,
-        key,
-        canonical_release_request_digest(provider_artifact_id, reference),
-    )
-
-
-def test_versioned_contract_fixtures_validate() -> None:
-    """Validate every positive and negative JSON Schema vector."""
-    root = Path(__file__).resolve().parents[2] / "contracts" / "artifact-store" / "version_1"
-    schema = json.loads((root / "schema" / "contract.schema.json").read_text())
-    valid = json.loads((root / "fixtures" / "valid.json").read_text())
-    invalid = json.loads((root / "fixtures" / "invalid.json").read_text())
-    for fixture in valid["fixtures"]:
-        definition = schema["$defs"][fixture["schema_ref"].rsplit("/", 1)[-1]]
-        Draft202012Validator({**schema, **definition}).validate(fixture["instance"])
-    for fixture in invalid["fixtures"]:
-        definition = schema["$defs"][fixture["schema_ref"].rsplit("/", 1)[-1]]
-        errors = list(Draft202012Validator({**schema, **definition}).iter_errors(fixture["instance"]))
-        assert errors, fixture["name"]
-        assert any(error.validator == fixture["expected_keyword"] for error in errors)
-
-    error_types = {
-        "malformed": ArtifactMalformedRequestError,
-        "oversized": ArtifactLimitExceededError,
-        "input_mismatch": ArtifactInputMismatchError,
-        "integrity": ArtifactIntegrityError,
-        "not_found": ArtifactNotFoundError,
-        "replay_conflict": ArtifactIdempotencyMismatchError,
-        "throttled": ArtifactThrottledError,
-        "provider_unavailable": ArtifactStoreUnavailableError,
-    }
-    for vector in invalid["error_vectors"]:
-        error_type = error_types[vector["name"]]
-        assert error_type.code == vector["code"]
-        assert error_type.category == vector["category"]
-        assert error_type.retryable is vector["retryable"]
-
-
-def test_canonical_digest_vectors_use_shared_hashing() -> None:
-    """Prove contract digests use Workstream's shared canonical helper."""
-    fixture = (
-        Path(__file__).resolve().parents[2]
-        / "contracts"
-        / "artifact-store"
-        / "version_1"
-        / "fixtures"
-        / "canonical-digests.json"
-    )
-    for vector in json.loads(fixture.read_text())["vectors"]:
-        assert canonical_json_hash(vector["input"]) == vector["digest"]
-
-
-@pytest.mark.asyncio
-async def test_executable_conformance_vectors(tmp_path: Path) -> None:
-    """Execute every named provider conformance vector against the local adapter."""
-    fixture_path = (
-        Path(__file__).resolve().parents[2]
-        / "contracts"
-        / "artifact-store"
-        / "version_1"
-        / "fixtures"
-        / "conformance.json"
-    )
-    vectors = {vector["name"]: vector for vector in json.loads(fixture_path.read_text())["vectors"]}
-    executed: set[str] = set()
-
-    adapter = LocalStorageAdapter(root=tmp_path / "store", buffer_bytes=2)
-    request = store_request(key="conformance-store", maximum_bytes=4)
-    stored = await adapter.store(byte_stream(b""), request)
-    replay = await adapter.store(byte_stream(b""), request)
-    assert replay.replayed and replay.receipt.receipt_id == stored.receipt.receipt_id
-    executed.add("store_exact_replay")
-
-    consumed = False
-
-    async def untouched() -> AsyncIterator[bytes]:
-        nonlocal consumed
-        consumed = True
-        yield b""
-
-    with pytest.raises(ArtifactIdempotencyMismatchError) as mismatch:
-        await adapter.store(
-            untouched(), store_request(key="conformance-store", request_value="changed")
-        )
-    assert mismatch.value.code == vectors["store_request_digest_mismatch"]["expected_error"]
-    assert consumed is vectors["store_request_digest_mismatch"]["consume_replay_stream"]
-    executed.add("store_request_digest_mismatch")
-
-    with pytest.raises(ArtifactIntegrityError) as replay_mismatch:
-        await adapter.store(byte_stream(b"x"), request)
-    assert replay_mismatch.value.code == vectors["store_replay_byte_mismatch"]["expected_error"]
-    executed.add("store_replay_byte_mismatch")
-
-    recovery_adapter = LocalStorageAdapter(root=tmp_path / "conformance-recovery", buffer_bytes=2)
-    recovery_request = store_request(
-        key="conformance-recovery",
-        expected_sha256="sha256:" + hashlib.sha256(b"data").hexdigest(),
-        expected_size=4,
-        maximum_bytes=4,
-    )
-    recovery_stored = await recovery_adapter.store(byte_stream(b"data"), recovery_request)
-    next((tmp_path / "conformance-recovery" / "metadata").iterdir()).unlink()
-    next((tmp_path / "conformance-recovery" / "receipts").iterdir()).unlink()
-    recovered = await recovery_adapter.recover_committed_store(recovery_request)
-    assert recovered.provider_artifact_id == recovery_stored.provider_artifact_id
-    assert recovered.replayed is True
-    executed.add("recover_confirmed_store")
-
-    range_adapter = LocalStorageAdapter(root=tmp_path / "ranges", buffer_bytes=2)
-    ranged = await range_adapter.store(
-        byte_stream(b"data"), store_request(key="ranges", maximum_bytes=4)
-    )
-    assert b"".join(
-        [chunk async for chunk in range_adapter.open(ranged.provider_artifact_id, ArtifactByteRange(4))]
-    ) == b""
-    executed.add("open_offset_at_eof")
-    with pytest.raises(ArtifactMalformedRequestError) as malformed:
-        b"".join(
-            [
-                chunk
-                async for chunk in range_adapter.open(
-                    ranged.provider_artifact_id, ArtifactByteRange(5)
-                )
-            ]
-        )
-    assert malformed.value.code == vectors["open_offset_past_eof"]["expected_error"]
-    executed.add("open_offset_past_eof")
-    assert b"".join(
-        [
-            chunk
-            async for chunk in range_adapter.open(
-                ranged.provider_artifact_id, ArtifactByteRange(1, 2)
-            )
-        ]
-    ) == b"at"
-    executed.add("open_exclusive_end")
-
-    release_request_identity = release_identity(
-        ranged.provider_artifact_id,
-        "unknown",
-        key="conformance-release",
-    )
-    with pytest.raises(ArtifactRetentionConflictError) as retention_conflict:
-        await range_adapter.release(
-            ranged.provider_artifact_id, "unknown", release_request_identity
-        )
-    assert retention_conflict.value.code == vectors["release_requires_exact_reference"][
-        "expected_error"
-    ]
-    executed.add("release_requires_exact_reference")
-
-    receipt = await adapter.get_operation_receipt(
-        request.idempotency.service_principal,
-        ArtifactOperation.STORE,
-        request.idempotency.key,
-    )
-    assert receipt is not None and receipt.receipt_id == stored.receipt.receipt_id
-    executed.add("receipt_lookup_full_identity")
-
-    truncated = store_request(
-        key="truncated", expected_size=4, maximum_bytes=4
-    )
-    with pytest.raises(ArtifactInputMismatchError) as truncated_store:
-        await adapter.store(byte_stream(b"abc"), truncated)
-    assert truncated_store.value.code == vectors["truncated_store_stream"]["expected_error"]
-    executed.add("truncated_store_stream")
-
-    object_path = next((tmp_path / "ranges" / "objects").iterdir())
-    object_path.write_bytes(b"abc")
-    with pytest.raises(ArtifactIntegrityError) as truncated_open:
-        b"".join([chunk async for chunk in range_adapter.open(ranged.provider_artifact_id)])
-    assert truncated_open.value.code == vectors["truncated_open_stream"]["expected_error"]
-    executed.add("truncated_open_stream")
-
-    assert executed == set(vectors)
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_store_open_range_replay_and_restart(tmp_path: Path) -> None:
-    """Store once, stream ranges, replay exactly, and survive adapter restart."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    request = store_request(maximum_bytes=5)
-    stored = await adapter.store(byte_stream(b"hello"), request)
-
-    assert stored.byte_count == 5
-    assert stored.sha256 == "sha256:" + hashlib.sha256(b"hello").hexdigest()
-    assert stored.receipt.response_digest == canonical_json_hash(
-        {
-            "byte_count": stored.byte_count,
-            "outcome": "stored",
-            "provider_artifact_id": stored.provider_artifact_id,
-            "provider_operation_id": stored.receipt.provider_operation_reference,
-            "receipt_id": stored.receipt.receipt_id,
-            "sha256": stored.sha256,
-        }
-    )
-    read_chunks = [chunk async for chunk in adapter.open(stored.provider_artifact_id)]
-    assert b"".join(read_chunks) == b"hello"
-    assert max(map(len, read_chunks)) <= 2
-    assert b"".join(
-        [
-            chunk
-            async for chunk in adapter.open(
-                stored.provider_artifact_id, ArtifactByteRange(offset=1, length=2)
-            )
-        ]
-    ) == b"el"
-    assert b"".join(
-        [
-            chunk
-            async for chunk in adapter.open(
-                stored.provider_artifact_id, ArtifactByteRange(offset=5)
-            )
-        ]
-    ) == b""
-    with pytest.raises(ArtifactMalformedRequestError):
-        b"".join(
-            [
-                chunk
-                async for chunk in adapter.open(
-                    stored.provider_artifact_id, ArtifactByteRange(offset=6)
-                )
-            ]
-        )
-
-    replay = await adapter.store(byte_stream(b"hello"), request)
-    restarted = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    restarted_replay = await restarted.store(byte_stream(b"hello"), request)
-    assert replay.provider_artifact_id == stored.provider_artifact_id
-    assert restarted_replay.receipt.provider_operation_reference == (
-        stored.receipt.provider_operation_reference
-    )
-    assert len(list((tmp_path / "artifacts" / "objects").iterdir())) == 1
-
-
-@pytest.mark.asyncio
-async def test_no_commitment_replay_is_fully_consumed_and_mismatch_quarantines(
-    tmp_path: Path,
-) -> None:
-    """Require complete no-commitment replay and quarantine changed bytes."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    request = store_request(maximum_bytes=8)
-    stored = await adapter.store(byte_stream(b"abcd"), request)
-    consumed: list[bytes] = []
-
-    async def changed_replay() -> AsyncIterator[bytes]:
-        for chunk in (b"ab", b"XY"):
-            consumed.append(chunk)
-            yield chunk
-
-    with pytest.raises(ArtifactIntegrityError):
-        await adapter.store(changed_replay(), request)
-    assert consumed == [b"ab", b"XY"]
-    status = await adapter.stat(stored.provider_artifact_id)
-    assert status.integrity_state == IntegrityState.QUARANTINED
-    with pytest.raises(ArtifactNotFoundError, match="unavailable"):
-        b"".join([chunk async for chunk in adapter.open(stored.provider_artifact_id)])
-
-
-@pytest.mark.asyncio
-async def test_request_digest_conflict_does_not_consume_or_duplicate(tmp_path: Path) -> None:
-    """Reject changed request metadata before reading replay bytes."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    await adapter.store(byte_stream(b"same"), store_request(key="one"))
-    consumed = False
-
-    async def should_not_run() -> AsyncIterator[bytes]:
-        nonlocal consumed
-        consumed = True
-        yield b"same"
-
-    with pytest.raises(ArtifactIdempotencyMismatchError):
-        await adapter.store(
-            should_not_run(), store_request(key="one", request_value="changed")
-        )
-    assert consumed is False
-    assert len(list((tmp_path / "artifacts" / "objects").iterdir())) == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("payload", "maximum", "fails"),
-    [(b"", 0, False), (b"abcd", 4, False), (b"abcde", 4, True)],
+from app.modules.artifacts.service import (
+    ArtifactIngestStateError,
+    ArtifactStorageNamespaceError,
+    ArtifactStorageNamespaceSpec,
+    ArtifactStorageOrchestrator,
+    ProviderAttemptFence,
+    artifact_storage_namespace_spec,
+    validate_artifact_storage_namespace_at_startup,
 )
-async def test_local_adapter_empty_boundary_and_oversize_cleanup(
-    tmp_path: Path, payload: bytes, maximum: int, fails: bool
-) -> None:
-    """Apply exact byte limits and remove every oversized temporary file."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    request = store_request(key=f"limit-{len(payload)}", maximum_bytes=maximum)
-    if fails:
-        with pytest.raises(ArtifactLimitExceededError):
-            await adapter.store(byte_stream(payload), request)
-        assert list((tmp_path / "artifacts" / "objects").iterdir()) == []
-    else:
-        stored = await adapter.store(byte_stream(payload), request)
-        assert stored.byte_count == len(payload)
-    assert list((tmp_path / "artifacts" / "tmp").iterdir()) == []
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_disk_failure_cleans_temp_and_redacts_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Convert disk failure to a stable path-free error and remove partial bytes."""
-    adapter = LocalStorageAdapter(root=tmp_path / "private-secret", buffer_bytes=2)
-
-    def fail_write(descriptor: int, chunk: memoryview) -> None:
-        raise OSError("disk full at /private-secret")
-
-    monkeypatch.setattr(adapter, "_write_all", fail_write)
-    with pytest.raises(ArtifactStoreUnavailableError) as raised:
-        await adapter.store(byte_stream(b"data"), store_request())
-    assert "/private-secret" not in str(raised.value)
-    assert list((tmp_path / "private-secret" / "tmp").iterdir()) == []
-    assert list((tmp_path / "private-secret" / "objects").iterdir()) == []
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_cancellation_waits_for_io_then_cleans_temp(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Wait for an in-flight thread write before cancellation cleanup."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    started = threading.Event()
-    release = threading.Event()
-    original_write = adapter._write_all
-
-    def delayed_write(descriptor: int, chunk: memoryview) -> None:
-        if bytes(chunk) == b"da":
-            started.set()
-            release.wait(timeout=5)
-        original_write(descriptor, chunk)
-
-    monkeypatch.setattr(adapter, "_write_all", delayed_write)
-    task = asyncio.create_task(
-        adapter.store(byte_stream(b"data"), store_request(key="cancelled"))
-    )
-    assert await asyncio.to_thread(started.wait, 5)
-    task.cancel()
-    release.set()
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert list((tmp_path / "artifacts" / "tmp").iterdir()) == []
-    assert list((tmp_path / "artifacts" / "objects").iterdir()) == []
-    monkeypatch.setattr(adapter, "_write_all", original_write)
-    recovered = await adapter.store(
-        byte_stream(b"data"), store_request(key="cancelled")
-    )
-    assert recovered.replayed is True
-    assert recovered.byte_count == 4
-
-
-@pytest.mark.asyncio
-async def test_cancellation_while_waiting_for_lock_does_not_clean_another_attempt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Do not clean provider state when cancellation happened before lock ownership."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    request = store_request(key="waiting-cancellation")
-    scope = adapter._scope_key(request.idempotency)
-    held_lock = adapter._acquire_lock(scope)
-    cleanup_calls = 0
-    original_cleanup = adapter._cleanup_unpublished
-
-    async def track_cleanup(cleanup_scope: str) -> None:
-        nonlocal cleanup_calls
-        cleanup_calls += 1
-        await original_cleanup(cleanup_scope)
-
-    monkeypatch.setattr(adapter, "_cleanup_unpublished", track_cleanup)
-    task = asyncio.create_task(adapter.store(byte_stream(b"data"), request))
-    await asyncio.sleep(0.05)
-    task.cancel()
-    await asyncio.to_thread(adapter._release_lock, held_lock)
-    with pytest.raises(asyncio.CancelledError):
-        await task
-    assert cleanup_calls == 0
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_publish_failure_leaves_no_partial_object(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Remove the completed temporary object if exclusive publication fails."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-
-    def fail_publish(temporary: Path, final: Path) -> None:
-        raise OSError("publish failed at a private path")
-
-    monkeypatch.setattr(adapter, "_publish_exclusive", fail_publish)
-    with pytest.raises(ArtifactStoreUnavailableError, match="local artifact operation failed"):
-        await adapter.store(byte_stream(b"data"), store_request(key="publish-failure"))
-    assert list((tmp_path / "artifacts" / "tmp").iterdir()) == []
-    assert list((tmp_path / "artifacts" / "objects").iterdir()) == []
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_fsync_and_publication_fault_recovery(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Recover deterministically from file, directory, metadata, and receipt faults."""
-    file_root = tmp_path / "file-fsync"
-    file_adapter = LocalStorageAdapter(root=file_root, buffer_bytes=2)
-    original_fsync = os.fsync
-
-    create_root = tmp_path / "create-fault"
-    create_adapter = LocalStorageAdapter(root=create_root, buffer_bytes=2)
-
-    def fail_create(path: Path) -> int:
-        del path
-        raise OSError("temporary create failed")
-
-    monkeypatch.setattr(create_adapter, "_open_exclusive", fail_create)
-    with pytest.raises(OSError, match="temporary create"):
-        await create_adapter._write_stream(
-            byte_stream(b"data"), "art_" + "2" * 32, store_request(key="create-fault")
-        )
-    assert list((create_root / "tmp").iterdir()) == []
-
-    write_root = tmp_path / "bounded-write"
-    write_adapter = LocalStorageAdapter(root=write_root, buffer_bytes=2)
-    write_sizes: list[int] = []
-    original_write = write_adapter._write_all
-
-    def track_write(descriptor: int, chunk: memoryview) -> None:
-        write_sizes.append(len(chunk))
-        original_write(descriptor, chunk)
-
-    monkeypatch.setattr(write_adapter, "_write_all", track_write)
-    await write_adapter._write_stream(
-        byte_stream(b"hello"), "art_" + "3" * 32, store_request(key="bounded-write")
-    )
-    assert write_sizes == [2, 2, 1]
-
-    def fail_file_fsync(descriptor: int) -> None:
-        if stat_module.S_ISREG(os.fstat(descriptor).st_mode):
-            raise OSError("file fsync failed")
-        original_fsync(descriptor)
-
-    monkeypatch.setattr(os, "fsync", fail_file_fsync)
-    with pytest.raises(OSError, match="file fsync"):
-        await file_adapter._write_stream(
-            byte_stream(b"data"), "art_" + "1" * 32, store_request(key="file-fsync")
-        )
-    assert list((file_root / "tmp").iterdir()) == []
-    assert list((file_root / "objects").iterdir()) == []
-    monkeypatch.setattr(os, "fsync", original_fsync)
-
-    directory_root = tmp_path / "directory-fsync"
-    directory_adapter = LocalStorageAdapter(root=directory_root, buffer_bytes=2)
-    directory_failed = False
-
-    def fail_published_directory_fsync(descriptor: int) -> None:
-        nonlocal directory_failed
-        if (
-            not directory_failed
-            and stat_module.S_ISDIR(os.fstat(descriptor).st_mode)
-            and any((directory_root / "objects").iterdir())
-        ):
-            directory_failed = True
-            raise OSError("directory fsync failed")
-        original_fsync(descriptor)
-
-    monkeypatch.setattr(os, "fsync", fail_published_directory_fsync)
-    directory_request = store_request(key="directory-fsync")
-    with pytest.raises(ArtifactStoreUnavailableError):
-        await directory_adapter.store(byte_stream(b"data"), directory_request)
-    monkeypatch.setattr(os, "fsync", original_fsync)
-    directory_recovered = await directory_adapter.store(
-        byte_stream(b"data"), directory_request
-    )
-    assert directory_recovered.replayed is True
-
-    for fault_directory in ("metadata", "receipts"):
-        root = tmp_path / f"publish-{fault_directory}"
-        adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-        request = store_request(key=f"publish-{fault_directory}")
-        original_publish = adapter._write_json_exclusive
-        failed = False
-
-        async def fail_publish_once(path: Path, value: dict) -> None:
-            nonlocal failed
-            if path.parent.name == fault_directory and not failed:
-                failed = True
-                raise OSError(f"{fault_directory} publication failed")
-            await original_publish(path, value)
-
-        monkeypatch.setattr(adapter, "_write_json_exclusive", fail_publish_once)
-        with pytest.raises(ArtifactStoreUnavailableError):
-            await adapter.store(byte_stream(b"data"), request)
-        monkeypatch.setattr(adapter, "_write_json_exclusive", original_publish)
-        recovered = await adapter.store(byte_stream(b"data"), request)
-        assert recovered.replayed is True
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_verify_read_and_quarantine_faults_are_typed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Return stable errors for verify-read and quarantine storage failures."""
-    verify_root = tmp_path / "verify-read"
-    verify_adapter = LocalStorageAdapter(root=verify_root, buffer_bytes=2)
-    stored = await verify_adapter.store(byte_stream(b"data"), store_request())
-
-    def fail_open(provider_id: str):
-        del provider_id
-        raise OSError("verify read failed")
-
-    monkeypatch.setattr(verify_adapter, "_open_regular_object", fail_open)
-    with pytest.raises(ArtifactStoreUnavailableError):
-        await verify_adapter.verify(
-            stored.provider_artifact_id,
-            stored.sha256,
-            stored.byte_count,
-            verify_identity(stored.provider_artifact_id, stored.sha256, stored.byte_count),
-        )
-
-    quarantine_root = tmp_path / "quarantine-fault"
-    quarantine_adapter = LocalStorageAdapter(root=quarantine_root, buffer_bytes=2)
-    request = store_request(
-        key="quarantine-fault",
-        expected_sha256="sha256:" + hashlib.sha256(b"data").hexdigest(),
-    )
-    await quarantine_adapter.store(byte_stream(b"data"), request)
-    next((quarantine_root / "objects").iterdir()).write_bytes(b"evil")
-    original_move = quarantine_adapter._move_to_quarantine
-
-    def fail_quarantine(source: Path, target: Path) -> None:
-        del source, target
-        raise OSError("quarantine failed")
-
-    monkeypatch.setattr(quarantine_adapter, "_move_to_quarantine", fail_quarantine)
-    with pytest.raises(ArtifactStoreUnavailableError):
-        await quarantine_adapter.store(byte_stream(b"data"), request)
-    monkeypatch.setattr(quarantine_adapter, "_move_to_quarantine", original_move)
-    with pytest.raises(ArtifactIntegrityError):
-        await quarantine_adapter.store(byte_stream(b"data"), request)
-
-
-@pytest.mark.asyncio
-async def test_reconciliation_hash_enforces_request_byte_ceiling(tmp_path: Path) -> None:
-    """Stop provider reconciliation as soon as bytes exceed the persisted ceiling."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    service = ArtifactIngestService(None, adapter, adapter_name="local")  # type: ignore[arg-type]
-    observed_sha256, observed_size = await service._hash_provider_object(
-        stored.provider_artifact_id, 4
-    )
-    assert (observed_sha256, observed_size) == (stored.sha256, stored.byte_count)
-    with pytest.raises(ArtifactIntegrityError, match="exceed"):
-        await service._hash_provider_object(stored.provider_artifact_id, 3)
-
-    with pytest.raises(ArtifactInputMismatchError, match="exact commitment"):
-        await adapter.recover_committed_store(store_request(key="recovery-without-commitment"))
-    exact_request = store_request(
-        key="recovery-without-intent",
-        expected_sha256=stored.sha256,
-        expected_size=stored.byte_count,
-    )
-    with pytest.raises(ArtifactIntegrityError, match="intent"):
-        await adapter.recover_committed_store(exact_request)
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_retain_release_verify_and_permissions(tmp_path: Path) -> None:
-    """Verify bytes, reference-count retention, and preserve private modes."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    verify_request_identity = verify_identity(
-        stored.provider_artifact_id, stored.sha256, stored.byte_count
-    )
-    await adapter.verify(
-        stored.provider_artifact_id, stored.sha256, stored.byte_count, verify_request_identity
-    )
-    retain_request_identity = retain_identity(
-        stored.provider_artifact_id, "ref-1", "evaluation"
-    )
-    await adapter.retain(
-        stored.provider_artifact_id, "ref-1", "evaluation", retain_request_identity
-    )
-    replayed_retain = await adapter.retain(
-        stored.provider_artifact_id, "ref-1", "evaluation", retain_request_identity
-    )
-    assert replayed_retain.receipt.provider_operation_reference is not None
-    assert replayed_retain.replayed is True
-    active = (await adapter.stat(stored.provider_artifact_id)).active_retentions
-    assert [(item.retention_reference, item.retention_class, item.state) for item in active] == [
-        ("ref-1", "evaluation", "active")
-    ]
-    release_request_identity = release_identity(stored.provider_artifact_id, "ref-1")
-    await adapter.release(stored.provider_artifact_id, "ref-1", release_request_identity)
-    assert (await adapter.stat(stored.provider_artifact_id)).active_retentions == ()
-    assert os.stat(root).st_mode & 0o777 == 0o700
-    assert all(path.stat().st_mode & 0o777 == 0o600 for path in (root / "objects").iterdir())
-
-
-@pytest.mark.asyncio
-async def test_concurrent_retention_preserves_ownership_and_all_references(
-    tmp_path: Path,
-) -> None:
-    """Serialize retention changes per artifact and enforce the creating principal."""
-    root = tmp_path / "artifacts"
-    first = LocalStorageAdapter(root=root, buffer_bytes=2)
-    second = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await first.store(byte_stream(b"data"), store_request())
-
-    def identity(principal: str, key: str, reference: str) -> IdempotencyIdentity:
-        return retain_identity(
-            stored.provider_artifact_id,
-            reference,
-            "evaluation" if reference == "ref-a" else "review",
-            key=key,
-            principal=principal,
-        )
-
-    await asyncio.gather(
-        first.retain(
-            stored.provider_artifact_id,
-            "ref-a",
-            "evaluation",
-            identity("workstream.artifact.a", "retain-a", "ref-a"),
-        ),
-        second.retain(
-            stored.provider_artifact_id,
-            "ref-b",
-            "review",
-            identity("workstream.artifact.b", "retain-b", "ref-b"),
-        ),
-    )
-    assert [item.retention_reference for item in (await first.stat(stored.provider_artifact_id)).active_retentions] == [
-        "ref-a",
-        "ref-b",
-    ]
-    wrong_owner = release_identity(
-        stored.provider_artifact_id,
-        "ref-a",
-        key="release-a",
-        principal="workstream.artifact.b",
-    )
-    with pytest.raises(ArtifactRetentionConflictError, match="owner"):
-        await second.release(stored.provider_artifact_id, "ref-a", wrong_owner)
-
-
-@pytest.mark.asyncio
-async def test_verify_and_retain_serialize_without_losing_metadata(tmp_path: Path) -> None:
-    """Preserve both verification and retention facts under concurrent mutation."""
-    root = tmp_path / "artifacts"
-    first = LocalStorageAdapter(root=root, buffer_bytes=2)
-    second = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await first.store(byte_stream(b"data"), store_request())
-    await asyncio.gather(
-        first.verify(
-            stored.provider_artifact_id,
-            stored.sha256,
-            stored.byte_count,
-            verify_identity(stored.provider_artifact_id, stored.sha256, stored.byte_count),
-        ),
-        second.retain(
-            stored.provider_artifact_id,
-            "concurrent-review",
-            "review",
-            retain_identity(stored.provider_artifact_id, "concurrent-review", "review"),
-        ),
-    )
-    status = await first.stat(stored.provider_artifact_id)
-    assert status.verification_state.value == "verified"
-    assert [retention.retention_reference for retention in status.active_retentions] == [
-        "concurrent-review"
-    ]
-
-
-@pytest.mark.asyncio
-async def test_retention_retry_recovers_after_receipt_publication_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Recover the same retention effect after metadata commits before its receipt."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    identity = retain_identity(
-        stored.provider_artifact_id,
-        "ref-crash",
-        "evaluation",
-        key="retain-crash",
-    )
-    original = adapter._write_json_exclusive
-    failed = False
-
-    async def fail_receipt_once(path: Path, value: dict) -> None:
-        nonlocal failed
-        if path.parent.name == "receipts" and not failed:
-            failed = True
-            raise OSError("simulated receipt publication failure")
-        await original(path, value)
-
-    monkeypatch.setattr(adapter, "_write_json_exclusive", fail_receipt_once)
-    with pytest.raises(ArtifactStoreUnavailableError):
-        await adapter.retain(
-            stored.provider_artifact_id, "ref-crash", "evaluation", identity
-        )
-    recovered = await adapter.retain(
-        stored.provider_artifact_id, "ref-crash", "evaluation", identity
-    )
-    assert recovered.receipt.retention_reference == "ref-crash"
-    assert len((await adapter.stat(stored.provider_artifact_id)).active_retentions) == 1
-
-
-@pytest.mark.asyncio
-async def test_expected_commitment_recovers_object_only_provider_state(tmp_path: Path) -> None:
-    """Rebuild metadata and receipt only after hashing committed provider bytes."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    expected = "sha256:" + hashlib.sha256(b"data").hexdigest()
-    request = store_request(expected_sha256=expected, expected_size=4)
-    stored = await adapter.store(byte_stream(b"data"), request)
-    next((root / "metadata").iterdir()).unlink()
-    next((root / "receipts").iterdir()).unlink()
-
-    restarted = LocalStorageAdapter(root=root, buffer_bytes=2)
-    recovered = await restarted.recover_committed_store(request)
-    assert recovered.provider_artifact_id == stored.provider_artifact_id
-    assert recovered.sha256 == expected
-    assert recovered.receipt.outcome.value == "stored"
-    assert recovered.replayed is True
-
-
-@pytest.mark.asyncio
-async def test_altered_object_and_receipt_are_quarantined(tmp_path: Path) -> None:
-    """Deny promotion and access when persisted provider facts are altered."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    request = store_request(expected_sha256="sha256:" + hashlib.sha256(b"data").hexdigest())
-    await adapter.store(byte_stream(b"data"), request)
-    object_path = next((root / "objects").iterdir())
-    object_path.write_bytes(b"evil")
-    with pytest.raises(ArtifactIntegrityError):
-        await adapter.store(byte_stream(b"data"), request)
-    assert (root / "quarantine" / object_path.name).exists()
-
-    second_root = tmp_path / "receipt-artifacts"
-    second = LocalStorageAdapter(root=second_root, buffer_bytes=2)
-    second_request = store_request(key="receipt", expected_sha256=request.expected_sha256)
-    second_stored = await second.store(byte_stream(b"data"), second_request)
-    receipt_path = next((second_root / "receipts").iterdir())
-    receipt_payload = json.loads(receipt_path.read_text())
-    receipt_payload["response_digest"] = "sha256:" + "f" * 64
-    receipt_path.write_text(json.dumps(receipt_payload))
-    with pytest.raises(ArtifactIntegrityError):
-        await second.store(byte_stream(b"data"), second_request)
-    assert (await second.stat(second_stored.provider_artifact_id)).integrity_state == (
-        IntegrityState.QUARANTINED
-    )
-
-    third_root = tmp_path / "receipt-identity-artifacts"
-    third = LocalStorageAdapter(root=third_root, buffer_bytes=2)
-    third_request = store_request(key="receipt-identity", expected_sha256=request.expected_sha256)
-    third_stored = await third.store(byte_stream(b"data"), third_request)
-    third_receipt_path = next((third_root / "receipts").iterdir())
-    third_receipt = json.loads(third_receipt_path.read_text())
-    third_receipt["receipt_id"] = "receipt_" + "a" * 32
-    third_receipt_path.write_text(json.dumps(third_receipt))
-    with pytest.raises(ArtifactIntegrityError, match="receipt is invalid"):
-        await third.store(byte_stream(b"data"), third_request)
-    assert (await third.stat(third_stored.provider_artifact_id)).integrity_state == (
-        IntegrityState.QUARANTINED
-    )
-
-    fourth_root = tmp_path / "receipt-principal-artifacts"
-    fourth = LocalStorageAdapter(root=fourth_root, buffer_bytes=2)
-    fourth_request = store_request(key="receipt-principal")
-    fourth_stored = await fourth.store(byte_stream(b"data"), fourth_request)
-    fourth_receipt_path = next((fourth_root / "receipts").iterdir())
-    fourth_receipt = json.loads(fourth_receipt_path.read_text())
-    fourth_receipt["service_principal"] = "INVALID PRINCIPAL"
-    fourth_receipt_path.write_text(json.dumps(fourth_receipt))
-    with pytest.raises(ArtifactIntegrityError, match="receipt is invalid"):
-        await fourth.store(byte_stream(b"data"), fourth_request)
-    assert (await fourth.stat(fourth_stored.provider_artifact_id)).integrity_state == (
-        IntegrityState.QUARANTINED
-    )
-
-
-@pytest.mark.asyncio
-async def test_verify_mismatch_and_invalid_retention_reference_fail_closed(tmp_path: Path) -> None:
-    """Quarantine failed full verification and reject unknown release references."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    missing_release_identity = release_identity(
-        stored.provider_artifact_id,
-        "missing",
-        key="missing-release",
-    )
-    with pytest.raises(ArtifactRetentionConflictError, match="not active"):
-        await adapter.release(stored.provider_artifact_id, "missing", missing_release_identity)
-
-    bad_verify_identity = verify_identity(
-        stored.provider_artifact_id,
-        "sha256:" + "0" * 64,
-        4,
-        key="bad-verify",
-    )
-    with pytest.raises(ArtifactIntegrityError):
-        await adapter.verify(
-            stored.provider_artifact_id, "sha256:" + "0" * 64, 4, bad_verify_identity
-        )
-    assert (await adapter.stat(stored.provider_artifact_id)).integrity_state == (
-        IntegrityState.QUARANTINED
-    )
-
-
-@pytest.mark.asyncio
-async def test_receipt_lookup_and_request_validation(tmp_path: Path) -> None:
-    """Scope receipt lookup fully and reject malformed requests before I/O."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    request = store_request()
-    stored = await adapter.store(byte_stream(b"data"), request)
-    receipt = await adapter.get_operation_receipt(
-        request.idempotency.service_principal,
-        ArtifactOperation.STORE,
-        request.idempotency.key,
-    )
-    assert receipt is not None
-    assert receipt.provider_operation_reference == stored.receipt.provider_operation_reference
-    assert (
-        await adapter.get_operation_receipt(
-            request.idempotency.service_principal, ArtifactOperation.STORE, "unknown"
-        )
-        is None
-    )
-    with pytest.raises(ArtifactMalformedRequestError):
-        await adapter.store(byte_stream(b"x"), store_request(maximum_bytes=-1))
-    with pytest.raises(ArtifactMalformedRequestError):
-        await adapter.store(
-            byte_stream(b"x"),
-            store_request(expected_sha256="SHA256:" + "0" * 64),
-        )
-    malformed = store_request(key="bad-digest")
-    malformed = replace(
-        malformed,
-        idempotency=replace(malformed.idempotency, request_digest="sha256:" + "f" * 64),
-    )
-    with pytest.raises(ArtifactIdempotencyMismatchError, match="not canonical"):
-        await adapter.store(byte_stream(b"x"), malformed)
-    with pytest.raises(ArtifactMalformedRequestError, match="media type"):
-        await adapter.store(
-            byte_stream(b"x"), replace(store_request(key="bad-media"), media_type="")
-        )
-    with pytest.raises(ArtifactMalformedRequestError, match="metadata"):
-        await adapter.store(
-            byte_stream(b"x"),
-            replace(store_request(key="bad-metadata"), metadata={"bad name": "value"}),
-        )
-    with pytest.raises(ArtifactNotFoundError):
-        await adapter.stat("../private")
-    missing_provider_id = "art_" + "0" * 32
-    missing_verify = verify_identity(
-        missing_provider_id,
-        "sha256:" + "0" * 64,
-        0,
-        key="missing-verify",
-    )
-    with pytest.raises(ArtifactNotFoundError) as missing_error:
-        await adapter.verify(missing_provider_id, "sha256:" + "0" * 64, 0, missing_verify)
-    assert str(tmp_path) not in str(missing_error.value)
-
-
-@pytest.mark.asyncio
-async def test_recovery_missing_and_changed_provider_state_fails_closed(tmp_path: Path) -> None:
-    """Reject receipt-only and changed object-only recovery states."""
-    expected = "sha256:" + hashlib.sha256(b"data").hexdigest()
-
-    missing_root = tmp_path / "missing"
-    missing = LocalStorageAdapter(root=missing_root, buffer_bytes=2)
-    missing_request = store_request(key="missing", expected_sha256=expected, expected_size=4)
-    await missing.store(byte_stream(b"data"), missing_request)
-    next((missing_root / "objects").iterdir()).unlink()
-    next((missing_root / "metadata").iterdir()).unlink()
-    with pytest.raises(ArtifactIntegrityError, match="receipt has no committed object"):
-        await missing.store(byte_stream(b"data"), missing_request)
-
-    status_root = tmp_path / "missing-status"
-    status_adapter = LocalStorageAdapter(root=status_root, buffer_bytes=2)
-    status_stored = await status_adapter.store(
-        byte_stream(b"data"), store_request(key="missing-status")
-    )
-    next((status_root / "objects").iterdir()).unlink()
-    status = await status_adapter.stat(status_stored.provider_artifact_id)
-    assert status.availability_state.value == "missing"
-    assert status.integrity_state.value == "unknown"
-
-    replay_root = tmp_path / "replay-metadata"
-    replay = LocalStorageAdapter(root=replay_root, buffer_bytes=2)
-    replay_request = store_request(key="no-metadata")
-    await replay.store(byte_stream(b"data"), replay_request)
-    next((replay_root / "metadata").iterdir()).unlink()
-    recovered = await replay.store(byte_stream(b"data"), replay_request)
-    assert recovered.replayed is True
-    assert recovered.sha256 == expected
-
-    changed_root = tmp_path / "changed"
-    changed = LocalStorageAdapter(root=changed_root, buffer_bytes=2)
-    changed_request = store_request(key="changed", expected_sha256=expected, expected_size=4)
-    stored = await changed.store(byte_stream(b"data"), changed_request)
-    next((changed_root / "metadata").iterdir()).unlink()
-    next((changed_root / "receipts").iterdir()).unlink()
-    next((changed_root / "objects").iterdir()).write_bytes(b"evil")
-    with pytest.raises(ArtifactIntegrityError, match="commitment"):
-        await changed.store(byte_stream(b"data"), changed_request)
-    assert (changed_root / "quarantine" / f"{stored.provider_artifact_id}.blob").exists()
-
-    size_root = tmp_path / "changed-size"
-    changed_size = LocalStorageAdapter(root=size_root, buffer_bytes=2)
-    size_request = store_request(key="size", expected_sha256=expected, expected_size=4)
-    size_stored = await changed_size.store(byte_stream(b"data"), size_request)
-    next((size_root / "metadata").iterdir()).unlink()
-    next((size_root / "receipts").iterdir()).unlink()
-    intent_path = next((size_root / "intents").iterdir())
-    intent = json.loads(intent_path.read_text())
-    intent["expected_size"] = 5
-    intent_path.write_text(json.dumps(intent))
-    with pytest.raises(ArtifactIntegrityError, match="size does not match"):
-        await changed_size.store(byte_stream(b"data"), size_request)
-    assert (size_root / "quarantine" / f"{size_stored.provider_artifact_id}.blob").exists()
-
-
-@pytest.mark.asyncio
-async def test_retention_class_conflict_and_verify_replay(tmp_path: Path) -> None:
-    """Reject changed retention ownership and replay one verify receipt."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    first = retain_identity(
-        stored.provider_artifact_id,
-        "same-ref",
-        "one",
-        key="retain-a",
-    )
-    await adapter.retain(stored.provider_artifact_id, "same-ref", "one", first)
-    conflicting = retain_identity(
-        stored.provider_artifact_id,
-        "same-ref",
-        "two",
-        key="retain-b",
-    )
-    with pytest.raises(ArtifactIdempotencyMismatchError, match="class changed"):
-        await adapter.retain(stored.provider_artifact_id, "same-ref", "two", conflicting)
-
-    verify_request_identity = verify_identity(
-        stored.provider_artifact_id,
-        stored.sha256,
-        stored.byte_count,
-        key="verify-replay",
-    )
-    first_result = await adapter.verify(
-        stored.provider_artifact_id, stored.sha256, stored.byte_count, verify_request_identity
-    )
-    replay = await adapter.verify(
-        stored.provider_artifact_id, stored.sha256, stored.byte_count, verify_request_identity
-    )
-    assert replay.receipt.provider_operation_reference == (
-        first_result.receipt.provider_operation_reference
-    )
-    assert replay.replayed is True
-
-
-@pytest.mark.asyncio
-async def test_truncated_object_and_malformed_metadata_are_integrity_failures(
-    tmp_path: Path,
-) -> None:
-    """Detect short object streams and non-object provider metadata."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    next((root / "objects").iterdir()).write_bytes(b"d")
-    with pytest.raises(ArtifactIntegrityError, match="ended"):
-        b"".join([chunk async for chunk in adapter.open(stored.provider_artifact_id)])
-
-    metadata_path = next((root / "metadata").iterdir())
-    metadata_path.write_text("[]")
-    with pytest.raises(ArtifactIntegrityError, match="metadata"):
-        await adapter.stat(stored.provider_artifact_id)
-    malformed_quarantine = await adapter.stat(stored.provider_artifact_id)
-    assert malformed_quarantine.integrity_state == IntegrityState.QUARANTINED
-    assert malformed_quarantine.availability_state.value == "unavailable"
-
-    state_root = tmp_path / "invalid-state"
-    state_adapter = LocalStorageAdapter(root=state_root, buffer_bytes=2)
-    state_stored = await state_adapter.store(
-        byte_stream(b"data"), store_request(key="invalid-state")
-    )
-    state_metadata_path = next((state_root / "metadata").iterdir())
-    state_metadata = json.loads(state_metadata_path.read_text())
-    state_metadata["verification_state"] = "corrupt"
-    state_metadata_path.write_text(json.dumps(state_metadata))
-    with pytest.raises(ArtifactIntegrityError, match="metadata"):
-        await state_adapter.stat(state_stored.provider_artifact_id)
-    quarantined = await state_adapter.stat(state_stored.provider_artifact_id)
-    assert quarantined.integrity_state == IntegrityState.QUARANTINED
-
-
-@pytest.mark.asyncio
-async def test_stream_and_operation_validation_rejects_invalid_inputs(tmp_path: Path) -> None:
-    """Reject invalid stream values, sizes, and operation identities."""
-    adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-
-    async def invalid_stream() -> AsyncIterator[bytes]:
-        yield "not-bytes"  # type: ignore[misc]
-
-    with pytest.raises(ArtifactInputMismatchError, match="yield bytes"):
-        await adapter.store(invalid_stream(), store_request(key="invalid-stream"))
-    with pytest.raises(ArtifactMalformedRequestError, match="expected artifact size"):
-        await adapter.store(
-            byte_stream(b"x"), store_request(key="negative-size", expected_size=-1)
-        )
-    control_media_request = replace(
-        store_request(key="control-media"), media_type="text/plain\ninvalid"
-    )
-    with pytest.raises(ArtifactMalformedRequestError, match="media type"):
-        await adapter.store(byte_stream(b"x"), control_media_request)
-    wrong_operation = IdempotencyIdentity(
-        "workstream.artifact.ingest",
-        ArtifactOperation.RETAIN,
-        "wrong-operation",
-        canonical_json_hash({"wrong": True}),
-    )
-    invalid_request = StoreArtifactRequest(
-        None, None, 4, "application/octet-stream", {}, wrong_operation
-    )
-    with pytest.raises(ArtifactMalformedRequestError, match="operation identity"):
-        await adapter.store(byte_stream(b"x"), invalid_request)
-    with pytest.raises(ValueError, match="nonnegative"):
-        ArtifactByteRange(offset=-1)
-
-    stored = await adapter.store(byte_stream(b"x"), store_request(key="validation-object"))
-    negative_verify_identity = verify_identity(
-        stored.provider_artifact_id,
-        stored.sha256,
-        -1,
-        key="negative-verify",
-    )
-    with pytest.raises(ArtifactMalformedRequestError, match="size must be nonnegative"):
-        await adapter.verify(
-            stored.provider_artifact_id, stored.sha256, -1, negative_verify_identity
-        )
-    empty_retain_identity = retain_identity(
-        stored.provider_artifact_id,
-        "empty-placeholder",
-        "evaluation",
-        key="empty-reference",
-    )
-    with pytest.raises(ArtifactMalformedRequestError, match="reference is invalid"):
-        await adapter.retain(
-            stored.provider_artifact_id, "", "evaluation", empty_retain_identity
-        )
-    long_principal_identity = retain_identity(
-        stored.provider_artifact_id,
-        "long-principal",
-        "evaluation",
-        principal="a" * 101,
-    )
-    with pytest.raises(ArtifactMalformedRequestError, match="service principal"):
-        await adapter.retain(
-            stored.provider_artifact_id,
-            "long-principal",
-            "evaluation",
-            long_principal_identity,
-        )
-    assert (await adapter.stat(stored.provider_artifact_id)).active_retentions == ()
-
-
-def test_local_adapter_rejects_invalid_buffer(tmp_path: Path) -> None:
-    """Keep configured local I/O inside the one MiB ceiling."""
-    with pytest.raises(ValueError, match="1 MiB"):
-        LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=0)
-
-
-def test_local_adapter_rejects_symlink_root(tmp_path: Path) -> None:
-    """Reject a configured root that redirects through a symlink."""
-    real = tmp_path / "real"
-    real.mkdir()
-    linked = tmp_path / "linked"
-    linked.symlink_to(real, target_is_directory=True)
-    with pytest.raises(ValueError, match="symlink"):
-        LocalStorageAdapter(root=linked)
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_rejects_runtime_subdirectory_replacement(tmp_path: Path) -> None:
-    """Keep operations under the pinned root after a subdirectory replacement."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    metadata = root / "metadata"
-    original = root / "metadata-original"
-    metadata.rename(original)
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    metadata.symlink_to(outside, target_is_directory=True)
-    with pytest.raises(ArtifactIntegrityError):
-        await adapter.stat(stored.provider_artifact_id)
-    assert list(outside.iterdir()) == []
-
-
-@pytest.mark.asyncio
-async def test_local_adapter_startup_cleans_locked_abandoned_object_temp(tmp_path: Path) -> None:
-    """Remove only stale object temporary files associated with durable intent."""
-    root = tmp_path / "artifacts"
-    adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-    stored = await adapter.store(byte_stream(b"data"), store_request())
-    temporary = root / "tmp" / f"{stored.provider_artifact_id}_{'a' * 32}.part"
-    temporary.write_bytes(b"partial")
-    old = datetime.now(UTC).timestamp() - 7200
-    os.utime(temporary, (old, old))
-    adapter.close()
-    restarted = LocalStorageAdapter(root=root, buffer_bytes=2)
-    assert not temporary.exists()
-    restarted.close()
+import app.modules.artifacts.service as artifact_service_module
+from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
+from app.modules.projects.models import Project
+from tests.artifact_store_helpers import (
+    local_namespace_claim,
+    minted_source as _minted_source,
+)
+
+
+def _alembic_config() -> Config:
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    return config
 
 
 @pytest.fixture
-def artifact_database_env(
-    isolated_database_env: str,
-    migration_lock,
-) -> Iterator[str]:
-    """Reset PostgreSQL around artifact coordinator integration tests."""
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
+def artifact_database_env(isolated_database_env: str, migration_lock) -> str:
+    """Provide one fully migrated empty PostgreSQL database per test."""
+    config = _alembic_config()
     with migration_lock():
+        asyncio.run(_truncate_artifacts_if_present(isolated_database_env))
         command.downgrade(config, "base")
         command.upgrade(config, "head")
-        yield isolated_database_env
-        asyncio.run(_truncate_artifact_tables(isolated_database_env))
+    yield isolated_database_env
+    with migration_lock():
+        asyncio.run(_truncate_artifacts(isolated_database_env))
         command.downgrade(config, "base")
 
 
-@pytest.mark.asyncio
-async def test_ingest_service_promotes_only_verified_provider_result(
-    artifact_database_env: str, tmp_path: Path
-) -> None:
-    """Prove transaction B creates one content/replica/receipt and no binding."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+async def _truncate_artifacts(database_url: str) -> None:
+    engine = create_async_engine(database_url)
     try:
-        request = store_request(
-            expected_sha256="sha256:" + hashlib.sha256(b"data").hexdigest(),
-            expected_size=4,
-        )
-        ids = await _seed_reserved_item(factory, request)
-        async with factory() as session:
-            service = ArtifactIngestService(
-                session,
-                LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2),
-                adapter_name="local",
-            )
-            await service.ingest_reserved_item(ids["item"], byte_stream(b"data"), request)
-        async with factory() as session:
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 1
-            assert (
-                await session.scalar(select(func.count()).select_from(ArtifactOperationReceipt))
-                == 1
-            )
-            assert await session.scalar(select(func.count()).select_from(ArtifactBinding)) == 0
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "ready"
-            replica = (await session.scalars(select(ArtifactReplica))).one()
-            replica_adapter = replica.adapter
-            replica_provider_id = replica.provider_artifact_id
-            replica_content_id = replica.content_id
-            binding_id = str(uuid4())
-            secondary_replica_id = str(uuid4())
-            await session.rollback()
-            async with session.begin():
-                session.add(
-                    ArtifactBinding(
-                        id=binding_id,
-                        content_id=replica_content_id,
-                        project_id=ids["project"],
-                        resource_type="submission",
-                        resource_id="submission-isolation",
-                        logical_role="submission_packet",
-                        scope_version=1,
-                        actor_id="actor-1",
-                        attribution_type="submitted_by",
-                    )
-                )
-                session.add(
-                    ArtifactReplica(
-                        id=secondary_replica_id,
-                        content_id=replica_content_id,
-                        adapter="secondary",
-                        provider_artifact_id="secondary-provider-copy",
-                        verification_state="verified",
-                        retention_state="retained",
-                        availability_state="available",
-                        integrity_state="valid",
-                    )
-                )
-            binding = await session.get(ArtifactBinding, binding_id)
-            secondary_replica = await session.get(ArtifactReplica, secondary_replica_id)
-            assert binding is not None
-            assert secondary_replica is not None
-            binding_before = {
-                column.name: getattr(binding, column.name)
-                for column in ArtifactBinding.__table__.columns
-            }
-            secondary_replica_before = {
-                column.name: getattr(secondary_replica, column.name)
-                for column in ArtifactReplica.__table__.columns
-            }
-            await session.rollback()
-            service = ArtifactIngestService(
-                session,
-                LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2),
-                adapter_name="local",
-            )
-            retain_request_identity = retain_identity(
-                replica_provider_id,
-                "review-hold",
-                "review",
-                key="retain-coordinator",
-                principal="workstream.artifact.lifecycle",
-            )
-            await service.retain_replica(
-                replica_adapter,
-                replica_provider_id,
-                "review-hold",
-                "review",
-                retain_request_identity,
-            )
-            second_retain_identity = retain_identity(
-                replica_provider_id,
-                "payment-hold",
-                "payment",
-                key="retain-payment",
-                principal="workstream.artifact.lifecycle",
-            )
-            await service.retain_replica(
-                replica_adapter,
-                replica_provider_id,
-                "payment-hold",
-                "payment",
-                second_retain_identity,
-            )
-            release_request_identity = release_identity(
-                replica_provider_id,
-                "review-hold",
-                key="release-coordinator",
-                principal="workstream.artifact.lifecycle",
-            )
-            await service.release_replica(
-                replica_adapter,
-                replica_provider_id,
-                "review-hold",
-                release_request_identity,
-            )
-            async with session.begin():
-                current_replica = await session.get(ArtifactReplica, replica.id)
-                assert current_replica is not None
-                current_replica.verification_state = "failed"
-            retained_after_one_release = await service.reconcile_replica(
-                replica_adapter, replica_provider_id
-            )
-            assert retained_after_one_release.retention_state.value == "retained"
-            await service.reconcile_replica(replica_adapter, replica_provider_id)
-            async with session.begin():
-                current_replica = await session.get(ArtifactReplica, replica.id)
-                assert current_replica is not None
-                current_replica.integrity_state = "unknown"
-            await service.quarantine_existing_replica(
-                replica_adapter, replica_provider_id, reason="integrity mismatch"
-            )
-            await service.quarantine_existing_replica(
-                replica_adapter, replica_provider_id, reason="integrity mismatch"
-            )
-            await service.reconcile_replica(replica_adapter, replica_provider_id)
-        async with factory() as session:
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactBinding)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 2
-            assert (
-                await session.scalar(select(func.count()).select_from(ArtifactOperationReceipt))
-                == 4
-            )
-            assert await session.scalar(
-                select(func.count())
-                .select_from(AuditEvent)
-                .where(AuditEvent.event_type == "artifact_replica_quarantined")
-            ) == 1
-            assert await session.scalar(
-                select(func.count())
-                .select_from(AuditEvent)
-                .where(AuditEvent.event_type == "artifact_retention_released")
-            ) == 1
-            reconciliation_event = (
-                await session.scalars(
-                    select(AuditEvent).where(
-                        AuditEvent.event_type == "artifact_replica_reconciled"
-                    )
-                )
-            ).one()
-            assert len(reconciliation_event.from_status or "") <= 30
-            assert len(reconciliation_event.to_status or "") <= 30
-            assert reconciliation_event.event_payload["before"]["verification_state"] == (
-                "failed"
-            )
-            quarantine_event = (
-                await session.scalars(
-                    select(AuditEvent).where(
-                        AuditEvent.event_type == "artifact_replica_quarantined"
-                    )
-                )
-            ).one()
-            assert quarantine_event.from_status == "unknown"
-            affected_replica = await session.scalar(
-                select(ArtifactReplica).where(
-                    ArtifactReplica.provider_artifact_id == replica_provider_id
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "truncate table artifact_storage_namespaces, artifact_upload_sessions, "
+                    "artifact_contents cascade"
                 )
             )
-            secondary_replica = await session.get(ArtifactReplica, secondary_replica_id)
-            binding = await session.get(ArtifactBinding, binding_id)
-            assert affected_replica is not None
-            assert affected_replica.integrity_state == "quarantined"
-            assert secondary_replica is not None
-            assert binding is not None
-            assert {
-                column.name: getattr(binding, column.name)
-                for column in ArtifactBinding.__table__.columns
-            } == binding_before
-            assert {
-                column.name: getattr(secondary_replica, column.name)
-                for column in ArtifactReplica.__table__.columns
-            } == secondary_replica_before
     finally:
         await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_ingest_service_input_failure_promotes_zero_facts(
-    artifact_database_env: str, tmp_path: Path
-) -> None:
-    """Prove failed input commitment creates no immutable storage facts."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    try:
-        request = store_request(expected_sha256="sha256:" + "0" * 64, expected_size=4)
-        ids = await _seed_reserved_item(factory, request)
-        async with factory() as session:
-            service = ArtifactIngestService(
-                session,
-                LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2),
-                adapter_name="local",
-            )
-            with pytest.raises(ArtifactInputMismatchError):
-                await service.ingest_reserved_item(ids["item"], byte_stream(b"data"), request)
-        async with factory() as session:
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 0
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 0
-            assert (
-                await session.scalar(select(func.count()).select_from(ArtifactOperationReceipt))
-                == 0
-            )
-            assert await session.scalar(select(func.count()).select_from(ArtifactBinding)) == 0
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "failed"
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_ingest_service_reconciles_provider_committed_gap(
-    artifact_database_env: str, tmp_path: Path
-) -> None:
-    """Finalize from provider receipt after a committed effect misses transaction B."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    payload = b"recovery"
-    request = store_request(
-        key="provider-gap",
-        expected_sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
-        expected_size=len(payload),
-        maximum_bytes=len(payload),
+async def _truncate_artifacts_if_present(database_url: str) -> None:
+    """Clear only artifact tables that exist at the database's current revision."""
+    engine = create_async_engine(database_url)
+    candidates = (
+        "artifact_storage_namespaces",
+        "artifact_upload_sessions",
+        "artifact_contents",
     )
     try:
-        ids = await _seed_reserved_item(factory, request)
-        adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            fence = await service._start_provider_operation(ids["item"], request)
-            stored = await adapter.store(byte_stream(payload), request)
-            await service._mark_provider_recovery_required(
-                ids["item"], request, fence, provider_commit_confirmed=True
-            )
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "provider_committed"
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            recovered = await service.reconcile_committed_item(ids["item"], request)
-            assert recovered.provider_artifact_id == stored.provider_artifact_id
-            assert recovered.replayed is True
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            upload_session = await session.get(ArtifactUploadSession, ids["session"])
-            assert item is not None and item.state == "ready"
-            assert upload_session is not None
-            assert upload_session.reserved_bytes == 0
-            assert upload_session.current_bytes == len(payload)
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 1
-            assert (
-                await session.scalar(select(func.count()).select_from(ArtifactOperationReceipt))
-                == 1
-            )
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_ingest_service_replays_ambiguous_provider_failure(
-    artifact_database_env: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Recover a committed provider effect after the call reports retryable failure."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    payload = b"ambiguous-commit"
-    request = store_request(
-        key="ambiguous",
-        expected_sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
-        expected_size=len(payload),
-        maximum_bytes=len(payload),
-    )
-    try:
-        ids = await _seed_reserved_item(factory, request)
-        adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-        original_store = adapter.store
-
-        async def commit_then_fail(
-            stream: AsyncIterator[bytes], store_operation: StoreArtifactRequest
-        ):
-            await original_store(stream, store_operation)
-            raise ArtifactStoreUnavailableError("provider acknowledgement was lost")
-
-        monkeypatch.setattr(adapter, "store", commit_then_fail)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            with pytest.raises(ArtifactStoreUnavailableError):
-                await service.ingest_reserved_item(ids["item"], byte_stream(payload), request)
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "replay_required"
-        monkeypatch.setattr(adapter, "store", original_store)
-        async with factory() as session:
-            recovered = await ArtifactIngestService(
-                session, adapter, adapter_name="local"
-            ).ingest_reserved_item(ids["item"], byte_stream(payload), request)
-            assert recovered.sha256 == request.expected_sha256
-            assert recovered.replayed is True
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "ready"
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 1
-            assert (
-                await session.scalar(select(func.count()).select_from(ArtifactOperationReceipt))
-                == 1
-            )
-            assert await session.scalar(select(func.count()).select_from(ArtifactBinding)) == 0
-            assert await session.scalar(select(func.count()).select_from(AuditEvent)) == 0
-            assert len(list((tmp_path / "artifacts" / "objects").iterdir())) == 1
-
-        pre_effect_request = store_request(
-            key="pre-effect-failure",
-            expected_sha256=request.expected_sha256,
-            expected_size=request.expected_size,
-            maximum_bytes=len(payload),
-        )
-        pre_effect_ids = await _seed_reserved_item(factory, pre_effect_request)
-
-        async def fail_before_effect(
-            stream: AsyncIterator[bytes], store_operation: StoreArtifactRequest
-        ):
-            del stream, store_operation
-            raise ArtifactStoreUnavailableError("provider was unavailable")
-
-        monkeypatch.setattr(adapter, "store", fail_before_effect)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            with pytest.raises(ArtifactStoreUnavailableError):
-                await service.ingest_reserved_item(
-                    pre_effect_ids["item"], byte_stream(payload), pre_effect_request
+        async with engine.begin() as connection:
+            existing = [
+                table_name
+                for table_name in candidates
+                if await connection.scalar(
+                    text("select to_regclass(:table_name) is not null"),
+                    {"table_name": f"public.{table_name}"},
                 )
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, pre_effect_ids["item"])
-            assert item is not None and item.state == "replay_required"
-
-        sha_only_request = store_request(
-            key="sha-only-confirmed",
-            expected_sha256=request.expected_sha256,
-            expected_size=None,
-            maximum_bytes=len(payload),
-        )
-        sha_only_ids = await _seed_reserved_item(factory, sha_only_request)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            fence = await service._start_provider_operation(sha_only_ids["item"], sha_only_request)
-            await service._mark_provider_recovery_required(
-                sha_only_ids["item"],
-                sha_only_request,
-                fence,
-                provider_commit_confirmed=True,
-            )
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, sha_only_ids["item"])
-            assert item is not None and item.state == "replay_required"
-
-        finalize_cancel_request = store_request(
-            key="finalize-cancelled",
-            expected_sha256=request.expected_sha256,
-            expected_size=request.expected_size,
-            maximum_bytes=len(payload),
-        )
-        finalize_cancel_ids = await _seed_reserved_item(factory, finalize_cancel_request)
-        monkeypatch.setattr(adapter, "store", original_store)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-
-            async def cancel_finalization(*args) -> None:
-                del args
-                raise asyncio.CancelledError
-
-            monkeypatch.setattr(service, "_finalize_provider_operation", cancel_finalization)
-            with pytest.raises(asyncio.CancelledError):
-                await service.ingest_reserved_item(
-                    finalize_cancel_ids["item"],
-                    byte_stream(payload),
-                    finalize_cancel_request,
-                )
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, finalize_cancel_ids["item"])
-            assert item is not None and item.state == "provider_committed"
-
-        reconcile_cancel_request = store_request(
-            key="reconcile-cancelled",
-            expected_sha256=request.expected_sha256,
-            expected_size=request.expected_size,
-            maximum_bytes=len(payload),
-        )
-        reconcile_cancel_ids = await _seed_reserved_item(factory, reconcile_cancel_request)
-        monkeypatch.setattr(adapter, "store", original_store)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            fence = await service._start_provider_operation(
-                reconcile_cancel_ids["item"], reconcile_cancel_request
-            )
-            await adapter.store(byte_stream(payload), reconcile_cancel_request)
-            await service._mark_provider_recovery_required(
-                reconcile_cancel_ids["item"],
-                reconcile_cancel_request,
-                fence,
-                provider_commit_confirmed=True,
-            )
-
-        recovery_started = asyncio.Event()
-        recovery_block = asyncio.Event()
-
-        async def block_recovery(*args) -> None:
-            del args
-            recovery_started.set()
-            await recovery_block.wait()
-
-        monkeypatch.setattr(adapter, "recover_committed_store", block_recovery)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            original_mark_recovery = service._mark_provider_recovery_required
-            cleanup_started = asyncio.Event()
-            cleanup_block = asyncio.Event()
-            cleanup_finished = asyncio.Event()
-
-            async def block_then_mark_recovery(*args, **kwargs) -> None:
-                cleanup_started.set()
-                await cleanup_block.wait()
-                await original_mark_recovery(*args, **kwargs)
-                cleanup_finished.set()
-
-            monkeypatch.setattr(
-                service, "_mark_provider_recovery_required", block_then_mark_recovery
-            )
-            reconcile_task = asyncio.create_task(
-                service.reconcile_committed_item(
-                    reconcile_cancel_ids["item"], reconcile_cancel_request
-                )
-            )
-            await recovery_started.wait()
-            reconcile_task.cancel()
-            await cleanup_started.wait()
-            reconcile_task.cancel()
-            await asyncio.sleep(0)
-            assert not reconcile_task.done()
-            cleanup_block.set()
-            with pytest.raises(asyncio.CancelledError):
-                await reconcile_task
-            assert cleanup_finished.is_set()
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, reconcile_cancel_ids["item"])
-            assert item is not None and item.state == "provider_committed"
+            ]
+            if existing:
+                await connection.execute(text(f"truncate table {', '.join(existing)} cascade"))
     finally:
         await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_reconciliation_rehashes_bytes_and_fails_corrupt_item(
-    artifact_database_env: str, tmp_path: Path
-) -> None:
-    """Reject altered committed bytes and fail the unpromoted item."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    payload = b"trusted"
-    request = store_request(
-        key="altered-recovery",
-        expected_sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
-        expected_size=len(payload),
-        maximum_bytes=len(payload),
+def _settings(tmp_path: Path) -> Settings:
+    (tmp_path / "store").mkdir(mode=0o700, exist_ok=True)
+    return Settings(
+        environment="test",
+        artifact_store_backend="local",
+        artifact_local_root=tmp_path / "store",
+        artifact_scratch_root=tmp_path / "scratch",
+        artifact_scratch_minimum_free_bytes=0,
     )
-    try:
-        ids = await _seed_reserved_item(factory, request)
-        root = tmp_path / "artifacts"
-        adapter = LocalStorageAdapter(root=root, buffer_bytes=2)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            fence = await service._start_provider_operation(ids["item"], request)
-            await adapter.store(byte_stream(payload), request)
-            await service._mark_provider_recovery_required(
-                ids["item"], request, fence, provider_commit_confirmed=True
-            )
-        next((root / "objects").iterdir()).write_bytes(b"altered")
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            with pytest.raises(ArtifactIntegrityError):
-                await service.reconcile_committed_item(ids["item"], request)
-        async with factory() as session:
-            item = await session.get(ArtifactUploadItem, ids["item"])
-            assert item is not None and item.state == "failed"
-            assert item.error_code == "artifact_integrity_failure"
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 0
-
-        missing_request = store_request(
-            key="missing-confirmed-recovery",
-            expected_sha256=request.expected_sha256,
-            expected_size=request.expected_size,
-            maximum_bytes=request.maximum_bytes,
-        )
-        missing_ids = await _seed_reserved_item(factory, missing_request)
-        missing_root = tmp_path / "missing-artifacts"
-        missing_adapter = LocalStorageAdapter(root=missing_root, buffer_bytes=2)
-        async with factory() as session:
-            service = ArtifactIngestService(session, missing_adapter, adapter_name="local")
-            fence = await service._start_provider_operation(
-                missing_ids["item"], missing_request
-            )
-            await missing_adapter.store(byte_stream(payload), missing_request)
-            await service._mark_provider_recovery_required(
-                missing_ids["item"],
-                missing_request,
-                fence,
-                provider_commit_confirmed=True,
-            )
-        next((missing_root / "objects").iterdir()).unlink()
-        async with factory() as session:
-            service = ArtifactIngestService(session, missing_adapter, adapter_name="local")
-            with pytest.raises(ArtifactIntegrityError, match="missing"):
-                await service.reconcile_committed_item(missing_ids["item"], missing_request)
-        async with factory() as session:
-            missing_item = await session.get(ArtifactUploadItem, missing_ids["item"])
-            assert missing_item is not None and missing_item.state == "failed"
-            assert missing_item.error_code == "artifact_integrity_failure"
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_identical_content_creates_distinct_provider_replicas(
-    artifact_database_env: str, tmp_path: Path
-) -> None:
-    """Deduplicate content facts without collapsing distinct physical replicas."""
-    engine = create_async_engine(artifact_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    payload = b"shared-content"
-    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
-    first_request = store_request(
-        key="shared-first",
-        expected_sha256=digest,
-        expected_size=len(payload),
-        maximum_bytes=len(payload),
-    )
-    second_request = store_request(
-        key="shared-second",
-        expected_sha256=digest,
-        expected_size=len(payload),
-        maximum_bytes=len(payload),
-    )
-    try:
-        first_ids = await _seed_reserved_item(factory, first_request)
-        second_ids = await _seed_reserved_item(factory, second_request)
-        adapter = LocalStorageAdapter(root=tmp_path / "artifacts", buffer_bytes=2)
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            await service.ingest_reserved_item(
-                first_ids["item"], byte_stream(payload), first_request
-            )
-        async with factory() as session:
-            service = ArtifactIngestService(session, adapter, adapter_name="local")
-            await service.ingest_reserved_item(
-                second_ids["item"], byte_stream(payload), second_request
-            )
-        async with factory() as session:
-            assert await session.scalar(select(func.count()).select_from(ArtifactContent)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactReplica)) == 2
-            provider_ids = set(await session.scalars(select(ArtifactReplica.provider_artifact_id)))
-            assert len(provider_ids) == 2
-    finally:
-        await engine.dispose()
 
 
 async def _seed_reserved_item(
-    factory: async_sessionmaker, request: StoreArtifactRequest
-) -> dict[str, str]:
-    """Create one project, upload session, and reserved upload item."""
-    ids = {name: str(uuid4()) for name in ("project", "session", "item")}
-    async with factory() as session, session.begin():
-        session.add(Project(id=ids["project"], name="Artifact test", slug=f"artifact-{uuid4()}"))
-        await session.flush()
-        session.add(
-            ArtifactUploadSession(
-                id=ids["session"],
-                actor_id="actor-1",
-                project_id=ids["project"],
-                permitted_roles=["submission_packet"],
-                state="open",
-                maximum_bytes=max(64, request.maximum_bytes),
-                current_bytes=0,
-                reserved_bytes=request.maximum_bytes,
-                maximum_items=4,
-                current_items=0,
-                reserved_items=1,
-                expires_at=datetime.now(UTC) + timedelta(hours=1),
-                cas_version=0,
-            )
+    session,
+    commitment: ArtifactCommitment,
+) -> str:
+    project_id = str(uuid4())
+    session_id = str(uuid4())
+    item_id = str(uuid4())
+    session.add(Project(id=project_id, name="Artifact project", slug=f"artifact-{project_id}"))
+    await session.flush()
+    session.add(
+        ArtifactUploadSession(
+            id=session_id,
+            actor_id="actor-1",
+            project_id=project_id,
+            permitted_roles=["submission"],
+            state="open",
+            maximum_bytes=1024,
+            current_bytes=0,
+            reserved_bytes=commitment.byte_count,
+            maximum_items=1,
+            current_items=0,
+            reserved_items=1,
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            cas_version=0,
         )
-        await session.flush()
+    )
+    await session.flush()
+    session.add(
+        ArtifactUploadItem(
+            id=item_id,
+            session_id=session_id,
+            logical_role="submission",
+            display_name="result.bin",
+            media_type=commitment.media_type,
+            reserved_bytes=commitment.byte_count,
+            expected_sha256=commitment.sha256,
+            expected_size=commitment.byte_count,
+            idempotency_key=f"put-{item_id}",
+            request_digest=canonical_json_hash(
+                {
+                    "sha256": commitment.sha256,
+                    "byte_count": commitment.byte_count,
+                    "media_type": commitment.media_type,
+                }
+            ),
+            state="reserved",
+            cas_version=0,
+        )
+    )
+    await session.commit()
+    return item_id
+
+
+async def _seed_reserved_items_in_one_session(
+    session,
+    commitments: tuple[ArtifactCommitment, ...],
+) -> tuple[str, ...]:
+    """Create multiple independently fenced items under one aggregate ledger."""
+    project_id = str(uuid4())
+    session_id = str(uuid4())
+    item_ids = tuple(str(uuid4()) for _ in commitments)
+    total_bytes = sum(commitment.byte_count for commitment in commitments)
+    session.add(Project(id=project_id, name="Artifact project", slug=f"artifact-{project_id}"))
+    await session.flush()
+    session.add(
+        ArtifactUploadSession(
+            id=session_id,
+            actor_id="actor-1",
+            project_id=project_id,
+            permitted_roles=["submission"],
+            state="open",
+            maximum_bytes=1024,
+            current_bytes=0,
+            reserved_bytes=total_bytes,
+            maximum_items=len(commitments),
+            current_items=0,
+            reserved_items=len(commitments),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            cas_version=0,
+        )
+    )
+    await session.flush()
+    for item_id, commitment in zip(item_ids, commitments, strict=True):
         session.add(
             ArtifactUploadItem(
-                id=ids["item"],
-                session_id=ids["session"],
-                logical_role="submission_packet",
-                display_name="packet.bin",
-                media_type="application/octet-stream",
-                reserved_bytes=request.maximum_bytes,
-                expected_sha256=request.expected_sha256,
-                expected_size=request.expected_size,
-                idempotency_key=request.idempotency.key,
-                request_digest=request.idempotency.request_digest,
+                id=item_id,
+                session_id=session_id,
+                logical_role="submission",
+                display_name=f"{item_id}.bin",
+                media_type=commitment.media_type,
+                reserved_bytes=commitment.byte_count,
+                expected_sha256=commitment.sha256,
+                expected_size=commitment.byte_count,
+                idempotency_key=f"put-{item_id}",
+                request_digest=canonical_json_hash(
+                    {
+                        "sha256": commitment.sha256,
+                        "byte_count": commitment.byte_count,
+                        "media_type": commitment.media_type,
+                    }
+                ),
                 state="reserved",
                 cas_version=0,
             )
         )
-    return ids
+    await session.commit()
+    return item_ids
 
 
-async def _truncate_artifact_tables(database_url: str) -> None:
-    """Clear additive artifact rows before exercising the guarded downgrade."""
-    engine = create_async_engine(database_url)
+@pytest.mark.asyncio
+async def test_put_acknowledgement_stops_at_pending_verification(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    content = b"artifact-v2"
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    settings = _settings(tmp_path)
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=tmp_path / "store", buffer_bytes=2))
+    namespace = artifact_storage_namespace_spec(settings, bootstrap)
+    store = bootstrap.initialize_after_namespace_claim(local_namespace_claim(bootstrap))
     try:
-        async with engine.begin() as connection:
-            await connection.exec_driver_sql(
-                """
-                truncate table
-                    artifact_operation_receipts,
-                    artifact_replicas,
-                    artifact_bindings,
-                    artifact_upload_items,
-                    artifact_contents,
-                    artifact_upload_sessions
-                cascade
-                """
+        async with _minted_source(tmp_path / "scratch", content) as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                result = await ArtifactStorageOrchestrator(
+                    session, store, namespace
+                ).put_reserved_item(item_id, source)
+        async with _minted_source(tmp_path / "scratch-replay", content) as replay_source:
+            async with factory() as session:
+                replay_item_id = await _seed_reserved_item(session, replay_source.commitment)
+                replay = await ArtifactStorageOrchestrator(
+                    session, store, namespace
+                ).put_reserved_item(replay_item_id, replay_source)
+                assert replay.replayed is True
+
+        async with factory() as session:
+            item = await session.get(ArtifactUploadItem, item_id)
+            replica = (await session.execute(select(ArtifactReplica))).scalar_one()
+            receipts = (await session.execute(select(ArtifactOperationReceipt))).scalars().all()
+            receipt = next(value for value in receipts if value.upload_item_id == item_id)
+            replay_receipt = next(
+                value for value in receipts if value.upload_item_id == replay_item_id
+            )
+            namespace_row = (await session.execute(select(ArtifactStorageNamespace))).scalar_one()
+            assert item is not None
+            assert item.state == "stored_pending_verification"
+            assert item.provider_object_ref == result.provider_object_ref
+            assert replica.verification_state == "pending"
+            assert replica.availability_state == "unknown"
+            assert replica.integrity_state == "unknown"
+            assert replica.namespace_fingerprint == namespace_row.namespace_fingerprint
+            assert receipt.operation == "put"
+            assert receipt.outcome == "stored_pending_verification"
+            assert receipt.provider_object_ref == result.provider_object_ref
+            assert receipt.replayed is False
+            assert len(receipts) == 2
+            assert replay_receipt.replayed is True
+            assert await store.head(result.provider_object_ref) == ArtifactObjectHead(
+                result.provider_object_ref,
+                exists=True,
+                byte_count=len(content),
+                media_type=None,
             )
     finally:
+        store.close()
         await engine.dispose()
+
+
+class _UnavailableStore:
+    """Count provider calls and fail with one sanitized retryable error."""
+
+    identity = ExternalServiceAdapterIdentity("artifact_store", "local")
+    namespace_identity = ArtifactStoreNamespaceIdentity(
+        provider_profile="local-v2",
+        descriptor_items=(
+            ("private_prefix", "objects/sha256"),
+            ("private_root_identity", "sha256:" + "0" * 64),
+        ),
+    )
+
+    def __init__(self) -> None:
+        self.put_calls = 0
+
+    async def put(self, _source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        raise ArtifactStoreUnavailableError()
+
+    async def observe_put_result(self, _commitment: ArtifactCommitment) -> ArtifactPutObservation:
+        raise NotImplementedError
+
+    def open(
+        self, _provider_object_ref: str, _byte_range: ArtifactByteRange | None = None
+    ) -> AsyncIterator[bytes]:
+        raise NotImplementedError
+
+    async def head(self, _provider_object_ref: str) -> ArtifactObjectHead:
+        raise NotImplementedError
+
+
+class _TerminalStore(_UnavailableStore):
+    async def put(self, _source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        raise ArtifactInputMismatchError()
+
+
+class _AcknowledgementUnknownThenReplayStore(_UnavailableStore):
+    """Lose the first acknowledgement and return an exact replay next."""
+
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        if self.put_calls == 1:
+            raise RuntimeError("provider acknowledgement lost")
+        digest_hex = source.commitment.sha256[7:]
+        return ArtifactPutResult(
+            f"sha256/{digest_hex[:2]}/{digest_hex[2:]}",
+            replayed=True,
+        )
+
+
+class _CancelledStore(_UnavailableStore):
+    async def put(self, _source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        raise asyncio.CancelledError("provider put cancelled")
+
+
+class _AcknowledgingStore(_UnavailableStore):
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        digest_hex = source.commitment.sha256[7:]
+        return ArtifactPutResult(
+            f"sha256/{digest_hex[:2]}/{digest_hex[2:]}",
+            replayed=False,
+        )
+
+
+class _NamespaceObservingAcknowledgingStore(_AcknowledgingStore):
+    """Assert the committed namespace exists before the provider is invoked."""
+
+    def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
+        super().__init__()
+        self._factory = factory
+        self.observed_namespace_fingerprint: str | None = None
+
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        async with self._factory() as session:
+            namespace = await session.scalar(select(ArtifactStorageNamespace))
+        assert namespace is not None
+        self.observed_namespace_fingerprint = namespace.namespace_fingerprint
+        return await super().put(source)
+
+
+class _ConcurrentAcknowledgingStore(_AcknowledgingStore):
+    """Release two same-object acknowledgements into finalization together."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._arrivals = 0
+        self._release = asyncio.Event()
+
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        self.put_calls += 1
+        self._arrivals += 1
+        arrival = self._arrivals
+        if self._arrivals == 2:
+            self._release.set()
+        await asyncio.wait_for(self._release.wait(), timeout=2)
+        digest_hex = source.commitment.sha256[7:]
+        return ArtifactPutResult(
+            f"sha256/{digest_hex[:2]}/{digest_hex[2:]}",
+            replayed=arrival > 1,
+        )
+
+
+class _ConcurrentDistinctAcknowledgingStore(_ConcurrentAcknowledgingStore):
+    """Release two distinct initial publications into finalization together."""
+
+    async def put(self, source: CommittedArtifactSource) -> ArtifactPutResult:
+        result = await super().put(source)
+        return ArtifactPutResult(result.provider_object_ref, replayed=False)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_same_object_finalization_reuses_one_replica(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    """Finalize two exact replays with one replica and two receipts."""
+    content = b"concurrent-artifact-v2"
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _ConcurrentAcknowledgingStore()
+    namespace = artifact_storage_namespace_spec(_settings(tmp_path), store)
+    try:
+        async with _minted_source(tmp_path / "scratch-first", content) as first_source:
+            async with _minted_source(tmp_path / "scratch-second", content) as second_source:
+                async with factory() as session:
+                    first_item_id = await _seed_reserved_item(session, first_source.commitment)
+                    second_item_id = await _seed_reserved_item(session, second_source.commitment)
+                    await ArtifactStorageOrchestrator(
+                        session, store, namespace
+                    ).ensure_storage_namespace()
+                    async with session.begin():
+                        session.add(
+                            ArtifactContent(
+                                id=str(uuid4()),
+                                sha256=first_source.commitment.sha256,
+                                byte_count=first_source.commitment.byte_count,
+                                media_type=first_source.commitment.media_type,
+                                normalized_display_name="preexisting.bin",
+                            )
+                        )
+
+                async def finalize(item_id: str, source: CommittedArtifactSource) -> None:
+                    async with factory() as session:
+                        await ArtifactStorageOrchestrator(
+                            session, store, namespace
+                        ).put_reserved_item(item_id, source)
+
+                await asyncio.gather(
+                    finalize(first_item_id, first_source),
+                    finalize(second_item_id, second_source),
+                )
+
+        async with factory() as session:
+            items = (
+                (
+                    await session.execute(
+                        select(ArtifactUploadItem).where(
+                            ArtifactUploadItem.id.in_((first_item_id, second_item_id))
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            replicas = (await session.execute(select(ArtifactReplica))).scalars().all()
+            receipts = (await session.execute(select(ArtifactOperationReceipt))).scalars().all()
+
+        assert {item.state for item in items} == {"stored_pending_verification"}
+        assert len(items) == 2
+        assert len(replicas) == 1
+        assert replicas[0].verification_state == "pending"
+        assert replicas[0].availability_state == "unknown"
+        assert replicas[0].integrity_state == "unknown"
+        assert len(receipts) == 2
+        assert {receipt.replica_id for receipt in receipts} == {replicas[0].id}
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_independent_items_in_one_session_finalize_without_shared_cas_replay(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    """Fence provider acknowledgements per item while accounting one session."""
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _ConcurrentDistinctAcknowledgingStore()
+    namespace = artifact_storage_namespace_spec(_settings(tmp_path), store)
+    try:
+        async with _minted_source(tmp_path / "scratch-first", b"first-item") as first:
+            async with _minted_source(tmp_path / "scratch-second", b"second-item") as second:
+                async with factory() as session:
+                    item_ids = await _seed_reserved_items_in_one_session(
+                        session,
+                        (first.commitment, second.commitment),
+                    )
+                    await ArtifactStorageOrchestrator(
+                        session, store, namespace
+                    ).ensure_storage_namespace()
+
+                async def finalize(item_id: str, source: CommittedArtifactSource) -> None:
+                    async with factory() as candidate_session:
+                        await ArtifactStorageOrchestrator(
+                            candidate_session, store, namespace
+                        ).put_reserved_item(item_id, source)
+
+                await asyncio.gather(
+                    finalize(item_ids[0], first),
+                    finalize(item_ids[1], second),
+                )
+
+        async with factory() as session:
+            items = (
+                (
+                    await session.execute(
+                        select(ArtifactUploadItem).where(ArtifactUploadItem.id.in_(item_ids))
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            upload_session = await session.get(ArtifactUploadSession, items[0].session_id)
+            receipts = (await session.execute(select(ArtifactOperationReceipt))).scalars().all()
+
+        assert {item.state for item in items} == {"stored_pending_verification"}
+        assert upload_session is not None
+        assert upload_session.reserved_bytes == 0
+        assert upload_session.reserved_items == 0
+        assert upload_session.current_bytes == len(b"first-item") + len(b"second-item")
+        assert upload_session.current_items == 2
+        assert len(receipts) == 2
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_database_rejects_partial_upload_result_metadata(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    """Require both stored-result references or neither in every item state."""
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with _minted_source(tmp_path / "scratch", b"constraint") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                content_id = str(uuid4())
+                session.add(
+                    ArtifactContent(
+                        id=content_id,
+                        sha256=source.commitment.sha256,
+                        byte_count=source.commitment.byte_count,
+                        media_type=source.commitment.media_type,
+                        normalized_display_name="constraint.bin",
+                    )
+                )
+                await session.commit()
+
+            with pytest.raises(IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "update artifact_upload_items set content_id = :content_id "
+                            "where id = :item_id"
+                        ),
+                        {"content_id": content_id, "item_id": item_id},
+                    )
+            with pytest.raises(IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "update artifact_upload_items "
+                            "set provider_object_ref = 'sha256/00/object' where id = :item_id"
+                        ),
+                        {"item_id": item_id},
+                    )
+
+        async with factory() as session:
+            item = await session.get(ArtifactUploadItem, item_id)
+            assert item is not None
+            assert item.content_id is None
+            assert item.provider_object_ref is None
+    finally:
+        await engine.dispose()
+
+
+def test_reservation_accounting_rejects_drift_without_clamping() -> None:
+    """Never consume capacity belonging to a different upload item."""
+    upload_session = ArtifactUploadSession(reserved_bytes=3, reserved_items=1)
+    item = ArtifactUploadItem(reserved_bytes=4)
+
+    with pytest.raises(ArtifactIntegrityError, match="reservation accounting"):
+        ArtifactStorageOrchestrator._apply_committed_accounting(upload_session, item, 4)
+
+    assert upload_session.reserved_bytes == 3
+    assert upload_session.reserved_items == 1
+
+
+class _FinalizationCancelledOrchestrator(ArtifactStorageOrchestrator):
+    async def _finalize_put(
+        self,
+        item_id: str,
+        commitment: ArtifactCommitment,
+        result: ArtifactPutResult,
+        fence: ProviderAttemptFence,
+        *,
+        correlation_id: str,
+    ) -> None:
+        del item_id, commitment, result, fence, correlation_id
+        raise asyncio.CancelledError("put finalization cancelled")
+
+
+async def _assert_replay_required_without_durable_facts(
+    factory: async_sessionmaker,
+    item_id: str,
+) -> None:
+    async with factory() as session:
+        item = await session.get(ArtifactUploadItem, item_id)
+        assert item is not None
+        upload_session = await session.get(ArtifactUploadSession, item.session_id)
+        assert upload_session is not None
+        assert item.state == "replay_required"
+        assert item.error_code == "artifact_put_acknowledgement_unknown"
+        assert upload_session.reserved_bytes == item.reserved_bytes
+        assert upload_session.reserved_items == 1
+        assert await session.scalar(select(ArtifactContent)) is None
+        assert await session.scalar(select(ArtifactReplica)) is None
+        assert await session.scalar(select(ArtifactOperationReceipt)) is None
+
+
+@pytest.mark.asyncio
+async def test_retryable_put_marks_existing_item_replay_required(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _UnavailableStore()
+    try:
+        async with _minted_source(tmp_path / "scratch", b"retry") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                orchestrator = ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    artifact_storage_namespace_spec(_settings(tmp_path), store),
+                )
+                with pytest.raises(ArtifactStoreUnavailableError):
+                    await orchestrator.put_reserved_item(item_id, source)
+
+        async with factory() as session:
+            item = await session.get(ArtifactUploadItem, item_id)
+            assert item is not None
+            assert item.state == "replay_required"
+            assert item.error_code == "artifact_put_acknowledgement_unknown"
+            assert await session.scalar(select(ArtifactReplica)) is None
+            assert await session.scalar(select(ArtifactOperationReceipt)) is None
+        assert store.put_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_same_item_replay_finalizes_once_without_double_accounting(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _AcknowledgementUnknownThenReplayStore()
+    content = b"same-item-replay"
+    try:
+        async with _minted_source(tmp_path / "scratch-first", content) as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                orchestrator = ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    artifact_storage_namespace_spec(_settings(tmp_path), store),
+                )
+                with pytest.raises(RuntimeError, match="acknowledgement lost"):
+                    await orchestrator.put_reserved_item(item_id, source)
+
+        async with _minted_source(tmp_path / "scratch-replay", content) as replay:
+            async with factory() as session:
+                result = await ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    artifact_storage_namespace_spec(_settings(tmp_path), store),
+                ).put_reserved_item(item_id, replay)
+
+        assert result.replayed is True
+        async with factory() as session:
+            item = await session.get(ArtifactUploadItem, item_id)
+            assert item is not None
+            upload_session = await session.get(ArtifactUploadSession, item.session_id)
+            assert upload_session is not None
+            receipts = (await session.execute(select(ArtifactOperationReceipt))).scalars().all()
+            replicas = (await session.execute(select(ArtifactReplica))).scalars().all()
+            contents = (await session.execute(select(ArtifactContent))).scalars().all()
+
+        assert item.state == "stored_pending_verification"
+        assert item.error_code is None
+        assert upload_session.reserved_bytes == 0
+        assert upload_session.reserved_items == 0
+        assert upload_session.current_bytes == len(content)
+        assert upload_session.current_items == 1
+        assert len(contents) == 1
+        assert len(replicas) == 1
+        assert len(receipts) == 1
+        assert receipts[0].upload_item_id == item_id
+        assert receipts[0].replayed is True
+        assert store.put_calls == 2
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_provider_cancellation_persists_replay_required_without_facts(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _CancelledStore()
+    try:
+        async with _minted_source(tmp_path / "scratch", b"provider cancellation") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                orchestrator = ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    artifact_storage_namespace_spec(_settings(tmp_path), store),
+                )
+                with pytest.raises(asyncio.CancelledError, match="provider put cancelled"):
+                    await orchestrator.put_reserved_item(item_id, source)
+
+        await _assert_replay_required_without_durable_facts(factory, item_id)
+        assert store.put_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_finalization_cancellation_persists_replay_required_without_facts(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _AcknowledgingStore()
+    try:
+        async with _minted_source(tmp_path / "scratch", b"finalization cancellation") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                orchestrator = _FinalizationCancelledOrchestrator(
+                    session,
+                    store,
+                    artifact_storage_namespace_spec(_settings(tmp_path), store),
+                )
+                with pytest.raises(asyncio.CancelledError, match="finalization cancelled"):
+                    await orchestrator.put_reserved_item(item_id, source)
+
+        await _assert_replay_required_without_durable_facts(factory, item_id)
+        assert store.put_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_terminal_put_failure_releases_reservation_and_fails_item(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _TerminalStore()
+    try:
+        async with _minted_source(tmp_path / "scratch", b"terminal") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                with pytest.raises(ArtifactInputMismatchError):
+                    await ArtifactStorageOrchestrator(
+                        session,
+                        store,
+                        artifact_storage_namespace_spec(_settings(tmp_path), store),
+                    ).put_reserved_item(item_id, source)
+
+        async with factory() as session:
+            item = await session.get(ArtifactUploadItem, item_id)
+            assert item is not None
+            upload_session = await session.get(ArtifactUploadSession, item.session_id)
+            assert item.state == "failed"
+            assert item.error_code == "artifact_input_mismatch"
+            assert upload_session is not None
+            assert upload_session.reserved_bytes == 0
+            assert upload_session.reserved_items == 0
+        assert store.put_calls == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_changed_commitment_is_rejected_before_provider_io(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _UnavailableStore()
+    try:
+        async with _minted_source(tmp_path / "scratch-first", b"first") as first:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, first.commitment)
+        async with _minted_source(tmp_path / "scratch-second", b"second") as second:
+            async with factory() as session:
+                with pytest.raises(ArtifactIngestStateError, match="commitment changed"):
+                    await ArtifactStorageOrchestrator(
+                        session,
+                        store,
+                        artifact_storage_namespace_spec(_settings(tmp_path), store),
+                    ).put_reserved_item(item_id, second)
+        assert store.put_calls == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_namespace_mismatch_fails_before_provider_io(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    store = _UnavailableStore()
+    settings = _settings(tmp_path)
+    canonical = artifact_storage_namespace_spec(settings, store)
+    conflicting_descriptor = dict(canonical.namespace_descriptor)
+    conflicting_descriptor["private_root_identity"] = "sha256:" + "f" * 64
+    conflicting = ArtifactStorageNamespaceSpec(
+        backend=canonical.backend,
+        adapter=canonical.adapter,
+        provider_profile=canonical.provider_profile,
+        namespace_descriptor=conflicting_descriptor,
+        namespace_fingerprint=canonical_json_hash(conflicting_descriptor),
+    )
+    try:
+        async with factory() as session:
+            await ArtifactStorageOrchestrator(session, store, canonical).ensure_storage_namespace()
+        async with _minted_source(tmp_path / "scratch", b"blocked") as source:
+            async with factory() as session:
+                item_id = await _seed_reserved_item(session, source.commitment)
+                with pytest.raises(ArtifactStorageNamespaceError):
+                    await ArtifactStorageOrchestrator(
+                        session, store, conflicting
+                    ).put_reserved_item(item_id, source)
+        assert store.put_calls == 0
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_different_first_namespace_writers_have_one_winner(
+    artifact_database_env: str,
+    tmp_path: Path,
+) -> None:
+    engine = create_async_engine(artifact_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    first_store = _NamespaceObservingAcknowledgingStore(factory)
+    second_store = _NamespaceObservingAcknowledgingStore(factory)
+    first = artifact_storage_namespace_spec(_settings(tmp_path), first_store)
+    second_descriptor = dict(first.namespace_descriptor)
+    second_descriptor["private_root_identity"] = "sha256:" + "a" * 64
+    second = ArtifactStorageNamespaceSpec(
+        backend=first.backend,
+        adapter=first.adapter,
+        provider_profile=first.provider_profile,
+        namespace_descriptor=second_descriptor,
+        namespace_fingerprint=canonical_json_hash(second_descriptor),
+    )
+
+    async def publish(
+        item_id: str,
+        source: CommittedArtifactSource,
+        store: _NamespaceObservingAcknowledgingStore,
+        spec: ArtifactStorageNamespaceSpec,
+    ) -> object:
+        async with factory() as session:
+            try:
+                return await ArtifactStorageOrchestrator(session, store, spec).put_reserved_item(
+                    item_id, source
+                )
+            except ArtifactStorageNamespaceError as exc:
+                return exc
+
+    try:
+        async with _minted_source(tmp_path / "scratch-first", b"first") as first_source:
+            async with _minted_source(tmp_path / "scratch-second", b"second") as second_source:
+                async with factory() as session:
+                    first_item_id = await _seed_reserved_item(session, first_source.commitment)
+                    second_item_id = await _seed_reserved_item(session, second_source.commitment)
+                outcomes = await asyncio.gather(
+                    publish(first_item_id, first_source, first_store, first),
+                    publish(second_item_id, second_source, second_store, second),
+                )
+
+        assert sum(isinstance(value, ArtifactPutResult) for value in outcomes) == 1
+        assert sum(isinstance(value, ArtifactStorageNamespaceError) for value in outcomes) == 1
+        winning_index = next(
+            index for index, value in enumerate(outcomes) if isinstance(value, ArtifactPutResult)
+        )
+        stores = (first_store, second_store)
+        specs = (first, second)
+        assert stores[winning_index].put_calls == 1
+        assert (
+            stores[winning_index].observed_namespace_fingerprint
+            == specs[winning_index].namespace_fingerprint
+        )
+        assert stores[1 - winning_index].put_calls == 0
+        assert stores[1 - winning_index].observed_namespace_fingerprint is None
+        async with factory() as session:
+            namespace = await session.scalar(select(ArtifactStorageNamespace))
+            assert namespace is not None
+            assert namespace.namespace_fingerprint == specs[winning_index].namespace_fingerprint
+    finally:
+        await engine.dispose()
+
+
+def test_namespace_descriptor_is_canonical_and_does_not_store_local_path(
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    store = _UnavailableStore()
+    spec = artifact_storage_namespace_spec(settings, store)
+    serialized = repr(spec.namespace_descriptor)
+
+    assert spec.backend == "local"
+    assert spec.provider_profile == "local-v2"
+    assert spec.namespace_fingerprint == canonical_json_hash(spec.namespace_descriptor)
+    assert str(settings.artifact_local_root) not in serialized
+    assert spec.namespace_descriptor["private_root_identity"].startswith("sha256:")
+
+
+def test_namespace_descriptor_changes_when_local_root_is_replaced(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    first_store = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    original = artifact_storage_namespace_spec(settings, first_store)
+    first_store.close()
+
+    root = settings.artifact_local_root
+    assert root is not None
+    root.rename(tmp_path / "replaced-store")
+    root.mkdir(mode=0o700)
+
+    replacement_store = LocalStorageBootstrap(LocalStorageAdapter(root=root))
+    replacement = artifact_storage_namespace_spec(settings, replacement_store)
+    replacement_store.close()
+    assert replacement.namespace_descriptor != original.namespace_descriptor
+    assert replacement.namespace_fingerprint != original.namespace_fingerprint
+
+
+def test_store_bootstrap_requires_preprovisioned_private_root(tmp_path: Path) -> None:
+    with pytest.raises(ArtifactConfigurationError, match="storage is unavailable"):
+        LocalStorageAdapter(root=tmp_path / "missing-store")
+
+
+def test_namespace_spec_rejects_adapter_drift(tmp_path: Path) -> None:
+    local_store = _UnavailableStore()
+    with pytest.raises(ArtifactStorageNamespaceError, match="identity"):
+        artifact_storage_namespace_spec(Settings(), local_store)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider_failure",
+    [asyncio.CancelledError("cancelled"), RuntimeError("provider crashed")],
+)
+async def test_unexpected_or_cancelled_provider_failure_requires_replay(
+    tmp_path: Path,
+    provider_failure: BaseException,
+) -> None:
+    store = _UnavailableStore()
+    store.put = AsyncMock(side_effect=provider_failure)  # type: ignore[method-assign]
+    orchestrator = ArtifactStorageOrchestrator(
+        None,  # type: ignore[arg-type]
+        store,
+        artifact_storage_namespace_spec(_settings(tmp_path), store),
+    )
+    orchestrator._start_put = AsyncMock(  # type: ignore[method-assign]
+        return_value=ProviderAttemptFence(1)
+    )
+    orchestrator._mark_replay_required = AsyncMock()  # type: ignore[method-assign]
+
+    async with _minted_source(tmp_path / "scratch", b"provider") as source:
+        with pytest.raises(type(provider_failure)):
+            await orchestrator.put_reserved_item("item", source)
+    orchestrator._mark_replay_required.assert_awaited_once()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "finalization_failure",
+    [
+        ArtifactInputMismatchError("mismatch"),
+        asyncio.CancelledError("cancelled"),
+        RuntimeError("database unavailable"),
+    ],
+)
+async def test_finalization_failure_never_leaves_uploading_unresolved(
+    tmp_path: Path,
+    finalization_failure: BaseException,
+) -> None:
+    store = _UnavailableStore()
+    store.put = AsyncMock(  # type: ignore[method-assign]
+        return_value=ArtifactPutResult("sha256/00/" + "0" * 62, replayed=False)
+    )
+    orchestrator = ArtifactStorageOrchestrator(
+        None,  # type: ignore[arg-type]
+        store,
+        artifact_storage_namespace_spec(_settings(tmp_path), store),
+    )
+    orchestrator._start_put = AsyncMock(  # type: ignore[method-assign]
+        return_value=ProviderAttemptFence(1)
+    )
+    orchestrator._finalize_put = AsyncMock(  # type: ignore[method-assign]
+        side_effect=finalization_failure
+    )
+    orchestrator._fail_put = AsyncMock()  # type: ignore[method-assign]
+    orchestrator._mark_replay_required = AsyncMock()  # type: ignore[method-assign]
+
+    async with _minted_source(tmp_path / "scratch", b"finalize") as source:
+        with pytest.raises(type(finalization_failure)):
+            await orchestrator.put_reserved_item("item", source)
+    if isinstance(finalization_failure, ArtifactInputMismatchError):
+        orchestrator._fail_put.assert_awaited_once()  # type: ignore[attr-defined]
+        orchestrator._mark_replay_required.assert_not_awaited()  # type: ignore[attr-defined]
+    else:
+        orchestrator._mark_replay_required.assert_awaited_once()  # type: ignore[attr-defined]
+        orchestrator._fail_put.assert_not_awaited()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_startup_namespace_validation_uses_canonical_session_factory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    store = _UnavailableStore()
+
+    class _TransactionContext:
+        async def __aenter__(self) -> None:
+            return None
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class _Session:
+        def begin(self) -> _TransactionContext:
+            return _TransactionContext()
+
+    session = _Session()
+
+    class _SessionContext:
+        async def __aenter__(self) -> object:
+            return session
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    repository = object()
+    ensured = AsyncMock()
+
+    def create_repository(candidate_session: object) -> object:
+        assert candidate_session is session
+        return repository
+
+    monkeypatch.setattr(
+        artifact_service_module,
+        "get_session_factory",
+        lambda: lambda: _SessionContext(),
+    )
+    monkeypatch.setattr(artifact_service_module, "ArtifactRepository", create_repository)
+    monkeypatch.setattr(
+        artifact_service_module,
+        "_claim_and_validate_storage_namespace",
+        ensured,
+    )
+
+    claim = await validate_artifact_storage_namespace_at_startup(store, settings)
+    assert isinstance(ensured.await_args.args[1], ArtifactStorageNamespaceSpec)
+    assert ensured.await_args.args[0] is repository
+    assert claim.namespace_identity == store.namespace_identity
+
+
+def test_models_remove_v1_provider_retention_and_receipt_fields() -> None:
+    assert not hasattr(ArtifactReplica, "retention_state")
+    assert not hasattr(ArtifactReplica, "provider_artifact_id")
+    assert not hasattr(ArtifactReplica, "provider_manifest_id")
+    assert not hasattr(ArtifactOperationReceipt, "provider_receipt_id")
+    assert not hasattr(ArtifactOperationReceipt, "retention_reference")
+    assert not hasattr(ArtifactOperationReceipt, "service_principal")
+    assert not hasattr(ArtifactUploadItem, "provider_operation_reference")
+    assert hasattr(ArtifactReplica, "provider_object_ref")
+    assert hasattr(ArtifactStorageNamespace, "namespace_fingerprint")

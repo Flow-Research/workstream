@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
 from app.core.hashing import canonical_json_hash
 from app.modules.audit.schemas import ActorReferenceKind
+from app.modules.actors.service_identities import ServiceIdentity
 
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _MODEL_CONFIG = ConfigDict(extra="forbid", frozen=True, strict=True, hide_input_in_errors=True)
@@ -116,8 +117,9 @@ class ServiceActorCreateRequest(CanonicalAuthorityRequest):
     """Canonical server-derived facts for manual service-actor creation."""
 
     operation: Literal[AuthorityOperation.SERVICE_ACTOR_CREATE]
+    service_identity: ServiceIdentity
     identity_reference_digest: Digest
-    profile_payload_digest: Digest
+    reason_digest: Digest
 
 
 class AdminRoleGrantIssueRequest(CanonicalAuthorityRequest):
@@ -260,13 +262,12 @@ def derive_reason_digest(reason: object) -> str:
 
 
 def derive_service_identity_digest(issuer: object, subject: object) -> str:
-    """Derive an internal identity reference from verified normalized facts."""
+    """Derive an internal identity reference from exact verified issuer facts."""
     digest = None
     try:
         if (
             type(issuer) is str
-            and issuer.startswith("https://")
-            and 1 <= len(issuer.encode("utf-8")) <= 500
+            and 1 <= len(issuer.encode("utf-8")) <= 200
             and type(subject) is str
             and 1 <= len(subject.encode("utf-8")) <= 200
         ):
@@ -275,26 +276,6 @@ def derive_service_identity_digest(issuer: object, subject: object) -> str:
         digest = None
     if digest is None:
         raise TypeError("invalid verified service identity")
-    return digest
-
-
-def derive_service_profile_digest(display_name: object, grant_reason: object) -> str:
-    """Derive an internal digest from bounded service profile request facts."""
-    digest = None
-    try:
-        if (
-            type(display_name) is str
-            and 1 <= len(display_name.encode("utf-8")) <= 200
-            and type(grant_reason) is str
-            and 1 <= len(grant_reason.encode("utf-8")) <= 500
-        ):
-            digest = canonical_json_hash(
-                {"display_name": display_name, "grant_reason": grant_reason}
-            )
-    except Exception:  # noqa: BLE001 - raw profile text must not escape diagnostics
-        digest = None
-    if digest is None:
-        raise TypeError("invalid service profile request")
     return digest
 
 

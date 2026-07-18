@@ -50,8 +50,9 @@ authorized Workstream artifact reader.
   binding creation declares `artifact.guide_source.binding.create`, mapped to
   `artifact.binding.create`; this chunk supplies each
   action's canonical resource composer, guards, surface declaration, and tests
-  against the AUTH-07 registry and AUTH-09 service principal. None implies
-  another.
+  against the AUTH-07 registry, AUTH-09A static matrix, AUTH-09B provisioned
+  service ActorProfile/ActorIdentityLink, and AUTH-09E runtime admission. None
+  implies another.
 - v0.1 accepts authorized caller-supplied or approved import-pipeline bytes.
   A durable URL may be recorded as a source reference, but this chunk performs
   no network retrieval. Server-side URL fetching requires a separate approved
@@ -103,7 +104,7 @@ authorized Workstream artifact reader.
 ## Exact CI Coverage Gates
 
 ```bash
-coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
+coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
 coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90
 coverage report --include='app/core/config.py' --precision=2 --fail-under=90
 coverage report --include='app/workers/*' --precision=2 --fail-under=90

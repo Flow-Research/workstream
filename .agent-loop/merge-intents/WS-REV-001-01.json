@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-REV-001-01",
+  "chunk_title": "Canonical Contract Adoption And Dependency Conformance",
+  "initiative_id": "WS-REV-001",
+  "next_chunk_id": "WS-REV-001-02",
+  "next_chunk_title": "Locked Review Policy And Task Lifecycle Alignment",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

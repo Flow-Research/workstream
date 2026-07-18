@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-ART-001-02A2` | Committed Source And Local Preparation | L1 | Active after explicit user start on 2026-07-15 |
+| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | PR #146 open; all valid CodeRabbit findings repaired; integrated exact-head review passed; replacement external checks pending |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.
@@ -14,10 +14,9 @@ output. This authored queue records the separately approved parallel chunks.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-QUAL-001-01B2` | Baseline Evidence And CI Ratchet | L1 | Paused for AUTH priority; no valid replacement baseline yet |
-| `WS-AUTH-001-09` | Actor State, Identity Revocation, And Service Actors | L1 | Inactive until AUTH-08 merge/memory and explicit user start |
+| `WS-AUTH-001-09D` | Actor And Identity-Link Lifecycle Mutations | L1 | Inactive until 09C merge/memory and explicit user start |
 | `WS-QUAL-001-02` | Project Service Coverage | L1 | Inactive until 01B2 merge/memory plus explicit user start |
 | `WS-POL-002-04` | Locked Runtime Execution And Routing Hardening | L1 | Inactive pending relevant authorization proof and a separate explicit user start |
-| `WS-ART-001-02A3` | ArtifactStore v2 Local Clean Cut | L1 | Inactive until 02A2 merge and explicit user start |
 | `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Inactive until 02A3 merge and explicit user start |
 | `WS-ART-001-02C1` | Admission And Put-Attempt Foundation | L1 | Inactive until 02B1 merge and explicit user start |
 | `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Inactive until 02C1 merge and explicit user start |
@@ -70,8 +69,15 @@ output. This authored queue records the separately approved parallel chunks.
 | `WS-AUTH-001-06` | Canonical Actor Profile And Identity Link | L1 | Merged through PR #124 as `f599551` on 2026-07-15 |
 | `WS-AUTH-001-07A` | Closed Permission And Action Catalogue | L1 | Merged through PR #126 as `e9d72a1` on 2026-07-15 |
 | `WS-AUTH-001-07B` | Deny-By-Default Kernel And Self-Action Cutover | L1 | Merged through PR #130 as `90eca12` on 2026-07-15 |
+| `WS-AUTH-001-08` | Bootstrap Access Administrator Grant | L1 | Merged through PR #131 as `aa0fdcd` on 2026-07-16 |
+| `WS-AUTH-001-09A` | Fixed Service Identity Foundation | L1 | Merged through PR #132 as `299363a` on 2026-07-17 |
+| `WS-AUTH-001-09B` | Controlled Service Actor Provisioning | L1 | Merged through PR #143 as `053242b` on 2026-07-17 |
+| `WS-XINT-001-PLAN` | Lifecycle Boundary Reconciliation | L1 | Merged through PR #139 as `5d353b6` on 2026-07-17 |
 | `WS-ART-001-OBJECT-STORAGE-AMENDMENT` | AWS-First Object Storage Planning Amendment | L1 | Merged through PR #120 as `4408256` on 2026-07-14 |
 | `WS-ART-001-02A1` | External Service Adapter Foundation | L1 | Merged through PR #127 as `f64a8e5` on 2026-07-15 |
+| `WS-ART-001-02A2` | Committed Source And Local Preparation | L1 | Merged through PR #129 as `9a04434` on 2026-07-16 |
+| `WS-ART-001-02A3` | ArtifactStore v2 Local Clean Cut | L1 | Merged through PR #141 as `a10d901` on 2026-07-18 |
+| `WS-AUTH-001-XINT` | Lifecycle Boundary Plan Reconciliation | L1 | Merged through PR #140 as `d541521` on 2026-07-17 |
 | `WS-ENG-001-02` | Automated Post-Merge Memory | L1 | Merged through PR #122 as `fc89fb6`; schema-v1 output superseded by WS-ENG-001-03 |
 
 ## Proposed Next
@@ -79,15 +85,19 @@ output. This authored queue records the separately approved parallel chunks.
 AUTH-05A merged through PR #115 as `8e1cde6`, and CAT plus its post-merge memory
 merged through PRs #117 and #118. AUTH-05B merged through PR #119 as `ad71c7e`.
 AUTH-06 merged through PR #124 as `f599551`. AUTH-07A, AUTH-07B, and AUTH-08
-merged through PRs #126, #130, and #131. Do not start AUTH-09 or POL-002-04
-automatically.
+merged through PRs #126, #130, and #131. WS-XINT planning merged through PR #139,
+and its AUTH owner reconciliation merged through PR #140 as `d541521`.
+AUTH-09A merged through PR #132 as `299363a`, and signed schema-v2 memory
+stopped. AUTH-09B merged through PR #143 as `053242b`; the user then explicitly
+started AUTH-09C, whose PR #146 is in external repair. Do not start AUTH-09D or
+POL-002-04 automatically.
 
 Coverage R10 merged through PR #108. Do not start 01B2, chunk 02, or another
 coverage implementation chunk from this worktree.
 
-`WS-ART-001-01`, the AWS-first planning amendment, and `02A1` are merged. R2
-and Flow Node are deferred. The user explicitly started `02A2` on 2026-07-15;
-do not start `02A3` automatically.
+`WS-ART-001-01`, the AWS-first planning amendment, `02A1`, `02A2`, and `02A3`
+are merged; PR #141 merged `02A3` as `a10d901`. R2 and Flow Node are deferred.
+`02B1` remains inactive until a separate explicit user start.
 
 Coverage work proceeds independently in its own worktree and is not owned by
 this AUTH queue update.

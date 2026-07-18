@@ -201,16 +201,18 @@ include `artifact_storage_unavailable`, `artifact_input_mismatch`,
 Transient post-submit retrieval failure keeps the task in
 `evaluation_pending`. Integrity mismatch quarantines the replica and blocks
 binding. Neither condition creates `accept`, `needs_revision`, `reject`, a
-contribution, payment exposure, or reputation effect.
+contribution, compensation-award, or reputation effect.
 
 ## Shared Adapter Convention
 
 Artifact storage follows ADR 0014. `LocalStorageAdapter` and
-`S3CompatibleArtifactStore` are explicitly registered through
-`ExternalServiceAdapterFactory[ArtifactStore]`. Only artifact-storage
-orchestration receives the writable port through composition-root dependency
-injection. Product modules and Celery jobs receive typed artifact
-ingest/read/materialization operations instead.
+`S3CompatibleArtifactStore` are reached through explicitly registered,
+non-mutating `ArtifactStoreBootstrap` implementations in
+`ExternalServiceAdapterFactory[ArtifactStoreBootstrap]`. The composition root
+claims the bootstrap's exact namespace in PostgreSQL before initialization
+yields the byte-only `ArtifactStore`. Only artifact-storage orchestration
+receives that writable port. Product modules and Celery jobs receive typed
+artifact ingest/read/materialization operations instead.
 
 There is no service locator, runtime plugin discovery, concrete-adapter import
 in product services, fallback constructor, compatibility alias, or dual factory
@@ -220,18 +222,33 @@ path.
 
 The existing ArtifactStore v1 provider `verify`, `retain`, `release`, and
 receipt methods are removed in the same chunk that migrates LocalStorage and
-all active callers. The dormant `flow_node` backend setting is removed. The new
+all active callers. The dormant Flow Node backend setting is removed. The new
 backend values are exactly `disabled`, `local`, and `s3_compatible`.
 
-Pre-production rows may be rebuilt when obsolete URI/hash or provider-retention
-contracts cannot be derived from authoritative stored bytes. No alias, fake
-verified backfill, nullable shadow field, dual write, or fallback remains.
+Migration `0025` refuses populated v1 artifact tables before DDL and preserves
+their prior schema and rows. An empty pre-production environment may be
+reprovisioned out of band and authoritative bytes reingested through v2; the
+migration performs no automated rebuild or fabricated backfill. No alias,
+nullable shadow field, dual write, or fallback remains.
 
 ## Review Boundary
 
 WS-REV owns `ReviewPacketManifest` and `ReviewEvidenceArtifact`. Both reference
-general `ArtifactBinding` records and consume the same immutable bytes. Semantic
-search is outside WS-ART-001.
+general `ArtifactBinding` records and consume the same immutable bytes. ART v2
+owns bytes, bindings, candidate/finalize intake, verification, retention,
+provider execution, and recovery. REV owns exact packet membership and the
+finding/response evidence relationship.
+
+Artifact bytes are readable only for the exact Submission packet covered by a
+current active ReviewLease. Authorized history is bounded metadata only. Prior,
+expired, consumed, sibling, later, cross-task, and cross-project leases cannot
+read packet bytes.
+
+Review decision and canonical contribution creation perform no ART call or
+provider I/O. They consume stabilized binding facts and copy the server-derived
+Submission `artifact_hash`. REV never imports the raw byte-only ArtifactStore,
+concrete providers, ART repositories, scratch state, `ArtifactScratchManager`,
+`PreparedArtifact`, or `CommittedArtifactSource`.
 
 ## Precedence
 
@@ -244,6 +261,8 @@ search is outside WS-ART-001.
 - ADR 0014 governs external adapter construction and injection.
 - `docs/spec_artifact_storage_service.md` is the canonical implementation
   contract.
+- `docs/spec_review_lifecycle.md` is canonical for review packet membership,
+  lease-bounded disclosure, and evidence semantics.
 - Archival reference specifications are non-executable inputs.
 
 ## Consequences

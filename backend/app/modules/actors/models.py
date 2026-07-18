@@ -18,6 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
+from app.modules.actors.service_identities import SERVICE_IDENTITY_VALUES
 
 ACTOR_KINDS = ("human", "service")
 ACTOR_PROFILE_STATUSES = ("active", "suspended", "deactivated")
@@ -52,6 +53,11 @@ class ActorProfile(Base):
             name="kind_provisioning",
         ),
         CheckConstraint(
+            "(actor_kind = 'human' and service_identity is null) or "
+            f"(actor_kind = 'service' and service_identity in ({_sql_values(SERVICE_IDENTITY_VALUES)}))",
+            name="kind_service_identity",
+        ),
+        CheckConstraint(
             "(status = 'active' and suspended_by is null and suspended_at is null and "
             "suspension_reason is null and deactivated_by is null and deactivated_at is null "
             "and deactivation_reason is null) or "
@@ -64,12 +70,14 @@ class ActorProfile(Base):
         ),
         Index("ix_actor_profiles_status_actor_kind", "status", "actor_kind"),
         Index("ix_actor_profiles_last_seen_at", "last_seen_at"),
+        UniqueConstraint("service_identity", name="service_identity"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     actor_kind: Mapped[str] = mapped_column(String(16), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     provisioning_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    service_identity: Mapped[str | None] = mapped_column(String(80))
     display_name: Mapped[str | None] = mapped_column(String(200))
     contact_email: Mapped[str | None] = mapped_column(String(320))
     created_by: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -105,6 +113,10 @@ class ActorIdentityLink(Base):
             "revoked_reason is not null)",
             name="revocation_fields",
         ),
+        CheckConstraint(
+            "subject_kind = 'service' or last_verified_at is not null",
+            name="human_verified",
+        ),
         UniqueConstraint("issuer", "subject", name="external_identity"),
         UniqueConstraint("actor_profile_id", name="actor_profile"),
         Index(
@@ -125,9 +137,7 @@ class ActorIdentityLink(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     linked_by: Mapped[str] = mapped_column(String(120), nullable=False)
     linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    last_verified_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_by: Mapped[str | None] = mapped_column(String(120))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_reason: Mapped[str | None] = mapped_column(String(500))

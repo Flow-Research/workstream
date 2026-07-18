@@ -14,9 +14,9 @@ Describe what this project produces and why it matters.
 
 ## Business Terms Summary
 
-Describe payment expectations in plain language when useful for project
-context. The enforceable base amount, currency, payout type, and payout rules
-live in `PaymentPolicy`, not in the project shell or guide request body.
+Describe compensation expectations in plain language when useful for project
+context. Enforceable submitter/reviewer rules live in the independently
+published ContributionPolicyVersion, not in the guide or project shell.
 
 ## Difficulty And Time Policy
 
@@ -112,10 +112,11 @@ Every active guide version must have:
 - PostSubmitCheckerPolicy:
 - ReviewPolicy:
 - RevisionPolicy:
-- PaymentPolicy:
+- ContributionPolicy and active published version:
 
-`PaymentPolicy` is the source of truth for base amount, currency, payout type,
-revision payment rule, rejection payment rule, and accepted payment rule.
+ContributionPolicyVersion is the source of truth for exact
+`accepted_submission` and `completed_review` compensated/unpaid rules and any
+immutable money/project-points award definitions.
 
 Each task later locks:
 
@@ -147,21 +148,21 @@ Allowed decisions:
 
 Needs revision requires:
 
-- concrete findings
-- required fix per finding
-- severity per finding
+- at least one unresolved blocking finding
+- concrete issue and required fix per blocking finding
+- optional advisory findings that do not block acceptance
 
-Second-review sampling:
+Offline post-decision reviewer-quality sampling only:
 
-- accepted:
-- rejected:
-- high-value tasks:
-
-Mandatory second review:
-
+- accepted sample rate:
+- rejected sample rate:
 - suspected copied or confidential material:
-- payment above threshold:
+- high-value criterion defined by `ReviewPolicy`:
 - reviewer conflict of interest:
+
+These criteria select non-product quality analysis only. They do not delay Review,
+FinalAcceptance, contribution creation, or task closure and do not create a
+second decision, reputation mutation, or adjudication path.
 - registered recovery operation used (permission, actor, reason, evidence):
 
 ## Revision Policy
@@ -171,10 +172,17 @@ Define:
 - maximum revision rounds:
 - revision deadline hours:
 - allowed resubmission states:
-- auto-reject after revision limit:
-- missed deadline behavior:
+- `RevisionPolicyInput.auto_reject_after_limit`: `false` (required explicitly
+  on project create/update; the backend schema default is not the v0.1 REV
+  contract)
+- limit/deadline exhaustion behavior: block preparation and submission pending
+  reason-bound covered-manager closure; never synthesize reject
 - reviewer reassignment rule:
-- payment effect during revision:
+
+Revision-policy activation and task screening must reject an effective policy
+whose `auto_reject_after_limit` value is not `false`. That runtime enforcement
+belongs to `WS-REV-001-02`; until it activates, this template is a required
+configuration precondition and does not claim the guard is available.
 
 ## Acceptance Policy
 
@@ -184,7 +192,8 @@ Accepted work must:
 - satisfy acceptance criteria
 - pass blocking checks
 - include evidence
-- close prior revision findings
+- preserve one immutable response and later resolution for each required prior
+  blocking finding
 
 ## Rejection Policy
 
@@ -208,19 +217,24 @@ Reject when:
 - low-quality generated artifacts banned by this guide
 - copied confidential/source material
 
-## Payment Dispute Policy
+## Compensation Business Terms Reference
 
-Define:
+Record only project-owner-supplied business terms and their durable source:
 
-- when accepted work becomes payable:
-- who can open a payment dispute:
-- evidence required for dispute:
-- dispute review owner:
-- payment hold rule:
-- final decision authority:
+- source reference:
+- intended submitter terms:
+- intended reviewer terms:
+- intended instrument/unit:
+
+This section is informational. It is not an active contribution award rule. Workstream
+publishes `ContributionPolicyVersion` independently, and `TaskAssignment` and
+`ReviewLease` freeze their applicable versions. Revision context never rebases
+compensation.
 
 ## Lessons Learned
 
 Keep this section updated as the project runs.
 
-Each repeated issue becomes a guide update, checker update, review policy update, revision policy update, payment policy update, template update, or reviewer training note.
+Each repeated issue becomes a guide update, checker update, review policy update,
+revision policy update, contribution policy update, template update, or
+reviewer training note.

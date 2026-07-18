@@ -11,11 +11,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DOCUMENT_SUFFIXES = {".md", ".html", ".puml"}
+DOCUMENT_SUFFIXES = {".html", ".json", ".md", ".puml"}
 
 # Exact reviewed history/archive paths. New files are active unless added here
 # with an explicit rationale through normal review.
 HISTORICAL_PATHS = {
+    ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md": "merged transitional implementation contract",
+    ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/WS-POL-001-11-actor-identity-profile-registry.md": "merged transitional implementation contract",
     "docs/checker_trial_failure_catalog.md": "closed checker-trial evidence",
     "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md": "closed internal review",
     "docs/internal_reviews/2026-06-11_revision_context_rebase.md": "closed internal review",
@@ -24,19 +26,9 @@ HISTORICAL_PATHS = {
     "docs/internal_reviews/2026-06-13_week1_week2_deterministic_hardening.md": "closed internal review",
     "docs/internal_reviews/2026-06-16_submission_artifact_policy_architecture.md": "closed internal review",
     "docs/reference_specs/WS-AUTH-001-actor-profile-role-and-authorization-service-specification.md": "immutable archival input",
+    "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md": "immutable archival input",
     "docs/reference_specs/WS-IMP-001-workstream-v0.1-coding-agent-implementation-specification.md": "immutable archival input",
     "docs/reference_specs/WS-REV-001-review-lifecycle-specification.md": "immutable archival input",
-    "docs/review_adversarial_quality_review.md": "closed review record",
-    "docs/review_architecture_review.md": "closed review record",
-    "docs/review_closure.md": "closed review record",
-    "docs/review_final_adversarial_review.md": "closed review record",
-    "docs/review_final_architecture_review.md": "closed review record",
-    "docs/review_final_product_strategy_review.md": "closed review record",
-    "docs/review_operations_review.md": "closed review record",
-    "docs/review_process_baseline_operations_review.md": "closed review record",
-    "docs/review_process_pattern_baseline_review.md": "closed review record",
-    "docs/review_product_strategy_review.md": "closed review record",
-    "docs/review_systems_architecture_review.md": "closed review record",
     "docs/roadmap_30_day_master_plan.md": "historical initial plan",
     "docs/roadmap_day_by_day_execution_plan.md": "historical execution plan",
     "docs/roadmap_pilot_plan.md": "historical pilot plan",
@@ -69,7 +61,10 @@ RULES = (
         re.compile(r"`?admin`?\s*(?:/|or)\s*`?project_manager`?", re.IGNORECASE),
     ),
     Rule("LEGACY_ROLE_HELPER", re.compile(r"require_any_role", re.IGNORECASE)),
-    Rule("TRUSTED_ROLE_CLAIM_AUTHORITY", re.compile(r"trusted role claims", re.IGNORECASE)),
+    Rule(
+        "TRUSTED_ROLE_CLAIM_AUTHORITY",
+        re.compile(r"trusted role claims", re.IGNORECASE),
+    ),
     Rule(
         "CURRENT_TOKEN_ROLE_AUTHORITY",
         re.compile(r"role in the current verified token", re.IGNORECASE),
@@ -88,13 +83,18 @@ RULES = (
     ),
     Rule(
         "OPERATOR_NOT_A_ROLE",
-        re.compile(r"Operator.{0,80}not a separate.{0,40}permission role", re.IGNORECASE),
+        re.compile(
+            r"Operator.{0,80}not a separate.{0,40}permission role", re.IGNORECASE
+        ),
     ),
     Rule(
         "BROAD_ADMIN_OVERRIDE",
         re.compile(r"\badmin\s+(?:can|may|must)\s+override", re.IGNORECASE),
     ),
-    Rule("LEGACY_ADMIN_HEADING", re.compile(r"^#{2,4}\s+Admin\s*$", re.IGNORECASE | re.MULTILINE)),
+    Rule(
+        "LEGACY_ADMIN_HEADING",
+        re.compile(r"^#{2,4}\s+Admin\s*$", re.IGNORECASE | re.MULTILINE),
+    ),
     Rule(
         "LEGACY_ROLE_MATRIX",
         re.compile(r"\|\s*Admin\s*\|.*\|\s*(?:Finance|Auditor)\s*\|", re.IGNORECASE),
@@ -172,8 +172,100 @@ RULES = (
             re.IGNORECASE,
         ),
     ),
+    Rule(
+        "ACCESS_ADMIN_CATALOG_ADMINISTRATION",
+        re.compile(
+            r"\b(?:Access Administrator|access_administrator)\b[^.\n]{0,200}(?:"
+            r"\b(?:manage(?:s|d|ment)?|administer(?:s|ed)?|administration|"
+            r"own(?:s|ership))\b[^.\n]{0,100}\b(?:permission|action)[\s/-]+"
+            r"catalog(?:ue)?\b|"
+            r"\b(?:permission|action)[\s/-]+catalog(?:ue)?\b[^.\n]{0,100}"
+            r"\b(?:management|administration|ownership)\b)",
+            re.IGNORECASE,
+        ),
+    ),
+    Rule(
+        "OPERATOR_CONTRIBUTION_POLICY_AUTHORITY",
+        re.compile(
+            r"(?:\bOperator\b.{0,180}\b(?:publish(?:es|ed)?|approve(?:s|d)?|"
+            r"bind(?:s|ing)?|manage(?:s|d|ment)?|mutate(?:s|d)?|mutation|"
+            r"reconcile(?:s|d)?|reconciliation)\b.{0,120}"
+            r"\b(?:contribution polic(?:y|ies)|compensation-adapter binding)\b|"
+            r"\b(?:contribution polic(?:y|ies)|compensation-adapter binding)\b"
+            r".{0,180}\bOperator\b.{0,100}\b(?:publish|approve|bind|manage|"
+            r"mutat|reconcil))",
+            re.IGNORECASE,
+        ),
+    ),
+    Rule(
+        "OPERATOR_COMPENSATION_MUTATION",
+        re.compile(
+            r"(?:\bOperator\b.{0,160}\b(?:reconcile(?:s|d)?|reconciliation|"
+            r"mutate(?:s|d)?|mutation|create(?:s|d)?|update(?:s|d)?)\b.{0,120}"
+            r"\b(?:contribution records?|compensation awards?|fulfillment records?)\b|"
+            r"\b(?:contribution records?|compensation awards?|fulfillment records?)\b"
+            r".{0,160}\bOperator\b.{0,100}\b(?:reconcil|mutat|creat|updat))",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
+FULL_INITIATIVE_RULE_CODES = {
+    "ACCESS_ADMIN_CATALOG_ADMINISTRATION",
+    "CURRENT_TOKEN_ROLE_AUTHORITY",
+    "NAMED_ROLE_TOKEN_AUTHORITY",
+    "OBSOLETE_ROLE_ASSIGNMENT_MODEL",
+    "OPERATOR_COMPENSATION_MUTATION",
+    "OPERATOR_CONTRIBUTION_POLICY_AUTHORITY",
+    "TOKEN_CARRIES_PRODUCT_ROLE",
+    "TOKEN_ROLE_PRODUCT_AUTHORITY",
+    "TRUSTED_ROLE_CLAIM_AUTHORITY",
+    "TYPED_PROFILE_AUTHORITY",
+    "TYPED_PROFILE_PRODUCT_AUTHORITY",
+}
+
+ACTIVATION_CUSTODY_RULES = (
+    Rule(
+        "FEATURE_OWNED_AUTH_ACTIVATION",
+        re.compile(
+            r"(?:"
+            r"actions?\s+remain\s+non-executable\s+until\s+(?:their\s+)?owning\s+"
+            r"chunks?\s+activates?|"
+            r"(?:later\s+)?owner\s+chunks?\s+activates?|"
+            r"(?:an?\s+)?owning\s+(?:feature\s+)?cutover\s+chunks?\s+activates?|"
+            r"feature\s+activation\s+blueprints?|"
+            r"actions?\s+(?:is|are)\s+activated\s+by\s+(?:their\s+)?owning\s+"
+            r"WS-(?:ART|REV|CON)\s+chunks?|"
+            r"each\s+owning\s+WS-(?:ART|REV|CON)\s+chunk\s+activates?|"
+            r"WS-(?:ART|REV|CON)[\w-]*\s+feature\s+chunk[\s\S]{0,120}?"
+            r"actions?\s+it\s+activates?|"
+            r"actions?\s+activated\s+by\s+that\s+chunk|"
+            r"owning\s+WS-(?:ART|REV|CON)\s+activation\s+blueprint|"
+            r"paired\s+owning\s+feature\s+activates?|"
+            r"runtime\s+activation\s+remain\s+with\s+the\s+listed\s+owner|"
+            r"route-owning\s+chunks?[\s\S]{0,120}?promote\s+an\s+action\s+to\s+active"
+            r")",
+            re.IGNORECASE,
+        ),
+    ),
+    Rule(
+        "PLANNING_INITIATIVE_AUTH_ACTIVATION",
+        re.compile(
+            r"(?:\bAUTH\b.{0,160}\b(?:activates?|changes?\s+action\s+"
+            r"availability)\b.{0,160}\bunder\s+`?WS-XINT-[\w-]+`?|"
+            r"\bWS-XINT-[\w-]+`?\s+(?:is|acts?\s+as)\s+(?:the\s+)?"
+            r"(?:AUTH\s+)?activation\s+custodian\b)",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+ACTIVATION_CUSTODY_EXACT_PATHS = (
+    "AGENTS.md",
+    ".agent-loop/LOOP_STATE.md",
+    ".agent-loop/WORK_QUEUE.md",
+    "docs/spec_authorization_service.md",
+)
 TECHNICAL_WORKER_PREFIX = re.compile(
     r"(?:celery(?:[- ]backed)?|checker|setup|system|background|reconciliation|"
     r"execution|"
@@ -210,7 +302,14 @@ def discover_documents(root: Path = ROOT) -> list[Path]:
     raw_paths.extend(git_lines(root, "ls-files", "--others", "--exclude-standard"))
     documents: list[Path] = []
     for raw_path in dict.fromkeys(raw_paths):
-        if raw_path != "README.md" and not raw_path.startswith("docs/"):
+        path_parts = Path(raw_path).parts
+        is_public_document = raw_path == "README.md" or raw_path.startswith("docs/")
+        is_policy = raw_path.startswith(".agent-loop/policies/")
+        is_initiative_contract = (
+            raw_path.startswith(".agent-loop/initiatives/")
+            and "reviews" not in path_parts
+        )
+        if not (is_public_document or is_policy or is_initiative_contract):
             continue
         if Path(raw_path).suffix.lower() not in DOCUMENT_SUFFIXES:
             continue
@@ -220,6 +319,30 @@ def discover_documents(root: Path = ROOT) -> list[Path]:
         if path.is_file():
             documents.append(path)
     return documents
+
+
+def discover_activation_custody_documents(root: Path = ROOT) -> list[Path]:
+    """Return active contracts that may assign authorization activation custody."""
+    documents = set(discover_documents(root))
+    documents.update(
+        root / relative_path
+        for relative_path in ACTIVATION_CUSTODY_EXACT_PATHS
+        if (root / relative_path).is_file()
+    )
+    policy_root = root / ".agent-loop/policies"
+    if policy_root.is_dir():
+        documents.update(policy_root.glob("*.md"))
+    initiative_root = root / ".agent-loop/initiatives"
+    if initiative_root.is_dir():
+        documents.update(
+            candidate
+            for candidate in initiative_root.rglob("*")
+            if candidate.is_file()
+            and candidate.suffix in {".json", ".md"}
+            and "reviews" not in candidate.relative_to(initiative_root).parts
+            and candidate.relative_to(root).as_posix() not in HISTORICAL_PATHS
+        )
+    return sorted(documents)
 
 
 def line_number(text: str, offset: int) -> int:
@@ -255,8 +378,24 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     token_end = worker_offset + len(token.group(0))
     suffix = text[token_end : token_end + 20]
     exact_code_path = token.group(0).lower() == "workers" and (
-        (prefix.endswith("backend/app/") and suffix.startswith("/"))
-        or (prefix.endswith("app.") and suffix.startswith("."))
+        (
+            re.search(r"(?:^|[^A-Za-z0-9_.-])(?:backend/)?app/$", prefix)
+            is not None
+            and suffix.startswith("/")
+        )
+        or (
+            re.search(r"(?:^|[^A-Za-z0-9_.-])app\.$", prefix) is not None
+            and suffix.startswith(".")
+        )
+    )
+    exact_technical_cli_flag = (
+        token.group(0).lower() == "worker"
+        and prefix.endswith("--start-api-")
+        and re.match(r"^-beat(?:\s|$)", suffix) is not None
+    ) or (
+        token.group(0).lower() == "workers"
+        and prefix.endswith("--require-")
+        and (not suffix or suffix[0].isspace())
     )
     exact_celery_cli = bool(
         re.search(
@@ -270,14 +409,36 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
         TECHNICAL_WORKER_PREFIX.search(prefix)
         or exact_code_path
         or exact_celery_cli
+        or exact_technical_cli_flag
     )
 
 
-def scan_text(relative_path: str, text: str) -> list[str]:
+def scan_text(
+    relative_path: str,
+    text: str,
+    *,
+    enforced_line_numbers: frozenset[int] | None = None,
+) -> list[str]:
     """Return deterministic rule failures for one active document."""
     failures: list[str] = []
     for rule in RULES:
         for match in rule.pattern.finditer(text):
+            match_line_number = line_number(text, match.start())
+            match_end_line_number = line_number(
+                text, max(match.start(), match.end() - 1)
+            )
+            enforce_full_initiative = (
+                relative_path.startswith(".agent-loop/initiatives/")
+                and rule.code in FULL_INITIATIVE_RULE_CODES
+            )
+            if (
+                enforced_line_numbers is not None
+                and not enforce_full_initiative
+                and enforced_line_numbers.isdisjoint(
+                    range(match_line_number, match_end_line_number + 1)
+                )
+            ):
+                continue
             if exempt_match(relative_path, rule, text, match.start()):
                 continue
             if rule.code in {
@@ -285,9 +446,62 @@ def scan_text(relative_path: str, text: str) -> list[str]:
                 "HUMAN_WORKER_IDENTIFIER",
             } and technical_worker_match(text, match):
                 continue
-            failures.append(
-                f"{relative_path}:{line_number(text, match.start())}: {rule.code}"
-            )
+            failures.append(f"{relative_path}:{match_line_number}: {rule.code}")
+    return failures
+
+
+def initiative_changed_line_numbers(
+    root: Path, relative_path: str
+) -> frozenset[int] | None:
+    """Return changed initiative lines, or ``None`` for a new/non-initiative file."""
+    if not relative_path.startswith(".agent-loop/initiatives/"):
+        return None
+    baseline = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "-e", f"origin/main:{relative_path}"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if baseline.returncode != 0:
+        return None
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(root),
+            "diff",
+            "--unified=0",
+            "--no-color",
+            "origin/main",
+            "--",
+            relative_path,
+        ],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    changed_lines: set[int] = set()
+    hunk_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+    for line in result.stdout.splitlines():
+        match = hunk_pattern.match(line)
+        if match is None:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or "1")
+        changed_lines.update(range(start, start + count))
+    return frozenset(changed_lines)
+
+
+def scan_activation_custody_text(relative_path: str, text: str) -> list[str]:
+    """Reject feature-owned authorization activation in current contracts."""
+    failures: list[str] = []
+    for rule in ACTIVATION_CUSTODY_RULES:
+        failures.extend(
+            f"{relative_path}:{line_number(text, match.start())}: {rule.code}"
+            for match in rule.pattern.finditer(text)
+        )
     return failures
 
 
@@ -301,7 +515,23 @@ def scan(root: Path = ROOT) -> list[str]:
         except (OSError, UnicodeDecodeError) as exc:
             failures.append(f"{relative_path}: unreadable active document: {exc}")
             continue
-        failures.extend(scan_text(relative_path, text))
+        failures.extend(
+            scan_text(
+                relative_path,
+                text,
+                enforced_line_numbers=initiative_changed_line_numbers(
+                    root, relative_path
+                ),
+            )
+        )
+    for path in discover_activation_custody_documents(root):
+        relative_path = path.relative_to(root).as_posix()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            failures.append(f"{relative_path}: unreadable custody contract: {exc}")
+            continue
+        failures.extend(scan_activation_custody_text(relative_path, text))
     return failures
 
 

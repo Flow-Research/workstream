@@ -29,10 +29,14 @@ List files, links, packages, or deliverables.
 Workstream derives the locked project guide version, locked guide-source
 snapshot id/hash, effective project submission artifact policy id/hash,
 generated project pre-submit checker policy id/bundle hash, post-submit
-checker policy context, review policy version, revision policy version, and
-payment policy version from the task's locked context. The contributor does not
+checker policy context, review policy version, and revision policy version from
+the task's locked context. The contributor does not
 provide those ids, versions, hashes, or internal policy bodies in the
 submission packet.
+
+Compensation is not submission input. The server uses the immutable
+TaskAssignment submitter ContributionPolicyVersion freeze and the ReviewLease
+reviewer freeze during contribution creation.
 
 Workstream runs pre-submit checks from the locked project pre-submit checker policy before creating the submission.
 Preflight failures return `PreSubmitCheckResponse` with structured

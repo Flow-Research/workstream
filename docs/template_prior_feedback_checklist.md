@@ -1,31 +1,25 @@
 # Prior Feedback Checklist Template
 
-## Task
+> Planned immutable response/resolution contract; not a mutable closure list.
 
-## Prior Review
+## Review Episode
 
-## Feedback Items
+- task ID:
+- prior Submission ID:
+- originating Review ID:
+- preparation head ID/digest:
 
-### Item 1
+## Required Responses
 
-```text
-original_feedback:
-severity:
-contributor_claim_status: fixed | disputed | not_applicable
-fix_note:
-evidence:
-reviewer_closure_status: closed_fixed | closed_rebutted | partially_closed | still_open | obsolete
-```
+| ReviewFinding ID | Kind | Required Change | SubmissionFindingResponse | Evidence Binding |
+|---|---|---|---|---|
+| `<uuid>` | `blocking` or `advisory` | `<change>` | `<response>` | `<uuid or null>` |
 
-## Rebuttals
+Every unresolved blocking finding requires exactly one response. Advisory
+responses are optional unless locked policy says otherwise.
 
-Use this section only when the original feedback is believed to be incorrect.
+## Later Review Resolutions
 
-```text
-feedback_item:
-rebuttal:
-evidence:
-requested_decision: close | waive
-```
-
-## Remaining Open Items
+| ReviewFinding ID | FindingResolution | Rationale | Evidence Binding |
+|---|---|---|---|
+| `<uuid>` | `resolved`, `unresolved`, or `not_applicable` | `<rationale>` | `<uuid or null>` |

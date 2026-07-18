@@ -95,9 +95,12 @@ The v0.1 contract records:
 
 - maximum revision rounds
 - revision deadline in hours
-- whether the task automatically rejects after the revision limit
 - states that allow resubmission
 - reviewer reassignment rule
+
+Limit or deadline exhaustion blocks later preparation and submission. It never
+creates a reject Review; the current active contract defines reason-bound
+manager/Operator cancellation paths.
 
 Activation requires a revision policy before the guide can become active. The active guide response returns revision policy beside submission artifact policy, checker policy, review policy, and payment policy so future task records can lock the full policy context. The Non-Scope section keeps only revision workflow execution out of this chunk, not revision policy itself.
 

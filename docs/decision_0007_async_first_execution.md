@@ -6,7 +6,8 @@ Accepted
 
 ## Context
 
-Workstream will run checks, submissions, reviews, revision loops, payment reconciliation, notifications, and audit writes.
+Workstream will run checks, submissions, reviews, revision loops, compensation
+fulfillment reconciliation, notifications, and audit writes.
 
 Some of these operations are quick request/response work. Others are long-running jobs that must not block API requests.
 

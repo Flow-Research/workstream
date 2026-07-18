@@ -11,8 +11,9 @@ deferred initiative input.
 
 ```text
 FastAPI / Celery composition roots
--> ExternalServiceAdapterFactory[ArtifactStore]
--> ArtifactStore v2 byte capability
+-> ExternalServiceAdapterFactory[ArtifactStoreBootstrap]
+-> PostgreSQL exact namespace claim
+-> initialized ArtifactStore v2 byte capability
    -> LocalStorageAdapter       local and focused tests
    -> S3CompatibleArtifactStore MinIO integration; AWS S3 production
 -> ArtifactService orchestration
@@ -339,10 +340,15 @@ resource drift, or stale execution updates zero rows and writes no terminal
 fact.
 
 AUTH-07 registers the closed artifact permissions, AUTH-08 defines applicable
-Operator grants, and AUTH-09 provisions the fixed service principal. Each
-WS-ART feature chunk activates only its own actions by supplying canonical
-resource composition, guards, surface declarations, and behavior tests. Later
-AUTH-12, AUTH-14, and AUTH-15 are not alternate artifact activation paths.
+Operator grants, AUTH-09A defines the static service-action matrix, AUTH-09B
+provisions fixed service ActorProfiles and ActorIdentityLinks, and AUTH-09E
+admits them at runtime. `WS-AUTH-001-ART-CUSTODY` transfers every current ART
+action to the exact AUTH activation custodian without changing mappings or
+availability. The owning WS-ART chunk then supplies hidden canonical resource
+composition, guards, surface declarations, behavior, and tests while the real
+kernel fails closed; the named AUTH activation chunk finally integrates the
+evaluator and alone changes availability to active. Later AUTH-12, AUTH-14, and
+AUTH-15 are not alternate artifact activation paths.
 
 Complete reads have an end-to-end verification deadline derived from the 512
 MiB maximum and minimum supported throughput. The deadline is shorter than the
@@ -411,8 +417,10 @@ atomicity.
 
 ## Migration Rules
 
-- Pre-production data is rebuilt when an old caller-URI/hash record cannot be
-  converted from authoritative stored bytes.
+- Migration `0025` refuses populated v1 artifact tables before DDL and preserves
+  the prior schema and rows. Pre-production reprovisioning happens out of band
+  into an empty database/storage namespace, followed by v2 reingest from
+  authoritative bytes; unavailable bytes are not fabricated or migrated.
 - `flow_node` configuration is rejected after the clean-cut settings migration.
 - ArtifactStore v1 methods are removed in the same chunk that migrates all
   LocalStorage callers and tests.

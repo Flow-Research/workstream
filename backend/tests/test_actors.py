@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
 from alembic import command
@@ -27,6 +29,7 @@ from app.modules.actors.models import (
 )
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.schemas import (
+    ActorProfileAdminResponse,
     ActorProfileUpdateRequest,
     LegacyWorkflowEligibilityActivationRequest,
 )
@@ -36,9 +39,11 @@ from app.modules.actors.service import (
     ActorService,
     IdentityLinkRevoked,
     LegacyWorkflowEligibilityCompatibility,
+    ResolvedActor,
     ServiceActorNotProvisioned,
     UnsupportedSubjectKind,
 )
+from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.api_controls.service import RateControlDecision, RateControlUnavailableError
 from app.modules.audit.service import AuditService
 from app.modules.authorization.catalogue import ActionId
@@ -52,6 +57,143 @@ from app.schemas.auth import (
 
 ISSUER = "https://identity.test"
 RATE_SECRET = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+
+
+def test_actor_admin_response_requires_exact_service_identity_pair() -> None:
+    now = datetime.now(UTC)
+    common = {
+        "actor_profile_id": uuid4(),
+        "status": "active",
+        "display_name": None,
+        "created_at": now,
+        "updated_at": now,
+        "last_seen_at": None,
+        "suspended_at": None,
+        "deactivated_at": None,
+    }
+    human = ActorProfileAdminResponse(
+        **common,
+        actor_kind="human",
+        provisioning_method="automatic_first_access",
+        service_identity=None,
+    )
+    service = ActorProfileAdminResponse(
+        **common,
+        actor_kind="service",
+        provisioning_method="manual_service_provisioning",
+        service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+    )
+
+    assert human.service_identity is None
+    assert service.service_identity is ServiceIdentity.ARTIFACT_VERIFIER
+    for actor_kind, provisioning_method, service_identity in (
+        ("human", "automatic_first_access", ServiceIdentity.ARTIFACT_VERIFIER),
+        ("service", "manual_service_provisioning", None),
+    ):
+        with pytest.raises(ValidationError, match="service identity"):
+            ActorProfileAdminResponse(
+                **common,
+                actor_kind=actor_kind,
+                provisioning_method=provisioning_method,
+                service_identity=service_identity,
+            )
+
+
+async def test_actor_admin_reads_are_bounded_and_reuse_exact_repository_lookups() -> None:
+    now = datetime.now(UTC)
+    actor_id, link_id = uuid4(), uuid4()
+    profile = ActorProfile(
+        id=str(actor_id),
+        actor_kind="service",
+        status="active",
+        provisioning_method="manual_service_provisioning",
+        service_identity=ServiceIdentity.ARTIFACT_VERIFIER.value,
+        display_name=None,
+        contact_email="must-not-escape@example.test",
+        created_by=str(uuid4()),
+        created_at=now,
+        updated_at=now,
+        last_seen_at=None,
+    )
+    link = ActorIdentityLink(
+        id=str(link_id),
+        actor_profile_id=str(actor_id),
+        issuer="private-issuer",
+        subject="private-subject",
+        subject_kind="service",
+        status="active",
+        linked_by=str(uuid4()),
+        linked_at=now,
+        last_verified_at=None,
+    )
+
+    class Repository:
+        calls: list[tuple[str, str]] = []
+
+        async def get_actor_profile(self, requested_id):
+            self.calls.append(("profile", requested_id))
+            return profile
+
+        async def get_identity_link_for_actor(self, requested_id):
+            self.calls.append(("link", requested_id))
+            return link
+
+    repository = Repository()
+    service = ActorService.__new__(ActorService)
+    service._repo = cast(ActorRepository, repository)
+
+    profile_response = await service.read_admin_profile(actor_id)
+    link_response = await service.read_admin_identity_link(actor_id)
+
+    assert profile_response is not None
+    assert link_response is not None
+    assert repository.calls == [("profile", str(actor_id)), ("link", str(actor_id))]
+    assert set(profile_response.model_dump()) == {
+        "actor_profile_id",
+        "actor_kind",
+        "status",
+        "provisioning_method",
+        "service_identity",
+        "display_name",
+        "created_at",
+        "updated_at",
+        "last_seen_at",
+        "suspended_at",
+        "deactivated_at",
+    }
+    assert set(link_response.model_dump()) == {
+        "identity_link_id",
+        "actor_profile_id",
+        "subject_kind",
+        "status",
+        "linked_at",
+        "last_verified_at",
+        "revoked_at",
+        "reactivated_at",
+    }
+    serialized = repr((profile_response.model_dump(), link_response.model_dump()))
+    assert "private-issuer" not in serialized
+    assert "private-subject" not in serialized
+    assert "must-not-escape@example.test" not in serialized
+
+
+def test_service_identity_lock_has_a_distinct_domain_without_changing_external_keys() -> None:
+    issuer = "service_identity"
+    subject = "workstream.artifact.verifier"
+    framed = (
+        len(issuer.encode()).to_bytes(4, "big")
+        + issuer.encode()
+        + len(subject.encode()).to_bytes(4, "big")
+        + subject.encode()
+    )
+    historical_external_key = int.from_bytes(
+        hashlib.sha256(framed).digest()[:8],
+        "big",
+        signed=True,
+    )
+
+    assert ActorRepository._advisory_key(issuer, subject) == historical_external_key
+    assert ActorRepository._advisory_key(subject, domain=b"\x01") != historical_external_key
 
 
 @pytest.fixture
@@ -157,6 +299,155 @@ def legacy_actor(subject: str, roles: tuple[str, ...] = ("worker",)) -> ActorCon
     )
 
 
+async def test_actor_resolution_fails_closed_on_profile_or_subject_kind_drift() -> None:
+    token = verified_token("actor-drift")
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=str(uuid4()),
+        issuer=token.issuer,
+        subject=token.subject,
+        subject_kind="human",
+        status="active",
+        linked_by=str(uuid4()),
+        last_verified_at=datetime.now(UTC),
+    )
+
+    class Repository:
+        profile = None
+
+        async def get_identity_link(self, _issuer, _subject):
+            return link
+
+        async def get_actor_profile(self, _actor_profile_id):
+            return self.profile
+
+    repository = Repository()
+    service = ActorService(object())  # type: ignore[arg-type]
+    service._repo = repository  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="missing actor profile"):
+        await service.find_actor_for_authorization(token)
+
+    repository.profile = ActorProfile(
+        id=link.actor_profile_id,
+        actor_kind="service",
+        status="active",
+        provisioning_method="manual_service_provisioning",
+        service_identity="workstream.artifact.verifier",
+        created_by=link.actor_profile_id,
+    )
+    with pytest.raises(UnsupportedSubjectKind, match="does not match actor"):
+        await service.find_actor_for_authorization(token)
+
+
+async def test_actor_authorization_lock_rejects_disappearance_and_identity_drift() -> None:
+    profile = ActorProfile(
+        id=str(uuid4()),
+        actor_kind="human",
+        status="active",
+        provisioning_method="automatic_first_access",
+        created_by=str(uuid4()),
+    )
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=profile.id,
+        issuer=ISSUER,
+        subject="locked-actor",
+        subject_kind="human",
+        status="active",
+        linked_by=profile.id,
+        last_verified_at=datetime.now(UTC),
+    )
+    resolved = ResolvedActor(profile=profile, identity_link=link)
+
+    class Repository:
+        locked_profile = None
+        locked_link = None
+        calls: list[str] = []
+
+        async def get_actor_profile(self, _actor_profile_id, *, for_update=False):
+            assert for_update is True
+            self.calls.append("profile")
+            return self.locked_profile
+
+        async def get_identity_link_by_id(self, _identity_link_id, *, for_update=False):
+            assert for_update is True
+            self.calls.append("link")
+            return self.locked_link
+
+    repository = Repository()
+    service = ActorService(object())  # type: ignore[arg-type]
+    service._repo = repository  # type: ignore[assignment]
+    with pytest.raises(RuntimeError, match="profile disappeared"):
+        await service.lock_actor_self_for_authorization(resolved)
+    assert repository.calls == ["profile"]
+
+    repository.locked_profile = profile
+    repository.calls = []
+    with pytest.raises(RuntimeError, match="link disappeared"):
+        await service.lock_actor_self_for_authorization(resolved)
+    assert repository.calls == ["profile", "link"]
+
+    repository.locked_link = ActorIdentityLink(
+        id=link.id,
+        actor_profile_id=profile.id,
+        issuer=link.issuer,
+        subject="changed-subject",
+        subject_kind="human",
+        status="active",
+        linked_by=profile.id,
+        last_verified_at=datetime.now(UTC),
+    )
+    with pytest.raises(RuntimeError, match="identity changed"):
+        await service.lock_actor_self_for_authorization(resolved)
+
+    repository.locked_link = link
+    locked = await service.lock_actor_self_for_authorization(resolved)
+    assert locked.profile is profile
+    assert locked.identity_link is link
+
+
+async def test_actor_timestamp_touch_fails_closed_before_writes_on_missing_rows() -> None:
+    profile = ActorProfile(
+        id=str(uuid4()),
+        actor_kind="human",
+        status="active",
+        provisioning_method="automatic_first_access",
+        created_by=str(uuid4()),
+    )
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=profile.id,
+        issuer=ISSUER,
+        subject="timestamp-actor",
+        subject_kind="human",
+        status="active",
+        linked_by=profile.id,
+        last_verified_at=datetime.now(UTC),
+    )
+    repository = ActorRepository(object())  # type: ignore[arg-type]
+
+    async def missing_profile(_actor_profile_id, *, for_update=False):
+        assert for_update is True
+        return None
+
+    repository.get_actor_profile = missing_profile  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="profile disappeared"):
+        await repository.touch_verified_actor(profile, link)
+
+    async def locked_profile(_actor_profile_id, *, for_update=False):
+        assert for_update is True
+        return profile
+
+    async def missing_link(_identity_link_id, *, for_update=False):
+        assert for_update is True
+        return None
+
+    repository.get_actor_profile = locked_profile  # type: ignore[method-assign]
+    repository.get_identity_link_by_id = missing_link  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="link disappeared"):
+        await repository.touch_verified_actor(profile, link)
+
+
 async def test_first_human_access_atomically_creates_profile_link_and_events(
     actor_database_env: str,
 ) -> None:
@@ -212,10 +503,10 @@ async def test_concurrent_first_access_leaves_one_profile_link_and_event_pair(
         assert await session.scalar(select(func.count()).select_from(ActorIdentityLink)) == 1
         assert (
             await session.scalar(
-                select(func.count())
-                .select_from(AuditEvent)
-                .where(
-                    AuditEvent.event_type.in_(["ActorProfileProvisioned", "ActorIdentityLinked"])
+                select(func.count()).select_from(AuditEvent).where(
+                    AuditEvent.event_type.in_(
+                        ["ActorProfileProvisioned", "ActorIdentityLinked"]
+                    )
                 )
             )
             == 2
@@ -753,10 +1044,10 @@ async def test_first_access_rate_control_unavailable_fails_closed(
         assert await session.scalar(select(func.count()).select_from(ActorIdentityLink)) == 0
         assert (
             await session.scalar(
-                select(func.count()).select_from(AuditEvent).where(
-                    AuditEvent.event_type.in_(
-                        ["ActorProfileProvisioned", "ActorIdentityLinked"]
-                    )
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.event_type.in_(["ActorProfileProvisioned", "ActorIdentityLinked"])
                 )
             )
             == 0
@@ -963,7 +1254,9 @@ async def test_existing_actor_and_legacy_negative_states_fail_closed(
                     actor_kind="service",
                     status="active",
                     provisioning_method="manual_service_provisioning",
+                    service_identity="workstream.artifact.verifier",
                     created_by="workstream:system:test",
+                    last_seen_at=None,
                 ),
                 ActorIdentityLink(
                     id=str(uuid4()),
@@ -973,17 +1266,28 @@ async def test_existing_actor_and_legacy_negative_states_fail_closed(
                     subject_kind="service",
                     status="active",
                     linked_by="workstream:system:test",
+                    last_verified_at=None,
                 ),
             ]
         )
         await session.commit()
-        resolved_service = await ActorService(session).resolve_verified_actor(
-            service_token,
-            request_id=uuid4(),
-            correlation_id=uuid4(),
-        )
-        with pytest.raises(UnsupportedSubjectKind):
-            ActorService.self_response(resolved_service.profile)
+        service = ActorService(session)
+        with pytest.raises(ServiceActorNotProvisioned):
+            await service.resolve_verified_actor(
+                service_token,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            )
+        with pytest.raises(ServiceActorNotProvisioned):
+            await service.resolve_actor_for_authorization(
+                service_token,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            )
+        persisted = await service.find_actor_for_authorization(service_token)
+        assert persisted is not None
+        assert persisted.profile.last_seen_at is None
+        assert persisted.identity_link.last_verified_at is None
 
     legacy = legacy_actor("disabled-legacy")
     async with db_session.get_session_factory()() as session:

@@ -74,12 +74,19 @@ Contributor project grants are:
 
 - `submitter`
 - `reviewer`
-- `both`
+- `adjudicator`
 
-Contributor is the umbrella human product term. A contributor has an
-exact-project `submitter`, `reviewer`, or `both` grant. Celery, checker, setup,
-and background workers are internal services, not human product roles. Administrative roles alone
-do not authorize submission or review.
+ADR 0015 supersedes the earlier combined-role design. These capabilities are
+independently granted.
+
+Contributor is the umbrella human product term. A contributor may hold separate
+exact-project `submitter`, `reviewer`, and `adjudicator` grants. The adjudicator
+grant creates no adjudication capability in v0.1; a future separately approved
+initiative must define the lifecycle before AUTH can register and activate any
+exact adjudication action. Celery, checker, setup, and
+background workers are internal services, not human product roles.
+Administrative roles alone do not authorize submission, review, or
+adjudication.
 
 The three additive Operator recovery permissions approved with this ADR are:
 
@@ -133,6 +140,8 @@ data are never stored as authority evidence.
 - WS-AUTH-001 and this ADR own actor identity, grants, authorization, and
   authority evidence.
 - WS-REV-001 owns review routing, leases, review decisions, and revision guards.
+- `docs/spec_review_lifecycle.md` is the active review/revision implementation
+  contract; archival WS-REV files are non-executable inputs.
 - WS-CON-001 owns contribution and compensation boundaries.
 - Human review decisions remain exactly `accept`, `needs_revision`, and
   `reject`.

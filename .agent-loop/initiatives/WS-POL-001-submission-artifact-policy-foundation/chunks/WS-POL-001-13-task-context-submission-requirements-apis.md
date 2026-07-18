@@ -94,7 +94,9 @@ DB-only drill steps as accepted proof
 - `locked-context` returns full operator provenance: guide source snapshot
   id/hash, effective policy id/hash, pre-submit checker policy id/hash,
   post-submit checker policy id/hash/body summary, review policy version,
-  revision policy version, and payment policy version.
+  and revision policy version. Compensation is not guide or checker context;
+  its frozen version is read from `TaskAssignment` or `ReviewLease` through the
+  owning WS-CON surface.
 - All task context APIs read already-stamped task locked context. They must not
   recompute policy from the current active guide or current project policy.
 - If required locked context is missing or inconsistent, task context endpoints

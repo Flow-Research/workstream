@@ -1,19 +1,33 @@
 # Chunk Contract: WS-AUTH-001-09 - Actor State, Identity Revocation, And Service Actors
 
+## Status
+
+Superseded as an executable chunk by `WS-AUTH-001-09A` through
+`WS-AUTH-001-09E`. This file records parent scope only; no runtime work or merge
+intent may execute against `WS-AUTH-001-09`.
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service
 
 ## Goal
 
-Implement actor suspension/reactivation/deactivation, identity-link
-revoke/reactivate, controlled service-actor provisioning, and their audited,
-idempotent authority invalidation behavior.
+Bound the actor/link/service scope that is implemented only through the reviewed
+`09A` through `09E` child contracts.
 
 ## Why this chunk exists
 
 Local role grants are incomplete without immediate actor/link invalidation and
-controlled service identity resolution.
+controlled service identity resolution. The parent was too broad for one L1
+implementation and was split before runtime work.
+
+## Child ownership
+
+- `09A`: fixed service identity and typed static service-action matrix.
+- `09B`: controlled service ActorProfile/ActorIdentityLink provisioning.
+- `09C`: actor and identity-link administrative reads.
+- `09D`: actor and identity-link lifecycle mutations.
+- `09E`: fixed service runtime admission without feature action activation.
 
 ## Approved plan reference
 
@@ -72,8 +86,10 @@ product adapter bindings or callback endpoints
 - Artifact system principals are fixed service identities, never human/admin
   grants. Their eventual permissions are drawn only from the closed registry.
   This chunk provisions the identities but does not attach them to artifact
-  call sites; each owning WS-ART chunk activates its exact service action after
-  the feature resource facts and guards exist.
+  call sites or activate them. Each owning WS-ART chunk later supplies hidden
+  resource facts, guards, surfaces, decision calls, behavior, and tests. The
+  dedicated AUTH custodian alone integrates the evaluator and changes the exact
+  action to active afterward.
 - The artifact service-principal allowlist is limited to
   `artifact.verification.execute`, `artifact.pending_work.scan`,
   `artifact.put_attempt.resolve`, `artifact.upload_session.expire`,
@@ -84,19 +100,21 @@ product adapter bindings or callback endpoints
   `workstream.artifact.put_resolver`, `workstream.artifact.scheduler`,
   `workstream.artifact.binding`, `workstream.artifact.guide_reader`,
   `workstream.artifact.materializer`, and
-  `workstream.artifact.checker_output`. Their exact ActionId assignments are
-  the closed service-identity matrix in `docs/spec_authorization_service.md`;
-  no principal receives the union of the allowlist.
-- AUTH-09 assigns only exact registered ActionIds from that table. Generic
+  `workstream.artifact.checker_output`. Their exact static ActionId matrix rows
+  are closed in `docs/spec_authorization_service.md`; no principal receives the
+  union of the allowlist.
+- AUTH-09A defines only exact registered ActionId matrix membership from that
+  table. Generic
   PermissionIds such as `artifact.binding.create` and
   `artifact.checker_input.materialize` are never executable action names and
   are never granted as an implicit union of their mapped actions. A planned
-  assignment remains inert until its owning WS-ART chunk activates the action's
-  canonical resource composer, guards, surface, and behavior proof.
+  matrix row remains inert while ART builds the action's hidden canonical
+  resource composer, guards, surface, and behavior proof, and until the later
+  AUTH activation checkpoint integrates its evaluator and changes availability.
 - Startup parity tests fail closed when any fixed artifact service actor,
-  identity link, action registration, PermissionId mapping, or exact assignment
-  is missing or extra. Negative tests prove each identity is denied all artifact
-  actions outside its matrix row.
+  identity link, action registration, PermissionId mapping, or exact static
+  matrix membership is missing or extra. Negative tests prove each identity is
+  denied all artifact actions outside its matrix row.
 - Agent and Space subjects remain unsupported and unpersisted.
 - Every mutation is idempotent, reasoned, and audited without token material.
 - Mixed concurrent link-revoke, grant-revoke, suspend, and deactivate attempts

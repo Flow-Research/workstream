@@ -2,7 +2,12 @@
 
 ## Summary
 
-Workstream is organized around projects, tasks, submissions, checks, reviews, revisions, payments, and reputation.
+Workstream is organized around projects, tasks, submissions, checks, reviews,
+revisions, contributions, compensation, and reputation.
+
+The review/revision component described below is a planned target contract. Its
+routes remain unavailable until hidden REV behavior, exact AUTH activation, and
+the REV-13 joint release complete. `docs/spec_review_lifecycle.md` is normative.
 
 The architecture stays modular enough to support different project types without becoming abstract to the point that no project can use it.
 
@@ -19,8 +24,8 @@ Frontend
   Checker results
   Review queue
   Review page
-  Payment dashboard
-  Reputation dashboard
+  Compensation dashboard
+  Reputation dashboard (deferred)
 
 Backend API
   Actor service
@@ -32,10 +37,9 @@ Backend API
   Checker service
   Review service
   Revision service
-  Contribution service
+  Contribution and compensation service
   Evidence service
-  Payment service
-  Reputation service
+  Reputation service (deferred)
 
 Storage
   Postgres for records
@@ -59,7 +63,9 @@ Approved stack:
 - Backend API: Python with FastAPI
 - ORM, migrations, and API schemas: SQLAlchemy 2.x async + Alembic + Pydantic schemas
 - Database: Postgres
-- File storage: local development can use filesystem-backed storage only behind the provider-neutral `ArtifactStore`; AWS S3 is the v0.1 hosted provider and MinIO is the local/CI protocol proof
+- Artifact storage: product services use ART v2 typed, provider-neutral
+  capabilities; local development may use the filesystem provider, AWS S3 is
+  the v0.1 hosted provider, and MinIO is the local/CI protocol proof
 - Auth: external Flow authentication token verification through an auth interface/adapter; Workstream does not own login, signup, password reset, password storage, or primary auth sessions
 - Jobs: async-first background execution through Celery-backed workers for product lifecycle jobs
 
@@ -81,7 +87,9 @@ Frontend policy:
 - The UI stays dashboard/form/workflow focused, not a marketing site.
 - Next.js is deferred unless server rendering, public pages, or full-stack React routing becomes a real requirement.
 
-The architecture avoids framework coupling in the domain model. Project, task, submission, checker, review, revision, contribution, payment, reputation, and audit behavior remain portable.
+The architecture avoids framework coupling in the domain model. Project, task,
+submission, checker, review, revision, contribution, compensation, reputation,
+and audit behavior remain portable; reputation behavior remains deferred.
 
 Auth policy:
 
@@ -119,7 +127,6 @@ Owns:
 - post-submit checker policy
 - review policy
 - revision policy
-- payment policy
 - skill taxonomy
 
 Project setup visibility APIs expose the latest setup run, sufficiency reports,
@@ -180,57 +187,43 @@ Owns:
 
 Owns:
 
-- review queue
-- findings
-- review decisions
-- second-review flags
-- reviewer audit history
+- server-selected ReviewQueueEntry routing and ReviewLeases
+- immutable ReviewPacketManifest and lease-bounded Review Context
+- immutable Reviews, ReviewFindings, FindingResolutions, and FinalAcceptance
+- decision orchestration, task effects, audit, and shared-outbox staging
+- reviewer history and bounded authorized chain metadata
 
 ### Revision Service
 
 Owns:
 
-- prior feedback replay
-- fix summaries
-- issue closure
-- resubmission linkage
+- immutable RevisionContextPreparation chains
+- SubmissionFindingResponse and FindingResolution lineage
+- exact Project Guide keep/forward/backward/block classification
+- resubmission and preferred-return linkage
 
-### Contribution Service
-
-Owns:
-
-- contribution record creation after acceptance
-- accepted submission linkage
-- accepted review linkage
-- acceptance evidence references
-- artifact hash manifest references
-- export status
-- payment and reputation attachment point
-
-### Evidence Service
+### Artifact Service Boundary
 
 Owns:
 
-- file attachments
-- logs
-- hashes
-- screenshots
-- checker output
-- reviewer notes
-- artifact immutability after checker execution begins
+- ART v2 immutable content, binding, verification, candidate/finalize, and recovery
+- narrow active-lease packet read
+- REV-owned packet membership and finding/response evidence semantics
+- no provider or raw byte-only ArtifactStore import in review services
 
-### Payment Service
+### Contribution And Compensation Service
 
 Owns:
 
-- payment records derived from locked payment policy context
-- accepted amount
-- pending payout
-- paid amount
-- payment status
-- payment references
+- immutable reviewer `completed_review` sourced from Review/ReviewLease
+- immutable submitter `accepted_submission` sourced only from FinalAcceptance
+- project ContributionPolicy and immutable published versions
+- independently frozen TaskAssignment and ReviewLease policy-version references
+- immutable CompensationAwards for payable contribution rules only
+- immutable fulfillment receipts and rebuildable status projections
+- contribution and compensation outbox events
 
-### Reputation Service
+### Reputation Service (Deferred)
 
 Owns:
 
@@ -248,7 +241,7 @@ Owns:
 - checker run events
 - review decision events
 - revision submission events
-- payment transition events
+- compensation-award and fulfillment events
 - manual overrides
 - guide and policy version references
 
@@ -256,7 +249,7 @@ Owns:
 
 Use Postgres for records.
 
-Use the provider-neutral `ArtifactStore` for large files and evidence. During
+Use ART v2 provider-neutral capabilities for large files and evidence. During
 local development, the implementation can store files on the local filesystem;
 hosted v0.1 uses AWS S3 and local/CI integration uses MinIO without changing
 submission or evidence semantics.
@@ -271,7 +264,8 @@ Every important lifecycle action creates an append-only audit event. State is re
 
 Use explicit domain APIs rather than generic CRUD-only endpoints.
 
-Examples:
+Existing APIs follow the `/api/v1` prefix. The examples below are conceptual;
+planned review/revision routes are not registered before REV-13.
 
 ```text
 POST /projects
@@ -280,10 +274,11 @@ POST /tasks/:id/claim
 POST /tasks/:id/submit
 POST /submissions/:id/finalize          # operational repair for the automatic checker gate
 GET /submissions/:id/checker-runs
-POST /reviews/:id/decision
-POST /submissions/:id/revision-replay
+planned reviewer current-work read under /api/v1
+planned active-lease decision mutation under /api/v1
+planned revision submission through canonical task submission.create
 POST /contributions/:id/export
-POST /payments/:id/mark-paid
+POST /compensation-awards/:id/fulfillment-receipts
 ```
 
 ## v0.1 Gates
@@ -307,9 +302,9 @@ Audit events cover:
 - submission creation and finalization
 - checker runs
 - review decisions
-- revision replay closure
-- payment status transitions
-- reputation events
+- immutable revision responses and later finding resolutions
+- compensation award, delivery, and fulfillment transitions
+- reputation events only after separate implementation
 - admin overrides
 
 ## Future Extension Points

@@ -50,10 +50,12 @@ Focus:
 - contributor and reviewer workflow
 - checker policy
 - revision replay
-- payment/reputation consistency
+- compensation/reputation consistency
 - auditability
 
-The Product/Ops reviewer is first-class. Do not collapse this track into QA or docs when a chunk affects operator, contributor, reviewer, revision, payment, reputation, or audit workflows.
+The Product/Ops reviewer is first-class. Do not collapse this track into QA or
+docs when a chunk affects operator, contributor, reviewer, revision,
+compensation, reputation, or audit workflows.
 
 ### Risk Reviewer
 
@@ -61,7 +63,7 @@ Focus:
 
 - privacy
 - copied data risk
-- payment disputes
+- compensation disputes
 - reviewer abuse
 - fake evidence
 - low-quality generated artifacts
@@ -95,7 +97,8 @@ Codex must not merge a PR unless the user explicitly approves that specific PR f
 
 Before a task moves from `SCREENING` to `READY`, run the same review pattern at task scale:
 
-- product/ops pass: task is worth doing and payment policy is clear
+- product/ops pass: task is worth doing and the project has explicit submitter
+  and reviewer contribution award rules before assignment/lease creation
 - guide pass: task follows the active project guide
 - checker pass: required automated checks exist for the task type
 - reviewer pass: acceptance criteria are reviewable

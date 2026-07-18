@@ -1,10 +1,21 @@
 # 30-Day Master Plan
 
+## Review Lifecycle Status
+
+The schedule is planning guidance, not a claim that review/revision routes are
+live. Those surfaces remain unavailable until their approved WS-REV chunks,
+exact AUTH activation, and REV-13 joint release complete.
+
 ## Goal
 
-Build the first serious version of Workstream: Flow's configurable task evaluation and contribution infrastructure that can run real internal projects from guide to contribution record, review decision, payment status, and reputation signal.
+Build the first serious version of Workstream: Flow's configurable task
+evaluation and contribution infrastructure that can run real internal projects
+from guide to contribution record, review decision, and compensation status.
 
-The output of the 30 days is not a demo-only UI. It is usable infrastructure with durable contribution records, project templates, automated checks, human review, revision replay, and payment/reputation ledgers.
+The output of the 30 days is not a demo-only UI. It is usable infrastructure
+with durable contribution records, project templates, automated checks, human
+review, revision replay, and compensation award/fulfillment records. Reputation
+is a separately approved later consumer.
 
 ## Scope
 
@@ -18,8 +29,7 @@ In scope:
 - revision loop
 - evidence storage
 - contribution records
-- payment ledger
-- reputation ledger
+- compensation award and fulfillment ledger
 - dashboards for current status
 - pilot with real tasks
 
@@ -50,7 +60,8 @@ Payment status is separate:
 NONE -> PENDING -> PAYOUT_SUBMITTED -> PAID
 ```
 
-If a feature does not improve lifecycle correctness, review quality, evidence, payment tracking, or reputation, defer it.
+If a feature does not improve lifecycle correctness, review quality, evidence,
+or compensation tracking, defer it. Reputation is already deferred.
 
 ## Week 1: Foundation
 
@@ -68,8 +79,7 @@ Deliverables:
 - roles and permissions matrix
 - submission record
 - evidence record
-- payment policy context
-- reputation dimensions
+- contribution and compensation policy context
 - backend API smoke paths for project, task, assignment, and submission records
 - workspace/packet convention for the first project
 - modular monolith structure with clean router, service, repository, interface, and adapter boundaries
@@ -101,7 +111,6 @@ Day 3:
 Day 4:
 
 - build worker and reviewer profiles
-- define reputation dimensions
 - add assignment and claim logic
 
 Day 5:
@@ -213,15 +222,14 @@ Objective: make human review auditable, consistent, and useful.
 
 Deliverables:
 
-- review queue
+- reviewer current work with an active lease, one server-selected offer, or none
 - review packet
 - finding model
-- severity model
+- blocking/advisory lifecycle model
 - accept / needs_revision / reject decisions
 - revision replay
 - revision context preparation and guide/policy rebase audit
-- reviewer metrics
-- second-review flag
+- offline reviewer quality metrics without product adjudication state
 
 Day 11:
 
@@ -232,11 +240,11 @@ Day 11:
 Day 12:
 
 - build finding model:
-  - severity
+  - lifecycle meaning: blocking or advisory
   - area
   - issue
   - required fix
-  - evidence reference
+  - immutable evidence relation to a finalized ART binding
 
 Day 13:
 
@@ -250,7 +258,7 @@ Day 14:
   - prior issue
   - fix summary
   - evidence
-  - closed / still open
+  - immutable later resolution: `resolved | unresolved | not_applicable`
 
 Day 15:
 
@@ -259,19 +267,21 @@ Day 15:
 
 Week 3 acceptance bar:
 
-- reviewers cannot issue vague decisions without findings
+- accept requires acceptance evidence; `needs_revision` requires an unresolved
+  blocking finding; reject requires a bounded human reason and findings remain
+  optional
 - every `needs_revision` has concrete fix requirements
-- every resubmission must close prior feedback
+- every resubmission must answer each unresolved blocking finding and preserve
+  later immutable resolution
 - accept, needs_revision, and reject decisions are auditable
 
-## Week 4: Payment, Reputation, Pilot
+## Week 4: Compensation, Pilot
 
 Objective: run real tasks and harden the operating loop.
 
 Deliverables:
 
-- payment ledger
-- reputation ledger
+- compensation award and fulfillment ledger
 - project dashboard
 - worker dashboard
 - reviewer dashboard
@@ -289,12 +299,8 @@ Day 16:
 
 Day 17:
 
-- implement reputation updates:
-  - acceptance rate
-  - revision rate
-  - rejection rate
-  - review quality
-  - skill tags
+- prove compensation outbox delivery, retry, callback, and immutable receipt
+  behavior; keep reputation out of the v0.1 transaction
 
 Day 18:
 
@@ -324,8 +330,7 @@ Day 22:
 
 - accept/reject pilot tasks
 - create contribution records
-- record payment outcomes
-- update reputation
+- record compensation outcomes when payable
 
 Day 23:
 
@@ -378,7 +383,7 @@ Week 4 acceptance bar:
 - at least 10 real tasks entered
 - at least 5 complete submission cycles
 - at least 2 revision cycles
-- payment and reputation records generated
+- contribution records and conditional compensation records generated
 - one pilot report completed
 
 ## Success Metrics
@@ -395,7 +400,7 @@ Operations:
 - at least 10 pilot tasks
 - at least 5 completed cycles
 - median review turnaround under 24 hours for pilot
-- no accepted task without payment record
+- no payable accepted contribution without its CompensationAward
 - no accepted task without contribution record
 
 Quality:
@@ -404,7 +409,8 @@ Quality:
 - reviewer findings are actionable
 - revision replay closes prior feedback
 - accepted work can be audited later
-- accepted work has contribution records before payment and reputation updates
+- accepted work has FinalAcceptance-sourced contribution records before any
+  compensation fulfillment
 
 ## Main Risks
 

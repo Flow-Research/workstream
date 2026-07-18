@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# ARTIFACT_CONTRACT_PHASE: foundation
-ARTIFACT_CONTRACT_PHASE = "foundation"
+# ARTIFACT_CONTRACT_PHASE: artifact_store_cutover
+ARTIFACT_CONTRACT_PHASE = "artifact_store_cutover"
 
 PHASES = (
     "foundation",
@@ -32,6 +32,8 @@ HISTORICAL_PREFIXES = (
 # Prefixes above remain useful for review/reference trees, while this set covers
 # standalone closed records and implemented plans outside those trees.
 HISTORICAL_PATHS = {
+    ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-06-canonical-actor-profile.md",
+    ".agent-loop/initiatives/WS-POL-001-submission-artifact-policy-foundation/chunks/WS-POL-001-11-actor-identity-profile-registry.md",
     "docs/checker_trial_failure_catalog.md",
     "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md",
     "docs/internal_reviews/2026-06-11_revision_context_rebase.md",
@@ -40,19 +42,9 @@ HISTORICAL_PATHS = {
     "docs/internal_reviews/2026-06-13_week1_week2_deterministic_hardening.md",
     "docs/internal_reviews/2026-06-16_submission_artifact_policy_architecture.md",
     "docs/reference_specs/WS-AUTH-001-actor-profile-role-and-authorization-service-specification.md",
+    "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md",
     "docs/reference_specs/WS-IMP-001-workstream-v0.1-coding-agent-implementation-specification.md",
     "docs/reference_specs/WS-REV-001-review-lifecycle-specification.md",
-    "docs/review_adversarial_quality_review.md",
-    "docs/review_architecture_review.md",
-    "docs/review_closure.md",
-    "docs/review_final_adversarial_review.md",
-    "docs/review_final_architecture_review.md",
-    "docs/review_final_product_strategy_review.md",
-    "docs/review_operations_review.md",
-    "docs/review_process_baseline_operations_review.md",
-    "docs/review_process_pattern_baseline_review.md",
-    "docs/review_product_strategy_review.md",
-    "docs/review_systems_architecture_review.md",
     "docs/roadmap_30_day_master_plan.md",
     "docs/roadmap_day_by_day_execution_plan.md",
     "docs/roadmap_pilot_plan.md",
@@ -238,9 +230,7 @@ LEGACY_R2_RUNTIME_LINES = {
     ),
 }
 LIVE_RULE_PATHS = {
-    "LEGACY_FLOW_NODE_RUNTIME": (
-        *DEFERRED_PROVIDER_RUNTIME_PREFIXES,
-    ),
+    "LEGACY_FLOW_NODE_RUNTIME": (*DEFERRED_PROVIDER_RUNTIME_PREFIXES,),
     "LEGACY_GUIDE_CONTENT_CID": (
         "backend/app/interfaces/project_agents.py",
         "backend/app/modules/projects/",
@@ -340,7 +330,9 @@ RULES = (
     Rule(
         "ACTIVE_R2_V01_PLAN",
         "foundation",
-        re.compile(r"(?:\bWS-ART-001-02B[23]\b|\b(?:Cloudflare\s+)?R2\b)", re.IGNORECASE),
+        re.compile(
+            r"(?:\bWS-ART-001-02B[23]\b|\b(?:Cloudflare\s+)?R2\b)", re.IGNORECASE
+        ),
     ),
     Rule(
         "OBSOLETE_FLOW_NODE_PLAN",
@@ -392,7 +384,9 @@ RULES = (
     Rule(
         "LEGACY_STORAGE_COMPILER_PRIMITIVE",
         "submission_cutover",
-        re.compile(r"\b(?:enforce_storage_scheme|verify_hash|require_manifest_field)\b"),
+        re.compile(
+            r"\b(?:enforce_storage_scheme|verify_hash|require_manifest_field)\b"
+        ),
     ),
     Rule(
         "LEGACY_CHECKER_ARTIFACT_COPY",
@@ -457,9 +451,9 @@ def path_is_active_contract(relative_path: str, root: Path = ROOT) -> bool:
             not relative_path.startswith(HISTORICAL_PREFIXES)
             and relative_path not in HISTORICAL_PATHS
         )
-    return relative_path.startswith(active_initiative_prefixes(root)) and "/reviews/" not in (
-        relative_path
-    )
+    return relative_path.startswith(
+        active_initiative_prefixes(root)
+    ) and "/reviews/" not in (relative_path)
 
 
 def active_work_queue_text(text: str) -> str:
@@ -470,7 +464,9 @@ def active_work_queue_text(text: str) -> str:
     for line in text.splitlines(keepends=True):
         if line.startswith("## "):
             section = line.strip()
-        output.append(line if section in active_headings else "\n" if line.endswith("\n") else "")
+        output.append(
+            line if section in active_headings else "\n" if line.endswith("\n") else ""
+        )
     if not active_headings.issubset(set(text.splitlines())):
         raise ValueError("malformed Work Queue headings")
     return "".join(output)
@@ -581,7 +577,9 @@ def clause_around(text: str, offset: int) -> str:
     return " ".join(text[start:end].split())
 
 
-def scan_text(relative_path: str, text: str, phase: str, root: Path = ROOT) -> list[str]:
+def scan_text(
+    relative_path: str, text: str, phase: str, root: Path = ROOT
+) -> list[str]:
     """Return deterministic stale-contract failures for one text file."""
     failures: list[str] = []
     if relative_path == ".agent-loop/WORK_QUEUE.md":
@@ -671,7 +669,9 @@ def scan(root: Path = ROOT, phase: str | None = None) -> list[str]:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             relative_path = path.relative_to(root).as_posix()
-            failures.append(f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})")
+            failures.append(
+                f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})"
+            )
             continue
         failures.extend(scan_text(path.relative_to(root).as_posix(), text, phase, root))
     return failures

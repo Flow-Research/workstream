@@ -27,7 +27,10 @@ Every active project guide version must have a complete guide-policy bundle:
 - `PostSubmitCheckerPolicy`
 - `ReviewPolicy`
 - `RevisionPolicy`
-- `PaymentPolicy`
+
+Publication of a `ContributionPolicyVersion` is independent of this guide-policy
+activation bundle. `TaskAssignment` and `ReviewLease` records freeze their applicable
+published `ContributionPolicyVersion` values at their own lifecycle boundaries.
 
 Project owners provide open-ended project material in plain language. Workstream
 must not force every project owner through one universal intake checklist.

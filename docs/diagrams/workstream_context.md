@@ -2,7 +2,11 @@
 
 This is the C4-PlantUML context view. It shows Workstream as one system inside the broader Flow ecosystem.
 
-The diagram intentionally separates current v0.1 scope from future adapter boundaries. Workstream owns evaluation, contribution records, payment status, and reputation signals. It does not own Flow login, agent identity standards, escrow contracts, settlement rails, or external task origins.
+The diagram intentionally separates current v0.1 scope from future adapter
+boundaries. Workstream owns evaluation, contribution records, compensation
+awards/fulfillment status, and reputation signals. It does not own Flow login,
+agent identity standards, escrow contracts, settlement rails, or external task
+origins.
 
 ![Workstream System Context](rendered/workstream_context.svg)
 
@@ -16,4 +20,5 @@ Source: [workstream_context.puml](workstream_context.puml)
 - ERC-8004 is the future agent identity and agent reputation rail.
 - ERC-8183 is the future task contract and escrow rail.
 - x402, OmniClaw, and USDC settlement are future payment execution rails.
-- v0.1 stays focused on the internal project guide -> task -> submission -> checks -> review -> revision -> contribution/payment/reputation loop.
+- v0.1 stays focused on the internal project guide -> task -> submission ->
+  checks -> review -> revision -> contribution/compensation/reputation loop.

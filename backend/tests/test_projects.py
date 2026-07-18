@@ -71,6 +71,7 @@ from app.modules.projects.service import (
     PolicySetupBlocked,
     ProjectSetupQueueError,
     ProjectService,
+    ProjectServiceError,
     StaleProjectSetupContinuation,
 )
 
@@ -2953,6 +2954,100 @@ async def test_project_setup_worker_unexpected_error_does_not_leak_raw_exception
     assert "raw-token" not in logged_payload
     assert "secret" not in logged_payload
     assert "/srv/private" not in logged_payload
+
+
+async def test_project_setup_worker_persists_sanitized_domain_failure(
+    project_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Known setup failures become a sanitized terminal setup-run result."""
+    from app.workers import project_setup as project_setup_worker_module
+
+    project = await create_project(project_client)
+    guide = await create_guide(
+        project_client,
+        project["id"],
+        {
+            **complete_guide_payload(),
+            "source_snapshot": source_snapshot_payload(),
+        },
+    )
+    async with db_session.get_session_factory()() as session:
+        snapshot = await session.scalar(
+            select(GuideSourceSnapshot).where(GuideSourceSnapshot.guide_id == guide["id"])
+        )
+        assert snapshot is not None
+        setup_run = ProjectSetupRun(
+            id=str(uuid4()),
+            project_id=project["id"],
+            guide_id=guide["id"],
+            guide_version=guide["version"],
+            source_snapshot_id=snapshot.id,
+            source_snapshot_hash=snapshot.bundle_hash,
+            status="queued",
+            current_step="queued",
+            created_by="test-project-manager",
+        )
+        session.add(setup_run)
+        await session.commit()
+        setup_run_id = setup_run.id
+        snapshot_id = snapshot.id
+
+    async def raise_domain_error(*_: object, **__: object) -> object:
+        raise ProjectServiceError(
+            "guide source unavailable at https://storage.flow.test/signed?token=secret"
+        )
+
+    monkeypatch.setattr(
+        project_setup_worker_module.ProjectService,
+        "run_guide_sufficiency_agent",
+        raise_domain_error,
+    )
+    warning_logs: list[dict[str, object]] = []
+
+    def capture_warning(message: str, *, extra: dict[str, object]) -> None:
+        warning_logs.append({"message": message, "extra": extra})
+
+    monkeypatch.setattr(project_setup_worker_module.logger, "warning", capture_warning)
+
+    result = await project_setup_worker_module._run_pre_submit_setup_pipeline(
+        project["id"],
+        guide["id"],
+        snapshot_id,
+        setup_run_id,
+    )
+
+    async with db_session.get_session_factory()() as session:
+        persisted = await session.get(ProjectSetupRun, setup_run_id)
+
+    public_error = "project setup failed; inspect server logs with the setup run id"
+    assert result == {
+        "status": "setup_blocked",
+        "error": public_error,
+        "guide_sufficiency_report_id": None,
+        "submission_artifact_policy_id": None,
+    }
+    assert persisted is not None
+    assert persisted.status == "setup_blocked"
+    assert persisted.current_step == "project_setup"
+    assert persisted.error_code == "ProjectServiceError"
+    assert persisted.error_summary == public_error
+    assert warning_logs == [
+        {
+            "message": "project setup pipeline stopped",
+            "extra": {
+                "project_id": project["id"],
+                "guide_id": guide["id"],
+                "source_snapshot_id": snapshot_id,
+                "setup_run_id": setup_run_id,
+                "error_code": "ProjectServiceError",
+                "error_summary": public_error,
+            },
+        }
+    ]
+    serialized = json.dumps({"result": result, "logs": warning_logs}, sort_keys=True)
+    assert "token=secret" not in serialized
+    assert "https://" not in serialized
 
 
 async def test_project_setup_run_rejects_cross_context_worker_updates(

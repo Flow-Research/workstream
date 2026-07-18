@@ -461,10 +461,10 @@
             <article class="step">
               <span class="num">1</span>
               <h3>Flow token enters API</h3>
-              <p>The caller sends a Flow bearer token. Workstream verifies issuer, audience, expiry, signature, and roles.</p>
+              <p>The caller sends a Flow bearer token. Workstream verifies issuer, audience, time validity, signature, and coarse scopes, then resolves local authorization from actor links, grants, permissions, and resource guards.</p>
               <div class="data">
-                <code>ActorContext</code>
-                <code>roles</code>
+                <code>VerifiedIssuerToken</code>
+                <code>AuthorizationContext</code>
               </div>
             </article>
 
@@ -476,14 +476,14 @@
                 <code>Project</code>
                 <code>ProjectGuide v1</code>
                 <code>GuideSufficiencyReport</code>
-                <code>artifact/checker/review/revision/payment</code>
+                <code>artifact/checker/review/revision</code>
               </div>
             </article>
 
             <article class="step">
               <span class="num">3</span>
               <h3>Guide activation locks contract</h3>
-              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching guide, source snapshot, effective project policy, and pre-submit checker provenance, review policy allowed decisions, revision states, and payment policy. Task readiness later validates that the task locks the applicable guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, and approved provenance-matched project post-submit checker policy reference.</p>
+              <p>Activation validates a passing or acknowledged sufficiency report, immutable guide source snapshot, approved submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching guide, source snapshot, effective project policy, and pre-submit checker provenance, review policy allowed decisions, and revision states. Task readiness later validates that the task locks the applicable guide snapshot, effective project submission artifact policy hash, pre-submit checker bundle hash, and approved provenance-matched project post-submit checker policy reference. Contribution-policy publication is outside this current-backend walkthrough and remains independent of guide activation.</p>
               <div class="data">
                 <code>status=active</code>
                 <code>one active guide</code>
@@ -591,11 +591,11 @@
           <div class="records">
             <div class="record">
               <strong>Project + Guide</strong>
-              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, project PreSubmitCheckerPolicy, post-submit checker policy, review policy, revision policy, payment policy.</span>
+              <span>Project, ProjectGuide, GuideSourceSnapshot bundle, SubmissionArtifactPolicy, effective project policy, project PreSubmitCheckerPolicy, post-submit checker policy, review policy, and revision policy.</span>
             </div>
             <div class="record">
               <strong>Task Queue</strong>
-              <span>WorkstreamTask, locked guide snapshot, locked effective project submission artifact policy hash, locked pre-submit checker bundle hash, TaskAssignment, status transitions.</span>
+              <span>WorkstreamTask, locked guide snapshot, locked effective project submission artifact policy hash, locked pre-submit checker bundle hash, TaskAssignment, and status transitions.</span>
             </div>
             <div class="record">
               <strong>Submission Packet</strong>
@@ -628,7 +628,7 @@
       <aside class="side-panel" aria-labelledby="invariants-title">
         <h2 id="invariants-title">Hard Invariants</h2>
         <ul class="check-list">
-          <li>Guide activation fails if the immutable guide source snapshot, guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching provenance, or required review, revision, and payment policy context is missing.</li>
+          <li>Guide activation fails if the immutable guide source snapshot, guide sufficiency report, submission artifact policy, effective project submission artifact policy hash, project pre-submit checker compiled bundle hash, approved generated project post-submit checker policy with matching provenance, or required review and revision policy context is missing.</li>
           <li>Pre-submit intake failures create no submission row or submission version.</li>
           <li>Revision resubmission states are limited to needs_revision in v0.1.</li>
           <li>Submission packet does not carry guide or policy versions from the contributor.</li>
@@ -646,7 +646,7 @@
         </div>
 
         <p class="footer-note">
-          This file is a visual explanation of the current backend system. It is not the canonical Workstream product interface.
+          This file explains the current backend evaluation flow through checker routing. Review, contribution, and compensation target contracts are outside this walkthrough, and this page is not the canonical Workstream product interface.
         </p>
       </aside>
     </div>

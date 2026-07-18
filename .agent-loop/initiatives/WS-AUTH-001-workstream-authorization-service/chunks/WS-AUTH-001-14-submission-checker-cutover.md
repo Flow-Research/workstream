@@ -1,5 +1,10 @@
 # Chunk Contract: WS-AUTH-001-14 - Submission, Checker, And Audit Visibility Cutover
 
+## Status
+
+Proposed and inactive. Exact ActionIds and migration `0030` must be enumerated
+before implementation; AUTH-PREP is required for mutations.
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service
@@ -41,7 +46,7 @@ backend/app/modules/checkers/**
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/app/adapters/project_agents/openai_agent_sdk.py
-backend/alembic/versions/0026_*.py
+backend/alembic/versions/0030_*.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/app/api/deps/auth.py
@@ -52,6 +57,7 @@ backend/tests/test_alembic.py
 backend/scripts/api_contract_e2e.py
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
+.agent-loop/merge-intents/WS-AUTH-001-14.json
 .agent-loop/LOOP_STATE.md
 .agent-loop/WORK_QUEUE.md
 .agent-loop/REVIEW_LOG.md
@@ -69,12 +75,15 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
 
 ## Acceptance criteria
 
-- Exact-project submitter/both grant plus active assignment is required to
-  create submissions; admin roles alone cannot submit.
-- Contributor artifact staging remains mechanically and authoritatively owned
-  by `WS-ART-001-04A`; this chunk neither activates upload actions nor provides
-  direct provider access. Submission authority never implies artifact-storage
-  authority.
+- An exact-project submitter grant plus active assignment is required to
+  create submissions; reviewer, adjudicator, and admin-only callers cannot
+  submit. After submitter revocation, retained reviewer/adjudicator/admin grants
+  do not preserve submission authority.
+- Contributor artifact staging behavior and resource facts remain owned by
+  `WS-ART-001-04A`; this chunk neither activates upload actions nor provides
+  direct provider access. Dedicated AUTH custodians activate the actions only
+  after hidden ART behavior merges. Submission authority never implies
+  artifact-storage authority.
 - Submission creation authorizes against its existing active assignment; every
   migrated submission/checker/audit route declares one primary registered
   action against a feature-owned canonical target and keeps artifact bytes and
@@ -92,8 +101,8 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   PermissionId/ActionId typed and PostgreSQL parity as planned metadata. This
   chunk promotes each action only with its feature resource composer, Operator
   candidate, guards, surface declaration, reason, evidence, and behavior tests.
-  Migration `0026` owns submission/checker Contributor-field schema changes
-  only; it does not change the permission or action registry.
+  Migration `0030` owns submission/checker Contributor-field schema changes and
+  exact new ActionId evidence parity; it changes no PermissionId mapping.
 - Contributor reads preserve ownership, hidden-result redaction, and concealed
   not-found behavior.
 - Audit reads expose only permission-appropriate bounded fields before counts.
@@ -105,14 +114,14 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
 - Revocation/suspension applies on next request and sensitive commit recheck.
 - No migrated operation uses token roles or `require_any_role()`.
 - Submission removes the final `LegacyWorkflowEligibilityCompatibility`
-  consumer; eligibility is the exact-project submitter/both grant plus active
+  consumer; eligibility is the exact-project submitter grant plus active
   assignment and lifecycle guards.
 - Submission ownership and attestation plus checker-result visibility fields
   use `contributor_id`, `contributor_attestation`, `contributor_message`,
   `contributor_suggested_fix`, `contributor_evidence_refs`, and
   `contributor_visible` across persistence, models, schemas, services, runner
   contracts, audit payloads, and tests. Submission-policy JSON and derivation
-  contracts use `contributor_facing_fix`. Migration `0026` preserves all values,
+  contracts use `contributor_facing_fix`. Migration `0030` preserves all values,
   supports downgrade, and removes legacy storage/property names without public
   API aliases.
 - With the final consumer removed, the legacy `/api/v1/workers/me/profile`
@@ -168,4 +177,5 @@ audit disclosure, and unchanged checker routing.
 ## Stop conditions
 
 Stop if authorization cutover requires changing checker outcomes, task states,
-or review lifecycle behavior.
+or review lifecycle behavior, if a wrong role can submit, or if a mutation
+bypasses AUTH-PREP.

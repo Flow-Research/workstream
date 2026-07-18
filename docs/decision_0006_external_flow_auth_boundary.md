@@ -6,7 +6,8 @@ Accepted
 
 ## Context
 
-Workstream needs trusted actor context for project setup, task work, review, audit, reputation, and payment records.
+Workstream needs trusted actor context for project setup, task work, review,
+audit, contribution records, compensation operations, and reputation signals.
 
 It does not need to become Flow's primary authentication product.
 

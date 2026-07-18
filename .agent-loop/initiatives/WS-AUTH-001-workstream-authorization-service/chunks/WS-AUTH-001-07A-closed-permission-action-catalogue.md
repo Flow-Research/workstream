@@ -117,8 +117,9 @@ are invalid. Every row has `availability=planned` and cannot authorize.
 | `artifact.checker_output.write` | `artifact.checker_output.write` | `WS-ART-001-06B` | `planned` |
 
 Each definition stores only these four fields. Principal class, resource facts,
-guards, composers, concealment, and revalidation are activation blueprints
-owned by later chunks and are not registered here.
+guards, composers, concealment, and revalidation are hidden behavior/resource
+blueprints owned by later feature chunks and are not registered here. Dedicated
+AUTH custodians own evaluator integration and every availability activation.
 
 ## Acceptance criteria
 
@@ -160,10 +161,11 @@ owned by later chunks and are not registered here.
 - Because all 50 actions remain `planned`, `AuthorityAuditEventInput` rejects
   `SensitiveAuthorizationAllowed` when any of them is present. A planned action
   may be persisted only as bounded `SensitiveAuthorizationDenied` evidence;
-  activation chunks own later allowed evidence.
+  dedicated AUTH activation custodians own later allowed evidence.
 - PostgreSQL is deliberately availability-neutral: it enforces registration,
   decision-event-only use, and the exact action-to-permission mapping, but does
-  not freeze `planned` versus `active`. Later owner chunks activate catalogue
+  not freeze `planned` versus `active`. After feature-owned hidden behavior
+  merges, dedicated AUTH custodians integrate evaluators and activate catalogue
   rows in typed code without altering migration `0021`.
 - Existing non-action authority events remain valid with null `action_id`.
 - Downgrade refuses when either any non-null action evidence or any PermissionId
@@ -184,7 +186,8 @@ owned by later chunks and are not registered here.
   while they remain planned; PostgreSQL deliberately does not freeze
   availability.
 - The canonical specification separates four-field planned registry metadata
-  from later feature activation blueprints.
+  from feature-owned hidden behavior/resource blueprints and AUTH-owned
+  activation manifests.
 - Operations docs cover startup catalogue failure, evidence inspection, and the
   guarded rollback rule.
 - No workflow, dependency, test skip, coverage exclusion, or global threshold

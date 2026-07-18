@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-09C",
+  "chunk_title": "Actor And Identity-Link Administration Reads",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-09D",
+  "next_chunk_title": "Actor And Identity-Link Lifecycle Mutations",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

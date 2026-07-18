@@ -739,6 +739,7 @@ async def seed_worker_profile(subject: str, *, skill_tags: list[str] | None = No
                     subject_kind="human",
                     status="active",
                     linked_by=worker_actor_id,
+                    last_verified_at=datetime.now(UTC),
                 ),
                 LegacyActorIdentity(
                     actor_id=worker_actor_id,
@@ -794,6 +795,7 @@ async def seed_actor_profile(
                     subject_kind="human",
                     status="active",
                     linked_by=seeded_actor_id,
+                    last_verified_at=datetime.now(UTC),
                 ),
                 LegacyActorIdentity(
                     actor_id=seeded_actor_id,

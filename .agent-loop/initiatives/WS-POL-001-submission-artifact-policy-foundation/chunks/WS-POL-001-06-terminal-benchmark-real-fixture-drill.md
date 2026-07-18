@@ -101,8 +101,8 @@ work. Further unrelated runtime bugs still require a separate chunk.
   guide source snapshot, guide sufficiency report, project
   `SubmissionArtifactPolicy`, effective project submission artifact policy, and
   compiled project `PreSubmitCheckerPolicy`.
-- Project creation is shell-only; base amount and currency live in
-  `PaymentPolicy`.
+- Project creation is shell-only; compensation business terms are input to the
+  independently published `ContributionPolicyVersion` owned by WS-CON.
 - Project guide create/update/response bodies expose guide content and policy
   records only. Legacy guide checklist fields are rejected by `extra="forbid"`
   and removed from the current database shape.

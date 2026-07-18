@@ -4,17 +4,21 @@ import base64
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import get_args
 
 import pytest
 from pydantic import SecretStr, ValidationError
 from pydantic_settings import BaseSettings
 
-from app.adapters.artifacts import resolve_artifact_store
+from app.adapters.artifacts import create_artifact_store_bootstrap
 from app.adapters.auth.flow import FlowAuthVerifier
 from app.api.deps.auth import get_application_auth_verifier
 from app.core.auth import clear_auth_verifier_cache, get_auth_verifier
 from app.core.config import Settings, get_settings
-from app.interfaces.artifacts import ArtifactConfigurationError
+from app.interfaces.external_services import (
+    ExternalServiceConfigurationError,
+    UnknownExternalServiceProviderError,
+)
 from app.main import create_app
 
 
@@ -459,33 +463,59 @@ def test_settings_reject_local_artifacts_outside_development(environment: str) -
             environment=environment,
             artifact_store_backend="local",
             artifact_local_root="/tmp/workstream-artifacts",
-            artifact_retention_policy_version="retention-v1",
+            artifact_scratch_root="/tmp/workstream-artifact-scratch",
         )
 
 
-def test_settings_require_retention_policy_for_enabled_artifacts() -> None:
-    """Fail construction when enabled storage lacks approved retention."""
-    with pytest.raises(ValidationError, match="retention policy"):
-        Settings(environment="test", artifact_store_backend="flow_node")
+def test_settings_require_scratch_root_for_enabled_artifacts() -> None:
+    with pytest.raises(ValidationError, match="artifact scratch root"):
+        Settings(
+            environment="test",
+            artifact_store_backend="s3_compatible",
+        )
 
 
-def test_local_artifact_settings_and_resolver(tmp_path) -> None:
-    """Resolve local storage only from complete development configuration."""
+@pytest.mark.parametrize("interval", [0, -1, 86_401])
+def test_artifact_scratch_cleanup_interval_is_positive_and_bounded(interval: int) -> None:
+    with pytest.raises(ValidationError):
+        Settings(artifact_scratch_cleanup_interval_seconds=interval)
+
+
+def test_artifact_backend_enum_is_exact_and_flow_node_is_rejected(tmp_path: Path) -> None:
+    annotation = Settings.model_fields["artifact_store_backend"].annotation
+    assert get_args(annotation) == ("disabled", "local", "s3_compatible")
+
+    with pytest.raises(ValidationError):
+        Settings(
+            environment="test",
+            artifact_store_backend="flow_node",  # type: ignore[arg-type]
+            artifact_scratch_root=tmp_path / "scratch",
+        )
+
+
+def test_local_artifact_settings_and_factory(tmp_path: Path) -> None:
+    """Construct local storage only from complete development configuration."""
     settings = Settings(
         environment="test",
         artifact_store_backend="local",
         artifact_local_root=tmp_path / "artifacts",
-        artifact_retention_policy_version="retention-v1",
+        artifact_scratch_root=tmp_path / "scratch",
         artifact_stream_buffer_bytes=64,
         artifact_operation_lock_timeout_seconds=17,
     )
-    adapter = resolve_artifact_store(settings)
-    assert adapter.adapter_name == "local"
-    assert adapter._lock_timeout_seconds == 17
+    (tmp_path / "artifacts").mkdir(mode=0o700)
+    adapter = create_artifact_store_bootstrap(settings)
+    assert adapter.identity.capability_key == "artifact_store"
+    assert adapter.identity.provider_key == "local"
+    assert adapter._adapter._lock_timeout_seconds == 17
     adapter.close()
     incomplete = settings.model_copy(update={"artifact_local_root": None})
-    with pytest.raises(ArtifactConfigurationError, match="root is not configured"):
-        resolve_artifact_store(incomplete)
+    with pytest.raises(UnknownExternalServiceProviderError) as disabled:
+        create_artifact_store_bootstrap(Settings())
+    assert disabled.value.identity is not None
+    assert disabled.value.identity.provider_key == "disabled"
+    with pytest.raises(ExternalServiceConfigurationError):
+        create_artifact_store_bootstrap(incomplete)
 
 
 def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
@@ -521,12 +551,15 @@ def test_artifact_scratch_settings_are_bounded_and_separate(tmp_path) -> None:
         )
 
 
-def test_flow_node_resolver_fails_until_adapter_chunk() -> None:
-    """Do not imply that the reserved Flow Node backend is implemented."""
+def test_s3_compatible_factory_fails_typed_until_adapter_chunk(tmp_path: Path) -> None:
+    """Keep valid future S3 configuration unavailable until its owned chunk."""
     settings = Settings(
-        environment="production",
-        artifact_store_backend="flow_node",
-        artifact_retention_policy_version="retention-v1",
+        environment="test",
+        artifact_store_backend="s3_compatible",
+        artifact_scratch_root=tmp_path / "scratch",
     )
-    with pytest.raises(ArtifactConfigurationError, match="not available"):
-        resolve_artifact_store(settings)
+    with pytest.raises(UnknownExternalServiceProviderError) as caught:
+        create_artifact_store_bootstrap(settings)
+
+    assert caught.value.identity is not None
+    assert caught.value.identity.provider_key == "s3_compatible"

@@ -29,9 +29,11 @@ skinparam cloud {
 
 package "People" #F8F9FA {
   rectangle "Project Manager" as project_manager #F1F3F5
+  rectangle "Finance Authority" as finance_authority #F1F3F5
   rectangle "Human-Agent\nContributor" as contributor #F1F3F5
   rectangle "Reviewer" as reviewer #F1F3F5
-  rectangle "Operator / Access Admin" as operator #F1F3F5
+  rectangle "Operator" as operator #F1F3F5
+  rectangle "Access Administrator" as access_administrator #F1F3F5
 }
 
 cloud "Flow Auth\n----\nToken issuer and\nhuman identity source" as flow_auth
@@ -46,14 +48,16 @@ package "Workstream v0.1" #F8FBFF {
 }
 
 package "Durable Records" #F2FBF7 {
-  database "Postgres\n----\nProjects, guides,\ntasks, submissions,\nchecks, reviews,\nrevisions, contribution,\npayment, reputation,\naudit events" as postgres
+  database "Postgres\n----\nProjects, guides,\ntasks, submissions,\nchecks, reviews,\nrevisions, contribution,\ncompensation, audit events" as postgres
   rectangle "Private Object Store\nBehind ArtifactStore\n----\nLocal / MinIO / AWS S3" as file_store #E6FCF5
 }
 
 project_manager --> frontend : uses
+finance_authority --> frontend : publishes contribution policy
 contributor --> frontend : uses
 reviewer --> frontend : uses
 operator --> frontend : uses
+access_administrator --> frontend : administers access
 
 frontend --> api : HTTP/JSON
 api --> flow_auth : verify identity token

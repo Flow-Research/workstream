@@ -45,9 +45,10 @@ Task
 
 Project owners provide open-ended project material: markdown, URLs, full
 documentation, examples, rubrics, repository docs, task instructions, domain
-requirements, business terms, payment policy inputs, or any other
-project-specific source material. Base amount and currency belong to
-`PaymentPolicy`, not to project creation. Workstream must not force every
+requirements, compensation business terms, or any other project-specific
+source material. Compensation business terms are untrusted
+owner input; an authorized Finance Authority publishes the independent
+`ContributionPolicyVersion`, not project creation. Workstream must not force every
 project into one fixed intake checklist. A project guide can be a URL to a
 complete documentation set if that is the right form for the project.
 

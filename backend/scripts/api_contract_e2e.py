@@ -35,6 +35,7 @@ from app.modules.projects.post_submit_policy import (
     compile_project_post_submit_checker_spec,
 )
 from run_isolated_tests import NAME_RE as DERIVED_DATABASE_NAME
+from bootstrap_access_administrator import _run as run_admin_bootstrap
 
 EXPECTED_DURABLE_CHECKERS = {
     "check_submission_packet",
@@ -536,6 +537,17 @@ def assert_local_database_url(database_url: str) -> None:
     )
 
 
+def assert_isolated_database_url(database_url: str) -> None:
+    """Require this destructive drill to use an isolated derived test database."""
+    assert_local_database_url(database_url)
+    database_name = urlparse(database_url).path.lstrip("/")
+    if DERIVED_DATABASE_NAME.fullmatch(database_name) is None:
+        raise RuntimeError(
+            "Refusing to run API contract E2E against a persistent test database. "
+            "Use scripts/run_isolated_tests.py to provide an isolated derived database."
+        )
+
+
 def guide_payload(run_id: str) -> dict:
     """Build a complete project guide payload.
 
@@ -959,6 +971,70 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert manager["is_dev_auth"] is False
         assert manager["roles"] == ["project_manager"]
 
+        manager_profile = await request_json(
+            client,
+            "GET",
+            "/api/v1/actors/me",
+            manager_token,
+        )
+        bootstrap_code, bootstrap = await run_admin_bootstrap(
+            manager_profile["actor_profile_id"],
+            execute=True,
+        )
+        assert bootstrap_code == 0
+        assert bootstrap["result_code"] == "bootstrapped"
+        service_payload = {
+            "service_identity": "workstream.artifact.verifier",
+            "subject": f"real-api-artifact-verifier-{run_id}",
+            "reason": "Real HTTP controlled service provisioning proof",
+        }
+        service_headers = auth_headers(manager_token) | {
+            "Idempotency-Key": str(uuid4()),
+            "X-Request-ID": str(uuid4()),
+            "X-Correlation-ID": str(uuid4()),
+        }
+        provisioned_service = await client.post(
+            "/api/v1/service-actors",
+            headers=service_headers,
+            json=service_payload,
+        )
+        assert provisioned_service.status_code == 201, provisioned_service.text
+        provisioned_body = provisioned_service.json()
+        assert provisioned_body["service_identity"] == service_payload["service_identity"]
+        assert provisioned_body["actor_status"] == "active"
+        assert service_payload["subject"] not in provisioned_service.text
+        replayed_service = await client.post(
+            "/api/v1/service-actors",
+            headers=service_headers,
+            json=service_payload,
+        )
+        assert replayed_service.status_code == 201, replayed_service.text
+        assert replayed_service.json() == provisioned_body
+        service_actor_id = provisioned_body["actor_profile_id"]
+        service_admin_profile = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/{service_actor_id}",
+            manager_token,
+        )
+        service_admin_link = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/{service_actor_id}/identity-links",
+            manager_token,
+        )
+        assert service_admin_profile["service_identity"] == service_payload["service_identity"]
+        assert service_admin_profile["actor_kind"] == "service"
+        assert service_admin_profile["last_seen_at"] is None
+        assert service_admin_link["subject_kind"] == "service"
+        assert service_admin_link["last_verified_at"] is None
+        serialized_service_reads = json.dumps(
+            [service_admin_profile, service_admin_link],
+            sort_keys=True,
+        )
+        assert service_payload["subject"] not in serialized_service_reads
+        assert flow_issuer not in serialized_service_reads
+
         project = await request_json(
             client,
             "POST",
@@ -1087,6 +1163,27 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert "issuer" not in canonical_actor
         assert "subject" not in canonical_actor
         assert "roles" not in canonical_actor
+        worker_admin_profile = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/{canonical_actor['actor_profile_id']}",
+            manager_token,
+        )
+        worker_admin_link = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/{canonical_actor['actor_profile_id']}/identity-links",
+            manager_token,
+        )
+        assert worker_admin_profile["actor_kind"] == "human"
+        assert worker_admin_profile["service_identity"] is None
+        assert worker_admin_link["subject_kind"] == "human"
+        serialized_worker_reads = json.dumps(
+            [worker_admin_profile, worker_admin_link],
+            sort_keys=True,
+        )
+        assert worker_subject not in serialized_worker_reads
+        assert flow_issuer not in serialized_worker_reads
         updated_actor = await request_json(
             client,
             "PATCH",
@@ -1421,7 +1518,7 @@ async def main(env: dict[str, str]) -> None:
 
 if __name__ == "__main__":
     api_env = api_environment()
-    assert_local_database_url(api_env["WORKSTREAM_DATABASE_URL"])
+    assert_isolated_database_url(api_env["WORKSTREAM_DATABASE_URL"])
     os.environ.update(api_env)
     command.upgrade(alembic_config(), "head")
     asyncio.run(main(api_env))

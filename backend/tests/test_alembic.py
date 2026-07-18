@@ -12,6 +12,13 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import pytest
 from alembic import command
 from alembic.config import Config
+from migration_contracts import service_identity_0023 as frozen_service_identity_contract
+from migration_contracts.service_identity_0023 import (
+    SERVICE_IDENTITY_VALUES as FROZEN_SERVICE_IDENTITY_VALUES,
+    ServiceIdentityMappingError as FrozenServiceIdentityMappingError,
+    protected_mapping_roots as frozen_protected_mapping_roots,
+    validate_mapping_path as validate_frozen_mapping_path,
+)
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine
@@ -33,6 +40,15 @@ from app.modules.actors.legacy_classification import (
     canonical_envelope_bytes,
     database_binding_identifier,
 )
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.actors.service_identity_migration import (
+    MAPPING_FILE_ENV,
+    ServiceActorIdentityMapping,
+    ServiceActorIdentityMappingDraft,
+    build_envelope as build_service_identity_envelope,
+    publish_envelope as publish_service_identity_envelope,
+    snapshot_existing_service_rows,
+)
 
 
 def _alembic_config() -> Config:
@@ -40,6 +56,56 @@ def _alembic_config() -> Config:
     config = Config(str(project_root / "alembic.ini"))
     config.set_main_option("script_location", str(project_root / "alembic"))
     return config
+
+
+def test_service_identity_migration_contract_is_frozen_from_application_modules() -> None:
+    backend_root = Path(__file__).resolve().parents[1]
+    revision_source = (
+        backend_root / "alembic/versions/0023_service_actor_identity.py"
+    ).read_text(encoding="utf-8")
+    contract_source = (
+        backend_root / "migration_contracts/service_identity_0023.py"
+    ).read_text(encoding="utf-8")
+    assert "from migration_contracts.service_identity_0023 import" in revision_source
+    assert "app.modules" not in revision_source
+    assert "app.modules" not in contract_source
+    assert "repository_root=MIGRATION_REPOSITORY_ROOT" in revision_source
+    assert "REPOSITORY_ROOT" not in contract_source
+    assert FROZEN_SERVICE_IDENTITY_VALUES == tuple(identity.value for identity in ServiceIdentity)
+
+
+def test_frozen_mapping_path_custody_is_independent_of_install_location(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    monkeypatch.setattr(
+        frozen_service_identity_contract,
+        "__file__",
+        "/installed/site-packages/migration_contracts/service_identity_0023.py",
+    )
+    roots = frozen_protected_mapping_roots(repository_root)
+    assert repository_root in roots
+    for root in roots:
+        with pytest.raises(
+            FrozenServiceIdentityMappingError,
+            match="service_mapping_path_forbidden",
+        ):
+            validate_frozen_mapping_path(
+                root / "private-envelope.json",
+                repository_root=repository_root,
+                output=True,
+            )
+
+    deployment_root = tmp_path / "deployed"
+    private_root = tmp_path / "private"
+    deployment_root.mkdir()
+    private_root.mkdir()
+    assert validate_frozen_mapping_path(
+        private_root / "private-envelope.json",
+        repository_root=deployment_root,
+        output=True,
+    ) == private_root / "private-envelope.json"
 
 
 def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_lock) -> None:
@@ -93,7 +159,9 @@ def test_current_schema_uses_project_policy_contract(
         "artifact_upload_items.id",
         "artifact_contents.sha256",
         "artifact_bindings.scope_version",
-        "artifact_replicas.provider_artifact_id",
+        "artifact_storage_namespaces.namespace_fingerprint",
+        "artifact_replicas.provider_object_ref",
+        "artifact_replicas.storage_namespace_id",
         "artifact_operation_receipts.request_digest",
     }.issubset(columns)
     discarded_columns = {
@@ -118,6 +186,11 @@ def test_current_schema_uses_project_policy_contract(
         "workstream_tasks.locked_checker_policy_version",
         "submissions.locked_checker_policy_version",
         "checker_runs.locked_checker_policy_version",
+        "artifact_replicas.provider_artifact_id",
+        "artifact_replicas.provider_manifest_id",
+        "artifact_replicas.retention_state",
+        "artifact_operation_receipts.provider_receipt_id",
+        "artifact_operation_receipts.retention_reference",
     }
     assert columns.isdisjoint(discarded_columns)
 
@@ -461,7 +534,13 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                     definitions=tuple(
                         definition
                         for definition in ACTION_DEFINITIONS
-                        if definition.owner is not ActionOwner.AUTH_08
+                        if definition.owner
+                        not in {
+                            ActionOwner.AUTH_08,
+                            ActionOwner.AUTH_09B,
+                            ActionOwner.AUTH_09C,
+                            ActionOwner.AUTH_09D,
+                        }
                     ),
                 )
             )
@@ -603,7 +682,21 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                 "grant_table": True,
                 "control": (False, None, 0),
             }
-            asyncio.run(_assert_authorization_action_sql_pairs(isolated_database_env))
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env,
+                    definitions=tuple(
+                        definition
+                        for definition in ACTION_DEFINITIONS
+                        if definition.owner
+                        not in {
+                            ActionOwner.AUTH_09B,
+                            ActionOwner.AUTH_09C,
+                            ActionOwner.AUTH_09D,
+                        }
+                    ),
+                )
+            )
             command.downgrade(config, "0021_auth_action_evidence")
             command.upgrade(config, "0022_bootstrap_admin_grants")
 
@@ -637,6 +730,343 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
             command.downgrade(config, "0021_auth_action_evidence")
             command.upgrade(config, "0022_bootstrap_admin_grants")
         finally:
+            command.downgrade(config, "base")
+
+
+def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prove exact legacy mapping, static action parity, and destructive rollback guards."""
+    config = _alembic_config()
+    service_id = actor_id_from_external_identity(
+        "https://identity.test", "auth09-legacy-service"
+    )
+    envelope_path = tmp_path / "service-identity-envelope.json"
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0022_bootstrap_admin_grants")
+            command.upgrade(config, "0023_service_actor_identity")
+            assert asyncio.run(_service_identity_schema(isolated_database_env)) == {
+                "revision": "0023_service_actor_identity",
+                "service_identity_column": True,
+                "mapped_count": 0,
+                "manifest_digest": None,
+                "envelope_digest": None,
+            }
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env,
+                    definitions=tuple(
+                        definition
+                        for definition in ACTION_DEFINITIONS
+                        if definition.owner
+                        in {
+                            ActionOwner.AUTH_09B,
+                            ActionOwner.AUTH_09C,
+                            ActionOwner.AUTH_09D,
+                        }
+                    ),
+                )
+            )
+            command.downgrade(config, "0022_bootstrap_admin_grants")
+
+            asyncio.run(
+                _insert_service_actor_before_fixed_identity(
+                    isolated_database_env,
+                    service_id,
+                    "auth09-legacy-service",
+                )
+            )
+            monkeypatch.delenv(MAPPING_FILE_ENV, raising=False)
+            with pytest.raises(
+                FrozenServiceIdentityMappingError,
+                match="^service_mapping_required$",
+            ):
+                command.upgrade(config, "0023_service_actor_identity")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0022_bootstrap_admin_grants"
+            )
+
+            asyncio.run(
+                _write_service_identity_envelope(
+                    isolated_database_env,
+                    envelope_path,
+                )
+            )
+            monkeypatch.setenv(MAPPING_FILE_ENV, str(envelope_path))
+            command.upgrade(config, "0023_service_actor_identity")
+            mapped = asyncio.run(_service_identity_schema(isolated_database_env))
+            assert mapped["revision"] == "0023_service_actor_identity"
+            assert mapped["service_identity"] == "workstream.artifact.verifier"
+            assert mapped["mapped_count"] == 1
+            assert len(mapped["source_digest"]) == 64
+            assert len(mapped["manifest_digest"]) == 64
+            assert len(mapped["envelope_digest"]) == 64
+            assert mapped["private_evidence_columns"] is False
+            assert asyncio.run(_service_identity_guards(isolated_database_env, service_id)) == {
+                "identity_update_rejected": True,
+                "kind_update_rejected": True,
+                "human_identity_rejected": True,
+                "unknown_identity_rejected": True,
+                "duplicate_identity_rejected": True,
+            }
+            assert asyncio.run(
+                _service_identity_evidence_guards(isolated_database_env)
+            ) == {
+                "update_rejected": True,
+                "delete_rejected": True,
+                "truncate_rejected": True,
+                "invalid_count_rejected": True,
+                "invalid_source_digest_rejected": True,
+                "invalid_manifest_digest_rejected": True,
+                "invalid_database_binding_rejected": True,
+            }
+            with pytest.raises(
+                RuntimeError,
+                match="^cannot downgrade fixed service identity authority$",
+            ):
+                command.downgrade(config, "0022_bootstrap_admin_grants")
+            asyncio.run(_remove_fixed_service_actor(isolated_database_env, service_id))
+            command.downgrade(config, "0022_bootstrap_admin_grants")
+            monkeypatch.delenv(MAPPING_FILE_ENV, raising=False)
+            command.upgrade(config, "0023_service_actor_identity")
+
+            auth09_definitions = tuple(
+                definition
+                for definition in ACTION_DEFINITIONS
+                if definition.owner
+                in {
+                    ActionOwner.AUTH_09B,
+                    ActionOwner.AUTH_09C,
+                    ActionOwner.AUTH_09D,
+                }
+            )
+            assert len(auth09_definitions) == 8
+            for definition in auth09_definitions:
+                event_id = asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env,
+                        definition.action_id.value,
+                        definition.permission_id.value,
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="^cannot downgrade fixed service identity authority$",
+                ):
+                    command.downgrade(config, "0022_bootstrap_admin_grants")
+                asyncio.run(
+                    _remove_authorization_action_events(isolated_database_env, [event_id])
+                )
+            command.downgrade(config, "0022_bootstrap_admin_grants")
+            command.upgrade(config, "0023_service_actor_identity")
+        finally:
+            monkeypatch.delenv(MAPPING_FILE_ENV, raising=False)
+            command.downgrade(config, "base")
+
+
+def test_service_link_verification_timestamp_schema_and_guarded_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Allow null verification only for services and refuse proof-losing rollback."""
+    config = _alembic_config()
+    human_id, human_link_id = str(uuid4()), str(uuid4())
+    rejected_human_id, rejected_human_link_id = str(uuid4()), str(uuid4())
+    service_id, service_link_id = str(uuid4()), str(uuid4())
+
+    async def seed_human_before_upgrade() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into actor_profiles "
+                        "(id,actor_kind,status,provisioning_method,created_by) values "
+                        "(:id,'human','active','automatic_first_access',:id)"
+                    ),
+                    {"id": human_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_identity_links "
+                        "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) "
+                        "values (:link,:actor,'issuer-0024','human-0024','human','active',:actor)"
+                    ),
+                    {"link": human_link_id, "actor": human_id},
+                )
+        finally:
+            await engine.dispose()
+
+    async def schema_state() -> dict[str, object]:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.connect() as connection:
+                column = (
+                    (
+                        await connection.execute(
+                            text(
+                                "select is_nullable,column_default from information_schema.columns "
+                                "where table_schema='public' and table_name='actor_identity_links' "
+                                "and column_name='last_verified_at'"
+                            )
+                        )
+                    )
+                    .mappings()
+                    .one()
+                )
+                human_verified = await connection.scalar(
+                    text(
+                        "select last_verified_at is not null from actor_identity_links "
+                        "where id=:id"
+                    ),
+                    {"id": human_link_id},
+                )
+                constraint = await connection.scalar(
+                    text(
+                        "select pg_get_constraintdef(oid) from pg_constraint where "
+                        "conrelid='actor_identity_links'::regclass and "
+                        "conname='ck_actor_identity_links_human_verified'"
+                    )
+                )
+                return {
+                    "nullable": column["is_nullable"],
+                    "default": column["column_default"],
+                    "human_verified": human_verified,
+                    "constraint": constraint,
+                }
+        finally:
+            await engine.dispose()
+
+    async def insert_service_and_reject_null_human() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into actor_profiles "
+                        "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+                        "values (:id,'service','active','manual_service_provisioning',"
+                        "'workstream.artifact.verifier',:id)"
+                    ),
+                    {"id": service_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_identity_links "
+                        "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                        "last_verified_at) values (:link,:actor,'issuer-0024','service-0024',"
+                        "'service','active',:actor,null)"
+                    ),
+                    {"link": service_link_id, "actor": service_id},
+                )
+            with pytest.raises(IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "insert into actor_profiles "
+                            "(id,actor_kind,status,provisioning_method,created_by) values "
+                            "(:id,'human','active','automatic_first_access',:id)"
+                        ),
+                        {"id": rejected_human_id},
+                    )
+                    await connection.execute(
+                        text(
+                            "insert into actor_identity_links "
+                            "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                            "last_verified_at) values (:link,:actor,'issuer-0024',"
+                            "'rejected-human-0024','human','active',:actor,null)"
+                        ),
+                        {"link": rejected_human_link_id, "actor": rejected_human_id},
+                    )
+        finally:
+            await engine.dispose()
+
+    async def make_service_downgrade_safe() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "update actor_identity_links set last_verified_at=clock_timestamp() "
+                        "where id=:id"
+                    ),
+                    {"id": service_link_id},
+                )
+        finally:
+            await engine.dispose()
+
+    async def cleanup() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("alter table actor_identity_links disable trigger user")
+                )
+                await connection.execute(text("alter table actor_profiles disable trigger user"))
+                await connection.execute(
+                    text(
+                        "delete from actor_identity_links where id in (:human_link,:service_link)"
+                    ),
+                    {"human_link": human_link_id, "service_link": service_link_id},
+                )
+                await connection.execute(
+                    text(
+                        "delete from actor_profiles where id in "
+                        "(:human,:rejected_human,:service)"
+                    ),
+                    {
+                        "human": human_id,
+                        "rejected_human": rejected_human_id,
+                        "service": service_id,
+                    },
+                )
+                await connection.execute(text("alter table actor_profiles enable trigger user"))
+                await connection.execute(
+                    text("alter table actor_identity_links enable trigger user")
+                )
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0023_service_actor_identity")
+            asyncio.run(seed_human_before_upgrade())
+            command.upgrade(config, "0024_service_link_verification")
+            state = asyncio.run(schema_state())
+            assert state["nullable"] == "YES"
+            assert state["default"] is None
+            assert state["human_verified"] is True
+            assert "subject_kind" in str(state["constraint"])
+            assert "last_verified_at IS NOT NULL" in str(state["constraint"])
+            asyncio.run(insert_service_and_reject_null_human())
+            with pytest.raises(
+                RuntimeError,
+                match="^cannot downgrade with unverified service identity links$",
+            ):
+                command.downgrade(config, "0023_service_actor_identity")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0024_service_link_verification"
+            )
+            asyncio.run(make_service_downgrade_safe())
+            command.downgrade(config, "0023_service_actor_identity")
+            historical = asyncio.run(schema_state())
+            assert historical["nullable"] == "NO"
+            assert "now()" in str(historical["default"])
+            assert historical["constraint"] is None
+            command.upgrade(config, "0024_service_link_verification")
+            asyncio.run(cleanup())
+        finally:
+            try:
+                asyncio.run(make_service_downgrade_safe())
+                asyncio.run(cleanup())
+            except DBAPIError:
+                pass
             command.downgrade(config, "base")
 
 
@@ -728,6 +1158,169 @@ def test_artifact_foundation_enforces_immutable_facts_and_guarded_downgrade(
             )
         finally:
             command.downgrade(config, "base")
+
+
+def test_artifact_store_v2_empty_clean_cut_and_reversible_shape(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Migrate only empty v1 tables and restore their empty shape on downgrade."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0023_service_actor_identity")
+            command.upgrade(config, "0025_artifact_store_v2")
+            v2_columns = asyncio.run(_fetch_columns(isolated_database_env))
+            command.downgrade(config, "0023_service_actor_identity")
+            v1_columns = asyncio.run(_fetch_columns(isolated_database_env))
+            command.upgrade(config, "0025_artifact_store_v2")
+        finally:
+            command.downgrade(config, "base")
+
+    assert {
+        "artifact_storage_namespaces.namespace_fingerprint",
+        "artifact_upload_items.provider_object_ref",
+        "artifact_replicas.storage_namespace_id",
+        "artifact_replicas.namespace_fingerprint",
+        "artifact_replicas.provider_profile",
+        "artifact_replicas.provider_object_ref",
+        "artifact_operation_receipts.replayed",
+    }.issubset(v2_columns)
+    assert {
+        "artifact_upload_items.provider_operation_reference",
+        "artifact_replicas.provider_artifact_id",
+        "artifact_replicas.provider_manifest_id",
+        "artifact_replicas.retention_state",
+        "artifact_operation_receipts.provider_receipt_id",
+        "artifact_operation_receipts.retention_reference",
+    }.issubset(v1_columns)
+    assert {
+        "artifact_upload_items.provider_object_ref",
+        "artifact_replicas.storage_namespace_id",
+        "artifact_replicas.namespace_fingerprint",
+        "artifact_replicas.provider_profile",
+        "artifact_replicas.provider_object_ref",
+        "artifact_operation_receipts.provider_object_ref",
+        "artifact_operation_receipts.replayed",
+    }.isdisjoint(v1_columns)
+    assert "artifact_storage_namespaces.id" not in v1_columns
+
+
+def test_artifact_store_v2_refuses_populated_v1_before_ddl(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Never fabricate namespace or verification provenance for a v1 row."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0023_service_actor_identity")
+            asyncio.run(_seed_artifact_content(isolated_database_env))
+            with pytest.raises(
+                RuntimeError,
+                match="artifact storage clean cut requires empty pre-production tables",
+            ):
+                command.upgrade(config, "0025_artifact_store_v2")
+            refused = asyncio.run(_artifact_v2_refusal_state(isolated_database_env))
+            asyncio.run(_truncate_artifact_foundation(isolated_database_env))
+            command.upgrade(config, "0025_artifact_store_v2")
+        finally:
+            command.downgrade(config, "base")
+
+    assert refused == {
+        "revision": "0023_service_actor_identity",
+        "namespace_table_exists": False,
+        "v1_content_count": 1,
+    }
+
+
+def test_artifact_store_v2_refuses_populated_v2_downgrade_before_ddl(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Never drop a namespace-only v2 deployment fence during downgrade."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0025_artifact_store_v2")
+            asyncio.run(_seed_v2_artifact_namespace(isolated_database_env))
+            with pytest.raises(
+                RuntimeError,
+                match="artifact storage clean cut requires empty pre-production tables",
+            ):
+                command.downgrade(config, "0023_service_actor_identity")
+            refused_revision = asyncio.run(_current_revision(isolated_database_env))
+            refused_columns = asyncio.run(_fetch_columns(isolated_database_env))
+            refused_namespace_count = asyncio.run(
+                _artifact_namespace_count(isolated_database_env)
+            )
+            asyncio.run(_truncate_v2_artifact_namespace(isolated_database_env))
+            command.downgrade(config, "0023_service_actor_identity")
+        finally:
+            asyncio.run(_truncate_v2_artifact_namespace(isolated_database_env))
+            command.downgrade(config, "base")
+
+    assert refused_revision == "0025_artifact_store_v2"
+    assert refused_namespace_count == 1
+    assert "artifact_replicas.provider_object_ref" in refused_columns
+
+
+def test_artifact_store_v2_waits_for_concurrent_v1_writer_and_refuses(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Serialize the clean-cut emptiness check against every v1 writer."""
+    config = _alembic_config()
+    inserted = threading.Event()
+    release_insert = threading.Event()
+    upgrade_started = threading.Event()
+
+    def guarded_upgrade() -> None:
+        upgrade_started.set()
+        command.upgrade(config, "0025_artifact_store_v2")
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0023_service_actor_identity")
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                insert_future = pool.submit(
+                    asyncio.run,
+                    _insert_v1_artifact_content_until_released(
+                        isolated_database_env,
+                        inserted,
+                        release_insert,
+                    ),
+                )
+                assert inserted.wait(timeout=5)
+                upgrade_future = pool.submit(guarded_upgrade)
+                assert upgrade_started.wait(timeout=5)
+                time.sleep(0.2)
+                assert upgrade_future.done() is False
+                release_insert.set()
+                insert_future.result(timeout=5)
+                with pytest.raises(
+                    RuntimeError,
+                    match="artifact storage clean cut requires empty pre-production tables",
+                ):
+                    upgrade_future.result(timeout=5)
+
+            refused = asyncio.run(_artifact_v2_refusal_state(isolated_database_env))
+            asyncio.run(_truncate_artifact_foundation(isolated_database_env))
+            command.upgrade(config, "0025_artifact_store_v2")
+        finally:
+            release_insert.set()
+            asyncio.run(_truncate_artifact_foundation(isolated_database_env))
+            command.downgrade(config, "base")
+
+    assert refused == {
+        "revision": "0023_service_actor_identity",
+        "namespace_table_exists": False,
+        "v1_content_count": 1,
+    }
 
 
 def test_api_rate_control_schema_preserves_domain_and_guards_downgrade(
@@ -1436,8 +2029,9 @@ async def _assert_actor_registry_unique_constraints(database_url: str) -> None:
             engine,
             text(
                 "insert into actor_identity_links "
-                "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) values "
-                "(:id,:actor,'https://identity.test','second-link','human','active',:actor)"
+                "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                "last_verified_at) values (:id,:actor,'https://identity.test',"
+                "'second-link','human','active',:actor,clock_timestamp())"
             ),
             {"id": str(uuid4()), "actor": actor_id},
         )
@@ -1600,8 +2194,9 @@ async def _insert_canonical_actor(
     await connection.execute(
         text(
             "insert into actor_identity_links "
-            "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) values "
-            "(:id,:actor,'https://identity.test',:subject,:kind,'active',:actor)"
+            "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+            "last_verified_at) values (:id,:actor,'https://identity.test',:subject,"
+            ":kind,'active',:actor,clock_timestamp())"
         ),
         {
             "id": str(uuid4()),
@@ -1637,8 +2232,9 @@ async def _expect_invalid_canonical_pair(
             await connection.execute(
                 text(
                     "insert into actor_identity_links "
-                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) "
-                    "values (:id,:actor,:issuer,:subject,:kind,:status,:actor)"
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                    "last_verified_at) values (:id,:actor,:issuer,:subject,:kind,:status,"
+                    ":actor,clock_timestamp())"
                 ),
                 {
                     "id": link_id or str(uuid4()),
@@ -2516,6 +3112,114 @@ async def _artifact_table_counts(database_url: str) -> dict[str, int]:
                 count = await connection.scalar(text(f"select count(*) from {table}"))
                 counts[table] = int(count or 0)
             return counts
+    finally:
+        await engine.dispose()
+
+
+async def _seed_artifact_content(database_url: str) -> None:
+    """Insert one content fact that a clean-cut migration must refuse."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "insert into artifact_contents "
+                    "(id, sha256, byte_count, media_type, normalized_display_name) "
+                    "values (:id, :sha256, 1, 'application/octet-stream', 'legacy.bin')"
+                ),
+                {"id": str(uuid4()), "sha256": "sha256:" + "1" * 64},
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _seed_v2_artifact_namespace(database_url: str) -> None:
+    """Insert the v2-only namespace fact that downgrade must preserve."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "insert into artifact_storage_namespaces "
+                    "(id, backend, adapter, provider_profile, namespace_descriptor, "
+                    "namespace_fingerprint) values "
+                    "('primary', 'local', 'local', 'local-v2', '{}'::json, :fingerprint)"
+                ),
+                {"fingerprint": "sha256:" + "3" * 64},
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _artifact_namespace_count(database_url: str) -> int:
+    """Return the current v2 deployment-namespace fact count."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            count = await connection.scalar(
+                text("select count(*) from artifact_storage_namespaces")
+            )
+            return int(count or 0)
+    finally:
+        await engine.dispose()
+
+
+async def _truncate_v2_artifact_namespace(database_url: str) -> None:
+    """Clear the v2 namespace when its table exists during test cleanup."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            exists = await connection.scalar(
+                text("select to_regclass('public.artifact_storage_namespaces') is not null")
+            )
+            if exists:
+                await connection.execute(
+                    text("truncate table artifact_storage_namespaces cascade")
+                )
+    finally:
+        await engine.dispose()
+
+
+async def _insert_v1_artifact_content_until_released(
+    database_url: str,
+    inserted: threading.Event,
+    release: threading.Event,
+) -> None:
+    """Hold one uncommitted v1 writer while the clean-cut upgrade requests locks."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "insert into artifact_contents "
+                    "(id, sha256, byte_count, media_type, normalized_display_name) "
+                    "values (:id, :sha256, 1, 'application/octet-stream', 'raced.bin')"
+                ),
+                {"id": str(uuid4()), "sha256": "sha256:" + "2" * 64},
+            )
+            inserted.set()
+            assert await asyncio.to_thread(release.wait, 5)
+    finally:
+        await engine.dispose()
+
+
+async def _artifact_v2_refusal_state(database_url: str) -> dict[str, object]:
+    """Return transactional proof that refusal changed no v1 schema or data."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            revision = await connection.scalar(text("select version_num from alembic_version"))
+            namespace_table = await connection.scalar(
+                text("select to_regclass('public.artifact_storage_namespaces') is not null")
+            )
+            content_count = await connection.scalar(
+                text("select count(*) from artifact_contents")
+            )
+            return {
+                "revision": revision,
+                "namespace_table_exists": namespace_table,
+                "v1_content_count": content_count,
+            }
     finally:
         await engine.dispose()
 
@@ -3833,8 +4537,13 @@ async def _assert_authorization_action_sql_pairs(
             await transaction.rollback()
 
         for definition in definitions:
+            wrong_permission_id = (
+                "actor.profile.read_self"
+                if definition.permission_id.value != "actor.profile.read_self"
+                else "actor.profile.read_any"
+            )
             wrong_permission = _action_evidence_values(
-                definition.action_id.value, "actor.profile.read_any"
+                definition.action_id.value, wrong_permission_id
             )
             async with engine.connect() as connection:
                 transaction = await connection.begin()
@@ -4569,5 +5278,261 @@ async def _clear_admin_authority_guard_fixtures(database_url: str) -> None:
             await connection.execute(text("delete from admin_role_grants"))
             await connection.execute(text("alter table admin_role_grants enable trigger user"))
             await connection.execute(text("alter table authority_control enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+async def _current_revision(database_url: str) -> str:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return str(await connection.scalar(text("select version_num from alembic_version")))
+    finally:
+        await engine.dispose()
+
+
+async def _insert_service_actor_before_fixed_identity(
+    database_url: str,
+    actor_profile_id: str,
+    subject: str,
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await _insert_canonical_actor(connection, actor_profile_id, subject, "service")
+    finally:
+        await engine.dispose()
+
+
+async def _write_service_identity_envelope(database_url: str, path: Path) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        snapshot = await snapshot_existing_service_rows(engine)
+        row = snapshot.rows[0]
+        draft = ServiceActorIdentityMappingDraft(
+            schema_version=1,
+            mappings=(
+                ServiceActorIdentityMapping(
+                    actor_profile_id=row.actor_profile_id,
+                    issuer=row.issuer,
+                    subject=row.subject,
+                    service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                ),
+            ),
+        )
+        envelope = build_service_identity_envelope(
+            draft,
+            snapshot.rows,
+            database_binding=snapshot.database_binding,
+            generated_at="2026-07-16T12:00:00Z",
+        )
+        publish_service_identity_envelope(path, envelope)
+    finally:
+        await engine.dispose()
+
+
+async def _service_identity_schema(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            state = (
+                await connection.execute(
+                    text(
+                        "select service_identity_mapped_count,"
+                        "service_identity_source_row_set_sha256,"
+                        "service_identity_manifest_sha256,"
+                        "service_identity_envelope_sha256 "
+                        "from actor_profile_migration_state where id=1"
+                    )
+                )
+            ).one()
+            result: dict[str, object] = {
+                "revision": await connection.scalar(
+                    text("select version_num from alembic_version")
+                ),
+                "service_identity_column": bool(
+                    await connection.scalar(
+                        text(
+                            "select exists(select 1 from information_schema.columns "
+                            "where table_name='actor_profiles' and "
+                            "column_name='service_identity')"
+                        )
+                    )
+                ),
+                "mapped_count": state.service_identity_mapped_count,
+                "source_digest": state.service_identity_source_row_set_sha256,
+                "manifest_digest": state.service_identity_manifest_sha256,
+                "envelope_digest": state.service_identity_envelope_sha256,
+                "private_evidence_columns": bool(
+                    await connection.scalar(
+                        text(
+                            "select exists(select 1 from information_schema.columns "
+                            "where table_name='actor_profile_migration_state' and "
+                            "column_name in ('actor_profile_id','issuer','subject','file_path'))"
+                        )
+                    )
+                ),
+            }
+            service_identity = await connection.scalar(
+                text(
+                    "select service_identity from actor_profiles "
+                    "where actor_kind='service' limit 1"
+                )
+            )
+            if service_identity is not None:
+                result["service_identity"] = service_identity
+            if state.service_identity_mapped_count == 0:
+                result.pop("source_digest")
+                result.pop("private_evidence_columns")
+            return result
+    finally:
+        await engine.dispose()
+
+
+async def _service_identity_guards(
+    database_url: str,
+    actor_profile_id: str,
+) -> dict[str, bool]:
+    engine = create_async_engine(database_url)
+    results: dict[str, bool] = {}
+    cases = (
+        (
+            "identity_update_rejected",
+            "update actor_profiles set service_identity='workstream.artifact.scheduler' "
+            "where id=:actor_id",
+            {"actor_id": actor_profile_id},
+        ),
+        (
+            "kind_update_rejected",
+            "update actor_profiles set actor_kind='human',"
+            "provisioning_method='automatic_first_access',service_identity=null "
+            "where id=:actor_id",
+            {"actor_id": actor_profile_id},
+        ),
+        (
+            "human_identity_rejected",
+            "insert into actor_profiles "
+            "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+            "values (:id,'human','active','automatic_first_access',"
+            "'workstream.artifact.scheduler',:id)",
+            {"id": str(uuid4())},
+        ),
+        (
+            "unknown_identity_rejected",
+            "insert into actor_profiles "
+            "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+            "values (:id,'service','active','manual_service_provisioning',"
+            "'workstream.artifact.unknown',:id)",
+            {"id": str(uuid4())},
+        ),
+        (
+            "duplicate_identity_rejected",
+            "insert into actor_profiles "
+            "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+            "values (:id,'service','active','manual_service_provisioning',"
+            "'workstream.artifact.verifier',:id)",
+            {"id": str(uuid4())},
+        ),
+    )
+    try:
+        for name, statement, values in cases:
+            try:
+                async with engine.begin() as connection:
+                    await connection.execute(text(statement), values)
+            except DBAPIError:
+                results[name] = True
+            else:
+                results[name] = False
+        return results
+    finally:
+        await engine.dispose()
+
+
+async def _service_identity_evidence_guards(database_url: str) -> dict[str, bool]:
+    engine = create_async_engine(database_url)
+    results: dict[str, bool] = {}
+    immutable_cases = {
+        "update_rejected": (
+            "update actor_profile_migration_state set "
+            "service_identity_mapped_count=service_identity_mapped_count where id=1"
+        ),
+        "delete_rejected": "delete from actor_profile_migration_state where id=1",
+        "truncate_rejected": "truncate actor_profile_migration_state",
+    }
+    constraint_cases = {
+        "invalid_count_rejected": (
+            "update actor_profile_migration_state set service_identity_mapped_count=8 where id=1"
+        ),
+        "invalid_source_digest_rejected": (
+            "update actor_profile_migration_state set "
+            "service_identity_source_row_set_sha256='not-a-digest' where id=1"
+        ),
+        "invalid_manifest_digest_rejected": (
+            "update actor_profile_migration_state set "
+            "service_identity_manifest_sha256='not-a-digest' where id=1"
+        ),
+        "invalid_database_binding_rejected": (
+            "update actor_profile_migration_state set "
+            "service_identity_database_binding='postgres-v1:not-a-digest' where id=1"
+        ),
+    }
+    try:
+        for name, statement in immutable_cases.items():
+            try:
+                async with engine.begin() as connection:
+                    await connection.execute(text(statement))
+            except DBAPIError:
+                results[name] = True
+            else:
+                results[name] = False
+        for name, statement in constraint_cases.items():
+            try:
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text(
+                            "alter table actor_profile_migration_state disable trigger user"
+                        )
+                    )
+                    await connection.execute(text(statement))
+            except DBAPIError:
+                results[name] = True
+            else:
+                results[name] = False
+        return results
+    finally:
+        await engine.dispose()
+
+
+async def _remove_fixed_service_actor(database_url: str, actor_profile_id: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("alter table actor_identity_links disable trigger user"))
+            await connection.execute(text("alter table actor_profiles disable trigger user"))
+            await connection.execute(
+                text("delete from actor_identity_links where actor_profile_id=:actor_id"),
+                {"actor_id": actor_profile_id},
+            )
+            await connection.execute(
+                text("delete from actor_profiles where id=:actor_id"),
+                {"actor_id": actor_profile_id},
+            )
+            await connection.execute(text("alter table actor_profiles enable trigger user"))
+            await connection.execute(text("alter table actor_identity_links enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+async def _insert_authorization_action_event_for(
+    database_url: str,
+    action_id: str,
+    permission_id: str,
+) -> str:
+    values = _action_evidence_values(action_id, permission_id)
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(_ACTION_EVIDENCE_INSERT, values)
+        return str(values["id"])
     finally:
         await engine.dispose()

@@ -98,8 +98,8 @@ actor_identity_link.reactivate
 ```
 
 These are idempotency-operation tokens, not AUTH-07 `ActionId` values. Project
-grant replacement is a `project_role_grant.issue` request whose strict
-canonical payload contains the replaced grant reference. Bootstrap,
+role issue targets one exact independent role and never replaces another role.
+Bootstrap,
 first-access provisioning, qualification capture, and identity-link creation
 are not in this registry. Each operation has the exact `extra="forbid"` request
 variant below. Unknown, extra, mistyped, overlong, non-canonical, or nested
@@ -126,7 +126,7 @@ field.
 | `service_actor.create` | `ServiceActorCreateRequest(operation, identity_reference_digest, profile_payload_digest)` | `actor.service.provision` | `manual_service_provisioning` | `actor_profile`, `201` | `ServiceActorProvisioned` | `actor_profile` |
 | `admin_role_grant.issue` | `AdminRoleGrantIssueRequest(operation, target_actor_id, role, scope_type, scope_project_id?, reason_digest)` | `admin_role.grant` | `authority_assignment` | `admin_role_grant`, `201` | `AdminRoleGrantIssued` | `admin_role_grant` |
 | `admin_role_grant.revoke` | `AdminRoleGrantRevokeRequest(operation, grant_id, reason_digest)` | `admin_role.revoke` | `authority_revocation` | `admin_role_grant`, `200` | `AdminRoleGrantRevoked` | `admin_role_grant` |
-| `project_role_grant.issue` | `ProjectRoleGrantIssueRequest(operation, project_id, target_actor_id, role, replaced_grant_id?, reason_digest)` | `project.role_grant.manage` | `authority_assignment` without replacement; `authority_replacement` with required replacement ID | `project_role_grant`, `201` | `ProjectRoleGrantIssued` without replacement; `ProjectRoleGrantReplaced` with required replacement ID | `project_role_grant` |
+| `project_role_grant.issue` | `ProjectRoleGrantIssueRequest(operation, project_id, target_actor_id, role, reason_digest)` | `project.role_grant.manage` | `authority_assignment` | `project_role_grant`, `201` | `ProjectRoleGrantIssued` | `project_role_grant` |
 | `project_role_grant.revoke` | `ProjectRoleGrantRevokeRequest(operation, project_id, grant_id, reason_digest)` | `project.role_grant.manage` | `authority_revocation` | `project_role_grant`, `200` | `ProjectRoleGrantRevoked` | `project_role_grant` |
 | `actor_profile.suspend` | `ActorProfileSuspendRequest(operation, actor_profile_id, reason_digest)` | `actor.profile.suspend` | `security_response` or `administrative_correction` | `actor_profile`, `200` | `ActorProfileSuspended` | `actor_profile` |
 | `actor_profile.reactivate` | `ActorProfileReactivateRequest(operation, actor_profile_id, reason_digest)` | `actor.profile.reactivate` | `administrative_correction` | `actor_profile`, `200` | `ActorProfileReactivated` | `actor_profile` |
@@ -139,7 +139,8 @@ Admin issue roles are exactly `access_administrator`, `operator`,
 `access_administrator` and `operator` require `system` scope with no project;
 the other three admit `system` with no project or `project` with exactly one
 project UUID. Project issue roles are exactly `submitter`, `reviewer`, or
-`both`. Create/issue variants use deterministic request facts or existing
+`adjudicator`.
+Create/issue variants use deterministic request facts or existing
 parents in the digest; a newly generated response resource UUID is never part
 of their request digest.
 

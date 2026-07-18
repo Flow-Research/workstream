@@ -1,14 +1,20 @@
 # Chunk Contract: WS-AUTH-001-10 - Project Qualification And Contributor Role Grants
 
+## Status
+
+Proposed and inactive. Before implementation review, this contract must add the
+exact ActionId/target/guard inventory required by D27. AUTH-PREP is a hard
+runtime prerequisite.
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service
 
 ## Goal
 
-Implement immutable qualification snapshots and exact-project
-`ProjectRoleGrant(submitter|reviewer|both)` create, replace, list, and revoke
-behavior under scoped Project Manager authority.
+Implement immutable qualification snapshots and independent
+`ProjectRoleGrant(submitter|reviewer|adjudicator)` create, list, and revoke
+behavior scoped to the exact project under Project Manager authority.
 
 ## Why this chunk exists
 
@@ -39,7 +45,7 @@ backend/app/modules/projects/repository.py
 backend/app/api/router.py
 backend/app/db/models.py
 backend/app/modules/audit/**
-backend/alembic/versions/0023_*.py
+backend/alembic/versions/0026_*.py
 backend/tests/test_actors.py
 backend/tests/test_projects.py
 backend/tests/test_auth.py
@@ -48,6 +54,7 @@ backend/scripts/api_contract_e2e.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
+.agent-loop/merge-intents/WS-AUTH-001-10.json
 .agent-loop/LOOP_STATE.md
 .agent-loop/WORK_QUEUE.md
 .agent-loop/REVIEW_LOG.md
@@ -59,15 +66,18 @@ docs/spec_authorization_service.md
 automated grants from skills or reputation
 self-grant or self-revoke of the issuer's own contributor grant through the
 administrative project-grant operation
-admin roles satisfying submitter/reviewer permissions
+admin roles satisfying submitter/reviewer/adjudicator permissions
 task/review lifecycle implementation
 project/task/checker authorization cutover
+`both`, compatibility alias, replacement event/reason, `replaced_grant_id`, or
+silent conversion of combined/replacement evidence
+editing migrations `0018`, `0019`, or `0022`
 ```
 
 ## Acceptance criteria
 
-- Snapshot is immutable, project/contributor-bound, privacy-bounded, and
-  records unavailable evidence explicitly.
+- Snapshot is immutable, actor/project/requested-role-bound, privacy-bounded,
+  and records unavailable evidence explicitly.
 - Qualification snapshots and ProjectRoleGrants are owned by the authorization
   module; ActorProfile/IdentityLink remain actor-owned, and ProjectRepository
   remains the canonical project loader. No duplicate grant/project repository
@@ -83,18 +93,42 @@ project/task/checker authorization cutover
 - Target must be an active human and cannot be the issuing manager.
 - A manager who separately holds a contributor grant cannot revoke that grant
   through their own administrative request; denial is stable and audited.
-- At most one active grant exists per contributor/project.
-- Replacement revokes old history and creates a new grant atomically.
-- Create, replace, and revoke require canonical request hashing: same key and
+- A partial unique index on `(actor_profile_id, project_id, role) WHERE status =
+  'active'` permits at most one active grant for the same exact role while a
+  contributor may hold active submitter, reviewer, and adjudicator rows
+  concurrently.
+- Issue never revokes another role. Regrant after revocation creates a new
+  immutable row.
+- Typed schemas, audit facts, idempotency evidence, and current PostgreSQL
+  validators accept only `submitter`, `reviewer`, and `adjudicator`; only issued
+  and revoked success events remain. `both`, replacement fields/events/reasons,
+  aliases, and conversion branches are absent.
+- Snapshot ownership is composite across snapshot ID, actor, project, and exact
+  requested role. There is no replacement/supersession column.
+- Create and revoke require canonical request hashing: same key and
   same request returns the committed graph; same key with different request is
   rejected.
+- Issue hashing includes the exact requested role. Same key/different role is
+  `idempotency_mismatch`; a new-key duplicate same-role issue is a stable audited
+  conflict; distinct keys may issue different roles concurrently. Revoke derives
+  role from the locked grant and replay reloads/re-authorizes before disclosure.
 - State, idempotency result, audit event, and invalidation event commit in one
   transaction.
 - Only manual creation is enabled; automated schema value cannot be emitted.
 - Revocation is visible on the next authorization context build.
+- Revocation evidence and invalidation identify the exact revoked role;
+  downstream consumers reconcile only the matching task, review, or future
+  adjudication responsibility.
+- The linked invalidation retains exact grant and cause-event references. A
+  submitter revocation creates only the task-assignment obligation and reviewer
+  revocation may create only its exact REV-owned review obligation. Adjudicator
+  revocation persists exact invalidation only and creates or consumes no
+  adjudication obligation until that separately approved lifecycle is active.
+  No path changes another project role or an AdminRoleGrant.
 - Project manager/admin role alone never creates contributor capability.
-- PostgreSQL concurrency tests cover identical creates, conflicting creates,
-  replace versus revoke, and revocation versus authorization.
+- PostgreSQL concurrency tests cover identical-role creates, concurrent
+  different-role creates, regrant versus revoke, and revocation versus
+  authorization.
 - `POST/GET /api/v1/projects/{project_id}/role-grants`, grant detail, and grant
   revoke routes have multi-role, self-revoke, scope, privacy, rate-limit,
   replay, and negative tests.
@@ -106,9 +140,13 @@ project/task/checker authorization cutover
   project deny, pagination/count concealment, minimal-field, rate-limit, and
   inactive/non-human exclusion tests; no UUID must be recovered from logs or
   direct database access.
-- Migration enforces snapshot/grant ownership FKs, checks, partial unique and
-  supporting indexes, database-time fields, immutability, prior-head upgrade,
-  downgrade, and preserved history.
+- Migration `0026` enforces exact three-role checks, composite snapshot/grant
+  ownership, partial unique/supporting indexes, database-time fields, and
+  immutability. Migration `0026` refuses upgrade when obsolete combined or
+  replacement evidence exists and never converts or deletes those rows. It
+  replaces current audit/idempotency validators without editing historical
+  migrations and refuses an unsafe downgrade without mutating evidence.
+  Prior-head, fresh replay, preserved history, and both refusal paths are tested.
 
 ## Verification commands
 
@@ -142,10 +180,11 @@ git diff --check
 
 ## Human review focus
 
-Review exact-project scope, self-grant protection, snapshot privacy, replacement
-atomicity, and absence of implicit grants.
+Review exact-project scope, self-grant protection, role-specific snapshot
+privacy, independent issue/revoke semantics, and absence of implicit grants.
 
 ## Stop conditions
 
 Stop if contributor authority depends on a token role, inferred qualification,
-or project ID supplied without canonical database resolution.
+project ID supplied without canonical database resolution, compatibility for
+`both`, evidence conversion, or a mutation path that bypasses AUTH-PREP.

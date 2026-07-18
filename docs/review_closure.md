@@ -28,7 +28,7 @@ Project Guide
 -> Human Review
 -> Revision Replay
 -> Acceptance / Rejection
--> Payment And Reputation Ledger
+-> Compensation Fulfillment And Reputation Ledger
 -> Lessons Learned
 ```
 
@@ -38,9 +38,10 @@ Project Guide
 - keep guide versions locked per task
 - bind checker runs to immutable submission versions and artifact hashes
 - require evidence citation before acceptance
-- keep payment status separate from task status
+- keep compensation fulfillment status separate from task status
 - require second review for high-value, disputed, override-backed, or suspected fraud/confidentiality cases
-- treat repeated misses as guide, checker, template, reviewer-policy, revision-policy, or payment-policy updates
+- treat repeated misses as guide, checker, template, reviewer-policy,
+  revision-policy, or ContributionPolicy updates
 
 ## Open Follow-Up
 

@@ -84,19 +84,37 @@ as `90eca12`. Signed schema-v2 memory verified that merge and stopped at
 AUTH-08. The user explicitly started AUTH-08. Its inherited L1 contract failed
 initial security/architecture, QA/product, and senior/CI/docs review before
 runtime edits. The repaired contract passed all required preimplementation
-tracks at `cbe7c6c`; bounded AUTH-08 implementation is active.
+tracks at `cbe7c6c`; bounded AUTH-08 implementation later merged through PR #131
+as `aa0fdcd`. AUTH-09 was split before runtime implementation. PR #140 merged
+the authoritative AUTH XINT reconciliation as `d541521`; PR #132 then merged
+AUTH-09A as `299363a`. Signed memory stopped, and the user explicitly started
+AUTH-09B from that trusted head. Its bounded implementation, external-review
+repair, coverage repair, and required checks passed before PR #143 merged as
+`053242b`. Signed memory stopped, and the user explicitly started AUTH-09C.
+Its bounded implementation activates only the exact actor-profile and
+identity-link administrative reads. Deterministic proof passes, including the
+live HTTP drill and focused actor and authorization branch coverage above 90
+percent. Every required implementation review track passes at exact SHA
+`6791381ceb9cb0c7f6ba163d4525c6c770c02ca6`. PR #146's original external checks
+passed. All five valid CodeRabbit proof findings are repaired at `c64bcc7`, and
+trusted `main` through PR #141 at `a10d901` is integrated. Focused unit, fresh
+real PostgreSQL, Ruff, and Agent Gates proof passes on the integrated candidate;
+all required exact integrated-head repair tracks pass at `c47d627`. Replacement
+external checks remain. No service caller or feature action is active.
 
 ## Active planning chunk
 
-None.
+None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-08` - Bootstrap And Administrative Role Grants.
+`WS-AUTH-001-09C` - Actor And Identity-Link Administration Reads. This chunk
+activates two system-authority read routes and no lifecycle mutation, service
+admission, or feature action.
 
-## Current implementation branch
+## Current review branch
 
-`codex/ws-auth-001-08-bootstrap-admin-grants`
+`codex/ws-auth-001-09c-actor-identity-admin-reads`
 
 ## Chunk status
 
@@ -117,17 +135,53 @@ None.
 | `WS-AUTH-001-07` | Split | `codex/ws-auth-001-07-authorization-kernel` | - | Required L1 review rejected the combined contract before runtime edits. |
 | `WS-AUTH-001-07A` | Merged | `codex/ws-auth-001-07-authorization-kernel` | #126 | Merged as `e9d72a1`; 74 permissions, 50 planned actions, and action-aware audit parity only. |
 | `WS-AUTH-001-07B` | Merged | `codex/ws-auth-001-07b-deny-default-kernel` | #130 | Merged as `90eca12`; signed memory passed. |
-| `WS-AUTH-001-08` | In review | `codex/ws-auth-001-08-bootstrap-admin-grants` | - | Implementation `34f87a5` passed deterministic evidence and all required internal reviewers; PR publication pending. |
-| `WS-AUTH-001-09` | Proposed | - | - | Actor/link states and service actors. |
+| `WS-AUTH-001-08` | Merged | `codex/ws-auth-001-08-bootstrap-admin-grants` | #131 | Merged as `aa0fdcd`; signed memory passed. |
+| `WS-AUTH-001-XINT` | Merged | `codex/ws-auth-001-xint-reconciliation` | #140 | Merged as `d541521`; signed schema-v2 memory passed. |
+| `WS-AUTH-001-09` | Split | - | - | Split into 09A through 09E before runtime implementation. |
+| `WS-AUTH-001-09A` | Merged | `codex/ws-auth-001-09-actor-state-service-actors` | #132 | Merged as `299363a`; signed memory passed. |
+| `WS-AUTH-001-09B` | Merged | `codex/ws-auth-001-09b-controlled-service-provisioning` | #143 | Merged as `053242b`; signed memory passed. |
+| `WS-AUTH-001-09C` | In review | `codex/ws-auth-001-09c-actor-identity-admin-reads` | #146 | Original external checks passed; all valid CodeRabbit findings repaired; integrated exact-head review passed; replacement checks pending. |
+| `WS-AUTH-001-09D` | Proposed | - | - | Actor and identity-link lifecycle mutations. |
+| `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after 09D. |
+| `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
+| `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
+| `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |
-| `WS-AUTH-001-15` | Proposed | - | - | Remaining system worker and obsolete authority removal. |
+| `WS-AUTH-001-15` | Proposed | - | - | Remaining internal service and obsolete authority removal. |
 | `WS-AUTH-001-16` | Proposed | - | - | Conformance and live proof. |
 
+Feature-gated registration and activation chunks are enumerated in
+`CHUNK_MAP.md` and `ACTIVATION_CUSTODY.md`. They remain inactive until exact
+merged feature manifests and separate human starts exist.
+
 ## Blockers
+
+AUTH-09C passed deterministic PostgreSQL behavior, concurrency, rollback,
+privacy, live HTTP, and focused 90 percent coverage proof. The original
+exact-head L1 internal and external checks passed. CodeRabbit's five valid proof
+findings are repaired, trusted `main` at `a10d901` is integrated, and focused
+integrated evidence passes. All required exact integrated-head internal tracks
+pass at `c47d627`; replacement GitHub checks and explicit human merge approval
+remain. It must not add lifecycle mutation, service grants, dynamic assignments,
+token-role authority, service admission, or feature-action activation.
+
+The four proposed REV lifecycle actions and review-evidence binding action are
+blocked on complete feature-owned typed manifests. REV fixed services are also
+blocked on exact identity-to-ActionId contracts. These are deliberate
+registration gates, not reasons to weaken AUTH or invent catch-all authority.
+
+AUTH-10 through AUTH-15 require exact action enumeration before each starts.
+AUTH-10 additionally owns the clean cut across the typed `ProjectRole`, audit,
+and idempotency contracts plus the current PostgreSQL validators recreated by
+migration `0022`, removing obsolete `ProjectRole.BOTH` and replacement evidence.
+AUTH-09B owns migration `0024` for service-link verification timestamp
+semantics, and ART owns `0025` for the ArtifactStore v2 clean cut. AUTH-10
+through AUTH-15 own shifted migrations `0026` through `0031` for their
+action/evidence parity.
 
 AUTH-05A and CAT post-merge memory have no remaining blocker and are merged.
 The combined AUTH-05 contract

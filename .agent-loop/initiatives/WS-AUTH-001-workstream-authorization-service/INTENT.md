@@ -43,9 +43,20 @@ superseded.
   are denied in v0.1.
 - Workstream-owned `AdminRoleGrant` and exact-project `ProjectRoleGrant`
   records provide permission candidates.
+- ProjectRoleGrant roles are independently persisted as `submitter`,
+  `reviewer`, and `adjudicator`; the adjudicator grant creates no adjudication
+  capability until WS-REV defines the lifecycle and AUTH activates exact
+  adjudication actions.
+- Explicitly provisioned service subjects resolve through service
+  ActorProfiles and a closed static service-action matrix, never human grants.
 - One `AuthorizationService` combines registered permissions, grant scope,
   canonical resource ownership, actor state, lifecycle state, and explicit
   guards.
+- Sensitive mutations use an AUTH-first prepared handle, feature-owned final
+  fact recomposition, one authorization evaluation, and one caller-owned commit.
+- `ActionOwner` names one exact AUTH activation custodian; ART, REV, CON, and
+  product modules keep resource facts and behavior but never change action
+  availability.
 - Revocation and suspension take effect from database state without requiring
   token refresh.
 - Sensitive authority changes are idempotent, concurrency-safe, and auditable.
@@ -65,9 +76,9 @@ move to the new authorization service in bounded cutover chunks.
 
 ## Alternatives considered
 
-### Keep token roles and add project grants
+### Keep issuer role metadata and add project grants
 
-Rejected. Token roles would remain a second authority source and revocation
+Rejected. Issuer role metadata would remain a second authority source and revocation
 would still depend on token lifetime.
 
 ### Add a parallel authorization subsystem
@@ -101,7 +112,7 @@ namespace and remains canonical.
 
 ## Expected risks
 
-- Accidentally accepting token roles after local grants are introduced.
+- Accidentally accepting issuer role metadata after local grants are introduced.
 - Misclassifying legacy actor rows that lack `subject_kind` provenance.
 - Leaving a protected endpoint on the old authorization path.
 - Breaking historical actor attribution during schema migration.
@@ -109,6 +120,13 @@ namespace and remains canonical.
 - Cross-project authorization through client-supplied resource scope.
 - Leaking identity claims, token material, or hidden resource existence.
 - Building new approval endpoints on the obsolete bootstrap during cutover.
+- Coupling submitter, reviewer, and adjudicator authority into one grant row.
+- Allowing a service token to enter human first-access or grant evaluation.
+- Letting a feature label remain an activation owner after PR #139.
+- Registering or activating review/artifact actions before complete feature
+  manifests and transaction proof exist.
+- Retaining `both` or replacement evidence in current typed or PostgreSQL
+  validators after independent project-role grants ship.
 
 ## What must not change
 
@@ -143,6 +161,8 @@ Resolved:
 - `WS-AUTH-001` is prioritized before `WS-POL-002-03`.
 - D4-D10 were explicitly approved and `WS-AUTH-001-01` was started by the user
   on 2026-07-11 after planning and post-merge memory closed.
+- D20-D22 establish service ActorProfiles, independent three-role project
+  grants, and fixed service runtime admission.
 
 External deployment details such as issuer URL, JWKS URL, approved algorithms,
 claim names, and introspection policy are configuration inputs. Their absence

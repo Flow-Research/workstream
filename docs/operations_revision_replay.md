@@ -1,85 +1,92 @@
 # Revision Replay
 
-## Purpose
+## Status And Purpose
 
-Revision replay prevents the common failure where a task comes back, the contributor says it is fixed, and nobody can prove which reviewer issues were actually closed.
+This is the planned v0.1 operating contract. Revision behavior remains
+unavailable until its owning REV chunks, exact AUTH activation, and REV-13 joint
+release complete.
 
-Every resubmission after `NEEDS_REVISION` must map prior findings to concrete fixes.
+Revision replay preserves an immutable answer to three questions: what the
+reviewer required, how the submitter responded, and how a later reviewer
+resolved each issue. No participant edits a prior Review, finding, response, or
+resolution.
 
-## Required Replay Fields
+## Review-Rooted Preparation
 
-For each prior finding:
+Human revision begins only from an immutable `Review(needs_revision)`. Checker
+remediation remains CheckerResult-rooted and does not fabricate a Review episode.
 
-- prior finding id
-- prior severity
-- prior area
-- required fix
-- contributor fix summary
-- evidence reference
-- contributor claim status: `fixed`, `disputed`, or `not_applicable`
+Before contributor access, Workstream appends a RevisionContextPreparation. It
+compares the prior Submission's stamped Project Guide identity and activation
+sequence with the currently active guide:
 
-Reviewer closure status:
+- exact pair match: `kept`;
+- any different valid active pair: `rebased` with `forward` or `backward`;
+- missing, incomplete, inconsistent, revoked, or unsafe context: `blocked`.
 
-- `closed_fixed`
-- `closed_rebutted`
-- `partially_closed`
-- `still_open`
-- `obsolete`
+The preparation freezes the selected guide/source/task-execution policy context,
+context digest, prior Submission, originating Review, source and target
+TaskAssignments, and change summary. Task Context returns the validated head,
+not a moving live guide. No guide rebase occurs during review; the reviewer
+reads the context stamped on the leased Submission.
 
-## Contributor Rules
+ContributionPolicyVersion is independent. The TaskAssignment freeze and each
+ReviewLease freeze never change because guide context rebases.
 
-The contributor must:
+## Submitter Response
 
-- address every high and medium finding
-- attach evidence for every claimed fix
-- explain any disputed finding directly
-- avoid bundling multiple findings into vague "fixed all" notes
+For each unresolved blocking ReviewFinding, the assigned submitter creates one
+immutable SubmissionFindingResponse containing:
 
-## Reviewer Rules
+- finding ID;
+- response text and concrete change summary;
+- optional finalized evidence binding;
+- exact preparation head ID and digest;
+- target Submission and TaskAssignment lineage.
 
-The reviewer must:
+Advisory findings may be answered but do not block resubmission unless the locked
+policy explicitly requires a response. Vague aggregate “fixed all” text cannot
+replace per-finding responses.
 
-- check each replay row
-- mark closure status per finding
-- only introduce new findings when they are real and guide-grounded
-- avoid moving goalposts unless the new issue blocks acceptance
+## Resubmission And Checks
 
-## Blocking Policy
+Submission N+1 acknowledges the exact preparation head/digest, links its
+immediate predecessor, and stamps the frozen context. The normal finalization
+and checker spine reruns. Only a current successful `allow_review` may create a
+new queue entry.
 
-A resubmission cannot move to `REVIEW_PENDING` when:
+The queue initially prefers the reviewer who requested revision. Expiry,
+decline, or invalidation opens the entry without resetting queue age.
 
-- prior high finding has no replay row
-- prior medium finding has no replay row
-- replay row has no fix summary
-- replay row has no evidence and project policy requires evidence
+## Reviewer Resolution
 
-Low findings can be left unresolved if the reviewer marks them as informational.
+The later Review appends one FindingResolution for every required prior finding:
 
-## Revision Context Preparation
+- `resolved`;
+- `unresolved`;
+- `not_applicable`.
 
-Before the contributor resumes a task in `NEEDS_REVISION`, Workstream prepares the next revision context.
+Each resolution carries bounded rationale and optional evidence. It never edits
+the original finding or submitter response. A new guide-grounded issue becomes a
+new ReviewFinding on the later Review.
 
-That preparation compares the prior submission's locked project guide and policy versions with the current active guide and policy versions. Revision policy decides whether the next attempt keeps the prior context, rebases to the latest active context, or is blocked for project-manager repair.
+## Limits And Recovery
 
-A rebase does not change the prior submission. It only defines the guide and policy context for the next submission attempt.
+A reached revision limit or deadline blocks further preparation and
+`submission.create`; it does not automatically reject or cancel the task. The
+task remains `needs_revision` until a covered Project Manager explicitly invokes
+the planned reason-bound obligation-close command. That administrative closure
+uses task `cancelled`, releases the assignment, and creates no synthetic Review
+or contribution.
 
-When a rebase happens, the contributor must see:
+A blocked or invalid Review-rooted preparation can be repaired only by appending
+one successor through the planned covered-manager repair command. Legacy
+`needs_revision` state with no Review/root requires an Operator evidence-linked
+legacy close and cannot enter normal revision replay.
 
-- prior guide and policy versions
-- next guide and policy versions
-- guide or policy change summary
-- reason the next attempt was rebased
+## Required Proof
 
-The reviewer must see the same context change in the review packet. A reviewer cannot apply out-of-band guidance unless it was encoded into the guide, policy, task template, or checker contract that governed the attempt.
-
-## Replay Table
-
-| Prior Finding ID | Required Fix | Contributor Fix Summary | Evidence | Contributor Status | Reviewer Closure |
-| --- | --- | --- | --- | --- | --- |
-| `RF-001` | `<required fix>` | `<what changed>` | `<evidence id/file/log/link>` | `fixed` | `still_open` |
-
-## Operational Standard
-
-Revision replay is not optional paperwork. It is the memory of the system.
-
-If the replay is weak, the platform fails the resubmission before a reviewer spends time on it.
+A revision cannot return to human review unless every unresolved blocking
+finding has one response, the exact preparation is still current, Submission
+lineage is immediate and same-task, evidence bindings are finalized, and the
+new CheckerRun is current for that Submission.

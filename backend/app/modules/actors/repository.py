@@ -24,14 +24,23 @@ class ActorRepository:
 
     async def lock_external_identity(self, issuer: str, subject: str) -> None:
         """Serialize first access for one exact external identity."""
-        digest = hashlib.sha256(
-            len(issuer.encode()).to_bytes(4, "big")
-            + issuer.encode()
-            + len(subject.encode()).to_bytes(4, "big")
-            + subject.encode()
-        ).digest()
-        key = int.from_bytes(digest[:8], "big", signed=True)
+        key = self._advisory_key(issuer, subject)
         await self._session.execute(select(func.pg_advisory_xact_lock(key)))
+
+    async def lock_service_identity(self, service_identity: str) -> None:
+        """Serialize provisioning for one fixed local service identity."""
+        key = self._advisory_key(service_identity, domain=b"\x01")
+        await self._session.execute(select(func.pg_advisory_xact_lock(key)))
+
+    @staticmethod
+    def _advisory_key(*values: str, domain: bytes = b"") -> int:
+        framed = bytearray(domain)
+        for value in values:
+            encoded = value.encode()
+            framed.extend(len(encoded).to_bytes(4, "big"))
+            framed.extend(encoded)
+        digest = hashlib.sha256(framed).digest()
+        return int.from_bytes(digest[:8], "big", signed=True)
 
     async def get_identity_link(
         self,
@@ -61,6 +70,16 @@ class ActorRepository:
             query = query.with_for_update()
         return await self._session.scalar(query.execution_options(populate_existing=True))
 
+    async def get_identity_link_for_actor(
+        self,
+        actor_profile_id: str,
+    ) -> ActorIdentityLink | None:
+        """Load the single identity link owned by one canonical actor."""
+        query = select(ActorIdentityLink).where(
+            ActorIdentityLink.actor_profile_id == actor_profile_id
+        )
+        return await self._session.scalar(query.execution_options(populate_existing=True))
+
     async def get_actor_profile(
         self,
         actor_profile_id: str,
@@ -71,6 +90,17 @@ class ActorRepository:
         query = select(ActorProfile).where(ActorProfile.id == actor_profile_id)
         if for_update:
             query = query.with_for_update()
+        return await self._session.scalar(query.execution_options(populate_existing=True))
+
+    async def get_service_actor(
+        self,
+        service_identity: str,
+    ) -> ActorProfile | None:
+        """Load one fixed service ActorProfile by its immutable local identity."""
+        query = select(ActorProfile).where(
+            ActorProfile.actor_kind == "service",
+            ActorProfile.service_identity == service_identity,
+        )
         return await self._session.scalar(query.execution_options(populate_existing=True))
 
     async def add_actor_profile(self, profile: ActorProfile) -> ActorProfile:
@@ -91,12 +121,12 @@ class ActorRepository:
         link: ActorIdentityLink,
     ) -> None:
         """Record monotonic execution-time verification under canonical locks."""
-        locked_link = await self.get_identity_link_by_id(link.id, for_update=True)
-        if locked_link is None or locked_link.actor_profile_id != profile.id:
-            raise RuntimeError("resolved identity link disappeared")
         locked_profile = await self.get_actor_profile(profile.id, for_update=True)
         if locked_profile is None:
             raise RuntimeError("resolved actor profile disappeared")
+        locked_link = await self.get_identity_link_by_id(link.id, for_update=True)
+        if locked_link is None or locked_link.actor_profile_id != profile.id:
+            raise RuntimeError("resolved identity link disappeared")
         await self._session.execute(
             update(ActorIdentityLink)
             .where(ActorIdentityLink.id == locked_link.id)

@@ -7,6 +7,9 @@ from celery import Celery
 from app.core.config import get_settings
 from app.workers.errors import CeleryConfigurationError
 
+ARTIFACT_SCRATCH_CLEANUP_TASK = "workstream.artifacts.cleanup_stale_scratch"
+ARTIFACT_SCRATCH_CLEANUP_SCHEDULE = "artifact-scratch-cleanup"
+
 
 def create_celery_app() -> Celery:
     """Create the Celery application from Workstream settings.
@@ -27,7 +30,11 @@ def create_celery_app() -> Celery:
         "workstream",
         broker=broker_url,
         backend=settings.celery_result_backend_url,
-        include=["app.workers.checkers", "app.workers.project_setup"],
+        include=[
+            "app.workers.artifacts",
+            "app.workers.checkers",
+            "app.workers.project_setup",
+        ],
     )
     celery_app.conf.update(
         accept_content=["json"],
@@ -37,6 +44,12 @@ def create_celery_app() -> Celery:
         task_ignore_result=True,
         task_serializer="json",
         timezone="UTC",
+        beat_schedule={
+            ARTIFACT_SCRATCH_CLEANUP_SCHEDULE: {
+                "task": ARTIFACT_SCRATCH_CLEANUP_TASK,
+                "schedule": settings.artifact_scratch_cleanup_interval_seconds,
+            }
+        },
     )
     return celery_app
 

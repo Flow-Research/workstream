@@ -1,5 +1,9 @@
 # Chunk Contract: <CHUNK_ID> — <TITLE>
 
+Keep the first line in this exact form. The internal review evidence gate binds
+evidence to the complete `<CHUNK_ID>` from this canonical heading and fails
+closed when a changed contract has no readable canonical heading.
+
 ## Parent initiative
 
 <INITIATIVE_ID> — <INITIATIVE_NAME>

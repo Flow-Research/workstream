@@ -8,15 +8,16 @@ schemas change only when their owning implementation chunk merges.
 The specification covers provider-neutral immutable byte storage, independent
 verification, guide/submission/checker binding, Operator observability, and
 durable recovery. It does not implement review decisions, contribution,
-payment, reputation, semantic search, public publication, physical deletion,
+compensation, reputation, semantic search, public publication, physical deletion,
 or Flow Node.
 
 ## Architecture
 
 ```text
 FastAPI and Celery composition roots
--> ExternalServiceAdapterFactory[ArtifactStore]
--> ArtifactStore v2
+-> ExternalServiceAdapterFactory[ArtifactStoreBootstrap]
+-> PostgreSQL exact namespace claim
+-> initialized ArtifactStore v2
    -> LocalStorageAdapter
    -> S3CompatibleArtifactStore
       -> MinIO integration
@@ -203,8 +204,20 @@ MinIO, and AWS S3, including region, bucket or private-root identity, normalized
 endpoint identity where applicable, private prefix, and addressing style; it
 contains no credential or resolved secret.
 
-Startup and every provider operation transactionally insert-or-validate this
-singleton before I/O. A concurrent first writer claims the namespace; a loser
+For LocalStorage, the durable root must already exist with owner-private
+permissions before application startup. Its descriptor stores only a hash over
+the normalized path plus filesystem device/inode identity. Replacing or
+remounting that root at the same configured path therefore changes the
+fingerprint. The typed factory constructs a non-mutating bootstrap that pins
+the root descriptor. PostgreSQL admits that exact namespace identity, then the
+bootstrap rechecks that the configured path still names the pinned descriptor
+before it creates layout files through that descriptor. Replacement before
+initialization fails without mutating either root; replacement after the final
+check cannot redirect descriptor-relative writes into the replacement root.
+
+Startup inspects and pins only the configured namespace identity before the
+transaction. It and every provider operation transactionally insert-or-validate
+the singleton before layout mutation or artifact-byte I/O. A concurrent first writer claims the namespace; a loser
 with a different fingerprint fails before provider access. Replicas and put
 attempts reference the namespace row and fingerprint. A populated deployment
 cannot change it without a separately reviewed maintenance migration.
@@ -243,11 +256,13 @@ preserves history.
 
 ### ArtifactOperationReceipt
 
-Append-only Workstream evidence for one operation identity: adapter,
-operation, idempotency key, request digest, bounded provider observation,
-outcome, correlation/attempt references, and provider/database timestamps.
-Credentials, signed headers, endpoints, raw provider responses, and product
-secrets are forbidden.
+Append-only Workstream evidence for one immutable put acknowledgement. It links
+the exact upload item and replica and records operation, idempotency key,
+`request_digest`, opaque `provider_object_ref`, replay observation, bounded
+outcome/details, attempt number, correlation ID, and `created_at`. Adapter and
+namespace identity resolve through the linked replica. A response digest,
+provider receipt, credentials, signed headers, endpoints, raw provider
+responses, and product secrets are forbidden.
 
 ### ArtifactVerificationJob
 
@@ -333,7 +348,8 @@ ArtifactBindingPort.bind_verified(ArtifactBindingCreateRequest)
 ArtifactMaterializationPort.materialize_ready_upload_set(ReadyUploadSetRequest)
 ArtifactMaterializationPort.materialize_bindings(BindingMaterializationRequest)
 CheckerArtifactOutputPort.store(CheckerOutputArtifactRequest)
-ArtifactOperatorReadPort.list/get/admission_usage(...)
+ArtifactOperatorReadPort.list_bindings/list_replicas/list_receipts/
+get_verification_job/get_recovery_attempt/list_audit_events/admission_usage(...)
 ArtifactOperatorRecoveryPort.retry_verification(ArtifactRecoveryRequest)
 ```
 
@@ -353,16 +369,28 @@ admission-usage request contains only bounded scope filters and pagination. It
 returns current reserved/completed byte usage and configured limits; it cannot
 release charges or mutate capacity.
 
+The binding lookup resource vocabulary is exactly `project`, `project_guide`,
+`guide_source_snapshot`, `guide_source_snapshot_item`, `task`, `submission`,
+`checker_run`, or `review`. The audit resource vocabulary is exactly
+`artifact_binding`, `artifact_content`, `artifact_replica`, `artifact_receipt`,
+`artifact_verification_job`, or `artifact_recovery_attempt`. Adding a product or
+artifact resource requires an explicit contract change; callers cannot submit
+an unregistered string.
+
 None accepts an adapter, provider object reference, storage namespace, caller-
-assembled quota scopes, arbitrary resource type, or caller-selected server
-content ID. The implementation resolves canonical relationships, authorization
+assembled quota scopes, a resource type outside the closed binding/audit
+vocabularies, or caller-selected server content ID. The implementation resolves
+canonical relationships, authorization
 resources, producer identity, and admission scopes inside artifact
 orchestration. The internal orchestrator is not itself a product capability.
 Operator routes receive the read or recovery capability they require, never the
 raw store or broad orchestrator.
 
-FastAPI and Celery composition roots construct the selected `ArtifactStore`,
-then construct one internal orchestrator, then expose only the required narrow
+FastAPI and Celery composition roots construct the selected non-mutating
+`ArtifactStoreBootstrap` through
+`ExternalServiceAdapterFactory[ArtifactStoreBootstrap]`, claim its exact
+namespace in PostgreSQL, and only then initialize the byte-only `ArtifactStore`.
+They construct one internal orchestrator and expose only the required narrow
 port to each route/service/task. Architecture tests parse imports, constructor
 annotations, dependency providers, and Celery task parameters; checking only
 textual `put` call sites is insufficient.
@@ -617,9 +645,26 @@ and the AWS live readiness profile.
 ## LocalStorage Adapter
 
 LocalStorage implements the same v2 port and conformance vectors. It uses a
-private configured root, opaque content-derived paths, exclusive no-overwrite
-publication, bounded off-event-loop file I/O, no-follow path handling, private
-permissions, full read verification, and sanitized failures.
+pre-provisioned private configured root, opaque content-derived paths,
+exclusive no-overwrite publication, bounded off-event-loop file I/O, no-follow
+path handling, private permissions, full read verification, and sanitized
+failures.
+
+Startup accepts only an empty provider-temporary directory or the exact sealed
+two-link state left after immutable publication and before temporary unlink. A
+single-link writable or sealed provider temporary blocks startup with an
+operator-cleanup error; initialization does not delete it because another live
+process may still own that file.
+
+Local development recovery requires a maintenance window in which every API
+and Celery process using that local root is stopped. The Operator may remove or
+move a file from `tmp/` to an owner-private quarantine directory outside the
+artifact root only after verifying that its name matches the canonical
+`.put.<32 lowercase hex>.tmp` shape, it is a regular file owned by the service
+account, it has exactly one link, and its mode is `0600` or `0400`. Workstream
+must then restart and revalidate the complete layout. Any different name,
+owner, type, link count, or mode is an integrity incident and must not be
+repaired by this procedure.
 
 The v1 local provider metadata for retain/release/provider receipts is removed
 in the v2 clean cut. No compatibility adapter or dual format remains.
@@ -712,6 +757,7 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_SCRATCH_RESERVATION_TTL_SECONDS` | `2400` | Database-independent wall-clock expiry for abandoned reservations. |
 | `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` | `1800` | Total first-pass and provider-consumption deadline. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_MARGIN_SECONDS` | `300` | Required margin between the total deadline and reservation TTL. |
+| `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_INTERVAL_SECONDS` | `300` | Celery Beat cadence for the named stale-scratch cleanup task; accepted range is 1 through 86400 seconds. |
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
 
@@ -786,7 +832,7 @@ tests cover each authority input for both service-execution mutation classes.
 | stale executor/generation | no terminal write | no effect | current execution owns outcome |
 
 Storage failures never become contributor checker findings, review decisions,
-contribution records, payment exposure, or reputation events.
+contribution records, compensation-award exposure, or reputation events.
 
 ## Operator Recovery
 
@@ -876,7 +922,7 @@ code = pre_submission_infrastructure_unavailable
 
 This is infrastructure state, not a checker result, review decision, or
 contributor outcome. It creates no admission, submission, checker finding,
-payment, contribution, or reputation effect. The sealed upload session and
+compensation, contribution, or reputation effect. The sealed upload session and
 artifact set remain sealed, unconsumed, and reusable until normal expiry; only
 the infrastructure attempt and audit are persisted. Idempotency scope is actor,
 task, sealed session/artifact set, locked context, client key, and canonical
@@ -986,7 +1032,7 @@ Implementation is a clean cut:
   without changing the active v1 port;
 - ArtifactStore v1 methods, active callers, LocalStorage's public adapter
   surface, and schema then migrate atomically in the v2 clean-cut chunk;
-- `flow_node` is removed from configuration without an alias;
+- the Flow Node backend is removed from configuration without an alias;
 - obsolete caller-owned URI/hash and storage-scheme fields are removed in
   their owning guide/submission cutovers;
 - the misleading submission `/finalize` repair route is replaced by
@@ -994,7 +1040,12 @@ Implementation is a clean cut:
   normal submission creation still enters evaluation automatically;
 - no dual write, nullable shadow field, fake verified backfill, fallback
   adapter, compatibility constructor, or second factory remains;
-- pre-production data is rebuilt when authoritative bytes are unavailable.
+- migration `0025` refuses every populated v1 artifact table before DDL and
+  leaves the prior schema and rows unchanged. It performs no automated rebuild
+  or fabricated backfill. Because this is a pre-production clean cut, the
+  Operator must reprovision an empty database/storage namespace out of band and
+  reingest authoritative bytes through v2; records whose authoritative bytes
+  are unavailable are not migrated.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

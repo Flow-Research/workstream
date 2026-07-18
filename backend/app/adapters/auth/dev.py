@@ -46,12 +46,16 @@ class DevelopmentAuthVerifier:
         if (
             not issuer.strip()
             or issuer != issuer.strip()
-            or len(issuer) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS
+            or len(issuer.encode("utf-8")) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS
         ):
             raise RuntimeError("WORKSTREAM_DEV_AUTH_ISSUER must be set for development auth")
         self._settings = settings
         self._subject = subject
         self._issuer = issuer
+
+    def canonical_issuer(self) -> str:
+        """Return the exact configured development issuer."""
+        return self._issuer
 
     async def verify(self, token: str) -> AuthVerificationResult:
         """Verify a local bearer token and return canonical and legacy views.

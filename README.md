@@ -2,11 +2,17 @@
 
 Workstream is Flow's task evaluation and contribution infrastructure.
 
-Workstream manages project guides, task queues, submission packets, automated checks, reviewer routing, evaluation sprints, revision loops, contribution records, payment status, and reputation signals.
+Workstream manages project guides, task queues, submission packets, automated
+checks, reviewer routing, evaluation sprints, revision loops, contribution
+records, compensation award and fulfillment state, and reputation signals.
 
 Workstream is how Flow measures, certifies, and coordinates useful human-agent work.
 
-It is not a workspace and it is not blockchain-first. Operators can work with any local tools, human-agent workflow, or external execution environment. Workstream owns the project guide, task queue, submission packet, automated checks, human review, revision loop, acceptance state, payment ledger, and reputation record.
+It is not a workspace and it is not blockchain-first. Operators can work with
+any local tools, human-agent workflow, or external execution environment.
+Workstream owns the project guide, task queue, submission packet, automated
+checks, human review, revision loop, contribution record, conditional
+compensation award and fulfillment state, and reputation signals.
 
 Workstream is source-agnostic, but v0.1 is manual-first. External origin onboarding, source adapters, automated routing, owner-agent execution workspaces, and on-chain settlement remain later adapters until the internal evaluation loop is proven.
 
@@ -22,9 +28,10 @@ Project Guide
 -> Platform Checkers
 -> Human Review
 -> Needs Revision / Accepted / Rejected
+-> FinalAcceptance on Accepted
 -> Contribution Record
--> Payment Record
--> Reputation Update
+-> Compensation Award / Fulfillment when payable
+-> Reputation projection when separately implemented
 -> Lessons Learned
 ```
 
@@ -35,14 +42,21 @@ Different projects speak different domain languages, but serious task evaluation
 - every project has a guide
 - every project has an approved submission artifact policy
 - every task belongs to a project
-- every project has a payment policy that carries base amount, currency, and payout rules
+- every project has an active published contribution policy version with
+  explicit `accepted_submission` and `completed_review` rules, including
+  explicit unpaid rules where intended
 - every task has acceptance criteria
 - every submission has required artifacts, evidence references, hashes, and contributor attestation
 - every invalid submission packet is blocked before submission creation
 - every submission passes automated checks before human review
-- every review creates a decision
-- every revision must close prior feedback
-- every accepted task updates payment and reputation
+- every valid human decision appends an immutable Review; submitted findings
+  and later resolutions are immutable
+- every revision responds to unresolved blocking feedback without rewriting it
+- every valid human review creates a reviewer contribution
+- every accepted Review creates one immutable FinalAcceptance
+- every submitter accepted_submission contribution consumes FinalAcceptance
+- every payable contribution updates compensation fulfillment; all contributions
+  may feed a separately implemented reputation projection
 
 Workstream turns that operating knowledge into reusable infrastructure.
 
@@ -76,11 +90,13 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [Workspace And Packet Convention](docs/operations_workspace_packet_convention.md)
 - [Reviewer Workflow](docs/operations_reviewer_workflow.md)
 - [Revision Replay](docs/operations_revision_replay.md)
+- [Review And Revision Lifecycle](docs/spec_review_lifecycle.md)
 - [Roles And Permissions](docs/operations_roles_permissions.md)
 - [Authorization Service](docs/spec_authorization_service.md)
 - [Immutable Artifact Storage](docs/spec_artifact_storage_service.md)
+- [Contribution And Compensation](docs/spec_contribution_compensation.md)
 - [Authorization Operations](docs/operations_authorization_service.md)
-- [Payment And Reputation](docs/operations_payment_reputation.md)
+- [Compensation And Reputation](docs/operations_payment_reputation.md)
 - [Risk Register](docs/risk_register.md)
 - [Process Pattern Baseline](docs/process_pattern_baseline.md)
 - [Architecture Lockdown](docs/architecture_lockdown.md)
@@ -119,11 +135,13 @@ Workstream turns that operating knowledge into reusable infrastructure.
 - [ADR 0007: Execution Is Async-First](docs/decision_0007_async_first_execution.md)
 - [ADR 0008: Files Use An Object-Storage Abstraction](docs/decision_0008_object_storage_abstraction.md)
 - [ADR 0009: Review Decisions Are Canonical](docs/decision_0009_review_decisions_are_canonical.md)
-- [ADR 0010: Revision Context Rebase Is Controlled By Policy](docs/decision_0010_revision_context_rebase.md)
+- [ADR 0010: Revision Context Rebase Uses The Active Project Guide](docs/decision_0010_revision_context_rebase.md)
 - [ADR 0011: Submission Artifact Policy Drives Pre-Submit Intake](docs/decision_0011_submission_artifact_policy_drives_pre_submit.md)
 - [ADR 0012: Workstream Owns Product Authorization](docs/decision_0012_workstream_authorization_service.md)
 - [ADR 0013: Immutable Artifact Storage Boundary](docs/decision_0013_immutable_artifact_storage_boundary.md)
 - [ADR 0014: External Services Use One Adapter Convention](docs/decision_0014_external_service_adapter_convention.md)
+- [ADR 0015: Project Contributor Roles Are Independent](docs/decision_0015_project_contributor_roles_are_independent.md)
+- [ADR 0016: Contribution Recognition Precedes External Fulfillment](docs/decision_0016_contribution_compensation_boundary.md)
 
 ## Authorization Baseline
 
@@ -135,8 +153,11 @@ exact-project contributor grants, registered permissions, resource/lifecycle
 guards, revocation, and append-only evidence.
 
 All public API documentation uses `/api/v1`. Imported reference specifications
-are immutable archival inputs; ADR 0012 and the canonical authorization service
-specification record repository-specific precedence and implementation order.
+are immutable archival inputs. ADR 0012 and the canonical authorization service
+specification control authorization; ADR 0016 and the canonical contribution
+and compensation specification control contribution recognition, award
+eligibility, and fulfillment boundaries. Older chunk specifications remain
+implementation history until their owning migrations replace the runtime.
 
 ## Engineering Loop
 
@@ -239,13 +260,17 @@ Submit packet
 Run checks
 Review packet
 Record review decision: accept, needs_revision, or reject
-Create contribution record for accepted work
-Record payment status separately for accepted work
-Update reputation from review outcome
+Create reviewer contribution for every valid human review
+For accept, create FinalAcceptance
+Use FinalAcceptance as the sole source of the submitter contribution
+Record compensation status only for payable contribution awards
+Project reputation only after its separate implementation
 Review lessons learned
 ```
 
-The system is successful only if it prevents weak work from reaching review, preserves evidence, and gives operators a clear path from task intake to accepted paid output.
+The system is successful only if it prevents weak work from reaching review,
+preserves evidence, and gives operators a clear path from task intake through
+review, contribution, conditional compensation, and fulfillment.
 
 ## Operating Standard
 
@@ -260,8 +285,10 @@ Governance:
 Lifecycle and revision:
 
 - status is a ledger, not a loose label
-- revisions replay prior findings one by one
-- revision context is prepared before resubmission when guide or policy versions change
+- revisions append one response and later resolution per required prior finding
+- revision context is prepared from the active Project Guide before
+  resubmission; exact stamped identity/activation-sequence match keeps context,
+  and any different valid active pair rebases forward or backward
 
 Artifacts, evidence, and auditing:
 
@@ -269,11 +296,13 @@ Artifacts, evidence, and auditing:
 - submitted artifacts are immutable and hash-bound to checker runs
 - every checker result is stored and auditable
 
-Acceptance and payment:
+Contribution and compensation:
 
-- accepted work cites evidence before payment exposure is created
-- accepted work creates an evidence-backed contribution record before payment or reputation updates
-- payments are recorded separately from task acceptance
+- every valid human review creates a reviewer contribution from locked evidence
+- for an accept decision, FinalAcceptance alone sources the submitter contribution
+- only payable contributions create immutable awards and fulfillment tracking;
+  explicit unpaid rules create none
+- compensation fulfillment is recorded separately from task acceptance
 
 Checkers, lessons, and gates:
 

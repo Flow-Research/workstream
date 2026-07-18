@@ -1,56 +1,56 @@
 # Revision Replay Template
 
-## Task
+> Planned contract; unavailable until REV/AUTH release gates complete.
 
-## Prior Review
+## Episode
 
-## New Submission
+- task ID:
+- originating `needs_revision` Review ID:
+- prior Submission ID/version:
+- source TaskAssignment ID:
+- target TaskAssignment ID:
 
-## Revision Summary
-
-## Revision Context
-
-Contributor-visible fields:
-
-| Field | Value |
-| --- | --- |
-| prior submission id | `<submission id>` |
-| prior submission version | `<version>` |
-| context rebased | yes or no |
-| prior guide version | `<guide version>` |
-| next guide version | `<guide version>` |
-| prior submission artifact policy version | `<submission artifact policy version>` |
-| next submission artifact policy version | `<submission artifact policy version>` |
-| prior pre-submit checker bundle hash | `<pre-submit checker bundle hash>` |
-| next pre-submit checker bundle hash | `<pre-submit checker bundle hash>` |
-| prior post-submit checker policy version | `<post-submit checker policy version>` |
-| next post-submit checker policy version | `<post-submit checker policy version>` |
-| prior review policy version | `<review policy version>` |
-| next review policy version | `<review policy version>` |
-| prior revision policy version | `<revision policy version>` |
-| next revision policy version | `<revision policy version>` |
-| prior payment policy version | `<payment policy version>` |
-| next payment policy version | `<payment policy version>` |
-| rebase reason | `<reason>` |
-| change summary shown to contributor | `<summary>` |
-
-Reviewer and authorized recovery evidence fields:
+## Revision Context Preparation
 
 | Field | Value |
-| --- | --- |
-| audit event id | `<audit event id>` |
+|---|---|
+| preparation ID | `<uuid>` |
+| preparation sequence | `<integer>` |
+| predecessor preparation ID | `<uuid or null>` |
+| current head ID | `<uuid>` |
+| context digest | `<sha256>` |
+| outcome | `kept`, `rebased`, or `blocked` |
+| direction | `forward`, `backward`, or `null` |
+| prior guide ID/version/activation sequence | `<values>` |
+| next guide ID/version/activation sequence | `<values>` |
+| frozen source snapshot and task-execution policies | `<bounded references>` |
+| change summary | `<contributor-visible summary>` |
+| audit event ID | `<uuid>` |
 
-## Finding Closure
+The reviewer consumes the context stamped on the revised Submission and does
+not perform a separate rebase. ContributionPolicyVersion is not part of this
+preparation.
 
-Every high and medium prior finding must have one row. A resubmission cannot move to review if any required finding is unmapped.
+## Immutable Finding Responses
 
-| Prior Finding ID | Prior Severity | Area | Required Fix | Contributor Fix Summary | Evidence Ref | Contributor Claim Status | Reviewer Closure Status |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `<finding id>` | high / medium / low | `<area>` | `<required fix>` | `<what changed>` | `<evidence id>` | fixed / disputed / not_applicable | closed_fixed / closed_rebutted / partially_closed / still_open / obsolete |
+Every unresolved blocking finding requires one SubmissionFindingResponse.
 
-## Checker Results After Revision
+| ReviewFinding ID | Kind | Required Change | Response Text | Finalized Evidence Binding ID |
+|---|---|---|---|---|
+| `<uuid>` | `blocking` or `advisory` | `<required change>` | `<what changed or bounded rebuttal>` | `<uuid or null>` |
 
-| checker | status | severity | message |
-| --- | --- | --- | --- |
+## Later Immutable Resolutions
 
-## Remaining Issues
+Completed by the later Review without editing the finding or response.
+
+| ReviewFinding ID | Revised Submission ID | Result | Rationale | Evidence Binding ID |
+|---|---|---|---|---|
+| `<uuid>` | `<uuid>` | `resolved`, `unresolved`, or `not_applicable` | `<bounded rationale>` | `<uuid or null>` |
+
+## Checker Readmission
+
+- revised Submission ID/version:
+- acknowledged preparation head/digest:
+- current CheckerRun ID:
+- routing outcome:
+- preferred prior reviewer ID:

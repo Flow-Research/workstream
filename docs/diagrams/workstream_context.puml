@@ -27,10 +27,12 @@ skinparam cloud {
   FontColor #212529
 }
 
-rectangle "Project Manager\n----\nCreates projects,\nguides, policies,\nand tasks" as project_manager #F1F3F5
+rectangle "Project Manager\n----\nCreates projects, guides, tasks,\nand setup/checker/review/\nrevision configuration" as project_manager #F1F3F5
+rectangle "Finance Authority\n----\nPublishes contribution policy\nand compensation-adapter bindings" as finance_authority #F1F3F5
 rectangle "Human-Agent\nContributor\n----\nClaims work,\nsubmits packets,\nand attests output" as contributor #F1F3F5
 rectangle "Reviewer\n----\nReviews evidence,\nfindings, and\nchecker results" as reviewer #F1F3F5
-rectangle "Operator / Access Admin\n----\nAudits, performs registered\nrecovery, and manages grants" as operator #F1F3F5
+rectangle "Operator\n----\nAudits and performs\nregistered recovery" as operator #F1F3F5
+rectangle "Access Administrator\n----\nManages actors, identity links,\nand administrative grants" as access_administrator #F1F3F5
 
 rectangle "Workstream\n----\nFlow task evaluation\nand contribution\ninfrastructure" as workstream #E7F5FF
 
@@ -41,9 +43,11 @@ rectangle "Immutable Artifact Storage\n----\nLocal focused dev\nMinIO local/CI p
 rectangle "Future Adapter Boundary\n----\nExternal task origins\nERC-8004 agent identity/reputation\nERC-8183 task contract/escrow\nx402 / OmniClaw / USDC settlement\nReputation and reporting consumers" as future_boundary #FFF3BF
 
 project_manager --> workstream : operates
+finance_authority --> workstream : governs contribution policy
 contributor --> workstream : submits
 reviewer --> workstream : reviews
 operator --> workstream : audits
+access_administrator --> workstream : administers access
 
 workstream --> flow_auth : verifies externally issued Flow tokens
 workstream --> postgres : records lifecycle

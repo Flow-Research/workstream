@@ -160,9 +160,9 @@ docs/reference_specs/SHA256SUMS
   01/02 merged and chunk 03 handled separately by PR #90, and defers further
   authorization implementation until auth proof.
 - Canonical vocabulary uses Contributor as the umbrella human term. A
-  contributor has an exact-project `submitter`, `reviewer`, or `both` grant.
-  Celery, checker, setup, and background workers are internal services, not
-  human product roles.
+  contributor may hold independent exact-project `submitter`, `reviewer`, and
+  `adjudicator` grants. Celery, checker, setup, and background workers are
+  internal services, not human product roles.
 - The project policy derivation prompt and its exact prompt-contract tests use
   Contributor for human submitters. This wording-only repair does not change
   schemas, persisted legacy field names, authorization, or runtime routing.

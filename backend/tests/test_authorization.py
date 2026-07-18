@@ -5,6 +5,7 @@ import asyncio
 import base64
 from collections import UserDict
 from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 import inspect
 import json
@@ -17,11 +18,12 @@ from alembic.config import Config
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.api.deps.authorization import get_authorization_service
+from app.core.api_controls import StructuredHTTPException
 from app.core.config import get_settings
 from app.modules.audit.schemas import (
     ActorReferenceKind,
@@ -29,7 +31,11 @@ from app.modules.audit.schemas import (
     AuthorityEventType,
 )
 from app.modules.audit.service import AuditService
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
+from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
+from app.modules.authorization import router as authorization_router
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     ACTION_DEFINITIONS,
@@ -42,7 +48,9 @@ from app.modules.authorization.catalogue import (
     ActionId,
     ActionOwner,
     PermissionId,
+    SERVICE_ACTIONS_BY_IDENTITY,
     _index_actions,
+    _index_service_actions,
     resolve_executable_action,
 )
 from app.modules.authorization.schemas import (
@@ -72,11 +80,11 @@ from app.modules.authorization.schemas import (
     ServiceActorCreateRequest,
     derive_reason_digest,
     derive_service_identity_digest,
-    derive_service_profile_digest,
     parse_authority_request,
 )
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.admin_service import (
     AdminRoleGrantService,
     BootstrapAlreadyCompleted,
@@ -86,9 +94,12 @@ from app.modules.authorization.admin_service import (
 from app.modules.authorization.policy import ADMIN_ROLE_PERMISSIONS, ADMIN_ROLE_SCOPES
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
+    ActorIdentityLinkAdminReadResourceContext,
     ActorKind,
+    ActorProfileAdminReadResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
+    AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
     AdminRoleGrantResourceContext,
@@ -99,8 +110,14 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
+    ServiceActorProvisionResourceContext,
     SystemResourceContext,
     authorization_resource_digest,
+)
+from app.modules.authorization.service_actor_service import (
+    ServiceActorConflict,
+    ServiceActorProvisioningService,
+    ServiceActorProvisioningUnavailable,
 )
 
 DIGEST = "sha256:" + "a" * 64
@@ -229,11 +246,22 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         "admin_role_grant.issue": ("admin_role.grant", "WS-AUTH-001-08"),
         "admin_role_grant.revoke": ("admin_role.revoke", "WS-AUTH-001-08"),
         "admin_role_grant.bootstrap": ("admin_role.grant", "WS-AUTH-001-08"),
+        "actor.profile.read": ("actor.profile.read_any", "WS-AUTH-001-09C"),
+        "actor.profile.suspend": ("actor.profile.suspend", "WS-AUTH-001-09D"),
+        "actor.profile.reactivate": ("actor.profile.reactivate", "WS-AUTH-001-09D"),
+        "actor.profile.deactivate": ("actor.profile.deactivate", "WS-AUTH-001-09D"),
+        "actor.identity_link.read": ("actor.identity_link.read", "WS-AUTH-001-09C"),
+        "actor.identity_link.revoke": ("actor.identity_link.revoke", "WS-AUTH-001-09D"),
+        "actor.identity_link.reactivate": (
+            "actor.identity_link.reactivate",
+            "WS-AUTH-001-09D",
+        ),
+        "actor.service.provision": ("actor.service.provision", "WS-AUTH-001-09B"),
     }
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 57
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 65
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -250,6 +278,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
+        ActionId.ACTOR_PROFILE_READ,
+        ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.ACTOR_SERVICE_PROVISION,
     }
     assert {
         definition.action_id.value: (
@@ -265,6 +296,86 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         resolve_executable_action(ActionId.REVIEW_QUEUE_READ)
     with pytest.raises(TypeError):
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
+
+
+def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
+    expected = {
+        ServiceIdentity.ARTIFACT_VERIFIER: {"artifact.verification.execute"},
+        ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
+        ServiceIdentity.ARTIFACT_SCHEDULER: {
+            "artifact.pending_work.scan",
+            "artifact.upload_session.expire",
+        },
+        ServiceIdentity.ARTIFACT_BINDING: {
+            "artifact.guide_source.binding.create",
+            "artifact.submission.binding.create",
+            "artifact.checker_output.binding.create",
+        },
+        ServiceIdentity.ARTIFACT_GUIDE_READER: {"artifact.guide_source.read"},
+        ServiceIdentity.ARTIFACT_MATERIALIZER: {
+            "artifact.pre_submit.checker_input.materialize",
+            "artifact.post_submit.checker_input.materialize",
+        },
+        ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: {"artifact.checker_output.write"},
+    }
+    assert set(SERVICE_ACTIONS_BY_IDENTITY) == SERVICE_IDENTITIES
+    assert {
+        identity: {action.value for action in actions}
+        for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
+    } == expected
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 11
+    assert all(
+        ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
+        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
+        for action in actions
+    )
+    with pytest.raises(TypeError):
+        SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["missing_identity", "extra_action", "duplicate_action", "swapped_rows"],
+)
+def test_fixed_service_action_matrix_construction_fails_closed(mutation: str) -> None:
+    rows = dict(SERVICE_ACTIONS_BY_IDENTITY)
+    if mutation == "missing_identity":
+        rows.pop(ServiceIdentity.ARTIFACT_VERIFIER)
+    elif mutation == "extra_action":
+        rows[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset(
+            {ActionId.ARTIFACT_VERIFICATION_EXECUTE, ActionId.ARTIFACT_AUDIT_READ}
+        )
+    elif mutation == "duplicate_action":
+        rows[ServiceIdentity.ARTIFACT_PUT_RESOLVER] = frozenset(
+            {ActionId.ARTIFACT_VERIFICATION_EXECUTE}
+        )
+    else:
+        rows[ServiceIdentity.ARTIFACT_VERIFIER], rows[ServiceIdentity.ARTIFACT_PUT_RESOLVER] = (
+            rows[ServiceIdentity.ARTIFACT_PUT_RESOLVER],
+            rows[ServiceIdentity.ARTIFACT_VERIFIER],
+        )
+    with pytest.raises(RuntimeError, match="service action matrix"):
+        _index_service_actions(rows)
+
+
+@pytest.mark.parametrize("metadata", ["permission", "owner", "availability"])
+def test_fixed_service_action_matrix_rejects_metadata_drift(
+    metadata: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    action = ActionId.ARTIFACT_VERIFICATION_EXECUTE
+    definition = ACTION_BY_ID[action]
+    if metadata == "permission":
+        changed = replace(definition, permission_id=PermissionId.ARTIFACT_PENDING_WORK_SCAN)
+    elif metadata == "owner":
+        changed = replace(definition, owner=ActionOwner.ART_03)
+    else:
+        changed = replace(definition, availability=ActionAvailability.ACTIVE)
+    action_index = dict(ACTION_BY_ID)
+    action_index[action] = changed
+    monkeypatch.setattr(authorization_catalogue, "ACTION_BY_ID", action_index)
+    with pytest.raises(RuntimeError, match="service action matrix metadata mismatch"):
+        _index_service_actions(dict(SERVICE_ACTIONS_BY_IDENTITY))
 
 
 def test_administrative_role_policy_and_definition_responses_are_exact() -> None:
@@ -323,6 +434,251 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
     assert [list(item.allowed_scopes) for item in role_response.items] == [
         expected_scopes[role] for role in AdminRole
     ]
+
+
+async def test_definition_reads_authorize_touch_and_commit_before_disclosure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, object]] = []
+    resolved = SimpleNamespace(profile=SimpleNamespace(id=str(uuid4())))
+
+    class Session:
+        async def commit(self) -> None:
+            events.append(("commit", None))
+
+        async def rollback(self) -> None:
+            events.append(("rollback", None))
+
+    class Authorization:
+        async def require(self, action_id, resource):
+            events.append(("authorize", (action_id, resource)))
+
+    class ActorService:
+        def __init__(self, session) -> None:
+            assert session is test_session
+
+        async def touch_after_authorization(self, actor) -> None:
+            assert actor is resolved
+            events.append(("touch", actor))
+
+    test_session = Session()
+    monkeypatch.setattr(authorization_router, "ActorService", ActorService)
+
+    permissions = await authorization_router.read_permission_definitions(
+        resolved,
+        Authorization(),
+        test_session,
+    )
+    roles = await authorization_router.read_admin_role_definitions(
+        resolved,
+        Authorization(),
+        test_session,
+    )
+
+    first_action, first_resource = events[0][1]
+    second_action, second_resource = events[3][1]
+    assert first_action is ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ
+    assert isinstance(first_resource, PermissionCatalogueResourceContext)
+    assert first_resource.resource_id == "workstream:permission_catalogue"
+    assert second_action is ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ
+    assert isinstance(second_resource, AdminRoleDefinitionsResourceContext)
+    assert second_resource.resource_id == "workstream:admin_role_definitions"
+    assert [event for event, _ in events] == [
+        "authorize",
+        "touch",
+        "commit",
+        "authorize",
+        "touch",
+        "commit",
+    ]
+    assert permissions.total == len(PermissionId)
+    assert roles.total == len(AdminRole)
+
+
+@pytest.mark.parametrize(
+    ("route", "action_id", "resource_type", "read_method"),
+    [
+        (
+            authorization_router.read_actor_profile,
+            ActionId.ACTOR_PROFILE_READ,
+            ActorProfileAdminReadResourceContext,
+            "read_admin_profile",
+        ),
+        (
+            authorization_router.read_actor_identity_link,
+            ActionId.ACTOR_IDENTITY_LINK_READ,
+            ActorIdentityLinkAdminReadResourceContext,
+            "read_admin_identity_link",
+        ),
+    ],
+)
+@pytest.mark.parametrize("self_target", [False, True])
+async def test_actor_admin_routes_authorize_before_lookup_touch_and_commit(
+    monkeypatch: pytest.MonkeyPatch,
+    route,
+    action_id: ActionId,
+    resource_type,
+    read_method: str,
+    self_target: bool,
+) -> None:
+    target_id = uuid4()
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(
+            id=str(target_id if self_target else uuid4()),
+            updated_at=datetime.now(UTC),
+            last_seen_at=datetime.now(UTC),
+        ),
+        identity_link=SimpleNamespace(last_verified_at=datetime.now(UTC)),
+    )
+    events: list[tuple[str, object]] = []
+
+    class Response:
+        def __init__(self) -> None:
+            self.updates: list[dict] = []
+
+        def model_copy(self, *, update):
+            self.updates.append(update)
+            return self
+
+    response = Response()
+
+    class Session:
+        async def commit(self) -> None:
+            events.append(("commit", None))
+
+        async def rollback(self) -> None:
+            events.append(("rollback", None))
+
+    class Authorization:
+        async def require(self, requested_action, resource):
+            events.append(("authorize", (requested_action, resource)))
+
+    class ActorService:
+        def __init__(self, session) -> None:
+            assert session is test_session
+
+        async def read_admin_profile(self, actor_profile_id):
+            assert read_method == "read_admin_profile"
+            events.append(("lookup", actor_profile_id))
+            return response
+
+        async def read_admin_identity_link(self, actor_profile_id):
+            assert read_method == "read_admin_identity_link"
+            events.append(("lookup", actor_profile_id))
+            return response
+
+        async def touch_after_authorization(self, actor) -> None:
+            assert actor is resolved
+            events.append(("touch", actor))
+
+    test_session = Session()
+    monkeypatch.setattr(authorization_router, "ActorService", ActorService)
+
+    result = await route(target_id, resolved, Authorization(), test_session)
+
+    requested_action, resource = events[0][1]
+    assert requested_action is action_id
+    assert isinstance(resource, resource_type)
+    assert resource.resource_id == target_id
+    assert result is response
+    assert [event for event, _ in events] == ["authorize", "lookup", "touch", "commit"]
+    if not self_target:
+        assert response.updates == []
+    elif action_id is ActionId.ACTOR_PROFILE_READ:
+        assert response.updates == [
+            {
+                "updated_at": resolved.profile.updated_at,
+                "last_seen_at": resolved.profile.last_seen_at,
+            }
+        ]
+    else:
+        assert response.updates == [
+            {"last_verified_at": resolved.identity_link.last_verified_at}
+        ]
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        authorization_router.read_actor_profile,
+        authorization_router.read_actor_identity_link,
+    ],
+)
+async def test_actor_admin_missing_resource_rolls_back_without_touch_or_commit(
+    monkeypatch: pytest.MonkeyPatch,
+    route,
+) -> None:
+    events: list[str] = []
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    class Authorization:
+        async def require(self, _action_id, _resource):
+            events.append("authorize")
+
+    class ActorService:
+        def __init__(self, _session) -> None:
+            pass
+
+        async def read_admin_profile(self, _actor_profile_id):
+            events.append("lookup")
+            return None
+
+        async def read_admin_identity_link(self, _actor_profile_id):
+            events.append("lookup")
+            return None
+
+        async def touch_after_authorization(self, _resolved) -> None:
+            events.append("touch")
+
+    monkeypatch.setattr(authorization_router, "ActorService", ActorService)
+
+    with pytest.raises(StructuredHTTPException) as missing:
+        await route(
+            uuid4(),
+            SimpleNamespace(),
+            Authorization(),
+            Session(),
+        )
+
+    assert missing.value.status_code == 404
+    assert missing.value.error_code == "actor_resource_not_found"
+    assert events == ["authorize", "lookup", "rollback"]
+
+
+async def test_authorization_route_database_failures_rollback_and_map_to_retryable_503() -> None:
+    class Session:
+        def __init__(self) -> None:
+            self.commits = 0
+            self.rollbacks = 0
+
+        async def commit(self) -> None:
+            self.commits += 1
+            raise SQLAlchemyError("commit failed")
+
+        async def rollback(self) -> None:
+            self.rollbacks += 1
+
+    async def failed_operation() -> None:
+        raise SQLAlchemyError("query failed")
+
+    session = Session()
+    with pytest.raises(StructuredHTTPException) as commit_failure:
+        await authorization_router._commit_or_unavailable(session)
+    with pytest.raises(StructuredHTTPException) as query_failure:
+        await authorization_router._database_call(session, failed_operation())
+
+    for failure in (commit_failure.value, query_failure.value):
+        assert failure.status_code == 503
+        assert failure.error_code == "service_unavailable"
+        assert failure.retryable is True
+    assert session.commits == 1
+    assert session.rollbacks == 2
 
 
 @pytest.mark.parametrize(
@@ -466,6 +822,7 @@ class _AdminPolicyFacts:
         )
         self.request_actor_is_present = True
         self.control_locked = False
+        self.find_calls: list[tuple[tuple, dict]] = []
 
     async def lock_control(self):
         self.control_locked = True
@@ -479,7 +836,8 @@ class _AdminPolicyFacts:
             SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
         )
 
-    async def find_effective_grant(self, *_args, **_kwargs):
+    async def find_effective_grant(self, *args, **kwargs):
+        self.find_calls.append((args, kwargs))
         return self.matched
 
     async def has_effective_permission_any_scope(self, *_args, **_kwargs):
@@ -527,6 +885,83 @@ async def test_admin_kernel_allows_only_a_matched_registered_grant() -> None:
     with pytest.raises(AuthorizationDenied) as denied:
         await service.require(ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ, resource)
     assert denied.value.public_code == "permission_not_granted"
+
+
+@pytest.mark.parametrize(
+    ("action_id", "resource_type"),
+    [
+        (ActionId.ACTOR_PROFILE_READ, ActorProfileAdminReadResourceContext),
+        (ActionId.ACTOR_IDENTITY_LINK_READ, ActorIdentityLinkAdminReadResourceContext),
+    ],
+)
+async def test_actor_admin_reads_serialize_system_authority_without_control_lock(
+    action_id: ActionId,
+    resource_type,
+) -> None:
+    context = _runtime_context()
+    service, evidence, facts = _admin_runtime_service(context)
+    read_kind = "profile" if action_id is ActionId.ACTOR_PROFILE_READ else "identity_link"
+    resource = resource_type(
+        resource_type="actor_profile",
+        resource_id=uuid4(),
+        read_kind=read_kind,
+    )
+
+    decision = await service.require(action_id, resource)
+
+    assert decision.allowed is True
+    assert decision.revalidated is True
+    assert decision.matched_grant_id == facts.matched.id
+    assert decision.matched_scope_project_id is None
+    assert facts.control_locked is False
+    assert facts.find_calls == [
+        (
+            (context.actor_profile_id, ACTION_BY_ID[action_id].permission_id),
+            {
+                "scope_project_id": None,
+                "system_scope_only": True,
+                "for_update": True,
+            },
+        )
+    ]
+    assert decision.resource_context_digest == authorization_resource_digest(resource)
+    assert evidence.events[0].resource_id == str(resource.resource_id)
+
+
+@pytest.mark.parametrize(
+    ("action_id", "resource"),
+    [
+        (
+            ActionId.ACTOR_PROFILE_READ,
+            ActorIdentityLinkAdminReadResourceContext(
+                resource_type="actor_profile",
+                resource_id=uuid4(),
+                read_kind="identity_link",
+            ),
+        ),
+        (
+            ActionId.ACTOR_IDENTITY_LINK_READ,
+            ActorProfileAdminReadResourceContext(
+                resource_type="actor_profile",
+                resource_id=uuid4(),
+                read_kind="profile",
+            ),
+        ),
+    ],
+)
+async def test_actor_admin_reads_reject_cross_paired_resource_contexts(
+    action_id: ActionId,
+    resource,
+) -> None:
+    service, evidence, facts = _admin_runtime_service(_runtime_context())
+
+    with pytest.raises(AuthorizationDenied) as denied:
+        await service.require(action_id, resource)
+
+    assert denied.value.public_code == "resource_guard_denied"
+    assert facts.find_calls == []
+    assert evidence.events[0].after_facts == {"allowed": False}
+    assert evidence.events[0].denial_code == "resource_guard_denied"
 
 
 async def test_admin_kernel_conceals_targets_until_permission_and_scope_match() -> None:
@@ -1875,6 +2310,111 @@ async def authorization_factory(authorization_database_env: str):
         await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_authorization_locks_refresh_cached_actor_lifecycle_state(
+    authorization_factory,
+) -> None:
+    """Locked authorization rows must replace stale identity-map state."""
+    profile_id, link_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    async with authorization_factory() as seed:
+        seed.add_all(
+            [
+                ActorProfile(
+                    id=str(profile_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(profile_id),
+                ),
+                ActorIdentityLink(
+                    id=str(link_id),
+                    actor_profile_id=str(profile_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"lock-refresh-{profile_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(profile_id),
+                    last_verified_at=now,
+                ),
+            ]
+        )
+        await seed.commit()
+
+    async with authorization_factory() as stale:
+        cached_profile = await stale.get(ActorProfile, str(profile_id))
+        cached_link = await stale.get(ActorIdentityLink, str(link_id))
+        assert cached_profile is not None and cached_profile.status == "active"
+        assert cached_link is not None and cached_link.status == "active"
+
+        async with authorization_factory() as lifecycle:
+            await lifecycle.execute(
+                text(
+                    "update actor_profiles set status='suspended', "
+                    "suspended_by=:actor, suspended_at=:changed_at, "
+                    "suspension_reason='security hold' where id=:actor"
+                ),
+                {"actor": str(profile_id), "changed_at": now},
+            )
+            await lifecycle.execute(
+                text(
+                    "update actor_identity_links set status='revoked', "
+                    "revoked_by=:actor, revoked_at=:changed_at, "
+                    "revoked_reason='credential revoked' where id=:link"
+                ),
+                {"actor": str(profile_id), "changed_at": now, "link": str(link_id)},
+            )
+            await lifecycle.commit()
+
+        locked = await AdminAuthorizationRepository(stale).lock_request_actor(
+            link_id,
+            profile_id,
+        )
+        assert locked is not None
+        locked_link, locked_profile = locked
+        assert locked_profile is cached_profile
+        assert locked_link is cached_link
+        assert locked_profile.status == "suspended"
+        assert locked_link.status == "revoked"
+        assert (
+            await AdminAuthorizationRepository(stale).lock_eligible_human(profile_id)
+            is None
+        )
+        await stale.rollback()
+
+        cached_profile = await stale.get(ActorProfile, str(profile_id))
+        cached_link = await stale.get(ActorIdentityLink, str(link_id))
+        assert cached_profile is not None and cached_profile.status == "suspended"
+        assert cached_link is not None and cached_link.status == "revoked"
+        async with authorization_factory() as lifecycle:
+            await lifecycle.execute(
+                text(
+                    "update actor_profiles set status='active', suspended_by=null, "
+                    "suspended_at=null, suspension_reason=null where id=:actor"
+                ),
+                {"actor": str(profile_id)},
+            )
+            await lifecycle.execute(
+                text(
+                    "update actor_identity_links set status='active', revoked_by=null, "
+                    "revoked_at=null, revoked_reason=null where id=:link"
+                ),
+                {"link": str(link_id)},
+            )
+            await lifecycle.commit()
+
+        eligible = await AdminAuthorizationRepository(stale).lock_eligible_human(
+            profile_id
+        )
+        assert eligible is not None
+        eligible_link, eligible_profile = eligible
+        assert eligible_profile is cached_profile
+        assert eligible_link is cached_link
+        assert eligible_profile.status == "active"
+        assert eligible_link.status == "active"
+        await stale.rollback()
+
+
 def _request(target: UUID | None = None) -> ActorProfileSuspendRequest:
     return ActorProfileSuspendRequest(
         operation=AuthorityOperation.ACTOR_PROFILE_SUSPEND,
@@ -2464,7 +3004,7 @@ def test_request_admission_is_frozen_bounded_and_nonretaining() -> None:
         ),
         lambda: derive_reason_digest("\ud800" + secret),
         lambda: derive_service_identity_digest("https://identity.example", "\ud800" + secret),
-        lambda: derive_service_profile_digest("\ud800" + secret, "approved"),
+        lambda: derive_service_identity_digest("\ud800" + secret, "service-subject"),
     ):
         with pytest.raises(TypeError) as caught:
             construct()
@@ -2497,15 +3037,323 @@ def test_state_changing_mapping_cannot_change_validated_snapshot() -> None:
         parse_authority_request(hostile)
 
 
+def _service_actor_request() -> ServiceActorCreateRequest:
+    return ServiceActorCreateRequest(
+        operation=AuthorityOperation.SERVICE_ACTOR_CREATE,
+        service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+        identity_reference_digest=derive_service_identity_digest(
+            "https://identity.flowresearch.tech", "opaque-service-subject"
+        ),
+        reason_digest=derive_reason_digest("Approved"),
+    )
+
+
+def _service_actor_decision(request: ServiceActorCreateRequest) -> AuthorizationDecision:
+    resource = ServiceActorProvisionResourceContext(
+        resource_type="service_actor_provisioning",
+        resource_id=request.service_identity,
+    )
+    return AuthorizationDecision(
+        decision_id=uuid4(),
+        action_id=ActionId.ACTOR_SERVICE_PROVISION,
+        permission_id=PermissionId.ACTOR_SERVICE_PROVISION,
+        allowed=True,
+        denial_code=None,
+        resource_type=resource.resource_type,
+        resource_id=resource.resource_id,
+        resource_context_digest=authorization_resource_digest(resource),
+        matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=None,
+        revalidated=True,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+async def test_service_actor_conflict_precedence_is_fixed_and_private() -> None:
+    service = ServiceActorProvisioningService(object())  # type: ignore[arg-type]
+
+    class Actors:
+        profile = None
+        link = None
+        link_reads = 0
+
+        async def get_service_actor(self, _service_identity):
+            return self.profile
+
+        async def get_identity_link(self, _issuer, _subject):
+            self.link_reads += 1
+            return self.link
+
+    actors = Actors()
+    service._actors = actors  # type: ignore[assignment]
+    actors.profile = object()
+    actors.link = object()
+    assert (
+        await service.find_conflict(
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+            issuer="private-issuer",
+            subject="private-subject",
+        )
+        is ServiceActorConflict.SERVICE_IDENTITY
+    )
+    assert actors.link_reads == 0
+
+    actors.profile = None
+    assert (
+        await service.find_conflict(
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+            issuer="private-issuer",
+            subject="private-subject",
+        )
+        is ServiceActorConflict.EXTERNAL_IDENTITY
+    )
+    actors.link = None
+    assert (
+        await service.find_conflict(
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+            issuer="private-issuer",
+            subject="private-subject",
+        )
+        is None
+    )
+
+
+async def test_service_actor_replay_fails_closed_on_committed_state_drift() -> None:
+    actor_id, creator_id = uuid4(), uuid4()
+    request = _service_actor_request()
+    response = AuthorityResponseReference(
+        resource_type=AuthorityResourceType.ACTOR_PROFILE,
+        resource_id=actor_id,
+        version=None,
+        http_status=201,
+    )
+    profile = ActorProfile(
+        id=str(actor_id),
+        actor_kind="service",
+        status="active",
+        provisioning_method="manual_service_provisioning",
+        service_identity=request.service_identity.value,
+        created_by=str(creator_id),
+    )
+    profile.created_at = datetime.now(UTC)
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=profile.id,
+        issuer="https://identity.flowresearch.tech",
+        subject="opaque-service-subject",
+        subject_kind="service",
+        status="active",
+        linked_by=str(creator_id),
+        last_verified_at=None,
+    )
+    link.linked_at = datetime.now(UTC)
+
+    class Actors:
+        current_profile = profile
+        current_link = link
+
+        async def get_actor_profile(self, _actor_profile_id):
+            return self.current_profile
+
+        async def get_identity_link_for_actor(self, _actor_profile_id):
+            return self.current_link
+
+    actors = Actors()
+    service = ServiceActorProvisioningService(object())  # type: ignore[arg-type]
+    service._actors = actors  # type: ignore[assignment]
+    wrong_resource = response.model_copy(
+        update={"resource_type": AuthorityResourceType.ADMIN_ROLE_GRANT}
+    )
+    with pytest.raises(TypeError, match="replay resource changed"):
+        await service.replay_response(
+            response=wrong_resource,
+            request=request,
+            issuer=link.issuer,
+            subject=link.subject,
+        )
+
+    for current_profile in (
+        None,
+        profile.__class__(
+            id=profile.id,
+            actor_kind="human",
+            status="active",
+            provisioning_method="automatic_first_access",
+            created_by=profile.id,
+        ),
+        profile.__class__(
+            id=profile.id,
+            actor_kind="service",
+            status="active",
+            provisioning_method="manual_service_provisioning",
+            service_identity=ServiceIdentity.ARTIFACT_SCHEDULER.value,
+            created_by=profile.id,
+        ),
+        profile.__class__(
+            id=profile.id,
+            actor_kind="service",
+            status="deactivated",
+            provisioning_method="manual_service_provisioning",
+            service_identity=profile.service_identity,
+            created_by=profile.id,
+            deactivated_by=profile.id,
+            deactivated_at=datetime.now(UTC),
+            deactivation_reason="retired",
+        ),
+    ):
+        actors.current_profile = current_profile
+        with pytest.raises(ServiceActorProvisioningUnavailable, match="actor is unavailable"):
+            await service.replay_response(
+                response=response,
+                request=request,
+                issuer=link.issuer,
+                subject=link.subject,
+            )
+
+    actors.current_profile = profile
+    for current_link in (
+        None,
+        link.__class__(
+            id=link.id,
+            actor_profile_id=profile.id,
+            issuer="different-issuer",
+            subject=link.subject,
+            subject_kind="service",
+            status="active",
+            linked_by=link.linked_by,
+        ),
+        link.__class__(
+            id=link.id,
+            actor_profile_id=profile.id,
+            issuer=link.issuer,
+            subject="different-subject",
+            subject_kind="service",
+            status="active",
+            linked_by=link.linked_by,
+        ),
+        link.__class__(
+            id=link.id,
+            actor_profile_id=profile.id,
+            issuer=link.issuer,
+            subject=link.subject,
+            subject_kind="human",
+            status="active",
+            linked_by=link.linked_by,
+            last_verified_at=datetime.now(UTC),
+        ),
+        link.__class__(
+            id=link.id,
+            actor_profile_id=profile.id,
+            issuer=link.issuer,
+            subject=link.subject,
+            subject_kind="service",
+            status="revoked",
+            linked_by=link.linked_by,
+            revoked_by=link.linked_by,
+            revoked_at=datetime.now(UTC),
+            revoked_reason="rotated",
+        ),
+    ):
+        actors.current_link = current_link
+        with pytest.raises(ServiceActorProvisioningUnavailable, match="link is unavailable"):
+            await service.replay_response(
+                response=response,
+                request=request,
+                issuer=link.issuer,
+                subject=link.subject,
+            )
+
+    actors.current_link = link
+    profile.created_at = None
+    with pytest.raises(RuntimeError, match="creation facts are incomplete"):
+        await service.replay_response(
+            response=response,
+            request=request,
+            issuer=link.issuer,
+            subject=link.subject,
+        )
+    profile.created_at = datetime.now(UTC)
+    replayed = await service.replay_response(
+        response=response,
+        request=request,
+        issuer=link.issuer,
+        subject=link.subject,
+    )
+    assert replayed.actor_profile_id == actor_id
+    assert replayed.service_identity is request.service_identity
+
+
+async def test_service_actor_mutation_rejects_authority_and_request_drift_before_writes() -> None:
+    actor_id = uuid4()
+    request = _service_actor_request()
+    decision = _service_actor_decision(request)
+    claim = AuthorityClaimHandle(
+        record_id=uuid4(),
+        idempotency_key=uuid4(),
+        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+        actor_ref=str(actor_id),
+        operation=request.operation,
+        request_digest=DIGEST,
+    )
+    service = ServiceActorProvisioningService(object())  # type: ignore[arg-type]
+
+    with pytest.raises(TypeError, match="exact matched authority"):
+        await service.complete(
+            claim=claim,
+            request=request,
+            decision=decision.model_copy(update={"revalidated": False}),
+            actor_profile_id=actor_id,
+            issuer="https://identity.flowresearch.tech",
+            subject="opaque-service-subject",
+            reason="Approved",
+        )
+    with pytest.raises(TypeError, match="identity digest changed"):
+        await service.complete(
+            claim=claim,
+            request=request.model_copy(update={"identity_reference_digest": DIGEST}),
+            decision=decision,
+            actor_profile_id=actor_id,
+            issuer="https://identity.flowresearch.tech",
+            subject="opaque-service-subject",
+            reason="Approved",
+        )
+    with pytest.raises(TypeError, match="reason digest changed"):
+        await service.complete(
+            claim=claim,
+            request=request.model_copy(update={"reason_digest": DIGEST}),
+            decision=decision,
+            actor_profile_id=actor_id,
+            issuer="https://identity.flowresearch.tech",
+            subject="opaque-service-subject",
+            reason="Approved",
+        )
+    invalid_decision = decision.model_copy(update={"revalidated": False})
+    with pytest.raises(TypeError, match="mismatch requires exact matched authority"):
+        await service.record_mismatch(
+            actor_profile_id=actor_id,
+            request=request,
+            decision=invalid_decision,
+        )
+    with pytest.raises(TypeError, match="conflict requires exact matched authority"):
+        await service.record_conflict(
+            actor_profile_id=actor_id,
+            request=request,
+            decision=invalid_decision,
+        )
+
+
 def test_every_operation_has_one_strict_canonical_request_variant() -> None:
     project, actor, resource = uuid4(), uuid4(), uuid4()
     requests = [
         ServiceActorCreateRequest(
             operation=AuthorityOperation.SERVICE_ACTOR_CREATE,
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
             identity_reference_digest=derive_service_identity_digest(
                 "https://identity.flowresearch.tech", "opaque-service-subject"
             ),
-            profile_payload_digest=derive_service_profile_digest("Adapter", "Approved"),
+            reason_digest=derive_reason_digest("Approved"),
         ),
         AdminRoleGrantIssueRequest(
             operation=AuthorityOperation.ADMIN_ROLE_GRANT_ISSUE,
@@ -2574,10 +3422,11 @@ async def test_all_operation_and_replacement_mappings_commit_one_linked_pair(
     requests = [
         ServiceActorCreateRequest(
             operation=AuthorityOperation.SERVICE_ACTOR_CREATE,
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
             identity_reference_digest=derive_service_identity_digest(
                 "https://identity.flowresearch.tech", "opaque-service-subject"
             ),
-            profile_payload_digest=derive_service_profile_digest("Adapter", "Approved"),
+            reason_digest=derive_reason_digest("Approved"),
         ),
         AdminRoleGrantIssueRequest(
             operation=AuthorityOperation.ADMIN_ROLE_GRANT_ISSUE,

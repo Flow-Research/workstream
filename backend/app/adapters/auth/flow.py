@@ -177,7 +177,11 @@ class FlowAuthVerifier:
 
         if self._local_hmac_secret:
             self._issuer = settings.flow_auth_issuer
-            if not self._issuer or len(self._issuer) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS:
+            if (
+                not self._issuer
+                or len(self._issuer.encode("utf-8"))
+                > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS
+            ):
                 raise RuntimeError("WORKSTREAM_FLOW_AUTH_ISSUER is invalid")
             self._audience = settings.flow_auth_audience
             self._algorithms = ("HS256",)
@@ -187,7 +191,7 @@ class FlowAuthVerifier:
             return
 
         self._issuer = _canonical_https_url(settings.token_issuer, name="WORKSTREAM_TOKEN_ISSUER")
-        if len(self._issuer) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS:
+        if len(self._issuer.encode("utf-8")) > MAX_VERIFIED_IDENTITY_ANCHOR_CHARACTERS:
             raise RuntimeError("WORKSTREAM_TOKEN_ISSUER is invalid")
         if urlsplit(self._issuer).hostname == "auth.flow.local":
             raise RuntimeError("WORKSTREAM_TOKEN_ISSUER cannot use the placeholder issuer")
@@ -241,6 +245,10 @@ class FlowAuthVerifier:
                 raise RuntimeError(
                     "WORKSTREAM_TOKEN_INTROSPECTION_CLIENT_SECRET must be configured"
                 )
+
+    def canonical_issuer(self) -> str:
+        """Return the exact configured issuer used by successful token results."""
+        return self._issuer
 
     @staticmethod
     def _parse_algorithms(raw: str) -> tuple[str, ...]:

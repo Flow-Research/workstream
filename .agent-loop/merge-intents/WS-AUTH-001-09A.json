@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-09A",
+  "chunk_title": "Fixed Service Identity Foundation",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-09B",
+  "next_chunk_title": "Controlled Service Actor Provisioning",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

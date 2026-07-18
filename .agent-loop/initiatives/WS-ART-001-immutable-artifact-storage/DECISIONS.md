@@ -79,12 +79,13 @@ access.
 
 S3CompatibleArtifactStore and LocalStorageAdapter are registered explicitly
 through
-`ExternalServiceAdapterFactory[ArtifactStore]`. Only the artifact-storage
-orchestration service receives the writable port through composition-root
-dependency injection. Product modules and Celery jobs receive typed artifact
+`ExternalServiceAdapterFactory[ArtifactStoreBootstrap]`. The composition root
+claims the bootstrap's exact namespace in PostgreSQL before initialization
+yields the writable `ArtifactStore`. Only artifact-storage orchestration
+receives that port. Product modules and Celery jobs receive typed artifact
 operations from that owner. No service locator, plugin discovery, concrete
-import, fallback constructor, dual factory, or bypassing writable-port
-injection exists.
+import, fallback constructor, dual factory, or bypassing writable-port injection
+exists.
 
 ## D13 - Private S3 Deployment
 
@@ -101,7 +102,11 @@ access mutation are denied. Static credentials are local/CI MinIO only.
 ## D14 - Clean Cut
 
 The `flow_node` backend value and ArtifactStore v1 contract are removed in
-02A3. Pre-production data may be rebuilt. No backward compatibility is retained.
+02A3. Migration `0025` refuses populated v1 artifact tables before DDL and
+preserves their prior schema and rows. An empty pre-production environment may
+be reprovisioned out of band and authoritative bytes reingested through v2; the
+migration performs no fabricated backfill. No backward compatibility is
+retained.
 
 ## D15 - Route Deployment Claims
 
@@ -201,11 +206,15 @@ same transaction.
 ## D25 - Paired Authorization Activation
 
 AUTH-07 registers artifact permissions, AUTH-08 owns applicable Operator grant
-definitions, and AUTH-09 provisions fixed service principals. Registry or
-principal presence alone is non-executable. Each WS-ART feature chunk activates
-only its exact actions by supplying canonical resource facts, guards, surface
-declarations, and behavior tests. AUTH-12, AUTH-14, and AUTH-15 do not provide a
-second artifact activation path.
+definitions, AUTH-09A owns the static service-action matrix, AUTH-09B provisions
+fixed service ActorProfiles and ActorIdentityLinks, and AUTH-09E admits them at
+runtime. Registry, grant, profile, link, matrix, or feature presence alone is
+non-executable. AUTH first registers an exact planned action and activation
+custodian; the owning WS-ART chunk then supplies hidden canonical resource facts,
+guards, surface declarations, behavior, and tests while the real kernel still
+fails closed; AUTH finally integrates the evaluator and alone changes that
+action to active. ART never writes action availability. AUTH-12, AUTH-14, and
+AUTH-15 do not provide alternate artifact activation paths.
 
 ## D26 - AWS Release Activation
 
@@ -230,3 +239,18 @@ Workstream never calls `ListObjects` or `ListObjectsV2`. The adapter maps only
 404 to missing; 403 always means provider unavailable. Chunk 07 must prove a
 nonexistent opaque challenge key returns 404 under the actual runtime identity
 before AWS activation.
+
+## D28 - Authorization Owns Artifact Activation Custody
+
+AUTH owns all artifact ActionId registration, service identities, exact static
+matrix rows, evaluators, activation custody, and availability. ART owns artifact
+resource facts, lifecycle guards, hidden behavior, and capability surfaces. ART
+must not invent a service principal, inspect AUTH grants or static matrix
+membership, or activate an authorization action.
+
+The seven fixed service identities and complete 25-action custody transfer are
+defined canonically in
+`../WS-AUTH-001-workstream-authorization-service/ACTIVATION_CUSTODY.md` and its
+`WS-AUTH-001-ART-CUSTODY` chunk contract. Operator verification retry remains
+an independently authorized human action. Service identity, Celery executor
+identity, and execution-generation fencing never substitute for one another.

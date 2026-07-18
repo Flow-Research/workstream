@@ -439,18 +439,25 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 54
+    assert len(route_inventory) == 57
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "2369cb557cb12fb466b261fcf0accca8a45780f1cd1741954ca11cf9ed20052c"
+        "03f8b0166ded1cf563acfd32443aeefc3f7331eb59a46756ab4f551c6d673dc1"
     )
-    assert len(protected_inventory) == 52
+    assert len(protected_inventory) == 55
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "1aa4e6dd38a02b8575d70580eb6e4992ca0e5cd1af7655ef1bdc89985efacc78"
+        "229a935e1d17697fd0b315ac4f8638644b1fdd7b6cf48a372e5dd2b584eef02c"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
         schema["paths"]["/api/v1/auth/me"]["get"]["responses"]
     )
+    service_actor_responses = schema["paths"]["/api/v1/service-actors"]["post"][
+        "responses"
+    ]
+    assert "409" in service_actor_responses
+    assert service_actor_responses["409"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ApiErrorResponse"
+    }
     assert {"404"} <= set(
         schema["paths"]["/api/v1/tasks/{task_id}"]["get"]["responses"]
     )
@@ -466,6 +473,9 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     assert action_declarations == {
         "GET /api/v1/actors/me": "actor.profile.read_self",
         "PATCH /api/v1/actors/me": "actor.profile.update_self",
+        "GET /api/v1/actors/{actor_profile_id}": "actor.profile.read",
+        "GET /api/v1/actors/{actor_profile_id}/identity-links": "actor.identity_link.read",
+        "POST /api/v1/service-actors": "actor.service.provision",
         "GET /api/v1/authorization/permissions": "authorization.permission_catalogue.read",
         "GET /api/v1/authorization/admin-role-definitions": (
             "authorization.admin_role_definitions.read"
@@ -477,6 +487,21 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         ),
         "POST /api/v1/admin-role-grants/{grant_id}/revoke": "admin_role_grant.revoke",
     }
+    for path, schema_name in (
+        ("/api/v1/actors/{actor_profile_id}", "ActorProfileAdminResponse"),
+        (
+            "/api/v1/actors/{actor_profile_id}/identity-links",
+            "ActorIdentityLinkAdminResponse",
+        ),
+    ):
+        operation = schema["paths"][path]["get"]
+        assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{schema_name}"
+        }
+        assert operation["responses"]["404"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/ApiErrorResponse"
+        }
+        assert schema["components"]["schemas"][schema_name]["additionalProperties"] is False
     assert not any("bootstrap" in path for path in schema["paths"])
     assert {"404", "409"} <= set(
         schema["paths"]["/api/v1/projects/{project_id}/guides/{guide_id}/activate"][

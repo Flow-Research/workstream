@@ -1,14 +1,16 @@
 # Chunk Contract: WS-ART-001-02D Operator Artifact Operations
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02C3 and AUTH-09
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02C3, AUTH-09E, and `WS-AUTH-001-ART-CUSTODY`
 
 Artifact contract phase: `artifact_store_cutover`
 
 ## Goal
 
-Expose exact authorized Operator read/retry/recovery/audit APIs and static
-production-readiness status without activating a provider profile or product
-cutover. Chunk 07 owns every live AWS provider inspection.
+Implement exact hidden Operator read/retry/recovery/audit APIs, internal resource
+composition, and static production-readiness status while every affected action
+remains planned. AUTH activates the exact actions only after this behavior
+merges. This chunk activates neither authorization, a provider profile, nor a
+product cutover. Chunk 07 owns every live AWS provider inspection.
 
 ## Allowed Files
 
@@ -43,11 +45,14 @@ cutover. Chunk 07 owns every live AWS provider inspection.
 - exact Operator APIs exist for resource-scoped binding discovery, replicas,
   receipts, verification job, retry, recovery-attempt read, artifact audit
   listing, and read-only admission usage.
-- AUTH-07, AUTH-08, and AUTH-09 are merged before this chunk starts, providing
-  the complete typed/SQL action registry, Operator grants, and fixed service
-  principals. This paired feature chunk supplies canonical artifact resources,
-  guards, surfaces, and decision calls; it registers no permission and creates
-  no authority fallback.
+- AUTH-07A/07B, AUTH-08, AUTH-09A through AUTH-09E, and
+  `WS-AUTH-001-ART-CUSTODY` are merged before this chunk starts. They
+  provide the complete typed/SQL planned action registry, Operator grants,
+  static service-action matrix, provisioned service ActorProfiles and
+  ActorIdentityLinks, fixed service runtime admission, and AUTH activation
+  custodians. This feature chunk supplies hidden canonical artifact resources,
+  guards, surfaces, and decision calls; it registers no permission, evaluator,
+  or availability change and creates no fallback.
 - binding, replica, receipt, verification-job, and recovery-attempt reads use,
   respectively, `artifact.binding.read`, `artifact.replica.read`,
   `artifact.receipt.read`, `artifact.verification_job.read`, and
@@ -93,9 +98,11 @@ cutover. Chunk 07 owns every live AWS provider inspection.
   environments. AWS S3 production remains uninstantiable with
   `artifact_provider_live_proof_required`; the activation schema and production
   composition guard do not exist until Chunk 07. Invalid profiles fail closed.
-- exact internal service-principal authorization activates every verification
-  provider read, periodic scan publication, and recovery job; no 02C1, 02C2,
-  or 02C3 mechanic runs before this gate.
+- after this hidden behavior merges, separate AUTH activation checkpoints make
+  the three internal service actions and eight Operator actions executable.
+  `artifact.verification_job.retry` remains independently evaluated and is not
+  implied by internal service activation. No 02C1, 02C2, or 02C3 mechanic runs
+  before the internal AUTH gate.
 - readiness exposes static configured prerequisites and remains inactive.
   Chunk 07's deployment-only harness owns bucket-policy/principal-boundary,
   credential, anonymous-read-negative, completed-prefix lifecycle, and AWS
@@ -117,7 +124,7 @@ cutover. Chunk 07 owns every live AWS provider inspection.
 ## Exact CI Coverage Gates
 
 ```bash
-coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
+coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
 coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90
 coverage report --include='app/core/config.py' --precision=2 --fail-under=90
 coverage report --include='app/workers/*' --precision=2 --fail-under=90
@@ -130,7 +137,7 @@ coverage report --include='app/api/router.py' --precision=2 --fail-under=90
 
 ```bash
 docker compose up -d --wait postgres redis minio
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_artifact_operator_api.py tests/test_artifact_authorization.py tests/test_config.py -q --cov=app.modules.artifacts --cov=app.adapters.artifacts --cov=app.api.router --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_artifact_operator_api.py tests/test_artifact_authorization.py tests/test_config.py -q --cov=app.interfaces.artifact_operations --cov=app.modules.artifacts --cov=app.adapters.artifacts --cov=app.api.router --cov-report=term-missing --cov-fail-under=90)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 (cd backend && .venv/bin/ruff check app tests)
 python3 scripts/check_stale_authorization_docs.py

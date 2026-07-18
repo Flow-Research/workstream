@@ -1,4 +1,4 @@
-# ADR 0010: Revision Context Rebase Is Controlled By Policy
+# ADR 0010: Revision Context Rebase Uses The Active Project Guide
 
 ## Status
 
@@ -13,33 +13,57 @@ If rule changes live only in Slack, chat, or memory, contributors can be punishe
 Workstream needs both fairness and correctness:
 
 - a submitted attempt must remain tied to the exact guide and policy versions it used
-- a revised attempt may need the latest active guide and policy context before the contributor resumes
+- a revised attempt must use the Project Guide that is active when revision
+  preparation freezes the next-attempt context
 - the contributor and reviewer must be able to see what changed
 
 ## Decision
 
-Submitted attempts are immutable. Each submission remains evaluated against the locked project guide, checker policy, review policy, revision policy, and payment policy versions stamped on that submission.
+Submitted attempts are immutable. Each submission remains evaluated against the
+locked project guide, checker policy, review policy, and revision policy
+versions stamped on that submission.
 
-When a task enters `NEEDS_REVISION`, Workstream runs a revision context preparation step before the contributor resumes. That step compares the submission's locked guide and policy context with the current active project guide and policy context.
+After a human `needs_revision` Review, Workstream runs an immutable revision
+context preparation step before the contributor resumes. The task pipeline owns
+the one Project Guide context used by the submitter and reviewer.
+`TaskAssignment` stores only `task_id`; every Submission stamps the exact guide
+identity, version, and immutable per-project activation sequence used for that
+attempt.
 
-Revision policy controls whether the next attempt:
+Preparation compares the prior Submission's stamped guide identity and
+activation sequence with the project's currently active guide pair:
 
-- keeps the prior locked context
-- rebases to the current active guide and policy context
-- is blocked for project-manager repair when the task setup is incomplete or unsafe
+- an exact identity and activation-sequence match keeps the prior context;
+- any different internally consistent active pair rebases the next attempt and
+  records forward or backward direction, including an older reactivated guide;
+- a missing, incomplete, internally inconsistent, revoked, or unsafe active
+  pair blocks for covered Project Manager repair.
+
+Version strings are never ordered. RevisionPolicy supplies limit and deadline
+inputs but does not choose a stale guide over the currently active authority.
 
 Every revision context preparation must record its outcome. When the next attempt keeps the prior context, Workstream records that no rebase occurred and why. When the next attempt is rebased, Workstream records:
 
 - task id
 - prior submission id and version
-- prior locked guide and policy versions
-- next locked guide and policy versions
+- prior stamped guide identity, version, and activation sequence
+- next frozen guide identity, version, activation sequence, source snapshot,
+  and task-execution policy context
+- outcome `kept`, `rebased`, or `blocked` and forward/backward direction where applicable
 - rebase reason
 - guide or policy change summary shown to the contributor
 - actor or system process that prepared the revision context
 - audit event id
 
-The contributor must see the old context, the new context, and the change summary before submitting the revised attempt when a rebase occurs. The reviewer packet must also show that the revised attempt used a different guide or policy context.
+Task Context returns the immutable preparation head and digest rather than a
+moving active-guide pointer. The contributor must see the old context, new
+context, and change summary before submitting. Submission N+1 acknowledges and
+stamps that preparation exactly. A later guide activation cannot silently drift
+an already prepared attempt.
+
+No guide rebase occurs during review. The reviewer consumes the guide and policy
+context stamped on the single Submission covered by the active ReviewLease. History
+shows the guide transition without changing any prior Submission.
 
 Out-of-band guidance has no acceptance force until it is encoded in one of:
 
@@ -47,7 +71,6 @@ Out-of-band guidance has no acceptance force until it is encoded in one of:
 - checker policy
 - review policy
 - revision policy
-- payment policy
 - task template
 - checker implementation governed by the checker policy
 
@@ -60,10 +83,15 @@ Positive:
 - contributors are not expected to monitor chat to discover rule changes
 - reviewers can see which standards governed each attempt
 - guide and policy updates can improve future revisions without mutating prior submissions
-- repeated lessons become durable guide, checker, review, revision, payment, or template changes
+- repeated lessons become durable guide, checker, review, revision, or template changes
+
+Contribution terms never rebase through revision context. Submitter terms
+remain governed by the `ContributionPolicyVersion` frozen on the
+`TaskAssignment`; every `ReviewLease` independently freezes the reviewer
+version active when that lease is created.
 
 Tradeoff:
 
 - revision preparation needs an explicit audit record
-- revision replay must show context changes, not only finding closure
+- revision replay must show context changes, immutable responses, and later resolutions
 - services must keep submitted-attempt immutability separate from next-attempt preparation

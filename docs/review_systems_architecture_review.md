@@ -6,17 +6,24 @@ Reviewer role: Systems Architecture Reviewer.
 
 ## Findings
 
-### High: Payment state was mixed into task lifecycle
+### High: Compensation fulfillment state was mixed into task lifecycle
 
-Task lifecycle initially included `PAID` as a terminal task state. That risks the same reporting confusion seen in task platforms where accepted work and paid work are separate dimensions.
+Task lifecycle initially included a compensation fulfillment state as a terminal
+task state. That risks the same reporting confusion seen in task platforms
+where accepted work and fulfilled awards are separate dimensions.
 
-Suggested change: keep task status and payment status separate. Task terminal states should be accepted, rejected, or cancelled, while payment status should move through pending, payout submitted, paid, or disputed.
+Suggested change: keep task status and compensation fulfillment status
+separate. Task terminal states should be accepted, rejected, or cancelled,
+while fulfillment status advances independently under its own adapter-owned
+contract.
 
 Status: fixed in `docs/roadmap_30_day_master_plan.md`, `docs/architecture_lifecycle_state_machine.md`, and `docs/operations_payment_reputation.md`.
 
 ### High: Roles and permissions needed a first-version matrix
 
-The plan mentioned roles, but did not define who can review, override, or update payment. That creates risk of self-review, unsafe overrides, and payment changes without authority.
+The plan mentioned roles, but did not define who can review, override, or
+administer compensation fulfillment. That creates risk of self-review, unsafe
+overrides, and fulfillment changes without authority.
 
 Suggested change: add a permission matrix and separation rules.
 
@@ -26,7 +33,10 @@ Status: fixed in `docs/operations_roles_permissions.md`.
 
 Tasks recorded guide version, but the locked task contract and downstream system records also need policy versions so later guide edits do not make old decisions ambiguous.
 
-Suggested change: add server-stamped locked guide and policy version fields to the task contract, submissions, checker runs, reviews, and payment records. Workers submit against the task id without restating policy versions.
+Suggested change: add server-stamped locked guide and policy version fields to
+the task contract, submissions, checker runs, reviews, ContributionRecords, and
+CompensationAwards. Submitters submit against the task id without restating policy
+versions.
 
 Status: fixed in `docs/architecture_data_model.md`.
 
@@ -76,6 +86,8 @@ Status: fixed in `docs/architecture_data_model.md` and `docs/operations_operator
 
 ### Low: Workstream captures the reusable operating model
 
-Baseline pattern: project guide, queue/status, checker/preflight, review guard, review packet, evidence, status ledger, needs-revision replay, accepted/rejected/payment tracking.
+Baseline pattern: project guide, queue/status, checker/preflight, review guard,
+review packet, evidence, status ledger, needs-revision replay, and independent
+contribution/compensation fulfillment tracking.
 
 Assessment: Workstream captures this reusable model through the canonical docs linked in `README.md`. Remaining duplicate older docs should be cleaned later, but they do not block the planning package.

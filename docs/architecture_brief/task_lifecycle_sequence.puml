@@ -16,6 +16,7 @@ skinparam DatabaseBorderColor #0CA678
 skinparam DatabaseBackgroundColor #E6FCF5
 
 actor "Project\nManager" as PM
+actor "Finance\nAuthority" as Finance
 actor "Human-Agent\nContributor" as Contributor
 actor Reviewer
 participant "React UI" as UI
@@ -23,17 +24,25 @@ participant "FastAPI\nBackend" as API
 participant "Flow Auth\nVerifier" as Auth
 participant "Workstream\nAuthorization" as Authorization
 database "Postgres" as DB
-participant "Storage\nAbstraction" as Storage
+participant "ART v2\nCapabilities" as Artifacts
 participant "Checker\nRunner" as Checks
 
-PM -> UI : create project, guide, policies
-UI -> API : POST project / guide / policies
+PM -> UI : create project, guide, tasks,\nsetup/checker/review/revision configuration
+UI -> API : POST project / guide / configuration
 API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : resolve actor profile and local grants
 Authorization -> Authorization : require permission + candidate grant\n+ resource/lifecycle guards
 Authorization --> API : allowed with matched Project Manager grant
-API -> DB : persist draft guide and policy context
+API -> DB : persist draft guide and checker/review/revision policy context
+
+Finance -> UI : publish contribution policy
+UI -> API : POST contribution policy version
+API -> Auth : verify Flow token
+Auth --> API : verified external identity
+API -> Authorization : require contribution policy permission\n+ project/resource/lifecycle guards
+Authorization --> API : allowed with matched Finance Authority grant
+API -> DB : publish contribution policy version independently
 
 PM -> UI : activate guide
 UI -> API : POST activate guide
@@ -54,42 +63,70 @@ API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : resolve actor profile and project grants
 Authorization -> Authorization : require task claim + candidate grant\n+ assignment/resource/lifecycle guards
-Authorization --> API : allowed with matched submitter/both grant
-API -> DB : create assignment and move in progress
+Authorization --> API : allowed with matched submitter grant
+API -> DB : create assignment, freeze submitter\nContributionPolicyVersion, move in progress
 
 Contributor -> UI : submit packet
 UI -> API : POST submission packet
 API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : require submission create + candidate grant\n+ ownership/resource/lifecycle guards
-Authorization --> API : allowed with matched submitter/both grant
-API -> Storage : store/read artifact references
+Authorization --> API : allowed with matched submitter grant
+API -> Artifacts : finalize verified artifact bindings
 API -> DB : create immutable submission version
 
 API -> Checks : run automated checks async
-Checks -> Storage : read artifacts
+Checks -> Artifacts : read exact authorized artifacts
 Checks -> DB : persist checker results
 
-Reviewer -> UI : submit review decision
-UI -> API : accept / needs_revision / reject
+Reviewer -> UI : request current work
+UI -> API : GET current work
 API -> Auth : verify Flow token
 Auth --> API : verified external identity
 API -> Authorization : resolve actor profile and project grants
-Authorization -> Authorization : require review decision + candidate grant\n+ assignment/resource/lifecycle guards
-Authorization --> API : allowed with matched reviewer/both grant
-API -> DB : store review decision
+Authorization -> Authorization : require review.queue.read\n+ resource/lifecycle guards
+Authorization --> API : allowed with matched reviewer grant
+API --> UI : active lease / one server-selected offer / none
+
+Reviewer -> UI : claim server-selected offer
+UI -> API : POST claim
+API -> Auth : verify Flow token
+Auth --> API : verified external identity
+API -> Authorization : PREP review.claim with exact request bindings
+Authorization --> API : opaque single-use prepared handle
+API -> DB : lock idempotency, lifecycle fence, queue;\nlock task, assignment, Submission, CheckerRun;\nrecompose canonical final facts
+API -> Authorization : consume prepared handle and evaluate final facts
+Authorization --> API : allowed; authorization evidence staged
+API -> DB : freeze reviewer policy; create ReviewLease\n+ ReviewPacketManifest; commit once
+API --> UI : exact leased Review Context
+
+Reviewer -> UI : submit accept / needs_revision / reject
+UI -> API : POST decision + immutable findings/resolutions
+API -> Auth : freshly verify Flow token
+Auth --> API : verified external identity
+API -> Authorization : PREP review.decision with exact request bindings
+Authorization --> API : opaque single-use prepared handle
+API -> DB : lock idempotency, lifecycle fence, queue, lease;\nlock task, assignment, Submission, predecessor/evidence;\nrecompose canonical final facts
+API -> Authorization : consume prepared handle and evaluate final facts
+Authorization --> API : allowed; authorization evidence staged
+API -> DB : append immutable Review/findings/resolutions;\nconsume lease and close queue
+API -> DB : CON reviewer completed_review\n+ applicable award when payable
 
 alt needs_revision
-  API -> DB : create revision requirements
-  Contributor -> UI : submit revision replay
-  UI -> API : new submission version
-  API -> Checks : rerun checks
+  API -> DB : task needs_revision; keep assignment active
 else accept
-  API -> DB : create contribution record
-  API -> DB : create payment record
-  API -> DB : create reputation event
+  API -> DB : append FinalAcceptance; accept task; complete assignment
+  API -> DB : CON submitter accepted_submission from FinalAcceptance
+  API -> DB : create applicable submitter award when payable
 else reject
-  API -> DB : store rejection findings
-  API -> DB : apply payment/reputation policy effects
+  API -> DB : block assignment; reject task\n+ no FinalAcceptance or submitter contribution
+end
+API -> DB : stage shared audit/outbox and commit once\n(no ART call in decision transaction)
+
+opt needs_revision after decision commit
+  API -> DB : in a later authorized transaction, append frozen\nRevisionContextPreparation
+  Contributor -> UI : submit finding responses
+  UI -> API : replacement Submission bound to preparation head
+  API -> Checks : rerun checks
 end
 @enduml

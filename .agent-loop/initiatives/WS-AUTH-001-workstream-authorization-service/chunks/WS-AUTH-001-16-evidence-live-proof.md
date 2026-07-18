@@ -1,5 +1,11 @@
 # Chunk Contract: WS-AUTH-001-16 - Conformance, Observability, And Live API Proof
 
+## Status
+
+Proposed final gate. It cannot start until every protected feature surface
+already merged has its matching AUTH activation, while every registered action
+without merged feature behavior still denies as planned.
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service
@@ -50,6 +56,7 @@ docs/spec_authorization_service.md
 docs/architecture_data_model.md
 docs/roadmap_status.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
+.agent-loop/merge-intents/WS-AUTH-001-16.json
 .agent-loop/LOOP_STATE.md
 .agent-loop/WORK_QUEUE.md
 .agent-loop/REVIEW_LOG.md
@@ -62,7 +69,7 @@ review/contribution/compensation implementation
 production credentials or private keys in fixtures/evidence
 direct database bootstrap or grant edits in live proof
 loosening issuer, scope, permission, or resource guards
-starting WS-POL-002-03 automatically
+starting WS-POL-002-04 or another initiative automatically
 ```
 
 ## Acceptance criteria
@@ -74,6 +81,15 @@ starting WS-POL-002-03 automatically
 - Tokens, raw claims, JWKS bodies, secrets, and unnecessary PII are absent from
   logs, errors, audit, and committed evidence.
 - Table-driven tests cover every permission role/scope allow and deny case.
+- Exact conformance proves all 74 PermissionIds and derives the trusted-main
+  ActionId total at execution time. REV-REG contributes exactly four planned
+  actions and review-evidence registration contributes exactly one planned
+  action, in either order; both contribute zero active actions. It proves every
+  ActionId-to-PermissionId mapping, exact AUTH owner, and availability. Every
+  fixed-service/service-principal action has exactly its approved static
+  service-matrix membership, while every human-only action has no service-matrix
+  membership. No feature-valued activation owner or broader service authority
+  remains.
 - A generated conformance manifest covers every protected `/api/v1` route and
   asynchronous command with exactly one primary registered action, canonical
   resource type, and owning feature loader/composer. Unknown or missing
@@ -82,9 +98,42 @@ starting WS-POL-002-03 automatically
   policy source.
 - PostgreSQL tests cover provisioning, grant, final-admin, revocation/command,
   and idempotency races.
-- Live drill proves bootstrap, scoped admin grants, submitter/reviewer grants,
+- Prepared-mutation tests prove AUTH-first lock order and an internal,
+  non-Pydantic `PreparedAuthorizationHandle` bound to the exact session, action,
+  actor reference kind, actor reference, idempotency key, and request digest.
+  They prove same-session/action cross-actor or cross-request substitution and
+  every reuse deny before feature mutation, followed by final feature fact
+  recomposition, one evaluation, one caller-owned commit, and complete rollback
+  on authority loss, evidence/participant/commit failure, timeout, and
+  cancellation.
+- Live drill proves bootstrap, scoped admin grants, separate submitter,
+  reviewer, and adjudicator grants and independent revocation,
   admin/contributor separation, same-token revocation, suspension/reactivation,
   service handling, cross-project denial, and final-admin safety.
+- Adjudicator grant behavior is visible and independently revocable while all
+  adjudication actions remain unavailable until WS-REV defines the lifecycle
+  and AUTH activates exact adjudication actions; admin authority alone cannot
+  submit, review, or adjudicate.
+- One actor/project holds all three roles concurrently; issue/revoke/regrant is
+  proven independently in every direction, duplicate/concurrent issue constraints
+  hold, each revocation preserves the other two and all admin grants, and no
+  `both`, replacement field/event/reason, audit, idempotency, schema, or current
+  PostgreSQL validator path remains.
+- Submitter revocation alone reaches task-assignment reconciliation; reviewer
+  revocation creates only the REV obligation; adjudicator invalidation remains
+  dormant until its lifecycle activates. Wrong-grant submit/review/adjudication
+  and same-token/transaction-time authority-loss cases deny.
+- Fixed-service proof covers exact token/link/profile/identity/matrix/action
+  admission, human/service isolation, every cross-service denial, planned-action
+  denial, and transaction revalidation. Missing provisioned rows deny without
+  preventing application startup.
+- Every activated feature action proves immutable feature-manifest-before-AUTH
+  ordering, real-kernel unavailable behavior before activation, exact
+  availability delta after activation, and no alternate feature writer.
+- When review evidence binding is registered, proof includes distinct human and
+  binding-service decisions/evidence, exact lock order, and one transaction.
+  When `review.decision` is active, REV plus the flush-only CON participant
+  commit once or roll back together with no ART call or contribution fallback.
 - Live drill implements the complete adopted specification sequence, including
   Finance and Audit Authority capability separation, Project Manager inability
   to review by admin role alone, self-grant/self-revoke denials, full authorized
@@ -106,8 +155,8 @@ starting WS-POL-002-03 automatically
   production dependency change requires separately recorded explicit human
   approval before modification.
 - No obsolete token-role authorization remains in runtime code.
-- Initiative memory records proof and leaves `WS-POL-002-03` inactive until an
-  explicit user resume signal.
+- Initiative memory records proof and does not start `WS-POL-002-04` or another
+  initiative without a separate explicit user signal.
 
 ## Verification commands
 
@@ -124,7 +173,7 @@ python3 scripts/check_internal_review_evidence.py
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/auth_api_e2e.py)
 (cd backend && .venv/bin/docstr-coverage --config .docstr.yaml)
-python3 scripts/check_stale_authorization.py
+python3 scripts/check_stale_authorization_docs.py
 git diff --check
 ```
 

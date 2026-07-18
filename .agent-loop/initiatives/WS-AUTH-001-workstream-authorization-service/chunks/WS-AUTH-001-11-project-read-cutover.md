@@ -1,5 +1,10 @@
 # Chunk Contract: WS-AUTH-001-11 - Project Identity, Guide, Source, And Visibility Cutover
 
+## Status
+
+Proposed and inactive. The exact project read/list ActionId inventory and
+migration `0027` mapping delta must be added before implementation review.
+
 ## Parent initiative
 
 `WS-AUTH-001` - Workstream Authorization Service
@@ -37,12 +42,16 @@ backend/app/modules/projects/service.py
 backend/app/modules/projects/repository.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/authorization/**
+backend/app/modules/audit/**
+backend/alembic/versions/0027_*.py
 backend/app/api/deps/auth.py
 backend/tests/test_projects.py
 backend/tests/test_auth.py
+backend/tests/test_alembic.py
 backend/scripts/api_contract_e2e.py
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
+.agent-loop/merge-intents/WS-AUTH-001-11.json
 .agent-loop/LOOP_STATE.md
 .agent-loop/WORK_QUEUE.md
 .agent-loop/REVIEW_LOG.md
@@ -53,7 +62,7 @@ docs/operations_authorization_service.md
 ```text
 project create/update, guide/source mutation, policy approval, activation
 task/submission/checker authorization
-token role fallback or authorization pagination after unfiltered counts
+issuer-role fallback or authorization pagination after unfiltered counts
 ```
 
 ## Acceptance criteria
@@ -64,16 +73,26 @@ token role fallback or authorization pagination after unfiltered counts
   minimal project views.
 - Access Administrator and contributor grants do not imply project-management
   visibility.
-- Active submitter, reviewer, and both grants allow the minimal `project.read`
-  projection for their exact project, without management fields or permissions.
-  Each role has exact-project allow, cross-project deny, minimal-field,
-  concealed-not-found, and pre-filtered count/cursor tests.
+- An active submitter, reviewer, or adjudicator grant independently allows the
+  minimal `project.read` projection for its exact project, without management
+  fields or permissions. Each role has exact-project allow, cross-project deny,
+  minimal-field, concealed-not-found, and pre-filtered count/cursor tests.
+- The adjudicator grant supplies no adjudication action in this chunk; it adds
+  only the same minimal exact-project read projection.
+- One actor may hold all three rows. A decision records the exact matched grant,
+  never a synthetic combined role. Revoking one role preserves minimal
+  `project.read` when another eligible exact-project role remains, and changes
+  no AdminRoleGrant.
 - Canonical project scope is resolved before filtering, counts, and cursors.
 - Every migrated project read/list route declares one primary registered action
   and its canonical project or collection-parent target; permission strings and
   secondary role policy do not live in the router.
 - Generated OpenAPI/command manifest-delta tests prove every protected project
   read/list surface migrated here has exactly one active `ActionId` declaration.
+- Before runtime edits, the contract enumerates every new ActionId, existing
+  PermissionId mapping, canonical target, principal class, facts, guards, and
+  surface. Migration `0027` updates typed/PostgreSQL action-evidence parity and
+  proves prior-head upgrade, downgrade, re-upgrade, and fresh replay.
 - ProjectRepository remains the canonical project/guide/source persistence
   query owner and returns domain records. The project application service or a
   feature-owned resource loader composes ResourceContext; persistence does not
@@ -92,6 +111,9 @@ token role fallback or authorization pagination after unfiltered counts
   --cov=app.modules.authorization --cov-report=term-missing --cov-fail-under=90)
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q)
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
+(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
+(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic downgrade -1)
+(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
 git diff --check

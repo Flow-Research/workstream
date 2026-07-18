@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from app.modules.actors.service_identities import ServiceIdentity
 
 
 def normalize_skill_tags(value: list[str]) -> list[str]:
@@ -65,6 +68,49 @@ class ActorProfileSelfResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_seen_at: datetime | None
+
+
+class ActorProfileAdminResponse(BaseModel):
+    """Privacy-bounded administrative view of one canonical actor."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    actor_profile_id: UUID
+    actor_kind: Literal["human", "service"]
+    status: Literal["active", "suspended", "deactivated"]
+    provisioning_method: Literal[
+        "automatic_first_access",
+        "manual_service_provisioning",
+    ]
+    service_identity: ServiceIdentity | None
+    display_name: str | None
+    created_at: datetime
+    updated_at: datetime
+    last_seen_at: datetime | None
+    suspended_at: datetime | None
+    deactivated_at: datetime | None
+
+    @model_validator(mode="after")
+    def require_kind_identity_pair(self):
+        """Bind the closed local service identity to service actors only."""
+        if (self.actor_kind == "service") != (self.service_identity is not None):
+            raise ValueError("actor kind and service identity are inconsistent")
+        return self
+
+
+class ActorIdentityLinkAdminResponse(BaseModel):
+    """Privacy-bounded administrative view of one canonical identity link."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    identity_link_id: UUID
+    actor_profile_id: UUID
+    subject_kind: Literal["human", "service"]
+    status: Literal["active", "revoked"]
+    linked_at: datetime
+    last_verified_at: datetime | None
+    revoked_at: datetime | None
+    reactivated_at: datetime | None
 
 
 class LegacyWorkflowEligibilityActivationRequest(BaseModel):

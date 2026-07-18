@@ -2,19 +2,41 @@
 
 ## Workstream
 
-Flow's task evaluation and contribution infrastructure: the system for project guides, task queues, submission packets, automated checks, reviewer routing, evaluation sprints, revision loops, contribution records, payment status, and reputation signals.
+Flow's task evaluation and contribution infrastructure: the system for project
+guides, task queues, submission packets, automated checks, reviewer routing,
+evaluation sprints, revision loops, contribution records, compensation award
+and fulfillment state, and reputation signals.
 
 ## Project
 
-A configured work program with its own human-facing guide, submission artifact policy, checker policies, review policy, revision policy, payment policy, and queue.
+A configured work program with its own human-facing guide, submission artifact
+policy, checker policies, review policy, revision policy, independently
+published contribution policy, and queue.
 
 ## Project Owner
 
 The external or internal organization that provides open-ended project material
 and business terms. That material can be markdown, URL-backed documentation,
-repository docs, examples, rubrics, task instructions, base payout or payment
-policy inputs, or other project-specific source material. The project owner
+repository docs, examples, rubrics, task instructions, compensation business
+terms, or other project-specific source material. The project owner
 does not author or approve Workstream's machine-readable internal policy schema.
+
+## ContributionPolicy
+
+The stable project policy that determines what canonical contributions can
+earn. Its immutable published `ContributionPolicyVersion` contains one explicit
+`ContributionRule` for each contribution type. Unpaid rules create no award;
+payable rules reference immutable `ContributionAwardDefinition` rows for money,
+project points, or both. A Finance Authority publishes the policy. Project
+owners provide business terms but do not author the machine policy directly.
+
+## CompensationAward
+
+The immutable result of evaluating one `ContributionRecord` against its frozen
+`ContributionPolicyVersion`. Its instrument is `money` or `project_points`.
+Money awards route downstream to payment-request/settlement adapters; points
+awards route to the project-points adapter. Downstream adapters cannot create
+award eligibility.
 
 ## ActorContext
 
@@ -62,7 +84,7 @@ protocol observations are replica details, not this record's identity.
 
 The per-item mutable upload-operation ledger inside an
 `ArtifactUploadSession`. It owns byte reservation, logical role, scoped
-idempotency, request digest, CAS state, provider operation reference, and the
+idempotency, request digest, CAS state, opaque `provider_object_ref`, and the
 resulting `ArtifactContent`. It is not an `ArtifactBinding`.
 
 ## ArtifactBinding
@@ -74,15 +96,19 @@ records Workstream meaning and provenance, not storage-provider state.
 
 ## ArtifactReplica
 
-One provider copy of `ArtifactContent`, identified by opaque provider artifact
-and optional bounded protocol observations. Verification, availability, and
-integrity states belong here and do not create task or review states. Logical
-Workstream references are represented only by `ArtifactBinding`.
+One provider copy of `ArtifactContent`, identified by an opaque
+`provider_object_ref` and optional bounded protocol observations. Verification,
+availability, and integrity states belong here and do not create task or review
+states. Logical Workstream references are represented only by
+`ArtifactBinding`.
 
 ## ArtifactOperationReceipt
 
-An append-only record of an idempotent storage-provider operation, canonical
-request/response digests, provider reference, bounded outcome, and timestamps.
+Append-only Workstream evidence for one immutable put acknowledgement. It links
+the exact upload item and replica and records operation, idempotency key,
+`request_digest`, opaque `provider_object_ref`, replay observation, bounded
+outcome/details, attempt number, correlation ID, and creation time. It contains
+no response digest or provider receipt.
 
 ## ArtifactSetManifest
 
@@ -96,14 +122,16 @@ and expiry.
 
 ## ReviewPacketManifest
 
-The future WS-REV-owned, system-generated packet presented to an authorized
-reviewer. It references general artifact bindings and is not implemented by the
-WS-ART storage foundation.
+The planned immutable WS-REV semantic projection for one exact queue entry,
+active ReviewLease, Submission, admitting CheckerRun, stamped context, response
+evidence, and ART binding IDs. Only the exact active lease authorizes its packet
+bytes; authorized history exposes bounded metadata only.
 
 ## ReviewEvidenceArtifact
 
-The future WS-REV-owned reviewer attachment record. It references a verified
-general artifact binding and requires reviewer assignment/lease authority.
+The planned immutable WS-REV semantic relation from a lease/finding or
+preparation/response evidence slot to one ART-finalized binding. ART owns the
+bytes and binding; REV owns the lifecycle purpose and lineage.
 
 ## AdminRoleGrant
 
@@ -114,14 +142,18 @@ system/project scope.
 ## ProjectRoleGrant
 
 An immutable exact-project contributor authority record with role `submitter`,
-`reviewer`, or `both`.
+`reviewer`, or `adjudicator`. A contributor may hold all three capabilities
+through separate active grants.
 
 ## Contributor
 
 The umbrella human product term for a person participating in Workstream. A
-contributor has an exact-project `submitter`, `reviewer`, or `both` grant.
-Celery, checker, setup, and background workers are internal services, not human
-product roles.
+contributor may have exact-project `submitter`, `reviewer`, and `adjudicator`
+grants as independent records. The adjudicator grant creates no adjudication
+capability in v0.1. A future separately approved initiative must define that
+lifecycle before AUTH registers and activates any exact action. Celery, checker,
+setup, and background workers are
+internal services, not human product roles.
 
 ## Source
 
@@ -190,9 +222,11 @@ A unit of work inside a project.
 
 ## Task Work Context
 
-The contributor-safe API projection of a task's locked guide, project summary,
-review policy, revision policy, payment policy, and lifecycle state. It is read
-from the task's stamped locked context and does not expose source snapshot
+The contributor-safe API projection of a task's guide, project summary, review
+policy, revision policy, and lifecycle state. Initial work reads the task's
+locked context. Human-review revision reads the validated immutable
+RevisionContextPreparation head and digest, not a moving active-guide pointer.
+It does not expose source snapshot
 hashes, private source/import refs, compiled checker bundles, checker configs,
 Celery ids, or setup errors.
 
@@ -206,13 +240,14 @@ rules, hash algorithm, size limits, and attestation terms before submission.
 ## Task Locked Context
 
 The permission-scoped Project Manager, Operator, or Audit projection of a task's
-locked guide and policy provenance, including guide source snapshot id/hash, effective policy
-id/hash, pre-submit checker policy id/hash, post-submit checker policy
-id/hash/body summary, and review, revision, and payment policy versions.
+locked guide and policy provenance, including guide source snapshot id/hash,
+effective policy id/hash, pre-submit checker policy id/hash, post-submit checker
+policy id/hash/body summary, and review and revision policy versions.
 
 ## Task Contract
 
-The normalized task fields required for Workstream to screen, assign, check, review, pay, and audit work.
+The normalized task fields required for Workstream to screen, assign, check,
+review, compensate, and audit work.
 
 ## Submission Packet
 
@@ -230,13 +265,60 @@ The set of required and warning checks for a project phase. Pre-submit checker p
 
 The judgment layer where a reviewer accepts, rejects, or requests revision.
 
-## Finding
+## ReviewQueueEntry
 
-A structured reviewer issue with severity, area, required fix, and evidence.
+The planned durable admission record connecting one exact finalized Submission
+and successful current CheckerRun to server-selected human-review routing.
+
+## ReviewLease
+
+The planned permanent identity of one reviewer claim attempt. It binds the
+canonical human reviewer, queue entry, exact Submission packet, lease timing,
+and independently frozen reviewer ContributionPolicyVersion.
+
+## Review
+
+The immutable result of one valid human decision under an active ReviewLease.
+Stored decisions are exactly `accept`, `needs_revision`, or `reject`. Later
+rounds append another Review rather than modifying history.
+
+## ReviewFinding
+
+A planned immutable structured issue submitted with a Review. Its lifecycle
+meaning is `blocking` or `advisory` and it carries area, required change,
+rationale, and optional finalized evidence.
+
+## SubmissionFindingResponse
+
+The immutable submitter response to one prior ReviewFinding, with response text
+and optional finalized evidence. Every unresolved blocking finding requires one
+response before revision submission.
+
+## FindingResolution
+
+The immutable later-review judgment for one prior finding and revised
+Submission: `resolved`, `unresolved`, or `not_applicable`, with bounded rationale
+and evidence.
+
+## RevisionContextPreparation
+
+The immutable Review-rooted next-attempt context. It records the prior
+Submission, source and target TaskAssignments, active Project Guide identity,
+version and activation sequence, frozen task-execution policies, context digest,
+change summary, and `kept`, `rebased`, or `blocked` result. A rebase records
+forward or backward direction.
+
+## FinalAcceptance
+
+The internal immutable accept-only fact linking one task, versioned Submission,
+source Review, accepted submitter, recording reviewer, time, and ReviewPolicy.
+It has no manual API or separate action and is the sole source of the submitter
+`accepted_submission` ContributionRecord.
 
 ## Revision Replay
 
-A resubmission record showing how each prior review finding was addressed.
+The complete immutable response and resolution history connecting a prior
+Review's findings to the next Submission and later Review.
 
 ## Evidence
 
@@ -244,12 +326,26 @@ Proof supporting task completion or review decision. Examples: logs, hashes, tes
 
 ## Artifact Store
 
-The provider-neutral typed capability through which Workstream stores and reads
-private immutable bytes. `LocalStorageAdapter` implements it for development
-and focused tests. `S3CompatibleArtifactStore` implements it for MinIO
-integration and AWS S3 v0.1 production deployments. Providers do
+The provider-neutral ART v2 byte boundary beneath Workstream's typed product
+capabilities. Its v0.1 byte-only operations are `put`, read-only
+`observe_put_result`, `open`, and `head`; product services consume narrow typed
+capabilities rather than importing the raw store. `LocalStorageAdapter`
+implements it for development and focused tests.
+`S3CompatibleArtifactStore` implements it for MinIO integration and AWS S3
+v0.1 production deployments. Providers do
 not own Workstream authorization, binding, lifecycle, audit, or integrity
 decisions.
+
+## Artifact Storage Namespace
+
+The immutable deployment-level PostgreSQL fence that binds Workstream to one
+configured artifact backend, adapter, provider profile, and non-secret storage
+namespace fingerprint. Startup and every provider operation must validate the
+same singleton before provider I/O. Changing a populated deployment requires a
+separately reviewed storage migration.
+For LocalStorage, the pre-provisioned private root's normalized path and
+filesystem identity are hashed into that fingerprint, so replacing the root at
+the same path fails closed before adapter construction mutates it.
 
 ## Artifact Verification Job
 
@@ -271,17 +367,37 @@ The object-storage adapter that implements `ArtifactStore` using the S3
 protocol. AWS S3 is the v0.1 production provider; MinIO is used for local and CI
 integration proof. Cloudflare R2 is deferred to a separate approved initiative.
 
-## Payment Ledger
+## Compensation Fulfillment
 
-The record of accepted amount, pending payout, paid amount, and payment state.
+The award-delivery and fulfillment record set for payable compensation:
+immutable `CompensationAward` and `CompensationFulfillmentReceipt` records plus
+a rebuildable `CompensationStatusProjection`. Explicitly unpaid contribution
+rules create no award.
 
 ## Reputation Ledger
 
-The outcome-based record of contributor and reviewer performance.
+The deferred outcome-based projection of contributor and reviewer performance.
+It is not a v0.1 review-transaction side effect.
 
 ## Contribution Record
 
-The evidence-backed record that accepted work was completed under a locked project guide. Payment and reputation records attach to contribution records, but do not replace them.
+The immutable, evidence-backed record of one completed contribution under locked
+project context. `completed_review` is created for every valid recorded human
+Review and binds directly to that Review and ReviewLease.
+`accepted_submission` is created only from FinalAcceptance and the exact
+TaskAssignment; it is never inferred directly from `Review.decision`.
+Compensation records may attach to either contribution type but do not replace
+the contribution record; reputation projections remain deferred.
+
+## Final Acceptance
+
+The immutable REV-owned internal fact created only as a lifecycle consequence
+of `Review(accept)`. It binds one project, task, existing versioned Submission,
+source Review, accepted submitter, recording reviewer, acceptance time, and
+locked ReviewPolicy. There is no public/manual create API or separate
+authorization action. `needs_revision` and `reject` create none. In v0.1 it is
+unique per task, source Review, and Submission and is the sole source of an
+`accepted_submission` ContributionRecord.
 
 ## Human Owner
 
