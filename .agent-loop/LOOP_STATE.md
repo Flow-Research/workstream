@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#148](https://github.com/Flow-Research/workstream/pull/148) - Add actor profile lifecycle and evidence repair
-- Merge commit: `99ae4c963e53f317175dcb308b9e47c93ccf19ed`
-- Final PR head: `9c5ef8a1feffd6324acfd947e67042921955320b`
-- Merged at: `2026-07-18T18:47:04Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-09D-A.json` at blob `3672c280c235dffa2de9e3eea7f3c04319a1357a`
-- Completed chunk: `WS-AUTH-001-09D-A` - Profile Lifecycle And Evidence Repair
+- Last merged PR: [#150](https://github.com/Flow-Research/workstream/pull/150) - docs(rev): reconcile runtime-readiness planning
+- Merge commit: `983b9e534b84f1590fafecc0ce1355cf131257ce`
+- Final PR head: `8524d220d92d0cb0b48580868dcf4fab20f41b31`
+- Merged at: `2026-07-18T21:54:51Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-REV-001-PLAN2.json` at blob `5104c6290ff0c327bed6d8db3559b186fabdd817`
+- Completed chunk: `WS-REV-001-PLAN2` - REV-02A Runtime Readiness Plan Refresh
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-AUTH-001-09D-B` - Identity-Link Lifecycle And Race Closure; requires a separate explicit start.
+- Next chunk: `WS-REV-001-02A` - Project Guide Activation Sequence And Publication Locking; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`

@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29655437464/job/88108765948"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29659446221/job/88119423475"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29655432398/job/88108748309"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29659446234/job/88119423504"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-09D-A",
-    "chunk_title": "Profile Lifecycle And Evidence Repair",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-09D-B",
-    "next_chunk_title": "Identity-Link Lifecycle And Race Closure",
+    "chunk_id": "WS-REV-001-PLAN2",
+    "chunk_title": "REV-02A Runtime Readiness Plan Refresh",
+    "initiative_id": "WS-REV-001",
+    "next_chunk_id": "WS-REV-001-02A",
+    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-09D-B",
-    "next_chunk_title": "Identity-Link Lifecycle And Race Closure",
+    "next_chunk_id": "WS-REV-001-02A",
+    "next_chunk_title": "Project Guide Activation Sequence And Publication Locking",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "f18b620932bb257dc1dc355bc0504271813dc6b1",
-    "head_ref": "codex/ws-auth-001-09d-actor-identity-lifecycle",
-    "head_sha": "9c5ef8a1feffd6324acfd947e67042921955320b",
-    "intent_blob_sha": "3672c280c235dffa2de9e3eea7f3c04319a1357a",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09D-A.json",
-    "main_sha": "99ae4c963e53f317175dcb308b9e47c93ccf19ed",
-    "merged_at": "2026-07-18T18:47:04Z",
+    "first_parent_sha": "99ae4c963e53f317175dcb308b9e47c93ccf19ed",
+    "head_ref": "codex/ws-rev-001-plan2-runtime-readiness",
+    "head_sha": "8524d220d92d0cb0b48580868dcf4fab20f41b31",
+    "intent_blob_sha": "5104c6290ff0c327bed6d8db3559b186fabdd817",
+    "intent_path": ".agent-loop/merge-intents/WS-REV-001-PLAN2.json",
+    "main_sha": "983b9e534b84f1590fafecc0ce1355cf131257ce",
+    "merged_at": "2026-07-18T21:54:51Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 148,
-    "pr_title": "Add actor profile lifecycle and evidence repair",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/148"
+    "pr_number": 150,
+    "pr_title": "docs(rev): reconcile runtime-readiness planning",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/150"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-18T18:47:04Z"
+  "updated_at": "2026-07-18T21:54:51Z"
 }
