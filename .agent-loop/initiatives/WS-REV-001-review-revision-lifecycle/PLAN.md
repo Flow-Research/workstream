@@ -237,8 +237,11 @@ The cross-initiative sequence is explicit:
   reviewed schema-only contributor-field foundation. That foundation performs
   only the canonical TaskAssignment/Submission field clean cuts and preserves
   current behavior; full AUTH-13/14 product cutovers are explicitly later;
-- `WS-REV-001-02` then establishes immutable
-  `Submission.task_assignment_id` attribution and guide activation sequence;
+- parent `WS-REV-001-02` is a non-executable split record. After the exact
+  AUTH foundation merge, 02A establishes guide activation chronology and Task
+  stamps, 02B establishes immutable review/revision policy plus dormant
+  task/assignment compatibility, and 02C establishes immutable
+  `Submission.task_assignment_id` attribution and lineage;
 - WS-CON's approved replacement chunks then freeze submitter
   `ContributionPolicyVersion` on `TaskAssignment` and remove legacy
   compensation-context fields and
@@ -333,10 +336,13 @@ prohibited.
   transitions plus bounded terminal reasons. Human reject enters `rejected`;
   the approved administrative revision-limit/deadline closure enters
   `cancelled` with its exact reason and creates no Review.
-- `TaskAssignment` receives completed/blocked compatibility fields and a reject
-  Review reference.
-- `ReviewPolicy` receives locked preference, lease, capacity, self-review,
-  reject, and finding-evidence settings.
+- `TaskAssignment` receives dormant completed/blocked compatibility fields.
+  No service path enters either state and no reject Review reference is added
+  until Review persistence and the owning decision/task participant exist.
+- `ReviewPolicy` receives positive preference/lease durations, capacity fixed
+  to one, self-review fixed false, close-task reject, and typed finding-evidence
+  settings. Existing policy migration uses separately approved duration
+  defaults and never infers either duration from `sla_hours`.
 - Existing locked non-compensation task/submission policy references remain the
   immutable execution-context anchor.
 
@@ -716,7 +722,7 @@ missing typed capability becomes a separately approved dependency-owner chunk;
 it is not added opportunistically to a WS-REV PR.
 
 The pre-WS-CON task/project schema may still contain retired compensation-context
-locks when chunk 02 lands. Those are transitional migration inputs only.
+locks when children 02A-02C land. Those are transitional migration inputs only.
 WS-CON owns their consumer cutover and schema removal; WS-REV-09A and every
 public/final context operate only after that removal and must not replace the
 frozen `ContributionPolicyVersion` with a moving current policy.

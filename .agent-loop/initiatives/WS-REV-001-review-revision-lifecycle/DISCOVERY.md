@@ -118,6 +118,24 @@ AUTH-owned schema-only contributor-field foundation before REV-02. REV-09A
 hidden behavior then precedes amended full AUTH-13/14 product cutovers. This is
 an AUTH repair gate, not permission for REV to rename AUTH-owned fields.
 
+The 2026-07-18 parent-02 start audit against exact main `b2b9016d5fee33ddca40882c97620a178d8e52f0`
+confirmed that the foundation is not yet present. Alembic head is
+`0025_artifact_store_v2`; TaskAssignment and Submission still store
+unconstrained retired contributor-identity strings; no contributor-foundation merge intent,
+PR/SHA, migration, or database-backed child human-lineage constraint exists.
+AUTH now owns migration `0026` for AUTH-09D-A profile lifecycle. The user
+directed AUTH to make the contributor foundation its next priority after 09D-A,
+from the then-current head, and authorized REV only for non-runtime planning and
+test design meanwhile.
+
+The same required L1 plan review found parent REV-02 too broad. Guide activation
+chronology/publication, review policy/dormant lifecycle, and Submission
+attribution/lineage are three independent migration boundaries. The executable
+work is therefore split into 02A, 02B, and 02C; parent 02 records no runtime.
+Two policy inputs remain absent from every source reviewed: concrete v0.1 values
+for the review preference window and review lease duration. They are explicit
+human decisions and cannot be inferred from `ReviewPolicy.sla_hours`.
+
 Merged AUTH reconciliation PR #140 is planning-only. Its `74` PermissionId /
 `57` ActionId / `9` active / `48` planned snapshot is now historical because
 AUTH-09A PR #132 added eight planned actions. PR #140 defines

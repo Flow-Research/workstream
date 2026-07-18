@@ -129,13 +129,14 @@ They are replaced in chunk 09A with direct project/guide/policy/context
 integrity constraints and a Submission-to-preparation binding. The original
 WorkstreamTask locks and all earlier Submissions remain unchanged.
 
-Guide ordering never compares version strings. Chunk 02 adds a per-project,
+Guide ordering never compares version strings. Chunk 02A adds a per-project,
 monotonic immutable `activation_sequence`. Existing active/superseded guides are
 backfilled deterministically from effective time, creation time, and ID under
 migration validation; drafts remain null until first activation. Active or
 superseded state requires a non-null sequence, draft state requires null, and a
-sequence is allocated exactly once while locking the project. Task, preparation,
-and Submission contexts stamp guide ID, version, and activation sequence. Equal
+sequence is allocated exactly once while locking the project. Task stamps guide
+identity in 02A, Submission stamps it in 02C, and later preparation stamps it in
+09A. Equal
 identity/sequence keeps. Any different currently active guide identity/sequence
 rebases, including an intentional backward rebase to an older activation
 sequence. An internally inconsistent pair whose identity and activation sequence
@@ -481,3 +482,33 @@ are one registered planned submission action, 19 registered planned review
 actions, and four approved but unregistered additions; none is active. The
 separate ART review-evidence binding proposal is not one of the 24, so future
 counts remain current-main-derived rather than a promised fixed total.
+
+### D21 - Parent REV-02 Is Split And AUTH Contributor Ownership Remains Prior
+
+The user explicitly started parent REV-02, but required L1 plan review found the
+combined guide, policy/lifecycle, and Submission migration unreviewable as one
+chunk. Parent 02 is therefore a non-executable split record:
+
+```text
+02A guide activation sequence/publication locking
+-> 02B immutable review/revision policy and dormant task/assignment states
+-> 02C Submission attribution/context/immediate-predecessor immutability
+```
+
+AUTH owns migration `0026` for AUTH-09D-A. After 09D-A merges, AUTH owns the
+separately reviewed contributor-field foundation from the then-current head.
+That foundation clean-cuts both retired task-subsystem contributor-identity
+fields to `contributor_id`, preserves current behavior, and supplies database-backed
+canonical-human ActorProfile lineage. REV records its exact merged PR/SHA and
+constraint contract before generating any child migration; REV never supplies a
+parallel rename, compatibility alias, or ActorProfile constraint.
+
+02B keeps terminal Task/Assignment values dormant. It adds no transition into
+`accepted`, `rejected`, `completed`, or `blocked`, and no reject Review FK.
+The Review decision/task participant owns those effects after immutable Review
+persistence exists. The later reason-bound administrative command owns the
+`cancelled` edge. D6 continues to prohibit synthetic reject.
+
+The review preference and lease durations are independent positive policy
+values. Neither may be inferred from `ReviewPolicy.sla_hours`; their exact v0.1
+migration defaults remain a human decision before 02B can start.

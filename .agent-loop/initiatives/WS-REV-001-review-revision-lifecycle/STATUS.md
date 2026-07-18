@@ -2,10 +2,33 @@
 
 ## Current status
 
-`WS-REV-001-PLAN` merged through PR #128 at trusted main
-`0302bcf854a565d429e232ad6b076a1931ea74e4`. The user explicitly started
-`WS-REV-001-01`, which is active on `codex/ws-rev-001-01` from that exact base.
-No runtime review or revision behavior is active in this chunk.
+`WS-REV-001-01` merged through PR #145 at trusted main
+`b2b9016d5fee33ddca40882c97620a178d8e52f0`. The user explicitly started
+parent `WS-REV-001-02` on 2026-07-18. Required L1 plan review failed the
+combined implementation boundary and required a 02A/02B/02C split before any
+runtime or migration edit.
+
+REV may continue planning and test design only. AUTH currently owns migration
+`0026` for AUTH-09D-A profile lifecycle. After AUTH-09D-A merges, AUTH owns the
+next-priority, separately reviewed contributor-field foundation from the
+then-current migration head. That foundation must clean-cut both retired
+task-subsystem contributor-identity fields to `contributor_id`, preserve
+existing behavior, establish
+database-backed canonical-human ActorProfile lineage, and provide an exact
+merged PR/SHA. REV runtime remains blocked until that merge.
+
+The parent 02 contract is now non-executable. Planning defines 02A guide
+activation chronology/publication locking, 02B immutable policy and dormant
+task/assignment lifecycle compatibility, and 02C Submission
+attribution/context/lineage. No backend model, service, migration, or persistence
+test has changed.
+
+Planning candidate `0292825a52f884f42d82e1522637f2ff2bf4bb7a` passed the
+repaired circuit breaker, all required internal reviewer tracks, mandatory
+contract scanners, Markdown links, 87 agent gates, and schema-v2 merge-intent
+validation. It is planning-publication ready, not runtime-ready.
+
+## Chunk 01 merge history
 
 While Chunk 01 was under review, CON planning PR #142 merged to main at
 `a947b8693a97bdb94c9dc63202a51e197834d613`. The branch pulled that merge and
@@ -72,10 +95,17 @@ gate. It changes no backend, migration, AUTH, ART, or CON runtime code.
   ordered flush-only participant before a canonical Review can commit. Every
   valid Review creates reviewer contribution; only an accept-created
   FinalAcceptance creates submitter contribution.
-- AUTH-owned contributor-field foundations, ART submission commitment and
-  packet-read contracts, CON persistence/participant contracts, and the
-  remaining per-chunk gates stay external prerequisites exactly as listed in
-  `CHUNK_MAP.md`.
+- AUTH-09D-A is in progress and owns migration `0026`. No AUTH contributor
+  foundation PR/SHA or migration exists on this REV base. REV assigns no
+  migration number and performs no runtime preparation against retired
+  contributor-identity storage.
+- After AUTH-09D-A, AUTH must merge the bounded contributor-field foundation.
+  ART submission commitment/packet-read contracts, CON
+  persistence/participant contracts, and the remaining per-child gates stay
+  external prerequisites exactly as listed in `CHUNK_MAP.md`.
+- Two product values remain human-owned before 02B implementation:
+  `review_preference_window_seconds` and
+  `review_lease_duration_seconds`. Neither is inferred from `sla_hours`.
 
 ## Canonical lifecycle boundary
 
@@ -106,7 +136,7 @@ security/auth, product/ops, architecture, docs, reuse/dedup, test delta, and CI
 integrity. All 80 current-main agent tests and seven REV additions are retained;
 87 agent-gate tests and the deterministic contract gates pass.
 
-Chunk 01 is published as PR #145. CodeRabbit's nine actionable findings and one
+Chunk 01 was published and merged as PR #145. CodeRabbit's nine actionable findings and one
 Markdown lint nit were repaired without runtime or successor-scope expansion.
 After ART-02A3 PR #141 advanced main, the branch merged and reconciled its
 active byte-only v2 LocalStorage clean cut while retaining every later
@@ -115,13 +145,14 @@ review-facing ART gate. Candidate
 internal reviewer tracks against
 `0ffdabf3dbb77e4e066683fde1a095d744ff1f43`; 87 agent gates, Ruff, scanners,
 links, checksums, renderer checks, merge-intent validation, and the exact
-71-entry A/M reviewed-scope comparison pass. Status-change, removal,
-rename-as-D+A, and addition probes fail closed. Replacement GitHub checks are
-required after push. This chunk activates no review action or endpoint and does
-not authorize merge.
+71-entry A/M reviewed-scope comparison passed. Status-change, removal,
+rename-as-D+A, and addition probes failed closed. This chunk activated no review
+action or endpoint.
 
 ## Stop condition
 
-After Chunk 01 is reviewed, merged with explicit human approval, and automated
-merge memory records it, stop. Do not start `WS-REV-001-02` without a separate
-explicit user instruction.
+Complete parent-02 planning review only. Do not edit backend runtime, migration,
+or persistence tests. After the exact AUTH contributor-foundation merge and
+human approval of the planning split, 02A still requires a separate explicit
+start. The duration defaults gate 02B. No child starts its successor
+automatically.

@@ -159,7 +159,13 @@ production `/api/v1` review-router registration
   work; neither domain imports the other's repository.
 - Required response evidence references verified same-project/task bindings.
 - Checker gate does not admit a revision missing required responses/evidence.
-- Revision limits/deadlines follow the approved non-synthetic behavior.
+- At the exact revision-round limit or revision deadline, preparation and N+1
+  submission fail with stable policy errors. Task remains `needs_revision`,
+  TaskAssignment remains active, and no Review, finding, terminal Task or
+  Assignment status, CON record, award, feature audit, or outbox record is
+  created. Tests cover below/at/after each boundary, retry, and transaction
+  rollback. The explicit reason-bound cancellation command remains owned only by
+  REV-11; 09A never closes the obligation or fabricates reject.
 - Response-evidence authorization uses
   `review.finding_response_evidence.ingest` mapped to `submission.create`, plus
   the owned active assignment, prepared revision context, and exact

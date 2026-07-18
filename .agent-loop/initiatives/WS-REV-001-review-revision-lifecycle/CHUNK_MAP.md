@@ -11,9 +11,12 @@ explicit start signal.
 | Chunk | Title | Risk | Gate | Status |
 |---|---|---:|---|---|
 | `WS-REV-001-PLAN` | Review And Revision Lifecycle Planning | L1 | None | Merged through PR #128 at trusted main `0302bcf854a565d429e232ad6b076a1931ea74e4` |
-| `WS-REV-001-01` | Canonical Contract Adoption And Dependency Conformance | L1 | Plan approval; current-main refresh; merged WS-XINT-001 handoffs, AUTH PR #140 planning contracts, AUTH-09A/09B foundations, and CON-01 canonical contract adoption | Active on `codex/ws-rev-001-01` |
-| `WS-REV-001-02` | Locked Review Policy And Task Lifecycle Alignment | L1 | AUTH canonical actor foundation; separately reviewed and merged AUTH-owned schema-only contributor-field foundation that breaks the current AUTH-13/14 <-> REV-09A cycle; ART submission commitment contract stable; canonical rejected/cancelled lifecycle amendment; D6 behavior approved | Proposed |
-| `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | 02 merged; WS-CON ContributionPolicyVersion persistence merged | Proposed |
+| `WS-REV-001-01` | Canonical Contract Adoption And Dependency Conformance | L1 | Plan approval; current-main refresh; merged WS-XINT-001 handoffs, AUTH PR #140 planning contracts, AUTH-09A/09B foundations, and CON-01 canonical contract adoption | Merged through PR #145 at trusted main `b2b9016d5fee33ddca40882c97620a178d8e52f0` |
+| `WS-REV-001-02` | Locked Review Policy And Task Lifecycle Alignment | L1 | Parent explicitly started; required L1 plan review | Split before runtime; non-executable parent |
+| `WS-REV-001-02A` | Project Guide Activation Sequence And Publication Locking | L1 | AUTH-09D-A and the subsequent AUTH-owned contributor-field foundation merged; exact dependency SHA/head refresh; separate human start | Planning prepared; runtime blocked |
+| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | 02A merged; approved preference/lease duration defaults; separate human start | Proposed |
+| `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | 02B merged; exact AUTH contributor/human-lineage constraints present; separate human start | Proposed |
+| `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | 02C merged; WS-CON ContributionPolicyVersion persistence merged | Proposed |
 | `WS-REV-001-04` | Immutable Review, Final Acceptance, Findings, And Replay Persistence | L1 | 03 merged; shared transactional-outbox persistence and caller-transaction lifecycle-audit participant merged at exact refreshed SHAs | Proposed |
 | `WS-REV-001-05` | Checker Admission, Preferred Routing, And Queue Views | L1 | 04; ART v2 submission/checker cutover; AUTH-10 reviewer grants and AUTH-11 project visibility; registered actions remain planned; hidden manifest later gates `WS-AUTH-001-REV-05` | Proposed |
 | `WS-REV-001-06` | Atomic Claims, Release, Preference, And Timers | L1 | 05; merged `WS-AUTH-001-REV-CUSTODY` and `WS-AUTH-001-PREP`; merged AUTH-09A foundation and AUTH-09B provisioning capability plus exact expiry identity extensions/provisioning and AUTH-09E admission from the merged REV-01 manifest; WS-CON ReviewLease ContributionPolicyVersion freeze participant; hidden manifest later gates `WS-AUTH-001-REV-06` | Proposed |
@@ -30,7 +33,7 @@ explicit start signal.
 ## Dependency order
 
 ```text
-PLAN -> 01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09A -> 09B -> 10 -> 11 -> 12 -> 12A -> 13
+PLAN -> 01 -> 02(parent split) -> 02A -> 02B -> 02C -> 03 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09A -> 09B -> 10 -> 11 -> 12 -> 12A -> 13
 ```
 
 External initiative gates are inserted without changing same-initiative
@@ -43,15 +46,16 @@ WS-REV-001-01 active contract and immutable registration/service manifests
   -> corresponding REV mutation/service chunks may consume registered actions
      and exact identities while every action remains unavailable
 
-AUTH canonical human plus an AUTH-owned schema-only contributor-field foundation
+AUTH-09D-A plus AUTH canonical human and the subsequent AUTH-owned
+schema-only contributor-field foundation
   + merged AUTH-08 transaction/error/timestamp invariants
   + ART v2 stable contracts
-  -> WS-REV-001-02
+  -> WS-REV-001-02A -> WS-REV-001-02B -> WS-REV-001-02C
 
-WS-REV-001-02
+WS-REV-001-02C
   -> WS-CON exact attribution consumption and retired compensation-context field removal
 
-WS-REV-001-02 + merged WS-CON ContributionPolicyVersion persistence
+WS-REV-001-02C + merged WS-CON ContributionPolicyVersion persistence
   -> WS-REV-001-03
 
 WS-REV-001-03 + merged CON-owned shared transactional-outbox persistence
@@ -88,8 +92,9 @@ REV planning does not create or start it on ART's behalf.
 ## Chunk boundaries
 
 - 01 changes contracts and active documentation, not runtime behavior.
-- 02-04 land persistence and constraints, including immutable FinalAcceptance,
-  without public review mutations.
+- 02 is a non-executable split record. 02A-02C and 03-04 land bounded
+  persistence and constraints, including immutable FinalAcceptance, without
+  public review mutations.
 - 05-07 build routing, leases, and evidence consumption behind an unavailable
   production composition boundary; registration remains availability-neutral.
 - 08 freezes decision inputs, validation, task effects, and the
@@ -110,14 +115,15 @@ REV planning does not create or start it on ART's behalf.
 
 Every chunk: senior engineering, QA/test, security/auth, and product/ops.
 
-Add architecture and reuse/dedup to 01-13. Add docs to PLAN and every chunk that
-changes schema, routes, runtime jobs, configuration, or active behavior: 01-13. Add
-test-delta to every runtime chunk. Add CI integrity whenever a
+Add architecture and reuse/dedup to 01-13, including split children 02A-02C.
+Add docs to PLAN and every chunk that changes schema, routes, runtime jobs,
+configuration, or active behavior. Add test-delta to every runtime chunk. Add
+CI integrity whenever a
 workflow, script, dependency, or coverage gate changes.
 
 ## Stop condition
 
-Planning is approved and merged AUTH PR #140/AUTH-08/AUTH-09A plus
-ART-02A2/ART-02A3 contracts are reconciled. Finish, review, and merge Chunk 01
-with explicit human approval, then stop. Do not start Chunk 02 automatically;
-its merge-intent gate remains separate.
+Parent 02 planning may be reviewed and merged without runtime. Stop after its
+automated memory names 02A. Do not start 02A until AUTH-09D-A and the subsequent
+AUTH contributor foundation merge and the user provides a separate explicit
+start. The duration defaults gate 02B, not 02A.

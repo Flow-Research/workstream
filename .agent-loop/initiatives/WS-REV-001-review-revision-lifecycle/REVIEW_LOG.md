@@ -885,3 +885,33 @@ AUTH-09C keeps 74 PermissionIds and 65 ActionIds, activating only
 dependencies remain unavailable. The trusted PR-scope base is now
 `0ffdabf3dbb77e4e066683fde1a095d744ff1f43`. Fresh deterministic evidence and
 all nine exact-SHA reviewer tracks are required.
+
+## WS-REV-001-02 Start And Planning Circuit Breaker - 2026-07-18
+
+The user explicitly started parent REV-02 from exact trusted main
+`b2b9016d5fee33ddca40882c97620a178d8e52f0`. Read-only dependency review
+returned FAIL: Alembic remains at `0025`, both task-subsystem models still use
+retired contributor-identity storage names, and the separately reviewed AUTH contributor foundation
+has no merged PR/SHA, migration, merge intent, or canonical-human child
+constraint.
+
+Senior/architecture/reuse review also returned SPLIT REQUIRED. Parent 02 crossed
+guide chronology/publication, policy/task lifecycle, and Submission
+attribution/immutability boundaries. QA found the parent PLAN's reject Review FK
+wording contradicted the approved contract and that preference/lease migration
+defaults were unspecified. Security confirmed REV must not absorb the AUTH
+rename or ActorProfile schema.
+
+The user then confirmed REV may continue non-runtime planning and test design.
+AUTH owns migration `0026` for AUTH-09D-A and will prioritize the contributor
+foundation afterward from the then-current head. Planning converts parent 02 to
+a non-executable split record, defines children 02A/02B/02C, corrects the Review
+FK wording, and records the full future test matrix. No backend model, service,
+migration, or persistence test is edited.
+
+Candidate `0292825a52f884f42d82e1522637f2ff2bf4bb7a` passed the repaired
+circuit breaker and all required internal planning tracks. Mandatory stale
+authorization/Workstream/review/artifact scanners, Markdown links, 87 agent
+gates, diff integrity, and the schema-v2 merge-intent validator pass. Remaining
+gates are the dependency-owned AUTH merges, a separate 02A start, and the two
+human-owned duration defaults before 02B.
