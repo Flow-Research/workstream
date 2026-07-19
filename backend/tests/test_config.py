@@ -34,6 +34,7 @@ from app.interfaces.external_services import (
 )
 from app.main import create_app
 from tests.assertion_helpers import assert_secret_not_retained
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
 def test_default_settings_are_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -386,6 +387,7 @@ def _flow_settings(**overrides) -> Settings:
 
 def _minio_setting_values(tmp_path: Path, **overrides: object) -> dict[str, object]:
     values: dict[str, object] = {
+        **artifact_admission_limit_settings(),
         "environment": "test",
         "artifact_store_backend": "s3_compatible",
         "artifact_scratch_root": tmp_path / "scratch",
@@ -409,6 +411,7 @@ def _minio_settings(tmp_path: Path, **overrides: object) -> Settings:
 
 def _aws_settings(tmp_path: Path, **overrides: object) -> Settings:
     values: dict[str, object] = {
+        **artifact_admission_limit_settings(),
         "environment": "production",
         "artifact_store_backend": "s3_compatible",
         "artifact_scratch_root": tmp_path / "scratch",
@@ -529,6 +532,7 @@ def test_settings_reject_local_artifacts_outside_development(environment: str) -
     """Keep filesystem storage out of production-like deployments."""
     with pytest.raises(ValidationError, match="local artifact storage"):
         Settings(
+            **artifact_admission_limit_settings(),
             environment=environment,
             artifact_store_backend="local",
             artifact_local_root="/tmp/workstream-artifacts",
@@ -539,9 +543,36 @@ def test_settings_reject_local_artifacts_outside_development(environment: str) -
 def test_settings_require_scratch_root_for_enabled_artifacts() -> None:
     with pytest.raises(ValidationError, match="artifact scratch root"):
         Settings(
+            **artifact_admission_limit_settings(),
             environment="test",
             artifact_store_backend="s3_compatible",
         )
+
+
+def test_settings_require_every_durable_byte_admission_limit(tmp_path: Path) -> None:
+    """Enabled stores must never inherit an implicit capacity policy."""
+    common = {
+        "environment": "test",
+        "artifact_store_backend": "local",
+        "artifact_local_root": tmp_path / "artifacts",
+        "artifact_scratch_root": tmp_path / "scratch",
+    }
+    with pytest.raises(
+        ValidationError,
+        match="requires all durable-byte admission limits",
+    ):
+        Settings(**common)
+
+    partial = artifact_admission_limit_settings()
+    partial.pop("artifact_admission_task_maximum_bytes")
+    with pytest.raises(
+        ValidationError,
+        match="requires all durable-byte admission limits",
+    ):
+        Settings(**common, **partial)
+
+    settings = Settings(**common, **artifact_admission_limit_settings())
+    assert settings.artifact_admission_task_maximum_bytes == 1024
 
 
 @pytest.mark.parametrize("interval", [0, -1, 86_401])
@@ -565,6 +596,7 @@ def test_artifact_backend_enum_is_exact_and_flow_node_is_rejected(tmp_path: Path
 def test_local_artifact_settings_and_factory(tmp_path: Path) -> None:
     """Construct local storage only from complete development configuration."""
     settings = Settings(
+        **artifact_admission_limit_settings(),
         environment="test",
         artifact_store_backend="local",
         artifact_local_root=tmp_path / "artifacts",
@@ -992,6 +1024,7 @@ def test_minio_secret_values_from_env_and_dotenv_are_absent_from_errors(
 
     with pytest.raises(ValidationError) as env_error:
         Settings(
+            **artifact_admission_limit_settings(),
             environment="test",
             artifact_store_backend="s3_compatible",
             artifact_scratch_root=tmp_path / "scratch",
@@ -1009,6 +1042,7 @@ def test_minio_secret_values_from_env_and_dotenv_are_absent_from_errors(
     monkeypatch.delenv("WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY")
     with pytest.raises(ValidationError) as dotenv_error:
         Settings(
+            **artifact_admission_limit_settings(),
             environment="test",
             artifact_store_backend="s3_compatible",
             artifact_scratch_root=tmp_path / "scratch",
@@ -1026,6 +1060,7 @@ def test_minio_secret_values_from_env_and_dotenv_are_absent_from_errors(
 def test_minio_endpoint_is_normalized_before_namespace_identity(tmp_path: Path) -> None:
     """Equivalent MinIO origins must produce one endpoint and namespace identity."""
     common = {
+        **artifact_admission_limit_settings(),
         "environment": "test",
         "artifact_store_backend": "s3_compatible",
         "artifact_scratch_root": tmp_path / "scratch",

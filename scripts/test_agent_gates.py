@@ -4168,7 +4168,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     ).read_text(encoding="utf-8")
     artifact_contract = Path(
         ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/"
-        "WS-ART-001-02B1-s3-compatible-minio-aws.md"
+        "WS-ART-001-02C1-admission-put-attempt-foundation.md"
     ).read_text(encoding="utf-8")
     work_queue = Path(".agent-loop/WORK_QUEUE.md").read_text(encoding="utf-8")
     loop_state = Path(".agent-loop/LOOP_STATE.md").read_text(encoding="utf-8")
@@ -4237,14 +4237,15 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert "Merged through PR #129 as `9a04434`" in artifact_map
     assert "Merged through PR #141 as `a10d901`" in artifact_map
-    assert "Active after 02A3 merged through PR #141" in artifact_map
-    assert "Status: Active after explicit human start" in artifact_contract
+    assert "Merged through PR #151 as `1b5422fc`" in artifact_map
+    assert "Active after PR #151 and explicit user start" in artifact_map
+    assert "Status: Active after explicit user start" in artifact_contract
     assert (
         "AUTH's owner reconciliation merged through PR #140 as\n"
         "`d541521`" in artifact_status
     )
-    assert "`WS-ART-001-02B1` is active" in artifact_status
-    assert "The current gate is deterministic 02B1 proof followed by all nine" in (
+    assert "`WS-ART-001-02C1` is active" in artifact_status
+    assert "The current gate is deterministic 02C1 proof followed by all nine" in (
         artifact_status.replace("\n", " ")
     )
     assert "No later artifact chunk starts automatically" in artifact_status.replace(
@@ -4254,21 +4255,11 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | "
         "Merged through PR #146 as `0ffdabf`" in work_queue
     )
-    assert (
-        "| `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | "
-        "Merged through PR #151 as `1b5422f` on 2026-07-19" in work_queue
-    )
-    assert (
-        "PR #151 then merged `WS-ART-001-02B1` as `1b5422f` on 2026-07-19"
-        in loop_state
-    )
-    assert (
-        "ART-02C1 remains inactive pending signed memory and a separate explicit start"
-        in loop_state.replace("\n", " ")
-    )
-    assert "Current ART gate: integrate trusted `main`" not in loop_state
-    assert "| `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Active" not in (
+    assert "| `WS-ART-001-02C1` | Admission And Put-Attempt Foundation | L1 | Active" in (
         work_queue
+    )
+    assert "Current ART gate: integrate trusted `main`, complete deterministic 02C1" in (
+        loop_state
     )
 
 

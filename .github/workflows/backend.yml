@@ -172,6 +172,14 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: Audit subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/audit/*'
+          --precision=2
+          --fail-under=90
+
       - name: Actor subsystem coverage
         working-directory: backend
         run: >-

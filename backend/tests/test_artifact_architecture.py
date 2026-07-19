@@ -35,6 +35,13 @@ CANONICAL_TYPE_ALIASES = {
     "ArtifactBindingResourceType",
 }
 RAW_TYPES = {"ArtifactStore", "ArtifactStorageOrchestrator"}
+INTERNAL_ADMISSION_TYPES = {
+    "ArtifactAdmissionService",
+    "ArtifactAdmissionResult",
+    "CheckerOutputArtifactAdmissionRequest",
+    "ContributorArtifactAdmissionRequest",
+    "GuideArtifactAdmissionRequest",
+}
 PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
@@ -76,7 +83,7 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 imported = {alias.name for alias in node.names}
-                forbidden = imported & RAW_TYPES
+                forbidden = imported & (RAW_TYPES | INTERNAL_ADMISSION_TYPES)
                 if forbidden:
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} imports {sorted(forbidden)}")
                 if (
@@ -100,6 +107,42 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
                     if forbidden:
                         violations.append(
                             f"{path.relative_to(BACKEND_ROOT)} injects {sorted(forbidden)}"
+                        )
+    assert violations == []
+
+
+def test_artifact_domain_has_no_provider_execution_during_admission_foundation() -> None:
+    """Keep 02C1 free of all provider write and acknowledgement execution."""
+    violations: list[str] = []
+    for path in _python_files(APP_ROOT / "modules" / "artifacts"):
+        for node in ast.walk(_tree(path)):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in {"put", "observe_put_result"}
+            ):
+                violations.append(
+                    f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}"
+                )
+    assert violations == []
+
+
+def test_artifact_domain_does_not_import_adapter_modules() -> None:
+    """Keep provider-neutral artifact rules independent from adapters."""
+    violations: list[str] = []
+    for path in _python_files(APP_ROOT / "modules" / "artifacts"):
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.ImportFrom) and (
+                node.module or ""
+            ).startswith("app.adapters.artifacts"):
+                violations.append(
+                    f"{path.relative_to(BACKEND_ROOT)} imports {node.module}"
+                )
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("app.adapters.artifacts"):
+                        violations.append(
+                            f"{path.relative_to(BACKEND_ROOT)} imports {alias.name}"
                         )
     assert violations == []
 
@@ -296,3 +339,18 @@ def test_scratch_cleanup_worker_has_no_product_or_database_state() -> None:
     assert not any(
         module.startswith(forbidden_import_prefixes) for module in imported_modules
     )
+
+
+def test_artifact_repository_does_not_own_actor_persistence() -> None:
+    """Keep canonical actor models and queries behind the actors-owned proof API."""
+    path = APP_ROOT / "modules" / "artifacts" / "repository.py"
+    tree = _tree(path)
+    imported_modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module is not None:
+            imported_modules.add(node.module)
+        elif isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+    assert not any(module.startswith("app.modules.actors") for module in imported_modules)
+    assert "actor_profiles" not in path.read_text()
+    assert "actor_identity_links" not in path.read_text()

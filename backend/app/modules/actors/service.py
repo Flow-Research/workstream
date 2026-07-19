@@ -96,6 +96,19 @@ class ResolvedActor:
     identity_link: ActorIdentityLink
 
 
+@dataclass(frozen=True, slots=True)
+class ActorAdmissionProof:
+    """Primitive canonical actor/link state locked for a caller transaction."""
+
+    actor_profile_id: str
+    actor_kind: str
+    actor_status: str
+    service_identity: str | None
+    identity_link_id: str
+    identity_link_subject_kind: str
+    identity_link_status: str
+
+
 class ActorService:
     """Resolve canonical actors and own first-human provisioning transactions."""
 
@@ -104,6 +117,29 @@ class ActorService:
         self._repo = ActorRepository(session)
         self._audit = AuditService(session)
         self._legacy_audit = AuditRepository(session)
+
+    async def lock_admission_proof(
+        self,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+    ) -> ActorAdmissionProof | None:
+        """Lock and project one exact actor/link pair without deciding authority."""
+        locked = await self._repo.lock_exact_actor_identity(
+            str(actor_profile_id),
+            str(identity_link_id),
+        )
+        if locked is None:
+            return None
+        profile, link = locked
+        return ActorAdmissionProof(
+            actor_profile_id=profile.id,
+            actor_kind=profile.actor_kind,
+            actor_status=profile.status,
+            service_identity=profile.service_identity,
+            identity_link_id=link.id,
+            identity_link_subject_kind=link.subject_kind,
+            identity_link_status=link.status,
+        )
 
     async def find_verified_actor(self, token: VerifiedIssuerToken) -> ResolvedActor | None:
         """Return a canonical actor for an existing exact identity link."""

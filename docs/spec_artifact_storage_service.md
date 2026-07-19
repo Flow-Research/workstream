@@ -724,10 +724,11 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
    provider call.
 3. Transaction A atomically claims or validates the deployment storage
    namespace, derives and reserves every applicable durable-storage scope
-   charge as `provisional`, reserves the item, and commits the server-computed
-   digest, size, media type, operation identity, canonical request digest,
-   limits, one `ArtifactPutAttempt`, and CAS. Any quota or namespace failure
-   rolls back all reservations.
+   charge as `provisional`, links the authoritative producer source reference,
+   and commits the server-computed digest, size, media type, operation identity,
+   canonical request digest, exact limits, one `ArtifactPutAttempt`, and CAS.
+   Any quota, relationship, or namespace failure rolls back the complete
+   transaction.
 4. Workstream passes the sealed `CommittedArtifactSource` from the artifact
    orchestration service to the adapter outside
    the transaction.
@@ -745,6 +746,12 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
 
 No provider call occurs inside a PostgreSQL transaction. No product binding is
 created before independent verification.
+
+Chunk 02C1 implements step 3 only. It creates a `prepared` attempt with no
+executor, lease, receipt, replica, or execution generation and exposes no
+product route. Steps 4 through 9 remain inactive until their separately
+approved owning chunks. In particular, 02C1 contains no provider `put`,
+`observe_put_result`, verification publication, recovery, or product cutover.
 
 Acknowledgement loss leaves the durable put attempt and charges provisional.
 The attempt scanner publishes resolution after an ambiguous outcome or expired
@@ -807,6 +814,20 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_INTERVAL_SECONDS` | `300` | Celery Beat cadence for the named stale-scratch cleanup task; accepted range is 1 through 86400 seconds. |
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
+
+Enabled artifact storage also requires an explicit durable-byte policy. None
+of these limits has a default, and startup fails unless all four are positive:
+
+| Environment variable | Default | Contract |
+|---|---:|---|
+| `WORKSTREAM_ARTIFACT_ADMISSION_TASK_MAXIMUM_BYTES` | unset | Maximum cumulative unique provisional/completed bytes charged to one task. Guide bytes have no task scope. |
+| `WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES` | unset | Maximum cumulative unique provisional/completed bytes charged to one canonical human actor or fixed service identity. |
+| `WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES` | unset | Maximum cumulative unique provisional/completed bytes charged to one project. |
+| `WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES` | unset | Maximum cumulative unique provisional/completed bytes charged to the deployment namespace. |
+
+The first committed scope row pins its configured limit. A later process whose
+configuration disagrees fails admission instead of silently changing the
+persisted capacity contract.
 
 The S3-compatible provider settings use the same prefix:
 
@@ -1131,6 +1152,11 @@ Implementation is a clean cut:
   Operator must reprovision an empty database/storage namespace out of band and
   reingest authoritative bytes through v2; records whose authoritative bytes
   are unavailable are not migrated.
+- migration `0028_artifact_admission` installs the durable admission ledger and prepared
+  put-attempt tables. Its downgrade locks every owned table and refuses to
+  remove the foundation when any admission scope, charge, attempt, or
+  attempt-charge link exists; downgrade is permitted only while all four
+  tables are empty.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

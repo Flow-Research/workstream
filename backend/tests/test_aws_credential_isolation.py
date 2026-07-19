@@ -13,12 +13,14 @@ from botocore.exceptions import MetadataRetrievalError, ReadTimeoutError
 
 from app.adapters.artifacts import s3_compatible
 from app.core.config import Settings
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.interfaces.artifacts import ArtifactConfigurationError
 from tests.assertion_helpers import assert_secret_not_retained
 
 
 def _aws_settings(tmp_path: Path, method: str = "container-role") -> Settings:
     return Settings(
+        **artifact_admission_limit_settings(),
         environment="production",
         artifact_store_backend="s3_compatible",
         artifact_scratch_root=tmp_path / "scratch",

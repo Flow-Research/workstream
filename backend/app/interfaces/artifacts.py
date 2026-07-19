@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+import re
 from typing import Protocol
 
 from app.core.hashing import canonical_json_hash
@@ -17,6 +18,9 @@ from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactS
 
 ARTIFACT_STORE_CAPABILITY_KEY = "artifact_store"
 _MAXIMUM_PROVIDER_OBJECT_REF_LENGTH = 1024
+_CANONICAL_PROVIDER_OBJECT_REF = re.compile(
+    r"^sha256/([0-9a-f]{2})/([0-9a-f]{62})$"
+)
 _RESERVED_NAMESPACE_DESCRIPTOR_KEYS = frozenset(
     {"adapter", "backend", "provider_profile"}
 )
@@ -260,6 +264,24 @@ class ArtifactOperationConflictError(ArtifactStoreError):
 
     code = "artifact_operation_conflict"
     category = "conflict"
+
+
+def artifact_provider_object_ref(commitment: ArtifactCommitment) -> str:
+    """Derive one identity-free provider reference from a commitment."""
+    if type(commitment) is not ArtifactCommitment:
+        raise ArtifactOperationConflictError("artifact commitment is invalid")
+    digest_hex = commitment.sha256[7:]
+    return f"sha256/{digest_hex[:2]}/{digest_hex[2:]}"
+
+
+def parse_artifact_provider_object_ref(provider_object_ref: str) -> tuple[str, str]:
+    """Return digest path parts after enforcing the canonical grammar."""
+    if not isinstance(provider_object_ref, str):
+        raise ArtifactOperationConflictError("artifact provider reference is invalid")
+    matched = _CANONICAL_PROVIDER_OBJECT_REF.fullmatch(provider_object_ref)
+    if matched is None:
+        raise ArtifactOperationConflictError("artifact provider reference is invalid")
+    return matched.group(1), matched.group(2)
 
 
 class ArtifactLimitExceededError(ArtifactStoreError):

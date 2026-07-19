@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-02C2 Verification Publication And Fencing
+# Chunk Contract: WS-ART-001-02C2 - Verification Publication And Fencing
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02C1
 

@@ -12,10 +12,12 @@ from app.adapters.artifacts import artifact_preparation_limits
 from app.core.config import Settings, get_settings
 from app.main import create_app
 from app.interfaces.artifacts import ArtifactProviderLiveProofRequiredError
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
 def _enabled_settings(tmp_path: Path, **changes: object) -> Settings:
     values: dict[str, object] = {
+        **artifact_admission_limit_settings(),
         "environment": "test",
         "artifact_store_backend": "local",
         "artifact_local_root": tmp_path / "store",
@@ -81,6 +83,7 @@ async def test_production_auth_validation_precedes_artifact_startup(
 
     events: list[str] = []
     settings = Settings(
+        **artifact_admission_limit_settings(),
         environment="production",
         artifact_store_backend="s3_compatible",
         artifact_scratch_root=tmp_path / "scratch",
@@ -164,6 +167,7 @@ async def test_aws_s3_startup_requires_live_provider_proof(
     monkeypatch.setattr(main_module, "build_auth_verifier", lambda _settings: None)
     app = create_app(
         Settings(
+            **artifact_admission_limit_settings(),
             environment="production",
             artifact_store_backend="s3_compatible",
             artifact_scratch_root=tmp_path / "scratch",
@@ -351,6 +355,7 @@ def test_aws_s3_is_runtime_ineligible_for_celery_and_cleanup_task(
     """Apply the same inactive-provider guard to API and worker entry points."""
     celery_module, artifacts_module = _load_worker_modules(monkeypatch, request)
     settings = Settings(
+        **artifact_admission_limit_settings(),
         environment="production",
         celery_task_always_eager=True,
         artifact_store_backend="s3_compatible",

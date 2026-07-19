@@ -149,6 +149,10 @@ class Settings(BaseSettings):
     )
     artifact_s3_max_pool_connections: int = Field(default=16, ge=1, le=256)
     artifact_maximum_bytes: int = Field(default=512 * 1024 * 1024, gt=0)
+    artifact_admission_task_maximum_bytes: int | None = Field(default=None, gt=0)
+    artifact_admission_producer_maximum_bytes: int | None = Field(default=None, gt=0)
+    artifact_admission_project_maximum_bytes: int | None = Field(default=None, gt=0)
+    artifact_admission_deployment_maximum_bytes: int | None = Field(default=None, gt=0)
     artifact_stream_buffer_bytes: int = Field(default=1024 * 1024, gt=0, le=1024 * 1024)
     artifact_operation_lock_timeout_seconds: float = Field(
         default=1800.0,
@@ -433,6 +437,16 @@ class Settings(BaseSettings):
                 )
         if self.artifact_store_backend == "disabled":
             return self
+        if any(
+            value is None
+            for value in (
+                self.artifact_admission_task_maximum_bytes,
+                self.artifact_admission_producer_maximum_bytes,
+                self.artifact_admission_project_maximum_bytes,
+                self.artifact_admission_deployment_maximum_bytes,
+            )
+        ):
+            raise ValueError("enabled artifact storage requires all durable-byte admission limits")
         if self.artifact_scratch_root is None:
             raise ValueError("enabled artifact storage requires an artifact scratch root")
         if self.artifact_store_backend == "local":

@@ -46,10 +46,6 @@ from botocore.utils import (
     get_current_datetime,
 )
 
-from app.adapters.artifacts.references import (
-    artifact_provider_object_ref,
-    parse_artifact_provider_object_ref,
-)
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.core.s3_validation import (
@@ -75,7 +71,9 @@ from app.interfaces.artifacts import (
     ArtifactStoreNamespaceClaim,
     ArtifactStoreNamespaceIdentity,
     ArtifactStoreUnavailableError,
+    artifact_provider_object_ref,
     artifact_store_namespace_material,
+    parse_artifact_provider_object_ref,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES

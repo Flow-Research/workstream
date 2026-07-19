@@ -37,7 +37,10 @@ from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.sources import ArtifactCommitment
 from tests.assertion_helpers import assert_secret_not_retained
-from tests.artifact_store_helpers import minted_source
+from tests.artifact_store_helpers import (
+    artifact_admission_limit_settings,
+    minted_source,
+)
 from tests.test_artifact_store_conformance import ArtifactStoreConformanceTests
 
 
@@ -91,6 +94,7 @@ def minio_settings(
 ) -> Settings:
     """Return one complete local-only MinIO configuration."""
     return Settings(
+        **artifact_admission_limit_settings(),
         environment="test",
         artifact_store_backend="s3_compatible",
         artifact_scratch_root=Path("/tmp/workstream-test-artifact-scratch"),

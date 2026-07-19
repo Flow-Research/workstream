@@ -14,10 +14,6 @@ from typing import cast
 import pytest
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
-from app.adapters.artifacts.references import (
-    artifact_provider_object_ref,
-    parse_artifact_provider_object_ref,
-)
 from app.interfaces.artifacts import (
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -26,6 +22,8 @@ from app.interfaces.artifacts import (
     ArtifactOperationConflictError,
     ArtifactStoreUnavailableError,
     ArtifactStoreNamespaceClaim,
+    artifact_provider_object_ref,
+    parse_artifact_provider_object_ref,
 )
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
 from tests.artifact_store_helpers import (

@@ -92,6 +92,20 @@ class ActorRepository:
             query = query.with_for_update()
         return await self._session.scalar(query.execution_options(populate_existing=True))
 
+    async def lock_exact_actor_identity(
+        self,
+        actor_profile_id: str,
+        identity_link_id: str,
+    ) -> tuple[ActorProfile, ActorIdentityLink] | None:
+        """Lock an exact canonical profile then its requested identity link."""
+        profile = await self.get_actor_profile(actor_profile_id, for_update=True)
+        if profile is None:
+            return None
+        link = await self.get_identity_link_by_id(identity_link_id, for_update=True)
+        if link is None or link.actor_profile_id != actor_profile_id:
+            return None
+        return profile, link
+
     async def get_service_actor(
         self,
         service_identity: str,

@@ -20,10 +20,6 @@ from app.core.cancellation import (
     await_cancellation_resistant,
     run_blocking_cancellation_resistant,
 )
-from app.adapters.artifacts.references import (
-    artifact_provider_object_ref,
-    parse_artifact_provider_object_ref,
-)
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
@@ -42,7 +38,9 @@ from app.interfaces.artifacts import (
     ArtifactStoreNamespaceClaim,
     ArtifactStoreNamespaceIdentity,
     ArtifactStoreUnavailableError,
+    artifact_provider_object_ref,
     artifact_store_namespace_material,
+    parse_artifact_provider_object_ref,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.core.hashing import canonical_json_hash

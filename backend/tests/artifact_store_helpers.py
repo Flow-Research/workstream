@@ -20,6 +20,18 @@ from app.modules.artifacts.preparation import (
 from app.modules.artifacts.sources import CommittedArtifactSource
 
 
+def artifact_admission_limit_settings(
+    maximum_bytes: int = 1024,
+) -> dict[str, int]:
+    """Return explicit bounded admission limits for enabled test stores."""
+    return {
+        "artifact_admission_task_maximum_bytes": maximum_bytes,
+        "artifact_admission_producer_maximum_bytes": maximum_bytes,
+        "artifact_admission_project_maximum_bytes": maximum_bytes,
+        "artifact_admission_deployment_maximum_bytes": maximum_bytes,
+    }
+
+
 async def artifact_byte_stream(*chunks: bytes) -> AsyncIterator[bytes]:
     """Yield exact test bytes through the public preparation boundary."""
     for chunk in chunks:
