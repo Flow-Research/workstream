@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 import httpx
@@ -18,6 +19,7 @@ from sse_starlette.sse import AppStatus
 from workstream_mcp.auth import STDIO_TOKEN_ENV, WorkstreamForwardingTokenVerifier
 from workstream_mcp.config import WorkstreamMCPConfig
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
+from workstream_mcp.observability import LOGGER
 from workstream_mcp.scenario_gateway import ScenarioContributorGateway
 from workstream_mcp.schemas import TOOL_DEFINITIONS
 from workstream_mcp.server import build_fastmcp_server
@@ -171,6 +173,13 @@ class _ClaimFailureGateway(ScenarioContributorGateway):
 
     async def claim_task(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         raise self._failure
+
+
+class _MalformedClaimSuccessGateway(ScenarioContributorGateway):
+    """Scenario gateway returning data that cannot satisfy the published result schema."""
+
+    async def claim_task(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return None  # type: ignore[return-value]
 
 
 @pytest.mark.asyncio
@@ -352,6 +361,37 @@ async def test_protocol_marks_execution_failures_as_mcp_errors(
     assert expected_code in response_text
     assert "issuer-token" not in response_text
     assert "private adapter detail" not in response_text
+
+
+@pytest.mark.asyncio
+async def test_protocol_keeps_output_validation_on_server_error_path(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Malformed gateway success data is not mislabeled as invalid tool input."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    caplog.set_level(logging.INFO, logger=LOGGER.name)
+    server = build_fastmcp_server(gateway=_MalformedClaimSuccessGateway())
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "claim_task",
+            {"task_id": "scenario-task-1", "request_id": REQUEST_IDS[0]},
+        )
+
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
+    assert result.isError is True
+    assert result.structuredContent is None
+    assert "unexpected_server_error" in response_text
+    assert "Tool input failed validation." not in response_text
+    assert "issuer-token" not in response_text
+    operation_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "mcp_identifier", None) == "claim_task"
+    )
+    assert operation_record.outcome == "unexpected_server_error"
+    assert operation_record.outcome_class == "infrastructure_error"
 
 
 @pytest.mark.asyncio

@@ -300,24 +300,29 @@ def build_fastmcp_server(
         action: Callable[[], Awaitable[dict[str, Any]]],
     ) -> ResultModelT:
         """Convert internal safe envelopes to typed success or MCP error results."""
+
+        async def validate_action_result() -> dict[str, Any]:
+            result = await action()
+            if isinstance(result.get("error"), dict):
+                return result
+            try:
+                result_model.model_validate(result)
+            except ValidationError:
+                return unexpected_server_error(
+                    correlation_id=request_context.correlation_id
+                ).to_result()
+            return result
+
         result = await observe_operation(
             request_context,
             kind="tool",
             identifier=identifier,
             request_id=request_id,
-            action=action,
+            action=validate_action_result,
         )
         if isinstance(result.get("error"), dict):
             raise ToolError(json.dumps(result, sort_keys=True, separators=(",", ":")))
-        try:
-            return result_model.model_validate(result)
-        except ValidationError as exc:
-            safe_error = unexpected_server_error(
-                correlation_id=request_context.correlation_id
-            ).to_result()
-            raise ToolError(
-                json.dumps(safe_error, sort_keys=True, separators=(",", ":"))
-            ) from exc
+        return result_model.model_validate(result)
 
     @server.resource(
         "workstream://me/projects",
