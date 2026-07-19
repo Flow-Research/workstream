@@ -6,7 +6,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from workstream_mcp.auth import RequestContext, redact_context_secrets
+from workstream_mcp.auth import (
+    RequestContext,
+    contains_context_secret,
+    redact_context_secrets,
+)
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError, unexpected_server_error
 from workstream_mcp.gateway import ContributorGateway
 from workstream_mcp.schemas import (
@@ -375,7 +379,7 @@ def _validate_input(
     **values: Any,
 ) -> Any | dict[str, Any]:
     """Validate tool inputs before they reach a gateway."""
-    if str(values.get("request_id", "")) == context.bearer_token:
+    if contains_context_secret(values, context):
         return _safe_result(
             context,
             {

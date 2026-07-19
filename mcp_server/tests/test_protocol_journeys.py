@@ -477,7 +477,8 @@ async def test_protocol_rejects_bearer_equivalent_request_id_without_logging_it(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A UUID-shaped bearer cannot cross into idempotency headers or telemetry."""
-    bearer_token = REQUEST_IDS[0]
+    bearer_token = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+    request_id = bearer_token.lower()
     monkeypatch.setenv(STDIO_TOKEN_ENV, bearer_token)
     monkeypatch.setenv(STDIO_SCENARIO_ACTOR_ID_ENV, "actor-submitter")
     caplog.set_level(logging.INFO, logger=LOGGER.name)
@@ -486,14 +487,16 @@ async def test_protocol_rejects_bearer_equivalent_request_id_without_logging_it(
     async with create_connected_server_and_client_session(server) as session:
         result = await session.call_tool(
             "claim_task",
-            {"task_id": "scenario-task-1", "request_id": bearer_token},
+            {"task_id": "scenario-task-1", "request_id": request_id},
         )
 
     response_text = "\n".join(getattr(item, "text", "") for item in result.content)
     assert result.isError is True
     assert "invalid_tool_input" in response_text
     assert bearer_token not in response_text
+    assert request_id not in response_text
     assert bearer_token not in caplog.text
+    assert request_id not in caplog.text
     operation_record = next(
         record
         for record in caplog.records

@@ -106,10 +106,7 @@ async def test_temporary_gateway_is_explicitly_injected() -> None:
         submission=submission(),
         request_id="22222222-2222-4222-8222-222222222222",
     )
-    gateway = HTTPContributorGateway(
-        base_url="http://workstream.test",
-        fallback=scenario,
-    )
+    gateway = scenario
 
     result = await claim_review(
         gateway,
@@ -201,7 +198,47 @@ async def test_tool_results_redact_echoed_bearer_token() -> None:
     )
 
     assert "issuer-token" not in json.dumps(result)
-    assert result["data"]["pre_submit_check"]["echoed_authorization"] == "Bearer [REDACTED]"
+    assert result["data"]["pre_submit_check"]["echoed_authorization"] == (
+        "Bearer [REDACTED]"
+    )
+
+
+@pytest.mark.asyncio
+async def test_bearer_material_never_reaches_identifier_paths() -> None:
+    """Known bearer material is rejected in tool, resource, and direct gateway refs."""
+    bearer = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+    identifier = bearer.lower()
+    bearer_context = RequestContext(bearer, "corr-secret", "test", "actor-secret")
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(200, json={})
+
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    tool_result = await run_pre_submit_check(
+        gateway,
+        bearer_context,
+        task_id=identifier,
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+    resource_result = await read_task_context(
+        gateway,
+        bearer_context,
+        task_id=identifier,
+    )
+    with pytest.raises(WorkstreamMCPError) as direct_error:
+        await gateway.get_task_context(bearer_context, task_id=identifier)
+
+    assert tool_result["error"]["code"] == "invalid_tool_input"
+    assert resource_result["error"]["code"] == "resource_not_found_or_not_visible"
+    assert direct_error.value.code == MCPErrorCode.RESOURCE_NOT_FOUND_OR_NOT_VISIBLE
+    assert calls == []
 
 
 @pytest.mark.asyncio
@@ -491,13 +528,10 @@ async def test_http_gateway_handles_empty_error_and_network_responses() -> None:
 
 
 @pytest.mark.asyncio
-async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> None:
-    """Every unavailable API delegates only through an explicitly injected gateway."""
+async def test_explicit_scenario_gateway_covers_all_temporary_surfaces() -> None:
+    """Temporary APIs are exercised through one explicitly injected scenario gateway."""
     scenario = ScenarioContributorGateway()
-    gateway = HTTPContributorGateway(
-        base_url="http://workstream.test",
-        fallback=scenario,
-    )
+    gateway = scenario
 
     projects = await gateway.get_my_projects(context())
     contributions = await gateway.get_my_contributions(

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from workstream_mcp.auth import RequestContext, redact_context_secrets
+from workstream_mcp.auth import (
+    RequestContext,
+    contains_context_secret,
+    redact_context_secrets,
+)
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError, unexpected_server_error
 from workstream_mcp.gateway import ContributorGateway
 from workstream_mcp.schemas import normalize_stable_ref
@@ -143,6 +147,12 @@ def _optional_resource_ref(
 
 def _resource_ref(value: str, field_name: str, context: RequestContext) -> str:
     """Convert malformed resource references to the non-disclosing resource error."""
+    if contains_context_secret(value, context):
+        raise WorkstreamMCPError(
+            MCPErrorCode.RESOURCE_NOT_FOUND_OR_NOT_VISIBLE,
+            "The requested Workstream resource was not found or is not visible.",
+            correlation_id=context.correlation_id,
+        )
     try:
         return normalize_stable_ref(value, field_name)
     except ValueError as exc:

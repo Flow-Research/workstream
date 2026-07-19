@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import os
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -154,6 +154,12 @@ def authorization_headers(
     context: RequestContext, *, request_id: str | None = None
 ) -> dict[str, str]:
     """Return Workstream HTTP headers without exposing tokens to tool schemas."""
+    if request_id is not None and contains_context_secret(request_id, context):
+        raise WorkstreamMCPError(
+            MCPErrorCode.INVALID_TOKEN,
+            "Bearer material cannot be reused as a request identifier.",
+            correlation_id=context.correlation_id,
+        )
     headers = {
         "Authorization": f"Bearer {context.bearer_token}",
         "X-Correlation-ID": context.correlation_id,
@@ -188,7 +194,19 @@ def redact_secrets(value: Any, secrets: tuple[str, ...]) -> Any:
 
 def redact_context_secrets(value: Any, context: RequestContext) -> Any:
     """Redact per-request bearer material from MCP-boundary outputs."""
-    return redact_secrets(value, (context.bearer_token,))
+    redacted = redact_secrets(value, (context.bearer_token,))
+    token_uuid = _as_uuid(context.bearer_token)
+    if token_uuid is None:
+        return redacted
+    return _redact_equivalent_uuid(redacted, token_uuid)
+
+
+def contains_context_secret(value: Any, context: RequestContext) -> bool:
+    """Detect raw or canonically equivalent bearer material in structured input."""
+    if contains_secret(value, context.bearer_token):
+        return True
+    token_uuid = _as_uuid(context.bearer_token)
+    return token_uuid is not None and _contains_equivalent_uuid(value, token_uuid)
 
 
 def contains_secret(value: Any, secret: str) -> bool:
@@ -205,6 +223,50 @@ def contains_secret(value: Any, secret: str) -> bool:
     if isinstance(value, (list, tuple, set)):
         return any(contains_secret(item, secret) for item in value)
     return False
+
+
+def _as_uuid(value: str) -> UUID | None:
+    """Parse a UUID-shaped value without exposing it."""
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError):
+        return None
+
+
+def _contains_equivalent_uuid(value: Any, secret_uuid: UUID) -> bool:
+    """Find UUID strings equal to a bearer after canonicalization."""
+    if isinstance(value, str):
+        candidate = _as_uuid(value)
+        return candidate == secret_uuid
+    if isinstance(value, dict):
+        return any(
+            _contains_equivalent_uuid(key, secret_uuid)
+            or _contains_equivalent_uuid(item, secret_uuid)
+            for key, item in value.items()
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(_contains_equivalent_uuid(item, secret_uuid) for item in value)
+    return False
+
+
+def _redact_equivalent_uuid(value: Any, secret_uuid: UUID) -> Any:
+    """Redact complete UUID strings canonically equal to the bearer."""
+    if isinstance(value, str):
+        return "[REDACTED]" if _as_uuid(value) == secret_uuid else value
+    if isinstance(value, list):
+        return [_redact_equivalent_uuid(item, secret_uuid) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_equivalent_uuid(item, secret_uuid) for item in value)
+    if isinstance(value, set):
+        return {_redact_equivalent_uuid(item, secret_uuid) for item in value}
+    if isinstance(value, dict):
+        return {
+            _redact_equivalent_uuid(key, secret_uuid): _redact_equivalent_uuid(
+                item, secret_uuid
+            )
+            for key, item in value.items()
+        }
+    return value
 
 
 def _is_valid_bearer_token(token: str) -> bool:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+import hashlib
 import json
 from typing import Any
 
@@ -88,6 +89,7 @@ class ScenarioContributorGateway:
         self._review_lease_count = 0
         self._task_owner: str | None = None
         self._review_owner: str | None = None
+        self._active_review_lease: dict[str, Any] | None = None
         self._replays: dict[
             tuple[str, str, str], tuple[tuple[Any, ...], dict[str, Any]]
         ] = {}
@@ -127,7 +129,14 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Return deterministic task views."""
         _require_context(context)
-        tasks = deepcopy(self._tasks)
+        actor_key = _actor_key(context)
+        tasks = [
+            deepcopy(task)
+            for task in self._tasks
+            if self._task_owner is None
+            or self._task_owner == actor_key
+            or task["actor_facing_state"] == "available"
+        ]
         if project_id is not None:
             tasks = [task for task in tasks if task["project_id"] == project_id]
         return {"source": "temporary_scenario_gateway", "project_id": project_id, "tasks": tasks}
@@ -347,12 +356,17 @@ class ScenarioContributorGateway:
             "task_id": task_id,
             "version": self._submission_count,
             "status": "submitted",
+            "packet": deepcopy(submission),
+            "packet_digest": hashlib.sha256(
+                _canonical_json(submission).encode("utf-8")
+            ).hexdigest(),
         }
         self._submissions.append(deepcopy(result))
         checker_run = {
             "checker_run_ref": f"scenario-checker-run-{self._submission_count}",
             "submission_ref": result["id"],
             "submission_version": result["version"],
+            "submission_digest": result["packet_digest"],
             "status": "final",
             "outcome": "allow_review",
             "current": True,
@@ -429,16 +443,7 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Return deterministic review context only for the leased fixture."""
         _require_context(context)
-        if (
-            review_ref != self._review["review_ref"]
-            or self._review["state"] != "leased_to_actor"
-            or self._review_owner != _actor_key(context)
-        ):
-            raise WorkstreamMCPError(
-                MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
-                "Review context is available only for a review leased to the actor.",
-                correlation_id=context.correlation_id,
-            )
+        self._active_lease(context, review_ref)
         reviewed_submission = self._review_submission(context)
         checker_admission = self._checker_admission(
             reviewed_submission,
@@ -460,11 +465,8 @@ class ScenarioContributorGateway:
             "submission": {
                 "submission_id": reviewed_submission["id"],
                 "version": reviewed_submission["version"],
-                "summary": "Scenario candidate submission.",
-                "artifact_manifest": [
-                    {"artifact": "result.txt", "hash": "sha256:def"}
-                ],
-                "evidence_items": [],
+                "packet_digest": reviewed_submission["packet_digest"],
+                "packet": deepcopy(reviewed_submission["packet"]),
             },
             "checker_results": checker_admission,
             "revision_chain": [],
@@ -527,6 +529,14 @@ class ScenarioContributorGateway:
         self._review["context_resource"] = (
             f"workstream://reviews/{self._review['review_ref']}/context"
         )
+        self._active_review_lease = {
+            "review_lease_ref": self._review["review_lease_ref"],
+            "review_ref": self._review["review_ref"],
+            "reviewer_actor_id": self._review_owner,
+            "submission_ref": self._review["submission_ref"],
+            "submission_version": self._review["submission_version"],
+            "checker_run_ref": self._review["checker_run_ref"],
+        }
         return self._store_replay(
             "claim_review",
             request_id,
@@ -554,16 +564,7 @@ class ScenarioContributorGateway:
         replay = self._replay("release_review", request_id, (review_ref,), context)
         if replay is not None:
             return replay
-        if (
-            review_ref != self._review["review_ref"]
-            or self._review["state"] != "leased_to_actor"
-            or self._review_owner != _actor_key(context)
-        ):
-            raise WorkstreamMCPError(
-                MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
-                "The review is not leased to the current actor.",
-                correlation_id=context.correlation_id,
-            )
+        self._active_lease(context, review_ref)
         self._review["state"] = "available_to_claim"
         self._review["actor_facing_state"] = "available_to_claim"
         self._review["context_resource"] = None
@@ -571,6 +572,7 @@ class ScenarioContributorGateway:
         self._review["lease_expires_at"] = None
         self._review["review_lease_ref"] = None
         self._review_owner = None
+        self._active_review_lease = None
         return self._store_replay(
             "release_review",
             request_id,
@@ -622,14 +624,8 @@ class ScenarioContributorGateway:
         replay = self._replay("submit_review", request_id, input_key, context)
         if replay is not None:
             return replay
-        if (
-            review_ref != self._review["review_ref"]
-            or self._review["state"] != "leased_to_actor"
-            or self._review_owner != _actor_key(context)
-            or not isinstance(self._review["review_lease_ref"], str)
-            or self._task_owner is None
-            or self._task_owner == _actor_key(context)
-        ):
+        lease = self._active_lease(context, review_ref)
+        if self._task_owner is None or self._task_owner == _actor_key(context):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
                 "The review is not leased to the current actor.",
@@ -644,10 +640,10 @@ class ScenarioContributorGateway:
         )
         review_record = {
             "review_ref": review_ref,
-            "review_lease_ref": self._review["review_lease_ref"],
+            "review_lease_ref": lease["review_lease_ref"],
             "submission_ref": reviewed_submission["id"],
             "submission_version": reviewed_submission["version"],
-            "checker_run_ref": self._review["checker_run_ref"],
+            "checker_run_ref": lease["checker_run_ref"],
             "decision": decision,
             "findings": deepcopy(findings),
             "reason": reason,
@@ -728,6 +724,7 @@ class ScenarioContributorGateway:
                 checker_run["checker_run_ref"] == checker_run_ref
                 and checker_run["submission_ref"] == submission["id"]
                 and checker_run["submission_version"] == submission["version"]
+                and checker_run["submission_digest"] == submission["packet_digest"]
                 and checker_run["status"] == "final"
                 and checker_run["outcome"] == "allow_review"
                 and checker_run["current"] is True
@@ -741,6 +738,33 @@ class ScenarioContributorGateway:
             correlation_id=context.correlation_id,
         )
 
+    def _active_lease(
+        self,
+        context: RequestContext,
+        review_ref: str,
+    ) -> dict[str, Any]:
+        """Return the exact immutable lease anchor or fail without mutation."""
+        lease = self._active_review_lease
+        if (
+            lease is None
+            or review_ref != self._review["review_ref"]
+            or self._review["state"] != "leased_to_actor"
+            or self._review_owner != _actor_key(context)
+            or not isinstance(self._review["review_lease_ref"], str)
+            or lease["review_lease_ref"] != self._review["review_lease_ref"]
+            or lease["review_ref"] != review_ref
+            or lease["reviewer_actor_id"] != _actor_key(context)
+            or lease["submission_ref"] != self._review["submission_ref"]
+            or lease["submission_version"] != self._review["submission_version"]
+            or lease["checker_run_ref"] != self._review["checker_run_ref"]
+        ):
+            raise WorkstreamMCPError(
+                MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
+                "The review is not leased to the current actor.",
+                correlation_id=context.correlation_id,
+            )
+        return lease
+
     def _review_submission(self, context: RequestContext) -> dict[str, Any]:
         """Return the exact immutable submission frozen on the review offer."""
         matches = [
@@ -749,6 +773,10 @@ class ScenarioContributorGateway:
             if submission["id"] == self._review["submission_ref"]
             and submission["version"] == self._review["submission_version"]
             and submission["task_id"] == self._review_task_id
+            and submission["packet_digest"]
+            == hashlib.sha256(
+                _canonical_json(submission["packet"]).encode("utf-8")
+            ).hexdigest()
         ]
         if len(matches) == 1:
             return matches[0]

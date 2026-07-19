@@ -269,15 +269,14 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
 
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
-    assert context_result["checker_results"] == {
-        "checker_run_ref": "scenario-checker-run-1",
-        "submission_ref": "scenario-submission-1",
-        "submission_version": 1,
-        "status": "final",
-        "outcome": "allow_review",
-        "current": True,
-        "results": [],
-    }
+    assert context_result["checker_results"]["checker_run_ref"] == (
+        "scenario-checker-run-1"
+    )
+    assert context_result["checker_results"]["submission_ref"] == (
+        "scenario-submission-1"
+    )
+    assert context_result["checker_results"]["status"] == "final"
+    assert context_result["checker_results"]["outcome"] == "allow_review"
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert advisory_only_revision["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert blocking_accept["error"]["code"] == "invalid_tool_input"
@@ -786,6 +785,83 @@ async def test_review_consumes_frozen_submission_and_checker_anchors() -> None:
 
 
 @pytest.mark.asyncio
+async def test_review_context_preserves_exact_immutable_submission_packet() -> None:
+    """Reviewers receive the exact packet submitted by the contributor."""
+    gateway = ScenarioContributorGateway()
+    packet = {
+        **submission(),
+        "summary": "Unique submitted summary",
+        "package_uri": "flow://packages/unique",
+        "evidence_items": [{"type": "test_result", "label": "Unique evidence"}],
+    }
+    await claim_task(gateway, context(), task_id="scenario-task-1", request_id=REQUEST_ID)
+    await submit_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        submission=packet,
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+    packet["summary"] = "mutated caller value"
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id="33333333-3333-4333-8333-333333333333",
+    )
+
+    review_context = await gateway.get_review_context(
+        other_context(), review_ref="scenario-review-1"
+    )
+
+    assert review_context["submission"]["packet"]["summary"] == (
+        "Unique submitted summary"
+    )
+    assert review_context["submission"]["packet"]["package_uri"] == (
+        "flow://packages/unique"
+    )
+    assert review_context["submission"]["packet"]["evidence_items"] == [
+        {"type": "test_result", "label": "Unique evidence", "metadata": {}}
+    ]
+    assert review_context["submission"]["packet_digest"] == (
+        review_context["checker_results"]["submission_digest"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_review_decision_rejects_corrupted_lease_anchor_without_mutation() -> None:
+    """A changed lease reference cannot produce authoritative review facts."""
+    gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+    original_lease_ref = gateway._review["review_lease_ref"]  # noqa: SLF001
+    gateway._review["review_lease_ref"] = "corrupted-lease"  # noqa: SLF001
+
+    rejected = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert rejected["error"]["code"] == MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR.value
+    assert gateway._review["state"] == "leased_to_actor"  # noqa: SLF001
+    assert gateway._reviews == []  # noqa: SLF001
+    assert gateway._final_acceptances == []  # noqa: SLF001
+    assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
+    gateway._review["review_lease_ref"] = original_lease_ref  # noqa: SLF001
+
+
+@pytest.mark.asyncio
 async def test_temporary_task_and_review_leases_are_actor_scoped() -> None:
     """A second test actor cannot read or mutate another actor's leased work."""
     task_gateway = ScenarioContributorGateway()
@@ -801,6 +877,7 @@ async def test_temporary_task_and_review_leases_are_actor_scoped() -> None:
         other_context(),
         task_id="scenario-task-1",
     )
+    hidden_task_list = await task_gateway.list_tasks(other_context())
     other_submit = await submit_task(
         task_gateway,
         other_context(),
@@ -829,6 +906,7 @@ async def test_temporary_task_and_review_leases_are_actor_scoped() -> None:
     )
 
     assert hidden_task["error"]["code"] == "resource_not_found_or_not_visible"
+    assert hidden_task_list["tasks"] == []
     assert other_submit["error"]["code"] == "submission_not_allowed"
     assert hidden_review["state"] == "none_available"
     assert other_review_context["error"]["code"] == "review_not_leased_to_actor"
