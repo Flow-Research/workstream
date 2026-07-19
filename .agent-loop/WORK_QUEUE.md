@@ -95,19 +95,17 @@ started AUTH-09C. PR #146 merged it as `0ffdabf`; signed memory at `eeb3dc2`
 stopped. The user explicitly started AUTH-09D, and required review split it
 before runtime edits. PR #148 merged 09D-A as `99ae4c9`; signed memory
 `cf8a3e8` stopped and named 09D-B. PR #152 merged 09D-B as `93dd392`; signed
-memory `912a6254` passed and stopped. The user explicitly started the
-contributor foundation from that trusted head. Its first L1 review rejected the
-underspecified contract before runtime edits; exact contract repair and
-rereview are current. AUTH-09E and POL-002-04 remain inactive pending their own
-gates and explicit starts.
+memory `912a6254` passed and stopped. PR #153 then merged the contributor
+foundation as `8d5eb15`. AUTH-09E and POL-002-04 remain inactive pending their
+own gates and explicit starts.
 
 Coverage R10 merged through PR #108. Do not start 01B2, chunk 02, or another
 coverage implementation chunk from this worktree.
 
 `WS-ART-001-01`, the AWS-first planning amendment, `02A1`, `02A2`, `02A3`, and
-`02B1` are merged; PR #151 merged `02B1` as `1b5422fc`. R2 and Flow Node are
-deferred. The user explicitly started `02C1` on 2026-07-19. `02C2` remains
-inactive until `02C1` merges and receives a separate explicit start.
+`02B1` are merged; PR #151 merged `02B1` as `1b5422fc`, and PR #154 merged
+`02C1` as `44f2467c`. R2 and Flow Node are deferred. The user explicitly started
+`02C2` on 2026-07-19; it is the current ART implementation chunk.
 
 Coverage work proceeds independently in its own worktree and is not owned by
 this AUTH queue update.
