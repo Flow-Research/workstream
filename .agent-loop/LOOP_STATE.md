@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#153](https://github.com/Flow-Research/workstream/pull/153) - Clean-cut contributor attribution to canonical human actors
-- Merge commit: `8d5eb15b384fd75787ce98a099400a1d335d2560`
-- Final PR head: `6a70b33fee0c63da8893fca35da967d59d3d410a`
-- Merged at: `2026-07-19T09:56:41Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-CONTRIBUTOR-FOUNDATION.json` at blob `e8a5f33bb21b79b2f2eb739beca7fd3cda9c16da`
-- Completed chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` - Contributor Fields And Canonical-Human Lineage
+- Last merged PR: [#154](https://github.com/Flow-Research/workstream/pull/154) - Add artifact admission and prepared put attempts
+- Merge commit: `44f2467cedc266d2efe261119cfff436ac6b7715`
+- Final PR head: `c93f1a246ddbc595aa0676a63c2926bf26fc1612`
+- Merged at: `2026-07-19T16:32:47Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ART-001-02C1.json` at blob `2b1ebeb24821a77fa38cd716b6b8156d8e87d342`
+- Completed chunk: `WS-ART-001-02C1` - Admission And Put-Attempt Foundation
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-AUTH-001-09E` - Fixed Service Runtime Admission; requires a separate explicit start.
+- Next chunk: `WS-ART-001-02C2` - Verification Publication And Fencing; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`

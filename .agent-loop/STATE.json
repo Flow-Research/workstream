@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29679534430/job/88173050756"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29695052119/job/88214254335"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29679534422/job/88173050730"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29692949209/job/88208778949"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-CONTRIBUTOR-FOUNDATION",
-    "chunk_title": "Contributor Fields And Canonical-Human Lineage",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-09E",
-    "next_chunk_title": "Fixed Service Runtime Admission",
+    "chunk_id": "WS-ART-001-02C1",
+    "chunk_title": "Admission And Put-Attempt Foundation",
+    "initiative_id": "WS-ART-001",
+    "next_chunk_id": "WS-ART-001-02C2",
+    "next_chunk_title": "Verification Publication And Fencing",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-09E",
-    "next_chunk_title": "Fixed Service Runtime Admission",
+    "next_chunk_id": "WS-ART-001-02C2",
+    "next_chunk_title": "Verification Publication And Fencing",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "93dd392484b397cfdfaaa833631dc2c27f591ed7",
-    "head_ref": "codex/ws-auth-001-contributor-foundation",
-    "head_sha": "6a70b33fee0c63da8893fca35da967d59d3d410a",
-    "intent_blob_sha": "e8a5f33bb21b79b2f2eb739beca7fd3cda9c16da",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-CONTRIBUTOR-FOUNDATION.json",
-    "main_sha": "8d5eb15b384fd75787ce98a099400a1d335d2560",
-    "merged_at": "2026-07-19T09:56:41Z",
+    "first_parent_sha": "8d5eb15b384fd75787ce98a099400a1d335d2560",
+    "head_ref": "codex/ws-art-001-02c1-admission-put-attempt",
+    "head_sha": "c93f1a246ddbc595aa0676a63c2926bf26fc1612",
+    "intent_blob_sha": "2b1ebeb24821a77fa38cd716b6b8156d8e87d342",
+    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02C1.json",
+    "main_sha": "44f2467cedc266d2efe261119cfff436ac6b7715",
+    "merged_at": "2026-07-19T16:32:47Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 153,
-    "pr_title": "Clean-cut contributor attribution to canonical human actors",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/153"
+    "pr_number": 154,
+    "pr_title": "Add artifact admission and prepared put attempts",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/154"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-19T09:56:41Z"
+  "updated_at": "2026-07-19T16:32:47Z"
 }
