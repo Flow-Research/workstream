@@ -482,6 +482,15 @@ class ReviewFindingInput(BaseModel):
         examples=[["workstream://evidence/check-result-1"]],
     )
 
+    @field_validator("summary")
+    @classmethod
+    def normalize_summary(cls, value: str) -> str:
+        """Reject contentless findings and persist normalized human text."""
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("summary must not be blank")
+        return normalized
+
 
 class SubmitReviewInput(RequestIdInput):
     """Input for submit_review."""

@@ -16,7 +16,11 @@ from pydantic import AnyUrl
 import pytest
 from sse_starlette.sse import AppStatus
 
-from workstream_mcp.auth import STDIO_TOKEN_ENV, WorkstreamForwardingTokenVerifier
+from workstream_mcp.auth import (
+    STDIO_SCENARIO_ACTOR_ID_ENV,
+    STDIO_TOKEN_ENV,
+    WorkstreamForwardingTokenVerifier,
+)
 from workstream_mcp.config import WorkstreamMCPConfig
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 from workstream_mcp.observability import LOGGER
@@ -51,6 +55,7 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
 ) -> None:
     """A real MCP client can complete both approved temporary conformance journeys."""
     monkeypatch.setenv(STDIO_TOKEN_ENV, "submitter-token")
+    monkeypatch.setenv(STDIO_SCENARIO_ACTOR_ID_ENV, "actor-submitter")
     gateway = ScenarioContributorGateway()
     server = build_fastmcp_server(gateway=gateway)
 
@@ -91,6 +96,7 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
         )
 
     monkeypatch.setenv(STDIO_TOKEN_ENV, "reviewer-token")
+    monkeypatch.setenv(STDIO_SCENARIO_ACTOR_ID_ENV, "actor-reviewer")
     async with create_connected_server_and_client_session(server) as session:
         current_review = await session.read_resource(
             AnyUrl("workstream://projects/scenario-project-1/current-review")
@@ -129,6 +135,7 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
         )
 
     monkeypatch.setenv(STDIO_TOKEN_ENV, "submitter-token")
+    monkeypatch.setenv(STDIO_SCENARIO_ACTOR_ID_ENV, "actor-submitter")
     async with create_connected_server_and_client_session(server) as session:
         submitter_contributions = await session.read_resource(
             AnyUrl("workstream://me/contributions")

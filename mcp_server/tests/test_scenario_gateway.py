@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-
 import pytest
 
 from workstream_mcp.auth import RequestContext
@@ -24,17 +22,22 @@ REQUEST_ID = "11111111-1111-4111-8111-111111111111"
 
 def context() -> RequestContext:
     """Return a reusable safe test context."""
-    return RequestContext("issuer-token", "corr-1", "test")
+    return RequestContext("issuer-token", "corr-1", "test", "actor-submitter")
 
 
 def other_context() -> RequestContext:
     """Return a second actor context for idempotency isolation tests."""
-    return RequestContext("other-issuer-token", "corr-2", "test")
+    return RequestContext("other-issuer-token", "corr-2", "test", "actor-reviewer")
 
 
 def third_context() -> RequestContext:
     """Return a third actor context for lease-visibility tests."""
-    return RequestContext("third-issuer-token", "corr-3", "test")
+    return RequestContext("third-issuer-token", "corr-3", "test", "actor-third")
+
+
+def rotated_submitter_context() -> RequestContext:
+    """Return the submitter under a rotated credential."""
+    return RequestContext("rotated-token", "corr-4", "test", "actor-submitter")
 
 
 def submission() -> dict[str, object]:
@@ -201,6 +204,14 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         findings=[{"summary": "Unresolved requirement.", "finding_kind": "blocking"}],
         request_id="99999999-9999-4999-8999-999999999999",
     )
+    blank_blocking_finding = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="needs_revision",
+        findings=[{"summary": "   ", "finding_kind": "blocking"}],
+        request_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    )
     missing_rejection_reason = await submit_review(
         gateway,
         other_context(),
@@ -257,9 +268,19 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
 
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
+    assert context_result["checker_results"] == {
+        "checker_run_ref": "scenario-checker-run-1",
+        "submission_ref": "scenario-submission-1",
+        "submission_version": 1,
+        "status": "final",
+        "outcome": "allow_review",
+        "current": True,
+        "results": [],
+    }
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert advisory_only_revision["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert blocking_accept["error"]["code"] == "invalid_tool_input"
+    assert blank_blocking_finding["error"]["code"] == "invalid_tool_input"
     assert missing_rejection_reason["error"]["code"] == "invalid_tool_input"
     assert blank_rejection_reason["error"]["code"] == "invalid_tool_input"
     assert misplaced_accept_reason["error"]["code"] == "invalid_tool_input"
@@ -275,6 +296,12 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         record["contribution_type"]
         for record in submitter_contributions["contributions"]
     ] == ["accepted_submission"]
+    assert submitter_contributions["contributions"][0]["source_ref"] == (
+        "scenario-final-acceptance-1"
+    )
+    assert await gateway.get_my_contributions(rotated_submitter_context()) == (
+        submitter_contributions
+    )
     assert await gateway.get_current_review(
         other_context(), project_id="scenario-project-1"
     ) == {
@@ -577,10 +604,14 @@ async def test_submitter_cannot_discover_or_claim_own_review() -> None:
     reviewer_view = await gateway.get_current_review(
         other_context(), project_id="scenario-project-1"
     )
+    rotated_submitter_view = await gateway.get_current_review(
+        rotated_submitter_context(), project_id="scenario-project-1"
+    )
 
     assert submitter_view["state"] == "none_available"
     assert self_claim["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
     assert reviewer_view["state"] == "available_to_claim"
+    assert rotated_submitter_view["state"] == "none_available"
 
 
 @pytest.mark.asyncio
@@ -595,9 +626,7 @@ async def test_submit_review_rechecks_self_review_before_mutation() -> None:
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
     )
-    gateway._task_owner = hashlib.sha256(  # noqa: SLF001 - deliberate invariant probe
-        other_context().bearer_token.encode("utf-8")
-    ).hexdigest()
+    gateway._task_owner = other_context().actor_id  # noqa: SLF001 - invariant probe
 
     result = await submit_review(
         gateway,
@@ -657,6 +686,40 @@ async def test_review_fails_closed_when_submission_state_is_missing() -> None:
     )
 
     assert retry["outcome"] == "accept"
+
+
+@pytest.mark.asyncio
+async def test_review_fails_closed_without_checker_admission() -> None:
+    """A review cannot proceed without its current final checker fact."""
+    gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+    gateway._checker_runs.clear()  # noqa: SLF001 - corrupted-state probe
+
+    review_context = await read_review_context(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+    )
+    decision = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert review_context["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert decision["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert gateway._review["state"] == "leased_to_actor"  # noqa: SLF001
+    assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
 
 
 @pytest.mark.asyncio

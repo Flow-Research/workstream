@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
-import hashlib
 import json
 from typing import Any
 
@@ -79,6 +78,8 @@ class ScenarioContributorGateway:
         self._latest_review_outcomes: dict[str, dict[str, Any]] = {}
         self._submission_count = 0
         self._submissions: list[dict[str, Any]] = []
+        self._checker_runs: list[dict[str, Any]] = []
+        self._final_acceptances: list[dict[str, Any]] = []
         self._task_owner: str | None = None
         self._review_owner: str | None = None
         self._replays: dict[
@@ -335,6 +336,24 @@ class ScenarioContributorGateway:
         if was_revision:
             self._revision_findings.pop(task_id, None)
             self._revision_submissions.pop(task_id, None)
+        result = {
+            "id": f"scenario-submission-{self._submission_count}",
+            "task_id": task_id,
+            "version": self._submission_count,
+            "status": "submitted",
+        }
+        self._submissions.append(deepcopy(result))
+        checker_run = {
+            "checker_run_ref": f"scenario-checker-run-{self._submission_count}",
+            "submission_ref": result["id"],
+            "submission_version": result["version"],
+            "status": "final",
+            "outcome": "allow_review",
+            "current": True,
+            "results": [],
+        }
+        self._checker_runs.append(checker_run)
+        result["checker_run_ref"] = checker_run["checker_run_ref"]
         next_review_number = self._submission_count
         self._review.update(
             {
@@ -348,13 +367,6 @@ class ScenarioContributorGateway:
             }
         )
         self._review_owner = None
-        result = {
-            "id": f"scenario-submission-{self._submission_count}",
-            "task_id": task_id,
-            "version": self._submission_count,
-            "status": "submitted",
-        }
-        self._submissions.append(deepcopy(result))
         return self._store_replay(
             "submit_task",
             request_id,
@@ -429,6 +441,7 @@ class ScenarioContributorGateway:
                 correlation_id=context.correlation_id,
             )
         reviewed_submission = task_submissions[-1]
+        checker_admission = self._checker_admission(reviewed_submission, context)
         return {
             "source": "temporary_scenario_gateway",
             "review_ref": review_ref,
@@ -450,7 +463,7 @@ class ScenarioContributorGateway:
                 ],
                 "evidence_items": [],
             },
-            "checker_results": {"status": "passed", "results": []},
+            "checker_results": checker_admission,
             "revision_chain": [],
             "review_criteria": ["Correctness", "Evidence completeness"],
             "compensation": {
@@ -625,6 +638,7 @@ class ScenarioContributorGateway:
                 correlation_id=context.correlation_id,
             )
         reviewed_submission = task_submissions[-1]
+        self._checker_admission(reviewed_submission, context)
         self._review["state"] = "none_available"
         self._review["actor_facing_state"] = "completed"
         persisted_findings = deepcopy(findings)
@@ -655,10 +669,22 @@ class ScenarioContributorGateway:
         elif decision == "accept":
             task["actor_facing_state"] = "accepted"
             task["may_claim"] = False
+            final_acceptance = {
+                "final_acceptance_ref": (
+                    f"scenario-final-acceptance-{len(self._final_acceptances) + 1}"
+                ),
+                "review_ref": review_ref,
+                "submission_ref": reviewed_submission["id"],
+                "submission_version": reviewed_submission["version"],
+            }
+            self._final_acceptances.append(final_acceptance)
+            self._latest_review_outcomes[self._review_task_id]["final_acceptance_ref"] = (
+                final_acceptance["final_acceptance_ref"]
+            )
             self._append_contribution(
                 owner_key=self._task_owner,
                 contribution_type="accepted_submission",
-                source_ref=self._review_task_id,
+                source_ref=final_acceptance["final_acceptance_ref"],
                 outcome="accepted",
                 policy_ref=SCENARIO_SUBMITTER_POLICY_REF,
                 summary=SCENARIO_SUBMITTER_COMPENSATION_SUMMARY,
@@ -678,6 +704,27 @@ class ScenarioContributorGateway:
                 "findings_count": len(findings),
             },
             context,
+        )
+
+    def _checker_admission(
+        self,
+        submission: dict[str, Any],
+        context: RequestContext,
+    ) -> dict[str, Any]:
+        """Return the final current checker fact that admitted a submission."""
+        for checker_run in reversed(self._checker_runs):
+            if (
+                checker_run["submission_ref"] == submission["id"]
+                and checker_run["submission_version"] == submission["version"]
+                and checker_run["status"] == "final"
+                and checker_run["outcome"] == "allow_review"
+                and checker_run["current"] is True
+            ):
+                return deepcopy(checker_run)
+        raise WorkstreamMCPError(
+            MCPErrorCode.REVIEW_NOT_AVAILABLE,
+            "The submission has no current final checker admission.",
+            correlation_id=context.correlation_id,
         )
 
     def _append_contribution(
@@ -791,8 +838,14 @@ def _now() -> str:
 
 
 def _actor_key(context: RequestContext) -> str:
-    """Return a process-local actor key without storing raw bearer material."""
-    return hashlib.sha256(context.bearer_token.encode("utf-8")).hexdigest()
+    """Return the stable actor identity explicitly injected for scenario tests."""
+    if context.actor_id is None:
+        raise WorkstreamMCPError(
+            MCPErrorCode.AUTHENTICATION_REQUIRED,
+            "The temporary scenario requires a stable actor identity.",
+            correlation_id=context.correlation_id,
+        )
+    return context.actor_id
 
 
 def _canonical_json(value: Any) -> str:

@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover
 
 
 STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
+STDIO_SCENARIO_ACTOR_ID_ENV = "WORKSTREAM_MCP_SCENARIO_ACTOR_ID"
 MAX_BEARER_TOKEN_LENGTH = 8192
 
 
@@ -28,6 +29,7 @@ class RequestContext:
     bearer_token: str = field(repr=False)
     correlation_id: str
     transport: str
+    actor_id: str | None = None
 
 
 def context_from_authorization_header(
@@ -69,7 +71,8 @@ def context_from_stdio_environment(*, correlation_id: str) -> RequestContext:
             "STDIO token configuration is missing.",
             correlation_id=correlation_id,
         )
-    return RequestContext(token, correlation_id, "stdio")
+    actor_id = os.environ.get(STDIO_SCENARIO_ACTOR_ID_ENV, "").strip() or None
+    return RequestContext(token, correlation_id, "stdio", actor_id)
 
 
 def context_from_mcp_access_token(access_token: Any, *, correlation_id: str) -> RequestContext:

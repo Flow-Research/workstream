@@ -43,12 +43,12 @@ def submission() -> dict[str, Any]:
 
 def context() -> RequestContext:
     """Return a reusable safe test context."""
-    return RequestContext("issuer-token", "corr-1", "test")
+    return RequestContext("issuer-token", "corr-1", "test", "actor-submitter")
 
 
 def reviewer_context() -> RequestContext:
     """Return a distinct reviewer identity for lifecycle tests."""
-    return RequestContext("reviewer-token", "corr-2", "test")
+    return RequestContext("reviewer-token", "corr-2", "test", "actor-reviewer")
 
 
 @pytest.mark.asyncio
