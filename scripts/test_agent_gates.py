@@ -4171,9 +4171,8 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "Merged through PR #148 as `99ae4c9`" in auth_map
     assert "| `WS-AUTH-001-09D-A` | Merged |" in auth_status
     assert "| `WS-AUTH-001-09D-B` | Merged |" in auth_status
-    assert "Active implementation chunk\n\n`WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" in (
-        auth_status
-    )
+    assert "Active implementation chunk\n\nNone." in auth_status
+    assert "Active implementation chunk\n\n`WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in auth_status
     assert "`codex/ws-auth-001-contributor-foundation`" in auth_status
     assert "PR #148 is open" not in auth_status
     stale_auth_09d_state = (
@@ -4199,12 +4198,14 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "five 09D-A/09D-B lifecycle actions" not in loop_state
     assert (
         "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And "
-        "Canonical-Human Lineage | L1 | Internal review passed at `4d1fc507`; "
-        "PR/external checks pending; Backend coverage mandatory" in auth_map
+        "Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15` "
+        "on 2026-07-19" in auth_map
     )
     assert (
-        "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | PR ready |" in auth_status
+        "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged |" in auth_status
     )
+    assert "PR/external checks pending" not in auth_map
+    assert "PR/external checks are current" not in auth_status
     assert (
         "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
         "Inactive until contributor-foundation merge/memory and explicit start"

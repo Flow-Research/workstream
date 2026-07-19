@@ -105,9 +105,9 @@ internal review, and external checks passed before PR #152 merged as
 foundation. The user explicitly started that chunk; exact contract `2a21166d`
 passed required L1 review. Initial exact-SHA implementation review found
 diagnostic-privacy and proof gaps; bounded repair and deterministic evidence are
-complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR and
-external checks are current; aggregate coverage remains a mandatory GitHub
-Backend gate. No service caller or consumer feature action is active.
+complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR #153
+merged the contributor foundation as `8d5eb15` on 2026-07-19. No service caller
+or consumer feature action is active.
 
 ## Active planning chunk
 
@@ -115,15 +115,12 @@ None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` - Contributor Fields And Canonical-Human
-Lineage. Explicitly started from trusted `main` at `93dd392`; exact contract
-`2a21166d` passed required L1 review. Internal review passed at code SHA
-`4d1fc507`; PR/external checks are current and aggregate coverage is mandatory
-in Backend.
+None. `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` merged through PR #153 as `8d5eb15`.
+AUTH-09E remains inactive until its own explicit start.
 
 ## Current review branch
 
-`codex/ws-auth-001-contributor-foundation`
+None.
 
 ## Chunk status
 
@@ -153,7 +150,7 @@ in Backend.
 | `WS-AUTH-001-09D` | Split | `codex/ws-auth-001-09d-actor-identity-lifecycle` | - | Required L1 review rejected the combined contract before runtime edits. |
 | `WS-AUTH-001-09D-A` | Merged | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | Merged as `99ae4c9`; signed memory `cf8a3e8` passed and stopped. |
 | `WS-AUTH-001-09D-B` | Merged | `codex/ws-auth-001-09d-b-identity-link-lifecycle` | #152 | Merged as `93dd392`; signed memory `912a6254` passed and stopped. |
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | PR ready | `codex/ws-auth-001-contributor-foundation` | - | Internal review passed at `4d1fc507`; PR/external checks pending; Backend coverage mandatory. |
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged | `codex/ws-auth-001-contributor-foundation` | #153 | Merged as `8d5eb15` on 2026-07-19. |
 | `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after the contributor foundation. |
 | `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
 | `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
@@ -174,15 +171,10 @@ merged feature manifests and separate human starts exist.
 
 AUTH-09C has no remaining blocker. PR #146 merged as `0ffdabf`; PR #148 merged
 AUTH-09D-A as `99ae4c9`; and PR #152 merged AUTH-09D-B as `93dd392`. Signed
-memory `912a6254` passed and stopped. The user explicitly started the
-contributor foundation. Its first L1 review rejected an underspecified
-identity-link race, migration diagnostic, resource-lock, clean-cut, and CI
-contract before runtime edits. Exact repaired contract `2a21166d` passed every
-required L1 track. Initial implementation candidate `e41c33c0` failed privacy,
-proof, docs, and evidence review. Bounded repair and deterministic evidence are
-complete; exact code SHA `4d1fc507` passed all nine internal tracks. PR/external
-checks are current and aggregate coverage remains mandatory in Backend.
-AUTH-09E remains inactive behind that foundation.
+memory `912a6254` passed and stopped. PR #153 merged the contributor foundation
+as `8d5eb15` after its repaired contract, bounded implementation, deterministic
+evidence, and all nine internal tracks passed. AUTH-09E remains inactive behind
+its own explicit-start gate.
 
 The four proposed REV lifecycle actions and review-evidence binding action are
 blocked on complete feature-owned typed manifests. REV fixed services are also

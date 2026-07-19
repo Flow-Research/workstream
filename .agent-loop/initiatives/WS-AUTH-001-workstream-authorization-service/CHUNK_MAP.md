@@ -35,7 +35,7 @@ stopped.
 | `WS-AUTH-001-09D` | Actor And Identity-Link Lifecycle Mutations | L1 | Split before runtime implementation into 09D-A and 09D-B |
 | `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | Merged through PR #148 as `99ae4c9`; signed memory `cf8a3e8` passed |
 | `WS-AUTH-001-09D-B` | Identity-Link Lifecycle And Race Closure | L1 | Merged through PR #152 as `93dd392`; signed memory `912a6254` passed |
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Internal review passed at `4d1fc507`; PR/external checks pending; Backend coverage mandatory |
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15` on 2026-07-19 |
 | `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Inactive until contributor-foundation merge/memory and explicit start |
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
@@ -205,6 +205,6 @@ merged 09D-A as `99ae4c9`; signed memory `cf8a3e8` stopped and named 09D-B. The
 user explicitly started 09D-B; exact contract `9ec6390b` passed required L1
 review. PR #152 merged it as `93dd392`; signed memory `912a6254` passed and
 stopped. The user explicitly started the contributor foundation. Its first L1
-review rejected the underspecified contract before runtime edits; exact repair
-and rereview are current. AUTH-09E and POL-002-04 remain inactive pending their
-own gates and explicit starts.
+review rejected the underspecified contract before runtime edits; PR #153 later
+merged its repaired implementation as `8d5eb15`. AUTH-09E and POL-002-04 remain
+inactive pending their own gates and explicit starts.
