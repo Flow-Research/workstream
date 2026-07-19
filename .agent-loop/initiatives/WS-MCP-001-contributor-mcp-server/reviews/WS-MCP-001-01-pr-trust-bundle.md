@@ -42,6 +42,7 @@ Link the initiative and chunk contract:
 - Published complete agent-facing descriptions, parameter metadata, examples, constraints, and typed output schemas for all seven tools.
 - Added direct `sse-starlette` test dependency ownership and strict MCP error signaling at the official SDK boundary.
 - Required strict coherent checker responses and exact validated Review Context references before publishing successful outcomes.
+- Kept malformed output-schema failures on the server-error path and aligned their operation telemetry with the client-visible infrastructure error.
 
 ## Why It Changed
 
@@ -107,7 +108,7 @@ git diff --check
 ### Result Summary
 
 ```text
-MCP tests: 97 passed at 94.50 percent statement coverage.
+MCP tests: 98 passed at 94.77 percent statement coverage.
 MCP ruff: passed.
 Stale wording, Markdown, authorization, and artifact-contract checks: passed.
 Agent gate regression: 88 passed.
@@ -138,6 +139,7 @@ WS-MCP-001 Sections 18 and 20 acceptance.
 - [x] All seven tool contracts publish complete agent guidance and typed input/output schemas through `tools/list`: `test_catalogue.py` and `test_protocol_journeys.py`.
 - [x] SDK validation errors cannot echo bearer material into MCP responses or logs: `test_protocol_journeys.py`.
 - [x] Malformed checker and review-claim gateway responses fail closed as MCP errors: `test_protocol_journeys.py`.
+- [x] Output-schema failures remain server errors and log matching infrastructure-error telemetry: `test_protocol_journeys.py`.
 - [x] Exactly one schema-v2 merge intent exists: `.agent-loop/merge-intents/WS-MCP-001-01.json`.
 
 ## WS-MCP-001 Sections 18 And 20
@@ -170,17 +172,17 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 4605bd606db3ecb91690f54dd4ba23cf71ba6068
+Reviewed code SHA: 139c6e61e0e0959b3b76f2e82a3c62abd44739df
 
-Reviewed at: 2026-07-19T14:26:11Z
+Reviewed at: 2026-07-19T14:56:55Z
 
 Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
 | Senior engineering | PASS AFTER FIXES | none | Lifecycle, replay, input, and safe-error findings were repaired. |
-| QA/test | PASS AFTER FIXES | none | 97 tests pass at 94.50 percent coverage, including agent-facing catalogue, error-boundary, and real SDK HTTP journeys; remaining authoritative Section 18 cases are recorded. |
-| Security/auth | PASS AFTER FIXES | none | Existing Auth verification, token-safe SDK validation, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, strict gateway-result validation, SSE-safe replay, redaction, and actor ownership are covered. |
+| QA/test | PASS AFTER FIXES | none | 98 tests pass at 94.77 percent coverage, including agent-facing catalogue, distinct input/output error boundaries, and real SDK HTTP journeys; remaining authoritative Section 18 cases are recorded. |
+| Security/auth | PASS AFTER FIXES | none | Existing Auth verification, token-safe SDK validation, secret-safe output validation, matching infrastructure-error telemetry, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, strict gateway-result validation, SSE-safe replay, redaction, and actor ownership are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS AFTER FIXES | none | No backend, persistence, or session ownership moved into MCP. |
 | CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `8d5eb15` integrates cleanly as `4605bd6` without changing MCP runtime. |
@@ -196,8 +198,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed merge head `4605bd6`. |
-| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, and the direct `sse-starlette` dependency remain addressed at reviewed merge head `4605bd6`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed code head `139c6e6`. |
+| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, direct `sse-starlette` dependency, and distinct output-validation error path are addressed through `139c6e6`; rerun after push. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity

@@ -3,7 +3,7 @@
 ## Current status
 
 `WS-MCP-001-01` addressed all current maintainer and CodeRabbit MCP-scope
-findings and received final exact-head PASS results at merge head `4605bd6`.
+findings and received final exact-head PASS results at code head `139c6e6`.
 It is open as
 [PR #149](https://github.com/Flow-Research/workstream/pull/149)
 from branch
@@ -24,7 +24,7 @@ WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Final review ready to push | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Current `main` at `8d5eb15` is integrated as `4605bd6`; all review findings remain addressed; 97 MCP tests pass at 94.50 percent coverage and 88 agent gates pass. External re-review and checks remain pending after push. |
+| `WS-MCP-001-01` | Final review ready to push | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Current `main` at `8d5eb15` is integrated; all review findings remain addressed through `139c6e6`; 98 MCP tests pass at 94.77 percent coverage and 88 agent gates pass. External re-review and checks remain pending after push. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers

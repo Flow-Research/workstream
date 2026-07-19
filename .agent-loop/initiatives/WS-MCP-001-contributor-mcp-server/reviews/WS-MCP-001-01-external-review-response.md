@@ -10,16 +10,16 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through `cbc097e`, and current `main` at `8d5eb15` is integrated as
-reviewed merge head `4605bd6`. CodeRabbit and GitHub checks must rerun after the
-final evidence commit is pushed.
+addressed through `139c6e6`, and current `main` at `8d5eb15` is integrated.
+CodeRabbit and GitHub checks must rerun after the final evidence commit is
+pushed.
 
 ## CodeRabbit Findings
 
 | Finding | Disposition | Evidence |
 |---|---|---|
 | Restrict the MCP job token permissions. | Addressed | The MCP job declares `permissions: contents: read`; checkout credentials remain disabled. |
-| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 94.50 percent. |
+| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 94.77 percent. |
 | Redact secrets inside sets. | Addressed | Recursive set redaction and a regression canary were added. |
 | Hide completed review lease/routing details. | Addressed | `none_available` now returns only source, project, and state. |
 | Check review replay before fixture matching. | Addressed | `claim_review` performs actor-scoped replay/conflict validation before availability checks. |
@@ -30,6 +30,7 @@ final evidence commit is pushed.
 | Bound unconstrained submission inputs. | Addressed | Submission strings/collections, finding lists, evidence references, metadata depth/size, and HTTP request bodies are bounded. |
 | Bound buffered ASGI messages, not only body bytes. | Addressed | Authenticated bodies are coalesced with 2 MiB, 1,024-frame, and 30-second limits; oversized frames are rejected before copying, anonymous bodies bypass buffering for immediate `401`, and replay delegates to the real receiver so SSE remains live. |
 | Declare directly imported `sse-starlette`. | Addressed | `sse-starlette>=3.0,<4.0` is a direct development dependency and installs with `.[dev]`. |
+| Keep output validation out of the input-validation sanitizer. | Addressed | Output model failures become safe `unexpected_server_error` results inside the observed operation; client `isError` and infrastructure-error telemetry are both protocol-tested. |
 
 ## Maintainer Agent-Facing Contract
 
@@ -60,7 +61,7 @@ final evidence commit is pushed.
   active bearer token.
 - Required strict, coherent checker responses and exact review-context references
   before publishing successful MCP outcomes.
-- Expanded protocol regressions; the complete package has 94.50 percent coverage.
+- Expanded protocol regressions; the complete package has 94.77 percent coverage.
 
 ## GitHub Checks
 
@@ -69,6 +70,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until reviewed merge head `4605bd6` and
-its evidence commit are pushed and CodeRabbit/GitHub checks report against that
-head. Do not merge without explicit human approval.
+Do not resolve the review as complete until reviewed code head `139c6e6` and its
+evidence commit are pushed and CodeRabbit/GitHub checks report against that head.
+Do not merge without explicit human approval.
