@@ -108,6 +108,21 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
                 "request_id": REQUEST_IDS[4],
             },
         )
+        reviewed_retry = await session.call_tool(
+            "submit_review",
+            {
+                "review_ref": "scenario-review-1",
+                "decision": "accept",
+                "findings": [],
+                "request_id": REQUEST_IDS[4],
+            },
+        )
+        contributions = await session.read_resource(
+            AnyUrl("workstream://me/contributions")
+        )
+        final_task_status = await session.read_resource(
+            AnyUrl("workstream://tasks/scenario-task-1/status")
+        )
 
     assert _structured(claimed_task)["outcome"] == "claimed"
     assert "locked_context" in json.loads(task_context.contents[0].text)  # type: ignore[union-attr]
@@ -120,6 +135,25 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
     assert _structured(claimed_review)["outcome"] == "leased_to_actor"
     assert "checker_results" in json.loads(review_context.contents[0].text)  # type: ignore[union-attr]
     assert _structured(reviewed)["outcome"] == "accept"
+    assert (
+        _structured(reviewed_retry)["data"]["review_decision"]["idempotent_replay"]
+        is True
+    )
+    contribution_records = json.loads(contributions.contents[0].text)["contributions"]  # type: ignore[union-attr]
+    assert [record["contribution_type"] for record in contribution_records] == [
+        "completed_review",
+        "accepted_submission",
+    ]
+    assert {record["compensation_status"] for record in contribution_records} == {
+        "unpaid"
+    }
+    assert {
+        record["compensation_policy_ref"] for record in contribution_records
+    } == {
+        "scenario-reviewer-policy-1:v1",
+        "scenario-submitter-policy-1:v1",
+    }
+    assert json.loads(final_task_status.contents[0].text)["final_outcome"] == "accepted"  # type: ignore[union-attr]
 
 
 def _structured(result: Any) -> dict[str, Any]:

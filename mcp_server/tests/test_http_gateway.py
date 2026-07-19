@@ -541,9 +541,12 @@ async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> No
         findings=[],
         request_id="88888888-8888-4888-8888-888888888888",
     )
+    recorded_contributions = await gateway.get_my_contributions(
+        context(), project_id="scenario-project-1"
+    )
 
     assert projects["source"] == "temporary_scenario_gateway"
-    assert len(contributions["contributions"]) == 1
+    assert contributions["contributions"] == []
     assert len(tasks["tasks"]) == 1
     assert claimed_task["assignment"]["id"] == "scenario-assignment-1"
     assert released_task["task"]["actor_facing_state"] == "available"
@@ -553,6 +556,10 @@ async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> No
     assert review_context["review_ref"] == "scenario-review-1"
     assert released_review["outcome"] == "released"
     assert submitted_review["outcome"] == "accept"
+    assert [
+        record["contribution_type"]
+        for record in recorded_contributions["contributions"]
+    ] == ["completed_review", "accepted_submission"]
 
 
 @pytest.mark.asyncio

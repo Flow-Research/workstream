@@ -17,7 +17,14 @@ from workstream_mcp.auth import RequestContext
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 
 SCENARIO_TIMESTAMP = "2026-07-10T00:00:00+00:00"
-SCENARIO_COMPENSATION_SUMMARY = "The applicable contribution rule is explicitly unpaid."
+SCENARIO_SUBMITTER_POLICY_REF = "scenario-submitter-policy-1:v1"
+SCENARIO_REVIEWER_POLICY_REF = "scenario-reviewer-policy-1:v1"
+SCENARIO_SUBMITTER_COMPENSATION_SUMMARY = (
+    "The submitter contribution rule is explicitly unpaid."
+)
+SCENARIO_REVIEWER_COMPENSATION_SUMMARY = (
+    "The reviewer contribution rule is explicitly unpaid."
+)
 
 
 class ScenarioContributorGateway:
@@ -52,20 +59,9 @@ class ScenarioContributorGateway:
                 "status_resource": "workstream://tasks/scenario-task-1/status",
             }
         ]
-        self._contributions = [
-            {
-                "contribution_ref": "scenario-contribution-1",
-                "project_id": "scenario-project-1",
-                "project_name": "Scenario Project",
-                "contribution_type": "accepted_submission",
-                "source_ref": "scenario-task-1",
-                "outcome": "accepted",
-                "recorded_at": _now(),
-                "compensation_status": "unpaid",
-                "compensation_policy_ref": "scenario-policy-1:v1",
-                "compensation_summary": SCENARIO_COMPENSATION_SUMMARY,
-            }
-        ]
+        self._contributions: list[dict[str, Any]] = []
+        self._contribution_owners: dict[str, str] = {}
+        self._contribution_count = 0
         self._review = {
             "state": "available_to_claim",
             "review_routing_ref": "scenario-review-route-1",
@@ -102,7 +98,12 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Return deterministic contribution records."""
         _require_context(context)
-        records = deepcopy(self._contributions)
+        actor_key = _actor_key(context)
+        records = [
+            deepcopy(record)
+            for record in self._contributions
+            if self._contribution_owners[record["contribution_ref"]] == actor_key
+        ]
         if project_id is not None:
             records = [record for record in records if record["project_id"] == project_id]
         return {
@@ -150,8 +151,10 @@ class ScenarioContributorGateway:
             "pre_submit_checks": ["scenario-checker-1"],
             "review_criteria": ["Correctness", "Evidence completeness"],
             "compensation": {
-                "policy_ref": "scenario-policy-1:v1",
-                "summary": SCENARIO_COMPENSATION_SUMMARY,
+                "contribution_type": "accepted_submission",
+                "compensation_mode": "unpaid",
+                "policy_ref": SCENARIO_SUBMITTER_POLICY_REF,
+                "summary": SCENARIO_SUBMITTER_COMPENSATION_SUMMARY,
             },
             "cycle": {"number": 1, "maximum_revisions": 2},
             "revision": {
@@ -197,7 +200,11 @@ class ScenarioContributorGateway:
                 if task["actor_facing_state"] == "needs_revision"
                 else None
             ),
-            "final_outcome": None,
+            "final_outcome": (
+                task["actor_facing_state"]
+                if task["actor_facing_state"] in {"accepted", "rejected"}
+                else None
+            ),
             "next_resource": (
                 f"workstream://tasks/{task_id}/context"
                 if task["actor_facing_state"] == "needs_revision"
@@ -438,8 +445,10 @@ class ScenarioContributorGateway:
             "revision_chain": [],
             "review_criteria": ["Correctness", "Evidence completeness"],
             "compensation": {
-                "policy_ref": "scenario-policy-1:v1",
-                "summary": SCENARIO_COMPENSATION_SUMMARY,
+                "contribution_type": "completed_review",
+                "compensation_mode": "unpaid",
+                "policy_ref": SCENARIO_REVIEWER_POLICY_REF,
+                "summary": SCENARIO_REVIEWER_COMPENSATION_SUMMARY,
             },
             "lease": {
                 "started_at": self._review["lease_started_at"],
@@ -575,18 +584,33 @@ class ScenarioContributorGateway:
             )
         self._review["state"] = "none_available"
         self._review["actor_facing_state"] = "completed"
+        task = self._task(self._review_task_id, context)
+        task_submissions = [
+            submission
+            for submission in self._submissions
+            if submission["task_id"] == self._review_task_id
+        ]
+        reviewed_submission = task_submissions[-1] if task_submissions else {
+            "id": "scenario-submission-1",
+            "version": 1,
+        }
+        persisted_findings = deepcopy(findings)
+        self._latest_review_outcomes[self._review_task_id] = {
+            "decision": decision,
+            "review_ref": review_ref,
+            "submission_ref": reviewed_submission["id"],
+            "submission_version": reviewed_submission["version"],
+            "findings": persisted_findings,
+        }
+        self._append_contribution(
+            owner_key=_actor_key(context),
+            contribution_type="completed_review",
+            source_ref=review_ref,
+            outcome=decision,
+            policy_ref=SCENARIO_REVIEWER_POLICY_REF,
+            summary=SCENARIO_REVIEWER_COMPENSATION_SUMMARY,
+        )
         if decision == "needs_revision":
-            persisted_findings = deepcopy(findings)
-            task = self._task(self._review_task_id, context)
-            task_submissions = [
-                submission
-                for submission in self._submissions
-                if submission["task_id"] == self._review_task_id
-            ]
-            reviewed_submission = task_submissions[-1] if task_submissions else {
-                "id": "scenario-submission-1",
-                "version": 1,
-            }
             task["actor_facing_state"] = "needs_revision"
             task["may_claim"] = False
             self._revision_findings[self._review_task_id] = persisted_findings
@@ -594,13 +618,20 @@ class ScenarioContributorGateway:
                 "submission_ref": reviewed_submission["id"],
                 "submission_version": reviewed_submission["version"],
             }
-            self._latest_review_outcomes[self._review_task_id] = {
-                "decision": decision,
-                "review_ref": review_ref,
-                "submission_ref": reviewed_submission["id"],
-                "submission_version": reviewed_submission["version"],
-                "findings": persisted_findings,
-            }
+        elif decision == "accept":
+            task["actor_facing_state"] = "accepted"
+            task["may_claim"] = False
+            self._append_contribution(
+                owner_key=self._task_owner or f"hidden-submitter:{self._review_task_id}",
+                contribution_type="accepted_submission",
+                source_ref=self._review_task_id,
+                outcome="accepted",
+                policy_ref=SCENARIO_SUBMITTER_POLICY_REF,
+                summary=SCENARIO_SUBMITTER_COMPENSATION_SUMMARY,
+            )
+        else:
+            task["actor_facing_state"] = "rejected"
+            task["may_claim"] = False
         return self._store_replay(
             "submit_review",
             request_id,
@@ -614,6 +645,35 @@ class ScenarioContributorGateway:
             },
             context,
         )
+
+    def _append_contribution(
+        self,
+        *,
+        owner_key: str,
+        contribution_type: str,
+        source_ref: str,
+        outcome: str,
+        policy_ref: str,
+        summary: str,
+    ) -> None:
+        """Append one actor-owned immutable contribution fixture record."""
+        self._contribution_count += 1
+        contribution_ref = f"scenario-contribution-{self._contribution_count}"
+        self._contributions.append(
+            {
+                "contribution_ref": contribution_ref,
+                "project_id": "scenario-project-1",
+                "project_name": "Scenario Project",
+                "contribution_type": contribution_type,
+                "source_ref": source_ref,
+                "outcome": outcome,
+                "recorded_at": _now(),
+                "compensation_status": "unpaid",
+                "compensation_policy_ref": policy_ref,
+                "compensation_summary": summary,
+            }
+        )
+        self._contribution_owners[contribution_ref] = owner_key
 
     def _task(self, task_id: str, context: RequestContext) -> dict[str, Any]:
         """Return the one scenario task or fail without revealing other data."""

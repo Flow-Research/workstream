@@ -52,11 +52,7 @@ async def test_scenario_gateway_marks_temporary_surfaces() -> None:
 
     assert gateway.temporary is True
     assert projects["source"] == "temporary_scenario_gateway"
-    contribution = contributions["contributions"][0]
-    assert contribution["contribution_ref"] == "scenario-contribution-1"
-    assert contribution["contribution_type"] == "accepted_submission"
-    assert contribution["recorded_at"] == SCENARIO_TIMESTAMP
-    assert contribution["compensation_status"] == "unpaid"
+    assert contributions["contributions"] == []
     assert tasks["tasks"][0]["task_id"] == "scenario-task-1"
     assert review["state"] == "available_to_claim"
 
@@ -83,14 +79,19 @@ async def test_scenario_resources_cover_required_v01_context() -> None:
         review_ref="scenario-review-1",
     )
 
-    assert {
-        "compensation_policy_ref",
-        "compensation_summary",
-    } <= contributions["contributions"][0].keys()
-    compensation_summary = contributions["contributions"][0]["compensation_summary"]
-    assert "unpaid" in compensation_summary
-    assert task_context["compensation"]["summary"] == compensation_summary
-    assert review_context["compensation"]["summary"] == compensation_summary
+    assert contributions["contributions"] == []
+    assert task_context["compensation"] == {
+        "contribution_type": "accepted_submission",
+        "compensation_mode": "unpaid",
+        "policy_ref": "scenario-submitter-policy-1:v1",
+        "summary": "The submitter contribution rule is explicitly unpaid.",
+    }
+    assert review_context["compensation"] == {
+        "contribution_type": "completed_review",
+        "compensation_mode": "unpaid",
+        "policy_ref": "scenario-reviewer-policy-1:v1",
+        "summary": "The reviewer contribution rule is explicitly unpaid.",
+    }
     assert {"available_from", "claim_by"} <= tasks["tasks"][0].keys()
     assert {
         "locked_context",
@@ -166,6 +167,8 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         findings=[],
         request_id="33333333-3333-4333-8333-333333333333",
     )
+    contributions = await gateway.get_my_contributions(context())
+    other_contributions = await gateway.get_my_contributions(other_context())
 
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
@@ -173,6 +176,11 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     assert accepted["outcome"] == "accept"
     assert accepted_retry["data"]["review_decision"]["idempotent_replay"] is True
     assert "idempotent_replay" not in accepted["data"]["review_decision"]
+    assert [
+        (record["contribution_type"], record["outcome"])
+        for record in contributions["contributions"]
+    ] == [("completed_review", "accept")]
+    assert other_contributions["contributions"] == []
     assert await gateway.get_current_review(
         context(), project_id="scenario-project-1"
     ) == {
@@ -340,7 +348,16 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
         findings=[finding],
         request_id="44444444-4444-4444-8444-444444444444",
     )
+    decision_retry = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="needs_revision",
+        findings=[finding],
+        request_id="44444444-4444-4444-8444-444444444444",
+    )
     status = await gateway.get_task_status(context(), task_id="scenario-task-1")
+    contributions = await gateway.get_my_contributions(context())
     task_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
     revised = await submit_task(
         gateway,
@@ -355,6 +372,10 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     )
 
     assert decision["outcome"] == "needs_revision"
+    assert decision_retry["data"]["review_decision"]["idempotent_replay"] is True
+    assert [record["contribution_type"] for record in contributions["contributions"]] == [
+        "completed_review"
+    ]
     assert status["actor_facing_state"] == "needs_revision"
     assert status["action_required"] == "read_task_context"
     persisted_finding = {**finding, "evidence_refs": []}
@@ -370,6 +391,59 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     assert next_review["state"] == "available_to_claim"
     assert next_review["review_ref"] == "scenario-review-2"
     assert next_review["review_routing_ref"] == "scenario-review-route-2"
+
+
+@pytest.mark.asyncio
+async def test_reject_records_only_one_replay_safe_reviewer_contribution() -> None:
+    """Reject completes the task without creating a submitter contribution."""
+    gateway = ScenarioContributorGateway()
+    await claim_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        request_id=REQUEST_ID,
+    )
+    await submit_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+    await claim_review(
+        gateway,
+        context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id="33333333-3333-4333-8333-333333333333",
+    )
+
+    rejected = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="reject",
+        findings=[],
+        request_id="44444444-4444-4444-8444-444444444444",
+    )
+    rejected_retry = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="reject",
+        findings=[],
+        request_id="44444444-4444-4444-8444-444444444444",
+    )
+    status = await gateway.get_task_status(context(), task_id="scenario-task-1")
+    contributions = await gateway.get_my_contributions(context())
+
+    assert rejected["outcome"] == "reject"
+    assert rejected_retry["data"]["review_decision"]["idempotent_replay"] is True
+    assert status["actor_facing_state"] == "rejected"
+    assert status["final_outcome"] == "rejected"
+    assert [record["contribution_type"] for record in contributions["contributions"]] == [
+        "completed_review"
+    ]
 
 
 @pytest.mark.asyncio
