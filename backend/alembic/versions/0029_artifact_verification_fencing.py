@@ -166,6 +166,13 @@ def upgrade() -> None:
             name="observed_facts",
         ),
     )
+    op.execute(
+        """
+        create trigger trg_artifact_put_observation_receipts_immutable
+        before update or delete on artifact_put_observation_receipts
+        for each row execute function reject_artifact_fact_mutation()
+        """
+    )
 
     op.create_table(
         "artifact_verification_jobs",
@@ -240,6 +247,13 @@ def upgrade() -> None:
             name="observed_facts",
         ),
     )
+    op.execute(
+        """
+        create trigger trg_artifact_verification_receipts_immutable
+        before update or delete on artifact_verification_receipts
+        for each row execute function reject_artifact_fact_mutation()
+        """
+    )
     op.create_index(
         "ix_artifact_verification_receipts_verification_job_id",
         "artifact_verification_receipts",
@@ -274,12 +288,20 @@ def downgrade() -> None:
         "ix_artifact_verification_receipts_verification_job_id",
         table_name="artifact_verification_receipts",
     )
+    op.execute(
+        "drop trigger trg_artifact_verification_receipts_immutable "
+        "on artifact_verification_receipts"
+    )
     op.drop_table("artifact_verification_receipts")
     for column in reversed(("originating_put_attempt_id", "replica_id", "status", "next_run_at")):
         op.drop_index(
             f"ix_artifact_verification_jobs_{column}", table_name="artifact_verification_jobs"
         )
     op.drop_table("artifact_verification_jobs")
+    op.execute(
+        "drop trigger trg_artifact_put_observation_receipts_immutable "
+        "on artifact_put_observation_receipts"
+    )
     op.drop_table("artifact_put_observation_receipts")
     op.drop_index(
         "ix_artifact_operation_receipts_put_attempt_id", table_name="artifact_operation_receipts"

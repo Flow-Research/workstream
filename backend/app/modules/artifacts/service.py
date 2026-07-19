@@ -191,6 +191,7 @@ class ArtifactStorageOrchestrator:
     ) -> str:
         """Claim a caller-held source and invoke the sole writable port once."""
         async with self._session.begin():
+            persisted_namespace = await self._claim_and_validate_namespace()
             candidate = await self._repo.lock_put_attempt(str(attempt_id))
             if (
                 candidate is None
@@ -198,6 +199,7 @@ class ArtifactStorageOrchestrator:
                 or (source.commitment.byte_count != candidate.byte_count)
             ):
                 raise ArtifactIngestStateError("committed source does not match put attempt")
+            self._validate_put_execution_namespace(candidate, persisted_namespace)
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _put_authority_facts(candidate, executor_id, candidate_generation + 1)
@@ -255,9 +257,11 @@ class ArtifactStorageOrchestrator:
     async def resolve_put_attempt(self, attempt_id: UUID) -> str:
         """Resolve ambiguous publication using observation only, never write replay."""
         async with self._session.begin():
+            persisted_namespace = await self._claim_and_validate_namespace()
             candidate = await self._repo.lock_put_attempt(str(attempt_id))
             if candidate is None:
                 return "stale"
+            self._validate_put_execution_namespace(candidate, persisted_namespace)
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _put_authority_facts(candidate, executor_id, candidate_generation + 1)
@@ -323,6 +327,7 @@ class ArtifactStorageOrchestrator:
     async def verify_object(self, job_id: UUID) -> str:
         """Run one deadline-bounded complete-object verification claim."""
         async with self._session.begin():
+            persisted_namespace = await self._claim_and_validate_namespace()
             candidate = await self._repo.lock_verification_job(str(job_id))
             if candidate is None:
                 return "stale"
@@ -330,6 +335,8 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(candidate.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
+            self._validate_put_execution_namespace(attempt, persisted_namespace)
+            self._validate_replica_execution_namespace(replica, persisted_namespace)
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _verification_authority_facts(
@@ -845,6 +852,39 @@ class ArtifactStorageOrchestrator:
     async def _claim_and_validate_namespace(self) -> ArtifactStorageNamespace:
         """Atomically claim the singleton or reject deployment identity drift."""
         return await _claim_and_validate_storage_namespace(self._repo, self._namespace)
+
+    def _validate_put_execution_namespace(
+        self,
+        attempt: ArtifactPutAttempt,
+        persisted: ArtifactStorageNamespace,
+    ) -> None:
+        """Reject provider execution outside the active storage namespace."""
+        if (
+            attempt.storage_namespace_id != persisted.id
+            or attempt.namespace_fingerprint != persisted.namespace_fingerprint
+            or self._store.identity.provider_key != persisted.adapter
+            or self._namespace.provider_profile != persisted.provider_profile
+        ):
+            raise ArtifactStorageNamespaceError(
+                "artifact put attempt does not match the active storage namespace"
+            )
+
+    def _validate_replica_execution_namespace(
+        self,
+        replica: ArtifactReplica,
+        persisted: ArtifactStorageNamespace,
+    ) -> None:
+        """Reject reads when replica identity differs from active composition."""
+        if (
+            replica.storage_namespace_id != persisted.id
+            or replica.namespace_fingerprint != persisted.namespace_fingerprint
+            or replica.adapter != persisted.adapter
+            or replica.provider_profile != persisted.provider_profile
+            or self._store.identity.provider_key != persisted.adapter
+        ):
+            raise ArtifactStorageNamespaceError(
+                "artifact replica does not match the active storage namespace"
+            )
 
 
 class ArtifactPendingWorkScanner:

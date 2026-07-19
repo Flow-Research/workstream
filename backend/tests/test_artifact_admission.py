@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -59,6 +60,7 @@ from app.modules.artifacts.service import (
     ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
     ArtifactStorageNamespaceSpec,
+    ArtifactStorageNamespaceError,
     ArtifactStorageOrchestrator,
     ArtifactPendingWorkScanner,
     artifact_storage_namespace_spec,
@@ -752,6 +754,82 @@ async def test_committed_put_and_independent_verification_are_fenced(
                 assert await orchestrator.verify_object(job_id) == "stale"
                 assert authority.preflights == 3
                 assert authority.terminals == 2
+                for operation in ("update", "delete"):
+                    statement = (
+                        "update artifact_verification_receipts set execution_generation = "
+                        "execution_generation + 1"
+                        if operation == "update"
+                        else "delete from artifact_verification_receipts"
+                    )
+                    with pytest.raises(DBAPIError):
+                        async with factory() as mutation_session, mutation_session.begin():
+                            await mutation_session.execute(text(statement))
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_every_provider_operation_revalidates_namespace_before_io(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+
+    class DriftStore:
+        identity = replace(store.identity, provider_key="drift")
+
+        async def put(self, _source):
+            raise AssertionError("put must not run after namespace drift")
+
+        async def observe_put_result(self, _commitment):
+            raise AssertionError("observation must not run after namespace drift")
+
+        def open(self, _provider_object_ref):
+            raise AssertionError("read must not run after namespace drift")
+
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "namespace-fence", b"fenced") as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                drifted = ArtifactStorageOrchestrator(
+                    session, DriftStore(), namespace, settings, _AllowArtifactAuthority()
+                )
+                with pytest.raises(ArtifactStorageNamespaceError):
+                    await drifted.execute_committed_put(
+                        attempt_id=admission.attempt_id, source=source
+                    )
+                with pytest.raises(ArtifactStorageNamespaceError):
+                    await drifted.resolve_put_attempt(admission.attempt_id)
+
+                real = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await real.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+                job = await session.scalar(select(ArtifactVerificationJob))
+                assert job is not None
+                replica = await session.get(ArtifactReplica, job.replica_id)
+                assert replica is not None
+                replica.adapter = "drift"
+                await session.commit()
+                with pytest.raises(ArtifactStorageNamespaceError):
+                    await real.verify_object(UUID(job.id))
+                await session.refresh(job)
+                assert job.status == "pending"
+                assert await _count(session, ArtifactVerificationReceipt) == 0
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -1064,6 +1142,8 @@ async def test_put_observation_unavailable_retries_then_exhausts_without_facts(
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     class UnavailableObservationStore:
+        identity = SimpleNamespace(provider_key=namespace.adapter)
+
         async def observe_put_result(self, _commitment):
             raise ArtifactStoreUnavailableError("provider unavailable")
 
@@ -1245,6 +1325,16 @@ async def test_acknowledgement_loss_is_observed_without_second_put(
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
                 assert await _count(session, ArtifactVerificationJob) == 1
+                for operation in ("update", "delete"):
+                    statement = (
+                        "update artifact_put_observation_receipts set execution_generation = "
+                        "execution_generation + 1"
+                        if operation == "update"
+                        else "delete from artifact_put_observation_receipts"
+                    )
+                    with pytest.raises(DBAPIError):
+                        async with factory() as mutation_session, mutation_session.begin():
+                            await mutation_session.execute(text(statement))
     finally:
         bootstrap.close()
         await engine.dispose()

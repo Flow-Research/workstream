@@ -4,7 +4,6 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Internal review passed at `4d1fc507`; PR/external checks pending; aggregate coverage mandatory in Backend |
 | `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Active after PR #154 and explicit user start; implementation and deterministic proof in progress |
 
 Live post-merge state remains read from signed `automation/loop-memory`
@@ -25,6 +24,7 @@ output. This authored queue records the separately approved parallel chunks.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15` on 2026-07-19 |
 | `WS-ART-001-02C1` | Admission And Put-Attempt Foundation | L1 | Merged through PR #154 as `44f2467c` on 2026-07-19 |
 | `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Merged through PR #151 as `1b5422fc` on 2026-07-19 |
 | `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | Merged through PR #148 as `99ae4c9` on 2026-07-18 |
