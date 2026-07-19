@@ -247,6 +247,15 @@ def build_fastmcp_server(
         )
 
     class WorkstreamFastMCP(FastMCP):
+        async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+            """Sanitize SDK validation failures before returning them to an MCP client."""
+            try:
+                return await super().call_tool(name, arguments)
+            except ToolError as exc:
+                if isinstance(exc.__cause__, ValidationError):
+                    raise ToolError("Tool input failed validation.") from None
+                raise
+
         def streamable_http_app(self) -> Any:
             from starlette.middleware import Middleware
 

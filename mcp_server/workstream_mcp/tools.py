@@ -14,9 +14,11 @@ from workstream_mcp.schemas import (
     ClaimReviewInput,
     ClaimTaskInput,
     OperationResult,
+    PreSubmitCheckGatewayResponse,
     ReleaseReviewInput,
     ReleaseTaskInput,
     SubmitReviewInput,
+    normalize_stable_ref,
 )
 
 
@@ -121,7 +123,19 @@ async def run_pre_submit_check(
             submission=parsed.submission.model_dump(exclude_none=True),
             request_id=str(parsed.request_id),
         )
-        passed = data.get("status") == "passed" or data.get("eligible_to_submit") is True
+        try:
+            checked = PreSubmitCheckGatewayResponse.model_validate(data)
+        except ValidationError:
+            return _safe_result(
+                context,
+                unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            )
+        if checked.task_id != parsed.task_id:
+            return _safe_result(
+                context,
+                unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            )
+        passed = checked.status == "passed"
         return _safe_result(
             context,
             OperationResult(
@@ -216,13 +230,32 @@ async def claim_review(
             request_id=str(parsed.request_id),
         )
         review_ref = data.get("review_ref")
+        next_resource = data.get("next_resource")
+        if not isinstance(review_ref, str):
+            return _safe_result(
+                context,
+                unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            )
+        try:
+            normalized_review_ref = normalize_stable_ref(review_ref, "review_ref")
+        except ValueError:
+            return _safe_result(
+                context,
+                unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            )
+        expected_next_resource = f"workstream://reviews/{normalized_review_ref}/context"
+        if review_ref != normalized_review_ref or next_resource != expected_next_resource:
+            return _safe_result(
+                context,
+                unexpected_server_error(correlation_id=context.correlation_id).to_result(),
+            )
         return _safe_result(
             context,
             OperationResult(
                 operation="claim_review",
                 outcome="leased_to_actor",
                 workstream_ref=review_ref,
-                next_resource=data.get("next_resource"),
+                next_resource=next_resource,
                 data={"review_claim": data},
                 summary="Review leased to the current actor.",
             ).model_dump(),

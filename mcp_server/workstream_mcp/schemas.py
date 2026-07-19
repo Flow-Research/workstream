@@ -7,7 +7,7 @@ import re
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 
 MCP_PROMPTS: tuple[str, ...] = ()
@@ -649,6 +649,28 @@ class OperationSuccessBase(BaseModel):
     summary: str = Field(description="Short agent-facing explanation of the completed outcome.")
 
 
+class PreSubmitCheckGatewayResponse(BaseModel):
+    """Validated response contract for the existing Workstream checker API."""
+
+    model_config = ConfigDict(extra="allow", strict=True)
+
+    task_id: str
+    authoritative: StrictBool
+    status: Literal["passed", "failed"]
+    eligible_to_submit: bool
+    results: list[dict[str, Any]]
+
+    @model_validator(mode="after")
+    def require_coherent_eligibility(self) -> PreSubmitCheckGatewayResponse:
+        """Require status and eligibility to describe the same completed outcome."""
+        if self.authoritative is not False:
+            raise ValueError("pre-submit checker response must be non-authoritative")
+        expected_eligibility = self.status == "passed"
+        if self.eligible_to_submit is not expected_eligibility:
+            raise ValueError("checker status and submission eligibility disagree")
+        return self
+
+
 class ClaimTaskData(BaseModel):
     """Authoritative task-claim payload returned by Workstream."""
 
@@ -730,6 +752,8 @@ class ClaimReviewResult(OperationSuccessBase):
 
     operation: Literal["claim_review"] = Field(description="Operation that produced this result.")
     outcome: Literal["leased_to_actor"] = Field(description="The review was leased to this actor.")
+    workstream_ref: str = Field(description="Leased review identifier.")
+    next_resource: str = Field(description="Review Context URI to read after claiming the review.")
     data: ClaimReviewData = Field(description="Authoritative review lease details.")
 
 

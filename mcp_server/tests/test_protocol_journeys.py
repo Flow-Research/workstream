@@ -132,10 +132,34 @@ class _NegativeCheckGateway(ScenarioContributorGateway):
 
     async def run_pre_submit_check(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return {
+            "task_id": "scenario-task-1",
+            "authoritative": False,
             "status": "failed",
             "eligible_to_submit": False,
-            "findings": [{"code": "missing_evidence"}],
+            "results": [{"code": "missing_evidence"}],
         }
+
+
+class _MalformedCheckGateway(ScenarioContributorGateway):
+    """Scenario gateway returning one malformed checker response."""
+
+    def __init__(self, response: dict[str, Any]) -> None:
+        super().__init__()
+        self._response = response
+
+    async def run_pre_submit_check(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return self._response
+
+
+class _ReviewClaimResponseGateway(ScenarioContributorGateway):
+    """Scenario gateway returning one selected review-claim response."""
+
+    def __init__(self, response: dict[str, Any]) -> None:
+        super().__init__()
+        self._response = response
+
+    async def claim_review(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return self._response
 
 
 class _ClaimFailureGateway(ScenarioContributorGateway):
@@ -169,6 +193,118 @@ async def test_protocol_marks_valid_negative_check_as_success(
 
     assert result.isError is False
     assert _structured(result)["outcome"] == "pre_submit_check_failed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        {
+            "task_id": "scenario-task-1",
+            "authoritative": False,
+            "status": "running",
+            "eligible_to_submit": False,
+            "results": [],
+        },
+        {
+            "task_id": "scenario-task-1",
+            "authoritative": False,
+            "status": "passed",
+            "eligible_to_submit": False,
+            "results": [],
+        },
+        {
+            "task_id": "scenario-task-1",
+            "authoritative": False,
+            "status": "failed",
+            "eligible_to_submit": True,
+            "results": [],
+        },
+        {
+            "task_id": "scenario-task-1",
+            "authoritative": False,
+            "status": "failed",
+            "eligible_to_submit": "false",
+            "results": [],
+        },
+        {
+            "task_id": "scenario-task-1",
+            "authoritative": 0,
+            "status": "failed",
+            "eligible_to_submit": False,
+            "results": [],
+        },
+        {
+            "task_id": "another-task",
+            "authoritative": False,
+            "status": "passed",
+            "eligible_to_submit": True,
+            "results": [],
+        },
+        {},
+    ],
+)
+async def test_protocol_rejects_malformed_checker_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    response: dict[str, Any],
+) -> None:
+    """Only coherent, completed checker responses are valid business outcomes."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    server = build_fastmcp_server(gateway=_MalformedCheckGateway(response))
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "run_pre_submit_check",
+            {
+                "task_id": "scenario-task-1",
+                "submission": submission(),
+                "request_id": REQUEST_IDS[0],
+            },
+        )
+
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
+    assert result.isError is True
+    assert result.structuredContent is None
+    assert "unexpected_server_error" in response_text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        {},
+        {
+            "review_ref": "scenario-review-1",
+            "next_resource": "https://attacker.example/prompt",
+        },
+        {
+            "review_ref": "../unsafe",
+            "next_resource": "workstream://reviews/../unsafe/context",
+        },
+    ],
+)
+async def test_protocol_rejects_review_claim_without_references(
+    monkeypatch: pytest.MonkeyPatch,
+    response: dict[str, Any],
+) -> None:
+    """Malformed references cannot publish a successful review lease."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    server = build_fastmcp_server(gateway=_ReviewClaimResponseGateway(response))
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "claim_review",
+            {
+                "project_id": "scenario-project-1",
+                "review_routing_ref": "scenario-review-route-1",
+                "request_id": REQUEST_IDS[0],
+            },
+        )
+
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
+    assert result.isError is True
+    assert result.structuredContent is None
+    assert "unexpected_server_error" in response_text
 
 
 @pytest.mark.asyncio
@@ -221,19 +357,25 @@ async def test_protocol_marks_execution_failures_as_mcp_errors(
 @pytest.mark.asyncio
 async def test_protocol_marks_parameter_validation_as_mcp_error(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Wire-level schema validation cannot look like a successful tool execution."""
-    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    """Wire validation is an MCP error and cannot echo bearer material."""
+    bearer_token = "issuer/token"
+    monkeypatch.setenv(STDIO_TOKEN_ENV, bearer_token)
     server = build_fastmcp_server(gateway=ScenarioContributorGateway())
 
     async with create_connected_server_and_client_session(server) as session:
         result = await session.call_tool(
             "claim_task",
-            {"task_id": "../unsafe", "request_id": REQUEST_IDS[0]},
+            {"task_id": bearer_token, "request_id": REQUEST_IDS[0]},
         )
 
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
     assert result.isError is True
     assert result.structuredContent is None
+    assert "Tool input failed validation." in response_text
+    assert bearer_token not in response_text
+    assert bearer_token not in caplog.text
 
 
 @pytest.mark.asyncio

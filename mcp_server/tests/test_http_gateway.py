@@ -164,7 +164,14 @@ async def test_tool_results_redact_echoed_bearer_token() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            json={"echoed_authorization": request.headers["authorization"]},
+            json={
+                "task_id": "task-1",
+                "authoritative": False,
+                "status": "passed",
+                "eligible_to_submit": True,
+                "results": [],
+                "echoed_authorization": request.headers["authorization"],
+            },
         )
 
     gateway = HTTPContributorGateway(
@@ -464,8 +471,7 @@ async def test_http_gateway_handles_empty_error_and_network_responses() -> None:
         request_id=REQUEST_ID,
     )
 
-    assert empty["outcome"] == "pre_submit_check_failed"
-    assert empty["data"]["pre_submit_check"] == {}
+    assert empty["error"]["code"] == "unexpected_server_error"
     assert denied["error"]["code"] == "capability_not_granted"
     assert unavailable_result["error"]["code"] == "workstream_temporarily_unavailable"
     assert unavailable_result["error"]["retryable"] is True
