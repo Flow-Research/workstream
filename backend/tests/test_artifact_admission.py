@@ -1600,6 +1600,7 @@ async def test_missing_transition_serializes_concurrent_binding_insert(
     )
     content_locked = asyncio.Event()
     allow_missing_completion = asyncio.Event()
+    binding_flush_started = asyncio.Event()
 
     class PausingContentLockRepository(ArtifactRepository):
         async def lock_content(self, content_id: str):
@@ -1667,9 +1668,11 @@ async def test_missing_transition_serializes_concurrent_binding_insert(
                                 supersedes_binding_id=None,
                             )
                         )
+                        binding_flush_started.set()
                         await binding_session.flush()
 
                 binding_insert = asyncio.create_task(insert_binding())
+                await asyncio.wait_for(binding_flush_started.wait(), timeout=2)
                 with pytest.raises(TimeoutError):
                     await asyncio.wait_for(asyncio.shield(binding_insert), timeout=0.2)
                 allow_missing_completion.set()
