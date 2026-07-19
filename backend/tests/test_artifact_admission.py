@@ -63,6 +63,7 @@ from app.modules.artifacts.service import (
     ArtifactStorageNamespaceError,
     ArtifactStorageOrchestrator,
     ArtifactPendingWorkScanner,
+    _verification_authority_facts,
     artifact_storage_namespace_spec,
 )
 from app.modules.authorization.runtime import (
@@ -895,7 +896,7 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
         await engine.dispose()
 
 
-async def test_preacknowledgement_mismatch_quarantines_and_keeps_charge(
+async def test_preacknowledgement_mismatch_fails_contributor_item_and_keeps_charge(
     admission_database_env: str,
     tmp_path: Path,
 ) -> None:
@@ -917,20 +918,25 @@ async def test_preacknowledgement_mismatch_quarantines_and_keeps_charge(
     try:
         async with factory() as session:
             async with minted_source(
-                tmp_path / "mismatch-guide-source",
+                tmp_path / "mismatch-contributor-source",
                 b"expected immutable bytes",
                 media_type="text/plain",
             ) as source:
-                _, guide_item_id = await _seed_guide(
+                _, _, item_ids = await _seed_contributor_items(
                     session,
                     context=context,
-                    content_hash=source.commitment.sha256,
-                    media_type=source.commitment.media_type,
+                    commitments=(
+                        (
+                            source.commitment.sha256,
+                            source.commitment.byte_count,
+                            source.commitment.media_type,
+                        ),
+                    ),
                 )
                 admission = await ArtifactAdmissionService(session, settings, namespace).admit(
-                    GuideArtifactAdmissionRequest(
+                    ContributorArtifactAdmissionRequest(
                         authorization_context=context,
-                        guide_source_item_id=UUID(guide_item_id),
+                        upload_item_id=UUID(item_ids[0]),
                         source=source,
                     )
                 )
@@ -963,6 +969,11 @@ async def test_preacknowledgement_mismatch_quarantines_and_keeps_charge(
                 ) == ("integrity_mismatch", "available", "invalid")
                 charges = (await session.execute(select(ArtifactAdmissionCharge))).scalars().all()
                 assert charges and {charge.state for charge in charges} == {"completed"}
+                item = await session.get(ArtifactUploadItem, item_ids[0])
+                assert item is not None
+                assert item.state == "failed"
+                assert item.error_code == "artifact_integrity_failure"
+                assert item.cas_version == 1
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
     finally:
@@ -1317,7 +1328,10 @@ async def test_acknowledgement_loss_is_observed_without_second_put(
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, _AllowArtifactAuthority()
                 )
-                assert await orchestrator.resolve_put_attempt(admission.attempt_id) == "verified"
+                assert (
+                    await orchestrator.resolve_put_attempt(admission.attempt_id)
+                    == "observed_confirmed"
+                )
                 attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                 assert attempt is not None
                 assert attempt.status == "object_confirmed"
@@ -1431,6 +1445,21 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                 expected_generation=1,
             )
             assert takeover is not None and takeover.execution_generation == 2
+        async with factory() as facts_session:
+            facts_repo = ArtifactRepository(facts_session)
+            first_replica = await facts_repo.lock_replica(first_claim.replica_id)
+            first_attempt = await facts_repo.lock_put_attempt(
+                first_claim.originating_put_attempt_id
+            )
+            assert first_replica is not None and first_attempt is not None
+            first_facts = _verification_authority_facts(
+                first_claim,
+                first_replica,
+                first_attempt,
+                first_executor,
+                first_claim.execution_generation,
+            )
+            await facts_session.rollback()
         async with factory() as stale_session:
             stale = ArtifactStorageOrchestrator(
                 stale_session, store, namespace, settings, _AllowArtifactAuthority()
@@ -1439,6 +1468,7 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                 await stale._complete_verification(
                     first_claim,
                     first_executor,
+                    first_facts,
                     "verified",
                     "sha256:" + "1" * 64,
                     1,

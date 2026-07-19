@@ -581,7 +581,7 @@ class ArtifactStorageOrchestrator:
             attempt.terminal_result_code = "observed_confirmed" if observed else "acknowledged"
             attempt.terminal_at = now
             attempt.cas_version += 1
-        return "verified" if observed else "stored_pending_verification"
+        return "observed_confirmed" if observed else "stored_pending_verification"
 
     async def _record_put_unavailable(self, claimed: ArtifactPutAttempt, executor_id: UUID) -> str:
         async with self._session.begin():
@@ -750,6 +750,17 @@ class ArtifactStorageOrchestrator:
                     replica.availability_state = "available"
                     replica.integrity_state = "invalid"
                 attempt.replica_id = replica.id
+                if outcome == "observed_integrity_mismatch" and attempt.upload_item_id is not None:
+                    item = await self._repo.lock_upload_item(attempt.upload_item_id)
+                    binding = await self._repo.lock_binding_for_content(content.id)
+                    if (
+                        item is not None
+                        and binding is None
+                        and item.state in {"reserved", "replay_required"}
+                    ):
+                        item.state = "failed"
+                        item.error_code = "artifact_integrity_failure"
+                        item.cas_version += 1
             await self._repo.add_put_observation_receipt(
                 ArtifactPutObservationReceipt(
                     id=str(uuid4()),
