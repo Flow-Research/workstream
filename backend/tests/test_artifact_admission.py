@@ -2309,12 +2309,16 @@ async def test_missing_transition_serializes_concurrent_binding_insert(
     content_locked = asyncio.Event()
     allow_missing_completion = asyncio.Event()
     binding_flush_started = asyncio.Event()
+    content_lock_count = 0
 
     class PausingContentLockRepository(ArtifactRepository):
         async def lock_content(self, content_id: str):
+            nonlocal content_lock_count
             content = await super().lock_content(content_id)
-            content_locked.set()
-            await allow_missing_completion.wait()
+            content_lock_count += 1
+            if content_lock_count == 2:
+                content_locked.set()
+                await allow_missing_completion.wait()
             return content
 
     try:
