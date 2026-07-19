@@ -208,15 +208,32 @@ class ArtifactStorageOrchestrator:
             action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
             facts=facts,
         )
-        async with self._session.begin():
-            claimed = await self._repo.claim_put_attempt(
+        async with self._session.begin() as claim_transaction:
+            persisted_namespace = await self._claim_and_validate_namespace()
+            claimed_result = await self._repo.claim_put_attempt(
                 attempt_id=attempt_id,
                 executor_id=executor_id,
                 lease_seconds=self._settings.artifact_execution_lease_seconds,
                 mode="caller_put",
                 expected_generation=candidate_generation,
             )
-            if claimed is None:
+            if claimed_result is None:
+                return "stale"
+            claimed = await self._repo.lock_put_attempt(str(attempt_id))
+            if not _matching_put_fence(claimed, executor_id, candidate_generation + 1):
+                await claim_transaction.rollback()
+                return "stale"
+            assert claimed is not None
+            self._validate_put_execution_namespace(claimed, persisted_namespace)
+            claimed_facts = _put_authority_facts(
+                claimed, executor_id, claimed.execution_generation
+            )
+            if (
+                claimed_facts != facts
+                or source.commitment.sha256 != claimed.sha256
+                or source.commitment.byte_count != claimed.byte_count
+            ):
+                await claim_transaction.rollback()
                 return "stale"
             charges = await self._repo.lock_attempt_charges(str(attempt_id))
             if any(charge.state == "released" for charge in charges):
@@ -240,15 +257,16 @@ class ArtifactStorageOrchestrator:
         try:
             result = await self._store.put(source)
         except ArtifactStoreUnavailableError:
-            return await self._record_put_unavailable(claimed, executor_id)
+            return await self._record_put_unavailable(claimed, executor_id, facts)
         except ArtifactStoreError:
             # Any non-acknowledgement provider error is resolved through the
             # read-only observation path; a caller write never fabricates
             # observation evidence.
-            return await self._record_put_unavailable(claimed, executor_id)
+            return await self._record_put_unavailable(claimed, executor_id, facts)
         return await self._complete_transaction_b(
             claimed=claimed,
             executor_id=executor_id,
+            expected_facts=facts,
             provider_object_ref=result.provider_object_ref,
             replayed=result.replayed,
             observed=False,
@@ -270,21 +288,33 @@ class ArtifactStorageOrchestrator:
             action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
             facts=facts,
         )
-        async with self._session.begin():
-            claimed = await self._repo.claim_put_attempt(
+        async with self._session.begin() as claim_transaction:
+            persisted_namespace = await self._claim_and_validate_namespace()
+            claimed_result = await self._repo.claim_put_attempt(
                 attempt_id=attempt_id,
                 executor_id=executor_id,
                 lease_seconds=self._settings.artifact_execution_lease_seconds,
                 mode="observation",
                 expected_generation=candidate_generation,
             )
-            if claimed is None:
+            if claimed_result is None:
+                return "stale"
+            claimed = await self._repo.lock_put_attempt(str(attempt_id))
+            if not _matching_put_fence(claimed, executor_id, candidate_generation + 1):
+                await claim_transaction.rollback()
+                return "stale"
+            assert claimed is not None
+            self._validate_put_execution_namespace(claimed, persisted_namespace)
+            if _put_authority_facts(
+                claimed, executor_id, claimed.execution_generation
+            ) != facts:
+                await claim_transaction.rollback()
                 return "stale"
         commitment = _attempt_commitment(claimed)
         try:
             observation = await self._store.observe_put_result(commitment)
             if not observation.committed:
-                return await self._record_put_absence(claimed, executor_id)
+                return await self._record_put_absence(claimed, executor_id, facts)
             observed_sha256, observed_size = await self._read_complete(
                 observation.provider_object_ref
             )
@@ -292,26 +322,28 @@ class ArtifactStorageOrchestrator:
             try:
                 observed_sha256, observed_size = await self._read_complete(claimed.canonical_target)
             except (ArtifactStoreUnavailableError, TimeoutError):
-                return await self._record_put_unavailable(claimed, executor_id)
+                return await self._record_put_unavailable(claimed, executor_id, facts)
             except ArtifactStoreError:
-                return await self._record_put_conflict(claimed, executor_id)
+                return await self._record_put_conflict(claimed, executor_id, facts)
             return await self._record_put_mismatch(
                 claimed,
                 executor_id,
+                facts,
                 claimed.canonical_target,
                 observed_sha256,
                 observed_size,
             )
         except ArtifactObjectMissingError:
-            return await self._record_put_absence(claimed, executor_id)
+            return await self._record_put_absence(claimed, executor_id, facts)
         except (ArtifactStoreUnavailableError, TimeoutError):
-            return await self._record_put_unavailable(claimed, executor_id)
+            return await self._record_put_unavailable(claimed, executor_id, facts)
         except ArtifactStoreError:
-            return await self._record_put_conflict(claimed, executor_id)
+            return await self._record_put_conflict(claimed, executor_id, facts)
         if observed_sha256 != claimed.sha256 or observed_size != claimed.byte_count:
             return await self._record_put_mismatch(
                 claimed,
                 executor_id,
+                facts,
                 observation.provider_object_ref,
                 observed_sha256,
                 observed_size,
@@ -319,6 +351,7 @@ class ArtifactStorageOrchestrator:
         return await self._complete_transaction_b(
             claimed=claimed,
             executor_id=executor_id,
+            expected_facts=facts,
             provider_object_ref=observation.provider_object_ref,
             replayed=True,
             observed=True,
@@ -442,6 +475,7 @@ class ArtifactStorageOrchestrator:
         *,
         claimed: ArtifactPutAttempt,
         executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
         provider_object_ref: str,
         replayed: bool,
         observed: bool,
@@ -452,6 +486,8 @@ class ArtifactStorageOrchestrator:
                 return "stale"
             assert attempt is not None
             facts = _put_authority_facts(attempt, executor_id, claimed.execution_generation)
+            if facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -583,16 +619,26 @@ class ArtifactStorageOrchestrator:
             attempt.cas_version += 1
         return "observed_confirmed" if observed else "stored_pending_verification"
 
-    async def _record_put_unavailable(self, claimed: ArtifactPutAttempt, executor_id: UUID) -> str:
+    async def _record_put_unavailable(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+    ) -> str:
         async with self._session.begin():
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
                 return "stale"
             assert attempt is not None
+            terminal_facts = _put_authority_facts(
+                attempt, executor_id, claimed.execution_generation
+            )
+            if terminal_facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-                facts=_put_authority_facts(attempt, executor_id, claimed.execution_generation),
+                facts=terminal_facts,
             )
             now = await self._repo.database_now()
             exhausted = attempt.observation_count >= attempt.maximum_observations
@@ -608,16 +654,26 @@ class ArtifactStorageOrchestrator:
             _clear_put_fence(attempt)
         return "provider_unavailable" if exhausted else "acknowledgement_unknown"
 
-    async def _record_put_absence(self, claimed: ArtifactPutAttempt, executor_id: UUID) -> str:
+    async def _record_put_absence(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+    ) -> str:
         async with self._session.begin():
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
                 return "stale"
             assert attempt is not None
+            terminal_facts = _put_authority_facts(
+                attempt, executor_id, claimed.execution_generation
+            )
+            if terminal_facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-                facts=_put_authority_facts(attempt, executor_id, claimed.execution_generation),
+                facts=terminal_facts,
             )
             charges = await self._repo.lock_attempt_charges(attempt.id)
             scopes = await self._repo.lock_charge_scopes(charges)
@@ -658,6 +714,7 @@ class ArtifactStorageOrchestrator:
         self,
         claimed: ArtifactPutAttempt,
         executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
         provider_object_ref: str,
         observed_sha256: str,
         observed_size: int,
@@ -665,6 +722,7 @@ class ArtifactStorageOrchestrator:
         return await self._record_put_terminal_observation(
             claimed,
             executor_id,
+            expected_facts,
             status="integrity_mismatch",
             outcome="observed_integrity_mismatch",
             observed_sha256=observed_sha256,
@@ -672,10 +730,16 @@ class ArtifactStorageOrchestrator:
             provider_object_ref=provider_object_ref,
         )
 
-    async def _record_put_conflict(self, claimed: ArtifactPutAttempt, executor_id: UUID) -> str:
+    async def _record_put_conflict(
+        self,
+        claimed: ArtifactPutAttempt,
+        executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
+    ) -> str:
         return await self._record_put_terminal_observation(
             claimed,
             executor_id,
+            expected_facts,
             status="conflict",
             outcome="conflict",
             observed_sha256=None,
@@ -687,6 +751,7 @@ class ArtifactStorageOrchestrator:
         self,
         claimed: ArtifactPutAttempt,
         executor_id: UUID,
+        expected_facts: ArtifactPutAttemptAuthorityFacts,
         *,
         status: str,
         outcome: str,
@@ -699,10 +764,15 @@ class ArtifactStorageOrchestrator:
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
                 return "stale"
             assert attempt is not None
+            terminal_facts = _put_authority_facts(
+                attempt, executor_id, claimed.execution_generation
+            )
+            if terminal_facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-                facts=_put_authority_facts(attempt, executor_id, claimed.execution_generation),
+                facts=terminal_facts,
             )
             now = await self._repo.database_now()
             for charge in await self._repo.lock_attempt_charges(attempt.id):
@@ -720,6 +790,10 @@ class ArtifactStorageOrchestrator:
                         normalized_display_name=None,
                     )
                 )
+                locked_content = await self._repo.lock_content(content.id)
+                if locked_content is None:
+                    raise ArtifactIngestStateError("artifact content is unavailable")
+                content = locked_content
                 replica = await self._repo.get_or_create_replica(
                     ArtifactReplica(
                         id=str(uuid4()),

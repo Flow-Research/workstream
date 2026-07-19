@@ -896,6 +896,66 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
         await engine.dispose()
 
 
+@pytest.mark.parametrize("mode", ["caller_put", "observation"])
+async def test_put_paths_recheck_authorized_facts_before_provider_io(
+    admission_database_env: str,
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    provider = SimpleNamespace(
+        identity=SimpleNamespace(provider_key=namespace.adapter),
+        put=AsyncMock(side_effect=AssertionError("provider put must not execute")),
+        observe_put_result=AsyncMock(
+            side_effect=AssertionError("provider observation must not execute")
+        ),
+        open=AsyncMock(side_effect=AssertionError("provider read must not execute")),
+    )
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / f"put-fact-drift-{mode}", b"authorized") as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                attempt_id = admission.attempt_id
+                await session.commit()
+
+                class DriftPutFactsAuthority(_AllowArtifactAuthority):
+                    async def preflight(self, **_values: object) -> None:
+                        await super().preflight(**_values)
+                        async with factory() as drift_session, drift_session.begin():
+                            drifted_attempt = await drift_session.get(
+                                ArtifactPutAttempt, str(attempt_id), with_for_update=True
+                            )
+                            assert drifted_attempt is not None
+                            drifted_attempt.operation_identity = "sha256:" + "f" * 64
+
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, provider, namespace, settings, DriftPutFactsAuthority()
+                )
+                result = (
+                    await orchestrator.execute_committed_put(
+                        attempt_id=attempt_id, source=source
+                    )
+                    if mode == "caller_put"
+                    else await orchestrator.resolve_put_attempt(attempt_id)
+                )
+                assert result == "stale"
+                provider.put.assert_not_awaited()
+                provider.observe_put_result.assert_not_awaited()
+                provider.open.assert_not_awaited()
+                attempt = await session.get(ArtifactPutAttempt, str(attempt_id))
+                assert attempt is not None
+                assert attempt.status == "prepared"
+                assert attempt.execution_generation == 0
+                assert attempt.executor_id is None
+    finally:
+        await engine.dispose()
+
+
 async def test_preacknowledgement_mismatch_fails_contributor_item_and_keeps_charge(
     admission_database_env: str,
     tmp_path: Path,
@@ -977,6 +1037,118 @@ async def test_preacknowledgement_mismatch_fails_contributor_item_and_keeps_char
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
     finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_mismatch_transition_serializes_concurrent_binding_insert(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    content_locked = asyncio.Event()
+    allow_mismatch_completion = asyncio.Event()
+    binding_flush_started = asyncio.Event()
+
+    class PausingContentLockRepository(ArtifactRepository):
+        async def lock_content(self, content_id: str):
+            content = await super().lock_content(content_id)
+            content_locked.set()
+            await allow_mismatch_completion.wait()
+            return content
+
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "mismatch-binding-race", b"expected") as source:
+                project_id, task_id, item_ids = await _seed_contributor_items(
+                    session,
+                    context=context,
+                    commitments=(
+                        (
+                            source.commitment.sha256,
+                            source.commitment.byte_count,
+                            source.commitment.media_type,
+                        ),
+                    ),
+                )
+                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+                    ContributorArtifactAdmissionRequest(
+                        authorization_context=context,
+                        upload_item_id=UUID(item_ids[0]),
+                        source=source,
+                    )
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                prefix, filename = attempt.canonical_target.removeprefix("sha256/").split("/")
+                provider_path = settings.artifact_local_root / "objects" / "sha256" / prefix
+                provider_path.mkdir(mode=0o700)
+                corrupt_object = provider_path / filename
+                corrupt_object.write_bytes(b"different")
+                corrupt_object.chmod(0o400)
+                content = ArtifactContent(
+                    id=str(uuid4()),
+                    sha256=source.commitment.sha256,
+                    byte_count=source.commitment.byte_count,
+                    media_type=source.commitment.media_type,
+                    normalized_display_name=None,
+                )
+                session.add(content)
+                await session.commit()
+                content_id = content.id
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                orchestrator._repo = PausingContentLockRepository(session)
+                resolution = asyncio.create_task(
+                    orchestrator.resolve_put_attempt(admission.attempt_id)
+                )
+                await asyncio.wait_for(content_locked.wait(), timeout=2)
+
+                async def insert_binding() -> None:
+                    async with factory() as binding_session, binding_session.begin():
+                        binding_session.add(
+                            ArtifactBinding(
+                                id=str(uuid4()),
+                                content_id=content_id,
+                                project_id=project_id,
+                                resource_type="task",
+                                resource_id=task_id,
+                                logical_role="submission",
+                                scope_version=1,
+                                actor_id=str(context.actor_profile_id),
+                                attribution_type="human",
+                                supersedes_binding_id=None,
+                            )
+                        )
+                        binding_flush_started.set()
+                        await binding_session.flush()
+
+                binding_insert = asyncio.create_task(insert_binding())
+                await asyncio.wait_for(binding_flush_started.wait(), timeout=2)
+                with pytest.raises(TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(binding_insert), timeout=0.2)
+                allow_mismatch_completion.set()
+                assert await resolution == "integrity_mismatch"
+                await asyncio.wait_for(binding_insert, timeout=2)
+                item = await session.get(ArtifactUploadItem, item_ids[0])
+                assert item is not None and item.state == "failed"
+                assert await _count(session, ArtifactBinding) == 1
+    finally:
+        allow_mismatch_completion.set()
         bootstrap.close()
         await engine.dispose()
 
