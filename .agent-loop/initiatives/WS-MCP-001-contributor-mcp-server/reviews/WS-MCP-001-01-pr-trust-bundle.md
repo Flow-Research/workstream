@@ -110,7 +110,7 @@ git diff --check
 MCP tests: 97 passed at 94.50 percent statement coverage.
 MCP ruff: passed.
 Stale wording, Markdown, authorization, and artifact-contract checks: passed.
-Agent gate regression: 87 passed.
+Agent gate regression: 88 passed.
 Backend ruff: passed.
 Focused backend API contract: 15 passed.
 git diff --check: passed.
@@ -170,9 +170,9 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: cbc097e6da22809367a0a7b8afe9cc8bf87fe538
+Reviewed code SHA: 4605bd606db3ecb91690f54dd4ba23cf71ba6068
 
-Reviewed at: 2026-07-19T14:08:54Z
+Reviewed at: 2026-07-19T14:26:11Z
 
 Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
@@ -183,7 +183,7 @@ Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-
 | Security/auth | PASS AFTER FIXES | none | Existing Auth verification, token-safe SDK validation, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, strict gateway-result validation, SSE-safe replay, redaction, and actor ownership are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS AFTER FIXES | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `983b9e5` integrates cleanly without changing MCP runtime. |
+| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `8d5eb15` integrates cleanly as `4605bd6` without changing MCP runtime. |
 | Docs | PASS AFTER FIXES | none | Initiative docs distinguish foundation PR readiness from full specification acceptance. |
 | Reuse/dedup | PASS AFTER FIXES | none | Boundary validation, mapping, replay, and observability remain centralized. |
 | Test delta | PASS AFTER FIXES | none | Every external and internal remediation finding has focused regression evidence. |
@@ -196,8 +196,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through `cbc097e`. |
-| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, and the direct `sse-starlette` dependency are addressed through `cbc097e`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed merge head `4605bd6`. |
+| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, and the direct `sse-starlette` dependency remain addressed at reviewed merge head `4605bd6`; rerun after push. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity

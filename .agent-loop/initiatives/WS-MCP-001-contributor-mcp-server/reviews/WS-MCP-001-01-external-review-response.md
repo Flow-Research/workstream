@@ -10,8 +10,9 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through `cbc097e`; CodeRabbit and GitHub checks must rerun after that
-head is pushed.
+addressed through `cbc097e`, and current `main` at `8d5eb15` is integrated as
+reviewed merge head `4605bd6`. CodeRabbit and GitHub checks must rerun after the
+final evidence commit is pushed.
 
 ## CodeRabbit Findings
 
@@ -63,11 +64,11 @@ head is pushed.
 
 ## GitHub Checks
 
-Pending on `cbc097e` after push. Fork-triggered jobs may still
+Pending on the final evidence head after push. Fork-triggered jobs may still
 require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until `cbc097e` and its evidence commit
-are pushed and CodeRabbit/GitHub checks report against that head. Do not merge
-without explicit human approval.
+Do not resolve the review as complete until reviewed merge head `4605bd6` and
+its evidence commit are pushed and CodeRabbit/GitHub checks report against that
+head. Do not merge without explicit human approval.
