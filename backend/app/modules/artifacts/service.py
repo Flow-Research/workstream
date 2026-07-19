@@ -347,7 +347,7 @@ class ArtifactStorageOrchestrator:
             action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
             facts=facts,
         )
-        async with self._session.begin():
+        async with self._session.begin() as claim_transaction:
             persisted_namespace = await self._claim_and_validate_namespace()
             claimed_result = await self._repo.claim_verification_job(
                 job_id=job_id,
@@ -377,7 +377,10 @@ class ArtifactStorageOrchestrator:
                 executor_id,
                 claimed.execution_generation,
             )
-            if execution_facts != facts or not _verification_relationship_matches(
+            if execution_facts != facts:
+                await claim_transaction.rollback()
+                return "stale"
+            if not _verification_relationship_matches(
                 claimed,
                 execution_replica,
                 execution_attempt,
@@ -400,11 +403,15 @@ class ArtifactStorageOrchestrator:
                 execution_replica.provider_object_ref
             )
         except ArtifactObjectMissingError:
-            return await self._complete_verification(claimed, executor_id, "missing", None, None)
+            return await self._complete_verification(
+                claimed, executor_id, facts, "missing", None, None
+            )
         except (ArtifactStoreUnavailableError, TimeoutError):
-            return await self._record_verification_unavailable(claimed, executor_id)
+            return await self._record_verification_unavailable(claimed, executor_id, facts)
         except ArtifactStoreError:
-            return await self._complete_verification(claimed, executor_id, "conflict", None, None)
+            return await self._complete_verification(
+                claimed, executor_id, facts, "conflict", None, None
+            )
         outcome = (
             "verified"
             if observed_sha256 == execution_attempt.sha256
@@ -412,7 +419,7 @@ class ArtifactStorageOrchestrator:
             else "integrity_mismatch"
         )
         return await self._complete_verification(
-            claimed, executor_id, outcome, observed_sha256, observed_size
+            claimed, executor_id, facts, outcome, observed_sha256, observed_size
         )
 
     async def _read_complete(self, provider_object_ref: str) -> tuple[str, int]:
@@ -762,7 +769,10 @@ class ArtifactStorageOrchestrator:
         return status
 
     async def _record_verification_unavailable(
-        self, claimed: ArtifactVerificationJob, executor_id: UUID
+        self,
+        claimed: ArtifactVerificationJob,
+        executor_id: UUID,
+        expected_facts: ArtifactVerificationAuthorityFacts,
     ) -> str:
         async with self._session.begin():
             job = await self._repo.lock_verification_job(claimed.id)
@@ -774,12 +784,15 @@ class ArtifactStorageOrchestrator:
             if replica is None or attempt is None:
                 return "conflict"
             content = await self._repo.lock_content(replica.content_id)
+            terminal_facts = _verification_authority_facts(
+                job, replica, attempt, executor_id, claimed.execution_generation
+            )
+            if terminal_facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-                facts=_verification_authority_facts(
-                    job, replica, attempt, executor_id, claimed.execution_generation
-                ),
+                facts=terminal_facts,
             )
             now = await self._repo.database_now()
             if not _verification_relationship_matches(job, replica, attempt, content):
@@ -802,6 +815,7 @@ class ArtifactStorageOrchestrator:
         self,
         claimed: ArtifactVerificationJob,
         executor_id: UUID,
+        expected_facts: ArtifactVerificationAuthorityFacts,
         outcome: str,
         observed_sha256: str | None,
         observed_size: int | None,
@@ -816,12 +830,15 @@ class ArtifactStorageOrchestrator:
             if replica is None or attempt is None:
                 return "conflict"
             content = await self._repo.lock_content(replica.content_id)
+            terminal_facts = _verification_authority_facts(
+                job, replica, attempt, executor_id, claimed.execution_generation
+            )
+            if terminal_facts != expected_facts:
+                return "stale"
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-                facts=_verification_authority_facts(
-                    job, replica, attempt, executor_id, claimed.execution_generation
-                ),
+                facts=terminal_facts,
             )
             now = await self._repo.database_now()
             if not _verification_relationship_matches(job, replica, attempt, content):

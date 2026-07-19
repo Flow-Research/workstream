@@ -1577,7 +1577,7 @@ async def test_existing_replica_immutable_fact_conflict_is_fenced(
         await engine.dispose()
 
 
-async def test_verification_resource_drift_terminalizes_conflict_without_mutation(
+async def test_verification_resource_drift_returns_stale_without_mutation(
     admission_database_env: str,
     tmp_path: Path,
 ) -> None:
@@ -1663,19 +1663,19 @@ async def test_verification_resource_drift_terminalizes_conflict_without_mutatio
                     return source.commitment.sha256, source.commitment.byte_count
 
                 orchestrator._read_complete = drift_job_after_claim
-                assert await orchestrator.verify_object(job_id) == "conflict"
+                assert await orchestrator.verify_object(job_id) == "stale"
                 await session.refresh(job)
                 await session.refresh(unrelated_replica)
                 original_replica = await session.get(ArtifactReplica, original_replica_id)
                 item = await session.get(ArtifactUploadItem, item_ids[0])
                 assert original_replica is not None and item is not None
-                assert job.status == "conflict"
+                assert job.status == "running"
                 assert unrelated_replica.verification_state == "pending"
                 assert original_replica.verification_state == "pending"
                 assert item.state == "stored_pending_verification"
                 assert item.content_id == original_replica.content_id
                 receipt = await session.scalar(select(ArtifactVerificationReceipt))
-                assert receipt is not None and receipt.outcome == "conflict"
+                assert receipt is None
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -1756,14 +1756,14 @@ async def test_verification_rechecks_relationship_after_preflight_before_io(
                 verifying._read_complete = AsyncMock(
                     side_effect=AssertionError("provider read must not execute")
                 )
-                assert await verifying.verify_object(job_id) == "conflict"
+                assert await verifying.verify_object(job_id) == "stale"
                 verifying._read_complete.assert_not_awaited()
                 await session.refresh(job)
                 await session.refresh(unrelated_replica)
-                assert job.status == "conflict"
+                assert job.status == "pending"
                 assert unrelated_replica.verification_state == "pending"
                 receipt = await session.scalar(select(ArtifactVerificationReceipt))
-                assert receipt is not None and receipt.outcome == "conflict"
+                assert receipt is None
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -1823,12 +1823,88 @@ async def test_verification_rechecks_authorized_object_ref_before_io(
                 verifying._read_complete = AsyncMock(
                     side_effect=AssertionError("provider read must not execute")
                 )
-                assert await verifying.verify_object(job_id) == "conflict"
+                assert await verifying.verify_object(job_id) == "stale"
                 verifying._read_complete.assert_not_awaited()
                 await session.refresh(job)
-                assert job.status == "conflict"
+                assert job.status == "pending"
                 receipt = await session.scalar(select(ArtifactVerificationReceipt))
-                assert receipt is not None and receipt.outcome == "conflict"
+                assert receipt is None
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_verification_rechecks_authorized_object_ref_after_io(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "postread-object-ref-drift", b"expected") as source:
+                _, _, item_ids = await _seed_contributor_items(
+                    session,
+                    context=context,
+                    commitments=(
+                        (
+                            source.commitment.sha256,
+                            source.commitment.byte_count,
+                            source.commitment.media_type,
+                        ),
+                    ),
+                )
+                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+                    ContributorArtifactAdmissionRequest(
+                        authorization_context=context,
+                        upload_item_id=UUID(item_ids[0]),
+                        source=source,
+                    )
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source
+                )
+                job = await session.scalar(select(ArtifactVerificationJob))
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert job is not None and attempt is not None and attempt.replica_id is not None
+                job_id = UUID(job.id)
+                replica_id = attempt.replica_id
+                await session.commit()
+
+                async def drift_object_ref_during_read(_provider_object_ref: str):
+                    async with factory() as drift_session, drift_session.begin():
+                        drifted_replica = await drift_session.get(
+                            ArtifactReplica, replica_id, with_for_update=True
+                        )
+                        assert drifted_replica is not None
+                        drifted_replica.provider_object_ref = "sha256/bb/" + "b" * 62
+                    return source.commitment.sha256, source.commitment.byte_count
+
+                orchestrator._read_complete = drift_object_ref_during_read
+                assert await orchestrator.verify_object(job_id) == "stale"
+                await session.refresh(job)
+                replica = await session.get(ArtifactReplica, replica_id)
+                item = await session.get(ArtifactUploadItem, item_ids[0])
+                assert replica is not None and item is not None
+                assert job.status == "running"
+                assert replica.verification_state == "pending"
+                assert item.state == "stored_pending_verification"
+                assert await session.scalar(select(func.count(ArtifactVerificationReceipt.id))) == 0
     finally:
         bootstrap.close()
         await engine.dispose()
