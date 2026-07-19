@@ -8,17 +8,17 @@
 
 [PR #149](https://github.com/Flow-Research/workstream/pull/149) received an
 initial CodeRabbit review with nine inline findings and one summary nitpick,
-followed by one ASGI buffering finding. All eleven findings are addressed by
-the implementation through `7ec4126`. Current upstream `main` at `983b9e5` was
-merged cleanly as `32099eb`; CodeRabbit and GitHub checks must rerun after the
-refreshed head is pushed.
+followed by ASGI buffering and direct test-dependency findings. The maintainer
+also requested complete agent-facing tool contracts. All current findings are
+addressed through `cbc097e`; CodeRabbit and GitHub checks must rerun after that
+head is pushed.
 
 ## CodeRabbit Findings
 
 | Finding | Disposition | Evidence |
 |---|---|---|
 | Restrict the MCP job token permissions. | Addressed | The MCP job declares `permissions: contents: read`; checkout credentials remain disabled. |
-| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 94.18 percent. |
+| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 94.50 percent. |
 | Redact secrets inside sets. | Addressed | Recursive set redaction and a regression canary were added. |
 | Hide completed review lease/routing details. | Addressed | `none_available` now returns only source, project, and state. |
 | Check review replay before fixture matching. | Addressed | `claim_review` performs actor-scoped replay/conflict validation before availability checks. |
@@ -28,6 +28,20 @@ refreshed head is pushed.
 | Require secure explicit HTTP auth issuer configuration. | Addressed | Streamable HTTP requires an explicit HTTPS issuer, with deliberate loopback-only development override. Workstream Auth verifies tokens before MCP HTTP context is created. |
 | Bound unconstrained submission inputs. | Addressed | Submission strings/collections, finding lists, evidence references, metadata depth/size, and HTTP request bodies are bounded. |
 | Bound buffered ASGI messages, not only body bytes. | Addressed | Authenticated bodies are coalesced with 2 MiB, 1,024-frame, and 30-second limits; oversized frames are rejected before copying, anonymous bodies bypass buffering for immediate `401`, and replay delegates to the real receiver so SSE remains live. |
+| Declare directly imported `sse-starlette`. | Addressed | `sse-starlette>=3.0,<4.0` is a direct development dependency and installs with `.[dev]`. |
+
+## Maintainer Agent-Facing Contract
+
+- All seven tools publish full what/when/not/prerequisite/side-effect/outcome
+  guidance and the next resource to read.
+- Actual decorated parameters publish descriptions, constraints, defaults, and
+  examples, including explicit UUID idempotency instructions and nested packet
+  fields.
+- All seven tools publish structured Pydantic output schemas. Execution and
+  validation failures set `isError=true`; a coherent completed checker failure
+  remains a valid negative result.
+- Resource and tool titles/descriptions come from the static catalogue and are
+  verified through the official SDK protocol.
 
 ## Additional Internal Findings
 
@@ -41,16 +55,19 @@ refreshed head is pushed.
   MCP SDK Streamable HTTP SSE journey.
 - Rejected missing or invalid bearer requests before body buffering while
   retaining byte, frame, and receive-deadline limits for authenticated bodies.
-- Expanded safe tool-error tests; `tools.py` now has 94.79 percent coverage and
-  the complete package has 94.18 percent coverage.
+- Sanitized SDK validation errors so invalid parameter values cannot echo the
+  active bearer token.
+- Required strict, coherent checker responses and exact review-context references
+  before publishing successful MCP outcomes.
+- Expanded protocol regressions; the complete package has 94.50 percent coverage.
 
 ## GitHub Checks
 
-Pending on the refreshed head after push. Fork-triggered jobs may still
+Pending on `cbc097e` after push. Fork-triggered jobs may still
 require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until merge head `32099eb` and its
-evidence commit are pushed and CodeRabbit/GitHub checks report against that
-head. Do not merge without explicit human approval.
+Do not resolve the review as complete until `cbc097e` and its evidence commit
+are pushed and CodeRabbit/GitHub checks report against that head. Do not merge
+without explicit human approval.

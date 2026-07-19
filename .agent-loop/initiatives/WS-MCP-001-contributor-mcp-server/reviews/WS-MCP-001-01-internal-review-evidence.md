@@ -12,9 +12,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 32099eb8ede12e3da89d511ffcf2e1c1c87001d0
+Reviewed code SHA: cbc097e6da22809367a0a7b8afe9cc8bf87fe538
 
-Reviewed at: 2026-07-18T22:06:10Z
+Reviewed at: 2026-07-19T14:08:54Z
 
 Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
 
@@ -25,8 +25,8 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS AFTER FIXES | none | Input limits, lifecycle propagation, replay ordering, and error boundaries were repaired without moving authority into MCP. |
-| QA/test | PASS AFTER FIXES | none | Eighty-two MCP tests prove the external findings, auth wiring, revision loop, safe errors, Streamable HTTP response lifecycle, and a strict 94.18 percent package coverage result. |
-| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; anonymous requests reach immediate `401`; authenticated body bytes, frames, and receive time are bounded; credential isolation, proxy safety, and redaction fail closed. |
+| QA/test | PASS AFTER FIXES | none | Ninety-seven MCP tests prove the agent-facing catalogue, auth wiring, revision loop, safe errors, strict gateway outcomes, and Streamable HTTP response lifecycle at 94.50 percent package coverage. |
+| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; SDK validation errors cannot echo bearer material; anonymous requests reach immediate `401`; authenticated body bytes, frames, and receive time are bounded; credential isolation, proxy safety, and redaction fail closed. |
 | product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
 | architecture | PASS AFTER FIXES | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
 | CI integrity | PASS AFTER FIXES | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `983b9e5` integrates cleanly and all local gates pass. |
@@ -63,6 +63,12 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Revision context records the reviewed submission reference/version, and a revised submission creates the next deterministic review offer in the test-only scenario.
 - An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, API timeout, body byte/frame/deadline caps, and scenario isolation.
 - Current upstream `main` at `983b9e5` was merged cleanly as `32099eb`. Exact-head reviewers confirmed that its revision-lifecycle planning changes do not alter MCP runtime, auth, fail-closed API boundaries, transport safety, CI coverage, or agent-gate integration.
+- All seven tools now publish authoritative titles, usage boundaries, parameter guidance, examples, constraints, and typed output schemas through the actual FastMCP registrations.
+- Tool execution failures publish MCP errors while a coherent completed checker failure remains a valid negative business outcome.
+- `sse-starlette` is declared directly as a development dependency because the protocol journey suite imports it.
+- SDK parameter-validation errors are sanitized before reaching clients, including when an invalid value equals the active bearer token.
+- Pre-submit checker responses require strict JSON scalar types, a non-authoritative completed status, coherent eligibility, and a matching task identifier; malformed responses fail closed.
+- Review claims require a stable review identifier and the exact derived `workstream://reviews/{review_ref}/context` resource before publishing success.
 
 ## WS-MCP-001 Specification Status
 
@@ -97,7 +103,7 @@ git diff --check
 ## Result Summary
 
 ```text
-MCP tests: 82 passed at 94.18 percent statement coverage.
+MCP tests: 97 passed at 94.50 percent statement coverage.
 MCP ruff: passed.
 Stale wording: passed.
 Markdown links: passed for 11 changed Markdown files.
