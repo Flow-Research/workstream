@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -335,8 +335,12 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(candidate.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
+            content = await self._repo.lock_content(replica.content_id)
             self._validate_put_execution_namespace(attempt, persisted_namespace)
             self._validate_replica_execution_namespace(replica, persisted_namespace)
+            relationship_matches = _verification_relationship_matches(
+                candidate, replica, attempt, content
+            )
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _verification_authority_facts(
@@ -356,6 +360,8 @@ class ArtifactStorageOrchestrator:
             )
             if claimed is None:
                 return "stale"
+        if not relationship_matches:
+            return await self._complete_verification(claimed, executor_id, "conflict", None, None)
         try:
             observed_sha256, observed_size = await self._read_complete(replica.provider_object_ref)
         except ArtifactObjectMissingError:
@@ -731,6 +737,7 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(job.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
+            content = await self._repo.lock_content(replica.content_id)
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -739,6 +746,9 @@ class ArtifactStorageOrchestrator:
                 ),
             )
             now = await self._repo.database_now()
+            if not _verification_relationship_matches(job, replica, attempt, content):
+                await self._terminalize_verification_conflict(job, now)
+                return "conflict"
             exhausted = job.attempt_count >= job.maximum_attempts
             job.status = "provider_unavailable"
             job.next_run_at = (
@@ -769,6 +779,7 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(job.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
+            content = await self._repo.lock_content(replica.content_id)
             await self._authority.revalidate_terminal(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -777,6 +788,10 @@ class ArtifactStorageOrchestrator:
                 ),
             )
             now = await self._repo.database_now()
+            if not _verification_relationship_matches(job, replica, attempt, content):
+                outcome = "conflict"
+                observed_sha256 = None
+                observed_size = None
             mapping = {
                 "verified": ("verified", "available", "valid"),
                 "missing": ("missing", "unavailable", "unknown"),
@@ -848,6 +863,28 @@ class ArtifactStorageOrchestrator:
             job.terminal_at = now
             _clear_job_fence(job)
         return outcome
+
+    async def _terminalize_verification_conflict(
+        self,
+        job: ArtifactVerificationJob,
+        now: datetime,
+    ) -> None:
+        """Append typed conflict evidence without mutating unrelated artifact facts."""
+        await self._repo.add_verification_receipt(
+            ArtifactVerificationReceipt(
+                id=str(uuid4()),
+                verification_job_id=job.id,
+                execution_generation=job.execution_generation,
+                outcome="conflict",
+                observed_sha256=None,
+                observed_byte_count=None,
+            )
+        )
+        job.status = "conflict"
+        job.next_run_at = None
+        job.terminal_result_code = "conflict"
+        job.terminal_at = now
+        _clear_job_fence(job)
 
     async def _claim_and_validate_namespace(self) -> ArtifactStorageNamespace:
         """Atomically claim the singleton or reject deployment identity drift."""
@@ -1418,6 +1455,23 @@ def _verification_authority_facts(
         byte_count=attempt.byte_count,
         executor_id=executor_id,
         execution_generation=generation,
+    )
+
+
+def _verification_relationship_matches(
+    job: ArtifactVerificationJob,
+    replica: ArtifactReplica,
+    attempt: ArtifactPutAttempt,
+    content: ArtifactContent | None,
+) -> bool:
+    """Prove one locked verification chain names the same immutable bytes."""
+    return (
+        content is not None
+        and job.replica_id == replica.id
+        and attempt.replica_id == replica.id
+        and replica.content_id == content.id
+        and content.sha256 == attempt.sha256
+        and content.byte_count == attempt.byte_count
     )
 
 

@@ -1577,6 +1577,110 @@ async def test_existing_replica_immutable_fact_conflict_is_fenced(
         await engine.dispose()
 
 
+async def test_verification_resource_drift_terminalizes_conflict_without_mutation(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "verification-drift", b"expected") as source:
+                _, _, item_ids = await _seed_contributor_items(
+                    session,
+                    context=context,
+                    commitments=(
+                        (
+                            source.commitment.sha256,
+                            source.commitment.byte_count,
+                            source.commitment.media_type,
+                        ),
+                    ),
+                )
+                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+                    ContributorArtifactAdmissionRequest(
+                        authorization_context=context,
+                        upload_item_id=UUID(item_ids[0]),
+                        source=source,
+                    )
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                job = await session.scalar(select(ArtifactVerificationJob))
+                assert attempt is not None and attempt.replica_id is not None
+                assert job is not None
+                original_replica_id = attempt.replica_id
+                unrelated_content = ArtifactContent(
+                    id=str(uuid4()),
+                    sha256="sha256:" + "f" * 64,
+                    byte_count=999,
+                    media_type="application/octet-stream",
+                    normalized_display_name=None,
+                )
+                session.add(unrelated_content)
+                await session.flush()
+                unrelated_replica = ArtifactReplica(
+                    id=str(uuid4()),
+                    content_id=unrelated_content.id,
+                    storage_namespace_id=attempt.storage_namespace_id,
+                    namespace_fingerprint=attempt.namespace_fingerprint,
+                    adapter=store.identity.provider_key,
+                    provider_profile=namespace.provider_profile,
+                    provider_object_ref="sha256/ff/" + "f" * 62,
+                    verification_state="pending",
+                    availability_state="unknown",
+                    integrity_state="unknown",
+                )
+                session.add(unrelated_replica)
+                await session.flush()
+                job_id = UUID(job.id)
+                await session.commit()
+
+                async def drift_job_after_claim(_provider_object_ref: str):
+                    async with factory() as drift_session, drift_session.begin():
+                        drifted_job = await drift_session.get(
+                            ArtifactVerificationJob, str(job_id), with_for_update=True
+                        )
+                        assert drifted_job is not None and drifted_job.status == "running"
+                        drifted_job.replica_id = unrelated_replica.id
+                    return source.commitment.sha256, source.commitment.byte_count
+
+                orchestrator._read_complete = drift_job_after_claim
+                assert await orchestrator.verify_object(job_id) == "conflict"
+                await session.refresh(job)
+                await session.refresh(unrelated_replica)
+                original_replica = await session.get(ArtifactReplica, original_replica_id)
+                item = await session.get(ArtifactUploadItem, item_ids[0])
+                assert original_replica is not None and item is not None
+                assert job.status == "conflict"
+                assert unrelated_replica.verification_state == "pending"
+                assert original_replica.verification_state == "pending"
+                assert item.state == "stored_pending_verification"
+                assert item.content_id == original_replica.content_id
+                receipt = await session.scalar(select(ArtifactVerificationReceipt))
+                assert receipt is not None and receipt.outcome == "conflict"
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
 @pytest.mark.parametrize("bound", [False, True])
 async def test_post_ack_missing_replays_only_unbound_contributor_item(
     admission_database_env: str,
