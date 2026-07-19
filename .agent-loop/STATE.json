@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29695052119/job/88214254335"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29696471801/job/88217972715"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29692949209/job/88208778949"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29696471153/job/88217970984"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ART-001-02C1",
-    "chunk_title": "Admission And Put-Attempt Foundation",
-    "initiative_id": "WS-ART-001",
-    "next_chunk_id": "WS-ART-001-02C2",
-    "next_chunk_title": "Verification Publication And Fencing",
+    "chunk_id": "WS-REV-001-02A",
+    "chunk_title": "Guide Chronology And Task Locking Split",
+    "initiative_id": "WS-REV-001",
+    "next_chunk_id": "WS-REV-001-02A1",
+    "next_chunk_title": "Project And Setup Publication Fence",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ART-001-02C2",
-    "next_chunk_title": "Verification Publication And Fencing",
+    "next_chunk_id": "WS-REV-001-02A1",
+    "next_chunk_title": "Project And Setup Publication Fence",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "8d5eb15b384fd75787ce98a099400a1d335d2560",
-    "head_ref": "codex/ws-art-001-02c1-admission-put-attempt",
-    "head_sha": "c93f1a246ddbc595aa0676a63c2926bf26fc1612",
-    "intent_blob_sha": "2b1ebeb24821a77fa38cd716b6b8156d8e87d342",
-    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02C1.json",
-    "main_sha": "44f2467cedc266d2efe261119cfff436ac6b7715",
-    "merged_at": "2026-07-19T16:32:47Z",
+    "first_parent_sha": "44f2467cedc266d2efe261119cfff436ac6b7715",
+    "head_ref": "codex/ws-rev-001-02a-split-contracts",
+    "head_sha": "efefe1c44f5233d3636793ddba05f6ffb0b8205a",
+    "intent_blob_sha": "67141704b370b767596b8550ec86308adc4263ad",
+    "intent_path": ".agent-loop/merge-intents/WS-REV-001-02A.json",
+    "main_sha": "3b1d63796c086f53fc2b0aeefe096387b82485ec",
+    "merged_at": "2026-07-19T17:40:28Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 154,
-    "pr_title": "Add artifact admission and prepared put attempts",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/154"
+    "pr_number": 156,
+    "pr_title": "docs(rev): split guide chronology and task locking contracts",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/156"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-19T16:32:47Z"
+  "updated_at": "2026-07-19T17:40:28Z"
 }
