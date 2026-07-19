@@ -32,6 +32,11 @@ def other_context() -> RequestContext:
     return RequestContext("other-issuer-token", "corr-2", "test")
 
 
+def third_context() -> RequestContext:
+    """Return a third actor context for lease-visibility tests."""
+    return RequestContext("third-issuer-token", "corr-3", "test")
+
+
 def submission() -> dict[str, object]:
     """Return a valid contributor packet for the temporary conformance fixture."""
     return {
@@ -40,6 +45,22 @@ def submission() -> dict[str, object]:
         "artifact_hash_manifest": [{"artifact": "result.txt", "hash": "sha256:def"}],
         "worker_attestation": "I attest this packet is complete.",
     }
+
+
+async def prepare_review(
+    gateway: ScenarioContributorGateway,
+    submitter: RequestContext | None = None,
+) -> None:
+    """Create the real submitted work required before a review can be offered."""
+    actor = submitter or context()
+    await claim_task(gateway, actor, task_id="scenario-task-1", request_id=REQUEST_ID)
+    await submit_task(
+        gateway,
+        actor,
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
 
 
 @pytest.mark.asyncio
@@ -51,12 +72,21 @@ async def test_scenario_gateway_marks_temporary_surfaces() -> None:
     contributions = await gateway.get_my_contributions(context())
     tasks = await gateway.list_tasks(context())
     review = await gateway.get_current_review(context(), project_id="scenario-project-1")
+    premature_claim = await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
 
     assert gateway.temporary is True
     assert projects["source"] == "temporary_scenario_gateway"
     assert contributions["contributions"] == []
     assert tasks["tasks"][0]["task_id"] == "scenario-task-1"
-    assert review["state"] == "available_to_claim"
+    assert review["state"] == "none_available"
+    assert premature_claim["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert (await gateway.get_my_contributions(context()))["contributions"] == []
 
 
 @pytest.mark.asyncio
@@ -68,16 +98,17 @@ async def test_scenario_resources_cover_required_v01_context() -> None:
     tasks = await gateway.list_tasks(context())
     task_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
     task_status = await gateway.get_task_status(context(), task_id="scenario-task-1")
+    await prepare_review(gateway)
     await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
     )
-    review = await gateway.get_current_review(context(), project_id="scenario-project-1")
+    review = await gateway.get_current_review(other_context(), project_id="scenario-project-1")
     review_context = await gateway.get_review_context(
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
     )
 
@@ -133,29 +164,46 @@ async def test_scenario_resources_cover_required_v01_context() -> None:
 async def test_current_review_claim_context_and_decision_flow() -> None:
     """Reviewer flow exposes one review and requires findings for revision."""
     gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
 
     claimed = await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
     )
     context_result = await gateway.get_review_context(
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
     )
     missing_findings = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="needs_revision",
         findings=[],
         request_id="22222222-2222-4222-8222-222222222222",
     )
+    advisory_only_revision = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="needs_revision",
+        findings=[{"summary": "Optional polish.", "finding_kind": "advisory"}],
+        request_id="88888888-8888-4888-8888-888888888888",
+    )
+    blocking_accept = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[{"summary": "Unresolved requirement.", "finding_kind": "blocking"}],
+        request_id="99999999-9999-4999-8999-999999999999",
+    )
     missing_rejection_reason = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="reject",
         findings=[],
@@ -163,7 +211,7 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     )
     blank_rejection_reason = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="reject",
         findings=[],
@@ -172,7 +220,7 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     )
     misplaced_accept_reason = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="accept",
         findings=[],
@@ -181,16 +229,16 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     )
     misplaced_revision_reason = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="needs_revision",
-        findings=[{"summary": "Correct the manifest."}],
+        findings=[{"summary": "Correct the manifest.", "finding_kind": "blocking"}],
         request_id="77777777-7777-4777-8777-777777777777",
         reason="This field is valid only for rejection.",
     )
     accepted = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="accept",
         findings=[],
@@ -198,18 +246,20 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     )
     accepted_retry = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="accept",
         findings=[],
         request_id="33333333-3333-4333-8333-333333333333",
     )
-    contributions = await gateway.get_my_contributions(context())
-    other_contributions = await gateway.get_my_contributions(other_context())
+    contributions = await gateway.get_my_contributions(other_context())
+    submitter_contributions = await gateway.get_my_contributions(context())
 
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
+    assert advisory_only_revision["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
+    assert blocking_accept["error"]["code"] == "invalid_tool_input"
     assert missing_rejection_reason["error"]["code"] == "invalid_tool_input"
     assert blank_rejection_reason["error"]["code"] == "invalid_tool_input"
     assert misplaced_accept_reason["error"]["code"] == "invalid_tool_input"
@@ -221,9 +271,12 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         (record["contribution_type"], record["outcome"])
         for record in contributions["contributions"]
     ] == [("completed_review", "accept")]
-    assert other_contributions["contributions"] == []
+    assert [
+        record["contribution_type"]
+        for record in submitter_contributions["contributions"]
+    ] == ["accepted_submission"]
     assert await gateway.get_current_review(
-        context(), project_id="scenario-project-1"
+        other_context(), project_id="scenario-project-1"
     ) == {
         "source": "temporary_scenario_gateway",
         "project_id": "scenario-project-1",
@@ -336,9 +389,10 @@ async def test_idempotency_is_scoped_to_actor_tool_and_request_id() -> None:
 async def test_review_claim_conflicting_retry_precedes_fixture_validation() -> None:
     """A reused review request ID reports conflict even when new input is unavailable."""
     gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
     await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
@@ -346,7 +400,7 @@ async def test_review_claim_conflicting_retry_precedes_fixture_validation() -> N
 
     conflicting_retry = await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="different-project",
         review_routing_ref="different-route",
         request_id=REQUEST_ID,
@@ -359,7 +413,11 @@ async def test_review_claim_conflicting_retry_precedes_fixture_validation() -> N
 async def test_needs_revision_persists_findings_and_allows_revised_submission() -> None:
     """A review revision decision drives the submitter back through task context."""
     gateway = ScenarioContributorGateway()
-    finding = {"summary": "Correct the declared artifact hash.", "category": "evidence"}
+    finding = {
+        "summary": "Correct the declared artifact hash.",
+        "finding_kind": "blocking",
+        "category": "evidence",
+    }
     await claim_task(
         gateway,
         context(),
@@ -529,6 +587,7 @@ async def test_submitter_cannot_discover_or_claim_own_review() -> None:
 async def test_submit_review_rechecks_self_review_before_mutation() -> None:
     """The decision boundary independently rejects a newly conflicting owner."""
     gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
     await claim_review(
         gateway,
         other_context(),
@@ -579,20 +638,21 @@ async def test_temporary_task_and_review_leases_are_actor_scoped() -> None:
     )
 
     review_gateway = ScenarioContributorGateway()
+    await prepare_review(review_gateway)
     await claim_review(
         review_gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
     )
     hidden_review = await review_gateway.get_current_review(
-        other_context(),
+        third_context(),
         project_id="scenario-project-1",
     )
     other_review_context = await read_review_context(
         review_gateway,
-        other_context(),
+        third_context(),
         review_ref="scenario-review-1",
     )
 

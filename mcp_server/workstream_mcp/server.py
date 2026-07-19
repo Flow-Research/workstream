@@ -675,8 +675,9 @@ def build_fastmcp_server(
         """Record one immutable decision for the actor's leased review.
 
         Use only after claim_review and Review Context. Do not decide an unleased,
-        expired, completed, or self-authored review. ``needs_revision`` requires actionable
-        findings tied to available evidence; ``reject`` requires a bounded human reason.
+        expired, completed, or self-authored review. ``needs_revision`` requires at least one
+        blocking finding tied to available evidence; acceptance permits advisory findings only;
+        ``reject`` requires a bounded human reason.
         This ends the lease. Success is ``accept``,
         ``needs_revision``, or ``reject``; execution failures are MCP errors. Read the
         project's Current Review or the related Task Status next.

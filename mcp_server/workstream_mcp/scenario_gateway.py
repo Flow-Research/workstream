@@ -63,12 +63,12 @@ class ScenarioContributorGateway:
         self._contribution_owners: dict[str, str] = {}
         self._contribution_count = 0
         self._review = {
-            "state": "available_to_claim",
+            "state": "none_available",
             "review_routing_ref": "scenario-review-route-1",
             "review_ref": "scenario-review-1",
             "project_id": "scenario-project-1",
             "task_summary": "Scenario review task",
-            "actor_facing_state": "available_to_claim",
+            "actor_facing_state": "none_available",
             "context_resource": None,
             "lease_started_at": None,
             "lease_expires_at": None,
@@ -335,19 +335,19 @@ class ScenarioContributorGateway:
         if was_revision:
             self._revision_findings.pop(task_id, None)
             self._revision_submissions.pop(task_id, None)
-            next_review_number = self._submission_count
-            self._review.update(
-                {
-                    "state": "available_to_claim",
-                    "review_routing_ref": f"scenario-review-route-{next_review_number}",
-                    "review_ref": f"scenario-review-{next_review_number}",
-                    "actor_facing_state": "available_to_claim",
-                    "context_resource": None,
-                    "lease_started_at": None,
-                    "lease_expires_at": None,
-                }
-            )
-            self._review_owner = None
+        next_review_number = self._submission_count
+        self._review.update(
+            {
+                "state": "available_to_claim",
+                "review_routing_ref": f"scenario-review-route-{next_review_number}",
+                "review_ref": f"scenario-review-{next_review_number}",
+                "actor_facing_state": "available_to_claim",
+                "context_resource": None,
+                "lease_started_at": None,
+                "lease_expires_at": None,
+            }
+        )
+        self._review_owner = None
         result = {
             "id": f"scenario-submission-{self._submission_count}",
             "task_id": task_id,
@@ -571,10 +571,20 @@ class ScenarioContributorGateway:
     ) -> dict[str, Any]:
         """Record a deterministic review decision outcome."""
         _require_context(context)
-        if decision == "needs_revision" and not findings:
+        if decision == "needs_revision" and not any(
+            finding.get("finding_kind") == "blocking" for finding in findings
+        ):
             raise WorkstreamMCPError(
                 MCPErrorCode.FINDINGS_REQUIRED,
-                "needs_revision requires actionable findings.",
+                "needs_revision requires at least one blocking finding.",
+                correlation_id=context.correlation_id,
+            )
+        if decision == "accept" and any(
+            finding.get("finding_kind") == "blocking" for finding in findings
+        ):
+            raise WorkstreamMCPError(
+                MCPErrorCode.FINDINGS_REQUIRED,
+                "accept permits advisory findings only.",
                 correlation_id=context.correlation_id,
             )
         if decision == "reject" and not reason:
@@ -591,6 +601,7 @@ class ScenarioContributorGateway:
             review_ref != self._review["review_ref"]
             or self._review["state"] != "leased_to_actor"
             or self._review_owner != _actor_key(context)
+            or self._task_owner is None
             or self._task_owner == _actor_key(context)
         ):
             raise WorkstreamMCPError(
@@ -639,7 +650,7 @@ class ScenarioContributorGateway:
             task["actor_facing_state"] = "accepted"
             task["may_claim"] = False
             self._append_contribution(
-                owner_key=self._task_owner or f"hidden-submitter:{self._review_task_id}",
+                owner_key=self._task_owner,
                 contribution_type="accepted_submission",
                 source_ref=self._review_task_id,
                 outcome="accepted",

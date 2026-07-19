@@ -83,8 +83,9 @@ SUBMIT_REVIEW_DESCRIPTION = (
     "Submit one final decision for the review leased to the authenticated actor. Use this only after "
     "claim_review and after reading the complete Review Context; obtain review_ref and evidence "
     "references from those results. Do not use it for an unleased, expired, completed, or "
-    "self-authored review. Use 'needs_revision' only with actionable findings; include evidence "
-    "references when available. A 'reject' decision requires a bounded human reason. "
+    "self-authored review. Use 'needs_revision' only with at least one blocking finding; include "
+    "evidence references when available. Acceptance permits advisory findings only. A 'reject' "
+    "decision requires a bounded human reason. "
     "This records an immutable review decision and releases the lease. Success has outcome 'accept', "
     "'needs_revision', or 'reject'; validation, authorization, lease, and backend failures are MCP "
     "errors. After success, read the project's Current Review resource or the related Task Status."
@@ -464,6 +465,10 @@ class ReviewFindingInput(BaseModel):
         max_length=4000,
         examples=["The submitted manifest omits the required checker report."],
     )
+    finding_kind: Literal["blocking", "advisory"] = Field(
+        description="Lifecycle meaning of the finding: blocking or advisory.",
+        examples=["blocking"],
+    )
     category: str | None = Field(
         default=None,
         description="Optional stable category for grouping the finding.",
@@ -489,16 +494,26 @@ class SubmitReviewInput(RequestIdInput):
     )
     decision: Literal["accept", "needs_revision", "reject"] = Field(
         description=(
-            "Final review decision. needs_revision requires at least one actionable finding; "
-            "reject requires a bounded human reason; accept may use an empty findings list."
+            "Final review decision. needs_revision requires at least one blocking finding; reject "
+            "requires a bounded human reason; accept permits advisory findings only."
         ),
         examples=["needs_revision"],
     )
     findings: list[ReviewFindingInput] = Field(
         default_factory=list,
-        description="Actionable findings supporting the decision; required for needs_revision.",
+        description=(
+            "Actionable findings supporting the decision; needs_revision requires at least one "
+            "blocking finding, while accept permits advisory findings only."
+        ),
         max_length=100,
-        examples=[[{"summary": "Add the missing checker report."}]],
+        examples=[
+            [
+                {
+                    "summary": "Add the missing checker report.",
+                    "finding_kind": "blocking",
+                }
+            ]
+        ],
     )
     reason: str | None = Field(
         default=None,
@@ -532,6 +547,10 @@ class SubmitReviewInput(RequestIdInput):
             raise ValueError("reject requires a bounded human reason")
         if self.decision != "reject" and self.reason is not None:
             raise ValueError("reason is only valid for reject")
+        if self.decision == "accept" and any(
+            finding.finding_kind == "blocking" for finding in self.findings
+        ):
+            raise ValueError("accept permits advisory findings only")
         return self
 
 
@@ -645,13 +664,15 @@ ReviewFindingsParameter = Annotated[
     Field(
         description=(
             "Actionable findings based on Review Context evidence. Required and non-empty for "
-            "needs_revision; at most 100 findings."
+            "needs_revision, with at least one blocking finding; accept permits advisory findings "
+            "only; at most 100 findings."
         ),
         max_length=100,
         examples=[
             [
                 {
                     "summary": "Add the required checker report to the artifact manifest.",
+                    "finding_kind": "blocking",
                     "category": "missing_evidence",
                     "evidence_refs": ["workstream://evidence/check-result-1"],
                 }

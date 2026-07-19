@@ -172,6 +172,10 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     finding_properties = tool_schemas["submit_review"]["$defs"]["ReviewFindingInput"][
         "properties"
     ]
+    assert finding_properties["finding_kind"]["enum"] == ["blocking", "advisory"]
+    assert "finding_kind" in tool_schemas["submit_review"]["$defs"]["ReviewFindingInput"][
+        "required"
+    ]
     assert all(field["description"] and field["examples"] for field in finding_properties.values())
     expected_output_titles = {
         "claim_task": "ClaimTaskResult",
@@ -257,13 +261,19 @@ def test_nested_tool_inputs_have_bounded_collections_and_metadata() -> None:
         SubmitReviewInput(
             review_ref="review-1",
             decision="accept",
-            findings=[{"summary": "finding"}] * 101,
+            findings=[{"summary": "finding", "finding_kind": "advisory"}] * 101,
             request_id="11111111-1111-4111-8111-111111111111",
         )
     with pytest.raises(ValueError):
         SubmitReviewInput(
             review_ref="review-1",
             decision="accept",
-            findings=[{"summary": "finding", "evidence_refs": ["ref"] * 101}],
+            findings=[
+                {
+                    "summary": "finding",
+                    "finding_kind": "advisory",
+                    "evidence_refs": ["ref"] * 101,
+                }
+            ],
             request_id="11111111-1111-4111-8111-111111111111",
         )

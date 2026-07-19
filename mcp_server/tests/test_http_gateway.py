@@ -98,14 +98,22 @@ async def test_default_http_gateway_fails_closed_for_missing_surfaces() -> None:
 @pytest.mark.asyncio
 async def test_temporary_gateway_is_explicitly_injected() -> None:
     """Scenario data is available only when tests/dev inject the temporary gateway."""
+    scenario = ScenarioContributorGateway()
+    await scenario.claim_task(context(), task_id="scenario-task-1", request_id=REQUEST_ID)
+    await scenario.submit_task(
+        context(),
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
     gateway = HTTPContributorGateway(
         base_url="http://workstream.test",
-        fallback=ScenarioContributorGateway(),
+        fallback=scenario,
     )
 
     result = await claim_review(
         gateway,
-        context(),
+        reviewer_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,

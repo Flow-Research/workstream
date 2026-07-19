@@ -327,12 +327,14 @@ async def submit_review(
     )
     if isinstance(parsed, dict):
         return parsed
-    if parsed.decision == "needs_revision" and not parsed.findings:
+    if parsed.decision == "needs_revision" and not any(
+        finding.finding_kind == "blocking" for finding in parsed.findings
+    ):
         return _safe_result(
             context,
             WorkstreamMCPError(
                 MCPErrorCode.FINDINGS_REQUIRED,
-                "needs_revision requires actionable findings.",
+                "needs_revision requires at least one blocking finding.",
                 correlation_id=context.correlation_id,
             ).to_result(),
         )
