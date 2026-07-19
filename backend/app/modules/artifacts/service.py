@@ -818,6 +818,11 @@ class ArtifactStorageOrchestrator:
                         item.state = "ready"
                         item_changed = True
                     elif outcome == "missing":
+                        content = await self._repo.lock_content(replica.content_id)
+                        if content is None:
+                            raise ArtifactIngestStateError(
+                                "artifact replica content is unavailable"
+                            )
                         binding = await self._repo.lock_binding_for_content(replica.content_id)
                         if binding is None:
                             item.state = "replay_required"

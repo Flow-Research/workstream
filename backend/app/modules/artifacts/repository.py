@@ -525,6 +525,15 @@ class ArtifactRepository:
             .execution_options(populate_existing=True)
         )
 
+    async def lock_content(self, content_id: str) -> ArtifactContent | None:
+        """Serialize binding creation and unbound lifecycle transitions."""
+        return await self._session.scalar(
+            select(ArtifactContent)
+            .where(ArtifactContent.id == content_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
     async def lock_binding_for_content(self, content_id: str) -> ArtifactBinding | None:
         """Lock one binding proving that content has entered an immutable lifecycle."""
         return await self._session.scalar(

@@ -47,6 +47,8 @@ from app.interfaces.artifacts import (
 )
 from app.modules.artifacts.repository import ArtifactRepository
 from app.modules.artifacts.schemas import (
+    ArtifactAuthorityDeniedError,
+    ArtifactInternalResourceType,
     CheckerOutputArtifactAdmissionRequest,
     ContributorArtifactAdmissionRequest,
     GuideArtifactAdmissionRequest,
@@ -67,6 +69,7 @@ from app.modules.authorization.runtime import (
     AuthorizationContext,
     IdentityLinkStatus,
 )
+from app.modules.authorization.catalogue import ActionId
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
@@ -104,9 +107,26 @@ class _AllowArtifactAuthority:
 class _RevokeTerminalArtifactAuthority(_AllowArtifactAuthority):
     """Test authority modelling any terminal actor/resource invalidation."""
 
-    async def revalidate_terminal(self, **_values: object) -> None:
+    def __init__(
+        self,
+        *,
+        reason: str,
+        service_identity: ServiceIdentity,
+        action_id: ActionId,
+        resource_type: ArtifactInternalResourceType,
+    ) -> None:
+        super().__init__()
+        self.reason = reason
+        self.service_identity = service_identity
+        self.action_id = action_id
+        self.resource_type = resource_type
+
+    async def revalidate_terminal(self, **values: object) -> None:
         self.terminals += 1
-        raise PermissionError("terminal authority revoked")
+        assert values["service_identity"] == self.service_identity
+        assert values["action_id"] == self.action_id
+        assert values["facts"].resource_type == self.resource_type
+        raise ArtifactAuthorityDeniedError(self.reason)
 
 
 def _alembic_config() -> Config:
@@ -972,7 +992,7 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
 
 @pytest.mark.parametrize(
     "revocation_kind",
-    ["actor_suspended", "actor_deactivated", "link_revoked", "resource_drift"],
+    ["actor_suspended", "link_revoked"],
 )
 async def test_terminal_authority_revocation_writes_zero_terminal_facts(
     admission_database_env: str,
@@ -1001,9 +1021,18 @@ async def test_terminal_authority_revocation_writes_zero_terminal_facts(
                     session, settings, namespace, _context(), source
                 )
                 orchestrator = ArtifactStorageOrchestrator(
-                    session, store, namespace, settings, _RevokeTerminalArtifactAuthority()
+                    session,
+                    store,
+                    namespace,
+                    settings,
+                    _RevokeTerminalArtifactAuthority(
+                        reason=revocation_kind,
+                        service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                        action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                        resource_type=ArtifactInternalResourceType.PUT_ATTEMPT,
+                    ),
                 )
-                with pytest.raises(PermissionError, match="terminal authority revoked"):
+                with pytest.raises(ArtifactAuthorityDeniedError, match=revocation_kind):
                     await orchestrator.execute_committed_put(
                         attempt_id=admission.attempt_id,
                         source=source,
@@ -1020,6 +1049,72 @@ async def test_terminal_authority_revocation_writes_zero_terminal_facts(
                 assert await _count(session, ArtifactVerificationJob) == 0
     finally:
         bootstrap.close()
+        await engine.dispose()
+
+
+async def test_put_observation_unavailable_retries_then_exhausts_without_facts(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path).model_copy(
+        update={"artifact_provider_observation_maximum_attempts": 2}
+    )
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    class UnavailableObservationStore:
+        async def observe_put_result(self, _commitment):
+            raise ArtifactStoreUnavailableError("provider unavailable")
+
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "put-unavailable", b"observe") as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session,
+                    UnavailableObservationStore(),
+                    namespace,
+                    settings,
+                    _AllowArtifactAuthority(),
+                )
+                assert (
+                    await orchestrator.resolve_put_attempt(admission.attempt_id)
+                    == "acknowledgement_unknown"
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                assert attempt.observation_count == 1
+                assert attempt.next_run_at is not None
+                assert attempt.terminal_at is None
+                assert attempt.executor_id is None
+                charges = (await session.execute(select(ArtifactAdmissionCharge))).scalars().all()
+                assert charges and {charge.state for charge in charges} == {"provisional"}
+                await session.execute(
+                    text(
+                        "update artifact_put_attempts set next_run_at = "
+                        "clock_timestamp() - interval '1 second' where id = :id"
+                    ),
+                    {"id": attempt.id},
+                )
+                await session.commit()
+                assert (
+                    await orchestrator.resolve_put_attempt(admission.attempt_id)
+                    == "provider_unavailable"
+                )
+                await session.refresh(attempt)
+                assert attempt.observation_count == 2
+                assert attempt.next_run_at is None
+                assert attempt.terminal_at is not None
+                assert attempt.terminal_result_code == "provider_unavailable"
+                assert attempt.executor_id is None
+                assert await _count(session, ArtifactOperationReceipt) == 0
+                assert await _count(session, ArtifactPutObservationReceipt) == 0
+                assert await _count(session, ArtifactReplica) == 0
+                assert await _count(session, ArtifactVerificationJob) == 0
+    finally:
         await engine.dispose()
 
 
@@ -1485,6 +1580,110 @@ async def test_post_ack_missing_replays_only_unbound_contributor_item(
         await engine.dispose()
 
 
+async def test_missing_transition_serializes_concurrent_binding_insert(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    content_locked = asyncio.Event()
+    allow_missing_completion = asyncio.Event()
+
+    class PausingContentLockRepository(ArtifactRepository):
+        async def lock_content(self, content_id: str):
+            content = await super().lock_content(content_id)
+            content_locked.set()
+            await allow_missing_completion.wait()
+            return content
+
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "binding-race", b"serialize") as source:
+                project_id, task_id, item_ids = await _seed_contributor_items(
+                    session,
+                    context=context,
+                    commitments=(
+                        (
+                            source.commitment.sha256,
+                            source.commitment.byte_count,
+                            source.commitment.media_type,
+                        ),
+                    ),
+                )
+                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+                    ContributorArtifactAdmissionRequest(
+                        authorization_context=context,
+                        upload_item_id=UUID(item_ids[0]),
+                        source=source,
+                    )
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None and attempt.replica_id is not None
+                replica = await session.get(ArtifactReplica, attempt.replica_id)
+                assert replica is not None
+                content_id = replica.content_id
+                job = await session.scalar(select(ArtifactVerificationJob))
+                assert job is not None
+                job_id = UUID(job.id)
+                await session.rollback()
+                orchestrator._repo = PausingContentLockRepository(session)
+                orchestrator._read_complete = AsyncMock(
+                    side_effect=ArtifactObjectMissingError("missing")
+                )
+                verification = asyncio.create_task(orchestrator.verify_object(job_id))
+                await asyncio.wait_for(content_locked.wait(), timeout=2)
+
+                async def insert_binding() -> None:
+                    async with factory() as binding_session, binding_session.begin():
+                        binding_session.add(
+                            ArtifactBinding(
+                                id=str(uuid4()),
+                                content_id=content_id,
+                                project_id=project_id,
+                                resource_type="task",
+                                resource_id=task_id,
+                                logical_role="submission",
+                                scope_version=1,
+                                actor_id=str(context.actor_profile_id),
+                                attribution_type="human",
+                                supersedes_binding_id=None,
+                            )
+                        )
+                        await binding_session.flush()
+
+                binding_insert = asyncio.create_task(insert_binding())
+                with pytest.raises(TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(binding_insert), timeout=0.2)
+                allow_missing_completion.set()
+                assert await verification == "missing"
+                await asyncio.wait_for(binding_insert, timeout=2)
+                item = await session.get(ArtifactUploadItem, item_ids[0])
+                assert item is not None and item.state == "replay_required"
+                assert await _count(session, ArtifactBinding) == 1
+    finally:
+        allow_missing_completion.set()
+        bootstrap.close()
+        await engine.dispose()
+
+
 @pytest.mark.parametrize(
     ("provider_result", "expected"),
     [
@@ -1541,6 +1740,69 @@ async def test_verification_terminal_result_matrix(
                     "integrity_mismatch" if expected == "integrity_mismatch" else "pending"
                 )
                 assert await _count(session, ArtifactVerificationReceipt) == 1
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("denial_reason", ["actor_deactivated", "resource_drift"])
+async def test_verification_terminal_authority_denial_writes_zero_result_facts(
+    admission_database_env: str,
+    tmp_path: Path,
+    denial_reason: str,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    try:
+        async with factory() as session:
+            async with minted_source(
+                tmp_path / f"verify-{denial_reason}", denial_reason.encode()
+            ) as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                allowing = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await allowing.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+                job = await session.scalar(select(ArtifactVerificationJob))
+                assert job is not None
+                job_id = UUID(job.id)
+                await session.rollback()
+                denying = ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    namespace,
+                    settings,
+                    _RevokeTerminalArtifactAuthority(
+                        reason=denial_reason,
+                        service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                        action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                        resource_type=ArtifactInternalResourceType.VERIFICATION_JOB,
+                    ),
+                )
+                with pytest.raises(ArtifactAuthorityDeniedError, match=denial_reason):
+                    await denying.verify_object(job_id)
+                job = await session.get(ArtifactVerificationJob, str(job_id))
+                assert job is not None
+                assert job.status == "running"
+                assert job.terminal_at is None
+                assert job.terminal_result_code is None
+                replica = await session.get(ArtifactReplica, job.replica_id)
+                assert replica is not None
+                assert replica.verification_state == "pending"
+                assert await _count(session, ArtifactVerificationReceipt) == 0
     finally:
         bootstrap.close()
         await engine.dispose()
