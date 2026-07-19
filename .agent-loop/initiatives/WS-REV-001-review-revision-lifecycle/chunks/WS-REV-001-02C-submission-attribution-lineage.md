@@ -39,7 +39,7 @@ P2.
   canonical-active-human revalidation consumed by task submission. If it does
   not, 02C stops for an AUTH-owned amendment rather than querying actor/grant
   tables.
-- 02A Task guide stamps and activation-sequence constraints are present.
+- 02A3 guide chronology and 02A4 Task guide stamps are present.
 - This contract receives a separate human start.
 
 ## Allowed files

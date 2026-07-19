@@ -1,5 +1,110 @@
 # Internal Plan Review Log: WS-REV-001
 
+## WS-REV-001-02A Post-Rebase Conformance Repair - 2026-07-19
+
+CodeRabbit's review of rebased PR #156 found that the conformance matrix's
+`Revision context` row omitted deferred owner 02A2 even though the Guide
+chronology row, plan, decisions, chunk map, and 02A2 contract assign prepared
+`If-Match`-protected superseded-guide reactivation to it. The repair adds 02A2
+and its exact reactivation proof to the Revision context row without starting
+the chunk or changing runtime. Because the matrix is a candidate artifact,
+fresh exact-SHA internal review and evidence rebinding are required again.
+
+## WS-REV-001-02A ART #154 Main Reconciliation - 2026-07-19
+
+ART admission foundation PR #154 merged at trusted main
+`44f2467cedc266d2efe261119cfff436ac6b7715` from final head
+`c93f1a246ddbc595aa0676a63c2926bf26fc1612`. The user required a current-main
+conflict check before any PR #156 merge. REV rebased all six commits without
+conflict; the sole Alembic head is now `0028_artifact_admission`.
+
+ART #154 changes no Project/setup writer file. It therefore does not expand the
+02A1 publication-fence inventory, but its migration becomes the publication
+base for every later child refresh. The merge supplies generic durable-byte
+admission and prepared put-attempt persistence only; it does not satisfy REV's
+later packet-read, review-evidence finalize, or stabilized Submission digest
+gates. The rebase rewrote every PR #156 SHA, so all earlier exact-SHA evidence
+is historical. Deterministic gates, full internal review, evidence rebinding,
+force-push, and current-head external checks are required before human merge.
+
+## WS-REV-001-02A External Review Repair - 2026-07-19
+
+CodeRabbit passed PR #156 with one actionable source-manifest finding. The
+manifest correctly recorded `8d5eb15b384fd75787ce98a099400a1d335d2560`
+and `0027_contributor_foundation` as the parent 02A start, but a later historical
+timeline sentence called the older AUTH-09D-A/`0026_actor_profile_lifecycle`
+snapshot "the post-rebase review base" without limiting that statement to the
+PLAN2 branch. The repair labels it as historical PLAN2 evidence and restates
+the full 02A trusted-main SHA, `0027` head, and then-current-head allocation rule
+for every executable child. No runtime, migration, child start, or owner file
+changes.
+
+Because `SOURCE_MANIFEST.md` is a planning-candidate file, the earlier exact-SHA
+review is historical after this repair. Deterministic gates and all required
+internal reviewer tracks must pass on the repaired committed candidate before
+the internal evidence is rebound and PR #156 is republished.
+
+## WS-REV-001-02A L1 Preimplementation Review Failed And Split - 2026-07-19
+
+The user explicitly started parent 02A from trusted main
+`8d5eb15b384fd75787ce98a099400a1d335d2560`. The AUTH runtime dependency is
+now satisfied by `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`, PR #153, migration
+`0027_contributor_foundation`, and its successful internal/GitHub proof.
+
+No runtime file changed before plan review. Senior/architecture/reuse returned
+FAIL because the contract combined the complete Project/setup writer fence,
+guide chronology/canonical approval, Task triplet screening, two migrations,
+and persistent coverage work. Security/CI returned PASS WITH CONDITIONS and
+confirmed underspecified canonical-human behavior, migration refusal/downgrade,
+active-repeat semantics, actor lifecycle races, and coverage commands. QA/
+product mapped every direct/indirect setup writer and the exact screening race.
+
+The repair converts parent 02A to a planning-only split record:
+
+```text
+02A -> 02A1 Project And Setup Publication Fence
+    -> 02A3 Guide Activation Chronology
+    -> 02A4 Task Guide Triplet And Screening
+```
+
+The already planned later 02A2 prepared reactivation remains after chunk 08.
+Each executable child requires its own current-main refresh, plan review, human
+start, implementation PR, evidence, and reviewer fanout. The parent merge
+intent names only 02A1 and requires explicit start.
+
+### Split Repair Review
+
+The first split review failed closed on incomplete direct-SQL immutability,
+contradictory current-runtime/AUTH wording, a future-head hard-code, undefined
+writer race groups, setup-run Project discovery, conditional coverage wording,
+and ambiguous AUTH-versus-Projects identity errors. The repaired contracts:
+
+- freeze the complete activated ProjectGuide row except exact lifecycle fields
+  and reserve the narrow future reactivation guard amendment to 02A2;
+- define exact chronology/triplet database objects, atomic migration refusal,
+  protected-history downgrade refusal, and then-current-head allocation;
+- map all 18 current setup writers to both-order PostgreSQL race proof plus an
+  exhaustive shared-fence structural test;
+- use an authority-free setup-run Project projection before the Project lock and
+  post-lock project/guide revalidation;
+- preserve AUTH-owned pre-service errors while assigning Projects 403/503 only
+  to transaction-local revalidation after a valid ActorContext; and
+- require global 78 percent, changed-subsystem 90 percent, docstring, stale,
+  link, loop-memory, evidence, merge-intent, agent-gate, and diff-integrity proof.
+
+Repair-cycle reviewer results:
+
+| Tracks | Agent | Result |
+|---|---|---|
+| Senior engineering, architecture, reuse/dedup, circuit breaker | `/root/rev01_senior_arch_reuse` | PASS; planning-only size exception justified |
+| QA/test, product/ops, test delta | `/root/rev01_qa_product_test` | PASS |
+| Security/auth, docs, CI integrity | `/root/rev01_security_docs_ci` | PASS |
+
+Working-tree deterministic proof passed four stale scanners, Markdown links for
+18 changed files, loop-memory state, diff/scope integrity, the 90.3 percent
+docstring gate, and all 88 agent-gate tests. Exact-SHA review, internal-evidence
+validation, and merge-intent validation remain post-commit gates.
+
 ## CON Reconciliation Addendum - 2026-07-15
 
 REV's joint integration evidence was refreshed against CON planning commit

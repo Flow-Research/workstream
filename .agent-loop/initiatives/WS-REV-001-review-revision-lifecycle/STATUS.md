@@ -2,42 +2,49 @@
 
 ## Current status
 
-Trusted main is `99ae4c963e53f317175dcb308b9e47c93ccf19ed`, which includes REV
-parent chunk 02 through PR #147 and AUTH-09D-A through PR #148. Parent 02 is a
-merged non-executable split record. `WS-REV-001-PLAN2` is the active planning/
-specification-only refresh. No backend runtime, migration, model, repository,
-service, route, or persistence test is authorized in this chunk.
-
-The user previously started 02A preparation, then accepted AUTH's runtime block
-and explicitly authorized continued planning/read-only work. After this refresh,
-02A requires a renewed explicit start because its exact runtime dependencies are
-not all merged.
+Trusted main is `44f2467cedc266d2efe261119cfff436ac6b7715`, which additionally
+includes ART admission foundation PR #154 after REV PLAN2 PR #150, AUTH-09D-B
+PR #152, and `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` PR #153. The user explicitly
+started parent 02A on 2026-07-19. L1 preimplementation review returned FAIL
+before runtime edits because the contract combined three separately reviewable
+database/concurrency boundaries. Parent 02A is therefore the active planning-
+only split repair; no backend, migration, workflow, route, or test edit is
+authorized in this PR.
 
 ## Trusted dependency truth
 
-- Single Alembic head: `0026_actor_profile_lifecycle`.
-- Both retired task-subsystem contributor-identity fields remain on trusted main.
-- AUTH catalogue: 74 PermissionIds, 65 ActionIds, 15 active, 50 planned.
+- Single Alembic head: `0028_artifact_admission`.
+- TaskAssignment and Submission expose canonical `contributor_id` with
+  ActorProfile foreign keys and human-kind database guards.
 - All 24 REV lifecycle action dependencies remain unavailable.
 - AUTH-09D-A merged through PR #148 at
   `99ae4c963e53f317175dcb308b9e47c93ccf19ed` with reviewed head
   `9c5ef8a1feffd6324acfd947e67042921955320b`. Its ActorProfile lifecycle
-  status/provenance and direct-SQL guards are trusted dependencies. The separate
-  human-approved contributor clean cut still has no trusted-main chunk
-  ID/PR/SHA/migration, and both retired task fields remain.
-- ART v2 LocalStorage merged through PR #141 at `a10d901`, but ART has no
-  scheduled review packet-read, review-evidence candidate/finalize, or
-  server-derived Submission artifact-digest owner chunk.
+  status/provenance and direct-SQL guards are trusted dependencies.
+- The contributor foundation merged through PR #153 at `8d5eb15b` from reviewed
+  head `6a70b33f`, with migration `0027_contributor_foundation`, final reviewed
+  code candidate `0ca5a632`, and successful Backend, Agent Gates, and CodeRabbit
+  checks. Its field clean cut, human lineage, and active-human transaction
+  revalidation satisfy the former external 02A gate.
+- ART admission/put-attempt foundation merged through PR #154 at `44f2467c`
+  from final head `c93f1a24`, advancing the sole migration head to
+  `0028_artifact_admission`. It changes no Project/setup writer and does not
+  supply review packet-read, review-evidence candidate/finalize, or
+  server-derived Submission artifact-digest capability.
 - CON-01 merged its specification. CON runtime chunks 02A onward remain
-  proposed on trusted main. Any unmerged CON work that previously claimed
-  `0026` must rebase from AUTH-09D-A's merged head before it is consumable.
+  proposed on trusted main. Any unmerged CON migration must rebase from the
+  then-current head before it is consumable.
 - Sibling AUTH/ART/CON status files contain stale post-merge wording. REV records
   actual merge facts but does not edit owner initiative memory.
 
 ## Plan-refresh results
 
-- 02A now owns only activation sequence, Project-first publication/screening,
-  immutable Task guide triplet, and unchanged superseded-candidate denial.
+- Parent 02A is a non-runtime split record. 02A1 owns the complete shared
+  Project/setup writer fence, 02A3 owns guide chronology/canonical approval, and
+  02A4 owns Task triplet screening.
+- Current runtime rejects an already-active activation candidate. 02A3 names
+  no-write active-repeat success as explicit additive behavior rather than
+  incorrectly describing it as existing behavior.
 - Proposed 02A2 owns prepared-authorized, `If-Match` protected superseded-guide
   reactivation after AUTH-PREP and AUTH-12. This preserves backward rebase
   without broadening the legacy public route.
@@ -75,9 +82,8 @@ not all merged.
 
 ## Human-owned gates
 
-- A real merged AUTH contributor/canonical-human foundation with exact ID,
-  PR/SHA, migration, constraints, and tests before 02A.
-- Separate 02A start after this refresh merges.
+- Separate 02A1, 02A3, and 02A4 starts after each predecessor merges. The AUTH
+  contributor foundation gate is satisfied.
 - Exact positive `review_preference_window_seconds` and
   `review_lease_duration_seconds` before 02B. Neither derives from `sla_hours`.
 - Exact human Review revision-round counting, deadline anchor, and boundary
@@ -90,5 +96,6 @@ not all merged.
 
 ## Stop condition
 
-Publish only `WS-REV-001-PLAN2`, let automated memory name 02A with an
-explicit-start gate, and stop. Do not implement 02A, 02A2, or 02B from this PR.
+Publish only the parent 02A planning split, let automated memory name 02A1 with
+an explicit-start gate, and stop. Do not implement or start 02A1, 02A3, 02A4,
+02A2, or 02B from this PR.

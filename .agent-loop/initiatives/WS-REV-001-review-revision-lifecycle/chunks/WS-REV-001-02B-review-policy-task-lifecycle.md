@@ -27,7 +27,7 @@ P2.
 
 ## Preconditions
 
-- 02A is merged and automated memory is current.
+- 02A1, 02A3, and 02A4 are merged and automated memory is current.
 - The exact merged AUTH contributor-foundation PR/SHA and its canonical-human
   database constraint names are recorded.
 - The human has approved concrete positive values for
@@ -84,7 +84,7 @@ docs/operations_operator_workflow.md only for migration/deployment/remediation
 
 ```text
 Submission schema, attribution, predecessor, or finalization behavior
-ProjectGuide activation-sequence behavior except consuming merged 02A fields
+ProjectGuide activation-sequence behavior except consuming merged 02A3/02A4 fields
 Review, ReviewLease, ReviewFinding, FinalAcceptance, or reject Review foreign key
 service transition into accepted, rejected, completed, or blocked
 public review or revision-obligation-close route

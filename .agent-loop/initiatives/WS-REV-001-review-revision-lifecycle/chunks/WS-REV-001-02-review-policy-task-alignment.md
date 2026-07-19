@@ -6,9 +6,10 @@ Split before runtime implementation after required L1 plan review. No backend,
 migration, or persistence-test work may execute against this parent contract.
 
 The user explicitly started parent `WS-REV-001-02` on 2026-07-18, then confirmed
-that REV may continue planning and test design only. Runtime remains blocked
-until AUTH-09D-A merges and AUTH subsequently merges its separately reviewed
-contributor-field foundation from the then-current migration head.
+that REV could continue planning and test design only while AUTH-09D-A and the
+separate contributor-field foundation remained unmerged. Both dependencies are
+now merged; parent 02 remains non-executable because its child boundaries and
+separate human-start gates still control runtime work.
 
 ## Parent initiative
 
@@ -38,26 +39,28 @@ combined L1 change was not credibly PR-sized.
 
 | Chunk | Title | Boundary |
 |---|---|---|
-| `WS-REV-001-02A` | Project Guide Activation Sequence And Publication Locking | Allocate immutable per-project activation chronology, stamp Task guide identity, and publish one internally consistent guide generation. |
+| `WS-REV-001-02A` | Guide Chronology And Task Locking Split | Non-executable planning parent for 02A1 Project/setup fencing, 02A3 guide chronology, and 02A4 Task triplet screening. |
 | `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | Make guide-bound review/revision policy exact and immutable and add non-executable terminal task/assignment schema compatibility without fabricating Review. |
 | `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | Bind each existing Submission to its exact assignment and canonical contributor, enforce same-task immediate-predecessor lineage, stamp guide identity, and protect finalized rows. |
 
 ## Dependency order
 
 ```text
-AUTH-09D-A merged
--> AUTH-owned contributor-field foundation reviewed and merged
--> WS-REV-001-02A
+AUTH-09D-A and AUTH contributor foundation merged
+-> WS-REV-001-02A planning split
+-> WS-REV-001-02A1
+-> WS-REV-001-02A3
+-> WS-REV-001-02A4
 -> human approval of the two duration defaults recorded in 02B
 -> WS-REV-001-02B
 -> WS-REV-001-02C
 -> WS-REV-001-03
 ```
 
-AUTH currently owns migration `0026` for profile lifecycle. REV assigns no
-migration identifier in planning. Every child refreshes from trusted `main` and
-uses the then-current single Alembic head only after the contributor foundation
-has merged.
+AUTH migration `0026` owns profile lifecycle and merged migration `0027` owns
+the contributor foundation. REV assigns no later migration identifier in parent
+planning. Every executable child refreshes from trusted `main` and allocates
+only the then-current single Alembic successor at its own start.
 
 ## Preserved boundaries
 

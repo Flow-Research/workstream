@@ -19,36 +19,76 @@ Every runtime child records and asserts:
 
 Missing evidence stops before REV generates a migration.
 
-## 02A chronology and Task locking
+## 02A1 Project/setup publication fence
+
+- Exhaustive writer inventory proves every Project Guide/setup mutation locks
+  Project first, then the declared row types and same-type IDs in stable order.
+- Locked reads refresh ORM identity-map state and revalidate draft ownership
+  before mutation.
+- Agent/provider work happens outside locks; persistence rolls back the read
+  phase and reacquires the full fence.
+- Post-commit enqueue bookkeeping uses the fenced setup-run participant rather
+  than direct mutation; the setup job remains a service-only caller.
+- The exact 18-row writer inventory in the 02A1 contract is the race matrix;
+  every row races with activation in both Project-lock acquisition orders and
+  observes a PostgreSQL wait. A separate structural test fails if any current or
+  newly discovered writer bypasses the shared fence.
+- Setup-run ID-only commands use an authority-free project projection, lock
+  Project first, refresh the graph, and revalidate project/guide ownership.
+- Activation-first, writer-first, insert-only create-guide, competing activation,
+  readiness-denial, post-commit delegation, and remote-output assertions match
+  the exact matrix contract; no partial or stale graph commits.
+
+## 02A3 guide activation chronology
 
 ### Migration/data
 
 - Number active/superseded guides independently per project by effective time,
   created time, then ID; drafts remain null.
-- Fail on missing activation provenance, unknown/inconsistent status, duplicate
-  ordering/sequence facts, or ambiguous Task guide context with row-specific
-  remediation and no partial DDL/data effects.
-- Backfill non-draft Task only from an exact same-project guide/version/sequence.
+- Fail on malformed/missing/non-human approver, invalid status/provenance/time
+  order, more than one active guide, or identical effective/created ordering
+  facts within a Project, with bounded redacted diagnostics and no partial DDL.
 - Prove prior-head preflight, one head, upgrade, safe downgrade/re-upgrade,
-  protected-row downgrade refusal, and failure rollback on real PostgreSQL.
+  dependency/protected-row downgrade refusal, and failure rollback on real
+  PostgreSQL without dropping AUTH's shared human-reference function.
 
-### Direct SQL
+### Direct SQL and service
 
-- Reject nonpositive/duplicate/mutable sequence.
-- Enforce exact draft/active/superseded provenance shapes and canonical-human
-  approver.
-- Reject partial, crossed, cross-project, or valid-to-valid changed Task guide
-  triplet.
+- Reject nonpositive/duplicate/mutable sequence and invalid
+  draft/active/superseded provenance shapes.
+- Activation changes only lifecycle allocation/update-time fields. Afterward,
+  reject every activated-row change including ID, project/version, content,
+  summary, creator/creation time, sequence, approver, and effective facts.
+  Permit only status/superseded/update-time changes during the
+  database-timestamped active-to-superseded transition, then reject every change
+  or clear.
+- Reject service approver and prove active-human profile/link revalidation in
+  both lifecycle race orders. Suspension, terminal deactivation, and link
+  revocation each prove both orders plus exact Projects-owned 403/503 envelopes.
+- Public pre-service service-token, already suspended/deactivated, already
+  revoked, identity-verifier unavailable, and actor-registry unavailable paths
+  retain their exact AUTH-owned envelopes and never enter ProjectService.
+- Transaction-race tests first resolve a valid ActorContext, then force the
+  lifecycle transition before or after the ProjectService actor lock. Only the
+  post-resolution revalidation failure uses the Projects envelope. Direct
+  non-human service misuse is tested separately from the public route.
+- First activations serialize and allocate distinct monotonic sequences using
+  one post-lock database timestamp.
+- Draft activation succeeds; sole-active repeat is explicit additive no-write
+  idempotency; superseded candidate remains denied.
 
-### Concurrency/service
+## 02A4 Task guide triplet and screening
 
-- Project-first publication and task screening run against activation, setup
-  mutation, and setup-job completion in both commit orders.
-- First activations serialize and allocate distinct monotonic sequences.
-- Draft activation succeeds; sole-active repeat is no-write idempotent;
-  superseded candidate remains denied in 02A.
-- Screening audit contains complete triplet; audit fault rolls back stamp.
-- No external I/O occurs while locks are held; timestamp is post-lock DB time.
+- Backfill non-draft Task only from an exact same-Project guide/version with
+  valid chronology; reject polluted drafts and zero/multiple legacy matches.
+- Direct SQL rejects partial, crossed, cross-Project, nonpositive, changed, or
+  cleared Task triplets through the exact composite FK/check/trigger.
+- Screening uses unlocked ID/project projection, then Project -> refreshed Task
+  -> refreshed active Guide locks before graph validation and stamping.
+- Screening audit contains the complete triplet; audit fault rolls back status,
+  guide, policy, and payment stamps.
+- Activation/screening races observe PostgreSQL lock waits in both commit orders
+  and never commit a mixed triplet.
 
 ## 02A2 hidden reactivation
 

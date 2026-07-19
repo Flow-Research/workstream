@@ -3,21 +3,23 @@
 ## Planning authority
 
 This plan is reconciled from trusted main
-`99ae4c963e53f317175dcb308b9e47c93ccf19ed`, which contains merged REV parent
-chunk 02 through PR #147 and merged AUTH-09D-A through PR #148. Worktree
-branches, unmerged PRs, and proposed owner changes are discovery evidence only.
+`44f2467cedc266d2efe261119cfff436ac6b7715`, which additionally contains ART
+admission foundation PR #154 after REV PLAN2 PR #150, AUTH-09D-B PR #152, and
+the AUTH contributor foundation PR #153. Worktree branches, unmerged PRs, and
+proposed owner changes are discovery evidence only.
 They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
 schema head, typed contract, and tests exist on trusted main.
 
 Current merged facts are:
 
-- the single Alembic head is `0026_actor_profile_lifecycle`;
-- task assignment and submission attribution still use the retired contributor-
-  identity storage names;
+- the single Alembic head is `0028_artifact_admission`;
+- TaskAssignment and Submission attribution use canonical `contributor_id`
+  ActorProfile foreign keys and database-enforced human lineage;
 - the AUTH catalogue contains 74 PermissionIds and 65 ActionIds, with 15 active
   and 50 planned;
 - all 24 REV lifecycle action dependencies remain unavailable;
-- ART v2 LocalStorage is merged, but review packet reads, review-evidence
+- ART admission and prepared put-attempt foundation is merged through PR #154,
+  but provider execution/publication, review packet reads, review-evidence
   candidate/finalize, and server-derived stabilized Submission artifact lineage
   do not have merged owner contracts;
 - CON has merged its canonical specification, but its outbox, audit,
@@ -25,14 +27,17 @@ Current merged facts are:
   runtime chunks remain proposed.
 
 AUTH-09D-A is merged through PR #148 at
-`99ae4c963e53f317175dcb308b9e47c93ccf19ed` (reviewed branch head
-`9c5ef8a1feffd6324acfd947e67042921955320b`) and supplies database-backed
-ActorProfile lifecycle status/provenance and migration `0026`. It does not rename
-task/submission contributor fields. REV-02 runtime remains blocked until AUTH
-publishes a real contributor-foundation chunk ID and merges it with exact
-`contributor_id`, database-backed canonical-human ActorProfile constraints,
-migration, regression tests, and PR/SHA evidence. REV never codes against
-those retired fields or reserves a migration number while waiting.
+`99ae4c963e53f317175dcb308b9e47c93ccf19ed` and supplies database-backed
+ActorProfile lifecycle status/provenance in migration `0026`. The separate
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` merged through PR #153 at `8d5eb15b` from
+reviewed head `6a70b33f`; migration `0027_contributor_foundation` clean-cuts
+both task-subsystem owner fields, adds canonical-human constraints, and exposes
+transaction-local active-human revalidation without changing authorization
+availability. That external runtime gate is satisfied. Each REV migration still
+allocates only the then-current next revision at its own explicit start.
+ART PR #154 later advanced the sole head to `0028_artifact_admission` without
+changing a Project/setup writer. It creates no REV migration conflict; every
+future REV child still refreshes from then-current trusted main.
 
 ## Shipping boundary
 
@@ -133,10 +138,14 @@ type/ID order. Task screening locks Project, Task, and the selected active guide
 before stamping. This prevents activation from changing the active generation
 between task context selection and commit.
 
-02A preserves the existing public behavior: draft first activation and the
-idempotent repeat of the sole active candidate are allowed, while a superseded
-candidate remains denied. After the pure REV contracts and AUTH-PREP/custody
-merge, 02A2 adds the hidden prepared-authorized reactivation branch while
+02A1 first makes every current setup writer share one Project-first fence.
+02A3 then adds chronology, freezes the complete activated guide row except exact
+lifecycle transitions, and explicitly introduces a no-write idempotent repeat
+for the sole active candidate; current runtime rejects that repeat, so this is
+additive behavior rather than a claimed preservation. Draft first activation
+remains allowed and a superseded candidate remains denied. 02A4 finally stamps
+the exact Task triplet. After the pure REV contracts and AUTH-PREP/custody merge,
+02A2 adds the hidden prepared-authorized reactivation branch while
 `project.guide.activate` remains unavailable. Its reviewed resource manifest
 then gates AUTH-12 evaluator/cutover/activation. The bodyless command requires `If-Match` for
 the exact current active guide ETag; missing precondition fails with 428 and a
@@ -275,15 +284,17 @@ errors but do not substitute for database enforcement.
 
 ## Chunk strategy
 
-Merged parent references remain as non-executable split records. Only 02A has a
-current executable contract after this refresh. Every later child is proposed
-and must receive a current-main chunk contract, risk routing, plan review,
-explicit start, and exact owner evidence before code.
+Merged parent references remain as non-executable split records. Parent 02A is
+the active planning-only split repair after its L1 preimplementation review
+failed; 02A1, 02A3, and 02A4 are the only executable children it declares.
+Each child still requires its own current-main refresh, risk routing, plan
+review, explicit start, and exact owner evidence before code.
 
 The detailed order is maintained in `CHUNK_MAP.md`. The important boundaries
 are:
 
-- 02A establishes chronology/task locking. 02A2 lands after 08 and adds hidden
+- 02A1 establishes the shared Project/setup fence; 02A3 adds guide chronology;
+  02A4 adds Task triplet screening. 02A2 remains later after 08 and adds hidden
   prepared-authorized, stale-retry-safe reactivation before AUTH-12 activation.
 - 03A queue/lease base schema; 03B normalized packet manifest after ART contract.
 - 04A immutable review-chain persistence; 04B FinalAcceptance/task linkage and
@@ -346,8 +357,7 @@ skip, or rewrite existing checker-caused revision coverage.
 
 ## Stop rule
 
-`WS-REV-001-PLAN2` changes planning/specification only. After it merges,
-automated memory names `WS-REV-001-02A` with an explicit-start gate. Runtime
-starts only after the exact AUTH contributor foundation and all 02A-specific
-conditions merge and the user explicitly starts 02A. No chunk starts its
-successor automatically.
+`WS-REV-001-02A` now changes planning/specification only because its L1
+preimplementation review rejected the oversized runtime contract. After this
+split merges, automated memory names `WS-REV-001-02A1` with an explicit-start
+gate. No runtime child or successor starts automatically.
