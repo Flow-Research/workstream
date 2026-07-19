@@ -130,6 +130,7 @@ _BACKEND_ERROR_CODES: dict[str, MCPErrorCode] = {
     "review_not_leased_to_actor": MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
     "review_lease_expired": MCPErrorCode.REVIEW_LEASE_EXPIRED,
     "findings_required": MCPErrorCode.FINDINGS_REQUIRED,
+    "task_locked_context_invalid": MCPErrorCode.UNEXPECTED_SERVER_ERROR,
     "workstream_temporarily_unavailable": MCPErrorCode.WORKSTREAM_TEMPORARILY_UNAVAILABLE,
     "unexpected_server_error": MCPErrorCode.UNEXPECTED_SERVER_ERROR,
 }

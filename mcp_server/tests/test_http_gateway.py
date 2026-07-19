@@ -443,6 +443,18 @@ def test_backend_error_mapping_supports_top_level_and_unknown_envelopes() -> Non
     assert unknown.code is MCPErrorCode.RESOURCE_NOT_FOUND_OR_NOT_VISIBLE
 
 
+def test_invalid_locked_task_context_is_not_blamed_on_a_submission() -> None:
+    """Invalid authoritative task setup maps to an infrastructure-safe error."""
+    error = map_http_error_response(
+        422,
+        {"error": {"code": "task_locked_context_invalid"}},
+        correlation_id="corr-1",
+    )
+
+    assert error.code is MCPErrorCode.UNEXPECTED_SERVER_ERROR
+    assert "submitted payload" not in error.message
+
+
 @pytest.mark.asyncio
 async def test_available_task_resources_compose_current_workstream_apis() -> None:
     """Task context and status compose only the semantically compatible APIs."""

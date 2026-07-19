@@ -21,12 +21,6 @@ except ImportError:  # pragma: no cover
 STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
 STDIO_SCENARIO_ACTOR_ID_ENV = "WORKSTREAM_MCP_SCENARIO_ACTOR_ID"
 MAX_BEARER_TOKEN_LENGTH = 8192
-UUID_TEXT_PATTERN = re.compile(
-    r"(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
-    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})"
-)
-
-
 @dataclass(frozen=True, slots=True)
 class RequestContext:
     """Per-request contributor identity context."""
@@ -241,10 +235,7 @@ def _as_uuid(value: str) -> UUID | None:
 def _contains_equivalent_uuid(value: Any, secret_uuid: UUID) -> bool:
     """Find UUID strings equal to a bearer after canonicalization."""
     if isinstance(value, str):
-        return any(
-            _as_uuid(match.group(0)) == secret_uuid
-            for match in UUID_TEXT_PATTERN.finditer(value)
-        )
+        return _equivalent_uuid_pattern(secret_uuid).search(value) is not None
     if isinstance(value, dict):
         return any(
             _contains_equivalent_uuid(key, secret_uuid)
@@ -259,14 +250,7 @@ def _contains_equivalent_uuid(value: Any, secret_uuid: UUID) -> bool:
 def _redact_equivalent_uuid(value: Any, secret_uuid: UUID) -> Any:
     """Redact complete UUID strings canonically equal to the bearer."""
     if isinstance(value, str):
-        return UUID_TEXT_PATTERN.sub(
-            lambda match: (
-                "[REDACTED]"
-                if _as_uuid(match.group(0)) == secret_uuid
-                else match.group(0)
-            ),
-            value,
-        )
+        return _equivalent_uuid_pattern(secret_uuid).sub("[REDACTED]", value)
     if isinstance(value, list):
         return [_redact_equivalent_uuid(item, secret_uuid) for item in value]
     if isinstance(value, tuple):
@@ -281,6 +265,24 @@ def _redact_equivalent_uuid(value: Any, secret_uuid: UUID) -> Any:
             for key, item in value.items()
         }
     return value
+
+
+def _equivalent_uuid_pattern(secret_uuid: UUID) -> re.Pattern[str]:
+    """Match this UUID in compact or hyphenated form at any string offset."""
+    compact = secret_uuid.hex
+    hyphenated = "-".join(
+        (
+            compact[:8],
+            compact[8:12],
+            compact[12:16],
+            compact[16:20],
+            compact[20:],
+        )
+    )
+    return re.compile(
+        rf"(?:{re.escape(hyphenated)}|{re.escape(compact)})",
+        re.IGNORECASE,
+    )
 
 
 def _is_valid_bearer_token(token: str) -> bool:

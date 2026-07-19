@@ -46,11 +46,15 @@ Local HTTP issuer development must be deliberate and loopback-only:
 
 ```bash
 WORKSTREAM_MCP_TRANSPORT=streamable-http \
-WORKSTREAM_API_BASE_URL=http://127.0.0.1:8000 \
-WORKSTREAM_MCP_AUTH_ISSUER_URL=http://127.0.0.1:8000 \
+WORKSTREAM_API_BASE_URL=http://127.0.0.1:8001 \
+WORKSTREAM_MCP_AUTH_ISSUER_URL=http://127.0.0.1:8001 \
 WORKSTREAM_MCP_ALLOW_INSECURE_AUTH_ISSUER=true \
 .venv/bin/workstream-mcp-server
 ```
+
+In this local topology, run Workstream on port `8001`. FastMCP listens on its
+default `127.0.0.1:8000`, and clients connect to
+`http://127.0.0.1:8000/mcp`.
 
 `WORKSTREAM_MCP_REQUEST_TIMEOUT_SECONDS` controls Workstream API timeouts.
 `WORKSTREAM_MCP_ALLOWED_HOSTS` and `WORKSTREAM_MCP_ALLOWED_ORIGINS` are
@@ -60,3 +64,12 @@ environment variables are intentionally ignored for bearer-token forwarding.
 
 The `ScenarioContributorGateway` is a deterministic test fixture only. Runtime
 configuration cannot select it.
+
+## Current Production Boundary
+
+The server advertises the complete closed v0.1 catalogue, but only Task
+Context, Task Status, and pre-submit checks currently have compatible
+authoritative HTTP APIs. Project/task lists, contributions, contributor
+claim/release/submission, and all review operations fail closed with
+`workstream_temporarily_unavailable` until Workstream provides matching APIs.
+The test-only scenario gateway is never used as a production fallback.

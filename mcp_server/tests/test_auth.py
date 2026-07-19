@@ -103,6 +103,17 @@ def test_uuid_equivalent_bearer_is_detected_and_redacted_inside_strings() -> Non
     )
 
 
+def test_compact_uuid_bearer_is_redacted_inside_a_longer_hex_run() -> None:
+    """An overlapping hex window cannot hide a compact UUID bearer."""
+    token = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+    compact = token.replace("-", "").lower()
+    context = RequestContext(token, "corr-overlap", "test")
+    embedded = f"0{compact}f"
+
+    assert contains_context_secret(embedded, context) is True
+    assert redact_context_secrets(embedded, context) == "0[REDACTED]f"
+
+
 @pytest.mark.asyncio
 async def test_forwarding_token_verifier_uses_existing_workstream_auth() -> None:
     """HTTP sessions begin only after Workstream Auth accepts the bearer token."""
