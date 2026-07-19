@@ -625,7 +625,7 @@ async def test_review_fails_closed_when_submission_state_is_missing() -> None:
         review_routing_ref="scenario-review-route-1",
         request_id=REQUEST_ID,
     )
-    gateway._submissions.clear()  # noqa: SLF001 - deliberate corrupted-state probe
+    submission_record = gateway._submissions.pop()  # noqa: SLF001 - corrupted-state probe
 
     review_context = await read_review_context(
         gateway,
@@ -643,7 +643,20 @@ async def test_review_fails_closed_when_submission_state_is_missing() -> None:
 
     assert review_context["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
     assert decision["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert gateway._review["state"] == "leased_to_actor"  # noqa: SLF001
     assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
+
+    gateway._submissions.append(submission_record)  # noqa: SLF001
+    retry = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert retry["outcome"] == "accept"
 
 
 @pytest.mark.asyncio

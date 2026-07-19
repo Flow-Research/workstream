@@ -612,8 +612,6 @@ class ScenarioContributorGateway:
                 "The review is not leased to the current actor.",
                 correlation_id=context.correlation_id,
             )
-        self._review["state"] = "none_available"
-        self._review["actor_facing_state"] = "completed"
         task = self._task(self._review_task_id, context)
         task_submissions = [
             submission
@@ -627,6 +625,8 @@ class ScenarioContributorGateway:
                 correlation_id=context.correlation_id,
             )
         reviewed_submission = task_submissions[-1]
+        self._review["state"] = "none_available"
+        self._review["actor_facing_state"] = "completed"
         persisted_findings = deepcopy(findings)
         self._latest_review_outcomes[self._review_task_id] = {
             "decision": decision,
