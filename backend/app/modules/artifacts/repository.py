@@ -7,13 +7,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, tuple_, update
+from sqlalchemy import and_, case, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.artifacts.models import (
     ArtifactAdmissionCharge,
     ArtifactAdmissionScope,
+    ArtifactBinding,
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactPutAttempt,
@@ -83,9 +84,7 @@ class ArtifactRepository:
     async def lock_upload_item(self, item_id: str) -> ArtifactUploadItem | None:
         """Load one upload item with a row lock."""
         result = await self._session.execute(
-            select(ArtifactUploadItem)
-            .where(ArtifactUploadItem.id == item_id)
-            .with_for_update()
+            select(ArtifactUploadItem).where(ArtifactUploadItem.id == item_id).with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -116,9 +115,7 @@ class ArtifactRepository:
                     GuideSourceSnapshot.id == GuideSourceSnapshotItem.source_snapshot_id,
                 )
                 .where(GuideSourceSnapshotItem.id == guide_source_item_id)
-                .with_for_update(
-                    of=(GuideSourceSnapshotItem, GuideSourceSnapshot)
-                )
+                .with_for_update(of=(GuideSourceSnapshotItem, GuideSourceSnapshot))
             )
         ).one_or_none()
         if row is None:
@@ -158,9 +155,7 @@ class ArtifactRepository:
                     & (WorkstreamTask.project_id == ArtifactUploadSession.project_id),
                 )
                 .where(ArtifactUploadItem.id == upload_item_id)
-                .with_for_update(
-                    of=(ArtifactUploadSession, ArtifactUploadItem, WorkstreamTask)
-                )
+                .with_for_update(of=(ArtifactUploadSession, ArtifactUploadItem, WorkstreamTask))
             )
         ).one_or_none()
         if row is None:
@@ -349,7 +344,17 @@ class ArtifactRepository:
                 )
             )
             .order_by(
-                func.coalesce(ArtifactPutAttempt.next_run_at, ArtifactPutAttempt.prepared_at),
+                case(
+                    (
+                        ArtifactPutAttempt.status == "acknowledgement_unknown",
+                        ArtifactPutAttempt.next_run_at,
+                    ),
+                    (
+                        ArtifactPutAttempt.status == "put_in_flight",
+                        ArtifactPutAttempt.lease_expires_at,
+                    ),
+                    else_=ArtifactPutAttempt.prepared_at,
+                ),
                 ArtifactPutAttempt.id,
             )
             .limit(limit)
@@ -436,8 +441,16 @@ class ArtifactRepository:
                 )
             )
             .order_by(
-                func.coalesce(
-                    ArtifactVerificationJob.next_run_at, ArtifactVerificationJob.created_at
+                case(
+                    (
+                        ArtifactVerificationJob.status == "provider_unavailable",
+                        ArtifactVerificationJob.next_run_at,
+                    ),
+                    (
+                        ArtifactVerificationJob.status == "running",
+                        ArtifactVerificationJob.lease_expires_at,
+                    ),
+                    else_=ArtifactVerificationJob.created_at,
                 ),
                 ArtifactVerificationJob.id,
             )
@@ -512,6 +525,16 @@ class ArtifactRepository:
             .execution_options(populate_existing=True)
         )
 
+    async def lock_binding_for_content(self, content_id: str) -> ArtifactBinding | None:
+        """Lock one binding proving that content has entered an immutable lifecycle."""
+        return await self._session.scalar(
+            select(ArtifactBinding)
+            .where(ArtifactBinding.content_id == content_id)
+            .order_by(ArtifactBinding.id)
+            .limit(1)
+            .with_for_update()
+        )
+
     async def get_or_create_content(self, content: ArtifactContent) -> ArtifactContent:
         """Return the immutable content fact for one digest and size."""
         await self._session.execute(
@@ -532,6 +555,7 @@ class ArtifactRepository:
             )
         )
         return result.scalar_one()
+
     async def get_or_create_replica(self, replica: ArtifactReplica) -> ArtifactReplica:
         """Atomically return one replica for a namespace and provider object."""
         await self._session.execute(
@@ -564,9 +588,7 @@ class ArtifactRepository:
         await self._session.flush()
         return receipt
 
-    async def get_receipt_for_item(
-        self, upload_item_id: str
-    ) -> ArtifactOperationReceipt | None:
+    async def get_receipt_for_item(self, upload_item_id: str) -> ArtifactOperationReceipt | None:
         """Load the Workstream put receipt for one upload item."""
         result = await self._session.execute(
             select(ArtifactOperationReceipt)
@@ -596,8 +618,6 @@ class ArtifactRepository:
             .on_conflict_do_nothing(index_elements=[ArtifactStorageNamespace.id])
         )
         result = await self._session.execute(
-            select(ArtifactStorageNamespace).where(
-                ArtifactStorageNamespace.id == namespace.id
-            )
+            select(ArtifactStorageNamespace).where(ArtifactStorageNamespace.id == namespace.id)
         )
         return result.scalar_one()

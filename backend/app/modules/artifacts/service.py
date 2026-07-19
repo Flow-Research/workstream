@@ -141,7 +141,9 @@ def artifact_storage_namespace_spec(
     if type(identity) is not ExternalServiceAdapterIdentity:
         raise ArtifactStorageNamespaceError("artifact adapter identity is invalid")
     if settings.artifact_store_backend != identity.provider_key:
-        raise ArtifactStorageNamespaceError("artifact adapter identity does not match configuration")
+        raise ArtifactStorageNamespaceError(
+            "artifact adapter identity does not match configuration"
+        )
     namespace_identity = store.namespace_identity
     descriptor, fingerprint = artifact_store_namespace_material(
         backend=settings.artifact_store_backend,
@@ -284,9 +286,7 @@ class ArtifactStorageOrchestrator:
             )
         except ArtifactIntegrityError:
             try:
-                observed_sha256, observed_size = await self._read_complete(
-                    claimed.canonical_target
-                )
+                observed_sha256, observed_size = await self._read_complete(claimed.canonical_target)
             except (ArtifactStoreUnavailableError, TimeoutError):
                 return await self._record_put_unavailable(claimed, executor_id)
             except ArtifactStoreError:
@@ -431,11 +431,40 @@ class ArtifactStorageOrchestrator:
                     integrity_state="unknown",
                 )
             )
+            replica_identity = (
+                replica.content_id,
+                replica.namespace_fingerprint,
+                replica.adapter,
+                replica.provider_profile,
+            )
+            expected_replica_identity = (
+                content.id,
+                attempt.namespace_fingerprint,
+                self._store.identity.provider_key,
+                self._namespace.provider_profile,
+            )
+            if replica_identity != expected_replica_identity:
+                await self._repo.add_put_observation_receipt(
+                    ArtifactPutObservationReceipt(
+                        id=str(uuid4()),
+                        put_attempt_id=attempt.id,
+                        execution_generation=attempt.execution_generation,
+                        outcome="conflict",
+                        expected_sha256=attempt.sha256,
+                        expected_byte_count=attempt.byte_count,
+                        observed_sha256=None,
+                        observed_byte_count=None,
+                    )
+                )
+                attempt.status = "conflict"
+                attempt.terminal_result_code = "conflict"
+                attempt.terminal_at = now
+                _clear_put_fence(attempt)
+                return "conflict"
             if observed:
                 observation_receipt = await self._repo.add_put_observation_receipt(
                     ArtifactPutObservationReceipt(
                         id=str(uuid4()),
-                        contract_version=2,
                         put_attempt_id=attempt.id,
                         execution_generation=attempt.execution_generation,
                         outcome="observed_confirmed",
@@ -784,16 +813,23 @@ class ArtifactStorageOrchestrator:
             if attempt.upload_item_id is not None:
                 item = await self._repo.lock_upload_item(attempt.upload_item_id)
                 if item is not None:
+                    item_changed = False
                     if outcome == "verified":
                         item.state = "ready"
+                        item_changed = True
                     elif outcome == "missing":
-                        item.state = "replay_required"
-                        item.content_id = None
-                        item.provider_object_ref = None
+                        binding = await self._repo.lock_binding_for_content(replica.content_id)
+                        if binding is None:
+                            item.state = "replay_required"
+                            item.content_id = None
+                            item.provider_object_ref = None
+                            item_changed = True
                     elif outcome == "integrity_mismatch":
                         item.state = "failed"
                         item.error_code = "artifact_integrity_failure"
-                    item.cas_version += 1
+                        item_changed = True
+                    if item_changed:
+                        item.cas_version += 1
             job.status = outcome
             job.next_run_at = None
             job.terminal_result_code = outcome
@@ -914,10 +950,7 @@ class ArtifactAdmissionService:
                 }
             )
             counters = await self._repo.ensure_and_lock_admission_scopes(
-                [
-                    (scope.scope_type, scope.scope_id, scope.limit_bytes)
-                    for scope in scopes
-                ]
+                [(scope.scope_type, scope.scope_id, scope.limit_bytes) for scope in scopes]
             )
             # A concurrent first caller may have committed while these shared
             # scope locks were pending. Recheck under serialization before any
@@ -934,9 +967,7 @@ class ArtifactAdmissionService:
                 byte_count=commitment.byte_count,
             )
             if replay is not None:
-                linked_charge_ids = await self._repo.list_put_attempt_charge_ids(
-                    replay.id
-                )
+                linked_charge_ids = await self._repo.list_put_attempt_charge_ids(replay.id)
                 reserved_charge_ids = tuple(sorted(charge.id for charge in charges))
                 if linked_charge_ids != reserved_charge_ids:
                     raise ArtifactAdmissionConfigurationError(
@@ -1001,13 +1032,9 @@ class ArtifactAdmissionService:
             context.actor_status is not ActorStatus.ACTIVE
             or context.identity_link_status is not IdentityLinkStatus.ACTIVE
         ):
-            raise ArtifactAdmissionRelationshipError(
-                "artifact admission actor is not active"
-            )
+            raise ArtifactAdmissionRelationshipError("artifact admission actor is not active")
 
-    async def _derive_admission_facts(
-        self, request: ArtifactAdmissionRequest
-    ) -> _AdmissionFacts:
+    async def _derive_admission_facts(self, request: ArtifactAdmissionRequest) -> _AdmissionFacts:
         """Load every product and producer relationship from authoritative rows."""
         if type(request) is GuideArtifactAdmissionRequest:
             return await self._guide_facts(request)
@@ -1017,9 +1044,7 @@ class ArtifactAdmissionService:
             return await self._checker_output_facts(request)
         raise TypeError("invalid artifact admission request")
 
-    async def _guide_facts(
-        self, request: GuideArtifactAdmissionRequest
-    ) -> _AdmissionFacts:
+    async def _guide_facts(self, request: GuideArtifactAdmissionRequest) -> _AdmissionFacts:
         """Bind committed bytes to one authoritative guide source item."""
         context = request.authorization_context
         if context.actor_kind is not ActorKind.HUMAN:
@@ -1118,8 +1143,7 @@ class ArtifactAdmissionService:
             or service_actor.identity_link_id != str(context.identity_link_id)
             or service_actor.identity_link_subject_kind != "service"
             or service_actor.identity_link_status != "active"
-            or service_actor.service_identity
-            != ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value
+            or service_actor.service_identity != ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value
         ):
             raise ArtifactAdmissionRelationshipError(
                 "checker output service identity is unavailable"
@@ -1127,9 +1151,7 @@ class ArtifactAdmissionService:
         checker_run_id = str(request.checker_run_id)
         row = await self._repo.get_checker_output_admission_facts(checker_run_id)
         if row is None:
-            raise ArtifactAdmissionRelationshipError(
-                "checker run relationship is unavailable"
-            )
+            raise ArtifactAdmissionRelationshipError("checker run relationship is unavailable")
         operation_identity = canonical_json_hash(
             {
                 "request_type": "checker_output",
@@ -1150,9 +1172,7 @@ class ArtifactAdmissionService:
             operation_identity=operation_identity,
         )
 
-    async def _require_active_human_actor(
-        self, context: AuthorizationContext
-    ) -> None:
+    async def _require_active_human_actor(self, context: AuthorizationContext) -> None:
         """Revalidate and lock exact human identity state inside admission."""
         actor = await self._actors.lock_admission_proof(
             context.actor_profile_id,
@@ -1182,9 +1202,7 @@ class ArtifactAdmissionService:
             or len(value) > 100
             or any(ord(character) < 32 or ord(character) == 127 for character in value)
         ):
-            raise ArtifactAdmissionRelationshipError(
-                "checker output logical role is invalid"
-            )
+            raise ArtifactAdmissionRelationshipError("checker output logical role is invalid")
         return value
 
     def _derive_scopes(self, facts: _AdmissionFacts) -> tuple[_AdmissionScopeSpec, ...]:
@@ -1233,9 +1251,7 @@ class ArtifactAdmissionService:
         if existing is None:
             return None
         if existing.request_digest != request_digest:
-            raise ArtifactAdmissionConflictError(
-                "artifact admission operation input changed"
-            )
+            raise ArtifactAdmissionConflictError("artifact admission operation input changed")
         return existing
 
     async def _reserve_charges(
@@ -1248,13 +1264,9 @@ class ArtifactAdmissionService:
         byte_count: int,
     ) -> tuple[ArtifactAdmissionCharge, ...]:
         """Reserve unique content under every locked scope or fail atomically."""
-        counter_by_key = {
-            (counter.scope_type, counter.scope_id): counter for counter in counters
-        }
+        counter_by_key = {(counter.scope_type, counter.scope_id): counter for counter in counters}
         if len(counter_by_key) != len(scopes):
-            raise ArtifactAdmissionConfigurationError(
-                "artifact admission scope set is incomplete"
-            )
+            raise ArtifactAdmissionConfigurationError("artifact admission scope set is incomplete")
         database_now = await self._repo.database_now()
         charges: list[ArtifactAdmissionCharge] = []
         for scope in scopes:
@@ -1302,9 +1314,7 @@ class ArtifactAdmissionService:
                 charge.released_at = None
                 charge.cas_version += 1
             else:
-                raise ArtifactAdmissionConflictError(
-                    "artifact admission charge state is invalid"
-                )
+                raise ArtifactAdmissionConflictError("artifact admission charge state is invalid")
             charges.append(charge)
         return tuple(charges)
 

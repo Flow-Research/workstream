@@ -73,9 +73,19 @@ def upgrade() -> None:
     op.add_column(
         "artifact_operation_receipts", sa.Column("logical_role", sa.String(100), nullable=True)
     )
+    # The receipt table is append-only at runtime. Migration-owned promotion
+    # of linked v1 contributor receipts is the sole controlled update.
+    op.execute(
+        "alter table artifact_operation_receipts "
+        "disable trigger trg_artifact_operation_receipts_immutable"
+    )
     op.execute(
         "update artifact_operation_receipts r set put_attempt_id = a.id, contract_version = 2 "
         "from artifact_put_attempts a where a.receipt_id = r.id"
+    )
+    op.execute(
+        "alter table artifact_operation_receipts "
+        "enable trigger trg_artifact_operation_receipts_immutable"
     )
     op.create_foreign_key(
         "fk_artifact_receipt_put_attempt",
@@ -186,7 +196,9 @@ def upgrade() -> None:
         sa.CheckConstraint("attempt_count >= 0 and maximum_attempts > 0", name="attempts"),
         sa.CheckConstraint("execution_generation >= 0 and cas_version >= 0", name="versions"),
         sa.CheckConstraint("(executor_id is null) = (lease_expires_at is null)", name="fence_pair"),
-        sa.CheckConstraint("(status = 'running') = (executor_id is not null)", name="running_fence"),
+        sa.CheckConstraint(
+            "(status = 'running') = (executor_id is not null)", name="running_fence"
+        ),
         sa.CheckConstraint(
             "status != 'provider_unavailable' or ((next_run_at is not null and terminal_at is null and attempt_count < maximum_attempts) or (next_run_at is null and terminal_at is not null and attempt_count >= maximum_attempts))",
             name="unavailable_retryability",
