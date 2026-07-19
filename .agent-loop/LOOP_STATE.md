@@ -40,7 +40,9 @@
   schema-v2 initiative-local clean cut.
 - Current ART gate: complete deterministic 02C2 proof, then pass all nine
   exact-SHA internal reviewer tracks. Production composition remains deny-only
-  until the later AUTH activation gate. No later ART chunk starts automatically.
+  until the later AUTH activation gate.
+  No service caller becomes executable before AUTH-09E.
+  No later ART chunk starts automatically.
 - Scope checkpoint: AWS S3 is the only v0.1 production provider; MinIO is
   local/CI S3 protocol proof; LocalStorage is focused development/test; R2 and
   Flow Node are deferred. Product modules receive narrow artifact capabilities,

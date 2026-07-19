@@ -4188,13 +4188,11 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         assert stale_text not in auth_map
         assert stale_text not in work_queue
     assert (
-        "Internal review passed at `4d1fc507`; PR/external checks pending; "
-        "aggregate coverage mandatory in Backend" in work_queue
+        "Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 "
+        "as `8d5eb15` on 2026-07-19" in work_queue
     )
-    assert (
-        "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`"
-        in loop_state
-    )
+    assert "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in loop_state
+    assert "Active ART implementation chunk: `WS-ART-001-02C2`" in loop_state
     assert "ActionIds, with 17 active actions" in loop_state
     assert "candidate total of 17" not in loop_state
     assert "with 12 active actions" not in loop_state
@@ -4218,9 +4216,9 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "Inactive until contributor-foundation merge/memory and explicit user start"
         in work_queue
     )
-    assert "no service caller becomes executable before AUTH-09E" in loop_state.replace(
+    assert "no service caller becomes executable before auth-09e" in loop_state.replace(
         "\n", " "
-    )
+    ).lower()
     assert "Merged through PR #129 as `9a04434`" in artifact_map
     assert "Merged through PR #141 as `a10d901`" in artifact_map
     assert "Merged through PR #151 as `1b5422fc`" in artifact_map
