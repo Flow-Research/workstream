@@ -1681,6 +1681,94 @@ async def test_verification_resource_drift_terminalizes_conflict_without_mutatio
         await engine.dispose()
 
 
+async def test_verification_rechecks_relationship_after_preflight_before_io(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / "preclaim-drift", b"expected") as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                allowing = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority()
+                )
+                await allowing.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+                job = await session.scalar(select(ArtifactVerificationJob))
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert job is not None and attempt is not None
+                unrelated_content = ArtifactContent(
+                    id=str(uuid4()),
+                    sha256="sha256:" + "e" * 64,
+                    byte_count=777,
+                    media_type="application/octet-stream",
+                    normalized_display_name=None,
+                )
+                session.add(unrelated_content)
+                await session.flush()
+                unrelated_replica = ArtifactReplica(
+                    id=str(uuid4()),
+                    content_id=unrelated_content.id,
+                    storage_namespace_id=attempt.storage_namespace_id,
+                    namespace_fingerprint=attempt.namespace_fingerprint,
+                    adapter=store.identity.provider_key,
+                    provider_profile=namespace.provider_profile,
+                    provider_object_ref="sha256/ee/" + "e" * 62,
+                    verification_state="pending",
+                    availability_state="unknown",
+                    integrity_state="unknown",
+                )
+                session.add(unrelated_replica)
+                job_id = UUID(job.id)
+                await session.commit()
+
+                class DriftBeforeClaimAuthority(_AllowArtifactAuthority):
+                    async def preflight(self, **_values: object) -> None:
+                        await super().preflight(**_values)
+                        async with factory() as drift_session, drift_session.begin():
+                            drifted_job = await drift_session.get(
+                                ArtifactVerificationJob, str(job_id), with_for_update=True
+                            )
+                            assert drifted_job is not None and drifted_job.status == "pending"
+                            drifted_job.replica_id = unrelated_replica.id
+
+                verifying = ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    namespace,
+                    settings,
+                    DriftBeforeClaimAuthority(),
+                )
+                verifying._read_complete = AsyncMock(
+                    side_effect=AssertionError("provider read must not execute")
+                )
+                assert await verifying.verify_object(job_id) == "conflict"
+                verifying._read_complete.assert_not_awaited()
+                await session.refresh(job)
+                await session.refresh(unrelated_replica)
+                assert job.status == "conflict"
+                assert unrelated_replica.verification_state == "pending"
+                receipt = await session.scalar(select(ArtifactVerificationReceipt))
+                assert receipt is not None and receipt.outcome == "conflict"
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
 @pytest.mark.parametrize("bound", [False, True])
 async def test_post_ack_missing_replays_only_unbound_contributor_item(
     admission_database_env: str,

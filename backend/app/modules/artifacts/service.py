@@ -335,12 +335,8 @@ class ArtifactStorageOrchestrator:
             attempt = await self._repo.lock_put_attempt(candidate.originating_put_attempt_id)
             if replica is None or attempt is None:
                 return "conflict"
-            content = await self._repo.lock_content(replica.content_id)
             self._validate_put_execution_namespace(attempt, persisted_namespace)
             self._validate_replica_execution_namespace(replica, persisted_namespace)
-            relationship_matches = _verification_relationship_matches(
-                candidate, replica, attempt, content
-            )
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _verification_authority_facts(
@@ -352,18 +348,56 @@ class ArtifactStorageOrchestrator:
             facts=facts,
         )
         async with self._session.begin():
-            claimed = await self._repo.claim_verification_job(
+            persisted_namespace = await self._claim_and_validate_namespace()
+            claimed_result = await self._repo.claim_verification_job(
                 job_id=job_id,
                 executor_id=executor_id,
                 lease_seconds=self._settings.artifact_execution_lease_seconds,
                 expected_generation=candidate_generation,
             )
-            if claimed is None:
+            if claimed_result is None:
                 return "stale"
-        if not relationship_matches:
-            return await self._complete_verification(claimed, executor_id, "conflict", None, None)
+            claimed = await self._repo.lock_verification_job(str(job_id))
+            if not _matching_job_fence(claimed, executor_id, candidate_generation + 1):
+                return "stale"
+            assert claimed is not None
+            execution_replica = await self._repo.lock_replica(claimed.replica_id)
+            execution_attempt = await self._repo.lock_put_attempt(
+                claimed.originating_put_attempt_id
+            )
+            if execution_replica is None or execution_attempt is None:
+                return "conflict"
+            execution_content = await self._repo.lock_content(execution_replica.content_id)
+            self._validate_put_execution_namespace(execution_attempt, persisted_namespace)
+            self._validate_replica_execution_namespace(execution_replica, persisted_namespace)
+            if not _verification_relationship_matches(
+                claimed,
+                execution_replica,
+                execution_attempt,
+                execution_content,
+            ):
+                await self._authority.revalidate_terminal(
+                    service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                    action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                    facts=_verification_authority_facts(
+                        claimed,
+                        execution_replica,
+                        execution_attempt,
+                        executor_id,
+                        claimed.execution_generation,
+                    ),
+                )
+                now = await self._repo.database_now()
+                await self._terminalize_verification_conflict(claimed, now)
+                relationship_conflict = True
+            else:
+                relationship_conflict = False
+        if relationship_conflict:
+            return "conflict"
         try:
-            observed_sha256, observed_size = await self._read_complete(replica.provider_object_ref)
+            observed_sha256, observed_size = await self._read_complete(
+                execution_replica.provider_object_ref
+            )
         except ArtifactObjectMissingError:
             return await self._complete_verification(claimed, executor_id, "missing", None, None)
         except (ArtifactStoreUnavailableError, TimeoutError):
@@ -372,7 +406,8 @@ class ArtifactStorageOrchestrator:
             return await self._complete_verification(claimed, executor_id, "conflict", None, None)
         outcome = (
             "verified"
-            if observed_sha256 == attempt.sha256 and observed_size == attempt.byte_count
+            if observed_sha256 == execution_attempt.sha256
+            and observed_size == execution_attempt.byte_count
             else "integrity_mismatch"
         )
         return await self._complete_verification(
