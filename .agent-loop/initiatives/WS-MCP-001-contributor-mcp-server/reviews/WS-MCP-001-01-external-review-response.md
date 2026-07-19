@@ -10,7 +10,7 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through `139c6e6`, and current `main` at `8d5eb15` is integrated.
+addressed through `c60902b`, and current `main` at `3b1d637` is integrated.
 CodeRabbit and GitHub checks must rerun after the final evidence commit is
 pushed.
 
@@ -19,7 +19,7 @@ pushed.
 | Finding | Disposition | Evidence |
 |---|---|---|
 | Restrict the MCP job token permissions. | Addressed | The MCP job declares `permissions: contents: read`; checkout credentials remain disabled. |
-| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 94.77 percent. |
+| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 95.25 percent. |
 | Redact secrets inside sets. | Addressed | Recursive set redaction and a regression canary were added. |
 | Hide completed review lease/routing details. | Addressed | `none_available` now returns only source, project, and state. |
 | Check review replay before fixture matching. | Addressed | `claim_review` performs actor-scoped replay/conflict validation before availability checks. |
@@ -61,7 +61,10 @@ pushed.
   active bearer token.
 - Required strict, coherent checker responses and exact review-context references
   before publishing successful MCP outcomes.
-- Expanded protocol regressions; the complete package has 94.77 percent coverage.
+- Expanded protocol regressions; the complete package has 95.25 percent coverage.
+- Redacted exact compact UUID equivalents even when an overlapping hexadecimal window precedes them.
+- Preserved retryable Auth outages as HTTP `503` responses instead of reporting invalid contributor credentials.
+- Documented the production capability boundary and a collision-free local Streamable HTTP topology.
 
 ## GitHub Checks
 
@@ -70,6 +73,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until reviewed code head `139c6e6` and its
+Do not resolve the review as complete until reviewed code head `c60902b` and its
 evidence commit are pushed and CodeRabbit/GitHub checks report against that head.
 Do not merge without explicit human approval.

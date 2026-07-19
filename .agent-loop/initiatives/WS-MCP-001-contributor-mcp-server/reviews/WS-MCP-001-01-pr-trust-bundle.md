@@ -43,6 +43,7 @@ Link the initiative and chunk contract:
 - Added direct `sse-starlette` test dependency ownership and strict MCP error signaling at the official SDK boundary.
 - Required strict coherent checker responses and exact validated Review Context references before publishing successful outcomes.
 - Kept malformed output-schema failures on the server-error path and aligned their operation telemetry with the client-visible infrastructure error.
+- Closed overlapping compact-UUID redaction, Auth-outage classification, locked-context error mapping, and local HTTP operator-documentation gaps found during final review.
 
 ## Why It Changed
 
@@ -108,7 +109,7 @@ git diff --check
 ### Result Summary
 
 ```text
-MCP tests: 98 passed at 94.77 percent statement coverage.
+MCP tests: 112 passed at 95.25 percent statement coverage.
 MCP ruff: passed.
 Stale wording, Markdown, authorization, and artifact-contract checks: passed.
 Agent gate regression: 88 passed.
@@ -172,23 +173,23 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 139c6e61e0e0959b3b76f2e82a3c62abd44739df
+Reviewed code SHA: c60902b012bd31e662a800373c889f31b65c1eef
 
-Reviewed at: 2026-07-19T14:56:55Z
+Reviewed at: 2026-07-19T23:53:35Z
 
-Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
+Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
-| Senior engineering | PASS AFTER FIXES | none | Lifecycle, replay, input, and safe-error findings were repaired. |
-| QA/test | PASS AFTER FIXES | none | 98 tests pass at 94.77 percent coverage, including agent-facing catalogue, distinct input/output error boundaries, and real SDK HTTP journeys; remaining authoritative Section 18 cases are recorded. |
-| Security/auth | PASS AFTER FIXES | none | Existing Auth verification, token-safe SDK validation, secret-safe output validation, matching infrastructure-error telemetry, immediate anonymous rejection, credential isolation, proxy safety, byte/frame/deadline bounds, strict gateway-result validation, SSE-safe replay, redaction, and actor ownership are covered. |
+| Senior engineering | PASS WITH LOW RISKS | none | No actionable exact-head engineering findings; unavailable authoritative APIs remain explicit follow-up work. |
+| QA/test | PASS WITH LOW RISKS | none | 112 tests pass at 95.25 percent coverage, including agent-facing catalogue, distinct input/output error boundaries, and real SDK HTTP journeys. |
+| Security/auth | PASS WITH LOW RISKS | none | Existing Auth verification, exact bearer-equivalent redaction, actor isolation, and retryable Auth outage handling are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
-| Architecture | PASS AFTER FIXES | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS AFTER FIXES | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `8d5eb15` integrates cleanly as `4605bd6` without changing MCP runtime. |
-| Docs | PASS AFTER FIXES | none | Initiative docs distinguish foundation PR readiness from full specification acceptance. |
-| Reuse/dedup | PASS AFTER FIXES | none | Boundary validation, mapping, replay, and observability remain centralized. |
-| Test delta | PASS AFTER FIXES | none | Every external and internal remediation finding has focused regression evidence. |
+| Architecture | PASS WITH LOW RISKS | none | No backend, persistence, or session ownership moved into MCP. |
+| CI integrity | PASS WITH LOW RISKS | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `3b1d637` is integrated. |
+| Docs | PASS WITH LOW RISKS | none | Initiative and operator docs are accurate; composed task reads await an authoritative aggregate API for snapshot consistency. |
+| Reuse/dedup | PASS | none | Boundary validation, mapping, replay, and observability remain centralized. |
+| Test delta | PASS WITH LOW RISKS | none | The remediation set is covered; direct 429/5xx verifier branch cases remain a low test risk. |
 
 ## External Review
 
@@ -198,8 +199,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed code head `139c6e6`. |
-| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, direct `sse-starlette` dependency, and distinct output-validation error path are addressed through `139c6e6`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed code head `c60902b`. |
+| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, direct `sse-starlette` dependency, and distinct output-validation error path are addressed through `c60902b`; rerun after push. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity
@@ -217,6 +218,8 @@ External review response file:
 - This MCP chunk cannot provide those actions in production until compatible backend contracts land.
 - Full backend database tests require CI or a configured `WORKSTREAM_TEST_DATABASE_URL`; local focused backend contract tests pass.
 - Full WS-MCP-001 acceptance remains open for the authoritative and transport evidence listed above.
+- Composed task resources cannot guarantee a cross-request snapshot until an authoritative aggregate API exists.
+- Auth network-outage and protocol-level 503 behavior are covered; direct 429/5xx verifier branch cases remain a low test risk.
 
 ## Follow-Up Work
 

@@ -12,11 +12,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 139c6e61e0e0959b3b76f2e82a3c62abd44739df
+Reviewed code SHA: c60902b012bd31e662a800373c889f31b65c1eef
 
-Reviewed at: 2026-07-19T14:56:55Z
+Reviewed at: 2026-07-19T23:53:35Z
 
-Reviewer run IDs: 019f7672-e843-73b0-9edb-76302cf14d44, 019f7672-ea4f-73e2-8c9f-43c0d58b4782, 019f7672-ed1c-7f23-8016-6a882188d692, 019f7672-ef20-75d0-b1a4-88d080b3aac4, 019f7672-f15a-78d0-8de7-ec38941649ed, 019f7687-e4f2-7210-ad56-5d261ed41cdf, 019f7688-3446-7651-818c-7e9dc7d24a6f, 019f7688-3879-72f0-8a2a-e15b572a93f2, 019f76e7-67be-72e2-8dd0-df6d63b6ba36, 019f76e7-6977-7a41-814f-73e183086736
+Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
 After the reviewed SHA, only review evidence, PR trust-bundle, and status files changed.
 
@@ -24,15 +24,15 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS AFTER FIXES | none | Input limits, lifecycle propagation, replay ordering, and error boundaries were repaired without moving authority into MCP. |
-| QA/test | PASS AFTER FIXES | none | Ninety-eight MCP tests prove the agent-facing catalogue, auth wiring, revision loop, safe errors, strict gateway outcomes, and Streamable HTTP response lifecycle at 94.77 percent package coverage. |
-| security/auth | PASS AFTER FIXES | none | Workstream Auth verifies HTTP tokens; input and output validation failures remain distinct and secret-safe; malformed outputs record infrastructure-error telemetry; authenticated body bytes, frames, and receive time are bounded; credential isolation, proxy safety, and redaction fail closed. |
+| senior engineering | PASS WITH LOW RISKS | none | Exact-head review found no actionable engineering issue; unavailable authoritative APIs and full conformance evidence remain bounded follow-up work. |
+| QA/test | PASS WITH LOW RISKS | none | 112 MCP tests prove the catalogue, auth wiring, review lifecycle, safe errors, strict gateway outcomes, and Streamable HTTP response lifecycle at 95.25 percent package coverage. |
+| security/auth | PASS WITH LOW RISKS | none | Exact UUID-equivalent redaction, actor isolation, fail-closed authority, and distinct retryable Auth outage handling are covered; direct 429/5xx verifier branch tests remain a low risk. |
 | product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
-| architecture | PASS AFTER FIXES | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
-| CI integrity | PASS AFTER FIXES | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `8d5eb15` integrates cleanly as `4605bd6` and all local gates pass. |
-| docs | PASS AFTER FIXES | none | Initiative records now distinguish foundation readiness from the complete Sections 18 and 20 conformance and acceptance gates. |
-| reuse/dedup | PASS AFTER FIXES | none | Stable-reference validation, metadata bounds, error mapping, observability, replay input, and actor keys remain centralized. |
-| test delta | PASS AFTER FIXES | none | Tests now cover every CodeRabbit finding and internal follow-up; remaining authoritative Section 18 cases are explicit follow-up work. |
+| architecture | PASS WITH LOW RISKS | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
+| CI integrity | PASS WITH LOW RISKS | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `3b1d637` is fully integrated and all local gates pass. |
+| docs | PASS WITH LOW RISKS | none | Operator and initiative records accurately distinguish foundation readiness from complete Sections 18 and 20 acceptance; composed task reads cannot guarantee a cross-request snapshot until an authoritative aggregate API exists. |
+| reuse/dedup | PASS | none | Stable-reference validation, metadata bounds, error mapping, observability, replay input, and actor keys remain centralized. |
+| test delta | PASS WITH LOW RISKS | none | 112 tests cover the remediation set; direct 429/5xx verifier branches remain a low risk while network-outage and protocol-level 503 behavior are covered. |
 
 ## Valid Findings Addressed
 
@@ -62,7 +62,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Bounded replay delegates to the original ASGI receiver after the coalesced body, preserving real disconnect delivery and the Streamable HTTP SSE response lifecycle.
 - Revision context records the reviewed submission reference/version, and a revised submission creates the next deterministic review offer in the test-only scenario.
 - An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, API timeout, body byte/frame/deadline caps, and scenario isolation.
-- Current upstream `main` at `8d5eb15` was merged cleanly as `4605bd6`. Exact-head reviewers confirmed that its artifact and contributor-identity changes preserve MCP runtime, auth, transport safety, CI coverage, and agent-gate integration.
+- Current upstream `main` at `3b1d637` is integrated. Exact-head reviewers confirmed that its artifact and contributor-identity changes preserve MCP runtime, auth, transport safety, CI coverage, and agent-gate integration.
 - The refreshed task APIs still separate claim from start, retain operator release semantics, and lack durable submission replay; contributor list, contribution, and review APIs remain unavailable, so the MCP's fail-closed production boundaries remain correct.
 - All seven tools now publish authoritative titles, usage boundaries, parameter guidance, examples, constraints, and typed output schemas through the actual FastMCP registrations.
 - Tool execution failures publish MCP errors while a coherent completed checker failure remains a valid negative business outcome.
@@ -71,6 +71,10 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Pre-submit checker responses require strict JSON scalar types, a non-authoritative completed status, coherent eligibility, and a matching task identifier; malformed responses fail closed.
 - Review claims require a stable review identifier and the exact derived `workstream://reviews/{review_ref}/context` resource before publishing success.
 - Output-schema failures remain safe `unexpected_server_error` results rather than being relabeled as input failures, and operation telemetry records the same infrastructure-error outcome.
+- UUID bearer equivalents are matched from the parsed secret itself, so compact forms remain detectable even when embedded at an overlapping offset inside a longer hexadecimal run.
+- Workstream Auth network, throttling, and server failures now produce a secret-safe retryable HTTP `503`, while rejected credentials remain `401`.
+- Invalid authoritative task locked-context responses no longer masquerade as submission errors.
+- The operator README now documents a collision-free local HTTP topology, the `/mcp` endpoint, and every production surface that intentionally fails closed.
 
 ## WS-MCP-001 Specification Status
 
@@ -105,7 +109,7 @@ git diff --check
 ## Result Summary
 
 ```text
-MCP tests: 98 passed at 94.77 percent statement coverage.
+MCP tests: 112 passed at 95.25 percent statement coverage.
 MCP ruff: passed.
 Stale wording: passed.
 Markdown links: passed for 11 changed Markdown files.
@@ -129,3 +133,5 @@ failures and 429 setup errors are outside the MCP diff.
 - The temporary scenario gateway is a test fixture only. It must never be configured as production behavior.
 - Full backend database evidence remains delegated to CI or a local PostgreSQL environment with `WORKSTREAM_TEST_DATABASE_URL` configured.
 - Full WS-MCP-001 Sections 18 and 20 acceptance remains open until authoritative APIs and the recorded transport, role/revocation, lifecycle, retry/concurrency, and Inspector evidence exist.
+- Task Context and Task Status compose multiple authoritative reads and cannot provide cross-request snapshot consistency until Workstream exposes an aggregate API.
+- Workstream Auth network-outage and HTTP 503 behavior are directly covered; dedicated 429/5xx verifier branch cases remain a low test risk.
