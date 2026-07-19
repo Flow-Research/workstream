@@ -87,6 +87,10 @@ async def test_scenario_resources_cover_required_v01_context() -> None:
         "compensation_policy_ref",
         "compensation_summary",
     } <= contributions["contributions"][0].keys()
+    compensation_summary = contributions["contributions"][0]["compensation_summary"]
+    assert "unpaid" in compensation_summary
+    assert task_context["compensation"]["summary"] == compensation_summary
+    assert review_context["compensation"]["summary"] == compensation_summary
     assert {"available_from", "claim_by"} <= tasks["tasks"][0].keys()
     assert {
         "locked_context",

@@ -17,6 +17,7 @@ from workstream_mcp.auth import RequestContext
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 
 SCENARIO_TIMESTAMP = "2026-07-10T00:00:00+00:00"
+SCENARIO_COMPENSATION_SUMMARY = "The applicable contribution rule is explicitly unpaid."
 
 
 class ScenarioContributorGateway:
@@ -62,7 +63,7 @@ class ScenarioContributorGateway:
                 "recorded_at": _now(),
                 "compensation_status": "unpaid",
                 "compensation_policy_ref": "scenario-policy-1:v1",
-                "compensation_summary": "The applicable contribution rule is explicitly unpaid.",
+                "compensation_summary": SCENARIO_COMPENSATION_SUMMARY,
             }
         ]
         self._review = {
@@ -150,7 +151,7 @@ class ScenarioContributorGateway:
             "review_criteria": ["Correctness", "Evidence completeness"],
             "compensation": {
                 "policy_ref": "scenario-policy-1:v1",
-                "summary": "Scenario points recorded after acceptance.",
+                "summary": SCENARIO_COMPENSATION_SUMMARY,
             },
             "cycle": {"number": 1, "maximum_revisions": 2},
             "revision": {
@@ -438,7 +439,7 @@ class ScenarioContributorGateway:
             "review_criteria": ["Correctness", "Evidence completeness"],
             "compensation": {
                 "policy_ref": "scenario-policy-1:v1",
-                "summary": "Scenario points recorded after acceptance.",
+                "summary": SCENARIO_COMPENSATION_SUMMARY,
             },
             "lease": {
                 "started_at": self._review["lease_started_at"],
