@@ -267,6 +267,7 @@ class HTTPContributorGateway:
         decision: str,
         findings: list[dict[str, Any]],
         request_id: str,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Submit a review decision through an explicitly injected temporary gateway."""
         if self._fallback is None:
@@ -278,6 +279,7 @@ class HTTPContributorGateway:
             decision=decision,
             findings=findings,
             request_id=request_id,
+            reason=reason,
         )
 
     async def _require_authoritative_identity(self, context: RequestContext) -> None:

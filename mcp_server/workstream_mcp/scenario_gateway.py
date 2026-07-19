@@ -377,6 +377,12 @@ class ScenarioContributorGateway:
                 "project_id": project_id,
                 "state": "none_available",
             }
+        if self._task_owner == _actor_key(context):
+            return {
+                "source": "temporary_scenario_gateway",
+                "project_id": project_id,
+                "state": "none_available",
+            }
         if self._review["state"] == "none_available":
             return {
                 "source": "temporary_scenario_gateway",
@@ -456,6 +462,7 @@ class ScenarioContributorGateway:
             },
             "allowed_decisions": ["accept", "needs_revision", "reject"],
             "findings_required_for": ["needs_revision"],
+            "reason_required_for": ["reject"],
         }
 
     async def claim_review(
@@ -475,6 +482,7 @@ class ScenarioContributorGateway:
         if (
             project_id != self._review["project_id"]
             or review_routing_ref != self._review["review_routing_ref"]
+            or self._task_owner == _actor_key(context)
         ):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_AVAILABLE,
@@ -559,6 +567,7 @@ class ScenarioContributorGateway:
         decision: str,
         findings: list[dict[str, Any]],
         request_id: str,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Record a deterministic review decision outcome."""
         _require_context(context)
@@ -568,7 +577,13 @@ class ScenarioContributorGateway:
                 "needs_revision requires actionable findings.",
                 correlation_id=context.correlation_id,
             )
-        input_key = (review_ref, decision, _canonical_json(findings))
+        if decision == "reject" and not reason:
+            raise WorkstreamMCPError(
+                MCPErrorCode.FINDINGS_REQUIRED,
+                "reject requires a bounded human reason.",
+                correlation_id=context.correlation_id,
+            )
+        input_key = (review_ref, decision, _canonical_json(findings), reason)
         replay = self._replay("submit_review", request_id, input_key, context)
         if replay is not None:
             return replay
@@ -576,6 +591,7 @@ class ScenarioContributorGateway:
             review_ref != self._review["review_ref"]
             or self._review["state"] != "leased_to_actor"
             or self._review_owner != _actor_key(context)
+            or self._task_owner == _actor_key(context)
         ):
             raise WorkstreamMCPError(
                 MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR,
@@ -601,6 +617,7 @@ class ScenarioContributorGateway:
             "submission_ref": reviewed_submission["id"],
             "submission_version": reviewed_submission["version"],
             "findings": persisted_findings,
+            "reason": reason,
         }
         self._append_contribution(
             owner_key=_actor_key(context),

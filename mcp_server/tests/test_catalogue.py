@@ -157,6 +157,7 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     assert all(field["description"] and field["examples"] for field in evidence_properties.values())
     review_properties = tool_schemas["submit_review"]["properties"]
     assert review_properties["findings"]["maxItems"] == 100
+    assert review_properties["reason"]["anyOf"][0]["maxLength"] == 4000
     assert tool_schemas["submit_review"]["properties"]["decision"]["enum"] == [
         "accept",
         "needs_revision",

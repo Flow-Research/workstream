@@ -313,6 +313,7 @@ async def submit_review(
     decision: str,
     findings: list[dict[str, Any]],
     request_id: str,
+    reason: str | None = None,
 ) -> dict[str, Any]:
     """Submit one human review decision."""
     parsed = _validate_input(
@@ -322,6 +323,7 @@ async def submit_review(
         decision=decision,
         findings=findings,
         request_id=request_id,
+        reason=reason,
     )
     if isinstance(parsed, dict):
         return parsed
@@ -341,6 +343,7 @@ async def submit_review(
             decision=parsed.decision,
             findings=[finding.model_dump(exclude_none=True) for finding in parsed.findings],
             request_id=str(parsed.request_id),
+            reason=parsed.reason,
         )
         return _safe_result(
             context,

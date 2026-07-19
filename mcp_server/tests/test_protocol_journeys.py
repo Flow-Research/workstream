@@ -50,8 +50,9 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A real MCP client can complete both approved temporary conformance journeys."""
-    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
-    server = build_fastmcp_server(gateway=ScenarioContributorGateway())
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "submitter-token")
+    gateway = ScenarioContributorGateway()
+    server = build_fastmcp_server(gateway=gateway)
 
     async with create_connected_server_and_client_session(server) as session:
         tasks = await session.read_resource(AnyUrl("workstream://tasks"))
@@ -85,6 +86,12 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
             AnyUrl("workstream://tasks/scenario-task-1/status")
         )
 
+        submitter_review = await session.read_resource(
+            AnyUrl("workstream://projects/scenario-project-1/current-review")
+        )
+
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "reviewer-token")
+    async with create_connected_server_and_client_session(server) as session:
         current_review = await session.read_resource(
             AnyUrl("workstream://projects/scenario-project-1/current-review")
         )
@@ -117,7 +124,13 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
                 "request_id": REQUEST_IDS[4],
             },
         )
-        contributions = await session.read_resource(
+        reviewer_contributions = await session.read_resource(
+            AnyUrl("workstream://me/contributions")
+        )
+
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "submitter-token")
+    async with create_connected_server_and_client_session(server) as session:
+        submitter_contributions = await session.read_resource(
             AnyUrl("workstream://me/contributions")
         )
         final_task_status = await session.read_resource(
@@ -131,6 +144,7 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
     assert json.loads(task_status.contents[0].text)["actor_facing_state"] == (  # type: ignore[union-attr]
         "review_pending"
     )
+    assert json.loads(submitter_review.contents[0].text)["state"] == "none_available"  # type: ignore[union-attr]
     assert json.loads(current_review.contents[0].text)["state"] == "available_to_claim"  # type: ignore[union-attr]
     assert _structured(claimed_review)["outcome"] == "leased_to_actor"
     assert "checker_results" in json.loads(review_context.contents[0].text)  # type: ignore[union-attr]
@@ -139,20 +153,18 @@ async def test_submitter_and_reviewer_journeys_over_mcp_protocol(
         _structured(reviewed_retry)["data"]["review_decision"]["idempotent_replay"]
         is True
     )
-    contribution_records = json.loads(contributions.contents[0].text)["contributions"]  # type: ignore[union-attr]
-    assert [record["contribution_type"] for record in contribution_records] == [
-        "completed_review",
-        "accepted_submission",
+    reviewer_records = json.loads(reviewer_contributions.contents[0].text)["contributions"]  # type: ignore[union-attr]
+    assert [record["contribution_type"] for record in reviewer_records] == [
+        "completed_review"
     ]
-    assert {record["compensation_status"] for record in contribution_records} == {
-        "unpaid"
-    }
-    assert {
-        record["compensation_policy_ref"] for record in contribution_records
-    } == {
-        "scenario-reviewer-policy-1:v1",
-        "scenario-submitter-policy-1:v1",
-    }
+    assert reviewer_records[0]["compensation_status"] == "unpaid"
+    assert reviewer_records[0]["compensation_policy_ref"] == "scenario-reviewer-policy-1:v1"
+    submitter_records = json.loads(submitter_contributions.contents[0].text)["contributions"]  # type: ignore[union-attr]
+    assert [record["contribution_type"] for record in submitter_records] == [
+        "accepted_submission"
+    ]
+    assert submitter_records[0]["compensation_status"] == "unpaid"
+    assert submitter_records[0]["compensation_policy_ref"] == "scenario-submitter-policy-1:v1"
     assert json.loads(final_task_status.contents[0].text)["final_outcome"] == "accepted"  # type: ignore[union-attr]
 
 

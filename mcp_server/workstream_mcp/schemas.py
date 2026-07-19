@@ -82,8 +82,9 @@ RELEASE_REVIEW_DESCRIPTION = (
 SUBMIT_REVIEW_DESCRIPTION = (
     "Submit one final decision for the review leased to the authenticated actor. Use this only after "
     "claim_review and after reading the complete Review Context; obtain review_ref and evidence "
-    "references from those results. Do not use it for an unleased, expired, or completed review. "
-    "Use 'needs_revision' only with actionable findings; include evidence references when available. "
+    "references from those results. Do not use it for an unleased, expired, completed, or "
+    "self-authored review. Use 'needs_revision' only with actionable findings; include evidence "
+    "references when available. A 'reject' decision requires a bounded human reason. "
     "This records an immutable review decision and releases the lease. Success has outcome 'accept', "
     "'needs_revision', or 'reject'; validation, authorization, lease, and backend failures are MCP "
     "errors. After success, read the project's Current Review resource or the related Task Status."
@@ -202,7 +203,7 @@ TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
         "submit_review",
         "Submit Review",
         SUBMIT_REVIEW_DESCRIPTION,
-        input_fields=("review_ref", "decision", "findings", "request_id"),
+        input_fields=("review_ref", "decision", "findings", "request_id", "reason"),
     ),
 )
 
@@ -489,7 +490,7 @@ class SubmitReviewInput(RequestIdInput):
     decision: Literal["accept", "needs_revision", "reject"] = Field(
         description=(
             "Final review decision. needs_revision requires at least one actionable finding; "
-            "accept and reject may use an empty findings list."
+            "reject requires a bounded human reason; accept may use an empty findings list."
         ),
         examples=["needs_revision"],
     )
@@ -499,12 +500,39 @@ class SubmitReviewInput(RequestIdInput):
         max_length=100,
         examples=[[{"summary": "Add the missing checker report."}]],
     )
+    reason: str | None = Field(
+        default=None,
+        description="Bounded human reason required for reject; omit for other decisions.",
+        min_length=1,
+        max_length=4000,
+        examples=["The submission does not satisfy the governing acceptance criteria."],
+    )
 
     @field_validator("review_ref")
     @classmethod
     def normalize_review_ref(cls, value: str) -> str:
         """Validate a review identifier used as one URI or HTTP path segment."""
         return normalize_stable_ref(value, "review_ref")
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str | None) -> str | None:
+        """Normalize an optional rejection reason and reject whitespace-only values."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("reason must not be blank")
+        return normalized
+
+    @model_validator(mode="after")
+    def require_rejection_reason(self) -> SubmitReviewInput:
+        """Require rationale for rejection without inventing structured findings."""
+        if self.decision == "reject" and self.reason is None:
+            raise ValueError("reject requires a bounded human reason")
+        if self.decision != "reject" and self.reason is not None:
+            raise ValueError("reason is only valid for reject")
+        return self
 
 
 class OperationResult(BaseModel):
@@ -607,7 +635,7 @@ ReviewDecisionParameter = Annotated[
     Field(
         description=(
             "Final decision for the leased review. needs_revision requires one or more actionable "
-            "findings; accept and reject may use an empty findings list."
+            "findings; reject requires a bounded human reason."
         ),
         examples=["needs_revision"],
     ),
@@ -629,6 +657,15 @@ ReviewFindingsParameter = Annotated[
                 }
             ]
         ],
+    ),
+]
+ReviewReasonParameter = Annotated[
+    str | None,
+    Field(
+        description="Bounded human reason required for reject; omit for other decisions.",
+        min_length=1,
+        max_length=4000,
+        examples=["The submission does not satisfy the governing acceptance criteria."],
     ),
 ]
 

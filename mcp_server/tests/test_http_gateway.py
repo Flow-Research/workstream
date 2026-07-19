@@ -46,6 +46,11 @@ def context() -> RequestContext:
     return RequestContext("issuer-token", "corr-1", "test")
 
 
+def reviewer_context() -> RequestContext:
+    """Return a distinct reviewer identity for lifecycle tests."""
+    return RequestContext("reviewer-token", "corr-2", "test")
+
+
 @pytest.mark.asyncio
 async def test_claim_task_fails_closed_until_backend_claim_starts_work() -> None:
     """The legacy claim endpoint cannot back the MCP's single claim operation."""
@@ -511,37 +516,43 @@ async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> No
         submission=submission(),
         request_id="44444444-4444-4444-8444-444444444444",
     )
-    current_review = await gateway.get_current_review(
+    submitter_review = await gateway.get_current_review(
         context(), project_id="scenario-project-1"
     )
+    current_review = await gateway.get_current_review(
+        reviewer_context(), project_id="scenario-project-1"
+    )
     claimed_review = await gateway.claim_review(
-        context(),
+        reviewer_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id="55555555-5555-4555-8555-555555555555",
     )
     review_context = await gateway.get_review_context(
-        context(), review_ref="scenario-review-1"
+        reviewer_context(), review_ref="scenario-review-1"
     )
     released_review = await gateway.release_review(
-        context(),
+        reviewer_context(),
         review_ref="scenario-review-1",
         request_id="66666666-6666-4666-8666-666666666666",
     )
     await gateway.claim_review(
-        context(),
+        reviewer_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id="77777777-7777-4777-8777-777777777777",
     )
     submitted_review = await gateway.submit_review(
-        context(),
+        reviewer_context(),
         review_ref="scenario-review-1",
         decision="accept",
         findings=[],
         request_id="88888888-8888-4888-8888-888888888888",
     )
-    recorded_contributions = await gateway.get_my_contributions(
+    reviewer_contributions = await gateway.get_my_contributions(
+        reviewer_context(), project_id="scenario-project-1"
+    )
+    submitter_contributions = await gateway.get_my_contributions(
         context(), project_id="scenario-project-1"
     )
 
@@ -551,6 +562,7 @@ async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> No
     assert claimed_task["assignment"]["id"] == "scenario-assignment-1"
     assert released_task["task"]["actor_facing_state"] == "available"
     assert submitted_task["status"] == "submitted"
+    assert submitter_review["state"] == "none_available"
     assert current_review["state"] == "available_to_claim"
     assert claimed_review["outcome"] == "leased_to_actor"
     assert review_context["review_ref"] == "scenario-review-1"
@@ -558,8 +570,12 @@ async def test_explicit_scenario_fallback_delegates_all_missing_surfaces() -> No
     assert submitted_review["outcome"] == "accept"
     assert [
         record["contribution_type"]
-        for record in recorded_contributions["contributions"]
-    ] == ["completed_review", "accepted_submission"]
+        for record in reviewer_contributions["contributions"]
+    ] == ["completed_review"]
+    assert [
+        record["contribution_type"]
+        for record in submitter_contributions["contributions"]
+    ] == ["accepted_submission"]
 
 
 @pytest.mark.asyncio

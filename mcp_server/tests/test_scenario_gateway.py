@@ -151,6 +151,14 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         findings=[],
         request_id="22222222-2222-4222-8222-222222222222",
     )
+    missing_rejection_reason = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="reject",
+        findings=[],
+        request_id="44444444-4444-4444-8444-444444444444",
+    )
     accepted = await submit_review(
         gateway,
         context(),
@@ -173,6 +181,7 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
+    assert missing_rejection_reason["error"]["code"] == "invalid_tool_input"
     assert accepted["outcome"] == "accept"
     assert accepted_retry["data"]["review_decision"]["idempotent_replay"] is True
     assert "idempotent_replay" not in accepted["data"]["review_decision"]
@@ -334,7 +343,7 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     )
     await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id="33333333-3333-4333-8333-333333333333",
@@ -342,7 +351,7 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
 
     decision = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="needs_revision",
         findings=[finding],
@@ -350,14 +359,15 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     )
     decision_retry = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="needs_revision",
         findings=[finding],
         request_id="44444444-4444-4444-8444-444444444444",
     )
     status = await gateway.get_task_status(context(), task_id="scenario-task-1")
-    contributions = await gateway.get_my_contributions(context())
+    contributions = await gateway.get_my_contributions(other_context())
+    submitter_contributions = await gateway.get_my_contributions(context())
     task_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
     revised = await submit_task(
         gateway,
@@ -368,7 +378,7 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     )
     revised_context = await gateway.get_task_context(context(), task_id="scenario-task-1")
     next_review = await gateway.get_current_review(
-        context(), project_id="scenario-project-1"
+        other_context(), project_id="scenario-project-1"
     )
 
     assert decision["outcome"] == "needs_revision"
@@ -376,6 +386,7 @@ async def test_needs_revision_persists_findings_and_allows_revised_submission() 
     assert [record["contribution_type"] for record in contributions["contributions"]] == [
         "completed_review"
     ]
+    assert submitter_contributions["contributions"] == []
     assert status["actor_facing_state"] == "needs_revision"
     assert status["action_required"] == "read_task_context"
     persisted_finding = {**finding, "evidence_refs": []}
@@ -412,7 +423,7 @@ async def test_reject_records_only_one_replay_safe_reviewer_contribution() -> No
     )
     await claim_review(
         gateway,
-        context(),
+        other_context(),
         project_id="scenario-project-1",
         review_routing_ref="scenario-review-route-1",
         request_id="33333333-3333-4333-8333-333333333333",
@@ -420,22 +431,25 @@ async def test_reject_records_only_one_replay_safe_reviewer_contribution() -> No
 
     rejected = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="reject",
         findings=[],
         request_id="44444444-4444-4444-8444-444444444444",
+        reason="The submission does not satisfy the governing acceptance criteria.",
     )
     rejected_retry = await submit_review(
         gateway,
-        context(),
+        other_context(),
         review_ref="scenario-review-1",
         decision="reject",
         findings=[],
         request_id="44444444-4444-4444-8444-444444444444",
+        reason="The submission does not satisfy the governing acceptance criteria.",
     )
     status = await gateway.get_task_status(context(), task_id="scenario-task-1")
-    contributions = await gateway.get_my_contributions(context())
+    contributions = await gateway.get_my_contributions(other_context())
+    submitter_contributions = await gateway.get_my_contributions(context())
 
     assert rejected["outcome"] == "reject"
     assert rejected_retry["data"]["review_decision"]["idempotent_replay"] is True
@@ -444,6 +458,39 @@ async def test_reject_records_only_one_replay_safe_reviewer_contribution() -> No
     assert [record["contribution_type"] for record in contributions["contributions"]] == [
         "completed_review"
     ]
+    assert submitter_contributions["contributions"] == []
+
+
+@pytest.mark.asyncio
+async def test_submitter_cannot_discover_or_claim_own_review() -> None:
+    """The temporary service enforces Workstream's no-self-review boundary."""
+    gateway = ScenarioContributorGateway()
+    await claim_task(gateway, context(), task_id="scenario-task-1", request_id=REQUEST_ID)
+    await submit_task(
+        gateway,
+        context(),
+        task_id="scenario-task-1",
+        submission=submission(),
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    submitter_view = await gateway.get_current_review(
+        context(), project_id="scenario-project-1"
+    )
+    self_claim = await claim_review(
+        gateway,
+        context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id="33333333-3333-4333-8333-333333333333",
+    )
+    reviewer_view = await gateway.get_current_review(
+        other_context(), project_id="scenario-project-1"
+    )
+
+    assert submitter_view["state"] == "none_available"
+    assert self_claim["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert reviewer_view["state"] == "available_to_claim"
 
 
 @pytest.mark.asyncio

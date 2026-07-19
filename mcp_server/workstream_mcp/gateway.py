@@ -117,5 +117,6 @@ class ContributorGateway(Protocol):
         decision: str,
         findings: list[dict[str, Any]],
         request_id: str,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Submit a human review decision."""
