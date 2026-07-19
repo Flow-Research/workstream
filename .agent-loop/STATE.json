@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29668448999/job/88143034911"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29669860228/job/88146788270"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29666372545/job/88137351345"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29669814109/job/88146669536"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ART-001-02B1",
-    "chunk_title": "S3-Compatible MinIO And AWS",
-    "initiative_id": "WS-ART-001",
-    "next_chunk_id": "WS-ART-001-02C1",
-    "next_chunk_title": "Admission And Put-Attempt Foundation",
+    "chunk_id": "WS-AUTH-001-09D-B",
+    "chunk_title": "Identity-Link Lifecycle And Race Closure",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-CONTRIBUTOR-FOUNDATION",
+    "next_chunk_title": "Contributor Fields And Canonical-Human Lineage",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ART-001-02C1",
-    "next_chunk_title": "Admission And Put-Attempt Foundation",
+    "next_chunk_id": "WS-AUTH-001-CONTRIBUTOR-FOUNDATION",
+    "next_chunk_title": "Contributor Fields And Canonical-Human Lineage",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "983b9e534b84f1590fafecc0ce1355cf131257ce",
-    "head_ref": "codex/ws-art-001-02b1-s3-compatible-minio-aws",
-    "head_sha": "1260353f7ed5b25a0e9d9585a1d8ed112c2bef3e",
-    "intent_blob_sha": "923a9476ef50c4973d0da46051612bedbdc9f8a3",
-    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02B1.json",
-    "main_sha": "1b5422fcaa361152af7c2b1f82a763d99c0e6db5",
-    "merged_at": "2026-07-19T01:21:40Z",
+    "first_parent_sha": "1b5422fcaa361152af7c2b1f82a763d99c0e6db5",
+    "head_ref": "codex/ws-auth-001-09d-b-identity-link-lifecycle",
+    "head_sha": "44ac09cf5bfabc7c0d5cd6f082cb63601ac5ac49",
+    "intent_blob_sha": "2e2aff5a9dc3a2aa8807b4512ee29d1ba9eff91c",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09D-B.json",
+    "main_sha": "93dd392484b397cfdfaaa833631dc2c27f591ed7",
+    "merged_at": "2026-07-19T02:39:19Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 151,
-    "pr_title": "Add S3-compatible artifact storage with MinIO proof",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/151"
+    "pr_number": 152,
+    "pr_title": "Add identity-link lifecycle authorization",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/152"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-19T01:21:40Z"
+  "updated_at": "2026-07-19T02:39:19Z"
 }
