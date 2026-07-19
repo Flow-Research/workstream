@@ -370,7 +370,14 @@ class ArtifactStorageOrchestrator:
             execution_content = await self._repo.lock_content(execution_replica.content_id)
             self._validate_put_execution_namespace(execution_attempt, persisted_namespace)
             self._validate_replica_execution_namespace(execution_replica, persisted_namespace)
-            if not _verification_relationship_matches(
+            execution_facts = _verification_authority_facts(
+                claimed,
+                execution_replica,
+                execution_attempt,
+                executor_id,
+                claimed.execution_generation,
+            )
+            if execution_facts != facts or not _verification_relationship_matches(
                 claimed,
                 execution_replica,
                 execution_attempt,
@@ -379,13 +386,7 @@ class ArtifactStorageOrchestrator:
                 await self._authority.revalidate_terminal(
                     service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                     action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-                    facts=_verification_authority_facts(
-                        claimed,
-                        execution_replica,
-                        execution_attempt,
-                        executor_id,
-                        claimed.execution_generation,
-                    ),
+                    facts=execution_facts,
                 )
                 now = await self._repo.database_now()
                 await self._terminalize_verification_conflict(claimed, now)
