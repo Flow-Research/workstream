@@ -42,6 +42,8 @@ from app.modules.artifacts.models import (
 )
 from app.interfaces.artifacts import (
     ArtifactObjectMissingError,
+    ArtifactPutObservation,
+    ArtifactPutResult,
     ArtifactStoreError,
     ArtifactStoreNamespaceClaim,
     ArtifactStoreUnavailableError,
@@ -63,6 +65,7 @@ from app.modules.artifacts.service import (
     ArtifactStorageNamespaceError,
     ArtifactStorageOrchestrator,
     ArtifactPendingWorkScanner,
+    _put_authority_facts,
     _verification_authority_facts,
     artifact_storage_namespace_spec,
 )
@@ -956,6 +959,74 @@ async def test_put_paths_recheck_authorized_facts_before_provider_io(
         await engine.dispose()
 
 
+@pytest.mark.parametrize("mode", ["caller_put", "observation"])
+async def test_put_paths_recheck_authorized_facts_after_provider_io(
+    admission_database_env: str,
+    tmp_path: Path,
+    mode: str,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            async with minted_source(tmp_path / f"post-io-put-drift-{mode}", b"authorized") as source:
+                admission = await _admit_guide_source(
+                    session, settings, namespace, _context(), source
+                )
+                attempt_id = admission.attempt_id
+                attempt = await session.get(ArtifactPutAttempt, str(attempt_id))
+                assert attempt is not None
+                provider_object_ref = attempt.canonical_target
+                await session.commit()
+
+                async def drift_facts() -> None:
+                    async with factory() as drift_session, drift_session.begin():
+                        drifted_attempt = await drift_session.get(
+                            ArtifactPutAttempt, str(attempt_id), with_for_update=True
+                        )
+                        assert drifted_attempt is not None
+                        drifted_attempt.operation_identity = "sha256:" + "e" * 64
+
+                async def put(_source: object) -> ArtifactPutResult:
+                    await drift_facts()
+                    return ArtifactPutResult(provider_object_ref, replayed=False)
+
+                async def observe_put_result(_commitment: object) -> ArtifactPutObservation:
+                    await drift_facts()
+                    return ArtifactPutObservation(provider_object_ref, committed=False)
+
+                provider = SimpleNamespace(
+                    identity=SimpleNamespace(provider_key=namespace.adapter),
+                    put=AsyncMock(side_effect=put),
+                    observe_put_result=AsyncMock(side_effect=observe_put_result),
+                    open=AsyncMock(side_effect=AssertionError("provider read must not execute")),
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, provider, namespace, settings, _AllowArtifactAuthority()
+                )
+                result = (
+                    await orchestrator.execute_committed_put(
+                        attempt_id=attempt_id, source=source
+                    )
+                    if mode == "caller_put"
+                    else await orchestrator.resolve_put_attempt(attempt_id)
+                )
+                assert result == "stale"
+                attempt = await session.get(ArtifactPutAttempt, str(attempt_id))
+                assert attempt is not None
+                assert attempt.status == "put_in_flight"
+                assert attempt.execution_generation == 1
+                assert attempt.terminal_at is None
+                assert await _count(session, ArtifactPutObservationReceipt) == 0
+                assert await _count(session, ArtifactOperationReceipt) == 0
+                assert await _count(session, ArtifactReplica) == 0
+                assert await _count(session, ArtifactVerificationJob) == 0
+    finally:
+        await engine.dispose()
+
+
 async def test_preacknowledgement_mismatch_fails_contributor_item_and_keeps_charge(
     admission_database_env: str,
     tmp_path: Path,
@@ -1218,6 +1289,11 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
                 expected_generation=0,
             )
             assert first_claim is not None
+            first_facts = _put_authority_facts(
+                first_claim,
+                first_executor,
+                first_claim.execution_generation,
+            )
         async with factory() as expire_session, expire_session.begin():
             await expire_session.execute(
                 text(
@@ -1240,7 +1316,10 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
             stale = ArtifactStorageOrchestrator(
                 stale_session, object(), namespace, settings, _AllowArtifactAuthority()
             )
-            assert await stale._record_put_absence(first_claim, first_executor) == "stale"
+            assert (
+                await stale._record_put_absence(first_claim, first_executor, first_facts)
+                == "stale"
+            )
             attempt = await stale_session.get(ArtifactPutAttempt, str(admission.attempt_id))
             assert attempt is not None
             assert attempt.execution_generation == 2
