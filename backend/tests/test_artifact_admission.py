@@ -1023,6 +1023,7 @@ async def test_put_paths_recheck_authorized_facts_after_provider_io(
                 assert await _count(session, ArtifactOperationReceipt) == 0
                 assert await _count(session, ArtifactReplica) == 0
                 assert await _count(session, ArtifactVerificationJob) == 0
+                assert await _count(session, AuditEvent) == 0
     finally:
         await engine.dispose()
 
@@ -1326,6 +1327,7 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
             assert attempt.executor_id == str(second_executor)
             assert await _count(stale_session, ArtifactPutObservationReceipt) == 0
             assert await _count(stale_session, ArtifactReplica) == 0
+            assert await _count(stale_session, AuditEvent) == 0
     finally:
         await engine.dispose()
 
@@ -1387,6 +1389,7 @@ async def test_terminal_authority_revocation_writes_zero_terminal_facts(
                 assert await _count(session, ArtifactVerificationReceipt) == 0
                 assert await _count(session, ArtifactReplica) == 0
                 assert await _count(session, ArtifactVerificationJob) == 0
+                assert await _count(session, AuditEvent) == 0
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -1727,6 +1730,7 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                 == "stale"
             )
             assert await _count(stale_session, ArtifactVerificationReceipt) == 0
+            assert await _count(stale_session, AuditEvent) == 0
             await stale_session.rollback()
             due_ids = await ArtifactRepository(stale_session).list_due_verification_job_ids(
                 cutoff=datetime.now(UTC), limit=2

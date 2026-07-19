@@ -8,8 +8,9 @@ PR #120 as `4408256`, the external-service adapter foundation merged through
 PR #127 as `f64a8e5`, committed-source preparation merged through PR #129 as
 `9a04434`, the ArtifactStore v2 Local clean cut merged through PR #141 as
 `a10d901`, and S3-compatible MinIO/AWS preparation merged through PR #151 as
-`1b5422fc` on 2026-07-19. The user explicitly started `WS-ART-001-02C1` on
-2026-07-19.
+`1b5422fc` on 2026-07-19. ART admission and the put-attempt foundation then
+merged through PR #154 as `44f2467c`, and the user explicitly started
+`WS-ART-001-02C2` on 2026-07-19.
 
 The planning-only cross-initiative boundary reconciliation merged through
 PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
@@ -17,8 +18,7 @@ PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
 mutation contracts without editing or activating AUTH runtime behavior.
 AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
 #152 as `93dd392`, and the contributor foundation merged through PR #153 as
-`8d5eb15b`; all are integrated into the ART candidate. ART admission and the
-put-attempt foundation merged through PR #154 as `44f2467c`. AUTH-09E remains
+`8d5eb15b`; all are integrated into the ART candidate. AUTH-09E remains
 inactive.
 
 The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks

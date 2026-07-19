@@ -112,7 +112,7 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
 
 
 def test_only_artifact_orchestrator_owns_provider_execution() -> None:
-    """Fence writable and observation calls to the artifact service owner."""
+    """Fence every raw store call to the artifact service owner."""
     violations: list[str] = []
     for path in _python_files(APP_ROOT / "modules" / "artifacts"):
         tree = _tree(path)
@@ -129,7 +129,9 @@ def test_only_artifact_orchestrator_owns_provider_execution() -> None:
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
-                and node.func.attr in {"put", "observe_put_result"}
+                and node.func.attr in PROVIDER_METHODS
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_store"
                 and (
                     orchestrator is None
                     or not (
