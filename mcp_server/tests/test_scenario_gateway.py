@@ -265,6 +265,7 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     )
     contributions = await gateway.get_my_contributions(other_context())
     submitter_contributions = await gateway.get_my_contributions(context())
+    task_status = await gateway.get_task_status(context(), task_id="scenario-task-1")
 
     assert claimed["outcome"] == "leased_to_actor"
     assert context_result["review_ref"] == "scenario-review-1"
@@ -292,12 +293,25 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         (record["contribution_type"], record["outcome"])
         for record in contributions["contributions"]
     ] == [("completed_review", "accept")]
+    assert contributions["contributions"][0]["source_ref"] == "scenario-review-1"
     assert [
         record["contribution_type"]
         for record in submitter_contributions["contributions"]
     ] == ["accepted_submission"]
     assert submitter_contributions["contributions"][0]["source_ref"] == (
         "scenario-final-acceptance-1"
+    )
+    assert task_status["latest_review_outcome"]["review_lease_ref"] == (
+        "scenario-review-lease-1"
+    )
+    assert task_status["latest_review_outcome"]["checker_run_ref"] == (
+        "scenario-checker-run-1"
+    )
+    assert gateway._reviews[0]["review_lease_ref"] == (  # noqa: SLF001
+        "scenario-review-lease-1"
+    )
+    assert gateway._final_acceptances[0]["review_ref"] == (  # noqa: SLF001
+        gateway._reviews[0]["review_ref"]  # noqa: SLF001
     )
     assert await gateway.get_my_contributions(rotated_submitter_context()) == (
         submitter_contributions
@@ -720,6 +734,55 @@ async def test_review_fails_closed_without_checker_admission() -> None:
     assert decision["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
     assert gateway._review["state"] == "leased_to_actor"  # noqa: SLF001
     assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
+
+
+@pytest.mark.asyncio
+async def test_review_consumes_frozen_submission_and_checker_anchors() -> None:
+    """Contradictory later fixture state cannot change the admitted review packet."""
+    gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
+    gateway._submissions.append(  # noqa: SLF001 - contradictory-state probe
+        {"id": "scenario-submission-2", "task_id": "scenario-task-1", "version": 2}
+    )
+    gateway._checker_runs.append(  # noqa: SLF001 - contradictory-state probe
+        {
+            "checker_run_ref": "scenario-checker-run-2",
+            "submission_ref": "scenario-submission-2",
+            "submission_version": 2,
+            "status": "final",
+            "outcome": "allow_review",
+            "current": True,
+            "results": [],
+        }
+    )
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+
+    review_context = await gateway.get_review_context(
+        other_context(), review_ref="scenario-review-1"
+    )
+    decision = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert review_context["submission"]["submission_id"] == "scenario-submission-1"
+    assert review_context["checker_results"]["checker_run_ref"] == (
+        "scenario-checker-run-1"
+    )
+    assert decision["outcome"] == "accept"
+    assert gateway._final_acceptances[0]["submission_ref"] == (  # noqa: SLF001
+        "scenario-submission-1"
+    )
 
 
 @pytest.mark.asyncio

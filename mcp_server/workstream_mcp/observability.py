@@ -7,7 +7,7 @@ import logging
 import time
 from typing import Any, Awaitable, Callable
 
-from workstream_mcp.auth import RequestContext
+from workstream_mcp.auth import RequestContext, redact_context_secrets
 
 
 LOGGER = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def _log_operation(
             "mcp_kind": kind,
             "mcp_identifier": identifier,
             "correlation_id": context.correlation_id,
-            "request_id": request_id,
+            "request_id": redact_context_secrets(request_id, context),
             "started_at": started_at,
             "outcome": outcome,
             "outcome_class": outcome_class,

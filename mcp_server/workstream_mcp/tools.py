@@ -375,6 +375,20 @@ def _validate_input(
     **values: Any,
 ) -> Any | dict[str, Any]:
     """Validate tool inputs before they reach a gateway."""
+    if str(values.get("request_id", "")) == context.bearer_token:
+        return _safe_result(
+            context,
+            {
+                "error": {
+                    "code": "invalid_tool_input",
+                    "message": "Tool input failed validation.",
+                    "retryable": False,
+                    "correlation_id": context.correlation_id,
+                    "next_resource": None,
+                    "details": {},
+                }
+            },
+        )
     try:
         return schema.model_validate(values)
     except ValidationError as exc:

@@ -71,6 +71,10 @@ class ScenarioContributorGateway:
             "context_resource": None,
             "lease_started_at": None,
             "lease_expires_at": None,
+            "review_lease_ref": None,
+            "submission_ref": None,
+            "submission_version": None,
+            "checker_run_ref": None,
         }
         self._review_task_id = "scenario-task-1"
         self._revision_findings: dict[str, list[dict[str, Any]]] = {}
@@ -79,7 +83,9 @@ class ScenarioContributorGateway:
         self._submission_count = 0
         self._submissions: list[dict[str, Any]] = []
         self._checker_runs: list[dict[str, Any]] = []
+        self._reviews: list[dict[str, Any]] = []
         self._final_acceptances: list[dict[str, Any]] = []
+        self._review_lease_count = 0
         self._task_owner: str | None = None
         self._review_owner: str | None = None
         self._replays: dict[
@@ -364,6 +370,10 @@ class ScenarioContributorGateway:
                 "context_resource": None,
                 "lease_started_at": None,
                 "lease_expires_at": None,
+                "review_lease_ref": None,
+                "submission_ref": result["id"],
+                "submission_version": result["version"],
+                "checker_run_ref": checker_run["checker_run_ref"],
             }
         )
         self._review_owner = None
@@ -429,19 +439,12 @@ class ScenarioContributorGateway:
                 "Review context is available only for a review leased to the actor.",
                 correlation_id=context.correlation_id,
             )
-        task_submissions = [
-            submission
-            for submission in self._submissions
-            if submission["task_id"] == self._review_task_id
-        ]
-        if not task_submissions:
-            raise WorkstreamMCPError(
-                MCPErrorCode.REVIEW_NOT_AVAILABLE,
-                "The submission for this review is not available.",
-                correlation_id=context.correlation_id,
-            )
-        reviewed_submission = task_submissions[-1]
-        checker_admission = self._checker_admission(reviewed_submission, context)
+        reviewed_submission = self._review_submission(context)
+        checker_admission = self._checker_admission(
+            reviewed_submission,
+            self._review["checker_run_ref"],
+            context,
+        )
         return {
             "source": "temporary_scenario_gateway",
             "review_ref": review_ref,
@@ -473,6 +476,7 @@ class ScenarioContributorGateway:
                 "summary": SCENARIO_REVIEWER_COMPENSATION_SUMMARY,
             },
             "lease": {
+                "review_lease_ref": self._review["review_lease_ref"],
                 "started_at": self._review["lease_started_at"],
                 "expires_at": self._review["lease_expires_at"],
             },
@@ -514,6 +518,10 @@ class ScenarioContributorGateway:
         self._review["state"] = "leased_to_actor"
         self._review["actor_facing_state"] = "leased_to_actor"
         self._review_owner = _actor_key(context)
+        self._review_lease_count += 1
+        self._review["review_lease_ref"] = (
+            f"scenario-review-lease-{self._review_lease_count}"
+        )
         self._review["lease_started_at"] = SCENARIO_TIMESTAMP
         self._review["lease_expires_at"] = "2026-07-10T00:30:00+00:00"
         self._review["context_resource"] = (
@@ -561,6 +569,7 @@ class ScenarioContributorGateway:
         self._review["context_resource"] = None
         self._review["lease_started_at"] = None
         self._review["lease_expires_at"] = None
+        self._review["review_lease_ref"] = None
         self._review_owner = None
         return self._store_replay(
             "release_review",
@@ -617,6 +626,7 @@ class ScenarioContributorGateway:
             review_ref != self._review["review_ref"]
             or self._review["state"] != "leased_to_actor"
             or self._review_owner != _actor_key(context)
+            or not isinstance(self._review["review_lease_ref"], str)
             or self._task_owner is None
             or self._task_owner == _actor_key(context)
         ):
@@ -626,34 +636,31 @@ class ScenarioContributorGateway:
                 correlation_id=context.correlation_id,
             )
         task = self._task(self._review_task_id, context)
-        task_submissions = [
-            submission
-            for submission in self._submissions
-            if submission["task_id"] == self._review_task_id
-        ]
-        if not task_submissions:
-            raise WorkstreamMCPError(
-                MCPErrorCode.REVIEW_NOT_AVAILABLE,
-                "The submission for this review is not available.",
-                correlation_id=context.correlation_id,
-            )
-        reviewed_submission = task_submissions[-1]
-        self._checker_admission(reviewed_submission, context)
+        reviewed_submission = self._review_submission(context)
+        self._checker_admission(
+            reviewed_submission,
+            self._review["checker_run_ref"],
+            context,
+        )
+        review_record = {
+            "review_ref": review_ref,
+            "review_lease_ref": self._review["review_lease_ref"],
+            "submission_ref": reviewed_submission["id"],
+            "submission_version": reviewed_submission["version"],
+            "checker_run_ref": self._review["checker_run_ref"],
+            "decision": decision,
+            "findings": deepcopy(findings),
+            "reason": reason,
+        }
+        self._reviews.append(review_record)
         self._review["state"] = "none_available"
         self._review["actor_facing_state"] = "completed"
         persisted_findings = deepcopy(findings)
-        self._latest_review_outcomes[self._review_task_id] = {
-            "decision": decision,
-            "review_ref": review_ref,
-            "submission_ref": reviewed_submission["id"],
-            "submission_version": reviewed_submission["version"],
-            "findings": persisted_findings,
-            "reason": reason,
-        }
+        self._latest_review_outcomes[self._review_task_id] = deepcopy(review_record)
         self._append_contribution(
             owner_key=_actor_key(context),
             contribution_type="completed_review",
-            source_ref=review_ref,
+            source_ref=review_record["review_ref"],
             outcome=decision,
             policy_ref=SCENARIO_REVIEWER_POLICY_REF,
             summary=SCENARIO_REVIEWER_COMPENSATION_SUMMARY,
@@ -674,6 +681,7 @@ class ScenarioContributorGateway:
                     f"scenario-final-acceptance-{len(self._final_acceptances) + 1}"
                 ),
                 "review_ref": review_ref,
+                "review_lease_ref": review_record["review_lease_ref"],
                 "submission_ref": reviewed_submission["id"],
                 "submission_version": reviewed_submission["version"],
             }
@@ -709,21 +717,44 @@ class ScenarioContributorGateway:
     def _checker_admission(
         self,
         submission: dict[str, Any],
+        checker_run_ref: str,
         context: RequestContext,
     ) -> dict[str, Any]:
         """Return the final current checker fact that admitted a submission."""
-        for checker_run in reversed(self._checker_runs):
+        matches = [
+            checker_run
+            for checker_run in self._checker_runs
             if (
-                checker_run["submission_ref"] == submission["id"]
+                checker_run["checker_run_ref"] == checker_run_ref
+                and checker_run["submission_ref"] == submission["id"]
                 and checker_run["submission_version"] == submission["version"]
                 and checker_run["status"] == "final"
                 and checker_run["outcome"] == "allow_review"
                 and checker_run["current"] is True
-            ):
-                return deepcopy(checker_run)
+            )
+        ]
+        if len(matches) == 1:
+            return deepcopy(matches[0])
         raise WorkstreamMCPError(
             MCPErrorCode.REVIEW_NOT_AVAILABLE,
             "The submission has no current final checker admission.",
+            correlation_id=context.correlation_id,
+        )
+
+    def _review_submission(self, context: RequestContext) -> dict[str, Any]:
+        """Return the exact immutable submission frozen on the review offer."""
+        matches = [
+            submission
+            for submission in self._submissions
+            if submission["id"] == self._review["submission_ref"]
+            and submission["version"] == self._review["submission_version"]
+            and submission["task_id"] == self._review_task_id
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        raise WorkstreamMCPError(
+            MCPErrorCode.REVIEW_NOT_AVAILABLE,
+            "The submission for this review is not available.",
             correlation_id=context.correlation_id,
         )
 

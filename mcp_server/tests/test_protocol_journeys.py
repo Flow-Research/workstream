@@ -472,6 +472,37 @@ async def test_protocol_marks_parameter_validation_as_mcp_error(
 
 
 @pytest.mark.asyncio
+async def test_protocol_rejects_bearer_equivalent_request_id_without_logging_it(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A UUID-shaped bearer cannot cross into idempotency headers or telemetry."""
+    bearer_token = REQUEST_IDS[0]
+    monkeypatch.setenv(STDIO_TOKEN_ENV, bearer_token)
+    monkeypatch.setenv(STDIO_SCENARIO_ACTOR_ID_ENV, "actor-submitter")
+    caplog.set_level(logging.INFO, logger=LOGGER.name)
+    server = build_fastmcp_server(gateway=ScenarioContributorGateway())
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "claim_task",
+            {"task_id": "scenario-task-1", "request_id": bearer_token},
+        )
+
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
+    assert result.isError is True
+    assert "invalid_tool_input" in response_text
+    assert bearer_token not in response_text
+    assert bearer_token not in caplog.text
+    operation_record = next(
+        record
+        for record in caplog.records
+        if getattr(record, "mcp_identifier", None) == "claim_task"
+    )
+    assert operation_record.request_id == "[REDACTED]"
+
+
+@pytest.mark.asyncio
 async def test_streamable_http_returns_sdk_response_after_body_replay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
