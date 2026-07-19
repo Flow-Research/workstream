@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
+from starlette.authentication import AuthenticationError
 
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 
@@ -21,6 +22,10 @@ except ImportError:  # pragma: no cover
 STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
 STDIO_SCENARIO_ACTOR_ID_ENV = "WORKSTREAM_MCP_SCENARIO_ACTOR_ID"
 MAX_BEARER_TOKEN_LENGTH = 8192
+
+
+class WorkstreamAuthUnavailable(AuthenticationError):
+    """Signal that authoritative authentication could not be evaluated."""
 @dataclass(frozen=True, slots=True)
 class RequestContext:
     """Per-request contributor identity context."""
@@ -138,8 +143,10 @@ class WorkstreamForwardingTokenVerifier:
                         "X-Correlation-ID": str(uuid4()),
                     },
                 )
-        except httpx.HTTPError:
-            return None
+        except httpx.HTTPError as exc:
+            raise WorkstreamAuthUnavailable("Workstream Auth is unavailable.") from exc
+        if response.status_code == 429 or response.status_code >= 500:
+            raise WorkstreamAuthUnavailable("Workstream Auth is unavailable.")
         if not response.is_success:
             return None
         return AccessToken(

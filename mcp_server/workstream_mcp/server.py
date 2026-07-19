@@ -13,6 +13,7 @@ from pydantic import BaseModel, ValidationError
 
 from workstream_mcp.auth import (
     RequestContext,
+    WorkstreamAuthUnavailable,
     WorkstreamForwardingTokenVerifier,
     context_for_transport,
 )
@@ -259,8 +260,25 @@ def build_fastmcp_server(
 
         def streamable_http_app(self) -> Any:
             from starlette.middleware import Middleware
+            from starlette.middleware.authentication import AuthenticationMiddleware
+            from starlette.responses import JSONResponse
 
             http_app = super().streamable_http_app()
+            for middleware in http_app.user_middleware:
+                if middleware.cls is AuthenticationMiddleware:
+                    middleware.kwargs["on_error"] = lambda _request, exc: JSONResponse(
+                        status_code=503,
+                        content={
+                            "error": {
+                                "code": "workstream_temporarily_unavailable",
+                                "message": "Workstream Auth is temporarily unavailable.",
+                                "retryable": True,
+                            }
+                        },
+                    ) if isinstance(exc, WorkstreamAuthUnavailable) else JSONResponse(
+                        status_code=401,
+                        content={"error": "invalid_token"},
+                    )
             http_app.user_middleware.append(
                 Middleware(
                     _RequestBodyLimitMiddleware,

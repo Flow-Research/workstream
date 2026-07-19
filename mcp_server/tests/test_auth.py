@@ -10,6 +10,7 @@ import pytest
 from workstream_mcp.auth import (
     RequestContext,
     WorkstreamForwardingTokenVerifier,
+    WorkstreamAuthUnavailable,
     authorization_headers,
     contains_context_secret,
     contains_secret,
@@ -153,7 +154,8 @@ async def test_forwarding_token_verifier_fails_closed_when_auth_is_unavailable()
         transport=httpx.MockTransport(unavailable),
     )
 
-    assert await verifier.verify_token("issuer-token") is None
+    with pytest.raises(WorkstreamAuthUnavailable):
+        await verifier.verify_token("issuer-token")
 
 
 def test_http_context_never_falls_back_to_stdio_token(

@@ -19,6 +19,7 @@ from sse_starlette.sse import AppStatus
 from workstream_mcp.auth import (
     STDIO_SCENARIO_ACTOR_ID_ENV,
     STDIO_TOKEN_ENV,
+    WorkstreamAuthUnavailable,
     WorkstreamForwardingTokenVerifier,
 )
 from workstream_mcp.config import WorkstreamMCPConfig
@@ -35,6 +36,50 @@ REQUEST_IDS = (
     "44444444-4444-4444-8444-444444444444",
     "55555555-5555-4555-8555-555555555555",
 )
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_reports_auth_outage_as_retryable_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An authoritative Auth outage is distinct from an invalid actor token."""
+
+    async def unavailable(
+        self: WorkstreamForwardingTokenVerifier,
+        token: str,
+    ) -> AccessToken:
+        raise WorkstreamAuthUnavailable("offline")
+
+    monkeypatch.setattr(WorkstreamForwardingTokenVerifier, "verify_token", unavailable)
+    server = build_fastmcp_server(
+        config=WorkstreamMCPConfig(
+            workstream_api_base_url="https://api.example.test",
+            request_timeout_seconds=1,
+            allowed_hosts=("mcp.example.test",),
+            allowed_origins=("https://client.example.test",),
+            auth_issuer_url="https://auth.example.test",
+        ),
+        transport="streamable-http",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=server.streamable_http_app()),
+        base_url="http://mcp.example.test",
+    ) as client:
+        response = await client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer issuer-token"},
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+        )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "error": {
+            "code": "workstream_temporarily_unavailable",
+            "message": "Workstream Auth is temporarily unavailable.",
+            "retryable": True,
+        }
+    }
 
 
 def submission() -> dict[str, Any]:
