@@ -373,7 +373,7 @@ class AssignmentResponse(BaseModel):
 
     id: str
     task_id: str
-    worker_id: str
+    contributor_id: str
     assigned_by: str
     assigned_at: datetime
     accepted_at: datetime | None
@@ -420,7 +420,7 @@ class SubmissionResponse(BaseModel):
 
     id: str
     task_id: str
-    worker_id: str
+    contributor_id: str
     version: int
     status: str
     summary: str

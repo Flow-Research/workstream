@@ -14,6 +14,10 @@ from typing import cast
 import pytest
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
+from app.adapters.artifacts.references import (
+    artifact_provider_object_ref,
+    parse_artifact_provider_object_ref,
+)
 from app.interfaces.artifacts import (
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -579,12 +583,12 @@ async def test_head_recovers_crash_after_link_before_temporary_unlink(
     try:
         async with minted_source(tmp_path / "scratch", b"crash recovery") as source:
             commitment = source.commitment
-            provider_ref = adapter._provider_object_ref(commitment)
+            provider_ref = artifact_provider_object_ref(commitment)
             descriptor, temporary_name = adapter._create_temporary()
             try:
                 adapter._write_all(descriptor, memoryview(b"crash recovery"))
                 adapter._seal_temporary(descriptor)
-                prefix, filename = adapter._parse_provider_object_ref(provider_ref)
+                prefix, filename = parse_artifact_provider_object_ref(provider_ref)
                 prefix_fd = adapter._open_prefix(prefix, create=True)
                 try:
                     os.link(

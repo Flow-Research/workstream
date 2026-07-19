@@ -41,6 +41,7 @@ No runtime code was changed under the rejected parent contract.
 
 ## Stop Condition
 
-Each child stops after merge and signed memory. `WS-AUTH-001-09E` remains
-inactive until both children merge and the user gives a separate explicit
-start.
+Each child stops after merge and signed memory.
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` is the next separate gate after both
+children merge. AUTH-09E remains inactive until that foundation merges and the
+user gives a separate explicit start.

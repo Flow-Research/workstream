@@ -250,6 +250,50 @@ intake. Operator start override does not use the bridge. AUTH-13 removes the
 claim and start consumers; AUTH-14 removes the final submission consumer,
 compatibility route, and adapter.
 
+## Contributor Attribution Migration And Runtime Guard
+
+Migration `0027_contributor_foundation` clean-cuts the retired assignment and
+submission human-owner columns to `contributor_id`. Before any DDL, it locks
+`actor_profiles`, `task_assignments`, and `submissions` and independently
+classifies every old value as malformed UUID, missing ActorProfile, or service
+ActorProfile. Failure reports only bounded row/profile ID pairs and counts. It
+redacts malformed source values completely while retaining safe row IDs and
+well-formed missing/service profile IDs. It does not inspect issuer, subject,
+email, token claims, current assignment, or another table to infer a
+replacement.
+
+Remediate a refusal only from authoritative canonical-actor evidence. Create or
+repair the canonical human ActorProfile through its owning reviewed process,
+or correct a demonstrably wrong attribution through a separately reviewed data
+repair. Do not map by email or display name, select a latest profile, convert a
+service identity, fabricate an ActorProfile, or edit immutable audit history.
+Rerun from exact head `0026_actor_profile_lifecycle` and retain the bounded
+preflight result with the deployment evidence.
+
+The reusable primitive is
+`public.require_human_actor_profile_reference()`. Exact triggers
+`task_assignments_contributor_human` and `submissions_contributor_human` enforce
+human lineage. Exact foreign keys
+`fk_task_assignments_contributor_id_actor_profiles` and
+`fk_submissions_contributor_id_actor_profiles` enforce existence, while renamed
+indexes `ix_task_assignments_contributor_id` and
+`ix_submissions_contributor_id` preserve lookup behavior.
+
+After upgrade, both columns are non-null `varchar(36)` foreign keys. PostgreSQL
+rejects a missing profile with SQLSTATE `23503` and a service profile with
+`23514`. Suspended and deactivated human profiles remain valid historical
+references. Downgrade first locks the same tables and refuses before DDL when
+any non-owned dependency uses the shared lineage function; remove or migrate
+that dependent schema through its owning release before retrying.
+
+Claim and submission also revalidate current identity inside their mutation
+transaction in lock order ActorProfile, exact issuer/subject identity link,
+task, active assignment. An inactive or non-human identity returns HTTP 403
+`active_contributor_required`. Missing, mismatched, database-unavailable, or
+lock-failed canonical identity state rolls back and returns retryable HTTP 503
+`contributor_identity_unavailable`. These responses are identity eligibility,
+not permission decisions; grant and resource authorization remain separate.
+
 ## PostgreSQL Rate Controls
 
 First human access now uses the AUTH-04B PostgreSQL control. Future
@@ -564,11 +608,11 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 ### Catalogue And Action-Evidence Staging
 
 The catalogue contains exactly 74 PermissionIds and 65 ActionIds after
-AUTH-09D-A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
-actions, `actor.service.provision`, `actor.profile.read`, and
-`actor.identity_link.read`, plus the three profile lifecycle actions are active;
-the other 50 entries remain planned and non-executable. The two identity-link
-lifecycle rows introduced by `0023` remain planned for AUTH-09D-B. The target post-custody
+AUTH-09D-B. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+actions, `actor.service.provision`, `actor.profile.read`,
+`actor.identity_link.read`, the three profile lifecycle actions, and the two
+identity-link lifecycle actions are active; the other 48 entries remain planned
+and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. Until the availability-neutral custody
 transfers merge, the 25 ART and 19 REV rows retain their historical feature
@@ -665,12 +709,13 @@ database service-grant table.
 ## Actor Self Decision Operations
 
 `GET /api/v1/actors/me` declares `actor.profile.read_self`; it permits an
-active identity link with an active or suspended human actor and commits only
-the bounded read-decision evidence after authorization. `PATCH
-/api/v1/actors/me` declares `actor.profile.update_self`; it locks the exact
-actor profile first and its exact identity link second, rechecks current state, mutates
-only `display_name` or `contact_email`, and commits mutation plus allow evidence
-once. The authorization kernel never commits or rolls back.
+active identity link with an active or suspended human actor. Both self routes
+lock the exact actor profile first and its exact identity link second and
+recheck current state before deciding. GET then advances verification timestamps
+and commits bounded read-decision evidence. `PATCH /api/v1/actors/me` declares
+`actor.profile.update_self`; it additionally mutates only `display_name` or
+`contact_email` and commits mutation plus allow evidence once. The authorization
+kernel never commits or rolls back.
 
 Self routes return explicit 403 errors because the caller owns the target:
 `identity_link_revoked`, then `actor_deactivated`, then `actor_suspended` for an
@@ -836,19 +881,24 @@ resource IDs as metric labels.
 
 ## Authority Mutation Idempotency
 
-AUTH-09D-A exposes only:
+AUTH-09D-A and AUTH-09D-B expose:
 
 ```text
 POST /api/v1/actors/{actor_profile_id}/suspend
 POST /api/v1/actors/{actor_profile_id}/reactivate
 POST /api/v1/actors/{actor_profile_id}/deactivate
+POST /api/v1/actor-identity-links/{identity_link_id}/revoke
+POST /api/v1/actor-identity-links/{identity_link_id}/reactivate
 ```
 
 Each route requires an effective system Access Administrator, the administrative
 mutation limiter, a UUID `Idempotency-Key`, and exactly one normalized bounded
 `reason`. Conflicts do not consume the key. Deactivation is terminal, and a
 profile reactivation does not restore a revoked identity link, grant, or fixed
-service admission. Identity-link lifecycle routes remain unavailable.
+service admission. Link revoke/reactivate preserves the immutable issuer and
+subject binding, permits repair while its owner is suspended, refuses terminal
+owners, and never restores a grant or fixed-service admission. An administrator
+cannot revoke their own identity link.
 
 Service-actor creation, administrative/project grant issue or revocation,
 actor suspension/reactivation/deactivation, and identity-link

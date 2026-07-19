@@ -34,9 +34,11 @@ from app.modules.actors.schemas import (
     LegacyWorkflowEligibilityActivationRequest,
 )
 from app.modules.actors.service import (
+    ActiveHumanWriteActorRequired,
     ActorDeactivated,
     ActorProfileDisabled,
     ActorService,
+    CanonicalWriteActorUnavailable,
     IdentityLinkRevoked,
     LegacyWorkflowEligibilityCompatibility,
     ResolvedActor,
@@ -406,6 +408,119 @@ async def test_actor_authorization_lock_rejects_disappearance_and_identity_drift
     locked = await service.lock_actor_self_for_authorization(resolved)
     assert locked.profile is profile
     assert locked.identity_link is link
+
+
+async def test_active_human_write_actor_revalidates_exact_profile_then_link() -> None:
+    actor = legacy_actor("contributor-write")
+    profile = ActorProfile(
+        id=actor.actor_id,
+        actor_kind="human",
+        status="active",
+        provisioning_method="automatic_first_access",
+        created_by=actor.actor_id,
+    )
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=profile.id,
+        issuer=actor.external_issuer,
+        subject=actor.external_subject,
+        subject_kind="human",
+        status="active",
+        linked_by=profile.id,
+        last_verified_at=datetime.now(UTC),
+    )
+
+    class Repository:
+        locked_profile = profile
+        locked_link = link
+        calls: list[tuple[str, str, str]] = []
+
+        async def get_actor_profile(self, actor_profile_id, *, for_update=False):
+            assert for_update is True
+            self.calls.append(("profile", actor_profile_id, ""))
+            return self.locked_profile
+
+        async def get_identity_link(self, issuer, subject, *, for_update=False):
+            assert for_update is True
+            self.calls.append(("link", issuer, subject))
+            return self.locked_link
+
+    repository = Repository()
+    service = ActorService(object())  # type: ignore[arg-type]
+    service._repo = repository  # type: ignore[assignment]
+
+    assert await service.require_active_human_write_actor(actor) is None
+    assert repository.calls == [
+        ("profile", actor.actor_id, ""),
+        ("link", actor.external_issuer, actor.external_subject),
+    ]
+
+    unavailable_cases = (
+        (None, link, "profile is missing"),
+        (
+            profile,
+            ActorIdentityLink(
+                id=link.id,
+                actor_profile_id=str(uuid4()),
+                issuer=link.issuer,
+                subject=link.subject,
+                subject_kind="human",
+                status="active",
+                linked_by=profile.id,
+                last_verified_at=link.last_verified_at,
+            ),
+            "link is inconsistent",
+        ),
+        (profile, None, "link is missing"),
+    )
+    for locked_profile, locked_link, message in unavailable_cases:
+        repository.locked_profile = locked_profile
+        repository.locked_link = locked_link
+        repository.calls = []
+        with pytest.raises(CanonicalWriteActorUnavailable, match=message):
+            await service.require_active_human_write_actor(actor)
+
+    for actor_kind, profile_status, link_status in (
+        ("service", "active", "active"),
+        ("human", "suspended", "active"),
+        ("human", "deactivated", "active"),
+        ("human", "active", "revoked"),
+    ):
+        repository.locked_profile = ActorProfile(
+            id=profile.id,
+            actor_kind=actor_kind,
+            status=profile_status,
+            provisioning_method=(
+                "manual_service_provisioning"
+                if actor_kind == "service"
+                else "automatic_first_access"
+            ),
+            service_identity=(
+                "workstream.artifact.verifier" if actor_kind == "service" else None
+            ),
+            created_by=profile.id,
+        )
+        repository.locked_link = ActorIdentityLink(
+            id=link.id,
+            actor_profile_id=profile.id,
+            issuer=link.issuer,
+            subject=link.subject,
+            subject_kind="human",
+            status=link_status,
+            linked_by=profile.id,
+            last_verified_at=link.last_verified_at,
+            revoked_by=profile.id if link_status == "revoked" else None,
+            revoked_at=datetime.now(UTC) if link_status == "revoked" else None,
+            revoked_reason="revoked for test" if link_status == "revoked" else None,
+        )
+        repository.calls = []
+        with pytest.raises(
+            ActiveHumanWriteActorRequired,
+            match="active contributor identity required",
+        ):
+            await service.require_active_human_write_actor(actor)
+        expected_calls = ["profile"] if actor_kind == "service" or profile_status != "active" else ["profile", "link"]
+        assert [call[0] for call in repository.calls] == expected_calls
 
 
 async def test_actor_timestamp_touch_fails_closed_before_writes_on_missing_rows() -> None:

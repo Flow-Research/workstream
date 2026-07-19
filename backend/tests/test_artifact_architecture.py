@@ -12,6 +12,7 @@ BACKEND_ROOT = Path(__file__).parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 ARTIFACT_OPERATIONS = APP_ROOT / "interfaces" / "artifact_operations.py"
 COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
+S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
 CLOSED_PORTS = {
     "GuideArtifactIngestPort",
     "ContributorArtifactUploadPort",
@@ -133,8 +134,37 @@ def test_concrete_adapter_construction_has_one_composition_path() -> None:
                 adapter_calls.append(path)
 
     assert factory_calls == [COMPOSITION_ROOT]
-    assert adapter_calls == [COMPOSITION_ROOT]
-    assert concrete_imports == [COMPOSITION_ROOT]
+    assert adapter_calls == [COMPOSITION_ROOT, S3_ADAPTER_MODULE]
+    assert set(concrete_imports) == {COMPOSITION_ROOT}
+
+
+def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
+    """Keep list, delete, copy, ACL, and multipart behavior out of the provider."""
+    allowed = {"get_object", "head_object", "put_object"}
+    forbidden = {
+        "abort_multipart_upload",
+        "complete_multipart_upload",
+        "copy_object",
+        "create_multipart_upload",
+        "delete_object",
+        "delete_objects",
+        "list_buckets",
+        "list_objects",
+        "list_objects_v2",
+        "put_object_acl",
+        "upload_part",
+        "upload_part_copy",
+    }
+    called = {
+        node.func.attr
+        for node in ast.walk(_tree(S3_ADAPTER_MODULE))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "client"
+    }
+    assert called & forbidden == set()
+    assert called & allowed == allowed
 
 
 def test_provider_methods_stay_inside_artifact_orchestration_and_adapters() -> None:

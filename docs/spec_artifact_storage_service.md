@@ -204,6 +204,19 @@ MinIO, and AWS S3, including region, bucket or private-root identity, normalized
 endpoint identity where applicable, private prefix, and addressing style; it
 contains no credential or resolved secret.
 
+Every descriptor also carries the reserved `adapter`, `backend`, and
+`provider_profile` keys. S3-compatible profiles then require exactly these
+additional keys; missing, unknown, or extra keys fail closed:
+
+| Provider profile | Exact additional descriptor keys |
+|---|---|
+| `minio-v1` | `addressing_style`, `bucket`, `endpoint_identity`, `private_prefix`, `region` |
+| `aws-s3-v1` | `addressing_style`, `bucket`, `private_prefix`, `region` |
+
+`endpoint_identity` is the non-secret SHA-256 identity of the normalized MinIO
+endpoint. It is required for `minio-v1` and forbidden for native `aws-s3-v1`,
+which has no configured endpoint.
+
 For LocalStorage, the durable root must already exist with owner-private
 permissions before application startup. Its descriptor stores only a hash over
 the normalized path plus filesystem device/inode identity. Replacing or
@@ -426,6 +439,11 @@ its only v0.1 production provider. MinIO proves the same protocol contract in
 local integration tests and CI. Cloudflare R2 is deferred and has no active
 runtime profile or credential contract.
 
+The v0.1 AWS profile supports global general-purpose buckets only. Workstream
+does not emit the account-regional namespace request header, so account-regional
+bucket names ending in `-an` fail the canonical bucket gate rather than being
+accepted with incomplete request semantics.
+
 Configuration includes:
 
 - provider profile `aws_s3` or `minio`;
@@ -434,8 +452,8 @@ Configuration includes:
 - dedicated private Workstream artifact bucket and private prefix; the bucket
   contains no other application's objects;
 - addressing style;
-- credential mode, optional access-key ID/secret/session token, and no resolved
-  credential persistence;
+- credential mode, local/CI MinIO static credentials held only as redacted
+  private settings, and no resolved credential persistence;
 - connect/read/write/pool timeouts;
 - total verification deadline and maximum buffered bytes.
 
@@ -451,13 +469,42 @@ pinned botocore credential resolver to that provider before any provider is
 loaded, and verifies the resolved method. Explicit credentials, environment
 access keys, shared credential/config files, credential processes, login/SSO,
 legacy EC2/Boto sources, and every unselected workload provider are rejected.
-Tests poison every nonselected source and prove that it is never read, executed,
-or contacted. This is an allowlisted workload-identity contract, not authority
-to use the ambient SDK default chain.
+Web-identity STS, ECS container metadata, and EC2 instance metadata use
+explicit no-proxy sessions. Web identity also rejects ambient endpoint and CA
+overrides. Tests poison every nonselected source and prove that it is never
+read, executed, or contacted. This is an allowlisted workload-identity
+contract, not authority to use the ambient SDK default chain.
 
 Chunk 02B1 pins the async S3 SDK pair to `aiobotocore==3.7.0` and
 `botocore==1.43.0`. An SDK upgrade is a reviewed contract change because
 credential-provider precedence and refresh windows are operational behavior.
+
+### Runtime Eligibility After Chunk 02B1
+
+`minio` is the only active `s3_compatible` profile in this chunk. It requires
+an explicit HTTP(S) endpoint, region, dedicated bucket, private prefix,
+`local_static` credentials, and a local/development/test environment. Startup
+still claims the exact `minio-v1` namespace in PostgreSQL before any object
+operation. Local and CI run the real digest-pinned MinIO server and provision
+only the dedicated test bucket; tests do not emulate S3 calls.
+
+`local/CI MinIO` names a non-production provider-eligibility class, not a
+literal endpoint-host rule. Repository-managed Compose and CI publish MinIO on
+host loopback only. A separately containerized Workstream process may use an
+operator-controlled private MinIO endpoint in a local, development, or test
+environment. Publicly exposed MinIO and every production-environment MinIO
+configuration are outside v0.1; neither can satisfy native AWS live proof.
+
+`aws_s3` accepts only a native endpoint-less AWS configuration, explicit
+region, and exactly one allowlisted workload-identity method. The composition
+root validates settings and then raises `artifact_provider_live_proof_required`
+before validating credential environment, constructing the adapter factory,
+building or loading the credential resolver, claiming a namespace, or
+performing provider I/O. The credential-environment validator and isolated
+resolver are inactive deployment-proof support in this chunk; startup does not
+invoke them. Chunk 07 alone may make native AWS runtime-eligible by adding the
+immutable live activation proof defined below. MinIO conformance is not AWS
+activation evidence.
 
 Cloudflare R2 has no v0.1 runtime mode, credential issuer, sidecar, secret
 contract, configuration profile, or deployment proof. Any future provider
@@ -761,6 +808,44 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
 
+The S3-compatible provider settings use the same prefix:
+
+| Environment variable | Default | Contract |
+|---|---:|---|
+| `WORKSTREAM_ARTIFACT_STORE_BACKEND` | `disabled` | Set to `s3_compatible` to select the S3 protocol adapter. |
+| `WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE` | unset | Closed value: `minio` for local/CI or `aws_s3` for the inactive native AWS profile. |
+| `WORKSTREAM_ARTIFACT_S3_REGION` | unset | Required canonical S3 region. |
+| `WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL` | unset | Required HTTP(S) endpoint for MinIO; forbidden for native AWS. |
+| `WORKSTREAM_ARTIFACT_S3_BUCKET` | unset | Required private bucket name. |
+| `WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX` | `workstream/artifacts` | Canonical private key prefix; object references remain server-derived SHA-256 paths. |
+| `WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE` | `virtual` | Closed value: `path` or `virtual`; local compose uses `path`. |
+| `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE` | unset | MinIO requires `local_static`; native AWS requires `aws_workload_identity`. |
+| `WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD` | unset | Native AWS selection: `assume-role-with-web-identity`, `container-role`, or `iam-role`; never used by MinIO. |
+| `WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID` | unset | MinIO local/CI secret only; forbidden for native AWS. |
+| `WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY` | unset | MinIO local/CI secret only; forbidden for native AWS. |
+| `WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN` | unset | Optional MinIO local/CI secret only; forbidden for native AWS. |
+| `WORKSTREAM_ARTIFACT_S3_CONNECT_TIMEOUT_SECONDS` | `5` | Provider connection timeout, at most 60 seconds. |
+| `WORKSTREAM_ARTIFACT_S3_READ_TIMEOUT_SECONDS` | `60` | Provider read timeout, at most 1800 seconds. |
+| `WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS` | `1800` | Provider write timeout, at most 3600 seconds. |
+| `WORKSTREAM_ARTIFACT_S3_POOL_TIMEOUT_SECONDS` | `5` | Client-pool acquisition timeout, at most 60 seconds. |
+| `WORKSTREAM_ARTIFACT_S3_OPERATION_TOTAL_TIMEOUT_SECONDS` | `1800` | Total provider-operation timeout, at most 3600 seconds. |
+| `WORKSTREAM_ARTIFACT_S3_MAX_POOL_CONNECTIONS` | `16` | Bounded client connection pool, from 1 through 256. |
+| `WORKSTREAM_ARTIFACT_MAXIMUM_BYTES` | `536870912` | Hard object maximum; configuration cannot exceed 512 MiB. |
+
+MinIO is the only runtime-eligible S3 profile in this chunk and is restricted
+to local, development, and test environments. Native AWS configuration rejects
+static credentials, configured endpoints, unselected or ambient credential
+sources, arbitrary container credential URLs, and custom instance-metadata
+endpoints. The selected method accepts only its exact closed `AWS_*`
+environment allowlist; every other `AWS_*` or `BOTOCORE_*` SDK behavior control
+fails before SDK session construction. S3 object operations and credential
+metadata operations explicitly ignore ambient HTTP proxy variables. IAM-role
+validation requires IMDSv2 and the isolated fetcher disables IMDSv1. Even valid
+native AWS settings fail with `artifact_provider_live_proof_required` at API,
+Celery scheduler/task, and direct-cleanup entry points before credential-source
+probing, factory construction, scratch cleanup, namespace claim, resolver
+loading, or provider I/O.
+
 Every process sharing a scratch root must use the identical complete setting
 set. The root marker binds a canonical fingerprint of those limits and startup
 fails closed on mismatch; changing limits therefore requires an empty,
@@ -1054,7 +1139,8 @@ bytes in PostgreSQL.
 ## Verification Strategy
 
 - one conformance suite runs against LocalStorage and real MinIO;
-- a secret-free live smoke profile proves AWS S3 configuration;
+- inactive validation proves the closed AWS S3 configuration contract, while
+  Chunk 07 owns live deployment proof;
 - integration tests use real S3-compatible API calls, not monkeypatching;
 - concurrent puts cannot overwrite existing bytes;
 - acknowledgement loss, exact replay, oversized-object refusal, truncation,

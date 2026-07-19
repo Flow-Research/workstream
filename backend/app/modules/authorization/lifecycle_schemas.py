@@ -33,3 +33,13 @@ class ActorLifecycleMutationResponse(BaseModel):
     resource_id: UUID
     version: None = None
     http_status: Literal[200]
+
+
+class IdentityLinkLifecycleMutationResponse(BaseModel):
+    """Stable privacy-bounded reference for one identity-link lifecycle result."""
+
+    model_config = _STRICT
+    resource_type: Literal["actor_identity_link"]
+    resource_id: UUID
+    version: None = None
+    http_status: Literal[200]

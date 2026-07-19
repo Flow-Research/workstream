@@ -2,7 +2,13 @@
 
 ## Purpose
 
-This chunk adds the backend record for worker submission packets. A worker submits against a task id, Workstream runs pre-submit intake checks from the locked project pre-submit checker policy, stamps the task's locked guide source snapshot, effective project submission artifact policy, project pre-submit checker bundle, post-submit checker, review, revision, and payment context, and every submitted packet version becomes immutable during successful submission creation before checker execution is queued.
+This chunk adds the backend record for Contributor submission packets. A
+Contributor submits against a task id, Workstream runs pre-submit intake checks
+from the locked project pre-submit checker policy, stamps the task's locked
+guide source snapshot, effective project submission artifact policy, project
+pre-submit checker bundle, post-submit checker, review, revision, and payment
+context, and every submitted packet version becomes immutable during successful
+submission creation before checker execution is queued.
 
 This completes the Week 1 backend lifecycle through `SUBMITTED`.
 
@@ -36,7 +42,7 @@ Chunk 5 stores package and evidence references. Actual file storage still belong
 
 - `id`
 - `task_id`
-- `worker_id`
+- `contributor_id`
 - `version`
 - `status`
 - `summary`
@@ -67,7 +73,7 @@ including guide-source snapshot provenance, effective project submission
 artifact policy provenance, project pre-submit checker compiled bundle hash
 provenance, and explicit post-submit checker policy provenance. The locked
 post-submit checker policy body is internal runtime provenance, copied from the
-task and hidden from worker-facing responses. This prevents task-owned locked
+task and hidden from Contributor-facing responses. This prevents task-owned locked
 context from changing silently after a submission has been recorded.
 
 `evidence_items`
@@ -112,7 +118,10 @@ Response body:
 
 POST `/api/v1/tasks/{task_id}/submissions`
 
-Runs pre-submit checks from the locked project pre-submit checker policy for the assigned worker's draft packet. Creates and locks a new submission version only when blocking pre-submit checks pass, then enqueues the automatic Celery pre-review checker gate.
+Runs pre-submit checks from the locked project pre-submit checker policy for the
+assigned Contributor's draft packet. Creates and locks a new submission version
+only when blocking pre-submit checks pass, then enqueues the automatic Celery
+pre-review checker gate.
 
 Request body:
 
@@ -180,7 +189,7 @@ Repair outcomes:
 
 ## Lifecycle Rules
 
-- a worker can submit only when assigned to the task
+- a Contributor can submit only when assigned to the task
 - first submission requires task status `IN_PROGRESS`
 - Workstream loads the locked effective project submission artifact policy hash before creating a submission
 - Workstream loads the locked generated project pre-submit checker compiled bundle hash before creating a submission
@@ -190,7 +199,8 @@ Repair outcomes:
 - later replacement submissions are allowed only after the task reaches `NEEDS_REVISION`
 - submission packet content must satisfy the locked project pre-submit checker policy
 - every submission creation writes a task audit event
-- the audit event includes submission id, submission version, worker id, package hash, and artifact hash manifest
+- the audit event includes submission id, submission version, contributor id,
+  package hash, and artifact hash manifest
 - successful submission creation writes both `submission_created` and
   `submission_finalized` audit events in the same server-owned handoff
 - only the latest submission version for a task can enter or repair the automatic
@@ -205,14 +215,16 @@ Repair outcomes:
 
 - Workstream still verifies external Flow auth only
 - no Workstream-owned login or primary auth session is added
-- only the assigned worker can create a submission for the task
+- only the assigned Contributor can create a submission for the task
 - admins can read submissions and can repair the automatic pre-review checker gate
   for operational recovery
 - project managers can read submissions and repair the automatic pre-review
   checker gate only for tasks they created in v0.1; assigned submitters lock
   their own submitted packet through the normal submission flow
-- workers can read their own task submissions
-- response payloads are role-sensitive: operators can inspect server-stamped locked provenance for source snapshots and policy context, while worker-facing payloads hide internal policy ids, hashes, and bodies
+- Contributors can read their own task submissions
+- response payloads are role-sensitive: operators can inspect server-stamped
+  locked provenance for source snapshots and policy context, while
+  Contributor-facing payloads hide internal policy ids, hashes, and bodies
 - package and evidence URIs are stored as object references, not signed URLs or credentials
 - persisted storage references are Workstream-issued opaque object references or validated object-storage adapter references
 - raw signed URLs, credential-bearing URLs, query strings, local filesystem paths, bucket secrets, and token-bearing references are rejected before persistence
@@ -220,7 +232,7 @@ Repair outcomes:
 
 ## Evidence Identity
 
-Workstream generates evidence item ids at persistence time. Worker-provided manifest rows may include artifact paths or URIs, but the persisted evidence item id is the stable Workstream evidence id for later checker and review records.
+Workstream generates evidence item ids at persistence time. Contributor-provided manifest rows may include artifact paths or URIs, but the persisted evidence item id is the stable Workstream evidence id for later checker and review records.
 
 ## Audit Scope
 
@@ -228,11 +240,18 @@ Chunk 5 writes task audit events with submission identifiers in `event_payload`.
 
 ## Conditions Of Satisfaction
 
-- worker submits a draft packet against `task_id` and Workstream assigns version `1` after blocking pre-submit checks pass
-- worker does not provide locked guide source snapshot, effective project submission artifact policy, project pre-submit checker, or guide/checker/review/revision/payment policy context
-- worker-provided locked guide source snapshot, effective project submission artifact policy, project pre-submit checker, or guide/checker/review/revision/payment policy context fields are rejected by the API schema
-- worker-provided submission version fields are rejected by the API schema
-- worker-provided checker names, checker outcomes, evidence ids, and checker run ids are rejected by the API schema
+- Contributor submits a draft packet against `task_id` and Workstream assigns
+  version `1` after blocking pre-submit checks pass
+- Contributor does not provide locked guide source snapshot, effective project
+  submission artifact policy, project pre-submit checker, or
+  guide/checker/review/revision/payment policy context
+- Contributor-provided locked guide source snapshot, effective project
+  submission artifact policy, project pre-submit checker, or
+  guide/checker/review/revision/payment policy context fields are rejected by
+  the API schema
+- Contributor-provided submission version fields are rejected by the API schema
+- Contributor-provided checker names, checker outcomes, evidence ids, and
+  checker run ids are rejected by the API schema
 - preflight failures return `PreSubmitCheckResponse(status="failed", eligible_to_submit=false, results=[...])`
 - blocked submission-create attempts return `DomainError(code="pre_submission_checker_failed")` with structured pass/fail/warning details and create no submission row, no submission version, no task transition to `SUBMITTED`, and no submission-created audit event
 - Workstream stamps locked guide source snapshot ids/hashes, effective project submission artifact policy ids/hashes, project pre-submit checker policy ids/bundle hashes, and guide/checker/review/revision/payment policy versions from task context
@@ -241,7 +260,8 @@ Chunk 5 writes task audit events with submission identifiers in `event_payload`.
 - dispatch failures after packet locking are visible as repairable automatic
   gate failures rather than failed contributor submissions
 - replacing an artifact creates a new submission version instead of mutating v1
-- submission audit events include task, worker, version, package, and artifact context
+- submission audit events include task, contributor, version, package, and
+  artifact context
 - submission and immutability tests pass
 
 ## Verifier Agents

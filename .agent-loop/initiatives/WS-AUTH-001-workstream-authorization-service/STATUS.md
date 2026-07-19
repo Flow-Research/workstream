@@ -94,15 +94,20 @@ repair, coverage repair, and required checks passed before PR #143 merged as
 Its bounded implementation and external repair passed before PR #146 merged as
 `0ffdabf`; signed schema-v2 memory at `eeb3dc2` recorded completion and stopped.
 The user explicitly started AUTH-09D. Required L1 preimplementation review
-rejected the combined lifecycle contract before runtime edits, so the parent is
-split into 09D-A and 09D-B. AUTH-09D-A exact-head internal review passed at
-`cc7e6cc` after all valid findings were repaired; ready PR #148 is open for
-external checks and explicit human approval. CodeRabbit then found a valid
-API/database lifecycle-reason whitespace mismatch and stale exact-head review
-evidence. The bounded repair passes direct PostgreSQL and request-schema proof;
-required exact-head internal review and canonical evidence pass at `7c33e64`;
-replacement external checks remain. No service caller or feature action is
-active.
+rejected the combined lifecycle contract before runtime edits, so the parent was
+split into 09D-A and 09D-B. After bounded external repair and exact-head review,
+PR #148 merged AUTH-09D-A as `99ae4c9`; signed schema-v2 memory `cf8a3e8`
+recorded the stopped gate and named 09D-B. The user explicitly started 09D-B
+from that trusted head. Exact contract `9ec6390b` passed required L1
+preimplementation review. Implementation, deterministic proof, required
+internal review, and external checks passed before PR #152 merged as
+`93dd392`; signed memory `912a6254` stopped and named the contributor
+foundation. The user explicitly started that chunk; exact contract `2a21166d`
+passed required L1 review. Initial exact-SHA implementation review found
+diagnostic-privacy and proof gaps; bounded repair and deterministic evidence are
+complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR and
+external checks are current; aggregate coverage remains a mandatory GitHub
+Backend gate. No service caller or consumer feature action is active.
 
 ## Active planning chunk
 
@@ -110,17 +115,15 @@ None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-09D-A` - Profile Lifecycle And Evidence Repair. Exact-SHA
-preimplementation review passed at `7f941a5`; the three profile lifecycle
-routes, migration `0026`, and repaired deterministic proof pass. PR #148's
-bounded external repair aligns database whitespace rejection with the API and
-passes focused proof plus exact-head internal review and canonical evidence at
-`7c33e64`. Replacement external checks and explicit human approval are the
-current gate.
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` - Contributor Fields And Canonical-Human
+Lineage. Explicitly started from trusted `main` at `93dd392`; exact contract
+`2a21166d` passed required L1 review. Internal review passed at code SHA
+`4d1fc507`; PR/external checks are current and aggregate coverage is mandatory
+in Backend.
 
 ## Current review branch
 
-`codex/ws-auth-001-09d-actor-identity-lifecycle`
+`codex/ws-auth-001-contributor-foundation`
 
 ## Chunk status
 
@@ -148,9 +151,10 @@ current gate.
 | `WS-AUTH-001-09B` | Merged | `codex/ws-auth-001-09b-controlled-service-provisioning` | #143 | Merged as `053242b`; signed memory passed. |
 | `WS-AUTH-001-09C` | Merged | `codex/ws-auth-001-09c-actor-identity-admin-reads` | #146 | Merged as `0ffdabf`; signed memory `eeb3dc2` passed and stopped. |
 | `WS-AUTH-001-09D` | Split | `codex/ws-auth-001-09d-actor-identity-lifecycle` | - | Required L1 review rejected the combined contract before runtime edits. |
-| `WS-AUTH-001-09D-A` | Active | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | External and Backend repair, exact-head review, and canonical evidence pass at `7c33e64`; replacement external checks pending. |
-| `WS-AUTH-001-09D-B` | Inactive | - | - | Identity-link lifecycle and race closure after 09D-A merge/memory and explicit start. |
-| `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after 09D-B. |
+| `WS-AUTH-001-09D-A` | Merged | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | Merged as `99ae4c9`; signed memory `cf8a3e8` passed and stopped. |
+| `WS-AUTH-001-09D-B` | Merged | `codex/ws-auth-001-09d-b-identity-link-lifecycle` | #152 | Merged as `93dd392`; signed memory `912a6254` passed and stopped. |
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | PR ready | `codex/ws-auth-001-contributor-foundation` | - | Internal review passed at `4d1fc507`; PR/external checks pending; Backend coverage mandatory. |
+| `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after the contributor foundation. |
 | `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
 | `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
 | `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
@@ -168,11 +172,17 @@ merged feature manifests and separate human starts exist.
 
 ## Blockers
 
-AUTH-09C has no remaining blocker. PR #146 merged as `0ffdabf` and signed
-memory passed at `eeb3dc2`. AUTH-09D-A's repaired contract passed required L1
-preimplementation review at `7f941a5`; no planning blocker remains. It must not
-add identity-link mutation, service grants, dynamic assignments,
-token-role authority, service admission, or feature-action activation.
+AUTH-09C has no remaining blocker. PR #146 merged as `0ffdabf`; PR #148 merged
+AUTH-09D-A as `99ae4c9`; and PR #152 merged AUTH-09D-B as `93dd392`. Signed
+memory `912a6254` passed and stopped. The user explicitly started the
+contributor foundation. Its first L1 review rejected an underspecified
+identity-link race, migration diagnostic, resource-lock, clean-cut, and CI
+contract before runtime edits. Exact repaired contract `2a21166d` passed every
+required L1 track. Initial implementation candidate `e41c33c0` failed privacy,
+proof, docs, and evidence review. Bounded repair and deterministic evidence are
+complete; exact code SHA `4d1fc507` passed all nine internal tracks. PR/external
+checks are current and aggregate coverage remains mandatory in Backend.
+AUTH-09E remains inactive behind that foundation.
 
 The four proposed REV lifecycle actions and review-evidence binding action are
 blocked on complete feature-owned typed manifests. REV fixed services are also
@@ -186,8 +196,9 @@ migration `0022`, removing obsolete `ProjectRole.BOTH` and replacement evidence.
 AUTH-09B owns migration `0024` for service-link verification timestamp
 semantics, ART owns `0025` for the ArtifactStore v2 clean cut, and AUTH-09D-A
 owns `0026` for lifecycle evidence and profile reactivation provenance repair.
-AUTH-10 through AUTH-15 own shifted migrations `0027` through `0032` for their
-action/evidence parity.
+The contributor foundation allocates the then-current next migration after
+09D-B merges. AUTH-10 through AUTH-15 no longer reserve fixed migration numbers;
+each allocates from trusted `main` when its contract becomes executable.
 
 AUTH-05A and CAT post-merge memory have no remaining blocker and are merged.
 The combined AUTH-05 contract

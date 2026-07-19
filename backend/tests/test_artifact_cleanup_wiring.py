@@ -11,7 +11,7 @@ import pytest
 from app.adapters.artifacts import artifact_preparation_limits
 from app.core.config import Settings, get_settings
 from app.main import create_app
-from app.interfaces.external_services import UnknownExternalServiceProviderError
+from app.interfaces.artifacts import ArtifactProviderLiveProofRequiredError
 
 
 def _enabled_settings(tmp_path: Path, **changes: object) -> Settings:
@@ -84,6 +84,11 @@ async def test_production_auth_validation_precedes_artifact_startup(
         environment="production",
         artifact_store_backend="s3_compatible",
         artifact_scratch_root=tmp_path / "scratch",
+        artifact_s3_provider_profile="aws_s3",
+        artifact_s3_region="us-east-1",
+        artifact_s3_bucket="workstream-artifacts-prod",
+        artifact_s3_credential_mode="aws_workload_identity",
+        artifact_s3_aws_workload_identity_method="container-role",
     )
     app = create_app(settings)
     store = _Store(events)
@@ -144,24 +149,37 @@ async def test_disabled_startup_does_not_construct_or_clean_artifacts(
         pass
 
 
-async def test_unimplemented_s3_startup_fails_through_typed_factory(
+async def test_aws_s3_startup_requires_live_provider_proof(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Keep real startup on the one ADR 0014 unavailable-provider path."""
+    """Keep native AWS runtime-ineligible until the owned activation chunk."""
+    import app.main as main_module
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+        "/v2/credentials/workstream-runtime",
+    )
+    monkeypatch.setattr(main_module, "build_auth_verifier", lambda _settings: None)
     app = create_app(
         Settings(
-            environment="test",
+            environment="production",
             artifact_store_backend="s3_compatible",
             artifact_scratch_root=tmp_path / "scratch",
+            artifact_s3_provider_profile="aws_s3",
+            artifact_s3_region="us-east-1",
+            artifact_s3_bucket="workstream-artifacts-prod",
+            artifact_s3_credential_mode="aws_workload_identity",
+            artifact_s3_aws_workload_identity_method="container-role",
         )
     )
 
-    with pytest.raises(UnknownExternalServiceProviderError) as caught:
+    with pytest.raises(ArtifactProviderLiveProofRequiredError) as caught:
         async with app.router.lifespan_context(app):
             pass
 
-    assert caught.value.identity is not None
-    assert caught.value.identity.provider_key == "s3_compatible"
+    assert caught.value.code == "artifact_provider_live_proof_required"
 
 
 async def test_namespace_failure_is_fail_closed_and_skips_cleanup(
@@ -323,3 +341,32 @@ def test_cleanup_task_runs_shared_helper_and_propagates_failure(
     monkeypatch.setattr(artifacts_module, "cleanup_stale_artifact_scratch", fail_cleanup)
     with pytest.raises(RuntimeError, match="scratch cleanup failed"):
         artifacts_module.cleanup_stale_scratch.run()
+
+
+def test_aws_s3_is_runtime_ineligible_for_celery_and_cleanup_task(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+) -> None:
+    """Apply the same inactive-provider guard to API and worker entry points."""
+    celery_module, artifacts_module = _load_worker_modules(monkeypatch, request)
+    settings = Settings(
+        environment="production",
+        celery_task_always_eager=True,
+        artifact_store_backend="s3_compatible",
+        artifact_scratch_root=tmp_path / "scratch",
+        artifact_s3_provider_profile="aws_s3",
+        artifact_s3_region="us-east-1",
+        artifact_s3_bucket="workstream-artifacts-prod",
+        artifact_s3_credential_mode="aws_workload_identity",
+        artifact_s3_aws_workload_identity_method="container-role",
+    )
+    monkeypatch.setattr(celery_module, "get_settings", lambda: settings)
+    with pytest.raises(ArtifactProviderLiveProofRequiredError) as startup_error:
+        celery_module.create_celery_app()
+    assert startup_error.value.code == "artifact_provider_live_proof_required"
+
+    monkeypatch.setattr(artifacts_module, "get_settings", lambda: settings)
+    with pytest.raises(ArtifactProviderLiveProofRequiredError) as task_error:
+        artifacts_module.cleanup_stale_scratch.run()
+    assert task_error.value.code == "artifact_provider_live_proof_required"

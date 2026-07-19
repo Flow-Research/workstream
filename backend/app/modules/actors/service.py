@@ -77,6 +77,17 @@ class ActorProfileDisabled(ActorRegistryError):
     code = "legacy_workflow_eligibility_disabled"
 
 
+class ActiveHumanWriteActorRequired(ActorRegistryError):
+    """The exact canonical caller is not currently eligible to write."""
+
+    status_code = 403
+    code = "active_contributor_required"
+
+
+class CanonicalWriteActorUnavailable(RuntimeError):
+    """Canonical profile/link state is missing or internally inconsistent."""
+
+
 @dataclass(frozen=True)
 class ResolvedActor:
     """Canonical profile and exact verified identity link for one request."""
@@ -218,6 +229,26 @@ class ActorService:
         ):
             raise RuntimeError("resolved actor identity changed")
         return ResolvedActor(profile=profile, identity_link=link)
+
+    async def require_active_human_write_actor(self, actor: ActorContext) -> None:
+        """Lock and revalidate one exact human caller in the current transaction."""
+        profile = await self._repo.get_actor_profile(actor.actor_id, for_update=True)
+        if profile is None:
+            raise CanonicalWriteActorUnavailable("canonical actor profile is missing")
+        if profile.actor_kind != "human" or profile.status != "active":
+            raise ActiveHumanWriteActorRequired("active contributor identity required")
+
+        link = await self._repo.get_identity_link(
+            actor.external_issuer,
+            actor.external_subject,
+            for_update=True,
+        )
+        if link is None:
+            raise CanonicalWriteActorUnavailable("canonical identity link is missing")
+        if link.actor_profile_id != profile.id or link.subject_kind != "human":
+            raise CanonicalWriteActorUnavailable("canonical identity link is inconsistent")
+        if link.status != "active":
+            raise ActiveHumanWriteActorRequired("active contributor identity required")
 
     async def update_self(
         self,

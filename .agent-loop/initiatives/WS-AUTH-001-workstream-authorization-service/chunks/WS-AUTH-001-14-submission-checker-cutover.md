@@ -2,8 +2,9 @@
 
 ## Status
 
-Proposed and inactive. Exact ActionIds and migration `0031` must be enumerated
-before implementation; AUTH-PREP is required for mutations.
+Proposed and inactive. Exact ActionIds and its then-current migration must be
+enumerated before implementation; AUTH-PREP and the merged contributor
+foundation are required for mutations.
 
 ## Parent initiative
 
@@ -46,7 +47,7 @@ backend/app/modules/checkers/**
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/app/adapters/project_agents/openai_agent_sdk.py
-backend/alembic/versions/0031_*.py
+backend/alembic/versions/<then-current-next>_*.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/app/api/deps/auth.py
@@ -101,8 +102,9 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   PermissionId/ActionId typed and PostgreSQL parity as planned metadata. This
   chunk promotes each action only with its feature resource composer, Operator
   candidate, guards, surface declaration, reason, evidence, and behavior tests.
-  Migration `0031` owns submission/checker Contributor-field schema changes and
-  exact new ActionId evidence parity; it changes no PermissionId mapping.
+  This chunk's then-current migration owns checker-field changes and exact new
+  ActionId evidence parity; it changes no PermissionId mapping and does not
+  rename Submission ownership again.
 - Contributor reads preserve ownership, hidden-result redaction, and concealed
   not-found behavior.
 - Audit reads expose only permission-appropriate bounded fields before counts.
@@ -121,9 +123,10 @@ legacy active-worker-profile or workflow-eligibility compatibility fallback
   `contributor_suggested_fix`, `contributor_evidence_refs`, and
   `contributor_visible` across persistence, models, schemas, services, runner
   contracts, audit payloads, and tests. Submission-policy JSON and derivation
-  contracts use `contributor_facing_fix`. Migration `0031` preserves all values,
-  supports downgrade, and removes legacy storage/property names without public
-  API aliases.
+  contracts use `contributor_facing_fix`. The merged contributor foundation
+  already supplies canonical `Submission.contributor_id`; this chunk consumes
+  it while removing its remaining separately enumerated legacy property names
+  without public API aliases.
 - With the final consumer removed, the legacy `/api/v1/workers/me/profile`
   route, typed-profile activation service/schema, and token-role workflow
   observation fields plus the now-unused compatibility adapter/allowlist are

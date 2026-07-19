@@ -91,13 +91,16 @@ make the whole actor effective.
 An identity link binds one canonical external issuer and opaque subject to one
 ActorProfile. It has active/revoked state plus state-transition-guarded current
 revocation and reactivation attribution. AUTH-09D-A migration `0026` enforces
-complete attribution and bounded lifecycle reasons before AUTH-09D-B activates
-link mutations. Append-only audit evidence preserves immutable transition
-history; the current row carries only the latest state-compatible attribution.
+complete attribution and bounded lifecycle reasons. AUTH-09D-B activates exact
+link revoke/reactivate mutations. Append-only audit evidence preserves immutable
+transition history; the current row carries only the latest state-compatible attribution.
 Raw tokens, provider credentials, and full claim payloads are not stored.
 The database enforces a unique `(issuer, subject)` pair across all links and, in
 v0.1, at most one active identity link per ActorProfile. Revocation preserves
 the immutable link and provenance; it does not free the pair for rebinding.
+Link reactivation is component-scoped: it restores only that exact credential
+binding, does not reactivate its ActorProfile or restore grants, and cannot
+bypass final-effective-Access-Administrator preservation.
 
 ### AdminRoleGrant
 
@@ -1154,6 +1157,15 @@ Fields:
 - `released_at`
 - `status`
 
+Migration `0027_contributor_foundation` clean-cuts the retired persisted human
+owner to `contributor_id`. The non-null `varchar(36)` value is protected by
+foreign key `fk_task_assignments_contributor_id_actor_profiles`, index
+`ix_task_assignments_contributor_id`, and trigger
+`task_assignments_contributor_human`. The trigger reuses invoker-rights function
+`public.require_human_actor_profile_reference()` to reject service profiles.
+It deliberately permits suspended and deactivated human profiles because this
+column preserves historical attribution rather than current authority.
+
 ## Submission
 
 Fields:
@@ -1190,6 +1202,19 @@ Fields:
 - `supersedes_submission_id`
 - `remediation_source_checker_run_id` (checker-remediation submissions only)
 - `revision_context_preparation_id` (human-Review revision submissions only)
+
+The submission contributor uses foreign key
+`fk_submissions_contributor_id_actor_profiles`, index
+`ix_submissions_contributor_id`, and trigger
+`submissions_contributor_human`, backed by the same reusable lineage function.
+
+The current Submission `contributor_id` uses the same migration, foreign-key,
+and canonical-human trigger contract as TaskAssignment. Claim and submission
+creation additionally lock and revalidate the caller's exact active human
+ActorProfile and active issuer/subject identity link before locking the task
+and active assignment. That transaction participant establishes current
+identity eligibility only; project roles, grants, actions, and resource policy
+remain owned by the authorization service.
 
 The contributor submission packet supplies the task id, summary, outputs,
 artifact hashes, evidence references, and contributor attestation. Workstream assigns the

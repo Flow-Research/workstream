@@ -20,6 +20,10 @@ from app.core.cancellation import (
     await_cancellation_resistant,
     run_blocking_cancellation_resistant,
 )
+from app.adapters.artifacts.references import (
+    artifact_provider_object_ref,
+    parse_artifact_provider_object_ref,
+)
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
@@ -53,7 +57,6 @@ _LAYOUT_MARKER_BYTES = b"workstream-artifact-store-v2\n"
 _LAYOUT_ENTRY_NAMES = frozenset(
     {_LAYOUT_MARKER, _LAYOUT_MARKER_TEMPORARY, "locks", "objects", "tmp"}
 )
-_PROVIDER_OBJECT_REF = re.compile(r"^sha256/([0-9a-f]{2})/([0-9a-f]{62})$")
 _DIGEST_PREFIX_NAME = re.compile(r"^[0-9a-f]{2}$")
 _DIGEST_OBJECT_NAME = re.compile(r"^[0-9a-f]{62}$")
 _TEMPORARY_NAME = re.compile(r"^\.put\.[0-9a-f]{32}\.tmp$")
@@ -218,7 +221,7 @@ class LocalStorageAdapter:
         if commitment.byte_count > HARD_MAXIMUM_ARTIFACT_BYTES:
             raise ArtifactLimitExceededError("artifact source exceeds provider limit")
 
-        provider_object_ref = self._provider_object_ref(commitment)
+        provider_object_ref = artifact_provider_object_ref(commitment)
         lock: tuple[Any, int] | None = None
         descriptor: int | None = None
         temporary_name: str | None = None
@@ -304,7 +307,7 @@ class LocalStorageAdapter:
         self._require_initialized()
         if type(commitment) is not ArtifactCommitment:
             raise ArtifactOperationConflictError("artifact commitment is invalid")
-        provider_object_ref = self._provider_object_ref(commitment)
+        provider_object_ref = artifact_provider_object_ref(commitment)
         observed = await self.head(provider_object_ref)
         if not observed.exists:
             return ArtifactPutObservation(provider_object_ref, committed=False)
@@ -318,7 +321,7 @@ class LocalStorageAdapter:
     ) -> AsyncIterator[bytes]:
         """Stream a full object or range through bounded off-loop reads."""
         self._require_initialized()
-        self._parse_provider_object_ref(provider_object_ref)
+        parse_artifact_provider_object_ref(provider_object_ref)
         if byte_range is not None and type(byte_range) is not ArtifactByteRange:
             raise ArtifactOperationConflictError("artifact byte range is invalid")
         selected_range = byte_range or ArtifactByteRange()
@@ -371,7 +374,7 @@ class LocalStorageAdapter:
     async def head(self, provider_object_ref: str) -> ArtifactObjectHead:
         """Return an existing or missing observation without exposing paths."""
         self._require_initialized()
-        self._parse_provider_object_ref(provider_object_ref)
+        parse_artifact_provider_object_ref(provider_object_ref)
         try:
             try:
                 byte_count = await self._run_io(
@@ -743,21 +746,6 @@ class LocalStorageAdapter:
         finally:
             os.close(descriptor)
 
-    def _provider_object_ref(self, commitment: ArtifactCommitment) -> str:
-        """Derive one identity-free object reference from canonical SHA-256."""
-        digest_hex = commitment.sha256[7:]
-        return f"sha256/{digest_hex[:2]}/{digest_hex[2:]}"
-
-    @staticmethod
-    def _parse_provider_object_ref(provider_object_ref: str) -> tuple[str, str]:
-        """Validate the exact opaque local provider-reference grammar."""
-        if not isinstance(provider_object_ref, str):
-            raise ArtifactOperationConflictError("artifact provider reference is invalid")
-        match = _PROVIDER_OBJECT_REF.fullmatch(provider_object_ref)
-        if match is None:
-            raise ArtifactOperationConflictError("artifact provider reference is invalid")
-        return match.group(1), match.group(2)
-
     def _open_prefix(self, prefix: str, *, create: bool) -> int:
         """Open one digest-prefix directory without following links."""
         if create:
@@ -802,7 +790,7 @@ class LocalStorageAdapter:
 
     def _publish_exclusive(self, temporary_name: str, provider_object_ref: str) -> bool:
         """Hard-link one complete object without ever replacing existing bytes."""
-        prefix, filename = self._parse_provider_object_ref(provider_object_ref)
+        prefix, filename = parse_artifact_provider_object_ref(provider_object_ref)
         prefix_fd = self._open_prefix(prefix, create=True)
         try:
             try:
@@ -832,19 +820,19 @@ class LocalStorageAdapter:
 
     def _head_object_with_recovery(self, provider_object_ref: str) -> int:
         """Recover an interrupted publication under its digest lock before head."""
-        prefix, filename = self._parse_provider_object_ref(provider_object_ref)
+        prefix, filename = parse_artifact_provider_object_ref(provider_object_ref)
         with self._locked_file(prefix + filename):
             return self._head_object(provider_object_ref)
 
     def _open_object_with_recovery(self, provider_object_ref: str) -> tuple[int, int]:
         """Recover an interrupted publication under its digest lock before open."""
-        prefix, filename = self._parse_provider_object_ref(provider_object_ref)
+        prefix, filename = parse_artifact_provider_object_ref(provider_object_ref)
         with self._locked_file(prefix + filename):
             return self._open_object(provider_object_ref)
 
     def _open_object(self, provider_object_ref: str) -> tuple[int, int]:
         """Open one immutable no-follow object and return its exact size."""
-        prefix, filename = self._parse_provider_object_ref(provider_object_ref)
+        prefix, filename = parse_artifact_provider_object_ref(provider_object_ref)
         prefix_fd = self._open_prefix(prefix, create=False)
         descriptor = -1
         try:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.core.hashing import canonical_json_hash
+from app.core.s3_validation import validate_s3_namespace_descriptor
 from app.interfaces.external_services import (
     ExternalServiceAdapter,
     ExternalServiceAdapterIdentity,
@@ -21,6 +22,23 @@ _RESERVED_NAMESPACE_DESCRIPTOR_KEYS = frozenset(
 )
 _NAMESPACE_DESCRIPTOR_KEYS_BY_PROFILE = {
     "local-v2": frozenset({"private_prefix", "private_root_identity"}),
+    "minio-v1": frozenset(
+        {
+            "addressing_style",
+            "bucket",
+            "endpoint_identity",
+            "private_prefix",
+            "region",
+        }
+    ),
+    "aws-s3-v1": frozenset(
+        {
+            "addressing_style",
+            "bucket",
+            "private_prefix",
+            "region",
+        }
+    ),
 }
 
 
@@ -133,6 +151,11 @@ class ArtifactStoreNamespaceIdentity:
             or set(keys) != expected_keys
         ):
             raise ValueError("artifact namespace descriptor is not canonical")
+        if self.provider_profile in {"minio-v1", "aws-s3-v1"}:
+            validate_s3_namespace_descriptor(
+                self.provider_profile,
+                dict(self.descriptor_items),
+            )
 
     def as_dict(self) -> dict[str, str]:
         """Return a fresh JSON-compatible descriptor projection."""
@@ -251,6 +274,12 @@ class ArtifactConfigurationError(ArtifactStoreError):
 
     code = "artifact_storage_configuration_invalid"
     category = "configuration"
+
+
+class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
+    """Raised while an AWS profile lacks the later live activation proof."""
+
+    code = "artifact_provider_live_proof_required"
 
 
 class ArtifactStore(ExternalServiceAdapter, Protocol):

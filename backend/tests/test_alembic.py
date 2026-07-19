@@ -1364,11 +1364,11 @@ def test_actor_profile_lifecycle_fresh_and_prior_head_upgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "0025_artifact_store_v2")
             assert asyncio.run(shape()) == ("0025_artifact_store_v2", False, False)
-            command.upgrade(config, "head")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
             assert asyncio.run(shape()) == ("0026_actor_profile_lifecycle", True, True)
             command.downgrade(config, "0025_artifact_store_v2")
             assert asyncio.run(shape()) == ("0025_artifact_store_v2", False, False)
-            command.upgrade(config, "head")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
             assert asyncio.run(shape()) == ("0026_actor_profile_lifecycle", True, True)
         finally:
             command.downgrade(config, "base")
@@ -1805,10 +1805,10 @@ def test_actor_profile_lifecycle_safe_downgrade_and_reupgrade(
     with migration_lock():
         try:
             command.downgrade(config, "base")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
             command.downgrade(config, "0025_artifact_store_v2")
             assert asyncio.run(_current_revision(isolated_database_env)) == "0025_artifact_store_v2"
-            command.upgrade(config, "head")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
             assert asyncio.run(_current_revision(isolated_database_env)) == "0026_actor_profile_lifecycle"
         finally:
             command.downgrade(config, "base")
@@ -2020,7 +2020,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
     with migration_lock():
         try:
             command.downgrade(config, "base")
-            command.upgrade(config, "head")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
             asyncio.run(seed_actor())
             asyncio.run(write_profile_reactivation())
             refuse_downgrade_without_change()
@@ -2036,6 +2036,181 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
                 asyncio.run(remove_audit_blocker(event_id))
             command.downgrade(config, "0025_artifact_store_v2")
         finally:
+            command.downgrade(config, "base")
+
+
+def test_contributor_foundation_upgrade_guards_and_reversible_preservation(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Preserve valid attribution and enforce canonical-human lineage in PostgreSQL."""
+    config = _alembic_config()
+    human_id = str(uuid4())
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
+            fixture = asyncio.run(
+                _seed_contributor_prior_head(
+                    isolated_database_env,
+                    assignment_values=(human_id,),
+                    submission_values=(human_id,),
+                    human_ids=(human_id,),
+                )
+            )
+            before = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+            assert before["revision"] == "0026_actor_profile_lifecycle"
+            assert before["assignment_column"] == ("worker_id", 100)
+            assert before["submission_column"] == ("worker_id", 100)
+
+            command.upgrade(config, "0027_contributor_foundation")
+            upgraded = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+            assert upgraded == {
+                "revision": "0027_contributor_foundation",
+                "assignment_column": ("contributor_id", 36),
+                "submission_column": ("contributor_id", 36),
+                "assignment_index": "ix_task_assignments_contributor_id",
+                "submission_index": "ix_submissions_contributor_id",
+                "foreign_keys": (
+                    "fk_submissions_contributor_id_actor_profiles",
+                    "fk_task_assignments_contributor_id_actor_profiles",
+                ),
+                "function": True,
+                "triggers": (
+                    "submissions_contributor_human",
+                    "task_assignments_contributor_human",
+                ),
+                "assignment_values": (human_id,),
+                "submission_values": (human_id,),
+            }
+            direct_sql = asyncio.run(
+                _exercise_contributor_lineage_guards(
+                    isolated_database_env,
+                    fixture=fixture,
+                    human_id=human_id,
+                )
+            )
+            assert direct_sql == {
+                "missing_assignment": "23503",
+                "service_assignment": "23514",
+                "missing_assignment_update": "23503",
+                "service_assignment_update": "23514",
+                "missing_submission": "23503",
+                "service_submission": "23514",
+                "missing_submission_update": "23503",
+                "service_submission_update": "23514",
+                "suspended_human_inserted": True,
+                "deactivated_human_inserted": True,
+                "unrelated_update_preserved": True,
+            }
+            assert asyncio.run(
+                _exercise_contributor_lineage_function_contract(
+                    isolated_database_env
+                )
+            ) == {
+                "zero_arguments": "55000",
+                "extra_arguments": "55000",
+                "absent_field": "55000",
+                "nullable_field_accepted": True,
+            }
+
+            asyncio.run(_add_contributor_function_dependency(isolated_database_env))
+            intact = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+            with pytest.raises(RuntimeError, match='"total":1'):
+                command.downgrade(config, "0026_actor_profile_lifecycle")
+            assert asyncio.run(_contributor_foundation_shape(isolated_database_env)) == intact
+            asyncio.run(_drop_contributor_function_dependency(isolated_database_env))
+
+            command.downgrade(config, "0026_actor_profile_lifecycle")
+            restored = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+            assert restored["revision"] == "0026_actor_profile_lifecycle"
+            assert restored["assignment_column"] == ("worker_id", 100)
+            assert restored["submission_column"] == ("worker_id", 100)
+            assert restored["assignment_index"] == "ix_task_assignments_worker_id"
+            assert restored["submission_index"] == "ix_submissions_worker_id"
+            assert human_id in restored["assignment_values"]
+            assert restored["submission_values"] == (human_id,)
+
+            command.upgrade(config, "0027_contributor_foundation")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0027_contributor_foundation"
+            )
+        finally:
+            command.downgrade(config, "0023_service_actor_identity")
+            asyncio.run(_clear_contributor_migration_fixtures(isolated_database_env))
+            command.downgrade(config, "base")
+
+
+def test_contributor_foundation_preflight_refuses_all_unsafe_classes_atomically(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Classify both source tables without guessing or partially changing schema."""
+    config = _alembic_config()
+    missing_ids = (str(uuid4()), str(uuid4()))
+    assignment_malformed = tuple(
+        f"private.person.{index}@example.test" for index in range(22)
+    )
+    submission_malformed = tuple(
+        f"eyJhbGciOiJSUzI1NiJ9.secret-token-material-{index}"
+        for index in range(22)
+    )
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0026_actor_profile_lifecycle")
+            fixture = asyncio.run(
+                _seed_contributor_prior_head(
+                    isolated_database_env,
+                    assignment_values=assignment_malformed
+                    + (missing_ids[0], "service"),
+                    submission_values=submission_malformed
+                    + (missing_ids[1], "service"),
+                )
+            )
+            service_id = str(fixture["service_id"])
+            before = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+
+            with pytest.raises(RuntimeError, match="contributor foundation preflight") as failure:
+                command.upgrade(config, "0027_contributor_foundation")
+
+            message = str(failure.value)
+            assert "malformed" in message
+            assert "missing" in message
+            assert "service" in message
+            assert service_id in message
+            assert all(missing_id in message for missing_id in missing_ids)
+            diagnostic = json.loads(message.split("preflight failed: ", 1)[1])
+            for table in ("task_assignments", "submissions"):
+                malformed = diagnostic[table]["malformed"]
+                assert malformed["total"] == 22
+                assert len(malformed["rows"]) == 20
+                assert [row[0] for row in malformed["rows"]] == sorted(
+                    row[0] for row in malformed["rows"]
+                )
+                assert all(
+                    row[1] == "<redacted-malformed>"
+                    for row in malformed["rows"]
+                )
+            assert all(
+                value not in message
+                for value in assignment_malformed + submission_malformed
+            )
+            assert all(
+                row_id in message
+                for row_id in (
+                    tuple(fixture["assignment_ids"])[-2:]
+                    + tuple(fixture["submission_ids"])[-2:]
+                )
+            )
+            assert "issuer" not in message
+            assert "subject" not in message
+            assert asyncio.run(_contributor_foundation_shape(isolated_database_env)) == before
+        finally:
+            command.downgrade(config, "0023_service_actor_identity")
+            asyncio.run(_clear_contributor_migration_fixtures(isolated_database_env))
             command.downgrade(config, "base")
 
 
@@ -6247,6 +6422,570 @@ async def _remove_fixed_service_actor(database_url: str, actor_profile_id: str) 
             )
             await connection.execute(text("alter table actor_profiles enable trigger user"))
             await connection.execute(text("alter table actor_identity_links enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+async def _seed_contributor_prior_head(
+    database_url: str,
+    *,
+    assignment_values: tuple[str, ...],
+    submission_values: tuple[str, ...],
+    human_ids: tuple[str, ...] = (),
+) -> dict[str, tuple[str, ...] | str]:
+    engine = create_async_engine(database_url)
+    assignment_ids = tuple(str(uuid4()) for _ in assignment_values)
+    runtime_ids = {
+        name: str(uuid4())
+        for name in (
+            "project",
+            "guide",
+            "snapshot",
+            "submission_policy",
+            "effective_policy",
+            "pre_submit_policy",
+            "policy",
+            "review_policy",
+            "revision_policy",
+            "payment_policy",
+            "task",
+            "submission",
+            "run",
+        )
+    }
+    submission_ids = (runtime_ids["submission"],) + tuple(
+        str(uuid4()) for _ in submission_values[1:]
+    )
+    service_id = str(uuid4())
+    try:
+        await _seed_artifact_prior_head_runtime_rows(database_url, runtime_ids)
+        async with engine.begin() as connection:
+            for human_id in human_ids:
+                await connection.execute(
+                    text(
+                        "insert into actor_profiles "
+                        "(id,actor_kind,status,provisioning_method,created_by) values "
+                        "(:id,'human','active','automatic_first_access',:id)"
+                    ),
+                    {"id": human_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_identity_links "
+                        "(id,actor_profile_id,issuer,subject,subject_kind,status,"
+                        "linked_by,last_verified_at) values "
+                        "(:link,:actor,'https://identity.test',:subject,'human',"
+                        "'active',:actor,clock_timestamp())"
+                    ),
+                    {
+                        "link": str(uuid4()),
+                        "actor": human_id,
+                        "subject": f"contributor-{human_id}",
+                    },
+                )
+            await connection.execute(
+                text(
+                    "insert into actor_profiles "
+                    "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+                    "values (:id,'service','active','manual_service_provisioning',"
+                    ":identity,:id)"
+                ),
+                {
+                    "id": service_id,
+                    "identity": ServiceIdentity.ARTIFACT_VERIFIER.value,
+                },
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by,"
+                    "last_verified_at) values "
+                    "(:link,:actor,'workstream-local',:subject,'service','active',"
+                    ":actor,clock_timestamp())"
+                ),
+                {
+                    "link": str(uuid4()),
+                    "actor": service_id,
+                    "subject": ServiceIdentity.ARTIFACT_VERIFIER.value,
+                },
+            )
+            resolved_assignment_values = tuple(
+                service_id if value == "service" else value
+                for value in assignment_values
+            )
+            for index, value in enumerate(assignment_values):
+                await connection.execute(
+                    text(
+                        "insert into task_assignments "
+                        "(id,task_id,worker_id,assigned_by,status) values "
+                        "(:id,:task,:actor,'migration-test',:status)"
+                    ),
+                    {
+                        "id": assignment_ids[index],
+                        "task": runtime_ids["task"],
+                        "actor": resolved_assignment_values[index],
+                        "status": "active" if index == 0 else "released",
+                    },
+                )
+            resolved_submission_values = tuple(
+                service_id if value == "service" else value for value in submission_values
+            )
+            await connection.execute(
+                text("update submissions set worker_id=:actor where id=:id"),
+                {
+                    "id": submission_ids[0],
+                    "actor": resolved_submission_values[0],
+                },
+            )
+            for index, value in enumerate(resolved_submission_values[1:], start=1):
+                await connection.execute(
+                    text(
+                        "insert into submissions "
+                        "(id,task_id,worker_id,version,status,summary,package_uri,"
+                        "package_hash,artifact_hash_manifest,worker_attestation,"
+                        "locked_guide_version,locked_post_submit_checker_policy_id,"
+                        "locked_post_submit_checker_policy_version,"
+                        "locked_post_submit_checker_policy_hash,"
+                        "locked_post_submit_checker_policy_body,"
+                        "locked_review_policy_version,locked_revision_policy_version,"
+                        "locked_payment_policy_version,locked_guide_source_snapshot_id,"
+                        "locked_guide_source_snapshot_hash,"
+                        "locked_effective_project_submission_artifact_policy_id,"
+                        "locked_effective_project_submission_artifact_policy_hash,"
+                        "locked_pre_submit_checker_policy_id,"
+                        "locked_pre_submit_checker_bundle_hash,submitted_at,locked_at,"
+                        "supersedes_submission_id) "
+                        "select :id,task_id,:actor,:version,"
+                        "status,summary,package_uri,package_hash,artifact_hash_manifest,"
+                        "worker_attestation,locked_guide_version,"
+                        "locked_post_submit_checker_policy_id,"
+                        "locked_post_submit_checker_policy_version,"
+                        "locked_post_submit_checker_policy_hash,"
+                        "locked_post_submit_checker_policy_body,"
+                        "locked_review_policy_version,locked_revision_policy_version,"
+                        "locked_payment_policy_version,locked_guide_source_snapshot_id,"
+                        "locked_guide_source_snapshot_hash,"
+                        "locked_effective_project_submission_artifact_policy_id,"
+                        "locked_effective_project_submission_artifact_policy_hash,"
+                        "locked_pre_submit_checker_policy_id,"
+                        "locked_pre_submit_checker_bundle_hash,submitted_at,locked_at,null "
+                        "from submissions where id=:source"
+                    ),
+                    {
+                        "id": submission_ids[index],
+                        "actor": value,
+                        "version": index + 1,
+                        "source": submission_ids[0],
+                    },
+                )
+        return {
+            "assignment_ids": assignment_ids,
+            "submission_ids": submission_ids,
+            "assignment_task": runtime_ids["task"],
+            "submission_task": runtime_ids["task"],
+            "service_id": service_id,
+        }
+    finally:
+        await engine.dispose()
+
+
+async def _clear_contributor_migration_fixtures(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("alter table actor_identity_links disable trigger user")
+            )
+            await connection.execute(text("alter table actor_profiles disable trigger user"))
+            await connection.execute(text("delete from actor_identity_links"))
+            await connection.execute(text("delete from actor_profiles"))
+            await connection.execute(text("alter table actor_profiles enable trigger user"))
+            await connection.execute(
+                text("alter table actor_identity_links enable trigger user")
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _contributor_foundation_shape(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            async def column(table: str) -> tuple[str, int]:
+                row = (
+                    await connection.execute(
+                        text(
+                            "select column_name,character_maximum_length "
+                            "from information_schema.columns where table_schema='public' "
+                            "and table_name=:table and column_name in "
+                            "('worker_id','contributor_id')"
+                        ),
+                        {"table": table},
+                    )
+                ).one()
+                return str(row[0]), int(row[1])
+
+            async def index(table: str) -> str:
+                value = await connection.scalar(
+                    text(
+                        "select indexname from pg_indexes where schemaname='public' "
+                        "and tablename=:table and indexname like "
+                        "'ix_%_worker_id' or schemaname='public' and tablename=:table "
+                        "and indexname like 'ix_%_contributor_id'"
+                    ),
+                    {"table": table},
+                )
+                assert value is not None
+                return str(value)
+
+            function_exists = bool(
+                await connection.scalar(
+                    text(
+                        "select to_regprocedure("
+                        "'public.require_human_actor_profile_reference()') is not null"
+                    )
+                )
+            )
+            foreign_keys = tuple(
+                str(row)
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select conname from pg_constraint where conname in "
+                            "('fk_task_assignments_contributor_id_actor_profiles',"
+                            "'fk_submissions_contributor_id_actor_profiles') order by conname"
+                        )
+                    )
+                ).scalars()
+            )
+            triggers = tuple(
+                str(row)
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select tgname from pg_trigger where not tgisinternal and tgname in "
+                            "('task_assignments_contributor_human',"
+                            "'submissions_contributor_human') order by tgname"
+                        )
+                    )
+                ).scalars()
+            )
+            assignment_field = "contributor_id" if function_exists else "worker_id"
+            submission_field = "contributor_id" if function_exists else "worker_id"
+            assignment_values = tuple(
+                str(row)
+                for row in (
+                    await connection.execute(
+                        text(f"select {assignment_field} from task_assignments order by id")
+                    )
+                ).scalars()
+            )
+            submission_values = tuple(
+                str(row)
+                for row in (
+                    await connection.execute(
+                        text(f"select {submission_field} from submissions order by id")
+                    )
+                ).scalars()
+            )
+            return {
+                "revision": await connection.scalar(
+                    text("select version_num from alembic_version")
+                ),
+                "assignment_column": await column("task_assignments"),
+                "submission_column": await column("submissions"),
+                "assignment_index": await index("task_assignments"),
+                "submission_index": await index("submissions"),
+                "foreign_keys": foreign_keys,
+                "function": function_exists,
+                "triggers": triggers,
+                "assignment_values": assignment_values,
+                "submission_values": submission_values,
+            }
+    finally:
+        await engine.dispose()
+
+
+def _database_error_sqlstate(error: DBAPIError) -> str | None:
+    return getattr(error.orig, "sqlstate", None)
+
+
+async def _exercise_contributor_lineage_guards(
+    database_url: str,
+    *,
+    fixture: dict[str, tuple[str, ...] | str],
+    human_id: str,
+) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    service_id = str(fixture["service_id"])
+    assignment_task = str(fixture["assignment_task"])
+    submission_task = str(fixture["submission_task"])
+    assignment_id = str(tuple(fixture["assignment_ids"])[0])
+    submission_id = str(tuple(fixture["submission_ids"])[0])
+    missing_id = str(uuid4())
+    suspended_id = str(uuid4())
+    deactivated_id = str(uuid4())
+    results: dict[str, object] = {}
+    try:
+        for name, statement, values in (
+            (
+                "missing_assignment",
+                "insert into task_assignments "
+                "(id,task_id,contributor_id,assigned_by,status) values "
+                "(:id,:task,:actor,'test','released')",
+                {"id": str(uuid4()), "task": assignment_task, "actor": missing_id},
+            ),
+            (
+                "service_assignment",
+                "insert into task_assignments "
+                "(id,task_id,contributor_id,assigned_by,status) values "
+                "(:id,:task,:actor,'test','released')",
+                {"id": str(uuid4()), "task": assignment_task, "actor": service_id},
+            ),
+            (
+                "missing_assignment_update",
+                "update task_assignments set contributor_id=:actor where id=:id",
+                {"id": assignment_id, "actor": missing_id},
+            ),
+            (
+                "service_assignment_update",
+                "update task_assignments set contributor_id=:actor where id=:id",
+                {"id": assignment_id, "actor": service_id},
+            ),
+            (
+                "missing_submission",
+                "insert into submissions "
+                "(id,task_id,contributor_id,version,status,summary,package_uri,"
+                "package_hash,artifact_hash_manifest,worker_attestation,"
+                "locked_guide_version,locked_post_submit_checker_policy_id,"
+                "locked_post_submit_checker_policy_version,"
+                "locked_post_submit_checker_policy_hash,"
+                "locked_post_submit_checker_policy_body,"
+                "locked_review_policy_version,locked_revision_policy_version,"
+                "locked_payment_policy_version,locked_guide_source_snapshot_id,"
+                "locked_guide_source_snapshot_hash,"
+                "locked_effective_project_submission_artifact_policy_id,"
+                "locked_effective_project_submission_artifact_policy_hash,"
+                "locked_pre_submit_checker_policy_id,"
+                "locked_pre_submit_checker_bundle_hash,submitted_at,locked_at,"
+                "supersedes_submission_id) "
+                "select :id,task_id,:actor,2,status,summary,"
+                "package_uri,package_hash,artifact_hash_manifest,worker_attestation,"
+                "locked_guide_version,locked_post_submit_checker_policy_id,"
+                "locked_post_submit_checker_policy_version,"
+                "locked_post_submit_checker_policy_hash,"
+                "locked_post_submit_checker_policy_body,locked_review_policy_version,"
+                "locked_revision_policy_version,locked_payment_policy_version,"
+                "locked_guide_source_snapshot_id,locked_guide_source_snapshot_hash,"
+                "locked_effective_project_submission_artifact_policy_id,"
+                "locked_effective_project_submission_artifact_policy_hash,"
+                "locked_pre_submit_checker_policy_id,locked_pre_submit_checker_bundle_hash,"
+                "submitted_at,locked_at,null from submissions where task_id=:task",
+                {"id": str(uuid4()), "task": submission_task, "actor": missing_id},
+            ),
+            (
+                "service_submission",
+                "insert into submissions "
+                "(id,task_id,contributor_id,version,status,summary,package_uri,"
+                "package_hash,artifact_hash_manifest,worker_attestation,"
+                "locked_guide_version,locked_post_submit_checker_policy_id,"
+                "locked_post_submit_checker_policy_version,"
+                "locked_post_submit_checker_policy_hash,"
+                "locked_post_submit_checker_policy_body,"
+                "locked_review_policy_version,locked_revision_policy_version,"
+                "locked_payment_policy_version,locked_guide_source_snapshot_id,"
+                "locked_guide_source_snapshot_hash,"
+                "locked_effective_project_submission_artifact_policy_id,"
+                "locked_effective_project_submission_artifact_policy_hash,"
+                "locked_pre_submit_checker_policy_id,"
+                "locked_pre_submit_checker_bundle_hash,submitted_at,locked_at,"
+                "supersedes_submission_id) "
+                "select :id,task_id,:actor,3,status,summary,"
+                "package_uri,package_hash,artifact_hash_manifest,worker_attestation,"
+                "locked_guide_version,locked_post_submit_checker_policy_id,"
+                "locked_post_submit_checker_policy_version,"
+                "locked_post_submit_checker_policy_hash,"
+                "locked_post_submit_checker_policy_body,locked_review_policy_version,"
+                "locked_revision_policy_version,locked_payment_policy_version,"
+                "locked_guide_source_snapshot_id,locked_guide_source_snapshot_hash,"
+                "locked_effective_project_submission_artifact_policy_id,"
+                "locked_effective_project_submission_artifact_policy_hash,"
+                "locked_pre_submit_checker_policy_id,locked_pre_submit_checker_bundle_hash,"
+                "submitted_at,locked_at,null from submissions where task_id=:task",
+                {"id": str(uuid4()), "task": submission_task, "actor": service_id},
+            ),
+            (
+                "missing_submission_update",
+                "update submissions set contributor_id=:actor where id=:id",
+                {"id": submission_id, "actor": missing_id},
+            ),
+            (
+                "service_submission_update",
+                "update submissions set contributor_id=:actor where id=:id",
+                {"id": submission_id, "actor": service_id},
+            ),
+        ):
+            try:
+                async with engine.begin() as connection:
+                    await connection.execute(text(statement), values)
+            except DBAPIError as error:
+                results[name] = _database_error_sqlstate(error)
+            else:
+                results[name] = None
+
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("update task_assignments set assigned_by='updated' where id=:id"),
+                {"id": assignment_id},
+            )
+            results["unrelated_update_preserved"] = (
+                await connection.scalar(
+                    text("select contributor_id=:actor from task_assignments where id=:id"),
+                    {"id": assignment_id, "actor": human_id},
+                )
+                is True
+            )
+            for actor_id, status in (
+                (suspended_id, "suspended"),
+                (deactivated_id, "deactivated"),
+            ):
+                await connection.execute(
+                    text(
+                        "insert into actor_profiles "
+                        "(id,actor_kind,status,provisioning_method,created_by) values "
+                        "(:id,'human','active','automatic_first_access',:id)"
+                    ),
+                    {"id": actor_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into actor_identity_links "
+                        "(id,actor_profile_id,issuer,subject,subject_kind,status,"
+                        "linked_by,last_verified_at) values "
+                        "(:link,:actor,'https://identity.test',:subject,'human',"
+                        "'active',:actor,clock_timestamp())"
+                    ),
+                    {
+                        "link": str(uuid4()),
+                        "actor": actor_id,
+                        "subject": f"historical-{actor_id}",
+                    },
+                )
+                if status == "suspended":
+                    await connection.execute(
+                        text(
+                            "update actor_profiles set status='suspended',"
+                            "suspended_by=:actor,suspended_at=clock_timestamp(),"
+                            "suspension_reason='migration test' where id=:actor"
+                        ),
+                        {"actor": actor_id},
+                    )
+                else:
+                    await connection.execute(
+                        text(
+                            "update actor_profiles set status='deactivated',"
+                            "deactivated_by=:actor,deactivated_at=clock_timestamp(),"
+                            "deactivation_reason='migration test' where id=:actor"
+                        ),
+                        {"actor": actor_id},
+                    )
+                await connection.execute(
+                    text(
+                        "insert into task_assignments "
+                        "(id,task_id,contributor_id,assigned_by,status) values "
+                        "(:id,:task,:actor,'test','released')"
+                    ),
+                    {"id": str(uuid4()), "task": assignment_task, "actor": actor_id},
+                )
+                results[f"{status}_human_inserted"] = True
+        return results
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_contributor_lineage_function_contract(
+    database_url: str,
+) -> dict[str, object]:
+    """Prove closed trigger arguments and nullable-field delegation."""
+    engine = create_async_engine(database_url)
+    results: dict[str, object] = {}
+    try:
+        for name, arguments in (
+            ("zero_arguments", ""),
+            ("extra_arguments", "'contributor_id','extra'"),
+            ("absent_field", "'missing_field'"),
+        ):
+            try:
+                async with engine.begin() as connection:
+                    await connection.execute(
+                        text("create temporary table lineage_probe (contributor_id text)")
+                    )
+                    await connection.execute(
+                        text(
+                            "create trigger lineage_probe_guard before insert on "
+                            "lineage_probe for each row execute function public."
+                            f"require_human_actor_profile_reference({arguments})"
+                        )
+                    )
+                    await connection.execute(
+                        text(
+                            "insert into lineage_probe (contributor_id) values "
+                            "('not-a-canonical-id')"
+                        )
+                    )
+            except DBAPIError as error:
+                results[name] = _database_error_sqlstate(error)
+            else:
+                results[name] = None
+
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("create temporary table lineage_nullable (contributor_id text)")
+            )
+            await connection.execute(
+                text(
+                    "create trigger lineage_nullable_guard before insert on "
+                    "lineage_nullable for each row execute function public."
+                    "require_human_actor_profile_reference('contributor_id')"
+                )
+            )
+            await connection.execute(
+                text("insert into lineage_nullable (contributor_id) values (null)")
+            )
+            results["nullable_field_accepted"] = (
+                await connection.scalar(text("select count(*) from lineage_nullable"))
+                == 1
+            )
+        return results
+    finally:
+        await engine.dispose()
+
+
+async def _add_contributor_function_dependency(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "create trigger task_assignments_contributor_dependency "
+                    "before update of contributor_id on task_assignments for each row "
+                    "execute function require_human_actor_profile_reference('contributor_id')"
+                )
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _drop_contributor_function_dependency(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "drop trigger task_assignments_contributor_dependency "
+                    "on task_assignments"
+                )
+            )
     finally:
         await engine.dispose()
 

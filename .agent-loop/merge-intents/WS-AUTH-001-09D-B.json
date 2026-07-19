@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-09D-B",
+  "chunk_title": "Identity-Link Lifecycle And Race Closure",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-CONTRIBUTOR-FOUNDATION",
+  "next_chunk_title": "Contributor Fields And Canonical-Human Lineage",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

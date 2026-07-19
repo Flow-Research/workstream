@@ -45,16 +45,27 @@ class TaskRepository:
         await self._session.refresh(task)
         return task
 
-    async def get_task(self, task_id: str) -> WorkstreamTask | None:
+    async def get_task(
+        self,
+        task_id: str,
+        *,
+        for_update: bool = False,
+    ) -> WorkstreamTask | None:
         """Load one task by primary key.
 
         Args:
             task_id: Task id to load.
+            for_update: Whether to lock and refresh the selected row.
 
         Returns:
             Task model when found; otherwise ``None``.
         """
-        return await self._session.get(WorkstreamTask, task_id)
+        statement = select(WorkstreamTask).where(WorkstreamTask.id == task_id)
+        if for_update:
+            statement = statement.with_for_update()
+        return await self._session.scalar(
+            statement.execution_options(populate_existing=True)
+        )
 
     async def add_assignment(self, assignment: TaskAssignment) -> TaskAssignment:
         """Persist an assignment and refresh generated database fields.
@@ -70,20 +81,29 @@ class TaskRepository:
         await self._session.refresh(assignment)
         return assignment
 
-    async def get_active_assignment(self, task_id: str) -> TaskAssignment | None:
+    async def get_active_assignment(
+        self,
+        task_id: str,
+        *,
+        for_update: bool = False,
+    ) -> TaskAssignment | None:
         """Load the active assignment for a task.
 
         Args:
             task_id: Task id whose active assignment should be loaded.
+            for_update: Whether to lock and refresh the selected row.
 
         Returns:
             Active assignment when present; otherwise ``None``.
         """
+        statement = select(TaskAssignment).where(
+            TaskAssignment.task_id == task_id,
+            TaskAssignment.status == "active",
+        )
+        if for_update:
+            statement = statement.with_for_update()
         result = await self._session.execute(
-            select(TaskAssignment).where(
-                TaskAssignment.task_id == task_id,
-                TaskAssignment.status == "active",
-            )
+            statement.execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 

@@ -5300,6 +5300,543 @@ async def test_actor_profile_lifecycle_real_postgres_matrix(
         ) == 0
 
 
+async def test_actor_identity_link_lifecycle_real_postgres_matrix(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prove link state, atomic failure, replay, owner, grant, and privacy behavior."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env).model_copy(
+        update={"api_admin_mutation_rate_limit": 1_000}
+    )
+    app = create_app(settings)
+    app.state.auth_verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+    names = ("admin", "target", "ordinary", "failure")
+    tokens = {
+        name: issue_asymmetric_token(
+            private_key,
+            claims={
+                "sub": f"auth09d-b-{name}",
+                "jti": f"auth09d-b-{name}-token",
+                "email": f"private-auth09d-b-{name}@example.test",
+            },
+        )
+        for name in names
+    }
+    headers = {
+        name: {"Authorization": f"Bearer {token}"} for name, token in tokens.items()
+    }
+
+    async def actor_link_state(actor_id: UUID) -> tuple:
+        async with db_session.get_session_factory()() as session:
+            return tuple(
+                (
+                    await session.execute(
+                        text(
+                            "select p.status,p.last_seen_at,l.id,l.status,l.revoked_by,"
+                            "l.revoked_at,l.revoked_reason,l.reactivated_by,l.reactivated_at,"
+                            "l.reactivation_reason,l.last_verified_at from actor_profiles p "
+                            "join actor_identity_links l on l.actor_profile_id=p.id "
+                            "where p.id=:actor"
+                        ),
+                        {"actor": str(actor_id)},
+                    )
+                ).one()
+            )
+
+    async def idempotency_count(key: str) -> int:
+        async with db_session.get_session_factory()() as session:
+            return int(
+                await session.scalar(
+                    text(
+                        "select count(*) from authority_idempotency_records "
+                        "where idempotency_key=:key"
+                    ),
+                    {"key": key},
+                )
+                or 0
+            )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        profiles = {
+            name: UUID(
+                (await client.get("/api/v1/actors/me", headers=headers[name])).json()[
+                    "actor_profile_id"
+                ]
+            )
+            for name in names
+        }
+        assert (await run_admin_bootstrap(profiles["admin"], execute=True))[0] == 0
+        states = {name: await actor_link_state(actor_id) for name, actor_id in profiles.items()}
+        links = {name: UUID(state[2]) for name, state in states.items()}
+
+        async def atomic_state(target: UUID) -> tuple:
+            async with db_session.get_session_factory()() as session:
+                return (
+                    await actor_link_state(target),
+                    await actor_link_state(profiles["admin"]),
+                    tuple(
+                        await session.scalars(
+                            text(
+                                "select to_jsonb(g)::text from admin_role_grants g "
+                                "order by g.id"
+                            )
+                        )
+                    ),
+                    tuple(
+                        await session.scalars(
+                            text(
+                                "select to_jsonb(e)::text from audit_events e order by e.id"
+                            )
+                        )
+                    ),
+                    tuple(
+                        await session.scalars(
+                            text(
+                                "select to_jsonb(i)::text from "
+                                "authority_idempotency_records i order by i.id"
+                            )
+                        )
+                    ),
+                )
+
+        async def link_authorization_events(resource_id: UUID) -> tuple[tuple, ...]:
+            async with db_session.get_session_factory()() as session:
+                return tuple(
+                    (
+                        await session.execute(
+                            select(
+                                AuditEvent.event_type,
+                                AuditEvent.action_id,
+                                AuditEvent.permission_id,
+                                AuditEvent.resource_type,
+                                AuditEvent.resource_id,
+                                AuditEvent.denial_code,
+                                AuditEvent.matched_grant_id,
+                            )
+                            .where(AuditEvent.resource_id == str(resource_id))
+                            .order_by(AuditEvent.created_at, AuditEvent.id)
+                        )
+                    ).all()
+                )
+
+        failure_target = profiles["failure"]
+        failure_link = links["failure"]
+        original_reserve = AuthorityIdempotencyRepository.reserve
+        original_add_event = AuditService.add_authority_event
+        original_target_lookup = (
+            AdminAuthorizationRepository.lock_identity_link_lifecycle_target
+        )
+        original_flush = AsyncSession.flush
+        original_touch = ActorService.touch_after_authorization
+        original_complete = AuthorityIdempotencyRepository.complete
+        original_commit = AsyncSession.commit
+
+        async def run_failure_matrix(operation: str) -> str:
+            target_status = "revoked" if operation == "revoke" else "active"
+            event_type = (
+                AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED
+                if operation == "revoke"
+                else AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED
+            )
+
+            async def fail_reservation(*_args, **_kwargs):
+                raise SQLAlchemyError("forced link lifecycle reservation failure")
+
+            async def fail_authorization_evidence(service, event):
+                if event.event_type is AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED:
+                    raise SQLAlchemyError("forced link lifecycle authorization evidence failure")
+                return await original_add_event(service, event)
+
+            async def fail_target_lookup(*_args, **_kwargs):
+                raise SQLAlchemyError("forced link lifecycle target lookup failure")
+
+            async def fail_state_flush(session, *args, **kwargs):
+                if any(
+                    isinstance(value, ActorIdentityLink)
+                    and value.id == str(failure_link)
+                    and value.status == target_status
+                    for value in session.dirty
+                ):
+                    raise SQLAlchemyError("forced link lifecycle state flush failure")
+                return await original_flush(session, *args, **kwargs)
+
+            async def fail_caller_touch(*_args, **_kwargs):
+                raise SQLAlchemyError("forced link lifecycle caller touch failure")
+
+            async def fail_success_evidence(service, event):
+                if event.event_type is event_type:
+                    raise SQLAlchemyError("forced link lifecycle success evidence failure")
+                return await original_add_event(service, event)
+
+            async def fail_invalidation_evidence(service, event):
+                if event.event_type is AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED:
+                    raise SQLAlchemyError("forced link lifecycle invalidation failure")
+                return await original_add_event(service, event)
+
+            async def fail_completion(*_args, **_kwargs):
+                raise SQLAlchemyError("forced link lifecycle completion failure")
+
+            async def fail_commit(*_args, **_kwargs):
+                raise SQLAlchemyError("forced link lifecycle commit failure")
+
+            stages = (
+                (AuthorityIdempotencyRepository, "reserve", original_reserve, fail_reservation),
+                (AuditService, "add_authority_event", original_add_event, fail_authorization_evidence),
+                (
+                    AdminAuthorizationRepository,
+                    "lock_identity_link_lifecycle_target",
+                    original_target_lookup,
+                    fail_target_lookup,
+                ),
+                (AsyncSession, "flush", original_flush, fail_state_flush),
+                (ActorService, "touch_after_authorization", original_touch, fail_caller_touch),
+                (AuditService, "add_authority_event", original_add_event, fail_success_evidence),
+                (
+                    AuditService,
+                    "add_authority_event",
+                    original_add_event,
+                    fail_invalidation_evidence,
+                ),
+                (AuthorityIdempotencyRepository, "complete", original_complete, fail_completion),
+                (AsyncSession, "commit", original_commit, fail_commit),
+            )
+            final_key = ""
+            for owner, attribute, original, failure in stages:
+                before = await atomic_state(failure_target)
+                final_key = str(uuid4())
+                monkeypatch.setattr(owner, attribute, failure)
+                try:
+                    response = await client.post(
+                        f"/api/v1/actor-identity-links/{failure_link}/{operation}",
+                        headers={**headers["admin"], "Idempotency-Key": final_key},
+                        json={"reason": f"Atomic {operation} failure at {attribute}"},
+                    )
+                finally:
+                    monkeypatch.setattr(owner, attribute, original)
+                assert response.status_code == 503, response.text
+                assert response.json()["error"] | {"correlation_id": None} == {
+                    "code": "service_unavailable",
+                    "message": "Service unavailable",
+                    "details": {},
+                    "correlation_id": None,
+                    "retryable": True,
+                }
+                UUID(response.json()["error"]["correlation_id"])
+                assert await atomic_state(failure_target) == before
+                assert await idempotency_count(final_key) == 0
+            return final_key
+
+        revoke_retry_key = await run_failure_matrix("revoke")
+        revoke_after_failures = await client.post(
+            f"/api/v1/actor-identity-links/{failure_link}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": revoke_retry_key},
+            json={"reason": "Atomic revoke failure at commit"},
+        )
+        assert revoke_after_failures.status_code == 200, revoke_after_failures.text
+        reactivate_retry_key = await run_failure_matrix("reactivate")
+        reactivate_after_failures = await client.post(
+            f"/api/v1/actor-identity-links/{failure_link}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": reactivate_retry_key},
+            json={"reason": "Atomic reactivate failure at commit"},
+        )
+        assert reactivate_after_failures.status_code == 200, reactivate_after_failures.text
+
+        missing_link = uuid4()
+        private_missing_key = str(uuid4())
+        private_missing = await client.post(
+            f"/api/v1/actor-identity-links/{missing_link}/revoke",
+            headers={**headers["ordinary"], "Idempotency-Key": private_missing_key},
+            json={"reason": "must not disclose missing link"},
+        )
+        assert private_missing.status_code == 403
+        assert private_missing.json()["error"]["code"] == "permission_not_granted"
+        assert await idempotency_count(private_missing_key) == 0
+        authorized_missing_key = str(uuid4())
+        missing_caller_before = await actor_link_state(profiles["admin"])
+        missing_events_before = await link_authorization_events(missing_link)
+        authorized_missing = await client.post(
+            f"/api/v1/actor-identity-links/{missing_link}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": authorized_missing_key},
+            json={"reason": "authorized missing link"},
+        )
+        assert authorized_missing.status_code == 404
+        assert authorized_missing.json()["error"]["code"] == "resource_not_found"
+        assert await idempotency_count(authorized_missing_key) == 0
+        assert await actor_link_state(profiles["admin"]) == missing_caller_before
+        missing_events_after = await link_authorization_events(missing_link)
+        assert missing_events_after[: len(missing_events_before)] == missing_events_before
+        assert missing_events_after[len(missing_events_before) :] == (
+            (
+                "SensitiveAuthorizationDenied",
+                "actor.identity_link.revoke",
+                "actor.identity_link.revoke",
+                "actor_identity_link",
+                str(missing_link),
+                "resource_not_found",
+                None,
+            ),
+        )
+        self_key = str(uuid4())
+        self_revoke = await client.post(
+            f"/api/v1/actor-identity-links/{links['admin']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": self_key},
+            json={"reason": "self link revocation must fail"},
+        )
+        assert self_revoke.status_code == 403
+        assert self_revoke.json()["error"]["code"] == "resource_guard_denied"
+        assert await idempotency_count(self_key) == 0
+
+        target_before = await actor_link_state(profiles["target"])
+        normalized_reason = "  Investigate exact identity link  "
+        revoke_key = str(uuid4())
+        revoked = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": revoke_key},
+            json={"reason": normalized_reason},
+        )
+        assert revoked.status_code == 200, revoked.text
+        assert revoked.json() == {
+            "resource_type": "actor_identity_link",
+            "resource_id": str(links["target"]),
+            "version": None,
+            "http_status": 200,
+        }
+        assert normalized_reason.strip() not in revoked.text
+        target_revoked = await actor_link_state(profiles["target"])
+        assert target_revoked[0] == "active"
+        assert target_revoked[3] == "revoked"
+        assert target_revoked[4] == str(profiles["admin"])
+        assert target_revoked[6] == normalized_reason.strip()
+        assert target_revoked[1] == target_before[1]
+        assert target_revoked[10] == target_before[10]
+
+        caller_before_mismatch = await actor_link_state(profiles["admin"])
+        mismatch = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": revoke_key},
+            json={"reason": "changed link lifecycle reason"},
+        )
+        assert mismatch.status_code == 409
+        assert mismatch.json()["error"]["code"] == "idempotency_mismatch"
+        assert await actor_link_state(profiles["admin"]) == caller_before_mismatch
+        assert await actor_link_state(profiles["target"]) == target_revoked
+        conflict_key = str(uuid4())
+        caller_before_conflict = await actor_link_state(profiles["admin"])
+        conflict = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": conflict_key},
+            json={"reason": "second link revocation"},
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["error"]["code"] == "identity_link_already_revoked"
+        assert await idempotency_count(conflict_key) == 0
+        assert await actor_link_state(profiles["admin"]) == caller_before_conflict
+        assert await actor_link_state(profiles["target"]) == target_revoked
+
+        reactivated = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": revoke_key},
+            json={"reason": "Repair exact identity link"},
+        )
+        assert reactivated.status_code == 200, reactivated.text
+        target_reactivated = await actor_link_state(profiles["target"])
+        assert target_reactivated[3] == "active"
+        assert target_reactivated[4:7] == (None, None, None)
+        assert target_reactivated[7] == str(profiles["admin"])
+        assert target_reactivated[9] == "Repair exact identity link"
+        assert target_reactivated[1] == target_before[1]
+        assert target_reactivated[10] == target_before[10]
+
+        caller_before_replay = await actor_link_state(profiles["admin"])
+        replay = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": revoke_key},
+            json={"reason": normalized_reason},
+        )
+        assert replay.status_code == 200
+        assert replay.json() == revoked.json()
+        assert await actor_link_state(profiles["target"]) == target_reactivated
+        caller_after_replay = await actor_link_state(profiles["admin"])
+        assert caller_after_replay[1] > caller_before_replay[1]
+        assert caller_after_replay[10] > caller_before_replay[10]
+
+        reused_conflict = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": conflict_key},
+            json={"reason": "second link revocation"},
+        )
+        assert reused_conflict.status_code == 200, reused_conflict.text
+
+        repair_for_suspension = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Prepare suspended owner proof"},
+        )
+        assert repair_for_suspension.status_code == 200, repair_for_suspension.text
+        suspend_owner = await client.post(
+            f"/api/v1/actors/{profiles['target']}/suspend",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Suspend owner while repairing link"},
+        )
+        assert suspend_owner.status_code == 200, suspend_owner.text
+        suspended_revoke = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Revoke suspended owner link"},
+        )
+        assert suspended_revoke.status_code == 200, suspended_revoke.text
+        suspended_reactivate = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Repair suspended owner link"},
+        )
+        assert suspended_reactivate.status_code == 200, suspended_reactivate.text
+        owner_still_blocked = await client.patch(
+            "/api/v1/actors/me",
+            headers=headers["target"],
+            json={"display_name": "Suspended owner cannot mutate"},
+        )
+        assert owner_still_blocked.status_code == 403
+        assert owner_still_blocked.json()["error"]["code"] == "actor_suspended"
+        restore_owner = await client.post(
+            f"/api/v1/actors/{profiles['target']}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Restore suspended owner"},
+        )
+        assert restore_owner.status_code == 200, restore_owner.text
+
+        delegated = await client.post(
+            "/api/v1/admin-role-grants",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": str(profiles["ordinary"]),
+                "role": "access_administrator",
+                "scope_type": "system",
+                "scope_project_id": None,
+                "reason": "Link reactivation grant non-restoration proof",
+            },
+        )
+        assert delegated.status_code == 201, delegated.text
+        ordinary_revoke = await client.post(
+            f"/api/v1/actor-identity-links/{links['ordinary']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Revoke delegated actor link"},
+        )
+        assert ordinary_revoke.status_code == 200, ordinary_revoke.text
+        revoke_grant = await client.post(
+            f"/api/v1/admin-role-grants/{delegated.json()['resource_id']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Revoke grant independently"},
+        )
+        assert revoke_grant.status_code == 200, revoke_grant.text
+        ordinary_reactivate = await client.post(
+            f"/api/v1/actor-identity-links/{links['ordinary']}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Reactivate without restoring grant"},
+        )
+        assert ordinary_reactivate.status_code == 200, ordinary_reactivate.text
+        async with db_session.get_session_factory()() as session:
+            assert (
+                await session.scalar(
+                    select(AdminRoleGrant.status).where(
+                        AdminRoleGrant.id == UUID(delegated.json()["resource_id"])
+                    )
+                )
+                == "revoked"
+            )
+
+        provisioned_service = await client.post(
+            "/api/v1/service-actors",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={
+                "service_identity": ServiceIdentity.ARTIFACT_SCHEDULER.value,
+                "subject": "auth09d-b-service-link-target",
+                "reason": "Provision service link lifecycle target",
+            },
+        )
+        assert provisioned_service.status_code == 201, provisioned_service.text
+        service_id = UUID(provisioned_service.json()["actor_profile_id"])
+        service_state = await actor_link_state(service_id)
+        service_link = UUID(service_state[2])
+        service_revoke = await client.post(
+            f"/api/v1/actor-identity-links/{service_link}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Revoke fixed service link"},
+        )
+        assert service_revoke.status_code == 200, service_revoke.text
+        service_reactivate = await client.post(
+            f"/api/v1/actor-identity-links/{service_link}/reactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Reactivate fixed service link without admission"},
+        )
+        assert service_reactivate.status_code == 200, service_reactivate.text
+        assert (await actor_link_state(service_id))[10] is None
+
+        deactivate_target = await client.post(
+            f"/api/v1/actors/{profiles['target']}/deactivate",
+            headers={**headers["admin"], "Idempotency-Key": str(uuid4())},
+            json={"reason": "Terminal owner proof"},
+        )
+        assert deactivate_target.status_code == 200, deactivate_target.text
+        terminal_key = str(uuid4())
+        terminal_link = await client.post(
+            f"/api/v1/actor-identity-links/{links['target']}/revoke",
+            headers={**headers["admin"], "Idempotency-Key": terminal_key},
+            json={"reason": "Terminal owner link must not change"},
+        )
+        assert terminal_link.status_code == 409
+        assert terminal_link.json()["error"]["code"] == "actor_deactivated_terminal"
+        assert await idempotency_count(terminal_key) == 0
+
+    async with db_session.get_session_factory()() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuthorityIdempotencyRecord)
+                .where(AuthorityIdempotencyRecord.status == "pending")
+            )
+            or 0
+        ) == 0
+        link_events = (
+            await session.execute(
+                select(AuditEvent).where(
+                    AuditEvent.event_type.in_(
+                        ["ActorIdentityLinkRevoked", "ActorIdentityLinkReactivated"]
+                    )
+                )
+            )
+        ).scalars().all()
+        assert link_events
+        assert all(event.target_actor_ref for event in link_events)
+        evidence = json.dumps(
+            [
+                (
+                    event.event_type,
+                    event.resource_type,
+                    event.resource_id,
+                    event.target_actor_ref,
+                    event.before_facts,
+                    event.after_facts,
+                )
+                for event in link_events
+            ],
+            default=str,
+        )
+        for private in (
+            settings.token_issuer,
+            *tokens.values(),
+            *(f"private-auth09d-b-{name}@example.test" for name in names),
+            normalized_reason.strip(),
+            derive_reason_digest(normalized_reason.strip()),
+        ):
+            assert private not in evidence
+
+
 async def _wait_for_named_database_lock(database_url: str, application_name: str) -> None:
     """Observe the ordered lifecycle request waiting on a PostgreSQL lock."""
     engine = create_async_engine(database_url)
@@ -5819,6 +6356,945 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
             "ActorProfileDeactivated": 4,
             "SensitiveAuthorizationDenied": 5,
         }
+
+
+async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
+    auth_database_env: str,
+    rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Prove link and mixed-authority races with observed PostgreSQL blockers."""
+    private_key, jwk = rsa_signing_material
+    settings = production_verifier_settings(database_url=auth_database_env).model_copy(
+        update={"api_admin_mutation_rate_limit": 1_000}
+    )
+    app = create_app(settings)
+    app.state.auth_verifier = FlowAuthVerifier(settings, jwks_transport=jwks_transport(jwk))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        actors: dict[str, tuple[UUID, UUID, dict[str, str]]] = {}
+
+        async def create_actor(name: str) -> tuple[UUID, UUID, dict[str, str]]:
+            token = issue_asymmetric_token(
+                private_key,
+                claims={
+                    "sub": f"auth09d-b-race-{name}",
+                    "jti": f"auth09d-b-race-{name}-token",
+                },
+            )
+            actor_headers = {"Authorization": f"Bearer {token}"}
+            response = await client.get("/api/v1/actors/me", headers=actor_headers)
+            assert response.status_code == 200, response.text
+            actor_id = UUID(response.json()["actor_profile_id"])
+            async with db_session.get_session_factory()() as session:
+                link_id = UUID(
+                    await session.scalar(
+                        select(ActorIdentityLink.id).where(
+                            ActorIdentityLink.actor_profile_id == str(actor_id)
+                        )
+                    )
+                )
+            actors[name] = (actor_id, link_id, actor_headers)
+            return actors[name]
+
+        bootstrap_id, _, bootstrap_headers = await create_actor("bootstrap")
+        bootstrap_code, bootstrap = await run_admin_bootstrap(bootstrap_id, execute=True)
+        assert bootstrap_code == 0
+
+        async def grant_admin(
+            target_id: UUID,
+            caller_headers: dict[str, str],
+            reason: str,
+        ) -> UUID:
+            response = await client.post(
+                "/api/v1/admin-role-grants",
+                headers={**caller_headers, "Idempotency-Key": str(uuid4())},
+                json={
+                    "target_actor_profile_id": str(target_id),
+                    "role": "access_administrator",
+                    "scope_type": "system",
+                    "scope_project_id": None,
+                    "reason": reason,
+                },
+            )
+            assert response.status_code == 201, response.text
+            return UUID(response.json()["resource_id"])
+
+        async def link_post(
+            link_id: UUID,
+            operation: str,
+            caller_headers: dict[str, str],
+            key: str,
+            reason: str,
+        ) -> Response:
+            return await client.post(
+                f"/api/v1/actor-identity-links/{link_id}/{operation}",
+                headers={**caller_headers, "Idempotency-Key": key},
+                json={"reason": reason},
+            )
+
+        tracked_events = (
+            "ActorIdentityLinkRevoked",
+            "ActorIdentityLinkReactivated",
+            "ActorProfileSuspended",
+            "AdminRoleGrantRevoked",
+            "AuthorityInvalidationRequested",
+            "SensitiveAuthorizationDenied",
+        )
+
+        async def audit_counts() -> dict[str, int]:
+            async with db_session.get_session_factory()() as session:
+                return {
+                    event_type: count
+                    for event_type, count in (
+                        await session.execute(
+                            select(AuditEvent.event_type, func.count())
+                            .where(AuditEvent.event_type.in_(tracked_events))
+                            .group_by(AuditEvent.event_type)
+                        )
+                    ).all()
+                }
+
+        async def assert_audit_delta(
+            before: dict[str, int],
+            expected: dict[str, int],
+        ) -> None:
+            after = await audit_counts()
+            assert {
+                event_type: after.get(event_type, 0) - before.get(event_type, 0)
+                for event_type in tracked_events
+            } == {event_type: expected.get(event_type, 0) for event_type in tracked_events}
+
+        async def idempotency_status(key: str) -> str | None:
+            async with db_session.get_session_factory()() as session:
+                return await session.scalar(
+                    select(AuthorityIdempotencyRecord.status).where(
+                        AuthorityIdempotencyRecord.idempotency_key == key
+                    )
+                )
+
+        async def actor_state(actor_id: UUID) -> tuple[str, datetime, datetime, str]:
+            async with db_session.get_session_factory()() as session:
+                row = (
+                    await session.execute(
+                        select(
+                            ActorProfile.status,
+                            ActorProfile.last_seen_at,
+                            ActorIdentityLink.last_verified_at,
+                            ActorIdentityLink.status,
+                        )
+                        .join(
+                            ActorIdentityLink,
+                            ActorIdentityLink.actor_profile_id == ActorProfile.id,
+                        )
+                        .where(ActorProfile.id == str(actor_id))
+                    )
+                ).one()
+                assert row[1] is not None and row[2] is not None
+                return row[0], row[1], row[2], row[3]
+
+        async def grant_state(grant_id: UUID) -> tuple[str, str]:
+            async with db_session.get_session_factory()() as session:
+                row = (
+                    await session.execute(
+                        select(
+                            AdminRoleGrant.status,
+                            AdminRoleGrant.target_actor_profile_id,
+                        ).where(AdminRoleGrant.id == grant_id)
+                    )
+                ).one()
+                return row[0], row[1]
+
+        async def effective_access_administrators() -> set[str]:
+            async with db_session.get_session_factory()() as session:
+                return set(
+                    await session.scalars(
+                        select(AdminRoleGrant.target_actor_profile_id)
+                        .join(
+                            ActorProfile,
+                            ActorProfile.id == AdminRoleGrant.target_actor_profile_id,
+                        )
+                        .join(
+                            ActorIdentityLink,
+                            ActorIdentityLink.actor_profile_id == ActorProfile.id,
+                        )
+                        .where(
+                            AdminRoleGrant.role == "access_administrator",
+                            AdminRoleGrant.scope_type == "system",
+                            AdminRoleGrant.status == "active",
+                            ActorProfile.actor_kind == "human",
+                            ActorProfile.status == "active",
+                            ActorIdentityLink.status == "active",
+                        )
+                        .distinct()
+                    )
+                )
+
+        async def concurrent_link_posts(
+            link_id: UUID,
+            operation: str,
+            keys: tuple[str, str],
+        ) -> tuple[Response, Response]:
+            original_reserve = AuthorityIdempotencyRepository.reserve
+            original_lock_control = AdminAuthorizationRepository.lock_control
+            first_blocker_acquired = asyncio.Event()
+            release_first = asyncio.Event()
+            second_entered = asyncio.Event()
+            waiter_name = f"auth09db-link-{uuid4().hex}"
+            same_key = keys[0] == keys[1]
+
+            async def observed_reserve(self, **kwargs):
+                task_name = asyncio.current_task().get_name()
+                if not same_key:
+                    return await original_reserve(self, **kwargs)
+                if task_name == "concurrent-link-first":
+                    result = await original_reserve(self, **kwargs)
+                    first_blocker_acquired.set()
+                    await release_first.wait()
+                    return result
+                await first_blocker_acquired.wait()
+                await self._session.execute(
+                    text("select set_config('application_name', :name, true)"),
+                    {"name": waiter_name},
+                )
+                second_entered.set()
+                return await original_reserve(self, **kwargs)
+
+            async def observed_lock_control(self):
+                task_name = asyncio.current_task().get_name()
+                if same_key:
+                    return await original_lock_control(self)
+                if task_name == "concurrent-link-first":
+                    control = await original_lock_control(self)
+                    first_blocker_acquired.set()
+                    await release_first.wait()
+                    return control
+                await first_blocker_acquired.wait()
+                await self._session.execute(
+                    text("select set_config('application_name', :name, true)"),
+                    {"name": waiter_name},
+                )
+                second_entered.set()
+                return await original_lock_control(self)
+
+            monkeypatch.setattr(
+                AuthorityIdempotencyRepository,
+                "reserve",
+                observed_reserve,
+            )
+            monkeypatch.setattr(
+                AdminAuthorizationRepository,
+                "lock_control",
+                observed_lock_control,
+            )
+            try:
+                first_task = asyncio.create_task(
+                    link_post(
+                        link_id,
+                        operation,
+                        bootstrap_headers,
+                        keys[0],
+                        f"Concurrent {operation} exact link",
+                    ),
+                    name="concurrent-link-first",
+                )
+                await asyncio.wait_for(first_blocker_acquired.wait(), timeout=20)
+                second_task = asyncio.create_task(
+                    link_post(
+                        link_id,
+                        operation,
+                        bootstrap_headers,
+                        keys[1],
+                        f"Concurrent {operation} exact link",
+                    ),
+                    name="concurrent-link-second",
+                )
+                await asyncio.wait_for(second_entered.wait(), timeout=20)
+                await asyncio.wait_for(
+                    _wait_for_named_database_lock(auth_database_env, waiter_name),
+                    timeout=20,
+                )
+                release_first.set()
+                first, second = await asyncio.wait_for(
+                    asyncio.gather(first_task, second_task),
+                    timeout=60,
+                )
+                return first, second
+            finally:
+                release_first.set()
+                monkeypatch.setattr(
+                    AuthorityIdempotencyRepository,
+                    "reserve",
+                    original_reserve,
+                )
+                monkeypatch.setattr(
+                    AdminAuthorizationRepository,
+                    "lock_control",
+                    original_lock_control,
+                )
+
+        expected_one_link_success = {
+            "AuthorityInvalidationRequested": 1,
+            "SensitiveAuthorizationDenied": 0,
+        }
+        for operation, initial_revoke, final_status, conflict_code, success_event in (
+            (
+                "revoke",
+                False,
+                "revoked",
+                "identity_link_already_revoked",
+                "ActorIdentityLinkRevoked",
+            ),
+            (
+                "reactivate",
+                True,
+                "active",
+                "identity_link_not_revoked",
+                "ActorIdentityLinkReactivated",
+            ),
+        ):
+            for key_kind in ("same", "different"):
+                actor_id, link_id, _ = await create_actor(f"{operation}-{key_kind}")
+                if initial_revoke:
+                    prepared = await link_post(
+                        link_id,
+                        "revoke",
+                        bootstrap_headers,
+                        str(uuid4()),
+                        "Prepare revoked-link concurrency row",
+                    )
+                    assert prepared.status_code == 200, prepared.text
+                before = await audit_counts()
+                keys = (
+                    (shared := str(uuid4()), shared)
+                    if key_kind == "same"
+                    else (str(uuid4()), str(uuid4()))
+                )
+                responses = await concurrent_link_posts(link_id, operation, keys)
+                statuses = sorted(response.status_code for response in responses)
+                if key_kind == "same":
+                    assert statuses == [200, 200]
+                    assert responses[0].json() == responses[1].json()
+                    assert await idempotency_status(keys[0]) == "committed"
+                    denial_count = 0
+                else:
+                    assert statuses == [200, 409]
+                    loser_index = next(
+                        index
+                        for index, response in enumerate(responses)
+                        if response.status_code == 409
+                    )
+                    assert responses[loser_index].json()["error"]["code"] == conflict_code
+                    assert await idempotency_status(keys[1 - loser_index]) == "committed"
+                    assert await idempotency_status(keys[loser_index]) is None
+                    denial_count = 1
+                assert (await actor_state(actor_id))[3] == final_status
+                await assert_audit_delta(
+                    before,
+                    {
+                        **expected_one_link_success,
+                        success_event: 1,
+                        "SensitiveAuthorizationDenied": denial_count,
+                    },
+                )
+
+        async def ordered_requests(
+            first_name: str,
+            requests: tuple[
+                tuple[str, str, dict[str, str], dict[str, str], str],
+                tuple[str, str, dict[str, str], dict[str, str], str],
+            ],
+        ) -> tuple[tuple[str, Response], tuple[str, Response]]:
+            original_lock_control = AdminAuthorizationRepository.lock_control
+            first_locked = asyncio.Event()
+            waiter_name = f"auth09db-{uuid4().hex}"
+
+            async def ordered_lock_control(self):
+                if asyncio.current_task().get_name() == first_name:
+                    control = await original_lock_control(self)
+                    first_locked.set()
+                    await asyncio.wait_for(
+                        _wait_for_named_database_lock(auth_database_env, waiter_name),
+                        timeout=5,
+                    )
+                    return control
+                await first_locked.wait()
+                await self._session.execute(
+                    text("select set_config('application_name', :name, true)"),
+                    {"name": waiter_name},
+                )
+                return await original_lock_control(self)
+
+            monkeypatch.setattr(
+                AdminAuthorizationRepository,
+                "lock_control",
+                ordered_lock_control,
+            )
+            try:
+                tasks = [
+                    asyncio.create_task(
+                        client.post(
+                            path,
+                            headers={**request_headers, "Idempotency-Key": key},
+                            json=body,
+                        ),
+                        name=name,
+                    )
+                    for name, path, request_headers, body, key in requests
+                ]
+                responses = await asyncio.wait_for(asyncio.gather(*tasks), timeout=60)
+                return (requests[0][4], responses[0]), (requests[1][4], responses[1])
+            finally:
+                monkeypatch.setattr(
+                    AdminAuthorizationRepository,
+                    "lock_control",
+                    original_lock_control,
+                )
+
+        def link_request(
+            name: str,
+            link_id: UUID,
+            operation: str,
+            caller_headers: dict[str, str] = bootstrap_headers,
+        ) -> tuple[str, str, dict[str, str], dict[str, str], str]:
+            return (
+                name,
+                f"/api/v1/actor-identity-links/{link_id}/{operation}",
+                caller_headers,
+                {"reason": f"Ordered {operation} for {name}"},
+                str(uuid4()),
+            )
+
+        ordered_rows = (
+            (False, "revoke", "reactivate", [200, 200], None, "active"),
+            (False, "reactivate", "revoke", [409, 200], "identity_link_not_revoked", "revoked"),
+            (True, "reactivate", "revoke", [200, 200], None, "revoked"),
+            (True, "revoke", "reactivate", [409, 200], "identity_link_already_revoked", "active"),
+        )
+        for index, (initial_revoke, first, second, statuses, error, final_status) in enumerate(
+            ordered_rows
+        ):
+            actor_id, link_id, _ = await create_actor(f"ordered-{index}")
+            if initial_revoke:
+                prepared = await link_post(
+                    link_id,
+                    "revoke",
+                    bootstrap_headers,
+                    str(uuid4()),
+                    "Prepare ordered revoked-link row",
+                )
+                assert prepared.status_code == 200, prepared.text
+            before = await audit_counts()
+            results = await ordered_requests(
+                f"ordered-{index}-first",
+                (
+                    link_request(f"ordered-{index}-first", link_id, first),
+                    link_request(f"ordered-{index}-second", link_id, second),
+                ),
+            )
+            assert [response.status_code for _, response in results] == statuses
+            if error is not None:
+                assert results[0][1].json()["error"]["code"] == error
+                assert await idempotency_status(results[0][0]) is None
+                expected_denials = 1
+                expected_invalidation = 1
+            else:
+                assert [await idempotency_status(key) for key, _ in results] == [
+                    "committed",
+                    "committed",
+                ]
+                expected_denials = 0
+                expected_invalidation = 2
+            assert await idempotency_status(results[1][0]) == "committed"
+            assert (await actor_state(actor_id))[3] == final_status
+            await assert_audit_delta(
+                before,
+                {
+                    "ActorIdentityLinkRevoked": int(error is None or second == "revoke"),
+                    "ActorIdentityLinkReactivated": int(
+                        error is None or second == "reactivate"
+                    ),
+                    "AuthorityInvalidationRequested": expected_invalidation,
+                    "SensitiveAuthorizationDenied": expected_denials,
+                },
+            )
+
+        custodian = (bootstrap_id, bootstrap_headers)
+
+        async def two_admins(
+            name: str,
+        ) -> tuple[
+            tuple[UUID, UUID, dict[str, str], UUID],
+            tuple[UUID, UUID, dict[str, str], UUID],
+        ]:
+            nonlocal custodian
+            a_id, a_link, a_headers = await create_actor(f"{name}-a")
+            b_id, b_link, b_headers = await create_actor(f"{name}-b")
+            a_grant = await grant_admin(a_id, custodian[1], f"Grant {name} administrator A")
+            b_grant = await grant_admin(b_id, custodian[1], f"Grant {name} administrator B")
+            disabled = await client.post(
+                f"/api/v1/actors/{custodian[0]}/suspend",
+                headers={**a_headers, "Idempotency-Key": str(uuid4())},
+                json={"reason": f"Leave exactly two administrators for {name}"},
+            )
+            assert disabled.status_code == 200, disabled.text
+            return (a_id, a_link, a_headers, a_grant), (
+                b_id,
+                b_link,
+                b_headers,
+                b_grant,
+            )
+
+        async def assert_mixed_row(
+            first_request: tuple[str, str, dict[str, str], dict[str, str], str],
+            second_request: tuple[str, str, dict[str, str], dict[str, str], str],
+            denial_code: str,
+            success_event: str,
+        ) -> tuple[str, str]:
+            before = await audit_counts()
+            results = await ordered_requests(first_request[0], (first_request, second_request))
+            assert [response.status_code for _, response in results] == [200, 403]
+            assert results[1][1].json()["error"]["code"] == denial_code
+            assert await idempotency_status(results[0][0]) == "committed"
+            assert await idempotency_status(results[1][0]) is None
+            await assert_audit_delta(
+                before,
+                {
+                    success_event: 1,
+                    "AuthorityInvalidationRequested": 1,
+                    "SensitiveAuthorizationDenied": 1,
+                },
+            )
+            return results[0][0], results[1][0]
+
+        a, b = await two_admins("profile-first")
+        await assert_mixed_row(
+            (
+                "profile-first-a",
+                f"/api/v1/actors/{b[0]}/suspend",
+                a[2],
+                {"reason": "Profile loss before link loss"},
+                str(uuid4()),
+            ),
+            link_request("profile-first-b", a[1], "revoke", b[2]),
+            "actor_suspended",
+            "ActorProfileSuspended",
+        )
+        assert (await actor_state(a[0]))[0::3] == ("active", "active")
+        assert (await actor_state(b[0]))[0::3] == ("suspended", "active")
+        assert await grant_state(a[3]) == ("active", str(a[0]))
+        assert await grant_state(b[3]) == ("active", str(b[0]))
+        assert await effective_access_administrators() == {str(a[0])}
+        custodian = (a[0], a[2])
+
+        a, b = await two_admins("link-first")
+        await assert_mixed_row(
+            link_request("link-first-b", a[1], "revoke", b[2]),
+            (
+                "link-first-a",
+                f"/api/v1/actors/{b[0]}/suspend",
+                a[2],
+                {"reason": "Profile loss after link loss"},
+                str(uuid4()),
+            ),
+            "identity_link_revoked",
+            "ActorIdentityLinkRevoked",
+        )
+        assert (await actor_state(a[0]))[0::3] == ("active", "revoked")
+        assert (await actor_state(b[0]))[0::3] == ("active", "active")
+        assert await grant_state(a[3]) == ("active", str(a[0]))
+        assert await grant_state(b[3]) == ("active", str(b[0]))
+        assert await effective_access_administrators() == {str(b[0])}
+        custodian = (b[0], b[2])
+
+        a, b = await two_admins("link-grant")
+        await assert_mixed_row(
+            link_request("link-grant-a", b[1], "revoke", a[2]),
+            (
+                "link-grant-b",
+                f"/api/v1/admin-role-grants/{a[3]}/revoke",
+                b[2],
+                {"reason": "Grant loss after link loss"},
+                str(uuid4()),
+            ),
+            "identity_link_revoked",
+            "ActorIdentityLinkRevoked",
+        )
+        assert (await actor_state(a[0]))[0::3] == ("active", "active")
+        assert (await actor_state(b[0]))[0::3] == ("active", "revoked")
+        assert await grant_state(a[3]) == ("active", str(a[0]))
+        assert await grant_state(b[3]) == ("active", str(b[0]))
+        assert await effective_access_administrators() == {str(a[0])}
+        custodian = (a[0], a[2])
+
+        a, b = await two_admins("grant-link")
+        await assert_mixed_row(
+            (
+                "grant-link-b",
+                f"/api/v1/admin-role-grants/{a[3]}/revoke",
+                b[2],
+                {"reason": "Grant loss before link loss"},
+                str(uuid4()),
+            ),
+            link_request("grant-link-a", b[1], "revoke", a[2]),
+            "permission_not_granted",
+            "AdminRoleGrantRevoked",
+        )
+        assert (await actor_state(a[0]))[0::3] == ("active", "active")
+        assert (await actor_state(b[0]))[0::3] == ("active", "active")
+        assert await grant_state(a[3]) == ("revoked", str(a[0]))
+        assert await grant_state(b[3]) == ("active", str(b[0]))
+        assert await effective_access_administrators() == {str(b[0])}
+        custodian = (b[0], b[2])
+
+        a_id, _, a_headers = await create_actor("three-a")
+        b_id, _, b_headers = await create_actor("three-b")
+        c_id, c_link, c_headers = await create_actor("three-c")
+        a_grant = await grant_admin(a_id, custodian[1], "Grant three-way administrator A")
+        b_grant = await grant_admin(b_id, custodian[1], "Grant three-way administrator B")
+        c_grant = await grant_admin(c_id, custodian[1], "Grant three-way administrator C")
+        remove_custodian = await client.post(
+            f"/api/v1/actors/{custodian[0]}/suspend",
+            headers={**a_headers, "Idempotency-Key": str(uuid4())},
+            json={"reason": "Leave exactly three administrators"},
+        )
+        assert remove_custodian.status_code == 200, remove_custodian.text
+        original_lock_control = AdminAuthorizationRepository.lock_control
+        first_locked = asyncio.Event()
+        release_first = asyncio.Event()
+        second_entered = asyncio.Event()
+        third_entered = asyncio.Event()
+        second_name = f"auth09db-three-second-{uuid4().hex}"
+        third_name = f"auth09db-three-third-{uuid4().hex}"
+
+        async def three_way_lock_control(self):
+            task_name = asyncio.current_task().get_name()
+            if task_name == "three-profile-first":
+                control = await original_lock_control(self)
+                first_locked.set()
+                await release_first.wait()
+                return control
+            await first_locked.wait()
+            application_name = (
+                second_name if task_name == "three-grant-second" else third_name
+            )
+            await self._session.execute(
+                text("select set_config('application_name', :name, true)"),
+                {"name": application_name},
+            )
+            (second_entered if task_name == "three-grant-second" else third_entered).set()
+            return await original_lock_control(self)
+
+        monkeypatch.setattr(
+            AdminAuthorizationRepository,
+            "lock_control",
+            three_way_lock_control,
+        )
+        three_before = await audit_counts()
+        three_keys = (str(uuid4()), str(uuid4()), str(uuid4()))
+        try:
+            first_task = asyncio.create_task(
+                client.post(
+                    f"/api/v1/actors/{b_id}/suspend",
+                    headers={**a_headers, "Idempotency-Key": three_keys[0]},
+                    json={"reason": "Three-way profile loss first"},
+                ),
+                name="three-profile-first",
+            )
+            await first_locked.wait()
+            second_task = asyncio.create_task(
+                client.post(
+                    f"/api/v1/admin-role-grants/{a_grant}/revoke",
+                    headers={**c_headers, "Idempotency-Key": three_keys[1]},
+                    json={"reason": "Three-way grant loss second"},
+                ),
+                name="three-grant-second",
+            )
+            await asyncio.wait_for(second_entered.wait(), timeout=20)
+            await asyncio.wait_for(
+                _wait_for_named_database_lock(auth_database_env, second_name),
+                timeout=20,
+            )
+            third_task = asyncio.create_task(
+                link_post(
+                    c_link,
+                    "revoke",
+                    b_headers,
+                    three_keys[2],
+                    "Three-way link loss denied third",
+                ),
+                name="three-link-third",
+            )
+            await asyncio.wait_for(third_entered.wait(), timeout=20)
+            await asyncio.wait_for(
+                _wait_for_named_database_lock(auth_database_env, third_name),
+                timeout=20,
+            )
+            release_first.set()
+            three_responses = await asyncio.wait_for(
+                asyncio.gather(first_task, second_task, third_task),
+                timeout=60,
+            )
+        finally:
+            release_first.set()
+            monkeypatch.setattr(
+                AdminAuthorizationRepository,
+                "lock_control",
+                original_lock_control,
+            )
+        assert [response.status_code for response in three_responses] == [200, 200, 403]
+        assert three_responses[2].json()["error"]["code"] == "actor_suspended"
+        assert [await idempotency_status(key) for key in three_keys] == [
+            "committed",
+            "committed",
+            None,
+        ]
+        await assert_audit_delta(
+            three_before,
+            {
+                "ActorProfileSuspended": 1,
+                "AdminRoleGrantRevoked": 1,
+                "AuthorityInvalidationRequested": 2,
+                "SensitiveAuthorizationDenied": 1,
+            },
+        )
+        assert (await actor_state(a_id))[0::3] == ("active", "active")
+        assert (await actor_state(b_id))[0::3] == ("suspended", "active")
+        assert (await actor_state(c_id))[0::3] == ("active", "active")
+        assert await grant_state(a_grant) == ("revoked", str(a_id))
+        assert await grant_state(b_grant) == ("active", str(b_id))
+        assert await grant_state(c_grant) == ("active", str(c_id))
+        assert await effective_access_administrators() == {str(c_id)}
+        custodian = (c_id, c_headers)
+
+        async def actor_self_race(method: str, lifecycle_first: bool, index: int) -> None:
+            target_id, target_link, target_headers = await create_actor(
+                f"self-{method.lower()}-{lifecycle_first}-{index}"
+            )
+            before_target = await actor_state(target_id)
+            before_admin = await actor_state(custodian[0])
+            before_events = await audit_counts()
+            lifecycle_key = str(uuid4())
+            self_name = f"self-{index}"
+            lifecycle_name = f"lifecycle-{index}"
+            waiter_name = f"auth09db-self-{uuid4().hex}"
+            self_lock_owner = ActorService
+            self_lock_attribute = "lock_actor_self_for_authorization"
+            original_self_lock = getattr(self_lock_owner, self_lock_attribute)
+            original_link_lock = (
+                AdminAuthorizationRepository.lock_identity_link_lifecycle_target
+            )
+            first_locked = asyncio.Event()
+            release_first = asyncio.Event()
+            waiter_entered = asyncio.Event()
+            captured_after_self: list[tuple[datetime, datetime]] = []
+
+            if lifecycle_first:
+
+                async def ordered_link_lock(self, identity_link_id):
+                    locked = await original_link_lock(self, identity_link_id)
+                    first_locked.set()
+                    await release_first.wait()
+                    return locked
+
+                async def ordered_self_lock(service, *args):
+                    await first_locked.wait()
+                    await service._session.execute(
+                        text("select set_config('application_name', :name, true)"),
+                        {"name": waiter_name},
+                    )
+                    waiter_entered.set()
+                    return await original_self_lock(service, *args)
+
+            else:
+
+                async def ordered_self_lock(service, *args):
+                    locked = await original_self_lock(service, *args)
+                    first_locked.set()
+                    await release_first.wait()
+                    return locked
+
+                async def ordered_link_lock(self, identity_link_id):
+                    await first_locked.wait()
+                    await self._session.execute(
+                        text("select set_config('application_name', :name, true)"),
+                        {"name": waiter_name},
+                    )
+                    waiter_entered.set()
+                    locked = await original_link_lock(self, identity_link_id)
+                    if locked is not None:
+                        captured_after_self.append(
+                            (locked[1].last_seen_at, locked[0].last_verified_at)
+                        )
+                    return locked
+
+            monkeypatch.setattr(
+                self_lock_owner,
+                self_lock_attribute,
+                ordered_self_lock,
+            )
+            monkeypatch.setattr(
+                AdminAuthorizationRepository,
+                "lock_identity_link_lifecycle_target",
+                ordered_link_lock,
+            )
+            self_task: asyncio.Task[Response] | None = None
+            lifecycle_task: asyncio.Task[Response] | None = None
+            try:
+                async def self_request() -> Response:
+                    return await client.request(
+                        method,
+                        "/api/v1/actors/me",
+                        headers=target_headers,
+                        json=(
+                            {"display_name": f"Ordered self patch {index}"}
+                            if method == "PATCH"
+                            else None
+                        ),
+                    )
+
+                async def lifecycle_request() -> Response:
+                    return await link_post(
+                        target_link,
+                        "revoke",
+                        custodian[1],
+                        lifecycle_key,
+                        f"Ordered self lifecycle {index}",
+                    )
+
+                async def require_first_lock(task: asyncio.Task[Response]) -> None:
+                    lock_task = asyncio.create_task(first_locked.wait())
+                    done, _ = await asyncio.wait(
+                        {task, lock_task},
+                        timeout=20,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if lock_task in done:
+                        return
+                    lock_task.cancel()
+                    if task in done:
+                        early = task.result()
+                        raise AssertionError(
+                            f"blocker returned before target lock: "
+                            f"{early.status_code} {early.text}"
+                        )
+                    raise AssertionError("blocker did not reach the target lock")
+
+                async def require_waiter(task: asyncio.Task[Response]) -> None:
+                    waiter_task = asyncio.create_task(waiter_entered.wait())
+                    done, _ = await asyncio.wait(
+                        {task, waiter_task},
+                        timeout=20,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    if waiter_task in done:
+                        return
+                    waiter_task.cancel()
+                    if task in done:
+                        early = task.result()
+                        raise AssertionError(
+                            f"{method} lifecycle_first={lifecycle_first} waiter returned "
+                            f"before target lock: {early.status_code} {early.text}"
+                        )
+                    raise AssertionError(
+                        f"{method} lifecycle_first={lifecycle_first} waiter did not "
+                        "reach the target lock"
+                    )
+
+                if lifecycle_first:
+                    lifecycle_task = asyncio.create_task(
+                        lifecycle_request(), name=lifecycle_name
+                    )
+                    await require_first_lock(lifecycle_task)
+                    self_task = asyncio.create_task(self_request(), name=self_name)
+                else:
+                    self_task = asyncio.create_task(self_request(), name=self_name)
+                    await require_first_lock(self_task)
+                    lifecycle_task = asyncio.create_task(
+                        lifecycle_request(), name=lifecycle_name
+                    )
+                waiter = self_task if lifecycle_first else lifecycle_task
+                assert waiter is not None
+                await require_waiter(waiter)
+                await asyncio.wait_for(
+                    _wait_for_named_database_lock(auth_database_env, waiter_name),
+                    timeout=20,
+                )
+                release_first.set()
+                self_response, lifecycle_response = await asyncio.wait_for(
+                    asyncio.gather(self_task, lifecycle_task),
+                    timeout=60,
+                )
+            finally:
+                release_first.set()
+                tasks = [
+                    task
+                    for task in (self_task, lifecycle_task)
+                    if task is not None and not task.done()
+                ]
+                for task in tasks:
+                    task.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                monkeypatch.setattr(
+                    self_lock_owner,
+                    self_lock_attribute,
+                    original_self_lock,
+                )
+                monkeypatch.setattr(
+                    AdminAuthorizationRepository,
+                    "lock_identity_link_lifecycle_target",
+                    original_link_lock,
+                )
+            assert lifecycle_response.status_code == 200, lifecycle_response.text
+            assert await idempotency_status(lifecycle_key) == "committed"
+            final_target = await actor_state(target_id)
+            final_admin = await actor_state(custodian[0])
+            assert final_target[3] == "revoked"
+            assert final_admin[1] > before_admin[1]
+            assert final_admin[2] > before_admin[2]
+            if lifecycle_first:
+                assert self_response.status_code == 403, self_response.text
+                assert self_response.json()["error"]["code"] == "identity_link_revoked"
+                assert final_target[1:3] == before_target[1:3]
+                denial_count = 1
+            else:
+                assert self_response.status_code == 200, self_response.text
+                assert captured_after_self
+                assert final_target[1:3] == captured_after_self[0]
+                assert final_target[1] > before_target[1]
+                assert final_target[2] > before_target[2]
+                denial_count = 0
+            await assert_audit_delta(
+                before_events,
+                {
+                    "ActorIdentityLinkRevoked": 1,
+                    "AuthorityInvalidationRequested": 1,
+                    "SensitiveAuthorizationDenied": denial_count,
+                },
+            )
+
+        index = 0
+        for method in ("GET", "PATCH"):
+            for lifecycle_first in (False, True):
+                index += 1
+                await actor_self_race(method, lifecycle_first, index)
+
+    async with db_session.get_session_factory()() as session:
+        assert await AdminAuthorizationRepository(
+            session
+        ).count_effective_access_administrators() == 1
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(AuthorityIdempotencyRecord)
+                .where(AuthorityIdempotencyRecord.status == "pending")
+            )
+            or 0
+        ) == 0
 
 
 async def test_no_local_login_password_or_session_routes() -> None:

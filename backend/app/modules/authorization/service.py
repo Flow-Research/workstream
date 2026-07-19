@@ -113,14 +113,14 @@ _EVIDENCE = {
     ),
     AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: _OperationEvidence(
         "actor.identity_link.revoke",
-        None,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         AuthorityResourceType.ACTOR_IDENTITY_LINK,
         200,
         (AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED,),
     ),
     AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: _OperationEvidence(
         "actor.identity_link.reactivate",
-        None,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
         AuthorityResourceType.ACTOR_IDENTITY_LINK,
         200,
         (AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED,),

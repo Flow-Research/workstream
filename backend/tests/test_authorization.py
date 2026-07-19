@@ -32,6 +32,7 @@ from app.modules.audit.schemas import (
 )
 from app.modules.audit.service import AuditService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.actors.service import ActorService
 from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
 from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
@@ -39,10 +40,13 @@ from app.modules.authorization import router as authorization_router
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
     ActorLifecycleMutationResponse,
+    IdentityLinkLifecycleMutationResponse,
 )
 from app.modules.authorization.lifecycle_service import (
     ActorLifecycleConflict,
     ActorLifecycleService,
+    IdentityLinkLifecycleConflict,
+    IdentityLinkLifecycleService,
 )
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
@@ -103,6 +107,7 @@ from app.modules.authorization.policy import ADMIN_ROLE_PERMISSIONS, ADMIN_ROLE_
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
+    ActorIdentityLinkLifecycleResourceContext,
     ActorKind,
     ActorProfileAdminReadResourceContext,
     ActorProfileLifecycleResourceContext,
@@ -288,12 +293,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
         ActionId.ACTOR_PROFILE_READ,
-            ActionId.ACTOR_IDENTITY_LINK_READ,
-            ActionId.ACTOR_SERVICE_PROVISION,
-            ActionId.ACTOR_PROFILE_SUSPEND,
-            ActionId.ACTOR_PROFILE_REACTIVATE,
-            ActionId.ACTOR_PROFILE_DEACTIVATE,
-        }
+        ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.ACTOR_SERVICE_PROVISION,
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+    }
     assert {
         definition.action_id.value: (
             definition.permission_id.value,
@@ -694,6 +701,164 @@ async def test_authorization_route_database_failures_rollback_and_map_to_retryab
 
 
 @pytest.mark.parametrize(
+    ("outcome", "expected_error", "expected_events"),
+    [
+        ("success", None, ["reserve", "authorize", "touch", "complete", "commit"]),
+        ("replay", None, ["reserve", "authorize", "touch", "commit"]),
+        (
+            "mismatch",
+            "idempotency_mismatch",
+            ["reserve", "authorize", "rollback", "record_mismatch", "commit"],
+        ),
+        (
+            "conflict",
+            "identity_link_already_revoked",
+            [
+                "reserve",
+                "authorize",
+                "touch",
+                "complete",
+                "rollback",
+                "record_conflict",
+                "commit",
+            ],
+        ),
+        (
+            "sql_failure",
+            "service_unavailable",
+            ["reserve", "authorize", "touch", "complete", "rollback"],
+        ),
+    ],
+)
+async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+    expected_error: str | None,
+    expected_events: list[str],
+) -> None:
+    """Prove route-owned ordering and stable mapping for every lifecycle outcome."""
+    caller_id = uuid4()
+    target_link_id = uuid4()
+    target_actor_id = uuid4()
+    idempotency_key = uuid4()
+    events: list[str] = []
+    response_reference = AuthorityResponseReference(
+        resource_type=AuthorityResourceType.ACTOR_IDENTITY_LINK,
+        resource_id=target_link_id,
+        version=None,
+        http_status=200,
+    )
+    response = IdentityLinkLifecycleMutationResponse(
+        resource_type="actor_identity_link",
+        resource_id=target_link_id,
+        version=None,
+        http_status=200,
+    )
+    claim = AuthorityClaimHandle(
+        record_id=uuid4(),
+        idempotency_key=idempotency_key,
+        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+        actor_ref=str(caller_id),
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+        request_digest=DIGEST,
+    )
+    reservation = {
+        "success": ClaimedReservation(claim=claim),
+        "replay": ReplayedReservation(response=response_reference),
+        "mismatch": MismatchedReservation(),
+        "conflict": ClaimedReservation(claim=claim),
+        "sql_failure": ClaimedReservation(claim=claim),
+    }[outcome]
+
+    class Session:
+        async def commit(self) -> None:
+            events.append("commit")
+
+        async def rollback(self) -> None:
+            events.append("rollback")
+
+    class Authorization:
+        async def require(self, action_id, resource):
+            events.append("authorize")
+            assert action_id is ActionId.ACTOR_IDENTITY_LINK_REVOKE
+            assert isinstance(resource, ActorIdentityLinkLifecycleResourceContext)
+            assert resource.resource_id == target_link_id
+            assert resource.transition == "revoke"
+            assert resource.existing_idempotency_record is (outcome in {"replay", "mismatch"})
+            return SimpleNamespace(revalidated=True)
+
+    class RouteActorService:
+        def __init__(self, session) -> None:
+            assert session is test_session
+
+        async def touch_after_authorization(self, resolved) -> None:
+            assert resolved.profile.id == str(caller_id)
+            events.append("touch")
+
+    class RouteLifecycleService:
+        def __init__(self, session) -> None:
+            assert session is test_session
+
+        async def reserve(self, **kwargs):
+            events.append("reserve")
+            assert kwargs["idempotency_key"] == idempotency_key
+            assert kwargs["actor_profile_id"] == caller_id
+            assert kwargs["request"].identity_link_id == target_link_id
+            return reservation
+
+        async def record_mismatch(self, **kwargs) -> None:
+            events.append("record_mismatch")
+            assert kwargs["actor_profile_id"] == caller_id
+
+        async def complete(self, **kwargs):
+            events.append("complete")
+            assert kwargs["actor_profile_id"] == caller_id
+            assert kwargs["reason"] == "Revoke exact identity link"
+            if outcome == "conflict":
+                raise IdentityLinkLifecycleConflict(
+                    "identity_link_already_revoked",
+                    target_actor_id,
+                )
+            if outcome == "sql_failure":
+                raise SQLAlchemyError("lifecycle write failed")
+            return response
+
+        async def record_conflict(self, **kwargs) -> None:
+            events.append("record_conflict")
+            assert kwargs["target_actor_profile_id"] == target_actor_id
+            assert kwargs["code"] == "identity_link_already_revoked"
+
+    test_session = Session()
+    monkeypatch.setattr(authorization_router, "ActorService", RouteActorService)
+    monkeypatch.setattr(
+        authorization_router,
+        "IdentityLinkLifecycleService",
+        RouteLifecycleService,
+    )
+
+    call = authorization_router._mutate_identity_link_lifecycle(
+        identity_link_id=target_link_id,
+        payload=ActorLifecycleBody(reason="Revoke exact identity link"),
+        idempotency_key=idempotency_key,
+        resolved=SimpleNamespace(profile=SimpleNamespace(id=str(caller_id))),
+        authorization=Authorization(),
+        session=test_session,  # type: ignore[arg-type]
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+        action=ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        transition="revoke",
+    )
+    if expected_error is None:
+        assert await call == response
+    else:
+        with pytest.raises(StructuredHTTPException) as failure:
+            await call
+        assert failure.value.error_code == expected_error
+        assert failure.value.status_code == (503 if outcome == "sql_failure" else 409)
+        assert failure.value.retryable is (outcome == "sql_failure")
+    assert events == expected_events
+
+
+@pytest.mark.parametrize(
     "definitions, message",
     [
         (ACTION_DEFINITIONS[:-1], "incomplete"),
@@ -781,6 +946,20 @@ def test_action_catalogue_construction_fails_closed(
         _index_actions(definitions)
 
 
+def test_action_catalogue_rejects_count_and_permission_partition_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as patch:
+        patch.setattr(authorization_catalogue, "PERMISSION_IDS", frozenset())
+        with pytest.raises(RuntimeError, match="catalogue count mismatch"):
+            _index_actions(ACTION_DEFINITIONS)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(authorization_catalogue, "HISTORICAL_PERMISSION_IDS", frozenset())
+        with pytest.raises(RuntimeError, match="permission boundary mismatch"):
+            _index_actions(ACTION_DEFINITIONS)
+
+
 def _runtime_context(
     *,
     actor_status: ActorStatus = ActorStatus.ACTIVE,
@@ -806,11 +985,19 @@ class _DecisionEvidence:
         self.events.append(event)
 
 
+_DEFAULT_REVALIDATOR = object()
+
+
 def _runtime_service(
     context: AuthorizationContext,
     *,
-    revalidate=None,
+    revalidate=_DEFAULT_REVALIDATOR,
 ) -> tuple[AuthorizationService, _DecisionEvidence]:
+    if revalidate is _DEFAULT_REVALIDATOR:
+
+        async def revalidate(current, _resource):
+            return current
+
     service = AuthorizationService(object(), context, revalidate_actor_self=revalidate)  # type: ignore[arg-type]
     evidence = _DecisionEvidence()
     service._audit = evidence  # type: ignore[assignment]
@@ -834,6 +1021,7 @@ class _AdminPolicyFacts:
         )
         self.request_actor_is_present = True
         self.lifecycle_target_is_present = True
+        self.link_lifecycle_target_is_present = True
         self.control_locked = False
         self.find_calls: list[tuple[tuple, dict]] = []
 
@@ -874,6 +1062,15 @@ class _AdminPolicyFacts:
         return (
             SimpleNamespace(status="active"),
             SimpleNamespace(id=str(actor_profile_id), status="active"),
+            None,
+        )
+
+    async def lock_identity_link_lifecycle_target(self, identity_link_id):
+        if not self.link_lifecycle_target_is_present:
+            return None
+        return (
+            SimpleNamespace(id=str(identity_link_id), status="active"),
+            SimpleNamespace(id=str(uuid4()), actor_kind="human", status="active"),
             None,
         )
 
@@ -1045,6 +1242,64 @@ async def test_actor_profile_lifecycle_kernel_guards_self_pairing_and_disclosure
     ]
 
 
+@pytest.mark.parametrize(
+    ("action_id", "transition"),
+    [
+        (ActionId.ACTOR_IDENTITY_LINK_REVOKE, "revoke"),
+        (ActionId.ACTOR_IDENTITY_LINK_REACTIVATE, "reactivate"),
+    ],
+)
+async def test_identity_link_lifecycle_kernel_locks_control_and_exact_target(
+    action_id: ActionId,
+    transition: str,
+) -> None:
+    service, evidence, facts = _admin_runtime_service(_runtime_context())
+    resource = ActorIdentityLinkLifecycleResourceContext(
+        resource_type="actor_identity_link",
+        resource_id=uuid4(),
+        transition=transition,
+    )
+
+    decision = await service.require(action_id, resource)
+
+    assert decision.allowed is True
+    assert decision.revalidated is True
+    assert decision.resource_context_digest == authorization_resource_digest(resource)
+    assert facts.control_locked is True
+    assert evidence.events[0].resource_id == str(resource.resource_id)
+
+
+async def test_identity_link_lifecycle_kernel_guards_self_pairing_and_disclosure() -> None:
+    context = _runtime_context()
+    service, evidence, facts = _admin_runtime_service(context)
+    self_revoke = ActorIdentityLinkLifecycleResourceContext(
+        resource_type="actor_identity_link",
+        resource_id=context.identity_link_id,
+        transition="revoke",
+    )
+    with pytest.raises(AuthorizationDenied) as self_denial:
+        await service.require(ActionId.ACTOR_IDENTITY_LINK_REVOKE, self_revoke)
+    assert self_denial.value.public_code == "resource_guard_denied"
+
+    crossed = self_revoke.model_copy(
+        update={"resource_id": uuid4(), "transition": "reactivate"}
+    )
+    with pytest.raises(AuthorizationDenied) as crossed_denial:
+        await service.require(ActionId.ACTOR_IDENTITY_LINK_REVOKE, crossed)
+    assert crossed_denial.value.public_code == "resource_guard_denied"
+
+    missing = self_revoke.model_copy(update={"resource_id": uuid4()})
+    facts.link_lifecycle_target_is_present = False
+    with pytest.raises(AuthorizationDenied) as missing_denial:
+        await service.require(ActionId.ACTOR_IDENTITY_LINK_REVOKE, missing)
+    assert missing_denial.value.public_code == "resource_not_found"
+    assert [event.denial_code for event in evidence.events] == [
+        "resource_guard_denied",
+        "resource_guard_denied",
+        "resource_not_found",
+    ]
+
+
 def _actor_lifecycle_decision(
     request: ActorProfileSuspendRequest | ActorProfileReactivateRequest,
     *,
@@ -1076,6 +1331,53 @@ def _actor_lifecycle_decision(
         denial_code=None,
         resource_type="actor_profile",
         resource_id=request.actor_profile_id,
+        resource_context_digest=authorization_resource_digest(resource),
+        matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+        matched_grant_id=uuid4(),
+        matched_scope_project_id=None,
+        revalidated=True,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+def _identity_link_lifecycle_decision(
+    request: ActorIdentityLinkRevokeRequest | ActorIdentityLinkReactivateRequest,
+    *,
+    existing: bool,
+) -> AuthorizationDecision:
+    action = {
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: (
+            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE
+        ),
+    }[request.operation]
+    permission = {
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: (
+            PermissionId.ACTOR_IDENTITY_LINK_REVOKE
+        ),
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: (
+            PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE
+        ),
+    }[request.operation]
+    transition = {
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: "revoke",
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: "reactivate",
+    }[request.operation]
+    resource = ActorIdentityLinkLifecycleResourceContext(
+        resource_type="actor_identity_link",
+        resource_id=request.identity_link_id,
+        transition=transition,
+        existing_idempotency_record=existing,
+    )
+    return AuthorizationDecision(
+        decision_id=uuid4(),
+        action_id=action,
+        permission_id=permission,
+        allowed=True,
+        denial_code=None,
+        resource_type="actor_identity_link",
+        resource_id=request.identity_link_id,
         resource_context_digest=authorization_resource_digest(resource),
         matched_authority_kind=MatchedAuthorityKind.ADMIN_ROLE_GRANT,
         matched_grant_id=uuid4(),
@@ -1277,6 +1579,159 @@ async def test_actor_lifecycle_service_applies_success_and_guards_conflicts() ->
         code="actor_already_suspended",
     )
     assert audit.event.matched_grant_id is None
+
+
+async def test_identity_link_lifecycle_service_applies_success_and_guards_conflicts() -> None:
+    target_link, target_actor, caller = uuid4(), uuid4(), uuid4()
+    reason = "Revoke exact identity link"
+
+    class Session:
+        flushed = 0
+
+        async def flush(self):
+            self.flushed += 1
+
+    class Repository:
+        def __init__(self, link, profile):
+            self.link = link
+            self.profile = profile
+
+        async def lock_identity_link_lifecycle_target(self, _identity_link_id):
+            return self.link, self.profile, None
+
+        async def count_effective_access_administrators(self):
+            return 1
+
+    class Mutation:
+        completed = None
+        mismatch = None
+
+        async def complete(self, **kwargs):
+            self.completed = kwargs
+
+        async def record_mismatch_denial(self, **kwargs):
+            self.mismatch = kwargs
+
+    class Audit:
+        event = None
+
+        async def add_authority_event(self, event):
+            self.event = event
+
+    session = Session()
+    link = SimpleNamespace(
+        id=str(target_link),
+        status="active",
+        revoked_by=None,
+        revoked_at=None,
+        revoked_reason=None,
+        reactivated_by=None,
+        reactivated_at=None,
+        reactivation_reason=None,
+    )
+    profile = SimpleNamespace(id=str(target_actor), actor_kind="human", status="active")
+    repository = Repository(link, profile)
+    mutation = Mutation()
+    service = IdentityLinkLifecycleService(session)  # type: ignore[arg-type]
+    service._repository = repository  # type: ignore[assignment]
+    service._mutation = mutation  # type: ignore[assignment]
+    audit = Audit()
+    service._audit = audit  # type: ignore[assignment]
+    claim = AuthorityClaimHandle(
+        record_id=uuid4(),
+        idempotency_key=uuid4(),
+        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+        actor_ref=str(caller),
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+        request_digest=DIGEST,
+    )
+    request = ActorIdentityLinkRevokeRequest(
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+        identity_link_id=target_link,
+        reason_digest=derive_reason_digest(reason),
+    )
+    decision = _identity_link_lifecycle_decision(request, existing=False)
+
+    response = await service.complete(
+        claim=claim,
+        request=request,
+        decision=decision,
+        actor_profile_id=caller,
+        reason=reason,
+    )
+    assert response == IdentityLinkLifecycleMutationResponse(
+        resource_type="actor_identity_link",
+        resource_id=target_link,
+        version=None,
+        http_status=200,
+    )
+    assert session.flushed == 1
+    assert link.status == "revoked"
+    assert link.revoked_by == str(caller)
+    assert link.revoked_reason == reason
+    success = mutation.completed["success"]
+    assert success.target_actor_ref == str(target_actor)
+    assert success.before_facts == {"status": "active"}
+    assert success.after_facts == {"status": "revoked"}
+
+    reactivate_reason = "Reactivate active identity link"
+    reactivate = ActorIdentityLinkReactivateRequest(
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE,
+        identity_link_id=target_link,
+        reason_digest=derive_reason_digest(reactivate_reason),
+    )
+    link.status = "active"
+    with pytest.raises(IdentityLinkLifecycleConflict) as not_revoked:
+        await service.complete(
+            claim=claim.model_copy(update={"operation": reactivate.operation}),
+            request=reactivate,
+            decision=_identity_link_lifecycle_decision(reactivate, existing=False),
+            actor_profile_id=caller,
+            reason=reactivate_reason,
+        )
+    assert not_revoked.value.code == "identity_link_not_revoked"
+    assert not_revoked.value.actor_profile_id == target_actor
+
+    assert (
+        await service._conflict(
+            request,
+            SimpleNamespace(status="active"),
+            SimpleNamespace(actor_kind="human", status="active"),
+            True,
+        )
+        == "last_access_administrator"
+    )
+    crossed = decision.model_copy(update={"revalidated": False})
+    with pytest.raises(TypeError, match="mismatch requires exact authority"):
+        await service.record_mismatch(
+            actor_profile_id=caller,
+            request=request,
+            decision=crossed,
+        )
+    with pytest.raises(TypeError, match="conflict requires exact authority"):
+        await service.record_conflict(
+            actor_profile_id=caller,
+            target_actor_profile_id=target_actor,
+            request=request,
+            decision=crossed,
+            code="identity_link_already_revoked",
+        )
+
+    await service.record_mismatch(
+        actor_profile_id=caller,
+        request=request,
+        decision=_identity_link_lifecycle_decision(request, existing=True),
+    )
+    assert mutation.mismatch["context"].matched_grant_id is None
+    await service.record_conflict(
+        actor_profile_id=caller,
+        target_actor_profile_id=target_actor,
+        request=request,
+        decision=decision,
+        code="identity_link_already_revoked",
+    )
+    assert audit.event.matched_grant_id is None
+    assert audit.event.target_actor_ref == str(target_actor)
 
 
 async def test_admin_kernel_conceals_targets_until_permission_and_scope_match() -> None:
@@ -2127,7 +2582,9 @@ async def test_post_allow_admin_denials_preserve_matched_grant_provenance() -> N
     }
 
 
-async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction() -> None:
+async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class ForgottenCommitSession:
         def __init__(self) -> None:
             self.rollback_count = 0
@@ -2149,6 +2606,15 @@ async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction
     service = await anext(dependency)
     evidence = _DecisionEvidence()
     service._audit = evidence  # type: ignore[assignment]
+
+    async def retain_resolved_actor(_service, current):
+        return current
+
+    monkeypatch.setattr(
+        ActorService,
+        "lock_actor_self_for_authorization",
+        retain_resolved_actor,
+    )
 
     await service.require(
         ActionId.ACTOR_PROFILE_READ_SELF,
@@ -2236,7 +2702,7 @@ async def test_authorization_kernel_allows_only_exact_actor_self_actions() -> No
     assert decision.allowed is True
     assert decision.action_id is ActionId.ACTOR_PROFILE_READ_SELF
     assert decision.permission_id is PermissionId.ACTOR_PROFILE_READ_SELF
-    assert decision.revalidated is False
+    assert decision.revalidated is True
     assert len(evidence.events) == 1
     assert evidence.events[0].action_id is ActionId.ACTOR_PROFILE_READ_SELF
     assert evidence.events[0].after_facts == {"allowed": True}
@@ -2544,12 +3010,25 @@ async def test_authorization_kernel_preserves_lifecycle_denial_precedence(
 
 async def test_actor_self_update_requires_transaction_revalidation() -> None:
     context = _runtime_context()
+    read_resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=(),
+    )
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
         requested_fields=("contact_email",),
     )
-    without_recheck, _ = _runtime_service(context)
+    without_read_recheck, _ = _runtime_service(context, revalidate=None)
+    with pytest.raises(AuthorizationDenied) as read_exc_info:
+        await without_read_recheck.require(ActionId.ACTOR_PROFILE_READ_SELF, read_resource)
+    assert (
+        read_exc_info.value.decision.denial_code
+        is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+    )
+
+    without_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as exc_info:
         await without_recheck.require(ActionId.ACTOR_PROFILE_UPDATE_SELF, resource)
     assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED

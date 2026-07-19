@@ -1055,6 +1055,65 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             json={"reason": "Real HTTP service profile correction"},
         )
         assert reactivated_service.status_code == 200, reactivated_service.text
+
+        service_link_id = service_admin_link["identity_link_id"]
+        link_lifecycle_key = str(uuid4())
+        link_lifecycle_reason = "Real HTTP service identity-link lifecycle proof"
+        revoked_service_link = await client.post(
+            f"/api/v1/actor-identity-links/{service_link_id}/revoke",
+            headers=auth_headers(manager_token)
+            | {"Idempotency-Key": link_lifecycle_key},
+            json={"reason": link_lifecycle_reason},
+        )
+        assert revoked_service_link.status_code == 200, revoked_service_link.text
+        assert revoked_service_link.json() == {
+            "resource_type": "actor_identity_link",
+            "resource_id": service_link_id,
+            "version": None,
+            "http_status": 200,
+        }
+        assert link_lifecycle_reason not in revoked_service_link.text
+        replayed_service_link = await client.post(
+            f"/api/v1/actor-identity-links/{service_link_id}/revoke",
+            headers=auth_headers(manager_token)
+            | {"Idempotency-Key": link_lifecycle_key},
+            json={"reason": link_lifecycle_reason},
+        )
+        assert replayed_service_link.status_code == 200, replayed_service_link.text
+        assert replayed_service_link.json() == revoked_service_link.json()
+        mismatched_service_link = await client.post(
+            f"/api/v1/actor-identity-links/{service_link_id}/revoke",
+            headers=auth_headers(manager_token)
+            | {"Idempotency-Key": link_lifecycle_key},
+            json={"reason": "Different link lifecycle request"},
+        )
+        assert mismatched_service_link.status_code == 409, mismatched_service_link.text
+        assert mismatched_service_link.json()["error"]["code"] == "idempotency_mismatch"
+        conflicting_service_link = await client.post(
+            f"/api/v1/actor-identity-links/{service_link_id}/revoke",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Conflicting link lifecycle request"},
+        )
+        assert conflicting_service_link.status_code == 409, conflicting_service_link.text
+        assert (
+            conflicting_service_link.json()["error"]["code"]
+            == "identity_link_already_revoked"
+        )
+        repaired_service_link = await client.post(
+            f"/api/v1/actor-identity-links/{service_link_id}/reactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Real HTTP service identity-link correction"},
+        )
+        assert repaired_service_link.status_code == 200, repaired_service_link.text
+        repaired_service_link_view = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/{service_actor_id}/identity-links",
+            manager_token,
+        )
+        assert repaired_service_link_view["status"] == "active"
+        assert repaired_service_link_view["last_verified_at"] is None
+
         deactivated_service = await client.post(
             f"/api/v1/actors/{service_actor_id}/deactivate",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
@@ -1338,6 +1397,11 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             worker_token,
             {"reason": "real worker claim"},
         )
+        ensure(
+            claim["assignment"]["contributor_id"]
+            == canonical_actor["actor_profile_id"],
+            "task claim did not return canonical contributor attribution",
+        )
         await request_json(
             client,
             "GET",
@@ -1395,6 +1459,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 ],
             },
             201,
+        )
+        ensure(
+            submission["contributor_id"] == canonical_actor["actor_profile_id"],
+            "submission did not return canonical contributor attribution",
         )
         for internal_field in (
             "artifact_hash_manifest",

@@ -28,6 +28,12 @@ S3CompatibleArtifactStore    integration and production
   MinIO                      local and CI integration provider
 ```
 
+The `local/CI` MinIO label is a non-production eligibility class, not a literal
+endpoint-host restriction. Repository-owned Compose and CI instances publish
+on host loopback. An operator-controlled private container-network endpoint may
+be used only in local, development, or test environments and does not count as
+production activation evidence.
+
 AWS S3 is the only v0.1 production provider. Each replica persists immutable
 provider profile and storage-namespace identity. Switching a populated
 deployment requires a separately approved complete-copy, verification, and

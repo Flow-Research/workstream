@@ -23,6 +23,7 @@ from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
+    ActorIdentityLinkLifecycleResourceContext,
     ActorKind,
     ActorProfileAdminReadResourceContext,
     ActorProfileLifecycleResourceContext,
@@ -64,6 +65,8 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.ACTOR_PROFILE_SUSPEND,
         ActionId.ACTOR_PROFILE_REACTIVATE,
         ActionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
@@ -80,6 +83,8 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.ACTOR_PROFILE_SUSPEND,
         ActionId.ACTOR_PROFILE_REACTIVATE,
         ActionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
     }
 )
 
@@ -126,7 +131,11 @@ class AuthorizationService:
         else:
             if (
                 action is not None
-                and action.action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF
+                and action.action_id
+                in {
+                    ActionId.ACTOR_PROFILE_READ_SELF,
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                }
                 and isinstance(resource_context, ActorSelfResourceContext)
                 and self._revalidate_actor_self is not None
             ):
@@ -266,6 +275,17 @@ class AuthorizationService:
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if await self._admin.lock_actor_lifecycle_target(resource.resource_id) is None:
                 return AuthorizationDenialCode.ACTOR_NOT_FOUND
+        elif isinstance(resource, ActorIdentityLinkLifecycleResourceContext):
+            if (
+                resource.resource_id == context.identity_link_id
+                and resource.transition == "revoke"
+            ):
+                return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if (
+                await self._admin.lock_identity_link_lifecycle_target(resource.resource_id)
+                is None
+            ):
+                return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         elif isinstance(
             resource,
             (AdminRoleGrantCollectionResourceContext, ActorAdminRoleGrantHistoryResourceContext),
@@ -298,6 +318,8 @@ class AuthorizationService:
             ActionId.ACTOR_PROFILE_SUSPEND: ActorProfileLifecycleResourceContext,
             ActionId.ACTOR_PROFILE_REACTIVATE: ActorProfileLifecycleResourceContext,
             ActionId.ACTOR_PROFILE_DEACTIVATE: ActorProfileLifecycleResourceContext,
+            ActionId.ACTOR_IDENTITY_LINK_REVOKE: ActorIdentityLinkLifecycleResourceContext,
+            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE: ActorIdentityLinkLifecycleResourceContext,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
@@ -305,6 +327,8 @@ class AuthorizationService:
             ActionId.ACTOR_PROFILE_SUSPEND: "suspend",
             ActionId.ACTOR_PROFILE_REACTIVATE: "reactivate",
             ActionId.ACTOR_PROFILE_DEACTIVATE: "deactivate",
+            ActionId.ACTOR_IDENTITY_LINK_REVOKE: "revoke",
+            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE: "reactivate",
         }.get(action_id)
         return transition is None or resource.transition == transition
 
@@ -373,7 +397,10 @@ class AuthorizationService:
             return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         if context.actor_kind is not ActorKind.HUMAN:
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-        if action.action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF and not revalidated:
+        if action.action_id in {
+            ActionId.ACTOR_PROFILE_READ_SELF,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+        } and not revalidated:
             return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         return None
 
@@ -402,8 +429,8 @@ class AuthorizationService:
         audit_resource_type = None
         if target_is_actor:
             audit_resource_type = "actor_profile"
-        elif decision.resource_type == "admin_role_grant":
-            audit_resource_type = "admin_role_grant"
+        elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
+            audit_resource_type = decision.resource_type
         try:
             await self._audit.add_authority_event(
                 AuthorityAuditEventInput(

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.auth import actor_registry_http_error, get_registered_actor
-from app.core.api_controls import error_response
+from app.core.api_controls import StructuredHTTPException, error_response
 from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
 from app.modules.actors.schemas import (
@@ -82,6 +82,16 @@ def task_http_error(exc: TaskServiceError) -> HTTPException:
     Returns:
         HTTP exception carrying the service error details.
     """
+    code = getattr(exc, "code", None)
+    if code is not None:
+        message = getattr(exc, "message", str(exc))
+        return StructuredHTTPException(
+            status_code=exc.status_code,
+            detail=message,
+            error_code=code,
+            error_message=message,
+            retryable=getattr(exc, "retryable", False),
+        )
     return HTTPException(status_code=exc.status_code, detail=str(exc))
 
 
@@ -92,6 +102,8 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
     message = {
         "pre_submission_checker_failed": "Pre-submission checks failed",
         "task_locked_context_invalid": "Task locked context is invalid",
+        "active_contributor_required": "Active contributor identity required",
+        "contributor_identity_unavailable": "Contributor identity verification unavailable",
     }[code]
     return error_response(
         request,
@@ -99,6 +111,7 @@ def task_domain_error_response(request: Request, exc: TaskServiceError) -> JSONR
         code=code,
         message=message,
         details=details,
+        retryable=getattr(exc, "retryable", False),
         compatibility={"code": code, "details": details},
     )
 
@@ -188,7 +201,7 @@ async def get_task_work_context(
     actor: Annotated[ActorContext, Depends(get_registered_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> TaskWorkContextResponse | JSONResponse:
-    """Return worker-safe locked guide, policy, and lifecycle context."""
+    """Return contributor-safe locked guide, policy, and lifecycle context."""
     try:
         return await TaskService(session).get_task_work_context(actor, task_id)
     except PermissionDenied as exc:
@@ -218,7 +231,7 @@ async def get_task_submission_requirements(
     actor: Annotated[ActorContext, Depends(get_registered_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionRequirementsResponse | JSONResponse:
-    """Return exact worker submission requirements from locked policy context."""
+    """Return exact contributor submission requirements from locked policy context."""
     try:
         return await TaskService(session).get_task_submission_requirements(actor, task_id)
     except PermissionDenied as exc:

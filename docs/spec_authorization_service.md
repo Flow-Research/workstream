@@ -238,14 +238,15 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 65 rows after AUTH-09D-A: 15 active actions
-and 50 planned rows. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 65 rows after AUTH-09D-B: 17 active actions
+and 48 planned rows. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
 `actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
-`actor.identity_link.read`, and AUTH-09D-A activates only the three profile
-lifecycle actions. The other planned rows cover
+`actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
+actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
+other planned rows cover
 three Operator recovery actions, 25 artifact actions, canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
@@ -281,8 +282,8 @@ AUTH-09A registers these exact planned actions through migration `0023`:
 
 AUTH-09B activates only `actor.service.provision` through the controlled route
 described below. AUTH-09C activates only the two bounded actor-registry reads.
-AUTH-09D-A activates profile suspend, reactivate, and terminal deactivate. The
-two identity-link mutations remain unavailable until AUTH-09D-B supplies their
+AUTH-09D-A profile lifecycle activation is complemented by AUTH-09D-B, which
+activates exact identity-link revoke and reactivate behavior and their
 route, typed resource context, evaluator, guards, transaction proof, and
 availability change. AUTH-09A supplies none of those runtime paths.
 
@@ -507,8 +508,8 @@ For every protected operation:
 7. Expand only registered permission candidates compatible with grant scope.
 8. Apply actor, exact-project, ownership, assignment, separation-of-duties,
    task-ban, and lifecycle guards.
-9. For sensitive mutations, revalidate authority inside the same transaction
-   immediately before commit.
+9. For actor-self reads/updates and sensitive mutations, revalidate current
+   identity or authority inside the same transaction immediately before acting.
 10. Return allow or a stable denial code without leaking hidden resources.
 
 Authorization decisions are request-scoped and are not cached across requests.
@@ -692,7 +693,7 @@ GET /api/v1/authorization/admin-role-definitions
 GET /api/v1/actors/{actor_profile_id}
 POST /api/v1/actors/{actor_profile_id}/suspend|reactivate|deactivate
 GET /api/v1/actors/{actor_profile_id}/identity-links
-POST /api/v1/actor-identity-links/{link_id}/revoke|reactivate
+POST /api/v1/actor-identity-links/{identity_link_id}/revoke|reactivate
 POST /api/v1/service-actors
 
 POST|GET /api/v1/admin-role-grants
@@ -713,11 +714,22 @@ kernel. AUTH-08 activates the two definition reads, scoped grant/history reads,
 issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
 and identity-link reads for effective system Access Administrator or Audit
 Authority grants. AUTH-09D-A activates the three profile lifecycle routes for
-effective system Access Administrators only. The two identity-link lifecycle
-routes remain unavailable until AUTH-09D-B; the project-role route family also
-remains planned. Project-scoped
+effective system Access Administrators only. AUTH-09D-B activates exact
+identity-link revoke and reactivate for the same authority; the project-role
+route family remains planned. Project-scoped
 `GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
 exact-project grant and canonical project capability composition exists.
+
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.
+It clean-cuts TaskAssignment and Submission attribution to `contributor_id`,
+binds both fields to canonical human ActorProfiles in PostgreSQL, and exposes
+one actor-owned transaction participant for claim and submission. The
+participant locks the exact profile and verified issuer/subject link, requires
+both to be active human identity state, returns no identity or authority data,
+and runs after coarse legacy role admission but before resource locks. A
+non-human or inactive identity returns `active_contributor_required`; missing,
+mismatched, or unavailable canonical identity state returns retryable
+`contributor_identity_unavailable`.
 
 ## Migration And Compatibility
 
@@ -740,16 +752,19 @@ The implementation order is fixed by the WS-AUTH-001 chunk map:
     reactivate, and terminal deactivate;
 13. `WS-AUTH-001-09D-B`: identity-link revoke/reactivate and mixed lifecycle
     race closure;
-14. `WS-AUTH-001-09E`: fixed service runtime admission without human grant
+14. `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`: canonical-human TaskAssignment and
+    Submission attribution plus transaction-local active identity
+    revalidation;
+15. `WS-AUTH-001-09E`: fixed service runtime admission without human grant
     evaluation or feature action activation;
-15. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
+16. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
     availability-neutral transfer to exact AUTH activation owners;
-16. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
-17. `WS-AUTH-001-10`: independent project contributor grants;
-18. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
+17. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
+18. `WS-AUTH-001-10`: independent project contributor grants;
+19. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
     cutovers;
-19. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
-20. `WS-AUTH-001-16`: conformance, observability, concurrency, and live API
+20. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
+21. `WS-AUTH-001-16`: conformance, observability, concurrency, and live API
     proof.
 
 No implementation may add a compatibility alias, fallback authority source,

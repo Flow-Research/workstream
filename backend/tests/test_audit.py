@@ -30,26 +30,7 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.tasks.models import AuditEvent
-
-
-def _assert_value_not_retained(value: object, forbidden: str, seen: set[int] | None = None) -> None:
-    """Traverse public exception state and prove rejected input is absent."""
-    seen = seen or set()
-    if id(value) in seen:
-        return
-    seen.add(id(value))
-    if isinstance(value, str):
-        assert forbidden not in value
-    elif isinstance(value, BaseException):
-        for item in (value.args, vars(value), value.__cause__, value.__context__):
-            _assert_value_not_retained(item, forbidden, seen)
-    elif isinstance(value, Mapping):
-        for key, item in value.items():
-            _assert_value_not_retained(key, forbidden, seen)
-            _assert_value_not_retained(item, forbidden, seen)
-    elif isinstance(value, (list, tuple, set)):
-        for item in value:
-            _assert_value_not_retained(item, forbidden, seen)
+from tests.assertion_helpers import assert_secret_not_retained
 
 
 @pytest.fixture
@@ -192,12 +173,14 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ADMIN_ROLE_GRANT_REVOKE,
         ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
         ActionId.ACTOR_PROFILE_READ,
-            ActionId.ACTOR_IDENTITY_LINK_READ,
-            ActionId.ACTOR_SERVICE_PROVISION,
-            ActionId.ACTOR_PROFILE_SUSPEND,
-            ActionId.ACTOR_PROFILE_REACTIVATE,
-            ActionId.ACTOR_PROFILE_DEACTIVATE,
-        }
+        ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.ACTOR_SERVICE_PROVISION,
+        ActionId.ACTOR_PROFILE_SUSPEND,
+        ActionId.ACTOR_PROFILE_REACTIVATE,
+        ActionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+    }
     with pytest.raises(TypeError, match="invalid authority audit input"):
         _authority_input(
             AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
@@ -545,13 +528,13 @@ def test_authority_input_rejects_unbounded_or_inconsistent_evidence() -> None:
         for mapping in mappings:
             with pytest.raises(TypeError, match="invalid authority audit input") as caught:
                 constructor(mapping)
-            _assert_value_not_retained(caught.value, secret)
+            assert_secret_not_retained(caught.value, secret)
     with pytest.raises(TypeError, match="invalid authority audit input") as caught:
         AuthorityAuditEventInput.model_validate_json(json.dumps(payload))
-    _assert_value_not_retained(caught.value, secret)
+    assert_secret_not_retained(caught.value, secret)
     with pytest.raises(TypeError, match="invalid authority audit input") as caught:
         AuthorityAuditEventInput.model_validate(HostileMapping())
-    _assert_value_not_retained(caught.value, secret)
+    assert_secret_not_retained(caught.value, secret)
 
     safe = _authority_input(AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED).model_dump(
         mode="json"
@@ -636,11 +619,11 @@ def test_authority_input_rejects_unbounded_or_inconsistent_evidence() -> None:
         for document in (raw, raw.encode(), bytearray(raw.encode())):
             with pytest.raises(TypeError, match="invalid authority audit input") as caught:
                 AuthorityAuditEventInput.model_validate_json(document)
-            _assert_value_not_retained(caught.value, secret)
+            assert_secret_not_retained(caught.value, secret)
     for document in (HostileBytearray(b"{}"), LyingBytearray(duplicate.encode())):
         with pytest.raises(TypeError, match="invalid authority audit input") as caught:
             AuthorityAuditEventInput.model_validate_json(document)
-        _assert_value_not_retained(caught.value, secret)
+        assert_secret_not_retained(caught.value, secret)
 
     for patch, forbidden in (
         (
@@ -665,10 +648,10 @@ def test_authority_input_rejects_unbounded_or_inconsistent_evidence() -> None:
         for constructor in constructors:
             with pytest.raises(TypeError, match="invalid authority audit input") as caught:
                 constructor(candidate)
-            _assert_value_not_retained(caught.value, forbidden)
+            assert_secret_not_retained(caught.value, forbidden)
         with pytest.raises(TypeError, match="invalid authority audit input") as caught:
             AuthorityAuditEventInput.model_validate_json(json.dumps(candidate))
-        _assert_value_not_retained(caught.value, forbidden)
+        assert_secret_not_retained(caught.value, forbidden)
     with pytest.raises(ValidationError, match="resource ID requires"):
         _authority_input(
             AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
@@ -897,7 +880,7 @@ async def test_authority_service_readmits_mutated_inputs_without_retention(audit
             with warnings.catch_warnings(record=True) as caught_warnings:
                 with pytest.raises(TypeError, match="invalid authority audit input") as caught:
                     await AuditService(session).add_authority_event(value)
-            _assert_value_not_retained(caught.value, secret)
+            assert_secret_not_retained(caught.value, secret)
             assert caught_warnings == []
             assert await session.get(AuditEvent, str(value.event_id)) is None
         with warnings.catch_warnings(record=True) as caught_warnings:

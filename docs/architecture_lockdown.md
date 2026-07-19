@@ -182,6 +182,11 @@ S3CompatibleArtifactStore    AWS S3 in v0.1 production
 MinIO                        local and CI S3-compatible integration proof
 ```
 
+Here, `local and CI` is the non-production eligibility boundary. The
+repository-managed MinIO service is published on host loopback; a private
+operator-controlled container-network endpoint is also valid in local,
+development, or test environments. MinIO is never hosted-production evidence.
+
 AWS S3 is the only v0.1 production provider. Cloudflare R2 and Flow Node are
 deferred adapter initiatives. No provider owns product identity, authorization,
 lifecycle, bindings, audit, or integrity truth. PostgreSQL owns those facts;

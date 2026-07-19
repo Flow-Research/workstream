@@ -439,13 +439,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 60
+    assert len(route_inventory) == 62
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "e5d6200a4403e6de55ed15300cba3370e8f0e0f20c0041bb4e4781be2bc1206c"
+        "a0b23568d205adad690e6a28b97830f5e5b5b5cd04a1b1ec56ef2b8aee47cc37"
     )
-    assert len(protected_inventory) == 58
+    assert len(protected_inventory) == 60
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "afeda1d10510c4280a810f994eafbdc0996d5fc4cbd944d27a6ced032cb17435"
+        "6da64ee69f2eb5a0a75156fbb70c93219646db1e9d1d28ef1a88f09074bf4ace"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
@@ -478,6 +478,12 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "POST /api/v1/actors/{actor_profile_id}/suspend": "actor.profile.suspend",
         "POST /api/v1/actors/{actor_profile_id}/reactivate": "actor.profile.reactivate",
         "POST /api/v1/actors/{actor_profile_id}/deactivate": "actor.profile.deactivate",
+        "POST /api/v1/actor-identity-links/{identity_link_id}/revoke": (
+            "actor.identity_link.revoke"
+        ),
+        "POST /api/v1/actor-identity-links/{identity_link_id}/reactivate": (
+            "actor.identity_link.reactivate"
+        ),
         "POST /api/v1/service-actors": "actor.service.provision",
         "GET /api/v1/authorization/permissions": "authorization.permission_catalogue.read",
         "GET /api/v1/authorization/admin-role-definitions": (

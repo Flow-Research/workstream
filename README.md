@@ -188,12 +188,29 @@ the repository is changed; it does not define runtime task or review records.
 ## Local Backend Database
 
 Workstream uses Postgres locally and in CI. It uses Celery with Redis for
-durable local project setup jobs and automatic pre-review checker gates. Start
-local services with:
+durable local project setup jobs and automatic pre-review checker gates. MinIO
+provides the S3-compatible artifact protocol in local development and CI. Start
+the local services with:
 
 ```bash
-docker compose up -d postgres redis
+docker compose up -d postgres redis minio
 ```
+
+MinIO uses the compose-only static credentials and the private
+`workstream-artifacts` bucket. The integration tests create that bucket
+automatically. For local runtime use, create the private bucket with an S3
+client against `http://localhost:9000` after MinIO is healthy, using access key
+`workstream-minio` and secret key `workstream-minio-secret-key`, before starting
+Workstream. Configure the runtime with the exact
+[artifact storage settings](docs/spec_artifact_storage_service.md#s3-compatible-adapter).
+The repository-managed MinIO port is bound to host loopback. A Workstream
+process running on a separate non-production container network may instead use
+an operator-controlled private MinIO endpoint; that remains development/test
+protocol proof and never qualifies as hosted-provider activation evidence.
+Native AWS S3 accepts workload-identity configuration but remains
+runtime-ineligible until live deployment proof is approved; startup fails with
+`artifact_provider_live_proof_required` before credential probing or provider
+I/O.
 
 The default local development URL is:
 

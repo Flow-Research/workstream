@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-02C1 Admission And Put-Attempt Foundation
+# Chunk Contract: WS-ART-001-02C1 - Admission And Put-Attempt Foundation
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02B1
 
@@ -71,6 +71,8 @@ coverage report --include='app/interfaces/external_services.py' --precision=2 --
 coverage report --include='app/core/config.py' --precision=2 --fail-under=90
 coverage report --include='app/workers/*' --precision=2 --fail-under=90
 coverage report --include='app/main.py' --precision=2 --fail-under=90
+coverage report --include='app/adapters/artifacts/s3_compatible.py' --precision=2 --fail-under=90
+coverage report --include='app/core/s3_validation.py' --precision=2 --fail-under=90
 coverage report --include='app/modules/audit/*' --precision=2 --fail-under=90
 ```
 

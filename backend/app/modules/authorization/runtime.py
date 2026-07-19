@@ -97,6 +97,16 @@ class ActorProfileLifecycleResourceContext(BaseModel):
     existing_idempotency_record: bool = False
 
 
+class ActorIdentityLinkLifecycleResourceContext(BaseModel):
+    """Server-composed target for one exact identity-link transition."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["actor_identity_link"]
+    resource_id: UUID
+    transition: Literal["revoke", "reactivate"]
+    existing_idempotency_record: bool = False
+
+
 class SystemResourceContext(BaseModel):
     """Non-authoritative placeholder for later fixed system actions."""
 
@@ -205,6 +215,7 @@ AuthorizationResourceContext = (
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
     | ActorProfileLifecycleResourceContext
+    | ActorIdentityLinkLifecycleResourceContext
     | SystemResourceContext
     | PermissionCatalogueResourceContext
     | AdminRoleDefinitionsResourceContext
@@ -260,6 +271,7 @@ class AuthorizationDecision(BaseModel):
     denial_code: AuthorizationDenialCode | None
     resource_type: Literal[
         "actor_profile",
+        "actor_identity_link",
         "system",
         "permission_catalogue",
         "admin_role_definitions",

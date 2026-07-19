@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
@@ -28,7 +28,12 @@ from app.modules.checkers.service import (
     pre_review_gate_system_actor,
 )
 from app.modules.actors.models import LegacyWorkflowEligibility
-from app.modules.actors.service import LegacyWorkflowEligibilityCompatibility
+from app.modules.actors.service import (
+    ActiveHumanWriteActorRequired,
+    ActorService,
+    CanonicalWriteActorUnavailable,
+    LegacyWorkflowEligibilityCompatibility,
+)
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
@@ -100,7 +105,7 @@ TASK_START_OPERATOR_ROLES = {"admin", "project_manager"}
 SUBMISSION_FINALIZE_ROLES = {"admin", "project_manager"}
 SUBMISSION_FINALIZED_EVENT_TYPE = "submission_finalized"
 PRE_REVIEW_GATE_DISPATCH_FAILED_EVENT_TYPE = "pre_review_gate_dispatch_failed"
-WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS = {
+CONTRIBUTOR_VISIBLE_AUDIT_PAYLOAD_KEYS = {
     "assignment_id",
     "locked_guide_version",
     "locked_review_policy_version",
@@ -110,9 +115,9 @@ WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS = {
     "submission_id",
     "submission_version",
     "supersedes_submission_id",
-    "worker_id",
+    "contributor_id",
 }
-WORKER_REDACTED_AUDIT_EVENTS = {
+CONTRIBUTOR_REDACTED_AUDIT_EVENTS = {
     "pre_review_gate_started",
     "pre_review_gate_passed",
     "pre_review_gate_needs_revision",
@@ -178,6 +183,23 @@ class TaskAssignmentConflict(TaskServiceError):
     """Raised when a task already has an active Contributor assignment."""
 
     status_code = 409
+
+
+class ActiveContributorRequired(TaskServiceError):
+    """Raised when the canonical caller cannot perform a contributor write."""
+
+    status_code = 403
+    code = "active_contributor_required"
+    message = "Active contributor identity required"
+
+
+class ContributorIdentityUnavailable(TaskServiceError):
+    """Raised when canonical contributor identity cannot be revalidated."""
+
+    status_code = 503
+    code = "contributor_identity_unavailable"
+    message = "Contributor identity verification unavailable"
+    retryable = True
 
 
 class LegacySubmitterEligibilityRequired(TaskServiceError):
@@ -269,6 +291,7 @@ class TaskService:
         self._session = session
         self._repo = TaskRepository(session)
         self._project_repo = ProjectRepository(session)
+        self._actors = ActorService(session)
         self._legacy_workflow_eligibility = LegacyWorkflowEligibilityCompatibility(session)
 
     async def create_task(
@@ -543,16 +566,17 @@ class TaskService:
             TaskAssignmentConflict: If an active assignment already exists.
         """
         require_any_role(actor, TASK_CLAIM_ROLES)
-        task = await self._get_task(task_id)
+        await self._require_active_contributor(actor)
+        task = await self._get_task(task_id, for_update=True)
         self._ensure_transition_allowed(task.status, TASK_STATUS_CLAIMED)
         await self._require_legacy_submitter_eligibility(actor)
-        if await self._repo.get_active_assignment(task_id) is not None:
+        if await self._repo.get_active_assignment(task_id, for_update=True) is not None:
             raise TaskAssignmentConflict("task already has an active assignment")
 
         assignment = TaskAssignment(
             id=str(uuid4()),
             task_id=task.id,
-            worker_id=actor.actor_id,
+            contributor_id=actor.actor_id,
             assigned_by=actor.actor_id,
             accepted_at=datetime.now(UTC),
             status="active",
@@ -565,7 +589,10 @@ class TaskService:
                 task,
                 TASK_STATUS_CLAIMED,
                 reason,
-                event_payload={"assignment_id": assignment.id, "worker_id": assignment.worker_id},
+                event_payload={
+                    "assignment_id": assignment.id,
+                    "contributor_id": assignment.contributor_id,
+                },
             )
             await self._session.commit()
         except IntegrityError as exc:
@@ -604,10 +631,10 @@ class TaskService:
         assignment = await self._repo.get_active_assignment(task_id)
         if assignment is None:
             raise TaskTransitionBlocked("task has no active assignment")
-        is_operator_override = assignment.worker_id != actor.actor_id and bool(
+        is_operator_override = assignment.contributor_id != actor.actor_id and bool(
             set(actor.roles).intersection(TASK_START_OPERATOR_ROLES)
         )
-        if assignment.worker_id != actor.actor_id and not is_operator_override:
+        if assignment.contributor_id != actor.actor_id and not is_operator_override:
             raise TaskTransitionBlocked("actor is not assigned to this task")
         if not is_operator_override:
             await self._require_legacy_submitter_eligibility(actor)
@@ -620,7 +647,7 @@ class TaskService:
             reason,
             event_payload={
                 "assignment_id": assignment.id,
-                "worker_id": assignment.worker_id,
+                "contributor_id": assignment.contributor_id,
                 "operator_override": bool(is_operator_override),
             },
             event_type="task_start_override" if is_operator_override else "task_status_changed",
@@ -653,14 +680,15 @@ class TaskService:
             SubmissionVersionConflict: If concurrent version allocation conflicts.
         """
         require_any_role(actor, TASK_SUBMIT_ROLES)
-        task = await self._get_task(task_id)
+        await self._require_active_contributor(actor)
+        task = await self._get_task(task_id, for_update=True)
         if "worker" in actor.roles and task.assigned_to not in {None, actor.actor_id}:
             raise TaskNotFound("task not found")
         await self._require_legacy_submitter_eligibility(actor)
-        assignment = await self._repo.get_active_assignment(task_id)
+        assignment = await self._repo.get_active_assignment(task_id, for_update=True)
         if assignment is None:
             raise TaskTransitionBlocked("task has no active assignment")
-        if assignment.worker_id != actor.actor_id or task.assigned_to != actor.actor_id:
+        if assignment.contributor_id != actor.actor_id or task.assigned_to != actor.actor_id:
             raise TaskNotFound("task not found")
         if task.status not in {
             TASK_STATUS_IN_PROGRESS,
@@ -699,7 +727,7 @@ class TaskService:
         submission = Submission(
             id=str(uuid4()),
             task_id=task.id,
-            worker_id=actor.actor_id,
+            contributor_id=actor.actor_id,
             version=next_version,
             status="submitted",
             summary=payload.summary,
@@ -1140,7 +1168,12 @@ class TaskService:
             raise SubmissionNotFound("submission not found")
         return submission
 
-    async def _get_task(self, task_id: str) -> WorkstreamTask:
+    async def _get_task(
+        self,
+        task_id: str,
+        *,
+        for_update: bool = False,
+    ) -> WorkstreamTask:
         """Load a task or raise a service error.
 
         Args:
@@ -1152,10 +1185,23 @@ class TaskService:
         Raises:
             TaskNotFound: If the task id is unknown.
         """
-        task = await self._repo.get_task(task_id)
+        task = await self._repo.get_task(task_id, for_update=for_update)
         if task is None:
             raise TaskNotFound("task not found")
         return task
+
+    async def _require_active_contributor(self, actor: ActorContext) -> None:
+        """Revalidate the exact canonical caller before contributor writes."""
+        try:
+            await self._actors.require_active_human_write_actor(actor)
+        except ActiveHumanWriteActorRequired as exc:
+            await self._session.rollback()
+            raise ActiveContributorRequired(ActiveContributorRequired.message) from exc
+        except (CanonicalWriteActorUnavailable, SQLAlchemyError) as exc:
+            await self._session.rollback()
+            raise ContributorIdentityUnavailable(
+                ContributorIdentityUnavailable.message
+            ) from exc
 
     @staticmethod
     def _submission_audit_payload(submission: Submission) -> dict:
@@ -1170,7 +1216,7 @@ class TaskService:
         return {
             "submission_id": submission.id,
             "submission_version": submission.version,
-            "worker_id": submission.worker_id,
+            "contributor_id": submission.contributor_id,
             "package_hash": submission.package_hash,
             "artifact_hash_manifest": submission.artifact_hash_manifest,
             "supersedes_submission_id": submission.supersedes_submission_id,
@@ -2283,9 +2329,9 @@ class TaskService:
             response.event_payload = {
                 key: value
                 for key, value in response.event_payload.items()
-                if key in WORKER_VISIBLE_AUDIT_PAYLOAD_KEYS
+                if key in CONTRIBUTOR_VISIBLE_AUDIT_PAYLOAD_KEYS
             }
-            if response.event_type in WORKER_REDACTED_AUDIT_EVENTS:
+            if response.event_type in CONTRIBUTOR_REDACTED_AUDIT_EVENTS:
                 response.event_type = "post_submit_checks_processing"
                 response.from_status = None
                 response.to_status = None

@@ -3,7 +3,7 @@
 ## Status
 
 Proposed and inactive. The exact project read/list ActionId inventory and
-migration `0028` mapping delta must be added before implementation review.
+then-current migration mapping delta must be added before implementation review.
 
 ## Parent initiative
 
@@ -43,7 +43,7 @@ backend/app/modules/projects/repository.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/**
-backend/alembic/versions/0028_*.py
+backend/alembic/versions/<then-current-next>_*.py
 backend/app/api/deps/auth.py
 backend/tests/test_projects.py
 backend/tests/test_auth.py
@@ -91,7 +91,7 @@ issuer-role fallback or authorization pagination after unfiltered counts
   read/list surface migrated here has exactly one active `ActionId` declaration.
 - Before runtime edits, the contract enumerates every new ActionId, existing
   PermissionId mapping, canonical target, principal class, facts, guards, and
-  surface. Migration `0028` updates typed/PostgreSQL action-evidence parity and
+  surface. The then-current migration updates typed/PostgreSQL action-evidence parity and
   proves prior-head upgrade, downgrade, re-upgrade, and fresh replay.
 - ProjectRepository remains the canonical project/guide/source persistence
   query owner and returns domain records. The project application service or a

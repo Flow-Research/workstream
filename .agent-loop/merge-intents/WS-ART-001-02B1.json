@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-02B1",
+  "chunk_title": "S3-Compatible MinIO And AWS",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-02C1",
+  "next_chunk_title": "Admission And Put-Attempt Foundation",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

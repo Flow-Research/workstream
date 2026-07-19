@@ -75,6 +75,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Start real MinIO artifact provider
+        run: |
+          image='quay.io/minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e'
+          docker run --detach --rm --name workstream-minio \
+            --publish 127.0.0.1:9000:9000 \
+            --env MINIO_ROOT_USER=workstream-minio \
+            --env MINIO_ROOT_PASSWORD=workstream-minio-secret-key \
+            "$image" server /data --address :9000
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs workstream-minio
+          exit 1
+
       - name: Lint
         working-directory: backend
         run: ruff check app tests scripts
@@ -93,6 +110,7 @@ jobs:
         working-directory: backend
         env:
           WORKSTREAM_TEST_ADMIN_DATABASE_URL: postgresql+asyncpg://workstream:workstream@localhost:5433/postgres
+          WORKSTREAM_TEST_MINIO_ENDPOINT: http://127.0.0.1:9000
         run: |
           metadata_dir="$(mktemp -d)"
           trap 'rm -rf "$metadata_dir"' EXIT
@@ -138,6 +156,22 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: S3-compatible artifact adapter coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/adapters/artifacts/s3_compatible.py'
+          --precision=2
+          --fail-under=90
+
+      - name: S3 namespace validation coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/core/s3_validation.py'
+          --precision=2
+          --fail-under=90
+
       - name: Actor subsystem coverage
         working-directory: backend
         run: >-
@@ -151,6 +185,14 @@ jobs:
         run: >-
           coverage report
           --include='app/modules/authorization/*'
+          --precision=2
+          --fail-under=90
+
+      - name: Task subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/tasks/*'
           --precision=2
           --fail-under=90
 

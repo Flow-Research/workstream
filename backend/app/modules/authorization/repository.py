@@ -221,6 +221,49 @@ class AdminAuthorizationRepository:
         )
         return link, profile, grant
 
+    async def lock_identity_link_lifecycle_target(
+        self,
+        identity_link_id: UUID,
+    ) -> tuple[ActorIdentityLink, ActorProfile, AdminRoleGrant | None] | None:
+        """Resolve one link owner, then lock profile, link, and exact grant."""
+        actor_profile_id = await self._session.scalar(
+            select(ActorIdentityLink.actor_profile_id).where(
+                ActorIdentityLink.id == str(identity_link_id)
+            )
+        )
+        if actor_profile_id is None:
+            return None
+        profile = await self._session.scalar(
+            select(ActorProfile)
+            .where(ActorProfile.id == actor_profile_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if profile is None:
+            raise RuntimeError("identity link lifecycle target is missing its actor profile")
+        link = await self._session.scalar(
+            select(ActorIdentityLink)
+            .where(
+                ActorIdentityLink.id == str(identity_link_id),
+                ActorIdentityLink.actor_profile_id == actor_profile_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if link is None:
+            raise RuntimeError("identity link lifecycle target changed owner")
+        grant = await self._session.scalar(
+            select(AdminRoleGrant)
+            .where(
+                AdminRoleGrant.target_actor_profile_id == actor_profile_id,
+                AdminRoleGrant.role == AdminRole.ACCESS_ADMINISTRATOR.value,
+                AdminRoleGrant.scope_type == AdminScope.SYSTEM.value,
+                AdminRoleGrant.status == "active",
+            )
+            .with_for_update()
+        )
+        return link, profile, grant
+
     async def has_effective_permission_any_scope(
         self,
         actor_profile_id: UUID,

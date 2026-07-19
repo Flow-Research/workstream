@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from celery import Celery
 
+from app.adapters.artifacts import require_artifact_runtime_eligible
 from app.core.config import get_settings
 from app.workers.errors import CeleryConfigurationError
 
@@ -18,6 +19,7 @@ def create_celery_app() -> Celery:
         Configured Celery application for durable background jobs.
     """
     settings = get_settings()
+    require_artifact_runtime_eligible(settings)
     broker_url = settings.celery_broker_url
     if broker_url is None:
         if settings.celery_task_always_eager:

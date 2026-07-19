@@ -3,7 +3,7 @@
 ## Status
 
 Proposed and inactive. Exact remaining command ActionIds, service identities,
-and migration `0032` parity must be enumerated before implementation.
+and then-current migration parity must be enumerated before implementation.
 
 ## Parent initiative
 
@@ -51,7 +51,7 @@ backend/app/core/permissions.py
 backend/app/schemas/auth.py
 backend/app/api/deps/auth.py
 backend/app/modules/audit/**
-backend/alembic/versions/0032_*.py
+backend/alembic/versions/<then-current-next>_*.py
 backend/scripts/api_contract_e2e.py
 backend/tests/test_projects.py
 backend/tests/test_tasks.py
@@ -112,7 +112,7 @@ review/contribution/compensation implementation
 - Scanner has regression tests and runs in CI.
 - Scanner regression includes a known-bad fixture for each forbidden authority
   pattern and proves the gate fails rather than silently allowlisting it.
-- Migration `0032` adds exact remaining command ActionId evidence parity and any
+- The then-current migration adds exact remaining command ActionId evidence parity and any
   approved fixed-service constraints; it changes no existing permission mapping
   and proves prior-head/fresh upgrade, downgrade, and re-upgrade.
 - Full backend suite and API contract drill pass.

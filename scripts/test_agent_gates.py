@@ -62,7 +62,12 @@ ARTIFACT_COVERAGE_COMMAND_OWNERS = {
         "coverage report --include='app/workers/*' --precision=2 --fail-under=90",
         "coverage report --include='app/main.py' --precision=2 --fail-under=90",
     ),
-    "02B1": (),
+    "02B1": (
+        "coverage report --include='app/adapters/artifacts/s3_compatible.py' "
+        "--precision=2 --fail-under=90",
+        "coverage report --include='app/core/s3_validation.py' "
+        "--precision=2 --fail-under=90",
+    ),
     "02C1": (
         "coverage report --include='app/modules/audit/*' --precision=2 --fail-under=90",
     ),
@@ -112,10 +117,34 @@ BACKEND_API_CONTRACT_E2E_COMMAND = "\n".join(
         "python scripts/api_contract_e2e.py",
     )
 )
+MINIO_IMAGE = (
+    "quay.io/minio/minio:latest@"
+    "sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"
+)
+BACKEND_MINIO_START_COMMAND = "\n".join(
+    (
+        f"image='{MINIO_IMAGE}'",
+        "docker run --detach --rm --name workstream-minio \\",
+        "  --publish 127.0.0.1:9000:9000 \\",
+        "  --env MINIO_ROOT_USER=workstream-minio \\",
+        "  --env MINIO_ROOT_PASSWORD=workstream-minio-secret-key \\",
+        '  "$image" server /data --address :9000',
+        "for attempt in $(seq 1 60); do",
+        "  if curl --fail --silent "
+        "http://127.0.0.1:9000/minio/health/live >/dev/null; then",
+        "    exit 0",
+        "  fi",
+        "  sleep 1",
+        "done",
+        "docker logs workstream-minio",
+        "exit 1",
+    )
+)
 AUTH_09B_COVERAGE_COMMANDS = (
     "coverage report --include='app/modules/actors/*' --precision=2 --fail-under=90",
     "coverage report --include='app/modules/authorization/*' "
     "--precision=2 --fail-under=90",
+    "coverage report --include='app/modules/tasks/*' --precision=2 --fail-under=90",
     "coverage report "
     "--include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/dev.py,"
     "app/adapters/auth/flow.py' --precision=2 --fail-under=90",
@@ -4139,7 +4168,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     ).read_text(encoding="utf-8")
     artifact_contract = Path(
         ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/"
-        "WS-ART-001-02A3-artifact-store-v2-local-clean-cut.md"
+        "WS-ART-001-02B1-s3-compatible-minio-aws.md"
     ).read_text(encoding="utf-8")
     work_queue = Path(".agent-loop/WORK_QUEUE.md").read_text(encoding="utf-8")
     loop_state = Path(".agent-loop/LOOP_STATE.md").read_text(encoding="utf-8")
@@ -4153,65 +4182,94 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "| `WS-AUTH-001-09B` | Merged |" in auth_status
     assert "| `WS-AUTH-001-09C` | Merged |" in auth_status
     assert "| `WS-AUTH-001-09D` | Split |" in auth_status
-    assert "| `WS-AUTH-001-09D-A` | Active |" in auth_status
-    assert "| `WS-AUTH-001-09D-B` | Inactive |" in auth_status
-    assert "Merged through PR #129 as `9a04434`" in artifact_map
-    artifact_phases = (
-        "Deterministic proof passed; exact-SHA internal review in progress",
-        "Internal review and deterministic evidence passed; external checks pending",
+    assert "Merged through PR #148 as `99ae4c9`" in auth_map
+    assert "| `WS-AUTH-001-09D-A` | Merged |" in auth_status
+    assert "| `WS-AUTH-001-09D-B` | Merged |" in auth_status
+    assert "Active implementation chunk\n\n`WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" in (
+        auth_status
     )
-    selected_phases = [phase for phase in artifact_phases if phase in artifact_map]
-    assert len(selected_phases) == 1
-    selected_phase = selected_phases[0]
-    assert f"Status: {selected_phase}" in artifact_contract
+    assert "`codex/ws-auth-001-contributor-foundation`" in auth_status
+    assert "PR #148 is open" not in auth_status
+    stale_auth_09d_state = (
+        "Only 09D-A implementation is active",
+        "Only 09D-A may proceed",
+        "AUTH-09D-A's repaired contract passed required L1",
+        "bounded implementation is active",
+        "Bounded implementation is the current gate",
+    )
+    for stale_text in stale_auth_09d_state:
+        assert stale_text not in auth_status
+        assert stale_text not in auth_map
+        assert stale_text not in work_queue
+    assert (
+        "Internal review passed at `4d1fc507`; PR/external checks pending; "
+        "aggregate coverage mandatory in Backend" in work_queue
+    )
+    assert (
+        "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`"
+        in loop_state
+    )
+    assert "ActionIds, with 17 active actions" in loop_state
+    assert "candidate total of 17" not in loop_state
+    assert "with 12 active actions" not in loop_state
+    assert "five 09D-A/09D-B lifecycle actions" not in loop_state
+    assert (
+        "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And "
+        "Canonical-Human Lineage | L1 | Internal review passed at `4d1fc507`; "
+        "PR/external checks pending; Backend coverage mandatory" in auth_map
+    )
+    assert (
+        "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | PR ready |" in auth_status
+    )
+    assert (
+        "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
+        "Inactive until contributor-foundation merge/memory and explicit start"
+        in auth_map
+    )
+    assert "| `WS-AUTH-001-09E` | Proposed |" in auth_status
+    assert (
+        "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
+        "Inactive until contributor-foundation merge/memory and explicit user start"
+        in work_queue
+    )
+    assert "no service caller becomes executable before AUTH-09E" in loop_state.replace(
+        "\n", " "
+    )
+    assert "Merged through PR #129 as `9a04434`" in artifact_map
+    assert "Merged through PR #141 as `a10d901`" in artifact_map
+    assert "Active after 02A3 merged through PR #141" in artifact_map
+    assert "Status: Active after explicit human start" in artifact_contract
     assert (
         "AUTH's owner reconciliation merged through PR #140 as\n"
         "`d541521`" in artifact_status
     )
+    assert "`WS-ART-001-02B1` is active" in artifact_status
+    assert "The current gate is deterministic 02B1 proof followed by all nine" in (
+        artifact_status.replace("\n", " ")
+    )
+    assert "No later artifact chunk starts automatically" in artifact_status.replace(
+        "\n", " "
+    )
     assert (
-        "`WS-ART-001-02A3` implementation and merged-main deterministic repair are\n"
-        "complete" in artifact_status
+        "| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | "
+        "Merged through PR #146 as `0ffdabf`" in work_queue
     )
-    artifact_02a3_merged = (
-        "`WS-ART-001-02A3` | ArtifactStore v2 Local Clean Cut | L1 | "
-        "Merged through PR #141 as `a10d901`" in work_queue
+    assert (
+        "| `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | "
+        "Merged through PR #151 as `1b5422f` on 2026-07-19" in work_queue
     )
-    if artifact_02a3_merged:
-        normalized_work_queue = " ".join(work_queue.split())
-        assert "PR #141 merged `WS-ART-001-02A3` into `main` as `a10d901`" in loop_state
-        assert (
-            "`WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | "
-            "Inactive until 02A3 merge and explicit user start" in work_queue
-        )
-        assert "ART-02B1 remains inactive" in loop_state
-        assert "Do not start AUTH-09C or POL-002-04 automatically." not in (
-            normalized_work_queue
-        )
-        assert (
-            "Its merged-main deterministic proof and exact-SHA internal review are "
-            "complete; external checks remain pending and `02B1` must not start "
-            "automatically." not in normalized_work_queue
-        )
-    elif selected_phase == artifact_phases[0]:
-        assert selected_phase in work_queue
-        assert (
-            "The current gate is all nine\nexact-SHA internal tracks" in artifact_status
-        )
-        assert (
-            "Current gate: complete all nine exact-SHA internal reviewer tracks"
-            in loop_state
-        )
-    else:
-        assert selected_phase in work_queue
-        assert (
-            "The current gate is GitHub Actions, CodeRabbit, and explicit human review"
-            in (artifact_status.replace("\n", " "))
-        )
-        assert (
-            "Current gate: publish PR #141 for GitHub Actions, CodeRabbit, and explicit"
-            in (loop_state.replace("\n", " "))
-        )
-    assert "No\nlater artifact chunk starts automatically" in artifact_status
+    assert (
+        "PR #151 then merged `WS-ART-001-02B1` as `1b5422f` on 2026-07-19"
+        in loop_state
+    )
+    assert (
+        "ART-02C1 remains inactive pending signed memory and a separate explicit start"
+        in loop_state.replace("\n", " ")
+    )
+    assert "Current ART gate: integrate trusted `main`" not in loop_state
+    assert "| `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Active" not in (
+        work_queue
+    )
 
 
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:
@@ -4826,6 +4884,27 @@ def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
     )
 
 
+def test_local_minio_compose_is_regression_protected() -> None:
+    """Keep the repository-managed MinIO proof pinned and loopback-only."""
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text(encoding="utf-8"))
+    minio = compose["services"]["minio"]
+    assert set(minio) == {
+        "image",
+        "command",
+        "environment",
+        "ports",
+        "healthcheck",
+        "volumes",
+    }
+    assert minio["image"] == MINIO_IMAGE
+    assert minio["command"] == "server /data --address :9000"
+    assert minio["environment"] == {
+        "MINIO_ROOT_USER": "workstream-minio",
+        "MINIO_ROOT_PASSWORD": "workstream-minio-secret-key",
+    }
+    assert minio["ports"] == ["127.0.0.1:9000:9000"]
+
+
 def test_backend_coverage_thresholds_are_regression_protected() -> None:
     """Keep both the approved global floor and stricter artifact floor fail closed."""
     workflow_path = ROOT / ".github/workflows/backend.yml"
@@ -4834,6 +4913,12 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     test_job = parsed_workflow["jobs"]["test"]
     assert set(test_job) == {"runs-on", "timeout-minutes", "services", "steps"}
     steps = test_job["steps"]
+    minio_steps = [
+        step for step in steps if step.get("name") == "Start real MinIO artifact provider"
+    ]
+    assert len(minio_steps) == 1
+    assert set(minio_steps[0]) == {"name", "run"}
+    assert str(minio_steps[0]["run"]).strip() == BACKEND_MINIO_START_COMMAND
     full_suite_steps = [
         step for step in steps if step.get("name") == "Backend full-suite coverage"
     ]
@@ -4843,13 +4928,15 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert full_suite_steps[0].get("env") == {
         "WORKSTREAM_TEST_ADMIN_DATABASE_URL": (
             "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
-        )
+        ),
+        "WORKSTREAM_TEST_MINIO_ENDPOINT": "http://127.0.0.1:9000",
     }
     for forbidden_key in ("if", "continue-on-error", "shell"):
         assert forbidden_key not in full_suite_steps[0]
     assert full_suite_run.strip() == BACKEND_FULL_SUITE_COVERAGE_COMMAND
     assert "/tmp/workstream-database.json" not in workflow
     full_suite_index = steps.index(full_suite_steps[0])
+    assert steps.index(minio_steps[0]) < full_suite_index
     isolated_steps = [
         step for step in steps if step.get("name") == "Isolated database runner test"
     ]
@@ -5876,6 +5963,7 @@ def main() -> int:
         test_agent_gates_runs_stale_authorization_docs_fail_closed,
         test_agent_gates_runs_stale_artifact_contracts_fail_closed,
         test_agent_gate_dependencies_and_workflow_are_pinned,
+        test_local_minio_compose_is_regression_protected,
         test_backend_coverage_thresholds_are_regression_protected,
         test_artifact_coverage_phase_is_derived_from_work_queue,
         test_stale_artifact_contracts_cutover_rejects_reached_terms_only,

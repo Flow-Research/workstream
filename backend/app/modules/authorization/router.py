@@ -39,15 +39,20 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
     ActorLifecycleMutationResponse,
+    IdentityLinkLifecycleMutationResponse,
 )
 from app.modules.authorization.lifecycle_service import (
     ActorLifecycleConflict,
     ActorLifecycleRequest,
     ActorLifecycleService,
+    IdentityLinkLifecycleConflict,
+    IdentityLinkLifecycleRequest,
+    IdentityLinkLifecycleService,
 )
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
+    ActorIdentityLinkLifecycleResourceContext,
     ActorProfileAdminReadResourceContext,
     ActorProfileLifecycleResourceContext,
     AdminRoleDefinitionsResourceContext,
@@ -64,6 +69,8 @@ from app.modules.authorization.schemas import (
     ActorProfileDeactivateRequest,
     ActorProfileReactivateRequest,
     ActorProfileSuspendRequest,
+    ActorIdentityLinkReactivateRequest,
+    ActorIdentityLinkRevokeRequest,
     AdminScope,
     AuthorityOperation,
     ServiceActorCreateRequest,
@@ -150,6 +157,23 @@ def _lifecycle_request(
         AuthorityOperation.ACTOR_PROFILE_SUSPEND: ActorProfileSuspendRequest,
         AuthorityOperation.ACTOR_PROFILE_REACTIVATE: ActorProfileReactivateRequest,
         AuthorityOperation.ACTOR_PROFILE_DEACTIVATE: ActorProfileDeactivateRequest,
+    }[operation]
+    return request_type(**values)
+
+
+def _identity_link_lifecycle_request(
+    identity_link_id: UUID,
+    reason: str,
+    operation: AuthorityOperation,
+) -> IdentityLinkLifecycleRequest:
+    values = {
+        "operation": operation,
+        "identity_link_id": identity_link_id,
+        "reason_digest": derive_reason_digest(reason),
+    }
+    request_type = {
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: ActorIdentityLinkRevokeRequest,
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: ActorIdentityLinkReactivateRequest,
     }[operation]
     return request_type(**values)
 
@@ -281,6 +305,99 @@ async def _mutate_actor_lifecycle(
         messages = {
             "actor_already_suspended": "Actor is already suspended",
             "actor_not_suspended": "Actor is not suspended",
+            "actor_deactivated_terminal": "Actor is permanently deactivated",
+            "last_access_administrator": "Final Access Administrator cannot be disabled",
+        }
+        raise _domain_error(409, exc.code, messages[exc.code]) from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise service_unavailable_error() from exc
+
+
+async def _mutate_identity_link_lifecycle(
+    *,
+    identity_link_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: UUID,
+    resolved: ResolvedActor,
+    authorization: AuthorizationService,
+    session: AsyncSession,
+    operation: AuthorityOperation,
+    action: ActionId,
+    transition: Literal["revoke", "reactivate"],
+) -> IdentityLinkLifecycleMutationResponse:
+    canonical = _identity_link_lifecycle_request(identity_link_id, payload.reason, operation)
+    caller_id = UUID(resolved.profile.id)
+    service = IdentityLinkLifecycleService(session)
+    reservation = await _database_call(
+        session,
+        service.reserve(
+            idempotency_key=idempotency_key,
+            actor_profile_id=caller_id,
+            request=canonical,
+        ),
+    )
+    decision = await _database_call(
+        session,
+        authorization.require(
+            action,
+            ActorIdentityLinkLifecycleResourceContext(
+                resource_type="actor_identity_link",
+                resource_id=identity_link_id,
+                transition=transition,
+                existing_idempotency_record=reservation.outcome in {"replay", "mismatch"},
+            ),
+        ),
+    )
+    if reservation.outcome == "mismatch":
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_mismatch(
+                actor_profile_id=caller_id,
+                request=canonical,
+                decision=decision,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
+    if reservation.outcome == "replay":
+        response = IdentityLinkLifecycleMutationResponse(
+            resource_type="actor_identity_link",
+            resource_id=reservation.response.resource_id,
+            version=None,
+            http_status=200,
+        )
+        await _database_call(session, ActorService(session).touch_after_authorization(resolved))
+        await _commit_or_unavailable(session)
+        return response
+    try:
+        await ActorService(session).touch_after_authorization(resolved)
+        response = await service.complete(
+            claim=reservation.claim,
+            request=canonical,
+            decision=decision,
+            actor_profile_id=caller_id,
+            reason=payload.reason,
+        )
+        await session.commit()
+        return response
+    except IdentityLinkLifecycleConflict as exc:
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_conflict(
+                actor_profile_id=caller_id,
+                target_actor_profile_id=exc.actor_profile_id,
+                request=canonical,
+                decision=decision,
+                code=exc.code,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        messages = {
+            "identity_link_already_revoked": "Identity link is already revoked",
+            "identity_link_not_revoked": "Identity link is not revoked",
             "actor_deactivated_terminal": "Actor is permanently deactivated",
             "last_access_administrator": "Final Access Administrator cannot be disabled",
         }
@@ -510,6 +627,64 @@ async def deactivate_actor_profile(
         operation=AuthorityOperation.ACTOR_PROFILE_DEACTIVATE,
         action=ActionId.ACTOR_PROFILE_DEACTIVATE,
         transition="deactivate",
+    )
+
+
+@router.post(
+    "/actor-identity-links/{identity_link_id}/revoke",
+    response_model=IdentityLinkLifecycleMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    responses=_LIFECYCLE_CONFLICT_RESPONSE,
+    openapi_extra={"x-workstream-action-id": ActionId.ACTOR_IDENTITY_LINK_REVOKE.value},
+)
+async def revoke_actor_identity_link(
+    identity_link_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> IdentityLinkLifecycleMutationResponse:
+    return await _mutate_identity_link_lifecycle(
+        identity_link_id=identity_link_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        resolved=resolved,
+        authorization=authorization,
+        session=session,
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+        action=ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        transition="revoke",
+    )
+
+
+@router.post(
+    "/actor-identity-links/{identity_link_id}/reactivate",
+    response_model=IdentityLinkLifecycleMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    responses=_LIFECYCLE_CONFLICT_RESPONSE,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.ACTOR_IDENTITY_LINK_REACTIVATE.value
+    },
+)
+async def reactivate_actor_identity_link(
+    identity_link_id: UUID,
+    payload: ActorLifecycleBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> IdentityLinkLifecycleMutationResponse:
+    return await _mutate_identity_link_lifecycle(
+        identity_link_id=identity_link_id,
+        payload=payload,
+        idempotency_key=idempotency_key,
+        resolved=resolved,
+        authorization=authorization,
+        session=session,
+        operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE,
+        action=ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        transition="reactivate",
     )
 
 

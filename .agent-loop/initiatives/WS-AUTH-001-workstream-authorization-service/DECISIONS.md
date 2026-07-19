@@ -122,14 +122,19 @@ product vocabulary or authority concepts.
 
 The field cutover is explicitly owned as follows:
 
-- `WS-AUTH-001-13` renames assignment ownership from legacy `worker_id` to
-  `contributor_id` across storage, models, services, schemas, audits, and tests.
-- `WS-AUTH-001-14` renames submission ownership/attestation and checker-result
-  visibility fields from legacy `worker_*` names to their `contributor_*`
-  equivalents across storage, models, services, schemas, audits, and tests. It
-  also renames the submission-policy JSON field `worker_facing_fix` to
+- `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` clean-cuts both retired assignment and
+  Submission human-owner identifiers to `contributor_id` across
+  storage, models, services, schemas, audits, and tests. It also supplies
+  database-backed canonical-human ActorProfile lineage and a transaction-local
+  active-human revalidation capability.
+- `WS-AUTH-001-13` consumes the canonical assignment field during task
+  authorization cutover; it does not rename it again.
+- `WS-AUTH-001-14` consumes the canonical Submission owner field and renames
+  the remaining submission attestation and checker-result visibility fields
+  from legacy `worker_*` names to their `contributor_*` equivalents. It also
+  renames the submission-policy JSON field `worker_facing_fix` to
   `contributor_facing_fix` across derivation schemas, prompts, persistence, and
-  compatibility tests.
+  tests.
 - Revision replay is not implemented yet and must begin with
   `contributor_claim_status`; it must not introduce the legacy name.
 - `ContributionRecord`, `CompensationAward`,
@@ -658,3 +663,24 @@ grant path that can remove the final effective Access Administrator, so no
 target-first alternate lock path is introduced. Profile and link reactivation
 invalidate from ineffective to effective; loss transitions invalidate from
 effective to ineffective.
+
+## D31: Prioritize the contributor/canonical-human foundation after AUTH-09D-B
+
+Status: accepted sequencing reconciliation on 2026-07-18.
+
+The prior plan left assignment ownership renaming in AUTH-13 and Submission
+ownership renaming in AUTH-14. That creates an unnecessary dependency cycle:
+REV needs canonical human attribution before its first runtime child, while the
+full AUTH-13/14 product cutovers depend on later REV preparation behavior.
+
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` is therefore the next same-initiative gate
+after AUTH-09D-B and before AUTH-09E. It clean-cuts only the two ownership fields,
+adds reusable database-backed human ActorProfile lineage, and exposes bounded
+transaction-local active-human revalidation. It changes no permission, action,
+grant, lifecycle, or feature availability. AUTH-13/14 retain their later
+authorization and lifecycle cutovers and consume the canonical fields.
+
+The foundation allocates only the then-current next migration from trusted
+`main`. This decision supersedes only the future fixed-number reservation
+clauses in D29, D30, and earlier decisions; their other boundaries remain in
+force. Merged migration ownership through AUTH-09D-A `0026` is unchanged.

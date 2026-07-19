@@ -214,7 +214,7 @@ class WorkstreamTask(Base):
 
 
 class TaskAssignment(Base):
-    """Worker assignment record for a task claim."""
+    """Contributor assignment record for a task claim."""
 
     __tablename__ = "task_assignments"
     __table_args__ = (
@@ -232,7 +232,12 @@ class TaskAssignment(Base):
         nullable=False,
         index=True,
     )
-    worker_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    contributor_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("actor_profiles.id"),
+        nullable=False,
+        index=True,
+    )
     assigned_by: Mapped[str] = mapped_column(String(100), nullable=False)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -243,7 +248,7 @@ class TaskAssignment(Base):
 
 
 class Submission(Base):
-    """Immutable worker submission packet version for a task."""
+    """Immutable contributor submission packet version for a task."""
 
     __tablename__ = "submissions"
     __table_args__ = (
@@ -381,7 +386,12 @@ class Submission(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     task_id: Mapped[str] = mapped_column(ForeignKey("workstream_tasks.id"), nullable=False, index=True)
-    worker_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    contributor_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("actor_profiles.id"),
+        nullable=False,
+        index=True,
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="submitted", index=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)

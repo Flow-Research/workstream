@@ -89,14 +89,18 @@ mode `aws_workload_identity` selects exactly one allowlisted method:
 constrains the pinned credential resolver to the selected provider before any
 provider is loaded, verifies the resolved method, and rejects explicit
 credentials, ambient access keys, file/process/login/SSO sources, legacy
-EC2/Boto sources, and every unselected workload provider. Chunk 02B1 pins
+EC2/Boto sources, and every unselected workload provider. For the selected
+method, startup accepts only that method's exact closed `AWS_*` environment
+allowlist and rejects every other `AWS_*` or `BOTOCORE_*` SDK control before
+constructing a session. Chunk 02B1 pins
 `aiobotocore==3.7.0` and `botocore==1.43.0`; SDK upgrades require an explicit
 dependency and credential-behavior review. MinIO static credentials are
 local/CI only. The endpoint is omitted for native AWS S3 and explicit for
 MinIO. AWS requires an explicit region and production requires HTTPS, a
 non-local resolved endpoint, and backend `s3_compatible`. Secrets and resolved
-credentials are never persisted or retained by errors. Cloudflare R2 has no
-v0.1 runtime profile, credential service, or configuration path.
+credentials are never persisted or retained by errors. Object and credential
+metadata transports explicitly ignore ambient HTTP proxy variables. Cloudflare
+R2 has no v0.1 runtime profile, credential service, or configuration path.
 
 ## Immutable Object Identity
 

@@ -293,12 +293,12 @@ ACTION_DEFINITIONS = (
         PermissionId.ACTOR_IDENTITY_LINK_READ,
         ActionOwner.AUTH_09C,
     ),
-    _planned(
+    _active(
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         PermissionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionOwner.AUTH_09D_B,
     ),
-    _planned(
+    _active(
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
         PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE,
         ActionOwner.AUTH_09D_B,
@@ -585,6 +585,8 @@ def _index_actions(
         ActionId.ACTOR_PROFILE_SUSPEND,
         ActionId.ACTOR_PROFILE_REACTIVATE,
         ActionId.ACTOR_PROFILE_DEACTIVATE,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
     }
     if {
         definition.action_id

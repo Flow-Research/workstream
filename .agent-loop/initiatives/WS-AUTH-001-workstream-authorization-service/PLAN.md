@@ -87,9 +87,10 @@ updates current typed/PostgreSQL audit mapping validation in its own migration.
 After AUTH-09A migration `0023`, AUTH-09B uses `0024` for service-link
 verification timestamp semantics and ART owns `0025` for the ArtifactStore v2
 clean cut. AUTH-09D-A uses `0026` to repair lifecycle evidence and profile
-reactivation provenance. Core reservations are therefore AUTH-10 `0027`,
-AUTH-11 `0028`, AUTH-12 `0029`, AUTH-13 `0030`, AUTH-14 `0031`, and AUTH-15
-`0032`.
+reactivation provenance. `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` allocates the
+then-current next migration only after AUTH-09D-B merges. AUTH-10 through
+AUTH-15 then allocate from trusted `main` when each contract becomes
+executable; their old `0027` through `0032` reservations are retired.
 Blocked cross-initiative additions allocate the next trusted-main migration head
 only when their complete feature contracts become executable. No migration
 number is reserved or allocated while the work remains blocked.
@@ -183,9 +184,10 @@ proving the same issuer role metadata alone no longer authorizes.
    self-action cutover in 07B before protected authority-management APIs.
 8. Implement bootstrap, `AuthorityControl`, and immutable admin-role grants.
 9. Reconcile merged WS-XINT boundaries and converge AUTH-09A on trusted `main`.
-10. Complete the uninterrupted AUTH-09B through 09E sequence: controlled
-    provisioning, actor/link administration, lifecycle mutations, and fixed
-    service runtime admission without activating feature actions.
+10. Complete AUTH-09B through 09D-B, then merge the separately reviewed
+    contributor/canonical-human foundation before AUTH-09E fixed service
+    runtime admission. The inserted foundation changes no permission or action
+    availability.
 11. Transfer all current ART/REV owner labels to exact AUTH custodians without
     changing availability, then add the prepared mutation authorization
     protocol.
