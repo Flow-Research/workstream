@@ -52,8 +52,11 @@ async def test_scenario_gateway_marks_temporary_surfaces() -> None:
 
     assert gateway.temporary is True
     assert projects["source"] == "temporary_scenario_gateway"
-    assert contributions["contributions"][0]["contribution_ref"] == "scenario-contribution-1"
-    assert contributions["contributions"][0]["recorded_at"] == SCENARIO_TIMESTAMP
+    contribution = contributions["contributions"][0]
+    assert contribution["contribution_ref"] == "scenario-contribution-1"
+    assert contribution["contribution_type"] == "accepted_submission"
+    assert contribution["recorded_at"] == SCENARIO_TIMESTAMP
+    assert contribution["compensation_status"] == "unpaid"
     assert tasks["tasks"][0]["task_id"] == "scenario-task-1"
     assert review["state"] == "available_to_claim"
 

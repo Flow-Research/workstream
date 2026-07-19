@@ -56,13 +56,13 @@ class ScenarioContributorGateway:
                 "contribution_ref": "scenario-contribution-1",
                 "project_id": "scenario-project-1",
                 "project_name": "Scenario Project",
-                "contribution_type": "submission_work",
+                "contribution_type": "accepted_submission",
                 "source_ref": "scenario-task-1",
                 "outcome": "accepted",
                 "recorded_at": _now(),
-                "compensation_status": "recorded",
+                "compensation_status": "unpaid",
                 "compensation_policy_ref": "scenario-policy-1:v1",
-                "compensation_summary": "Scenario points recorded after acceptance.",
+                "compensation_summary": "The applicable contribution rule is explicitly unpaid.",
             }
         ]
         self._review = {
