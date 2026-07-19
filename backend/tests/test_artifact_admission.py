@@ -27,13 +27,17 @@ from app.modules.artifacts.models import (
     ArtifactAdmissionScope,
     ArtifactContent,
     ArtifactOperationReceipt,
+    ArtifactPutObservationReceipt,
     ArtifactPutAttempt,
     ArtifactPutAttemptCharge,
     ArtifactReplica,
     ArtifactStorageNamespace,
     ArtifactUploadItem,
     ArtifactUploadSession,
+    ArtifactVerificationJob,
+    ArtifactVerificationReceipt,
 )
+from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
 from app.modules.artifacts.repository import ArtifactRepository
 from app.modules.artifacts.schemas import (
     CheckerOutputArtifactAdmissionRequest,
@@ -46,6 +50,7 @@ from app.modules.artifacts.service import (
     ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
     ArtifactStorageNamespaceSpec,
+    ArtifactStorageOrchestrator,
     artifact_storage_namespace_spec,
 )
 from app.modules.authorization.runtime import (
@@ -72,6 +77,21 @@ from tests.artifact_store_helpers import (
     artifact_admission_limit_settings,
     minted_source,
 )
+
+
+class _AllowArtifactAuthority:
+    """Explicit test-only authority exercising both phases."""
+
+    def __init__(self) -> None:
+        self.preflights = 0
+        self.terminals = 0
+
+    async def preflight(self, **_values: object) -> None:
+        self.preflights += 1
+
+    async def revalidate_terminal(self, **_values: object) -> None:
+        self.terminals += 1
+
 
 
 def _alembic_config() -> Config:
@@ -105,7 +125,6 @@ async def _reset_admission_test_schema(database_url: str) -> None:
             await connection.execute(text("create schema public"))
     finally:
         await engine.dispose()
-
 
 def _settings(tmp_path: Path, *, maximum_bytes: int = 1024) -> Settings:
     durable_root = tmp_path / "durable"
@@ -599,6 +618,242 @@ async def _count(session, model: type) -> int:
     value = await session.scalar(select(func.count()).select_from(model))
     assert value is not None
     return value
+
+
+async def test_committed_put_and_independent_verification_are_fenced(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    authority = _AllowArtifactAuthority()
+    try:
+        async with factory() as session:
+            async with minted_source(
+                tmp_path / "fenced-guide-source",
+                b"independently verified bytes",
+                media_type="text/plain",
+            ) as source:
+                _, guide_item_id = await _seed_guide(
+                    session,
+                    context=context,
+                    content_hash=source.commitment.sha256,
+                    media_type=source.commitment.media_type,
+                )
+                admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+                    GuideArtifactAdmissionRequest(
+                        authorization_context=context,
+                        guide_source_item_id=UUID(guide_item_id),
+                        source=source,
+                    )
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, authority
+                )
+                assert (await orchestrator.ensure_storage_namespace()).id == "primary"
+                assert (
+                    await orchestrator.execute_committed_put(
+                        attempt_id=admission.attempt_id,
+                        source=source,
+                    )
+                    == "stored_pending_verification"
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                assert attempt.status == "object_confirmed"
+                assert attempt.executor_id is None
+                assert attempt.execution_generation == 1
+                job = await session.scalar(
+                    select(ArtifactVerificationJob).where(
+                        ArtifactVerificationJob.originating_put_attempt_id == attempt.id
+                    )
+                )
+                assert job is not None
+                job_id = UUID(job.id)
+                await session.rollback()
+                assert await orchestrator.verify_object(job_id) == "verified"
+                await session.refresh(job)
+                assert job.status == "verified"
+                assert job.executor_id is None
+                assert job.execution_generation == 1
+                replica = await session.get(ArtifactReplica, job.replica_id)
+                assert replica is not None
+                assert (
+                    replica.verification_state,
+                    replica.availability_state,
+                    replica.integrity_state,
+                ) == ("verified", "available", "valid")
+                assert await _count(session, ArtifactOperationReceipt) == 1
+                assert await _count(session, ArtifactVerificationReceipt) == 1
+                await session.rollback()
+                assert await orchestrator.verify_object(job_id) == "stale"
+                assert authority.preflights == 3
+                assert authority.terminals == 2
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_preacknowledgement_absence_releases_capacity_without_write(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(
+        LocalStorageAdapter(root=settings.artifact_local_root)
+    )
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    authority = _AllowArtifactAuthority()
+    try:
+        async with factory() as session:
+            async with minted_source(
+                tmp_path / "missing-guide-source",
+                b"provider object is deliberately absent",
+                media_type="text/plain",
+            ) as source:
+                _, guide_item_id = await _seed_guide(
+                    session,
+                    context=context,
+                    content_hash=source.commitment.sha256,
+                    media_type=source.commitment.media_type,
+                )
+                admission = await ArtifactAdmissionService(
+                    session, settings, namespace
+                ).admit(
+                    GuideArtifactAdmissionRequest(
+                        authorization_context=context,
+                        guide_source_item_id=UUID(guide_item_id),
+                        source=source,
+                    )
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, authority
+                )
+                assert await orchestrator.resolve_put_attempt(admission.attempt_id) == "missing"
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                assert attempt.status == "absent_replay_required"
+                assert attempt.observation_count == 1
+                charges = (
+                    await session.execute(select(ArtifactAdmissionCharge))
+                ).scalars().all()
+                scopes = (
+                    await session.execute(select(ArtifactAdmissionScope))
+                ).scalars().all()
+                assert charges and {charge.state for charge in charges} == {"released"}
+                assert scopes and {scope.counted_bytes for scope in scopes} == {0}
+                assert await _count(session, ArtifactPutObservationReceipt) == 1
+                assert await _count(session, ArtifactOperationReceipt) == 0
+                assert authority.preflights == 1
+                assert authority.terminals == 1
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_preacknowledgement_mismatch_quarantines_and_keeps_charge(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(
+        LocalStorageAdapter(root=settings.artifact_local_root)
+    )
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    authority = _AllowArtifactAuthority()
+    try:
+        async with factory() as session:
+            async with minted_source(
+                tmp_path / "mismatch-guide-source",
+                b"expected immutable bytes",
+                media_type="text/plain",
+            ) as source:
+                _, guide_item_id = await _seed_guide(
+                    session,
+                    context=context,
+                    content_hash=source.commitment.sha256,
+                    media_type=source.commitment.media_type,
+                )
+                admission = await ArtifactAdmissionService(
+                    session, settings, namespace
+                ).admit(
+                    GuideArtifactAdmissionRequest(
+                        authorization_context=context,
+                        guide_source_item_id=UUID(guide_item_id),
+                        source=source,
+                    )
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                prefix, filename = attempt.canonical_target.removeprefix("sha256/").split("/")
+                provider_path = settings.artifact_local_root / "objects" / "sha256" / prefix
+                provider_path.mkdir(mode=0o700)
+                corrupt_object = provider_path / filename
+                corrupt_object.write_bytes(b"different provider bytes")
+                corrupt_object.chmod(0o400)
+                await session.rollback()
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, authority
+                )
+                assert (
+                    await orchestrator.resolve_put_attempt(admission.attempt_id)
+                    == "integrity_mismatch"
+                )
+                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+                assert attempt is not None
+                assert attempt.status == "integrity_mismatch"
+                assert attempt.replica_id is not None
+                replica = await session.get(ArtifactReplica, attempt.replica_id)
+                assert replica is not None
+                assert (
+                    replica.verification_state,
+                    replica.availability_state,
+                    replica.integrity_state,
+                ) == ("integrity_mismatch", "available", "invalid")
+                charges = (
+                    await session.execute(select(ArtifactAdmissionCharge))
+                ).scalars().all()
+                assert charges and {charge.state for charge in charges} == {"completed"}
+                assert await _count(session, ArtifactPutObservationReceipt) == 1
+                assert await _count(session, ArtifactOperationReceipt) == 0
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
 
 
 async def test_guide_admission_derives_three_scopes_without_provider_evidence(

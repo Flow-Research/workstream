@@ -10,6 +10,8 @@ from app.workers.errors import CeleryConfigurationError
 
 ARTIFACT_SCRATCH_CLEANUP_TASK = "workstream.artifacts.cleanup_stale_scratch"
 ARTIFACT_SCRATCH_CLEANUP_SCHEDULE = "artifact-scratch-cleanup"
+ARTIFACT_PUT_RESOLUTION_TASK = "workstream.artifacts.resolve_put_attempt"
+ARTIFACT_VERIFICATION_TASK = "workstream.artifacts.verify_object"
 
 
 def create_celery_app() -> Celery:
