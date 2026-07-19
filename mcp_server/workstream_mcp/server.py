@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+import json
 import os
-from typing import Annotated, Any, Literal
-from uuid import UUID, uuid4
+from typing import Any, Awaitable, Callable, Literal, TypeVar
+from uuid import uuid4
 
-from pydantic import Field
+from pydantic import BaseModel, ValidationError
 
 from workstream_mcp.auth import (
     RequestContext,
@@ -21,17 +22,33 @@ from workstream_mcp.http_gateway import HTTPContributorGateway
 from workstream_mcp.observability import observe_operation
 import workstream_mcp.resources as resources
 import workstream_mcp.tools as tools
+from workstream_mcp.errors import unexpected_server_error
 from workstream_mcp.schemas import (
+    ClaimReviewResult,
+    ClaimTaskResult,
     MCP_PROMPTS,
+    PreSubmitCheckResult,
+    ProjectIdParameter,
     RESOURCE_DEFINITIONS,
+    ReleaseReasonParameter,
+    ReleaseReviewResult,
+    ReleaseTaskResult,
+    RequestIdParameter,
+    ReviewDecisionParameter,
+    ReviewFindingsParameter,
+    ReviewRefParameter,
+    ReviewRoutingRefParameter,
+    SubmissionParameter,
+    SubmitReviewResult,
+    SubmitTaskResult,
     TOOL_DEFINITIONS,
-    ReviewFindingInput,
-    SubmissionInput,
+    TaskIdParameter,
 )
 
 MAX_HTTP_REQUEST_BODY_BYTES = 2 * 1024 * 1024
 MAX_HTTP_REQUEST_FRAMES = 1024
 MAX_HTTP_REQUEST_RECEIVE_SECONDS = 30.0
+ResultModelT = TypeVar("ResultModelT", bound=BaseModel)
 
 
 class _RequestBodyLimitMiddleware:
@@ -206,6 +223,7 @@ def build_fastmcp_server(
         from mcp.server.fastmcp import FastMCP
         from mcp.server.auth.middleware.auth_context import get_access_token
         from mcp.server.auth.settings import AuthSettings
+        from mcp.server.fastmcp.exceptions import ToolError
         from mcp.server.transport_security import TransportSecuritySettings
         from mcp.types import ToolAnnotations
     except ImportError as exc:
@@ -214,6 +232,8 @@ def build_fastmcp_server(
     resolved_config = config or WorkstreamMCPConfig.from_environment()
     resolved_transport = transport or _transport_from_environment()
     app = create_mcp_application(gateway, config=resolved_config)
+    resource_catalogue = {definition.name: definition for definition in RESOURCE_DEFINITIONS}
+    tool_catalogue = {definition.name: definition for definition in TOOL_DEFINITIONS}
     auth_settings = None
     token_verifier = None
     if resolved_transport == "streamable-http":
@@ -262,7 +282,39 @@ def build_fastmcp_server(
             transport=resolved_transport,
         )
 
-    @server.resource("workstream://me/projects")
+    async def registered_tool_result(
+        request_context: RequestContext,
+        *,
+        identifier: str,
+        request_id: str,
+        result_model: type[ResultModelT],
+        action: Callable[[], Awaitable[dict[str, Any]]],
+    ) -> ResultModelT:
+        """Convert internal safe envelopes to typed success or MCP error results."""
+        result = await observe_operation(
+            request_context,
+            kind="tool",
+            identifier=identifier,
+            request_id=request_id,
+            action=action,
+        )
+        if isinstance(result.get("error"), dict):
+            raise ToolError(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        try:
+            return result_model.model_validate(result)
+        except ValidationError as exc:
+            safe_error = unexpected_server_error(
+                correlation_id=request_context.correlation_id
+            ).to_result()
+            raise ToolError(
+                json.dumps(safe_error, sort_keys=True, separators=(",", ":"))
+            ) from exc
+
+    @server.resource(
+        "workstream://me/projects",
+        title=resource_catalogue["my_projects"].title,
+        description=resource_catalogue["my_projects"].description,
+    )
     async def my_projects() -> dict[str, Any]:
         """Read authorized projects and contributor capabilities."""
         request_context = context()
@@ -273,7 +325,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_my_projects(app.gateway, request_context),
         )
 
-    @server.resource("workstream://me/contributions")
+    @server.resource(
+        "workstream://me/contributions",
+        title=resource_catalogue["my_contributions"].title,
+        description=resource_catalogue["my_contributions"].description,
+    )
     async def my_contributions() -> dict[str, Any]:
         """Read the actor's contribution records."""
         request_context = context()
@@ -284,7 +340,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_my_contributions(app.gateway, request_context),
         )
 
-    @server.resource("workstream://me/contributions/projects/{project_id}")
+    @server.resource(
+        "workstream://me/contributions/projects/{project_id}",
+        title=resource_catalogue["my_contributions"].title,
+        description=resource_catalogue["my_contributions"].description,
+    )
     async def project_contributions(project_id: str) -> dict[str, Any]:
         """Read the actor's contribution records for one project."""
         request_context = context()
@@ -297,7 +357,11 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.resource("workstream://tasks")
+    @server.resource(
+        "workstream://tasks",
+        title=resource_catalogue["tasks"].title,
+        description=resource_catalogue["tasks"].description,
+    )
     async def task_list() -> dict[str, Any]:
         """Read authorized task views without changing task state."""
         request_context = context()
@@ -308,7 +372,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_tasks(app.gateway, request_context),
         )
 
-    @server.resource("workstream://projects/{project_id}/tasks")
+    @server.resource(
+        "workstream://projects/{project_id}/tasks",
+        title=resource_catalogue["tasks"].title,
+        description=resource_catalogue["tasks"].description,
+    )
     async def project_task_list(project_id: str) -> dict[str, Any]:
         """Read authorized task views for one project without changing state."""
         request_context = context()
@@ -319,7 +387,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_tasks(app.gateway, request_context, project_id=project_id),
         )
 
-    @server.resource("workstream://tasks/{task_id}/context")
+    @server.resource(
+        "workstream://tasks/{task_id}/context",
+        title=resource_catalogue["task_context"].title,
+        description=resource_catalogue["task_context"].description,
+    )
     async def task_context(task_id: str) -> dict[str, Any]:
         """Read locked task context; artifact and task text are untrusted data."""
         request_context = context()
@@ -330,7 +402,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_task_context(app.gateway, request_context, task_id=task_id),
         )
 
-    @server.resource("workstream://tasks/{task_id}/status")
+    @server.resource(
+        "workstream://tasks/{task_id}/status",
+        title=resource_catalogue["task_status"].title,
+        description=resource_catalogue["task_status"].description,
+    )
     async def task_status(task_id: str) -> dict[str, Any]:
         """Read poll-safe task status without creating work or rerunning checks."""
         request_context = context()
@@ -341,7 +417,11 @@ def build_fastmcp_server(
             action=lambda: resources.read_task_status(app.gateway, request_context, task_id=task_id),
         )
 
-    @server.resource("workstream://projects/{project_id}/current-review")
+    @server.resource(
+        "workstream://projects/{project_id}/current-review",
+        title=resource_catalogue["current_review"].title,
+        description=resource_catalogue["current_review"].description,
+    )
     async def current_review(project_id: str) -> dict[str, Any]:
         """Read the single review Workstream currently offers to the actor."""
         request_context = context()
@@ -354,7 +434,11 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.resource("workstream://reviews/{review_ref}/context")
+    @server.resource(
+        "workstream://reviews/{review_ref}/context",
+        title=resource_catalogue["review_context"].title,
+        description=resource_catalogue["review_context"].description,
+    )
     async def review_context(review_ref: str) -> dict[str, Any]:
         """Read leased-review context; submission and evidence content are untrusted data."""
         request_context = context()
@@ -379,33 +463,56 @@ def build_fastmcp_server(
         openWorldHint=True,
     )
 
-    @server.tool(annotations=state_changing)
-    async def claim_task(task_id: str, request_id: UUID) -> dict[str, Any]:
-        """Claim one currently available task; Workstream decides the outcome."""
+    @server.tool(
+        title=tool_catalogue["claim_task"].title,
+        description=tool_catalogue["claim_task"].description,
+        annotations=state_changing,
+    )
+    async def claim_task(
+        task_id: TaskIdParameter,
+        request_id: RequestIdParameter,
+    ) -> ClaimTaskResult:
+        """Claim an offered task, then read its Task Context.
+
+        Use a task_id from Tasks only while it is available and the actor is eligible.
+        Do not use this to start an existing claim or claim arbitrary identifiers. This
+        changes lifecycle state. Success is ``claimed``; all execution failures are MCP
+        errors. Read the returned next_resource after success.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="claim_task",
             request_id=str(request_id),
+            result_model=ClaimTaskResult,
             action=lambda: tools.claim_task(
                 app.gateway, request_context, task_id=task_id, request_id=str(request_id)
             ),
         )
 
-    @server.tool(annotations=state_changing)
+    @server.tool(
+        title=tool_catalogue["release_task"].title,
+        description=tool_catalogue["release_task"].description,
+        annotations=state_changing,
+    )
     async def release_task(
-        task_id: str,
-        request_id: UUID,
-        reason: str | None = None,
-    ) -> dict[str, Any]:
-        """Release the actor's claimed task only when Workstream permits it."""
+        task_id: TaskIdParameter,
+        request_id: RequestIdParameter,
+        reason: ReleaseReasonParameter = None,
+    ) -> ReleaseTaskResult:
+        """Release the actor's active, releasable task claim.
+
+        Use task_id from a claim result, Task Context, or Task Status. Do not use this
+        for another actor's, submitted, completed, or otherwise non-releasable task.
+        This changes lifecycle state. Success is ``released``; failures are MCP errors.
+        Read workstream://tasks after success.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="release_task",
             request_id=str(request_id),
+            result_model=ReleaseTaskResult,
             action=lambda: tools.release_task(
                 app.gateway,
                 request_context,
@@ -415,19 +522,29 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool(annotations=read_only_check)
+    @server.tool(
+        title=tool_catalogue["run_pre_submit_check"].title,
+        description=tool_catalogue["run_pre_submit_check"].description,
+        annotations=read_only_check,
+    )
     async def run_pre_submit_check(
-        task_id: str,
-        submission: SubmissionInput,
-        request_id: UUID,
-    ) -> dict[str, Any]:
-        """Evaluate a candidate packet without creating a submission."""
+        task_id: TaskIdParameter,
+        submission: SubmissionParameter,
+        request_id: RequestIdParameter,
+    ) -> PreSubmitCheckResult:
+        """Evaluate a complete packet without submitting or changing task state.
+
+        Use this after claim_task and Task Context, before submit_task. Do not treat it
+        as submission. A completed failed check is a valid ``pre_submit_check_failed``
+        result, not an MCP error; validation, authorization, and backend failures are
+        MCP errors. Read the returned next_resource after completion.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="run_pre_submit_check",
             request_id=str(request_id),
+            result_model=PreSubmitCheckResult,
             action=lambda: tools.run_pre_submit_check(
                 app.gateway,
                 request_context,
@@ -437,19 +554,29 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool(annotations=state_changing)
+    @server.tool(
+        title=tool_catalogue["submit_task"].title,
+        description=tool_catalogue["submit_task"].description,
+        annotations=state_changing,
+    )
     async def submit_task(
-        task_id: str,
-        submission: SubmissionInput,
-        request_id: UUID,
-    ) -> dict[str, Any]:
-        """Submit a packet only through Workstream's authoritative lifecycle."""
+        task_id: TaskIdParameter,
+        submission: SubmissionParameter,
+        request_id: RequestIdParameter,
+    ) -> SubmitTaskResult:
+        """Create an immutable initial or revised Workstream submission.
+
+        Use only for the actor's claimed task after Task Context and required checks.
+        Do not submit drafts, unchanged revisions, or packets for unclaimed tasks. This
+        changes lifecycle state. Success is ``submitted``; validation, authorization,
+        checker, lifecycle, and backend failures are MCP errors. Read Task Status next.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="submit_task",
             request_id=str(request_id),
+            result_model=SubmitTaskResult,
             action=lambda: tools.submit_task(
                 app.gateway,
                 request_context,
@@ -459,19 +586,29 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool(annotations=state_changing)
+    @server.tool(
+        title=tool_catalogue["claim_review"].title,
+        description=tool_catalogue["claim_review"].description,
+        annotations=state_changing,
+    )
     async def claim_review(
-        project_id: str,
-        review_routing_ref: str,
-        request_id: UUID,
-    ) -> dict[str, Any]:
-        """Claim only the review currently offered by Workstream."""
+        project_id: ProjectIdParameter,
+        review_routing_ref: ReviewRoutingRefParameter,
+        request_id: RequestIdParameter,
+    ) -> ClaimReviewResult:
+        """Claim the single review currently offered by Workstream.
+
+        First read the project's Current Review and use its exact project_id and routing
+        reference. Do not choose arbitrary work or reuse an expired offer. This creates
+        a lease. Success is ``leased_to_actor``; authorization, availability, lease, and
+        backend failures are MCP errors. Read the returned Review Context next.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="claim_review",
             request_id=str(request_id),
+            result_model=ClaimReviewResult,
             action=lambda: tools.claim_review(
                 app.gateway,
                 request_context,
@@ -481,34 +618,58 @@ def build_fastmcp_server(
             ),
         )
 
-    @server.tool(annotations=state_changing)
-    async def release_review(review_ref: str, request_id: UUID) -> dict[str, Any]:
-        """Release the actor's current review lease when Workstream permits it."""
+    @server.tool(
+        title=tool_catalogue["release_review"].title,
+        description=tool_catalogue["release_review"].description,
+        annotations=state_changing,
+    )
+    async def release_review(
+        review_ref: ReviewRefParameter,
+        request_id: RequestIdParameter,
+    ) -> ReleaseReviewResult:
+        """Release the actor's active review lease without deciding the review.
+
+        Use review_ref from claim_review or Review Context only while the lease is active.
+        Do not release another actor's, expired, or completed review. This changes routing
+        state. Success is ``released``; validation, authorization, lease, and backend
+        failures are MCP errors. Read the project's Current Review resource next.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="release_review",
             request_id=str(request_id),
+            result_model=ReleaseReviewResult,
             action=lambda: tools.release_review(
                 app.gateway, request_context, review_ref=review_ref, request_id=str(request_id)
             ),
         )
 
-    @server.tool(annotations=state_changing)
+    @server.tool(
+        title=tool_catalogue["submit_review"].title,
+        description=tool_catalogue["submit_review"].description,
+        annotations=state_changing,
+    )
     async def submit_review(
-        review_ref: str,
-        decision: Literal["accept", "needs_revision", "reject"],
-        findings: Annotated[list[ReviewFindingInput], Field(max_length=100)],
-        request_id: UUID,
-    ) -> dict[str, Any]:
-        """Record one reviewer decision with actionable findings where required."""
+        review_ref: ReviewRefParameter,
+        decision: ReviewDecisionParameter,
+        findings: ReviewFindingsParameter,
+        request_id: RequestIdParameter,
+    ) -> SubmitReviewResult:
+        """Record one immutable decision for the actor's leased review.
+
+        Use only after claim_review and Review Context. Do not decide an unleased,
+        expired, or completed review. ``needs_revision`` requires actionable findings
+        tied to available evidence. This ends the lease. Success is ``accept``,
+        ``needs_revision``, or ``reject``; execution failures are MCP errors. Read the
+        project's Current Review or the related Task Status next.
+        """
         request_context = context()
-        return await observe_operation(
+        return await registered_tool_result(
             request_context,
-            kind="tool",
             identifier="submit_review",
             request_id=str(request_id),
+            result_model=SubmitReviewResult,
             action=lambda: tools.submit_review(
                 app.gateway,
                 request_context,

@@ -74,8 +74,20 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     tool_names = [tool.name for tool in tools]
     tool_schemas = {tool.name: tool.inputSchema for tool in tools}
     tool_annotations = {tool.name: tool.annotations for tool in tools}
+    tool_titles = {tool.name: tool.title for tool in tools}
+    tool_descriptions = {tool.name: tool.description for tool in tools}
+    tool_output_schemas = {tool.name: tool.outputSchema for tool in tools}
     resource_uris = [str(resource.uri) for resource in resources]
     template_uris = [str(template.uriTemplate) for template in resource_templates]
+    resource_metadata = {
+        str(resource.uri): (resource.title, resource.description) for resource in resources
+    }
+    resource_metadata.update(
+        {
+            str(template.uriTemplate): (template.title, template.description)
+            for template in resource_templates
+        }
+    )
 
     assert tool_names == [tool.name for tool in TOOL_DEFINITIONS]
     assert prompts == []
@@ -85,13 +97,38 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     assert set(resource_uris + template_uris) == {
         template for resource in RESOURCE_DEFINITIONS for template in resource.uri_templates
     }
+    for definition in RESOURCE_DEFINITIONS:
+        for uri_template in definition.uri_templates:
+            assert resource_metadata[uri_template] == (
+                definition.title,
+                definition.description,
+            )
     for tool in TOOL_DEFINITIONS:
         schema = tool_schemas[tool.name]
+        assert tool_titles[tool.name] == tool.title
+        assert tool_descriptions[tool.name] == tool.description
         assert set(schema["properties"]) == set(tool.input_fields)
         assert "bearer_token" not in schema["properties"]
         assert "authorization" not in schema["properties"]
+        for field_name in tool.input_fields:
+            field_schema = schema["properties"][field_name]
+            assert field_schema["description"]
+            assert field_schema["examples"]
     assert tool_schemas["claim_task"]["required"] == ["task_id", "request_id"]
     assert tool_schemas["claim_task"]["properties"]["request_id"]["format"] == "uuid"
+    request_id_schema = tool_schemas["claim_task"]["properties"]["request_id"]
+    assert "new UUID for every new logical operation" in request_id_schema["description"]
+    assert "Never reuse it for a different task, review, or action" in request_id_schema[
+        "description"
+    ]
+    assert request_id_schema["examples"] == ["11111111-1111-4111-8111-111111111111"]
+    task_id_schema = tool_schemas["claim_task"]["properties"]["task_id"]
+    assert task_id_schema["pattern"] == "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    assert task_id_schema["minLength"] == 1
+    assert task_id_schema["maxLength"] == 100
+    release_reason_schema = tool_schemas["release_task"]["properties"]["reason"]
+    assert release_reason_schema["default"] is None
+    assert release_reason_schema["anyOf"][0]["maxLength"] == 1000
     assert "summary" in tool_schemas["submit_task"]["$defs"]["SubmissionInput"]["properties"]
     submission_properties = tool_schemas["submit_task"]["$defs"]["SubmissionInput"][
         "properties"
@@ -100,6 +137,24 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
     assert submission_properties["worker_attestation"]["maxLength"] == 20000
     assert submission_properties["artifact_hash_manifest"]["maxItems"] == 1000
     assert submission_properties["evidence_items"]["maxItems"] == 1000
+    for field_name in (
+        "summary",
+        "package_uri",
+        "package_hash",
+        "artifact_hash_manifest",
+        "worker_attestation",
+        "evidence_items",
+    ):
+        assert submission_properties[field_name]["description"]
+        assert submission_properties[field_name]["examples"]
+    artifact_properties = tool_schemas["submit_task"]["$defs"]["ArtifactHashEntryInput"][
+        "properties"
+    ]
+    evidence_properties = tool_schemas["submit_task"]["$defs"]["EvidenceItemInput"][
+        "properties"
+    ]
+    assert all(field["description"] and field["examples"] for field in artifact_properties.values())
+    assert all(field["description"] and field["examples"] for field in evidence_properties.values())
     review_properties = tool_schemas["submit_review"]["properties"]
     assert review_properties["findings"]["maxItems"] == 100
     assert tool_schemas["submit_review"]["properties"]["decision"]["enum"] == [
@@ -113,6 +168,35 @@ async def test_fastmcp_runtime_registration_matches_closed_catalogue() -> None:
         "findings",
         "request_id",
     ]
+    finding_properties = tool_schemas["submit_review"]["$defs"]["ReviewFindingInput"][
+        "properties"
+    ]
+    assert all(field["description"] and field["examples"] for field in finding_properties.values())
+    expected_output_titles = {
+        "claim_task": "ClaimTaskResult",
+        "release_task": "ReleaseTaskResult",
+        "run_pre_submit_check": "PreSubmitCheckResult",
+        "submit_task": "SubmitTaskResult",
+        "claim_review": "ClaimReviewResult",
+        "release_review": "ReleaseReviewResult",
+        "submit_review": "SubmitReviewResult",
+    }
+    for tool_name, output_title in expected_output_titles.items():
+        output_schema = tool_output_schemas[tool_name]
+        assert output_schema is not None
+        assert output_schema["title"] == output_title
+        assert output_schema["type"] == "object"
+        assert output_schema["properties"]["operation"]["const"] == tool_name
+        assert output_schema["properties"]["outcome"]["description"]
+        assert output_schema["properties"]["data"]["description"]
+        assert set(output_schema["required"]) == {
+            "operation",
+            "outcome",
+            "workstream_ref",
+            "next_resource",
+            "summary",
+            "data",
+        }
     assert tool_annotations["run_pre_submit_check"] is not None
     assert tool_annotations["run_pre_submit_check"].readOnlyHint is True
     assert tool_annotations["run_pre_submit_check"].destructiveHint is False

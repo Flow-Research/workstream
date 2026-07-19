@@ -17,7 +17,9 @@ from sse_starlette.sse import AppStatus
 
 from workstream_mcp.auth import STDIO_TOKEN_ENV, WorkstreamForwardingTokenVerifier
 from workstream_mcp.config import WorkstreamMCPConfig
+from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
 from workstream_mcp.scenario_gateway import ScenarioContributorGateway
+from workstream_mcp.schemas import TOOL_DEFINITIONS
 from workstream_mcp.server import build_fastmcp_server
 
 REQUEST_IDS = (
@@ -125,6 +127,115 @@ def _structured(result: Any) -> dict[str, Any]:
     return result.structuredContent
 
 
+class _NegativeCheckGateway(ScenarioContributorGateway):
+    """Scenario gateway whose checker completes with a valid negative outcome."""
+
+    async def run_pre_submit_check(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "status": "failed",
+            "eligible_to_submit": False,
+            "findings": [{"code": "missing_evidence"}],
+        }
+
+
+class _ClaimFailureGateway(ScenarioContributorGateway):
+    """Scenario gateway that raises one selected claim failure."""
+
+    def __init__(self, failure: Exception) -> None:
+        super().__init__()
+        self._failure = failure
+
+    async def claim_task(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise self._failure
+
+
+@pytest.mark.asyncio
+async def test_protocol_marks_valid_negative_check_as_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A completed checker failure is business data, not an MCP execution error."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    server = build_fastmcp_server(gateway=_NegativeCheckGateway())
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "run_pre_submit_check",
+            {
+                "task_id": "scenario-task-1",
+                "submission": submission(),
+                "request_id": REQUEST_IDS[0],
+            },
+        )
+
+    assert result.isError is False
+    assert _structured(result)["outcome"] == "pre_submit_check_failed"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("failure", "expected_code"),
+    [
+        (
+            WorkstreamMCPError(
+                MCPErrorCode.CAPABILITY_NOT_GRANTED,
+                "The actor is not authorized.",
+                correlation_id="corr-safe",
+            ),
+            "capability_not_granted",
+        ),
+        (
+            WorkstreamMCPError(
+                MCPErrorCode.WORKSTREAM_TEMPORARILY_UNAVAILABLE,
+                "Workstream is unavailable.",
+                retryable=True,
+                correlation_id="corr-safe",
+            ),
+            "workstream_temporarily_unavailable",
+        ),
+        (RuntimeError("private adapter detail"), "unexpected_server_error"),
+    ],
+)
+async def test_protocol_marks_execution_failures_as_mcp_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    expected_code: str,
+) -> None:
+    """Authorization, backend, and unexpected failures set isError without leaking detail."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    server = build_fastmcp_server(gateway=_ClaimFailureGateway(failure))
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "claim_task",
+            {"task_id": "scenario-task-1", "request_id": REQUEST_IDS[0]},
+        )
+
+    response_text = "\n".join(getattr(item, "text", "") for item in result.content)
+    assert result.isError is True
+    assert result.structuredContent is None
+    assert expected_code in response_text
+    assert "issuer-token" not in response_text
+    assert "private adapter detail" not in response_text
+
+
+@pytest.mark.asyncio
+async def test_protocol_marks_parameter_validation_as_mcp_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wire-level schema validation cannot look like a successful tool execution."""
+    monkeypatch.setenv(STDIO_TOKEN_ENV, "issuer-token")
+    server = build_fastmcp_server(gateway=ScenarioContributorGateway())
+
+    async with create_connected_server_and_client_session(server) as session:
+        result = await session.call_tool(
+            "claim_task",
+            {"task_id": "../unsafe", "request_id": REQUEST_IDS[0]},
+        )
+
+    assert result.isError is True
+    assert result.structuredContent is None
+
+
 @pytest.mark.asyncio
 async def test_streamable_http_returns_sdk_response_after_body_replay(
     monkeypatch: pytest.MonkeyPatch,
@@ -172,4 +283,13 @@ async def test_streamable_http_returns_sdk_response_after_body_replay(
         await asyncio.sleep(0.6)
         AppStatus.should_exit = False
 
-    assert len(catalogue.tools) == 7
+    wire_tools = {tool.name: tool for tool in catalogue.tools}
+    assert list(wire_tools) == [definition.name for definition in TOOL_DEFINITIONS]
+    for definition in TOOL_DEFINITIONS:
+        wire_tool = wire_tools[definition.name]
+        assert wire_tool.title == definition.title
+        assert wire_tool.description == definition.description
+        assert wire_tool.outputSchema is not None
+    request_id_schema = wire_tools["claim_task"].inputSchema["properties"]["request_id"]
+    assert request_id_schema["format"] == "uuid"
+    assert request_id_schema["examples"] == ["11111111-1111-4111-8111-111111111111"]
