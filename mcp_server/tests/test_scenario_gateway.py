@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from workstream_mcp.auth import RequestContext
@@ -159,6 +161,33 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
         findings=[],
         request_id="44444444-4444-4444-8444-444444444444",
     )
+    blank_rejection_reason = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="reject",
+        findings=[],
+        request_id="55555555-5555-4555-8555-555555555555",
+        reason="   ",
+    )
+    misplaced_accept_reason = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="66666666-6666-4666-8666-666666666666",
+        reason="This field is valid only for rejection.",
+    )
+    misplaced_revision_reason = await submit_review(
+        gateway,
+        context(),
+        review_ref="scenario-review-1",
+        decision="needs_revision",
+        findings=[{"summary": "Correct the manifest."}],
+        request_id="77777777-7777-4777-8777-777777777777",
+        reason="This field is valid only for rejection.",
+    )
     accepted = await submit_review(
         gateway,
         context(),
@@ -182,6 +211,9 @@ async def test_current_review_claim_context_and_decision_flow() -> None:
     assert context_result["review_ref"] == "scenario-review-1"
     assert missing_findings["error"]["code"] == MCPErrorCode.FINDINGS_REQUIRED.value
     assert missing_rejection_reason["error"]["code"] == "invalid_tool_input"
+    assert blank_rejection_reason["error"]["code"] == "invalid_tool_input"
+    assert misplaced_accept_reason["error"]["code"] == "invalid_tool_input"
+    assert misplaced_revision_reason["error"]["code"] == "invalid_tool_input"
     assert accepted["outcome"] == "accept"
     assert accepted_retry["data"]["review_decision"]["idempotent_replay"] is True
     assert "idempotent_replay" not in accepted["data"]["review_decision"]
@@ -491,6 +523,35 @@ async def test_submitter_cannot_discover_or_claim_own_review() -> None:
     assert submitter_view["state"] == "none_available"
     assert self_claim["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
     assert reviewer_view["state"] == "available_to_claim"
+
+
+@pytest.mark.asyncio
+async def test_submit_review_rechecks_self_review_before_mutation() -> None:
+    """The decision boundary independently rejects a newly conflicting owner."""
+    gateway = ScenarioContributorGateway()
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+    gateway._task_owner = hashlib.sha256(  # noqa: SLF001 - deliberate invariant probe
+        other_context().bearer_token.encode("utf-8")
+    ).hexdigest()
+
+    result = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert result["error"]["code"] == MCPErrorCode.REVIEW_NOT_LEASED_TO_ACTOR.value
+    assert gateway._review["state"] == "leased_to_actor"  # noqa: SLF001
+    assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
 
 
 @pytest.mark.asyncio
