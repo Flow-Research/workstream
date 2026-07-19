@@ -11,9 +11,11 @@ from workstream_mcp.auth import (
     RequestContext,
     WorkstreamForwardingTokenVerifier,
     authorization_headers,
+    contains_context_secret,
     contains_secret,
     context_for_transport,
     context_from_authorization_header,
+    redact_context_secrets,
     redact_secrets,
 )
 from workstream_mcp.errors import MCPErrorCode, WorkstreamMCPError
@@ -80,6 +82,19 @@ def test_redaction_removes_known_secret_from_structured_values() -> None:
         "message": "Bearer [REDACTED]",
         "items": ["[REDACTED]", "safe"],
         "unique_items": {"[REDACTED]", "safe"},
+    }
+
+
+def test_uuid_equivalent_bearer_is_detected_and_redacted_inside_strings() -> None:
+    """Canonical UUID variants cannot hide inside identifiers or nested output."""
+    token = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
+    canonical = token.lower()
+    context = RequestContext(token, "corr-uuid", "test")
+    payload = {"nested": [f"prefix:{canonical}:suffix"]}
+
+    assert contains_context_secret(payload, context) is True
+    assert redact_context_secrets(payload, context) == {
+        "nested": ["prefix:[REDACTED]:suffix"]
     }
 
 

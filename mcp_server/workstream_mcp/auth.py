@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
+import re
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,6 +21,10 @@ except ImportError:  # pragma: no cover
 STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
 STDIO_SCENARIO_ACTOR_ID_ENV = "WORKSTREAM_MCP_SCENARIO_ACTOR_ID"
 MAX_BEARER_TOKEN_LENGTH = 8192
+UUID_TEXT_PATTERN = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,8 +241,10 @@ def _as_uuid(value: str) -> UUID | None:
 def _contains_equivalent_uuid(value: Any, secret_uuid: UUID) -> bool:
     """Find UUID strings equal to a bearer after canonicalization."""
     if isinstance(value, str):
-        candidate = _as_uuid(value)
-        return candidate == secret_uuid
+        return any(
+            _as_uuid(match.group(0)) == secret_uuid
+            for match in UUID_TEXT_PATTERN.finditer(value)
+        )
     if isinstance(value, dict):
         return any(
             _contains_equivalent_uuid(key, secret_uuid)
@@ -252,7 +259,14 @@ def _contains_equivalent_uuid(value: Any, secret_uuid: UUID) -> bool:
 def _redact_equivalent_uuid(value: Any, secret_uuid: UUID) -> Any:
     """Redact complete UUID strings canonically equal to the bearer."""
     if isinstance(value, str):
-        return "[REDACTED]" if _as_uuid(value) == secret_uuid else value
+        return UUID_TEXT_PATTERN.sub(
+            lambda match: (
+                "[REDACTED]"
+                if _as_uuid(match.group(0)) == secret_uuid
+                else match.group(0)
+            ),
+            value,
+        )
     if isinstance(value, list):
         return [_redact_equivalent_uuid(item, secret_uuid) for item in value]
     if isinstance(value, tuple):

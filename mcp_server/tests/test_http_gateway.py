@@ -207,7 +207,7 @@ async def test_tool_results_redact_echoed_bearer_token() -> None:
 async def test_bearer_material_never_reaches_identifier_paths() -> None:
     """Known bearer material is rejected in tool, resource, and direct gateway refs."""
     bearer = "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"
-    identifier = bearer.lower()
+    identifier = f"prefix:{bearer.lower()}:suffix"
     bearer_context = RequestContext(bearer, "corr-secret", "test", "actor-secret")
     calls: list[httpx.Request] = []
 
