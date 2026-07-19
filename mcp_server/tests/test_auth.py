@@ -91,11 +91,16 @@ def test_uuid_equivalent_bearer_is_detected_and_redacted_inside_strings() -> Non
     canonical = token.lower()
     context = RequestContext(token, "corr-uuid", "test")
     payload = {"nested": [f"prefix:{canonical}:suffix"]}
+    compact = canonical.replace("-", "")
 
     assert contains_context_secret(payload, context) is True
+    assert contains_context_secret(f"prefix:{compact}:suffix", context) is True
     assert redact_context_secrets(payload, context) == {
         "nested": ["prefix:[REDACTED]:suffix"]
     }
+    assert redact_context_secrets(f"prefix:{compact}:suffix", context) == (
+        "prefix:[REDACTED]:suffix"
+    )
 
 
 @pytest.mark.asyncio

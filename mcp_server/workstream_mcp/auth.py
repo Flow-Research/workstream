@@ -22,8 +22,8 @@ STDIO_TOKEN_ENV = "WORKSTREAM_MCP_ISSUER_TOKEN"
 STDIO_SCENARIO_ACTOR_ID_ENV = "WORKSTREAM_MCP_SCENARIO_ACTOR_ID"
 MAX_BEARER_TOKEN_LENGTH = 8192
 UUID_TEXT_PATTERN = re.compile(
-    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
-    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    r"(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|[0-9a-fA-F]{32})"
 )
 
 
