@@ -422,10 +422,13 @@ class ScenarioContributorGateway:
             for submission in self._submissions
             if submission["task_id"] == self._review_task_id
         ]
-        reviewed_submission = task_submissions[-1] if task_submissions else {
-            "id": "scenario-submission-1",
-            "version": 1,
-        }
+        if not task_submissions:
+            raise WorkstreamMCPError(
+                MCPErrorCode.REVIEW_NOT_AVAILABLE,
+                "The submission for this review is not available.",
+                correlation_id=context.correlation_id,
+            )
+        reviewed_submission = task_submissions[-1]
         return {
             "source": "temporary_scenario_gateway",
             "review_ref": review_ref,
@@ -617,10 +620,13 @@ class ScenarioContributorGateway:
             for submission in self._submissions
             if submission["task_id"] == self._review_task_id
         ]
-        reviewed_submission = task_submissions[-1] if task_submissions else {
-            "id": "scenario-submission-1",
-            "version": 1,
-        }
+        if not task_submissions:
+            raise WorkstreamMCPError(
+                MCPErrorCode.REVIEW_NOT_AVAILABLE,
+                "The submission for this review is not available.",
+                correlation_id=context.correlation_id,
+            )
+        reviewed_submission = task_submissions[-1]
         persisted_findings = deepcopy(findings)
         self._latest_review_outcomes[self._review_task_id] = {
             "decision": decision,

@@ -653,8 +653,8 @@ ReviewDecisionParameter = Annotated[
     Literal["accept", "needs_revision", "reject"],
     Field(
         description=(
-            "Final decision for the leased review. needs_revision requires one or more actionable "
-            "findings; reject requires a bounded human reason."
+            "Final decision for the leased review. needs_revision requires at least one blocking "
+            "finding; accept permits advisory findings only; reject requires a bounded human reason."
         ),
         examples=["needs_revision"],
     ),

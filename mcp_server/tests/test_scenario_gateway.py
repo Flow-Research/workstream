@@ -614,6 +614,39 @@ async def test_submit_review_rechecks_self_review_before_mutation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_review_fails_closed_when_submission_state_is_missing() -> None:
+    """A corrupted temporary fixture never fabricates reviewed work."""
+    gateway = ScenarioContributorGateway()
+    await prepare_review(gateway)
+    await claim_review(
+        gateway,
+        other_context(),
+        project_id="scenario-project-1",
+        review_routing_ref="scenario-review-route-1",
+        request_id=REQUEST_ID,
+    )
+    gateway._submissions.clear()  # noqa: SLF001 - deliberate corrupted-state probe
+
+    review_context = await read_review_context(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+    )
+    decision = await submit_review(
+        gateway,
+        other_context(),
+        review_ref="scenario-review-1",
+        decision="accept",
+        findings=[],
+        request_id="22222222-2222-4222-8222-222222222222",
+    )
+
+    assert review_context["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert decision["error"]["code"] == MCPErrorCode.REVIEW_NOT_AVAILABLE.value
+    assert (await gateway.get_my_contributions(other_context()))["contributions"] == []
+
+
+@pytest.mark.asyncio
 async def test_temporary_task_and_review_leases_are_actor_scoped() -> None:
     """A second test actor cannot read or mutate another actor's leased work."""
     task_gateway = ScenarioContributorGateway()
