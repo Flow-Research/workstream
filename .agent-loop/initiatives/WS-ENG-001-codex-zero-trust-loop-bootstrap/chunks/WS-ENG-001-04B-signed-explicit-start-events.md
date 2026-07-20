@@ -37,6 +37,7 @@ activation.
 AGENTS.md
 .agents/skills/memory-update/SKILL.md
 .agent-loop/policies/repository-engineering-policy.md
+.agent-loop/policies/loop-memory-legacy-start-exemptions.json
 .agent-loop/initiatives/WS-ENG-001-codex-zero-trust-loop-bootstrap/**
 .agent-loop/merge-intents/WS-ENG-001-04B.json
 .github/workflows/loop-memory-start.yml
@@ -45,6 +46,8 @@ docs/operations_post_merge_memory.md
 scripts/update_post_merge_memory.py
 scripts/check_loop_memory_state.py
 scripts/test_agent_gates.py
+scripts/test_update_post_merge_memory.py
+scripts/test_check_loop_memory_state.py
 ```
 
 ## Not allowed
@@ -59,10 +62,12 @@ of a second chunk while the same initiative is active.
 - Only a protected, attributable human workflow event can start work.
 - The requested chunk equals the signed same-initiative successor and its exact
   contract exists on current protected `main`.
-- The event records actor, timestamp, protected-main SHA, initiative, and chunk
-  in authenticated typed state.
-- Replay, stale SHA, unauthorized actor, conflicting active state, arbitrary
-  chunk, and cross-initiative selection fail closed.
+- The event signs dispatcher attribution, distinct environment-approver
+  authorization, immutable workflow-run ID and API creation time, protected-main
+  SHA, prior state tip, initiative, chunk, and validated reason.
+- Identical replay is non-mutating; same-ID/different-byte collision, duplicate
+  run, stale main/tip, invalid identity/reason, null/wrong/cross-initiative
+  successor, already-active start, and wrong/inactive cancellation fail closed.
 - All canonical projections update atomically and identify the active chunk.
 - A later trusted merge closes that exact active chunk and returns the
   initiative to a stopped successor gate.
@@ -76,23 +81,42 @@ of a second chunk while the same initiative is active.
   fixed state-branch destination, and the protected `loop-memory-start`
   environment.
 - The environment-scoped signing secret is unavailable before required human
-  approval; repository code documents this external configuration gate.
+  approval. It is never accepted as input/argv or exposed in logs/artifacts,
+  uses mode-0600 temporary storage only when required, and is removed on exit.
 - Correction is an attributable corrective cancellation restoring the same
   successor gate, followed by a separate protected start; arbitrary replacement
   is absent.
-- Legacy already-approved work may still reconcile by merge-only state, but any
-  initiative with active signed state must merge that exact chunk.
-- Materially changed loop-memory scripts remain at or above 90 percent branch
-  coverage.
+- A legacy merge-only closure requires an exact initiative/chunk in the signed
+  cutover inventory and consumes that exemption once. Every other post-cutover
+  no-active merge fails; active state must merge its exact chunk.
+- Before start/cancel, signed state catches up every unrecorded merge through the
+  expected main SHA. Main is resolved again after environment approval and
+  immediately before signing/push; movement fails closed.
+- Exact active merge closes; wrong active merge fails. Cancel then retry succeeds
+  without history rewrite. Signature/tree/render/write/push failure and every
+  rejected event leave canonical branch state unchanged.
+- Parsed-YAML tests enforce the exact trigger, job-level main/first-attempt
+  guard, environment, closed permissions, non-cancelling shared concurrency,
+  credential-free trusted-main checkout, fixed push ref, and absence of
+  caller-controlled ref/destination values.
+- Before publication, GitHub settings/API evidence proves required reviewers,
+  disabled self-review/admin bypass, protected-main deployment restriction, and
+  environment-only secret placement; a misconfigured environment fails rollout.
+- Materially changed `update_post_merge_memory.py` and
+  `check_loop_memory_state.py` remain at or above 90 percent combined branch
+  coverage without weakening an existing gate.
 
 ## Verification commands
 
 ```text
-python -m pytest -q scripts/test_agent_gates.py
-python -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
-python scripts/check_loop_memory_state.py --state-root <fixture-root>
-python scripts/check_markdown_links.py
-python scripts/check_stale_workstream_wording.py
+python3 -m pytest -q scripts/test_agent_gates.py
+python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
+python3 -m pytest -q --cov=scripts.update_post_merge_memory --cov=scripts.check_loop_memory_state --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
+python3 scripts/check_loop_memory_state.py --state-root <fixture-root>
+gh api repos/{owner}/{repo}/environments/loop-memory-start
+gh api repositories/{repository_id}/environments/loop-memory-start/secrets
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
 git diff --check
 ```
 

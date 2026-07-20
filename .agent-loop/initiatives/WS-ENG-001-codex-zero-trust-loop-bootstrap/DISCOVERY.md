@@ -120,9 +120,14 @@ cancel/correct semantics; none is required for 04A.
   stopped successor gate so a later protected start can retry. A correction is
   represented as an attributable corrective cancellation plus a later start,
   avoiding an arbitrary replacement path.
-- Existing in-flight initiatives predate signed starts. Merge reconciliation
-  must close an exact active chunk when one exists, while retaining legacy
-  merge-only reconciliation for already-approved work that began before 04B.
+- Existing in-flight initiatives predate signed starts. A signed 04B cutover
+  must seal an exact reviewed initiative/chunk inventory. Each exemption is
+  consumed once by merge; every post-cutover no-active merge outside that list
+  fails closed.
+- Environment approval and dispatch are distinct GitHub actions. The protected
+  environment supplies authorization through a required reviewer distinct from
+  the dispatcher; workflow-run approval history supplies signed approver
+  provenance, while the dispatcher remains signed attribution.
 
 ### Tests and operational dependencies
 
@@ -134,3 +139,6 @@ cancel/correct semantics; none is required for 04A.
 - Repository configuration must create and protect the `loop-memory-start`
   environment with required human reviewers before the workflow can succeed.
   This external configuration is a deployment gate, not repository code.
+- The start/cancel transaction must first reuse merge reconciliation through the
+  requested main SHA; shared concurrency alone cannot make a lagging signed
+  branch current.

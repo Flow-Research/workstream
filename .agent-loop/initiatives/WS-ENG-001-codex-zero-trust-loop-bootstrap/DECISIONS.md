@@ -54,7 +54,13 @@
   same reviewed successor gate, followed by a separate protected start. Do not
   introduce arbitrary active-chunk replacement.
 - Require exact active-chunk closure when active state exists, while allowing
-  legacy merge-only reconciliation for work already in flight at 04B rollout.
+  one-use merge-only closure only for the exact reviewed in-flight inventory
+  sealed by the signed 04B cutover. Reject every later unsigned start.
+- Treat a distinct protected-environment reviewer as event authorization and
+  the workflow dispatcher as attribution; sign both identities and disable
+  self-review and administrator bypass.
+- Reconcile signed state through the requested current-main SHA before applying
+  start/cancel, then revalidate protected main immediately before mutation.
 
 ## Deferred
 

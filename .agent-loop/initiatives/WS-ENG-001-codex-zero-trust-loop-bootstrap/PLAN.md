@@ -69,34 +69,53 @@ Bootstrap Workstream's engineering loop using Codex-native surfaces first:
 
 After 04A merge/replay and a separate user start:
 
-1. Extend the append-only ledger with a closed schema-v2 event union for
-   `merge`, `start`, and `cancel`. Start/cancel events bind GitHub actor, unique
-   workflow run ID, event time, reason, protected-main SHA, initiative, chunk,
-   and prior signed-state tip. Do not rewrite earlier records.
+1. Extend the append-only ledger with a closed event union for `merge`, `start`,
+   `cancel`, and one 04B `cutover` record. Start/cancel events bind the dispatcher,
+   environment approval reviewer(s), immutable workflow run ID and creation
+   time obtained from the GitHub API, validated reason, protected-main SHA,
+   initiative, chunk, and prior signed-state tip. Do not use runner wall time or
+   rewrite earlier records.
 2. Reduce events per initiative. `start` changes only the exact recorded
    same-initiative successor from `stopped_after_merge` to `active`; `cancel`
    returns that same chunk to the stopped explicit-start gate. Correction uses
    an attributable corrective cancellation followed by a fresh start.
-3. Add repository-owned commands that apply a validated event to an already
-   authenticated state root, rerender the complete closed tree, sign it, and
-   validate it with the existing manifest/tree boundary.
+3. Extend the existing repository-owned reconciliation, reducer, render,
+   signing, exact-tree, and fast-forward commands; do not create a second
+   start-specific state path. Before applying an authority event, authenticate
+   state and reconcile every unrecorded protected-main merge through the exact
+   expected SHA using the existing commit planner. Re-resolve protected `main`
+   after environment approval and immediately before signing/push; fail if it
+   moved. A failed/raced push leaves the branch unchanged and recovery uses a
+   fresh dispatch after inspecting signed state.
 4. Add `.github/workflows/loop-memory-start.yml` using `workflow_dispatch` only.
    Require ref `main`, `run_attempt == 1`, an exact expected current-main SHA,
-   the fixed `loop-memory-start` protected environment, minimal read/write
-   permissions, the shared concurrency group, reviewed code from current main,
-   and the fixed `automation/loop-memory` fast-forward destination.
-5. Keep the signing key environment-scoped. Treat environment approval and
-   GitHub actor attribution as the human authority; never accept chat text,
-   feature-branch code, arbitrary successors, or caller-selected destinations.
-6. When merge reconciliation encounters an active initiative, require the
-   merged chunk to equal that active chunk before clearing it. Preserve
-   merge-only handling for work already in flight when 04B deploys.
-7. Update policy, skill, AGENTS, and operations guidance with dispatch, cancel,
-   recovery, environment setup, audit, and rollout rules.
+   the fixed `loop-memory-start` protected environment, a closed minimal
+   permissions map, the shared non-cancelling concurrency group, credential-free
+   checkout of independently resolved current main, and the fixed
+   `automation/loop-memory` fast-forward destination. Parsed-YAML tests must
+   reject every additional trigger, permission, ref, or destination path.
+5. Treat a distinct required environment reviewer as authorization and the
+   dispatcher as attribution. Disable self-review and administrator bypass;
+   fetch and validate workflow-run approval history from GitHub and sign both
+   identities. The signing key exists only in the protected write job, is never
+   an input/argument/log/artifact value, uses a mode-0600 temporary file only if
+   necessary, and is removed on every exit. Validate actor/reason IDs, lengths,
+   Unicode/control characters, and the closed event type before use.
+6. The 04B merge records a signed cutover and an exact reviewed inventory of
+   initiative/chunk exemptions already in flight. Each exemption permits one
+   merge-only closure and is consumed in signed state. After cutover, reject
+   every no-active merge not in that inventory. Active initiatives must merge
+   their exact signed chunk.
+7. Update policy, skill, AGENTS, and operations guidance with exact environment
+   settings and evidence, inputs/validation, audit lookup, the grandfather
+   inventory, fresh-dispatch recovery, failure meanings, state-branch recovery,
+   and signing-key rotation/compromise handling.
 8. Prove event/schema reduction, deterministic rendering, signing, replay,
-   stale/conflict rejection, cancel/retry, active-merge mismatch, hostile paths,
-   and workflow permissions/order. Preserve at least 90 percent branch coverage
-   for materially changed loop-memory scripts.
+   stale/conflict rejection, cancel/retry, active-merge mismatch, failure
+   atomicity, hostile paths, and exact workflow structure. Enforce at least 90
+   percent combined branch coverage for materially changed
+   `update_post_merge_memory.py` and `check_loop_memory_state.py`, without
+   weakening any existing CI gate.
 
 ### Alternatives and verification
 

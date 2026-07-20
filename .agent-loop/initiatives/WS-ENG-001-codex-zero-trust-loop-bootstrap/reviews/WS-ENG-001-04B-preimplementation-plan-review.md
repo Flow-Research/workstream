@@ -34,6 +34,25 @@ current protected-main state during 2026-07-20.
 | Reuse/dedup | Pending | Review required |
 | Test delta | Pending | Review required |
 
+## First-pass findings repaired
+
+- Replaced the unbounded legacy merge-only path with a signed cutover containing
+  an exact, one-use initiative/chunk exemption inventory.
+- Defined environment approval by a reviewer distinct from the dispatcher as
+  authorization, dispatcher identity as attribution, and both as signed event
+  evidence. Required settings disable self-review and administrator bypass.
+- Required merge catch-up through expected main before event application and a
+  second protected-main freshness check after environment approval immediately
+  before signing and push.
+- Bound event ID/time to immutable GitHub run metadata, added closed input
+  validation, secret hygiene, failure atomicity, and fresh-dispatch recovery.
+- Added the missing updater/checker test files to allowed scope, an enforceable
+  combined branch-coverage command, exact parsed-workflow assertions, and
+  external environment-configuration evidence.
+- Prohibited a parallel start-specific state path; 04B must extend the existing
+  reconciliation, renderer, signer, manifest, exact-tree, and fast-forward
+  machinery.
+
 ## Gate
 
 Planning review is in progress. Implementation is not approved.

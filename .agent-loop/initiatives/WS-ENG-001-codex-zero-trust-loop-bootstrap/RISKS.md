@@ -26,4 +26,7 @@
 | Dispatch runs feature-branch workflow code with a write token | Critical | Require `workflow_dispatch` on `refs/heads/main`, independently resolve protected main, detach at that SHA, and fix the state-branch destination. |
 | A write-capable collaborator bypasses intended human start authority | Critical | Gate the signing secret and job behind the protected `loop-memory-start` environment with required reviewers; record actor and run ID. |
 | Rerun or duplicate dispatch replays an authority event | Critical | Require first run attempt and append-only unique event IDs; identical replay is non-mutating and collisions fail closed. |
-| 04B blocks already-approved work started before deployment | High | Enforce exact active-chunk closure when active state exists; retain legacy merge-only reconciliation for pre-04B in-flight work. |
+| 04B blocks already-approved work started before deployment | High | Seal exact pre-04B initiative/chunk exemptions at cutover and consume each once. |
+| Legacy reconciliation becomes a permanent unsigned-start bypass | Critical | Seal an exact initiative/chunk inventory in the signed cutover, consume every exemption once, and reject all other post-cutover no-active merges. |
+| Environment approval is confused with dispatcher identity | Critical | Require a distinct reviewer, disable self-review/admin bypass, fetch approval history, and sign both approver authorization and dispatcher attribution. |
+| State lags main when an explicit event is applied | Critical | Reuse merge reconciliation through expected main, then re-resolve main immediately before signing and pushing. |
