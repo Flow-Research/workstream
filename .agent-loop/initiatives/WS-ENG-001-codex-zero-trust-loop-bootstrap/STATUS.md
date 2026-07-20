@@ -8,9 +8,10 @@
 - `WS-ENG-001-04A`: merged through PR #161; signed replay and complete
   projections passed
 - `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
-  workflow, cutover inventory, tests, CI coverage gates, and operations policy
-  are under deterministic verification
-- Current gate: implementation evidence and exact-SHA internal review
+  workflow, cutover inventory, tests, CI coverage gates, operations policy, and
+  all nine exact-SHA reviewer tracks pass at `a93a58b2`
+- Current gate: configure and evidence the protected `loop-memory-start`
+  environment before PR publication
 - Product runtime: unchanged
 
 ## Last Update
@@ -24,5 +25,5 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Complete deterministic evidence and all nine implementation reviewer tracks,
-then publish one PR trust bundle. Do not begin another chunk.
+Create the protected environment with the required controls and environment-only
+key, record settings evidence, then publish one PR. Do not begin another chunk.
