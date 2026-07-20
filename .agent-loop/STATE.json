@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29736619803/job/88333353424"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29745741452/job/88363115326"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29736619841/job/88338537040"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29743407774/job/88355326286"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-ART-CUSTODY",
-    "chunk_title": "ART Activation Custody Transfer",
+    "chunk_id": "WS-AUTH-001-REV-CUSTODY",
+    "chunk_title": "REV Activation Custody Transfer",
     "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-REV-CUSTODY",
-    "next_chunk_title": "REV Activation Custody Transfer",
+    "next_chunk_id": "WS-AUTH-001-PREP",
+    "next_chunk_title": "Prepared Mutation Authorization Protocol",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-REV-CUSTODY",
-    "next_chunk_title": "REV Activation Custody Transfer",
+    "next_chunk_id": "WS-AUTH-001-PREP",
+    "next_chunk_title": "Prepared Mutation Authorization Protocol",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "42a89b2deac8fc7672556a567a6124f8a4e5d423",
-    "head_ref": "codex/ws-auth-001-art-custody",
-    "head_sha": "2cbce2d5e9413659ea837ea95c10f1e86d2eae9f",
-    "intent_blob_sha": "56eacb178d7aa29186a4cb66eaf4d74ca3cfd7d8",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-ART-CUSTODY.json",
-    "main_sha": "be2a79a243ec50049c37f1f634322a9b3ab895ba",
-    "merged_at": "2026-07-20T11:55:54Z",
+    "first_parent_sha": "be2a79a243ec50049c37f1f634322a9b3ab895ba",
+    "head_ref": "codex/ws-auth-001-rev-custody",
+    "head_sha": "ec77e64c746947c24b3da47a221869dd11bce642",
+    "intent_blob_sha": "9067950d154648983a04727ee554942c3a55f40d",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-REV-CUSTODY.json",
+    "main_sha": "fe0e4492a7de8699c06a52921cbdaa8a1a22e567",
+    "merged_at": "2026-07-20T13:58:14Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 158,
-    "pr_title": "AUTH: transfer ART activation custody",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/158"
+    "pr_number": 160,
+    "pr_title": "AUTH: transfer REV activation custody",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/160"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-20T11:55:54Z"
+  "updated_at": "2026-07-20T13:58:14Z"
 }
