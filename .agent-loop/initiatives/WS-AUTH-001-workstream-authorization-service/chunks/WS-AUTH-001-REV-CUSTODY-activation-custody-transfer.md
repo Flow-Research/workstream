@@ -1,4 +1,4 @@
-# Chunk Contract: WS-AUTH-001-REV-CUSTODY — REV Activation Custody Transfer
+# Chunk Contract: WS-AUTH-001-REV-CUSTODY - REV Activation Custody Transfer
 
 ## Parent initiative
 

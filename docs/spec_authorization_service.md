@@ -361,15 +361,36 @@ dynamically, or changes availability.
 
 The following table is the single source of truth for artifact ActionId-to-
 PermissionId mappings, principal/resource facts, and ART hidden-behavior
-ownership. AUTH-07A registers only each row's stable `ActionId`, approved
-  `PermissionId`, historical pre-transfer owner value, and `planned`
-availability. Its principal-class and canonical-resource columns are not AUTH
+ownership. AUTH-07A registered each row's stable `ActionId`, approved
+`PermissionId`, historical owner value, and `planned` availability.
+`WS-AUTH-001-ART-CUSTODY` has now replaced only those historical owner values
+with the exact AUTH activation custodians below; mappings, availability, and
+ART hidden-behavior ownership are unchanged. Its principal-class and
+canonical-resource columns are not AUTH
 registry fields and are not executable authority; the owning WS-ART chunk adopts
 them with its hidden canonical resource composer, guards, surface declaration,
 and behavior tests. The complete AUTH activation-custody transfer is separately
 canonical in
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md`.
 A mapping is not a permission alias.
+
+| AUTH activation custodian | Exact planned ActionIds |
+|---|---|
+| `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
+| `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
+| `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-AUTH-001-ART-04A` | `artifact.upload_session.create`, `artifact.upload_session.read`, `artifact.upload_item.write`, `artifact.upload_session.seal`, `artifact.upload_session.cancel`, `artifact.upload_session.expire` |
+| `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
+| `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+
+The `OPERATOR` suffix names future activation custody only; it creates no
+Operator grant or entitlement. All 25 actions remain planned and unavailable.
+`artifact.verification_job.retry` requires its own later evaluator, guards, and
+independent activation proof; read/status proof cannot activate retry. The
+transfer adds no migration, and all 19 REV rows retain their historical owners
+until the separately started REV custody chunk.
 
 | ActionId | PermissionId | Principal class | Canonical resource | Resource-owning WS-ART chunk |
 |---|---|---|---|---|

@@ -37,10 +37,16 @@ mappings, and availability must remain identical.
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
 
-`WS-AUTH-001-ART-CUSTODY` performs the atomic 25-row transfer to eight exact AUTH
-groups and removes the seven historical ART owner enum values. It adds no migration because owner and
-availability are typed metadata, while PostgreSQL preserves the exact
-ActionId-to-PermissionId set.
+`WS-AUTH-001-ART-CUSTODY` atomically transfers these 25 rows with exact owner
+cardinalities `3/8/3/6/1/1/1/2` in the table order above and removes the seven
+historical ART owner enum values. The `OPERATOR` suffix denotes only future
+activation custody; it grants no Operator entitlement. All 25 actions remain
+planned, including independently gated `artifact.verification_job.retry`, which
+cannot be activated by read/status proof. The transfer adds no migration because
+owner and availability are typed metadata, while PostgreSQL preserves the exact
+ActionId-to-PermissionId set. The catalogue remains at 74 PermissionIds,
+65 ActionIds, 17 active actions, and 48 planned actions; the seven-identity,
+eleven-membership service matrix is unchanged.
 
 ## REV custody transfer
 

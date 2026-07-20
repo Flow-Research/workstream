@@ -138,6 +138,134 @@ from app.modules.authorization.service_actor_service import (
 
 DIGEST = "sha256:" + "a" * 64
 
+ART_CUSTODY_EXPECTATIONS = {
+    "artifact.binding.read": (
+        "artifact.binding.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.replica.read": (
+        "artifact.replica.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.receipt.read": (
+        "artifact.receipt.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.verification_job.read": (
+        "artifact.verification_job.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.verification_job.retry": (
+        "artifact.verification_job.retry",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.recovery_attempt.read": (
+        "artifact.recovery_attempt.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.audit.read": (
+        "artifact.audit.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "operations.artifact_storage_admission.read": (
+        "operations.status.read",
+        "WS-AUTH-001-ART-02D-OPERATOR",
+        "planned",
+    ),
+    "artifact.verification.execute": (
+        "artifact.verification.execute",
+        "WS-AUTH-001-ART-02D-INTERNAL",
+        "planned",
+    ),
+    "artifact.pending_work.scan": (
+        "artifact.pending_work.scan",
+        "WS-AUTH-001-ART-02D-INTERNAL",
+        "planned",
+    ),
+    "artifact.put_attempt.resolve": (
+        "artifact.put_attempt.resolve",
+        "WS-AUTH-001-ART-02D-INTERNAL",
+        "planned",
+    ),
+    "artifact.guide_source.ingest": (
+        "artifact.guide_source.ingest",
+        "WS-AUTH-001-ART-03",
+        "planned",
+    ),
+    "artifact.guide_source.read": (
+        "artifact.guide_source.read",
+        "WS-AUTH-001-ART-03",
+        "planned",
+    ),
+    "artifact.guide_source.binding.create": (
+        "artifact.binding.create",
+        "WS-AUTH-001-ART-03",
+        "planned",
+    ),
+    "artifact.upload_session.create": (
+        "artifact.upload_session.create",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.upload_session.read": (
+        "artifact.upload_session.read",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.upload_item.write": (
+        "artifact.upload_item.write",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.upload_session.seal": (
+        "artifact.upload_session.seal",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.upload_session.cancel": (
+        "artifact.upload_session.cancel",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.upload_session.expire": (
+        "artifact.upload_session.expire",
+        "WS-AUTH-001-ART-04A",
+        "planned",
+    ),
+    "artifact.pre_submit.checker_input.materialize": (
+        "artifact.checker_input.materialize",
+        "WS-AUTH-001-ART-04B",
+        "planned",
+    ),
+    "artifact.submission.binding.create": (
+        "artifact.binding.create",
+        "WS-AUTH-001-ART-05",
+        "planned",
+    ),
+    "artifact.post_submit.checker_input.materialize": (
+        "artifact.checker_input.materialize",
+        "WS-AUTH-001-ART-06A",
+        "planned",
+    ),
+    "artifact.checker_output.write": (
+        "artifact.checker_output.write",
+        "WS-AUTH-001-ART-06B",
+        "planned",
+    ),
+    "artifact.checker_output.binding.create": (
+        "artifact.binding.create",
+        "WS-AUTH-001-ART-06B",
+        "planned",
+    ),
+}
+
 
 def _admin_resource_context(
     request: AdminRoleGrantIssueRequest | AdminRoleGrantRevokeRequest,
@@ -224,37 +352,10 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             "WS-REV-001-12",
         ),
         "review.projection.rebuild": ("operations.projection.rebuild", "WS-REV-001-12"),
-        "artifact.binding.read": ("artifact.binding.read", "WS-ART-001-02D"),
-        "artifact.replica.read": ("artifact.replica.read", "WS-ART-001-02D"),
-        "artifact.receipt.read": ("artifact.receipt.read", "WS-ART-001-02D"),
-        "artifact.verification_job.read": ("artifact.verification_job.read", "WS-ART-001-02D"),
-        "artifact.verification_job.retry": ("artifact.verification_job.retry", "WS-ART-001-02D"),
-        "artifact.recovery_attempt.read": ("artifact.recovery_attempt.read", "WS-ART-001-02D"),
-        "artifact.audit.read": ("artifact.audit.read", "WS-ART-001-02D"),
-        "operations.artifact_storage_admission.read": ("operations.status.read", "WS-ART-001-02D"),
-        "artifact.guide_source.ingest": ("artifact.guide_source.ingest", "WS-ART-001-03"),
-        "artifact.guide_source.read": ("artifact.guide_source.read", "WS-ART-001-03"),
-        "artifact.upload_session.create": ("artifact.upload_session.create", "WS-ART-001-04A"),
-        "artifact.upload_session.read": ("artifact.upload_session.read", "WS-ART-001-04A"),
-        "artifact.upload_item.write": ("artifact.upload_item.write", "WS-ART-001-04A"),
-        "artifact.upload_session.seal": ("artifact.upload_session.seal", "WS-ART-001-04A"),
-        "artifact.upload_session.cancel": ("artifact.upload_session.cancel", "WS-ART-001-04A"),
-        "artifact.upload_session.expire": ("artifact.upload_session.expire", "WS-ART-001-04A"),
-        "artifact.guide_source.binding.create": ("artifact.binding.create", "WS-ART-001-03"),
-        "artifact.submission.binding.create": ("artifact.binding.create", "WS-ART-001-05"),
-        "artifact.checker_output.binding.create": ("artifact.binding.create", "WS-ART-001-06B"),
-        "artifact.verification.execute": ("artifact.verification.execute", "WS-ART-001-02D"),
-        "artifact.pending_work.scan": ("artifact.pending_work.scan", "WS-ART-001-02D"),
-        "artifact.put_attempt.resolve": ("artifact.put_attempt.resolve", "WS-ART-001-02D"),
-        "artifact.pre_submit.checker_input.materialize": (
-            "artifact.checker_input.materialize",
-            "WS-ART-001-04B",
-        ),
-        "artifact.post_submit.checker_input.materialize": (
-            "artifact.checker_input.materialize",
-            "WS-ART-001-06A",
-        ),
-        "artifact.checker_output.write": ("artifact.checker_output.write", "WS-ART-001-06B"),
+        **{
+            action: (permission, owner)
+            for action, (permission, owner, _availability) in ART_CUSTODY_EXPECTATIONS.items()
+        },
         "authorization.permission_catalogue.read": ("admin_role.read", "WS-AUTH-001-08"),
         "authorization.admin_role_definitions.read": ("admin_role.read", "WS-AUTH-001-08"),
         "admin_role_grant.list": ("admin_role.read", "WS-AUTH-001-08"),
@@ -310,6 +411,45 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         )
         for definition in ACTION_DEFINITIONS
     } == expected
+    assert {
+        action: (
+            ACTION_BY_ID[ActionId(action)].permission_id.value,
+            ACTION_BY_ID[ActionId(action)].owner.value,
+            ACTION_BY_ID[ActionId(action)].availability.value,
+        )
+        for action in ART_CUSTODY_EXPECTATIONS
+    } == ART_CUSTODY_EXPECTATIONS
+    assert {
+        owner: sum(definition.owner is owner for definition in ACTION_DEFINITIONS)
+        for owner in {
+            ActionOwner.AUTH_ART_02D_OPERATOR,
+            ActionOwner.AUTH_ART_02D_INTERNAL,
+            ActionOwner.AUTH_ART_03,
+            ActionOwner.AUTH_ART_04A,
+            ActionOwner.AUTH_ART_04B,
+            ActionOwner.AUTH_ART_05,
+            ActionOwner.AUTH_ART_06A,
+            ActionOwner.AUTH_ART_06B,
+        }
+    } == {
+        ActionOwner.AUTH_ART_02D_OPERATOR: 8,
+        ActionOwner.AUTH_ART_02D_INTERNAL: 3,
+        ActionOwner.AUTH_ART_03: 3,
+        ActionOwner.AUTH_ART_04A: 6,
+        ActionOwner.AUTH_ART_04B: 1,
+        ActionOwner.AUTH_ART_05: 1,
+        ActionOwner.AUTH_ART_06A: 1,
+        ActionOwner.AUTH_ART_06B: 2,
+    }
+    assert all(not owner.value.startswith("WS-ART-") for owner in ActionOwner)
+    assert sum(
+        definition.availability is ActionAvailability.ACTIVE
+        for definition in ACTION_DEFINITIONS
+    ) == 17
+    assert sum(
+        definition.availability is ActionAvailability.PLANNED
+        for definition in ACTION_DEFINITIONS
+    ) == 48
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
     )
@@ -354,6 +494,90 @@ def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
         SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]
 
 
+def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    custody_documents = (
+        repository_root / "docs/spec_authorization_service.md",
+        repository_root
+        / ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service"
+        / "ACTIVATION_CUSTODY.md",
+    )
+    expected_custody = {
+        action: owner
+        for action, (_permission, owner, _availability) in ART_CUSTODY_EXPECTATIONS.items()
+    }
+    expected_owner_counts = {
+        "WS-AUTH-001-ART-02D-OPERATOR": 8,
+        "WS-AUTH-001-ART-02D-INTERNAL": 3,
+        "WS-AUTH-001-ART-03": 3,
+        "WS-AUTH-001-ART-04A": 6,
+        "WS-AUTH-001-ART-04B": 1,
+        "WS-AUTH-001-ART-05": 1,
+        "WS-AUTH-001-ART-06A": 1,
+        "WS-AUTH-001-ART-06B": 2,
+    }
+
+    for document in custody_documents:
+        rows = document.read_text(encoding="utf-8").splitlines()
+        header_index = next(
+            index
+            for index, row in enumerate(rows)
+            if row
+            in {
+                "| AUTH activation custodian | Exact planned ActionIds |",
+                "| AUTH activation chunk | Exact planned ActionIds |",
+            }
+        )
+        table_rows: list[str] = []
+        for row in rows[header_index + 2 :]:
+            if not row.startswith("|"):
+                break
+            table_rows.append(row)
+        parsed: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for row in table_rows:
+            cells = [cell.strip() for cell in row.split("|")]
+            assert len(cells) == 4
+            owner = cells[1].strip("`")
+            for action in cells[2].split("`")[1::2]:
+                if action in parsed:
+                    duplicates.add(action)
+                parsed[action] = owner
+        assert duplicates == set()
+        assert parsed == expected_custody
+        assert {
+            owner: sum(parsed_owner == owner for parsed_owner in parsed.values())
+            for owner in set(parsed.values())
+        } == expected_owner_counts
+
+    spec_rows = (repository_root / "docs/spec_authorization_service.md").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    parsed_permissions: dict[str, str] = {}
+    for row in spec_rows:
+        cells = [cell.strip() for cell in row.split("|")]
+        if len(cells) < 6:
+            continue
+        action = cells[1].strip("`")
+        if action in ART_CUSTODY_EXPECTATIONS:
+            assert action not in parsed_permissions
+            parsed_permissions[action] = cells[2].strip("`")
+    assert parsed_permissions == {
+        action: permission
+        for action, (permission, _owner, _availability) in ART_CUSTODY_EXPECTATIONS.items()
+    }
+
+    operations = (repository_root / "docs/operations_authorization_service.md").read_text(
+        encoding="utf-8"
+    )
+    assert "all 25 ART rows to eight exact AUTH custodians" in operations
+    assert "The 19 REV rows retain their historical" in operations
+    assert "The ART transfer adds no migration" in operations
+    assert "does not grant Operator" in operations
+    assert "verification retry remains independently gated" in operations
+    assert "74 PermissionIds, 65 ActionIds, 17 active actions, and\n48 planned actions" in operations
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["missing_identity", "extra_action", "duplicate_action", "swapped_rows"],
@@ -389,7 +613,7 @@ def test_fixed_service_action_matrix_rejects_metadata_drift(
     if metadata == "permission":
         changed = replace(definition, permission_id=PermissionId.ARTIFACT_PENDING_WORK_SCAN)
     elif metadata == "owner":
-        changed = replace(definition, owner=ActionOwner.ART_03)
+        changed = replace(definition, owner=ActionOwner.AUTH_ART_03)
     else:
         changed = replace(definition, availability=ActionAvailability.ACTIVE)
     action_index = dict(ACTION_BY_ID)
@@ -872,7 +1096,7 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
                 ActionDefinition(
                     ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
                     PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.ART_02D,
+                    ActionOwner.AUTH_ART_02D_OPERATOR,
                     ActionAvailability.PLANNED,
                 ),
             ),
@@ -884,7 +1108,7 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
                 ActionDefinition(
                     ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
                     PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.ART_06B,
+                    ActionOwner.AUTH_ART_06B,
                     ActionAvailability.ACTIVE,
                 ),
             ),
@@ -896,7 +1120,19 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
                 ActionDefinition(
                     ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
                     "unknown.permission",  # type: ignore[arg-type]
-                    ActionOwner.ART_06B,
+                    ActionOwner.AUTH_ART_06B,
+                    ActionAvailability.PLANNED,
+                ),
+            ),
+            "invalid row",
+        ),
+        (
+            ACTION_DEFINITIONS[:-1]
+            + (
+                ActionDefinition(
+                    ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+                    PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+                    "WS-ART-001-06B",  # type: ignore[arg-type]
                     ActionAvailability.PLANNED,
                 ),
             ),
@@ -908,7 +1144,7 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
                 ActionDefinition(
                     "unknown.action",  # type: ignore[arg-type]
                     PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.ART_06B,
+                    ActionOwner.AUTH_ART_06B,
                     ActionAvailability.PLANNED,
                 ),
             ),
@@ -932,7 +1168,7 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
                 ActionDefinition(
                     ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
                     PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.ART_06B,
+                    ActionOwner.AUTH_ART_06B,
                     "unknown.availability",  # type: ignore[arg-type]
                 ),
             ),
@@ -3247,6 +3483,47 @@ async def test_authorization_kernel_denies_active_action_without_implemented_aut
 
     assert exc_info.value.decision.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
     assert evidence.events[0].event_type is AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED
+
+
+@pytest.mark.parametrize(
+    ("action_id", "expected_metadata"),
+    ART_CUSTODY_EXPECTATIONS.items(),
+)
+async def test_art_custody_actions_remain_unavailable_without_runtime_dispatch(
+    action_id: str,
+    expected_metadata: tuple[str, str, str],
+) -> None:
+    expected_permission, _owner, expected_availability = expected_metadata
+    action = ActionId(action_id)
+    context = _runtime_context()
+
+    async def unexpected_revalidation(*_args, **_kwargs):
+        raise AssertionError("planned ART custody action reached runtime revalidation")
+
+    class UnexpectedAuthorizationDependency:
+        def __getattr__(self, name: str):
+            async def unexpected(*_args, **_kwargs):
+                raise AssertionError(f"planned ART custody action reached {name}")
+
+            return unexpected
+
+    service, evidence = _runtime_service(context, revalidate=unexpected_revalidation)
+    service._admin = UnexpectedAuthorizationDependency()  # type: ignore[assignment]
+    resource = SystemResourceContext(resource_type="system", resource_id="workstream:system")
+
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(action, resource)
+
+    decision = exc_info.value.decision
+    assert decision.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
+    assert decision.action_id is action
+    assert decision.permission_id is PermissionId(expected_permission)
+    assert ACTION_BY_ID[action].availability.value == expected_availability
+    assert decision.revalidated is False
+    assert len(evidence.events) == 1
+    assert evidence.events[0].event_type is AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED
+    assert evidence.events[0].action_id == action_id
+    assert evidence.events[0].permission_id == expected_permission
 
 
 async def test_unknown_action_denies_without_fabricated_evidence() -> None:

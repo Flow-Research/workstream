@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-ART-CUSTODY",
+  "chunk_title": "ART Activation Custody Transfer",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-REV-CUSTODY",
+  "next_chunk_title": "REV Activation Custody Transfer",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

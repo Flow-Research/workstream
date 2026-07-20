@@ -614,9 +614,11 @@ actions, `actor.service.provision`, `actor.profile.read`,
 identity-link lifecycle actions are active; the other 48 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
-AUTH activation owner, and availability. Until the availability-neutral custody
-transfers merge, the 25 ART and 19 REV rows retain their historical feature
-owner values as an explicitly blocked exception.
+AUTH activation owner, and availability. The availability-neutral ART custody
+transfer assigns all 25 ART rows to eight exact AUTH custodians without changing
+their mappings or planned availability. The 19 REV rows retain their historical
+feature-owner values as an explicitly blocked exception until the separate REV
+custody chunk receives its own human start and merges.
 Their owning feature must publish the approved principal/resource/guard/surface/
 transaction contract before registration or activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
@@ -624,7 +626,11 @@ blocker, not a reason to relax catalogue checks.
 
 PR #139 requires availability-neutral transfer of all 25 ART and 19 REV owner
 rows to exact AUTH chunks before feature activation. Counts and mappings remain
-unchanged. Catalogue totals are derived from the trusted entry head: four later
+unchanged. The ART transfer adds no migration and does not grant Operator
+authority; its `OPERATOR` suffix denotes only future activation custody, and
+verification retry remains independently gated from read/status actions.
+Catalogue totals remain 74 PermissionIds, 65 ActionIds, 17 active actions, and
+48 planned actions. Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
 action, in either order. Neither addition is operational until its complete
