@@ -96,8 +96,9 @@ stopped. The user explicitly started AUTH-09D, and required review split it
 before runtime edits. PR #148 merged 09D-A as `99ae4c9`; signed memory
 `cf8a3e8` stopped and named 09D-B. PR #152 merged 09D-B as `93dd392`; signed
 memory `912a6254` passed and stopped. PR #153 then merged the contributor
-foundation as `8d5eb15`. AUTH-09E and POL-002-04 remain inactive pending their
-own gates and explicit starts.
+foundation as `8d5eb15`. PR #157 merged AUTH-09E as `42a89b2d`; its feature
+actions remain planned and inactive. POL-002-04 remains inactive pending its
+own gate and explicit start.
 
 Coverage R10 merged through PR #108. Do not start 01B2, chunk 02, or another
 coverage implementation chunk from this worktree.
