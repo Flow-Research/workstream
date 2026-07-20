@@ -3,12 +3,12 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#163](https://github.com/Flow-Research/workstream/pull/163) - ci(backend): parallelize full-suite coverage
-- Merge commit: `b0f9ad6476bb836a99c0adac7073705eb5206f4c`
-- Final PR head: `1fa072b89407e6a705d85eb06cd8ac26f774e4fd`
-- Merged at: `2026-07-20T18:11:28Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-CI-001-01.json` at blob `5d6e839c9b7fc7a98646999f735e71b8bd9349b3`
-- Completed chunk: `WS-CI-001-01` - Parallel Full-Suite Coverage
+- Last merged PR: [#164](https://github.com/Flow-Research/workstream/pull/164) - fix(ci): preserve isolated runner cleanup time
+- Merge commit: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
+- Final PR head: `aa73e1078406e7d6eaee32f83a04d39e20890da2`
+- Merged at: `2026-07-20T18:46:43Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-CI-001-01R1.json` at blob `3d7bcb5d9dc1c466d41b473c496b5695571b8b91`
+- Completed chunk: `WS-CI-001-01R1` - Timeout Cleanup Repair
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
