@@ -4239,12 +4239,13 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | "
         "Merged through PR #146 as `0ffdabf`" in work_queue
     )
-    assert "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Active" in (
-        work_queue
+    assert (
+        "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | "
+        "Deterministic proof and all nine internal tracks complete" in work_queue
     )
-    assert "Current ART gate: complete deterministic 02C2 proof" in (
-        loop_state
-    )
+    assert "Current ART gate: deterministic 02C2 proof and all nine exact-SHA" in loop_state
+    assert "external CI/review and explicit human merge" in loop_state.replace("\n", " ")
+    assert "external CI/review and explicit human merge approval are current" in work_queue
     assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
 
 

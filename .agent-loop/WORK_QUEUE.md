@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Active after PR #154 and explicit user start; implementation and deterministic proof in progress |
+| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Deterministic proof and all nine internal tracks complete; external CI/review and explicit human merge approval are current |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.

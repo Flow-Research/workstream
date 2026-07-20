@@ -41,9 +41,10 @@
 - PR #122 merged the first automated post-merge memory implementation as
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
-- Current ART gate: complete deterministic 02C2 proof, then pass all nine
-  exact-SHA internal reviewer tracks. Production composition remains deny-only
-  for feature actions after merged AUTH-09E runtime admission.
+- Current ART gate: deterministic 02C2 proof and all nine exact-SHA internal
+  reviewer tracks are complete; external CI/review and explicit human merge
+  approval are current. Production composition remains deny-only for feature
+  actions after merged AUTH-09E runtime admission.
   No feature action or service call site becomes active in ART-02C2.
   No later ART chunk starts automatically.
 - PR #157 merged `WS-AUTH-001-09E` as `42a89b2d` on 2026-07-20; fixed-service
