@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 
 from pydantic import SecretStr, ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 
 def assert_secret_not_retained(
@@ -27,6 +29,30 @@ def assert_secret_not_retained(
         assert secret.encode("utf-8") not in bytes(value)
     elif isinstance(value, SecretStr):
         assert secret not in value.get_secret_value()
+    elif isinstance(value, AsyncSession):
+        # Inspect only ORM state capable of retaining caller values. Traversing
+        # SQLAlchemy's private registry/cache graph is order-dependent and can
+        # reach opaque weak mappings that are unrelated to the session payload.
+        assert_secret_not_retained(
+            value.sync_session,
+            secret,
+            seen,
+            traceback_module_prefixes=traceback_module_prefixes,
+        )
+    elif isinstance(value, Session):
+        retained_state = (
+            dict(value.info),
+            tuple(value.new),
+            tuple(value.dirty),
+            tuple(value.deleted),
+            tuple(value.identity_map.values()),
+        )
+        assert_secret_not_retained(
+            retained_state,
+            secret,
+            seen,
+            traceback_module_prefixes=traceback_module_prefixes,
+        )
     elif isinstance(value, BaseException):
         if isinstance(value, ValidationError):
             assert_secret_not_retained(

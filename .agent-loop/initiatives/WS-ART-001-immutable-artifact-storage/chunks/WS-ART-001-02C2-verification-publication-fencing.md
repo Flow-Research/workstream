@@ -25,6 +25,10 @@ Do not add recovery attempts, Operator routes, or product cutovers.
 - `backend/app/core/config.py` for scanner SLA, execution lease,
   complete-read deadline, and persistence margin;
 - focused PostgreSQL/Celery/artifact tests;
+- `backend/tests/assertion_helpers.py` and
+  `backend/tests/test_assertion_helpers.py` only for the external Backend CI
+  repair that bounds SQLAlchemy session inspection to ORM state capable of
+  retaining caller payloads; no production outbox or shared-runtime change;
 - `.github/workflows/backend.yml` only to expand the exact 90 percent scoped gate;
 - `scripts/test_agent_gates.py` only to assert that backend CI retains this
   chunk's exact scoped coverage sources and fail-closed 90 percent threshold;
