@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29717768338/job/88274283365"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29736619803/job/88333353424"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29717761883/job/88274265530"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29736619841/job/88338537040"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-09E",
-    "chunk_title": "Fixed Service Runtime Admission",
+    "chunk_id": "WS-AUTH-001-ART-CUSTODY",
+    "chunk_title": "ART Activation Custody Transfer",
     "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-ART-CUSTODY",
-    "next_chunk_title": "ART Activation Custody Transfer",
+    "next_chunk_id": "WS-AUTH-001-REV-CUSTODY",
+    "next_chunk_title": "REV Activation Custody Transfer",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-ART-CUSTODY",
-    "next_chunk_title": "ART Activation Custody Transfer",
+    "next_chunk_id": "WS-AUTH-001-REV-CUSTODY",
+    "next_chunk_title": "REV Activation Custody Transfer",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "cb9d5f9f9c311e644ed20a988c69843d3618a6b0",
-    "head_ref": "codex/ws-auth-001-09e-fixed-service-runtime-admission",
-    "head_sha": "43e7a3da80521e687bd2f3d202341b741249e77f",
-    "intent_blob_sha": "3d117066a38ed6e3ea082f2ddd7a955af9e8f661",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-09E.json",
-    "main_sha": "42a89b2deac8fc7672556a567a6124f8a4e5d423",
-    "merged_at": "2026-07-20T06:14:44Z",
+    "first_parent_sha": "42a89b2deac8fc7672556a567a6124f8a4e5d423",
+    "head_ref": "codex/ws-auth-001-art-custody",
+    "head_sha": "2cbce2d5e9413659ea837ea95c10f1e86d2eae9f",
+    "intent_blob_sha": "56eacb178d7aa29186a4cb66eaf4d74ca3cfd7d8",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-ART-CUSTODY.json",
+    "main_sha": "be2a79a243ec50049c37f1f634322a9b3ab895ba",
+    "merged_at": "2026-07-20T11:55:54Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 157,
-    "pr_title": "AUTH-09E: admit fixed services at runtime",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/157"
+    "pr_number": 158,
+    "pr_title": "AUTH: transfer ART activation custody",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/158"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-20T06:14:44Z"
+  "updated_at": "2026-07-20T11:55:54Z"
 }

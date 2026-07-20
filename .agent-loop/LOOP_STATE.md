@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#157](https://github.com/Flow-Research/workstream/pull/157) - AUTH-09E: admit fixed services at runtime
-- Merge commit: `42a89b2deac8fc7672556a567a6124f8a4e5d423`
-- Final PR head: `43e7a3da80521e687bd2f3d202341b741249e77f`
-- Merged at: `2026-07-20T06:14:44Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-09E.json` at blob `3d117066a38ed6e3ea082f2ddd7a955af9e8f661`
-- Completed chunk: `WS-AUTH-001-09E` - Fixed Service Runtime Admission
+- Last merged PR: [#158](https://github.com/Flow-Research/workstream/pull/158) - AUTH: transfer ART activation custody
+- Merge commit: `be2a79a243ec50049c37f1f634322a9b3ab895ba`
+- Final PR head: `2cbce2d5e9413659ea837ea95c10f1e86d2eae9f`
+- Merged at: `2026-07-20T11:55:54Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-ART-CUSTODY.json` at blob `56eacb178d7aa29186a4cb66eaf4d74ca3cfd7d8`
+- Completed chunk: `WS-AUTH-001-ART-CUSTODY` - ART Activation Custody Transfer
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-AUTH-001-ART-CUSTODY` - ART Activation Custody Transfer; requires a separate explicit start.
+- Next chunk: `WS-AUTH-001-REV-CUSTODY` - REV Activation Custody Transfer; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
