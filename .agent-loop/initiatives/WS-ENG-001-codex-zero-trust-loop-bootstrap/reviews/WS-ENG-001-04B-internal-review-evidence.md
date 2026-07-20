@@ -20,8 +20,9 @@ Reviewed against trusted main: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
 - Ruff, compilation, merge-intent validation, Markdown links, stale wording,
   hash-pinned dependency resolution, workflow structure, and diff checks pass.
 - Remote publication failure leaves the canonical remote tip unchanged.
-- Live environment inspection returns 404; deployment remains blocked until the
-  protected environment and environment-only key are configured and evidenced.
+- Live environment inspection returned 404; deployment remained blocked until
+  the protected approval environment was configured and evidenced. The user
+  approved reuse of the existing loop-memory signing identity after this review.
 
 ## Reviewer results
 
@@ -57,6 +58,5 @@ Reviewed against trusted main: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
 
 Code review is complete. PR publication and workflow enablement remain blocked
 until `loop-memory-start` exists with required distinct reviewers, self-review
-and administrator bypass disabled, protected-main deployment restriction, the
-environment-only `LOOP_MEMORY_START_SIGNING_KEY`, and repository/organization
-same-name absence evidence.
+and administrator bypass disabled, and protected-main deployment restriction.
+No second signing key is required.

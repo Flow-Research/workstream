@@ -113,7 +113,8 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     assert "pull_request" not in text
     assert "repository_dispatch" not in text
     assert "automation/loop-memory" in text
-    assert "LOOP_MEMORY_START_SIGNING_KEY" in text
+    assert "LOOP_MEMORY_SIGNING_KEY" in text
+    assert "LOOP_MEMORY_START_SIGNING_KEY" not in text
     assert "inputs.expected_main_sha" in text
     assert "inputs.destination" not in text and "inputs.ref" not in text
     assert job["env"] == {"STATE_BRANCH": "automation/loop-memory"}

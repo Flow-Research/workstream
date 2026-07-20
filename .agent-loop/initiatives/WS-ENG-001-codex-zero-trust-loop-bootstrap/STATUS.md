@@ -25,5 +25,6 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Create the protected environment with the required controls and environment-only
-key, record settings evidence, then publish one PR. Do not begin another chunk.
+Create the protected environment with the required controls, record settings
+evidence, then publish one PR. Reuse the existing loop-memory signing identity;
+do not create or transfer another key. Do not begin another chunk.

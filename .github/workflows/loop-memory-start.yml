@@ -119,7 +119,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          LOOP_MEMORY_START_SIGNING_KEY: ${{ secrets.LOOP_MEMORY_START_SIGNING_KEY }}
+          LOOP_MEMORY_SIGNING_KEY: ${{ secrets.LOOP_MEMORY_SIGNING_KEY }}
           EVENT_ACTION: ${{ inputs.action }}
           EVENT_CHUNK_ID: ${{ inputs.chunk_id }}
         run: |
@@ -129,7 +129,7 @@ jobs:
           private_key=$(mktemp "${RUNNER_TEMP}/loop-memory-key.XXXXXX")
           trap 'rm -f "${private_key}"' EXIT
           chmod 600 "${private_key}"
-          printf '%s\n' "${LOOP_MEMORY_START_SIGNING_KEY}" > "${private_key}"
+          printf '%s\n' "${LOOP_MEMORY_SIGNING_KEY}" > "${private_key}"
           git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
           [[ "$(git rev-parse refs/remotes/origin/main)" == "${TARGET_SHA}" ]]
           python3 scripts/update_post_merge_memory.py sign-state \

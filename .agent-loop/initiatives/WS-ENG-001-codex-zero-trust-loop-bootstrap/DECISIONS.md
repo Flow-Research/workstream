@@ -48,8 +48,9 @@
   fast-forward child commit. Do not recursively delete the cloned worktree and
   do not force-push.
 - For 04B, use a `workflow_dispatch` job on `main` protected by the
-  `loop-memory-start` GitHub environment. Environment reviewers control access
-  to the signing secret; actor and unique run ID become signed event evidence.
+  `loop-memory-start` GitHub environment. Environment reviewers authorize the
+  job; actor and unique run ID become signed event evidence. Reuse the existing
+  loop-memory signing identity rather than provisioning a second private key.
 - Model correction as an attributable corrective cancellation that restores the
   same reviewed successor gate, followed by a separate protected start. Do not
   introduce arbitrary active-chunk replacement.

@@ -82,9 +82,10 @@ of a second chunk while the same initiative is active.
   only on `refs/heads/main`, with `run_attempt == 1`, shared serialization, a
   fixed state-branch destination, and the protected `loop-memory-start`
   environment.
-- The environment-scoped signing secret is unavailable before required human
-  approval. It is never accepted as input/argv or exposed in logs/artifacts,
-  uses mode-0600 temporary storage only when required, and is removed on exit.
+- The protected job reuses the existing `LOOP_MEMORY_SIGNING_KEY`; no second key
+  is generated, transferred, or stored. It is never accepted as input/argv or
+  exposed in logs/artifacts, uses mode-0600 temporary storage only when
+  required, and is removed on exit.
 - Correction is an attributable corrective cancellation restoring the same
   successor gate, followed by a separate protected start; arbitrary replacement
   is absent.
@@ -103,8 +104,8 @@ of a second chunk while the same initiative is active.
   concurrency, credential-free trusted-main checkout, fixed push ref, and
   absence of caller-controlled ref/destination values.
 - Before publication, GitHub settings/API evidence proves required reviewers,
-  disabled self-review/admin bypass, protected-main deployment restriction, and
-  environment-only secret placement; a misconfigured environment fails rollout.
+  disabled self-review/admin bypass, and protected-main deployment restriction;
+  a missing or misconfigured environment fails rollout.
 - Materially changed `update_post_merge_memory.py` and
   `check_loop_memory_state.py` each remain at or above 90 percent branch
   coverage in the required Agent Gates PR job. Test/coverage dependencies are
@@ -119,9 +120,6 @@ python3 -m pytest -q --cov=scripts.update_post_merge_memory --cov-branch --cov-r
 python3 -m pytest -q --cov=scripts.check_loop_memory_state --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
 python3 scripts/check_loop_memory_state.py --state-root <fixture-root>
 gh api repos/{owner}/{repo}/environments/loop-memory-start
-gh api repositories/{repository_id}/environments/loop-memory-start/secrets
-gh api repos/{owner}/{repo}/actions/secrets
-gh api orgs/{org}/actions/secrets
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 git diff --check

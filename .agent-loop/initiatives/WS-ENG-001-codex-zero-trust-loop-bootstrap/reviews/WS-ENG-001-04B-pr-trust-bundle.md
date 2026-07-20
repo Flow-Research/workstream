@@ -46,9 +46,9 @@ docs, reuse/dedup, and test delta.
 ## Remaining risk and external review
 
 CodeRabbit, hosted checks, and human PR review have not run because publication
-is blocked by missing live environment configuration. `loop-memory-start`
-currently returns 404. The workflow cannot be enabled until its protected
-reviewer/settings and environment-only signing secret are evidenced.
+was blocked by missing live environment configuration. The workflow cannot be
+enabled until its protected reviewer/settings are evidenced. It reuses the
+existing loop-memory signing identity; no second key is created or transferred.
 
 ## Human review focus
 

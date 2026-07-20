@@ -141,10 +141,10 @@ reason. A reviewer other than the dispatcher must approve the
 
 Configure that environment with required reviewers, self-review disabled,
 administrator bypass disabled, and deployment restricted to protected `main`.
-Store `LOOP_MEMORY_START_SIGNING_KEY` only as an environment secret. Before
-enabling the workflow, inspect the environment and its secret inventory through
-the GitHub API and verify repository and organization Actions secrets do not
-contain the same name.
+The job reuses the existing organization-managed `LOOP_MEMORY_SIGNING_KEY` used
+by trusted merge memory. Do not create, transfer, or paste a second private key.
+The protected environment authorizes the start/cancel job; it does not redefine
+the existing key's organization scope.
 
 Every signed event records the dispatcher, approving reviewers, immutable run
 ID and creation time, current-main SHA, prior state-branch tip, reason,
@@ -167,9 +167,6 @@ Verify deployment configuration before enabling it:
 
 ```bash
 gh api repos/Flow-Research/workstream/environments/loop-memory-start
-gh api repositories/<repository-id>/environments/loop-memory-start/secrets
-gh api repos/Flow-Research/workstream/actions/secrets
-gh api orgs/Flow-Research/actions/secrets
 ```
 
 Do not rerun a failed job. Inspect the signed automation branch first. If no

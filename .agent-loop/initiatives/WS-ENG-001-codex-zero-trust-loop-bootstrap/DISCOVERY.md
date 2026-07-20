@@ -106,7 +106,7 @@ cancel/correct semantics; none is required for 04A.
   a caller can select a ref and rerun metadata can differ. The workflow must
   require `refs/heads/main`, resolve current protected `main` independently,
   reject stale expected SHAs, and use a protected environment whose reviewers
-  control access to the signing secret.
+  authorize the start/cancel job.
 
 ### State and lifecycle gaps
 

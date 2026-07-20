@@ -57,8 +57,8 @@ planning SHA `7ffaa59bcb61baa287a125ee9c01c08c0ff29cf5`.
   loop-memory script, connected it to the required Agent Gates PR job with
   hash-pinned dependencies, and fixed workflow permissions to exactly
   `actions: read` plus `contents: write`.
-- Required repository and organization secret inventories to prove the
-  environment-only signing secret has no same-name fallback.
+- The user later approved reusing the existing loop-memory signing identity;
+  no second private key or environment-secret copy is required.
 
 ## Gate
 

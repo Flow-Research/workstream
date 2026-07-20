@@ -98,8 +98,10 @@ After 04A merge/replay and a separate user start:
 5. Treat a distinct required environment reviewer as authorization and the
    dispatcher as attribution. Disable self-review and administrator bypass;
    fetch and validate workflow-run approval history from GitHub and sign both
-   identities. The signing key exists only in the protected write job, is never
-   an input/argument/log/artifact value, uses a mode-0600 temporary file only if
+   identities. Reuse the existing `LOOP_MEMORY_SIGNING_KEY` identity already
+   used by trusted merge memory; the environment gates the authority job rather
+   than introducing or transferring another key. The key is never an
+   input/argument/log/artifact value, uses a mode-0600 temporary file only if
    necessary, and is removed on every exit. Validate actor/reason IDs, lengths,
    Unicode/control characters, and the closed event type before use.
 6. The 04B merge records a signed cutover and an exact reviewed inventory of
