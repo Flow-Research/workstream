@@ -24,6 +24,8 @@
   the user then explicitly started ART-02C2.
 - Active ART implementation chunk: `WS-ART-001-02C2` on
   `codex/ws-art-001-02c2-verification-publication-fencing`.
+- ART-02C1 owns durable admission, prepared put-attempt state, and migration
+  `0028_artifact_admission`.
 - The ART worktree consumes merged AUTH, REV, and CON contracts without
   editing or activating their independently owned runtime behavior.
 - AUTH-09D-A merged through PR #148 as `99ae4c9`; signed schema-v2 memory at
@@ -40,9 +42,12 @@
   schema-v2 initiative-local clean cut.
 - Current ART gate: complete deterministic 02C2 proof, then pass all nine
   exact-SHA internal reviewer tracks. Production composition remains deny-only
-  until the later AUTH activation gate.
-  No service caller becomes executable before AUTH-09E.
+  for feature actions after merged AUTH-09E runtime admission.
+  No feature action or service call site becomes active in ART-02C2.
   No later ART chunk starts automatically.
+- PR #157 merged `WS-AUTH-001-09E` as `42a89b2d` on 2026-07-20; fixed-service
+  runtime admission is available, while feature actions and call sites remain
+  planned and inactive.
 - Scope checkpoint: AWS S3 is the only v0.1 production provider; MinIO is
   local/CI S3 protocol proof; LocalStorage is focused development/test; R2 and
   Flow Node are deferred. Product modules receive narrow artifact capabilities,
@@ -59,12 +64,12 @@
   AUTH planning requires availability-neutral ART custody transfer, fixed-service
   admission, prepared mutation authority, and exact AUTH-only activation chunks;
   neither reconciliation PR activates feature behavior.
-- Parallel artifact checkpoint: ART-02A1, ART-02A2, ART-02A3, and ART-02B1
-  merged through PRs #127, #129, #141, #151, and #154. ART-02C2 is active and
+- Parallel artifact checkpoint: ART-02A1 through ART-02C1 merged through PRs
+  #127, #129, #141, #151, and #154. ART-02C2 is active and
   adds hidden fenced put resolution and independent verification mechanics.
 - Authorization checkpoint: AUTH-07B through AUTH-09D-B and the contributor
   foundation merged through PRs #130, #131, #132, #143, #146, #148, #152,
-  and #153. AUTH-09E remains inactive.
+  #153, and #157. AUTH-09E is merged; its feature actions remain planned.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

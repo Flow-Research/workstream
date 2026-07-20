@@ -10,13 +10,28 @@
 
 ## Trusted baseline
 
-- `origin/main` at `053242b90d927ace3fab92eeca72da27a61cecec`, merging
-  AUTH-09B PR #143 after reviewed REV PR #128, AUTH-09A, AUTH PR #140, and
-  WS-XINT PR #139.
+- `origin/main` at `8d5eb15b384fd75787ce98a099400a1d335d2560`, merging
+  contributor-foundation PR #153 after AUTH-09D-B PR #152 and ART-02B1 PR #151
+  after planning-only REV PLAN2 PR #150,
+  AUTH-09D-A PR #148, REV-02
+  PR #147, REV-01 PR #145, AUTH-09C PR #146, ART PR #141, AUTH-09B PR #143,
+  reviewed REV planning PR #128, AUTH-09A, AUTH PR #140, and WS-XINT PR #139.
 - PR #128 remains planning authority, not Review runtime implementation.
-- Runtime AUTH is 74 PermissionIds, 65 ActionIds, ten active, 55 planned.
-  AUTH-09B activates only `actor.service.provision`; no CON or task-claim
-  ActionId exists, and provisioning grants no service runtime authority.
+- REV PLAN2 PR #150 is the current runtime-readiness planning authority. It
+  splits future REV parent records into executable children but changes no
+  backend runtime, migration, AUTH catalogue, or 02A outbox contract.
+- ART-02B1 PR #151 adds the S3-compatible ArtifactStore adapter and real MinIO
+  proof plus inactive AWS-profile support. It adds no migration or outbox seam,
+  and remains outside the core Review-to-CON transaction.
+- Runtime AUTH is 74 PermissionIds, 65 ActionIds, 17 active, 48 planned.
+  AUTH-09B activates only `actor.service.provision`; AUTH-09C activates only
+  `actor.profile.read` and `actor.identity_link.read`; AUTH-09D-A activates
+  only the three actor-profile lifecycle actions; AUTH-09D-B activates only
+  identity-link revoke/reactivate. Contributor-foundation PR #153 clean-cuts
+  TaskAssignment and Submission attribution to canonical human
+  `contributor_id` and adds write revalidation without changing catalogue or
+  availability. Fixed-service admission remains planned. No CON or task-claim ActionId exists,
+  and these administrative operations grant no service runtime authority.
 - PR #140 remains the source for AUTH activation-custody, prepared-protocol,
   revised chunk,
   operations, and verification contracts. It changes no runtime CON behavior,
@@ -30,14 +45,14 @@
 - On 2026-07-17 the human fixed the v0.1 shipping path as
   `Review(accept) -> FinalAcceptance -> accepted_submission` and explicitly
   excluded adjudication lifecycle/actions/readiness.
-- Merged REV PR #128 now plans FinalAcceptance, exact
+- Merged REV PR #128 and its PLAN2 PR #150 refresh plan FinalAcceptance, exact
   `accepted`/`needs_revision`/`rejected` effects, two ordered CON participant
   operations, and REV-12A lifecycle-control hooks. WS-CON implementation still
   waits for each exact runtime chunk and consumes no sibling-worktree behavior.
 - The amendment's `submission_version_id` is normalized to canonical
   `Submission.id` / `submission_id`; current runtime already stores each
   immutable version as a Submission row.
-- Merged REV-04 retains `policy_context_ref` as the foreign key to exact locked
+- Planned REV-04B retains `policy_context_ref` as the foreign key to exact locked
   `ReviewPolicy.id` and `recorded_by` as the reviewer ActorProfile field; CON
   consumes those names and REV owns/proves the lineage.
 - `docs/review_closure.md`, `docs/review_final_adversarial_review.md`, and
@@ -75,6 +90,7 @@
 - `.agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-08-immutable-decision-kernel.md`
 - `.agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-10-contribution-integration-hidden-composition.md`
 - `.agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-12A-joint-lifecycle-release-control.md`
+- `.agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-PLAN2-runtime-readiness-plan-refresh.md`
 - `.agent-loop/policies/*`
 
 ## Normative WS-XINT handoffs
@@ -95,7 +111,7 @@
   and 05B own semantic then physical removal after a human migration decision.
 - No ContributionPolicy, ContributionRecord, CompensationAward, fulfillment, or
   WS-CON action runtime exists yet.
-- No FinalAcceptance runtime exists yet; merged planning assigns it to REV-04
+- No FinalAcceptance runtime exists yet; merged planning assigns it to REV-04B
   and makes that exact schema a prerequisite for CON-03C/07.
 - Existing `Submission` is the versioned identity; no new SubmissionVersion is
   required.

@@ -221,14 +221,24 @@ contribution type, branch, action, readiness check, or initiative dependency.
 
 ## D16 - AUTH Planning And Provisioning Do Not Activate CON
 
-**Status:** accepted by merged AUTH PR #140 and AUTH-09B PR #143 on 2026-07-17.
+**Status:** accepted by merged AUTH PR #140, AUTH-09B PR #143, AUTH-09C PR
+#146, AUTH-09D-A PR #148, AUTH-09D-B PR #152, and contributor-foundation PR
+#153 through current main `8d5eb15b`; REV PLAN2 PR #150 and ART-02B1 PR #151 change no AUTH catalogue
+fact.
 
-Trusted main `053242b` after AUTH-09B has 74 PermissionIds, 65 ActionIds, ten
-active actions, and 55 planned actions, with no registered CON or task-claim
+Trusted main `8d5eb15b` after contributor-foundation PR #153 has 74
+PermissionIds, 65 ActionIds, 17
+active actions, and 48 planned actions, with no registered CON or task-claim
 ActionId. AUTH-09B activates only `actor.service.provision`; its controlled
 human-administrator route can create the ActorProfile/ActorIdentityLink for an
 already-approved closed ServiceIdentity but grants no service execution,
-runtime admission, role, grant, or database action assignment. PR #140 supplies
+runtime admission, role, grant, or database action assignment. AUTH-09C
+activates only administrative `actor.profile.read` and
+`actor.identity_link.read`. AUTH-09D-A activates only the three actor-profile
+lifecycle actions; AUTH-09D-B activates only identity-link revoke/reactivate.
+The contributor foundation is merged and changes attribution/write identity
+validation without changing authorization availability. Fixed-service
+admission remains planned. PR #140 supplies
 the exact prepared protocol, complete ART/REV custody maps, and feature-manifest
 activation rule; those runtime implementations remain upstream work.
 
@@ -266,8 +276,9 @@ the request route or service command commits once.
 
 **Status:** accepted from merged REV PR #128 on 2026-07-17.
 
-REV-12A owns the sole PostgreSQL `JointLifecycleReleaseControl` and shared
-`JointLifecycleMutationFence`. CON creates no parallel phase/controller. Every
+REV-12A1 owns the sole PostgreSQL `JointLifecycleReleaseControl`, and REV-12A3
+composes CON against the shared `JointLifecycleMutationFence`. CON creates no
+parallel phase/controller. Every
 fulfillment-obligation root creation, requeue, successor, and repair writer
 must acquire that fence before it allocates one immutable, monotonically
 increasing root ordinal or locks obligation rows.
@@ -297,3 +308,19 @@ credentials, URLs, markup, or metadata are never persisted, logged, emitted,
 exported, or returned. The bounded receipt identifiers are not authentication
 tokens and may appear only in their canonical receipt/status fields. Unknown
 provider failures map to the closed generic failure code before persistence.
+
+## D20 - Repository-Wide Runtime Proof Runs In GitHub CI
+
+**Status:** accepted by human direction for CON-02A and later runtime chunks.
+
+Repository-wide tests and repository coverage run in the existing GitHub
+Backend full-suite job after a full PR is pushed. Agents do not run the
+multi-hour repository suite locally. Local proof remains bounded to the active
+chunk's focused real-service tests, subsystem coverage floor, Ruff, migration
+head, documentation links, stale-contract scans, and agent-loop gates.
+
+This changes execution location, not proof strength. GitHub must still run the
+unchanged full test selection with isolated PostgreSQL, real MinIO where
+required, and the repository 78 percent coverage floor. A focused local pass
+cannot waive a missing or failing GitHub result, and the subsystem 90 percent
+coverage floor remains required.

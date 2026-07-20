@@ -130,16 +130,15 @@ They are replaced in chunk 09A with direct project/guide/policy/context
 integrity constraints and a Submission-to-preparation binding. The original
 WorkstreamTask locks and all earlier Submissions remain unchanged.
 
-Guide ordering never compares version strings. Chunk 02A adds a per-project,
+Guide ordering never compares version strings. Chunk 02A3 adds a per-project,
 monotonic immutable `activation_sequence`. Existing active/superseded guides are
 backfilled deterministically from effective time, creation time, and ID under
 migration validation; drafts remain null until first activation. Active or
 superseded state requires a non-null sequence, draft state requires null, and a
 sequence is allocated exactly once while locking the project. Task stamps guide
-identity in 02A, Submission stamps it in 02C, and later preparation stamps it in
-09A. Equal
-identity/sequence keeps. Any different currently active guide identity/sequence
-rebases, including an intentional backward rebase to an older activation
+identity in 02A4, Submission stamps it in 02C, and later preparation stamps it
+in 09A. Equal identity/sequence keeps. Any different currently active guide
+identity/sequence rebases, including an intentional backward rebase to an older activation
 sequence. An internally inconsistent pair whose identity and activation sequence
 do not belong to the same guide record, or incomplete/unsafe context, blocks for
 manager repair.
@@ -495,22 +494,24 @@ combined guide, policy/lifecycle, and Submission migration unreviewable as one
 chunk. Parent 02 is therefore a non-executable split record:
 
 ```text
-02A guide activation sequence/publication locking
+02A parent split
+  -> 02A1 Project/setup publication fence
+  -> 02A3 guide activation chronology
+  -> 02A4 Task guide triplet screening
 -> 02B immutable review/revision policy and dormant task/assignment states
 -> 02C Submission attribution/context/immediate-predecessor immutability
 ```
 
-Trusted main does not assign REV a migration and does not contain the contributor
-foundation. AUTH-09D-A merged through PR #148 as
+AUTH-09D-A merged through PR #148 as
 `99ae4c963e53f317175dcb308b9e47c93ccf19ed`, establishing migration
 `0026_actor_profile_lifecycle` and database-backed ActorProfile lifecycle
-provenance without renaming either retired task field. AUTH next owns the
-separately reviewed contributor-field foundation from that then-current head.
-That foundation clean-cuts both retired task-subsystem contributor-identity
-fields to `contributor_id`, preserves current behavior, and supplies database-backed
-canonical-human ActorProfile lineage. REV records its exact merged PR/SHA and
-constraint contract before generating any child migration; REV never supplies a
-parallel rename, compatibility alias, or ActorProfile constraint.
+provenance. `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` later merged through PR #153 at
+`8d5eb15b` with migration `0027_contributor_foundation`. It clean-cuts both
+retired task-subsystem contributor-identity fields to `contributor_id`, preserves
+current behavior, and supplies database-backed canonical-human ActorProfile
+lineage. REV consumes that exact merged contract and never supplies a parallel
+rename, compatibility alias, or ActorProfile constraint. Each executable REV
+child allocates a migration only from its then-current explicit-start head.
 
 02B keeps terminal Task/Assignment values dormant. It adds no transition into
 `accepted`, `rejected`, `completed`, or `blocked`, and no reject Review FK.
@@ -546,9 +547,14 @@ bypassed through context repair.
 
 ### D24 - Guide Chronology Precedes Hidden Authorized Reactivation
 
-02A adds activation sequence, Project-first publication/screening locking, and
-immutable Task guide stamps while preserving public superseded-candidate denial.
-After AUTH-PREP/custody and an AUTH-12 contract amendment, 02A2 adds hidden
+Parent 02A is a planning-only split after L1 review rejected its combined
+runtime boundary. 02A1 first makes the complete Project/setup writer graph share
+one Project-first fence. 02A3 then adds activation sequence and canonical-human
+approval provenance, freezes the complete activated guide row except exact
+lifecycle transitions, and adds an explicit no-write active-repeat success while
+preserving public superseded-candidate denial. 02A4 adds immutable Task guide
+stamps and Project-first screening. After AUTH-PREP/custody and an
+AUTH-12 contract amendment, 02A2 adds hidden
 bodyless `If-Match` reactivation while `project.guide.activate` remains
 unavailable. Its complete resource manifest gates AUTH-12 evaluator/cutover/
 activation. This prevents new behavior from appearing under legacy local roles
@@ -578,7 +584,7 @@ decision command.
 
 ### D27 - Oversized Parent Contracts Are Non-Executable
 
-Parents 03, 04, 05, 06, 07, 09A, 11, 12, 12A, and 13 are split records. Only
+Parents 02A, 03, 04, 05, 06, 07, 09A, 11, 12, 12A, and 13 are split records. Only
 the unique children in `CHUNK_MAP.md` may receive future implementation
 contracts. Chunk 08 is pure contracts/validation only; chunk 10 is the first
 canonical Review/FinalAcceptance/CON commit. Active release docs and router

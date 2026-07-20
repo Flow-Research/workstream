@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-REV-001-02A",
+  "chunk_title": "Guide Chronology And Task Locking Split",
+  "initiative_id": "WS-REV-001",
+  "next_chunk_id": "WS-REV-001-02A1",
+  "next_chunk_title": "Project And Setup Publication Fence",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

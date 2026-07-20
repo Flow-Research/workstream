@@ -1,5 +1,65 @@
 # Review Log
 
+## 2026-07-20 - WS-AUTH-001-09E External Review Repair
+
+CodeRabbit raised two valid findings. The specification now says the service
+variant carries a “required, closed” identity. The serialized human
+administrative path now checks the locked profile remains human before
+reconstructing `HumanAuthorizationContext`; kind drift returns bounded
+`permission_not_granted` evidence and performs no grant lookup. Ruff and 11
+focused authorization tests pass. The repair requires fresh exact-SHA internal
+review, evidence rebinding, hosted CI, and CodeRabbit re-review before human
+merge review.
+
+## 2026-07-19 - WS-AUTH-001-09E Integrated Review Passed
+
+Trusted main advanced through ART PR #154 as `44f2467c`, bringing ART-owned
+`0028_artifact_admission` and a strict artifact-admission boundary. Merge
+candidate `d2d974eb` passed senior and QA integration review but security found
+that ART's exact check against the former concrete `AuthorizationContext` could
+never accept AUTH-09E's closed human/service union. Integrated candidate
+`98376fd1` accepts only the two exact concrete context types, updates the test
+fixture to construct the matching discriminated context, and changes no
+artifact lifecycle, persistence, capacity, provider I/O, or action availability.
+Four isolated PostgreSQL admission tests, Ruff, diff integrity, and all 88 agent
+gates pass. Senior engineering, QA/test, security/auth, product/ops,
+architecture, CI integrity, reuse/dedup, and test-delta review pass; the stale
+pre-ART-merge documentation finding was then repaired. AUTH-09E adds or
+allocates no migration after ART's merged `0028`.
+
+## 2026-07-19 - WS-AUTH-001-09E Implementation Review Passed
+
+Exact implementation SHA `881ac7fc` and documentation repair `d859af3d` passed
+senior engineering, QA/test, security/auth, product/ops, architecture, CI
+integrity, docs, reuse/dedup, and test-delta review after every valid finding
+was repaired. Initial candidate `65ee8887` incorrectly staged observations for
+inactive service rows and lacked direct real-callback drift proof. The repair
+gates timestamp observation on active profile/link state and proves locked
+lifecycle, identity, matrix, and availability drift denial. One stale
+pre-09E operations sentence and the human-only dependency docstring were also
+corrected. Focused PostgreSQL and HTTP evidence passes; GitHub Backend remains
+the authoritative full-suite coverage gate. No migration is added or allocated;
+ART owns merged migration `0028_artifact_admission`.
+
+## 2026-07-19 - WS-AUTH-001-09E Preimplementation Review Passed
+
+- The user explicitly started AUTH-09E from trusted `main` `8d5eb15b` after
+  contributor foundation PR #153 and signed memory `66ab58d` completed.
+- Initial review rejected missing deterministic verification commands and an
+  acceptance criterion that overclaimed feature-owned locked resource
+  recomposition while feature call sites were forbidden.
+- The repaired contract defines a discriminated human/service context union,
+  exact ActionId matrix-before-availability dispatch, one AUTH-owned
+  transaction-local service revalidation seam, rollback-safe observations,
+  separate 90 percent actor/authorization/dependency coverage, and explicit
+  feature-boundary, privacy, cancellation, and persistence-failure proof.
+- Senior engineering, QA/test, security/auth, product/ops, architecture, CI
+  integrity, docs, reuse/dedup, and test-delta tracks passed. Implementation may
+  begin for AUTH-09E only; no feature action or call site may activate.
+- The human confirmed ART owns migration `0028`. AUTH-09E contains no migration
+  and allocates no revision; later AUTH migration work must wait for the ART PR
+  to merge and then allocate from trusted main.
+
 ## 2026-07-19 - WS-AUTH-001-CONTRIBUTOR-FOUNDATION Internal Review Passed
 
 - Exact code SHA `4d1fc507c343d483677a332c2a91885e32571693` passed senior,

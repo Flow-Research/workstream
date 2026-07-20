@@ -15,9 +15,12 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-PLAN` | Review And Revision Lifecycle Planning | L1 | None | Merged PR #128 |
 | `WS-REV-001-01` | Canonical Contract Adoption And Dependency Conformance | L1 | PLAN | Merged PR #145 |
 | `WS-REV-001-02` | Locked Review Policy And Task Lifecycle Alignment | L1 | 01 | Merged PR #147; non-executable split record |
-| `WS-REV-001-PLAN2` | REV-02A Runtime Readiness Plan Refresh | L1 | 02; planning-only human start | Active planning/specification chunk; no runtime |
-| `WS-REV-001-02A` | Project Guide Activation Sequence And Publication Locking | L1 | Exact merged AUTH contributor foundation; refreshed SHA/head; separate human start | Runtime blocked |
-| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | 02A; approved duration defaults; separate start | Proposed |
+| `WS-REV-001-PLAN2` | REV-02A Runtime Readiness Plan Refresh | L1 | 02; planning-only human start | Merged PR #150 |
+| `WS-REV-001-02A` | Guide Chronology And Task Locking Split | L1 | PLAN2; exact merged AUTH contributor foundation; separate human start | Active planning-only split record after preimplementation FAIL; no runtime |
+| `WS-REV-001-02A1` | Project And Setup Publication Fence | L1 | 02A; current writer inventory; separate human start | Proposed executable child |
+| `WS-REV-001-02A3` | Guide Activation Chronology | L1 | 02A1; current AUTH foundation/head; separate human start | Proposed executable child |
+| `WS-REV-001-02A4` | Task Guide Triplet And Screening | L1 | 02A3; current migration head; separate human start | Proposed executable child |
+| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | 02A4; approved duration defaults; separate start | Proposed |
 | `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | 02B; merged AUTH canonical contributor constraints; separate start | Proposed |
 | `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | 02C | Non-executable split record |
 | `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | 02C; merged `WS-CON-001-03B`; contract review | Proposed; no contract yet |
@@ -36,7 +39,7 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-07A` | Lease-Bounded Packet And Review Chain Context | L1 | 06C; exact ART packet-read owner chunk | Proposed; owner chunk unscheduled |
 | `WS-REV-001-07B` | Reviewer Finding Evidence Candidate And Finalize | L1 | 07A; exact ART review-evidence owner chunk and AUTH binding contracts | Proposed; owner chunk unscheduled |
 | `WS-REV-001-08` | Pure Decision, Final Acceptance, And Task-Effect Contract | L1 | 07B; typed participant contracts | Proposed; executable contract after repair, no canonical write |
-| `WS-REV-001-02A2` | Prepared Superseded Guide Reactivation | L1 | 08; merged AUTH-PREP/custody; AUTH-12 contract amendment; `project.guide.activate` remains unavailable | Proposed hidden behavior; manifest gates AUTH-12 evaluator/cutover/activation |
+| `WS-REV-001-02A2` | Prepared Superseded Guide Reactivation | L1 | 08 and 02A4; merged AUTH-PREP/custody; AUTH-12 contract amendment; `project.guide.activate` remains unavailable | Proposed hidden behavior; manifest gates AUTH-12 evaluator/cutover/activation |
 | `WS-REV-001-09A` | Revision Context Preparation And Resubmission | L1 | 08 | Non-executable split record |
 | `WS-REV-001-09A1` | Review-Rooted Revision Preparation Persistence | L1 | 02A2; approved human round/deadline semantics; migration/head refresh | Proposed; no contract yet |
 | `WS-REV-001-09A2` | Revision Preparation Participant, Resolver, And Task Context | L1 | 09A1 | Proposed; task-owned flush-only participant, no transaction composition |
@@ -67,7 +70,8 @@ typed symbol/manifest, and tests.
 ## Same-initiative order
 
 ```text
-PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A -> 02B -> 02C
+PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(parent split)
+-> 02A1 -> 02A3 -> 02A4 -> 02B -> 02C
 -> 03(parent) -> 03A -> 03B
 -> 04(parent) -> 04A -> 04B
 -> 05(parent) -> 05A -> 05B
@@ -97,14 +101,16 @@ owner chunk ID + merged PR + merge SHA + migration head (if schema)
 ```
 
 Known merged/planned CON IDs may be named, but proposed status remains blocked.
-The contributor clean cut and ART packet-read/review-evidence/digest work do not
-yet have trusted-main owner chunk IDs. REV neither invents those IDs nor edits
-owner plans.
+The contributor clean cut is merged as
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` through PR #153 at `8d5eb15b`. ART
+packet-read/review-evidence/digest work still lacks exact merged owner chunks;
+REV neither invents those IDs nor edits owner plans.
 
 ## Parent split records
 
-Existing parent contract files for 03, 04, 05, 06, 07, 09A, 11, 12, former
-12A release control, and 13 are non-executable historical planning records.
+After this planning-only split merges, parent 02A joins the existing parent
+contract files for 03, 04, 05, 06, 07, 09A, 11, 12, former 12A release control,
+and 13 as a non-executable historical planning record.
 They must not be used as implementation authorization. New child contracts are
 authored only from the then-current main when each child receives a human start.
 
@@ -117,7 +123,6 @@ configuration, or coverage changes add CI integrity.
 
 ## Stop condition
 
-Complete and merge only `WS-REV-001-PLAN2`, then stop. Its schema-v2 merge
-intent names `WS-REV-001-02A` and requires a separate explicit start after the
-exact AUTH runtime foundation merges. Do not begin 02A or any later child from
-this planning PR.
+Complete and merge only the planning-only parent split `WS-REV-001-02A`, then
+stop. Its schema-v2 merge intent names `WS-REV-001-02A1` and requires a separate
+explicit start. Do not begin 02A1, 02A3, 02A4, 02A2, or 02B from this PR.

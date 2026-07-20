@@ -27,6 +27,50 @@ the controlled `actor.service.provision` route. Historical review artifacts
 retain their exact earlier SHAs and observations. No AUTH runtime file is
 changed by this CON reconciliation.
 
+Before CON-02A review, trusted main advanced through ART PR #141 and AUTH-09C
+PR #146 to `0ffdabf`. The live catalogue is now
+74-permission/65-action/12-active/53-planned because AUTH-09C activates only
+`actor.profile.read` and `actor.identity_link.read`; it adds no CON/outbox
+identifier or migration. Historical CON-01 evidence above remains exact.
+Trusted main then advanced to `b2b9016` through REV-01 PR #145, which publishes
+the canonical review specification without changing the backend migration head
+or the CON-02A outbox boundary.
+REV-02 PR #147 then advanced trusted main to `f18b620` with planning-only chunk
+decomposition and no backend, migration, or 02A boundary change.
+AUTH-09D-A PR #148 then advanced trusted main to `99ae4c96`, activated only
+three actor-profile lifecycle actions, and added AUTH-owned
+`0026_actor_profile_lifecycle`. CON-02A therefore rebases its linear migration
+to `0027_shared_transactional_outbox`; the merge adds no CON/outbox action,
+permission, evaluator, service identity, or runtime admission.
+REV PLAN2 PR #150 then advanced trusted main to `983b9e53` with a
+planning/specification-only runtime-readiness refresh. It preserves the
+FinalAcceptance-sourced submitter contribution, reviewer contribution on all
+three decisions, REV-owned single commit, and shared outbox staging. Its split
+future REV child gates are reconciled in CON planning; it changes no backend,
+migration, AUTH catalogue, or CON-02A implementation.
+ART-02B1 PR #151 then advanced trusted main to `1b5422fc` with the
+S3-compatible ArtifactStore adapter, real MinIO integration, inactive AWS
+profile support, dependency pins, CI changes, and substantial tests. It adds no
+migration or outbox seam and does not change CON-02A behavior, but it requires
+fresh repository-wide evidence on the combined tree.
+AUTH-09D-B PR #152 then advanced trusted main to `93dd3924`, activating only
+identity-link revoke/reactivate and expanding AUTH lifecycle proof. It adds no
+migration, CON/task-claim identifier, fixed-service admission, or outbox seam;
+at that historical point the contributor foundation and AUTH-09E remained
+later gates.
+Contributor-foundation PR #153 then advanced trusted main to `8d5eb15b`. It
+clean-cuts TaskAssignment and Submission attribution to canonical human
+`contributor_id`, adds writer revalidation, and owns
+`0027_contributor_foundation`. It adds no CON/outbox identifier, service
+admission, dispatcher, review lifecycle, or authority change. CON-02A is now
+the linear `0028_shared_transactional_outbox` child; AUTH-09E remains a later
+gate.
+ART-02C1 PR #154 then advanced trusted main to `44f2467c`. It owns
+`0028_artifact_admission` and adds durable artifact-admission and prepared-put
+state without changing the generic outbox boundary. CON-02A is therefore the
+linear `0029_shared_transactional_outbox` child; ART remains absent from the
+outbox append path.
+
 ## Inspected and already aligned
 
 The following active documents already describe ContributionPolicy,

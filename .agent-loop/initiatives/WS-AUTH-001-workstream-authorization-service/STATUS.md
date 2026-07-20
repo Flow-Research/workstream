@@ -115,8 +115,8 @@ None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-None. `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` merged through PR #153 as `8d5eb15`.
-AUTH-09E remains inactive until its own explicit start.
+None. `WS-AUTH-001-09E` merged through PR #157 as `42a89b2d` without changing
+feature action availability.
 
 ## Current review branch
 
@@ -150,8 +150,8 @@ None.
 | `WS-AUTH-001-09D` | Split | `codex/ws-auth-001-09d-actor-identity-lifecycle` | - | Required L1 review rejected the combined contract before runtime edits. |
 | `WS-AUTH-001-09D-A` | Merged | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | Merged as `99ae4c9`; signed memory `cf8a3e8` passed and stopped. |
 | `WS-AUTH-001-09D-B` | Merged | `codex/ws-auth-001-09d-b-identity-link-lifecycle` | #152 | Merged as `93dd392`; signed memory `912a6254` passed and stopped. |
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged | `codex/ws-auth-001-contributor-foundation` | #153 | Merged as `8d5eb15` on 2026-07-19. |
-| `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after the contributor foundation. |
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged | `codex/ws-auth-001-contributor-foundation` | #153 | Merged as `8d5eb15b`; signed memory `66ab58d` passed and stopped. |
+| `WS-AUTH-001-09E` | Merged | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | #157 | Merged as `42a89b2d` on 2026-07-20. |
 | `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
 | `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
 | `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
@@ -171,10 +171,21 @@ merged feature manifests and separate human starts exist.
 
 AUTH-09C has no remaining blocker. PR #146 merged as `0ffdabf`; PR #148 merged
 AUTH-09D-A as `99ae4c9`; and PR #152 merged AUTH-09D-B as `93dd392`. Signed
-memory `912a6254` passed and stopped. PR #153 merged the contributor foundation
-as `8d5eb15` after its repaired contract, bounded implementation, deterministic
-evidence, and all nine internal tracks passed. AUTH-09E remains inactive behind
-its own explicit-start gate.
+memory `912a6254` passed and stopped. The user explicitly started the
+contributor foundation. Its first L1 review rejected an underspecified
+identity-link race, migration diagnostic, resource-lock, clean-cut, and CI
+contract before runtime edits. Exact repaired contract `2a21166d` passed every
+required L1 track. Initial implementation candidate `e41c33c0` failed privacy,
+proof, docs, and evidence review. Bounded repair and deterministic evidence are
+complete; exact code SHA `4d1fc507` passed all nine internal tracks. PR/external
+checks are current and aggregate coverage remains mandatory in Backend.
+The user explicitly started AUTH-09E after contributor foundation PR #153 and
+signed memory completed. Its first preimplementation review rejected missing
+verification commands and an overbroad feature-resource revalidation claim.
+The refreshed contract limits this chunk to AUTH-owned service authority
+resolution/revalidation, defers feature-row recomposition to later activation
+chunks, and passed all nine required L1 tracks. Runtime implementation is
+merged through PR #157 as `42a89b2d`; all feature actions remain planned.
 
 The four proposed REV lifecycle actions and review-evidence binding action are
 blocked on complete feature-owned typed manifests. REV fixed services are also

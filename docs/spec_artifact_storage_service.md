@@ -1170,7 +1170,7 @@ Implementation is a clean cut:
   remove the foundation when any admission scope, charge, attempt, or
   attempt-charge link exists; downgrade is permitted only while all four
   tables are empty.
-- migration `0029_artifact_verification` adds polymorphic contract-v2 operation
+- migration `0030_artifact_verification` adds polymorphic contract-v2 operation
   receipts, typed put-observation receipts, verification jobs and receipts, and
   execution-mode/observation fencing. Existing contributor receipt rows remain
   readable as contract v1. Downgrade refuses when verification evidence or a

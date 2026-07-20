@@ -1,7 +1,7 @@
 """add artifact verification publication and execution fencing
 
-Revision ID: 0029_artifact_verification
-Revises: 0028_artifact_admission
+Revision ID: 0030_artifact_verification
+Revises: 0029_shared_transactional_outbox
 Create Date: 2026-07-19
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0029_artifact_verification"
-down_revision = "0028_artifact_admission"
+revision = "0030_artifact_verification"
+down_revision = "0029_shared_transactional_outbox"
 branch_labels = depends_on = None
 
 

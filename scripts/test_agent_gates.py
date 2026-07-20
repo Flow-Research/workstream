@@ -4173,7 +4173,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "| `WS-AUTH-001-09D-B` | Merged |" in auth_status
     assert "Active implementation chunk\n\nNone." in auth_status
     assert "Active implementation chunk\n\n`WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in auth_status
-    assert "`codex/ws-auth-001-contributor-foundation`" in auth_status
+    assert "Current review branch\n\nNone." in auth_status
     assert "PR #148 is open" not in auth_status
     stale_auth_09d_state = (
         "Only 09D-A implementation is active",
@@ -4192,34 +4192,32 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in loop_state
     assert "Active ART implementation chunk: `WS-ART-001-02C2`" in loop_state
+    assert "Merged through PR #157 as `42a89b2d`" in work_queue
     assert "ActionIds, with 17 active actions" in loop_state
     assert "candidate total of 17" not in loop_state
     assert "with 12 active actions" not in loop_state
     assert "five 09D-A/09D-B lifecycle actions" not in loop_state
     assert (
         "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And "
-        "Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15` "
-        "on 2026-07-19" in auth_map
-    )
-    assert (
-        "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged |" in auth_status
+        "Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15b`" in auth_map
     )
     assert "PR/external checks pending" not in auth_map
     assert "PR/external checks are current" not in auth_status
+    assert "| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged |" in auth_status
     assert (
         "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
-        "Inactive until contributor-foundation merge/memory and explicit start"
+        "Merged through PR #157 as `42a89b2d`"
         in auth_map
     )
-    assert "| `WS-AUTH-001-09E` | Proposed |" in auth_status
+    assert "| `WS-AUTH-001-09E` | Merged |" in auth_status
     assert (
         "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
-        "Inactive until contributor-foundation merge/memory and explicit user start"
+        "Merged through PR #157 as `42a89b2d`"
         in work_queue
     )
-    assert "no service caller becomes executable before auth-09e" in loop_state.replace(
-        "\n", " "
-    ).lower()
+    assert "No feature action or service call site becomes active" in " ".join(
+        loop_state.split()
+    )
     assert "Merged through PR #129 as `9a04434`" in artifact_map
     assert "Merged through PR #141 as `a10d901`" in artifact_map
     assert "Merged through PR #151 as `1b5422fc`" in artifact_map
@@ -4247,6 +4245,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "Current ART gate: complete deterministic 02C2 proof" in (
         loop_state
     )
+    assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
 
 
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:
@@ -5318,7 +5317,7 @@ def test_stale_artifact_contracts_scan_only_current_initiatives() -> None:
     )
     prefixes = gate.active_initiative_prefixes()
     assert any("WS-ART-001-immutable-artifact-storage" in item for item in prefixes)
-    assert any(
+    assert not any(
         "WS-AUTH-001-workstream-authorization-service" in item for item in prefixes
     )
     assert gate.path_is_scannable(

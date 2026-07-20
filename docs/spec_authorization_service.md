@@ -501,7 +501,10 @@ For every protected operation:
 1. Verify the external token through the existing verifier boundary.
 2. Resolve the canonical identity link and actor profile without preempting the
    action's lifecycle guards.
-3. Build request-scoped `AuthorizationContext` without token-role authority.
+3. Build the closed request-scoped
+   `HumanAuthorizationContext | ServiceAuthorizationContext` union without
+   token-role authority. Only the service variant carries a required, closed
+   `service_identity`.
 4. Load the canonical resource through its owning repository/service.
 5. Compose `ResourceContext` in the application service.
 6. Load active candidate grants using database time.
@@ -516,6 +519,13 @@ Authorization decisions are request-scoped and are not cached across requests.
 Each decision carries a bounded SHA-256 digest of its complete typed resource
 context so feature code cannot reuse it with substituted role, scope, target,
 or replay facts. List filtering occurs before counts and pagination cursors.
+
+Context-type dispatch occurs before candidate lookup. A service context never
+enters actor-self, administrative-grant, project-grant, contributor, or human
+rate-control paths. AUTH checks exact `ActionId` membership in the fixed
+identity's static matrix row before checking availability; a different row
+denies even when both actions share one `PermissionId`. An own-row action still
+denies while its availability is `planned`.
 
 Sensitive mutations use the prepared protocol instead of evaluating final
 authority against unlocked feature facts:
@@ -538,6 +548,13 @@ availability are immutable code-owned validations after the service profile and
 link locks; they are not database rows or lock targets. Existing actor-self,
 administrative, and lifecycle mutations must use the same authority-row order
 before any prepared consumer ships.
+
+AUTH-09E supplies the reusable transaction-local service-authority lock and
+revalidation seam: reload and lock profile then exact link, recheck row
+identity, lifecycle, immutable service identity, exact matrix membership, and
+current action availability, and return refreshed typed authority without
+committing. Later feature activation chunks own locked feature-row
+recomposition, their exact `ResourceContext`, and terminal mutation proof.
 
 The handle is single-use, nonserializable, and never a route schema or caller
 input. Consumption matches the exact session, action, actor reference kind,
@@ -612,6 +629,13 @@ identity's exact static ActionId row. It never enters human provisioning or
 human grant evaluation. Feature actions remain unavailable until their owning
 feature supplies canonical resource facts, guards, hidden behavior, and proof
 and AUTH separately activates them.
+
+Exact active resolution may stage monotonic profile/link observation timestamps
+in the caller-owned request transaction. Admission denial stages no
+observations. Planned-action denial, cancellation, decision-evidence failure,
+or other request failure rolls staged observations back; bounded denial
+evidence is restaged only from a clean transaction and contains no issuer,
+subject, bearer material, claims, scopes, provider data, or service secret.
 
 New fixed services are added only after the owning feature publishes an exact
 identity-to-ActionId manifest. AUTH then owns one closed enum/constraint/matrix

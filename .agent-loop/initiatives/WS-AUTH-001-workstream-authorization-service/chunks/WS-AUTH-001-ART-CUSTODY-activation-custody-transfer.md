@@ -1,4 +1,4 @@
-# Chunk Contract: WS-AUTH-001-ART-CUSTODY — ART Activation Custody Transfer
+# Chunk Contract: WS-AUTH-001-ART-CUSTODY - ART Activation Custody Transfer
 
 ## Parent initiative
 

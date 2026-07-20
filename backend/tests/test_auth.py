@@ -3707,6 +3707,17 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             "subject": service_subject,
             "reason": reason,
         }
+        unprovisioned_service = await client.post(
+            "/api/v1/service-actors",
+            headers={**service_headers, "Idempotency-Key": str(uuid4())},
+            json=payload,
+        )
+        assert unprovisioned_service.status_code == 403
+        assert (
+            unprovisioned_service.json()["error"]["code"]
+            == "service_actor_not_provisioned"
+        )
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) is None
         key = str(uuid4())
         created = await client.post(
             "/api/v1/service-actors",
@@ -3749,6 +3760,14 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             str(admin_id),
         )
         assert state[11] is None
+        service_human_path_denial = await client.post(
+            "/api/v1/service-actors",
+            headers={**service_headers, "Idempotency-Key": str(uuid4())},
+            json=payload,
+        )
+        assert service_human_path_denial.status_code == 403
+        assert service_human_path_denial.json()["error"]["code"] == "permission_not_granted"
+        assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
         caller_after_create = await actor_timestamps(admin_id)
         assert caller_after_create[0] > caller_before[0]
         assert caller_after_create[1] > caller_before[1]
@@ -3878,10 +3897,13 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
         assert service_subject not in invalid_header.text
         assert reason not in invalid_header.text
 
-        for path in ("/api/v1/actors/me", "/api/v1/auth/me"):
+        for path, expected_code in (
+            ("/api/v1/actors/me", "permission_not_granted"),
+            ("/api/v1/auth/me", "service_actor_not_provisioned"),
+        ):
             service_denial = await client.get(path, headers=service_headers)
             assert service_denial.status_code == 403
-            assert service_denial.json()["error"]["code"] == "service_actor_not_provisioned"
+            assert service_denial.json()["error"]["code"] == expected_code
         assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) == state
 
         race_key = str(uuid4())

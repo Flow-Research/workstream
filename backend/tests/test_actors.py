@@ -102,6 +102,48 @@ def test_actor_admin_response_requires_exact_service_identity_pair() -> None:
             )
 
 
+async def test_service_admission_rejects_malformed_stored_identity_without_writes() -> None:
+    profile = ActorProfile(
+        id=str(uuid4()),
+        actor_kind="service",
+        status="active",
+        provisioning_method="manual_service_provisioning",
+        service_identity="private-invalid-service-identity",
+        created_by=str(uuid4()),
+    )
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=profile.id,
+        issuer=ISSUER,
+        subject="malformed-service",
+        subject_kind="service",
+        status="active",
+        linked_by=str(uuid4()),
+    )
+
+    class Repository:
+        calls: list[str] = []
+
+        async def get_identity_link(self, _issuer, _subject):
+            self.calls.append("link")
+            return link
+
+        async def get_actor_profile(self, _profile_id):
+            self.calls.append("profile")
+            return profile
+
+    repository = Repository()
+    service = ActorService.__new__(ActorService)
+    service._repo = cast(ActorRepository, repository)
+
+    with pytest.raises(ServiceActorNotProvisioned, match="not provisioned"):
+        await service.resolve_service_for_authorization(
+            verified_token("malformed-service", kind="service")
+        )
+
+    assert repository.calls == ["link", "profile"]
+
+
 async def test_actor_admin_reads_are_bounded_and_reuse_exact_repository_lookups() -> None:
     now = datetime.now(UTC)
     actor_id, link_id = uuid4(), uuid4()
@@ -726,11 +768,16 @@ async def test_unsupported_subject_kinds_create_nothing(
 
 async def test_unknown_service_creates_nothing(actor_database_env: str) -> None:
     async with db_session.get_session_factory()() as session:
+        service = ActorService(session)
         with pytest.raises(ServiceActorNotProvisioned):
-            await ActorService(session).resolve_verified_actor(
+            await service.resolve_verified_actor(
                 verified_token("unknown-service", kind="service"),
                 request_id=uuid4(),
                 correlation_id=uuid4(),
+            )
+        with pytest.raises(ServiceActorNotProvisioned):
+            await service.resolve_service_for_authorization(
+                verified_token("unknown-service", kind="service")
             )
         await session.rollback()
     async with db_session.get_session_factory()() as session:
@@ -1403,6 +1450,11 @@ async def test_existing_actor_and_legacy_negative_states_fail_closed(
             )
         persisted = await service.find_actor_for_authorization(service_token)
         assert persisted is not None
+        admitted = await service.resolve_service_for_authorization(service_token)
+        assert admitted.profile.id == service_actor_id
+        locked = await service.lock_actor_for_authorization(admitted)
+        assert locked is not None
+        assert locked.profile.service_identity == ServiceIdentity.ARTIFACT_VERIFIER
         assert persisted.profile.last_seen_at is None
         assert persisted.identity_link.last_verified_at is None
 

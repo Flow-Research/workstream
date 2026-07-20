@@ -17,7 +17,7 @@ L1 privileged mutation, immutable provenance, and concurrency.
 
 ## Preconditions
 
-- 02A and 08 are merged with Project-first locking, immutable activation sequence,
+- 02A1, 02A3, 02A4, and 08 are merged with Project-first locking, immutable activation sequence,
   pure decision/resource contracts, and
   unchanged superseded-candidate denial.
 - Exact merged AUTH-PREP/custody and an AUTH-12 contract amendment are recorded
@@ -41,11 +41,17 @@ L1 privileged mutation, immutable provenance, and concurrency.
   and activation sequence; clears only its superseded time; supersedes the exact
   expected current guide at post-lock database time; and leaves exactly one
   active guide.
+- Its migration amends the 02A3 database guard only for the exact prepared,
+  If-Match-protected `superseded -> active` transition and corresponding
+  `superseded_at -> NULL` and database-maintained update-time changes. ID,
+  Project, version, content, summary, creator/creation time, original approver,
+  effective time, and activation sequence remain immutable; every other change
+  remains rejected.
 - The shared AuditEvent records `project_guide_reactivated`, project/candidate,
   canonical actor, replaced/restored IDs and activation sequences,
   `older_guide_reactivated`, request/correlation IDs, AuthorizationDecision,
   and database time. Audit failure rolls back all feature mutation.
-- Active repeat remains no-write idempotent. Draft first activation remains 02A
+- Active repeat remains no-write idempotent. Draft first activation remains 02A3
   behavior. Unknown/cross-project/wrong-state targets fail closed.
 - Independent-session tests cover competing reactivations, new activation versus
   reactivation, exact retry, delayed retry, current-guide change, authority loss,

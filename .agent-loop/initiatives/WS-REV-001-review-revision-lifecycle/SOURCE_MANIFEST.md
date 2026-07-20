@@ -168,6 +168,16 @@ review-evidence candidate/finalize, projection, and live-proof contracts,
 including a separately approved `WS-ART-001-REV-EVIDENCE` owner chunk, remain
 dependency gates.
 
+ART admission foundation PR #154 later merged at trusted main
+`44f2467cedc266d2efe261119cfff436ac6b7715` from final branch head
+`c93f1a246ddbc595aa0676a63c2926bf26fc1612`, with migration
+`0028_artifact_admission`. It adds the durable-byte admission ledger and one
+prepared `ArtifactPutAttempt` before provider I/O, while keeping provider
+execution, verification publication, recovery, routes, and product cutover
+inactive. Its merge changes no Project/setup writer file; it therefore advances
+the publication migration base without expanding 02A1's writer inventory or
+satisfying REV's later packet-read, evidence-finalize, or digest gates.
+
 The merged ART plan also leaves the narrow active-lease packet-read port and
 server-derived `Submission.artifact_hash` field unassigned to an approved chunk.
 REV-07/10 require exact merged ART/task-owner amendments for those capabilities;
@@ -222,14 +232,20 @@ AUTH-09D-A merged through PR #148 at trusted main
 `0026_actor_profile_lifecycle`, ActorProfile lifecycle fields/constraints,
 direct-SQL history guards, service behavior, and tests are merged authority.
 
-The following are explicitly unmerged discovery evidence and not authority:
+PLAN2 later merged through PR #150. AUTH-09D-B merged through PR #152, then
+`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` merged through PR #153 at trusted main
+`8d5eb15b384fd75787ce98a099400a1d335d2560` from reviewed PR head
+`6a70b33fee0c63da8893fca35da967d59d3d410a`. Its final reviewed code candidate
+is `0ca5a6326a893e6671848dacde484b7c784b7bd0`. Migration
+`0027_contributor_foundation`, the two canonical `contributor_id` fields,
+ActorProfile FKs, reusable `public.require_human_actor_profile_reference()`,
+active-human transaction revalidation, and successful Backend/Agent
+Gates/CodeRabbit proof are merged authority for the 02A split children.
 
-- the human-directed but unnamed AUTH contributor/canonical-human foundation;
-- any unmerged CON outbox work that still claims the now-consumed `0026` number.
-
-Trusted main has the single head `0026_actor_profile_lifecycle`, retains both
-retired task contributor storage names, and contains no merged contributor
-foundation.
+Any unmerged CON outbox work or later sibling migration remains discovery only
+and must rebase from the then-current head. Trusted main at the parent 02A split
+start has the single head `0027_contributor_foundation`; no child reserves a
+later revision before its own explicit start refresh.
 Current Submission storage also has no immutable causal field for the exact
 needs-revision CheckerRun that admits a corrected checker-remediation N+1. 02C
 owns the planned server-derived `remediation_source_checker_run_id`, exact
@@ -251,7 +267,12 @@ After the initial exact-SHA review, the branch pulled merged CON PR #142 at
 archive-integrity proofs remain fixed. The branch then pulled merged AUTH-09B
 PR #143 at `053242b90d927ace3fab92eeca72da27a61cecec` and merged CON-01 PR
 #144 at `e118e33afcd89b8ee78ecfc8f0e0d585ae0ee4b9`; final PR scope and
-exact-SHA review use the newest merged-main boundary. The branch then rebased
-cleanly onto merged AUTH-09D-A PR #148 at
-`99ae4c963e53f317175dcb308b9e47c93ccf19ed`; the post-rebase review base is
-that trusted commit.
+exact-SHA review use the newest merged-main boundary. The PLAN2 branch then
+rebased cleanly onto merged AUTH-09D-A PR #148 at
+`99ae4c963e53f317175dcb308b9e47c93ccf19ed`; that historical PLAN2 post-rebase
+review base had the single head `0026_actor_profile_lifecycle`. Parent 02A later
+started from trusted main
+`8d5eb15b384fd75787ce98a099400a1d335d2560`, after the contributor foundation
+merged with the single head `0027_contributor_foundation`. Every 02A executable
+child must allocate from the then-current trusted-main head at its own explicit
+start, never from the historical PLAN2 base.

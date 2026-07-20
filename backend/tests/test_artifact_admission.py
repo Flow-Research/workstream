@@ -73,7 +73,9 @@ from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
     AuthorizationContext,
+    HumanAuthorizationContext,
     IdentityLinkStatus,
+    ServiceAuthorizationContext,
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects.models import (
@@ -196,15 +198,21 @@ def _context(
     identity_link_id: UUID | None = None,
     actor_kind: ActorKind = ActorKind.HUMAN,
 ) -> AuthorizationContext:
-    return AuthorizationContext(
+    common = dict(
         actor_profile_id=actor_profile_id or uuid4(),
-        actor_kind=actor_kind,
         actor_status=ActorStatus.ACTIVE,
         identity_link_id=identity_link_id or uuid4(),
         identity_link_status=IdentityLinkStatus.ACTIVE,
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
+    if actor_kind is ActorKind.SERVICE:
+        return ServiceAuthorizationContext(
+            actor_kind=ActorKind.SERVICE,
+            service_identity=ServiceIdentity.ARTIFACT_CHECKER_OUTPUT,
+            **common,
+        )
+    return HumanAuthorizationContext(actor_kind=ActorKind.HUMAN, **common)
 
 
 async def _seed_human_actor(
@@ -2586,7 +2594,7 @@ async def test_verification_unavailable_retries_then_exhausts(
         await engine.dispose()
 
 
-async def test_0029_populated_contributor_receipt_upgrade_and_guarded_downgrade(
+async def test_0030_populated_contributor_receipt_upgrade_and_guarded_downgrade(
     admission_database_env: str,
     tmp_path: Path,
 ) -> None:
@@ -2676,7 +2684,7 @@ async def test_0029_populated_contributor_receipt_upgrade_and_guarded_downgrade(
 
     config = _alembic_config()
     await asyncio.to_thread(command.downgrade, config, "0028_artifact_admission")
-    await asyncio.to_thread(command.upgrade, config, "0029_artifact_verification")
+    await asyncio.to_thread(command.upgrade, config, "0030_artifact_verification")
     engine = create_async_engine(admission_database_env)
     try:
         async with engine.begin() as connection:

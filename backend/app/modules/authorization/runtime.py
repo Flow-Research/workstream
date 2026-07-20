@@ -38,18 +38,36 @@ class IdentityLinkStatus(StrEnum):
     REVOKED = "revoked"
 
 
-class AuthorizationContext(BaseModel):
-    """Bounded canonical identity state for one request only."""
+class HumanAuthorizationContext(BaseModel):
+    """Bounded canonical human identity state for one request only."""
 
     model_config = _STRICT_FROZEN
 
     actor_profile_id: UUID
-    actor_kind: ActorKind
+    actor_kind: Literal[ActorKind.HUMAN]
     actor_status: ActorStatus
     identity_link_id: UUID
     identity_link_status: IdentityLinkStatus
     request_id: UUID
     correlation_id: UUID
+
+
+class ServiceAuthorizationContext(BaseModel):
+    """Bounded canonical fixed-service identity state for one request only."""
+
+    model_config = _STRICT_FROZEN
+
+    actor_profile_id: UUID
+    actor_kind: Literal[ActorKind.SERVICE]
+    actor_status: ActorStatus
+    identity_link_id: UUID
+    identity_link_status: IdentityLinkStatus
+    service_identity: ServiceIdentity
+    request_id: UUID
+    correlation_id: UUID
+
+
+AuthorizationContext = HumanAuthorizationContext | ServiceAuthorizationContext
 
 
 class ActorSelfResourceContext(BaseModel):

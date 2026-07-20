@@ -26,6 +26,7 @@ from app.modules.actors.schemas import (
     LegacyWorkflowEligibilityActivationRequest,
     LegacyWorkflowEligibilityResponse,
 )
+from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.audit.repository import AuditRepository
 from app.modules.audit.schemas import (
     ActorReferenceKind,
@@ -242,11 +243,30 @@ class ActorService:
             )
         return resolved
 
-    async def lock_actor_self_for_authorization(
+    async def resolve_service_for_authorization(
+        self,
+        token: VerifiedIssuerToken,
+    ) -> ResolvedActor:
+        """Resolve one explicitly provisioned service without first access."""
+        if token.subject_kind != "service":
+            raise UnsupportedSubjectKind("Unsupported subject kind")
+        try:
+            resolved = await self.find_actor_for_authorization(token)
+        except RuntimeError as exc:
+            raise ServiceActorNotProvisioned("Service actor is not provisioned") from exc
+        if resolved is None or resolved.profile.service_identity is None:
+            raise ServiceActorNotProvisioned("Service actor is not provisioned")
+        try:
+            ServiceIdentity(resolved.profile.service_identity)
+        except ValueError as exc:
+            raise ServiceActorNotProvisioned("Service actor is not provisioned") from exc
+        return resolved
+
+    async def lock_actor_for_authorization(
         self,
         resolved: ResolvedActor,
     ) -> ResolvedActor:
-        """Lock the exact profile then its link and reject identity drift."""
+        """Lock profile then exact link and reject missing or drifted rows."""
         profile = await self._repo.get_actor_profile(resolved.profile.id, for_update=True)
         if profile is None:
             raise RuntimeError("resolved actor profile disappeared")
@@ -265,6 +285,13 @@ class ActorService:
         ):
             raise RuntimeError("resolved actor identity changed")
         return ResolvedActor(profile=profile, identity_link=link)
+
+    async def lock_actor_self_for_authorization(
+        self,
+        resolved: ResolvedActor,
+    ) -> ResolvedActor:
+        """Lock the exact profile then its link and reject identity drift."""
+        return await self.lock_actor_for_authorization(resolved)
 
     async def require_active_human_write_actor(self, actor: ActorContext) -> None:
         """Lock and revalidate one exact human caller in the current transaction."""
