@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Explicitly started; approved contract, runtime, and focused evidence are in progress from trusted `fe0e4492` |
+| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.

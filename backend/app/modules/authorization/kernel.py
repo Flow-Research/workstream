@@ -103,6 +103,7 @@ class _PrelockedAuthority:
     __slots__ = (
         "action_id",
         "context",
+        "_frozen",
         "issuer",
         "matched_grant_id",
         "matched_grant_status",
@@ -129,17 +130,27 @@ class _PrelockedAuthority:
         matched_grant_status: str | None,
         permission_id: PermissionId,
     ) -> None:
-        self.issuer = issuer
-        self.transaction = transaction
-        self.context = context
-        self.action_id = action_id
-        self.scope_project_id = scope_project_id
-        self.matched_grant_id = matched_grant_id
-        self.matched_grant_status = matched_grant_status
-        self.permission_id = permission_id
+        object.__setattr__(self, "issuer", issuer)
+        object.__setattr__(self, "transaction", transaction)
+        object.__setattr__(self, "context", context)
+        object.__setattr__(self, "action_id", action_id)
+        object.__setattr__(self, "scope_project_id", scope_project_id)
+        object.__setattr__(self, "matched_grant_id", matched_grant_id)
+        object.__setattr__(self, "matched_grant_status", matched_grant_status)
+        object.__setattr__(self, "permission_id", permission_id)
+        object.__setattr__(self, "_frozen", True)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("prelocked authority is immutable")
 
 
 _PRELOCKED_CONSTRUCTOR_TOKEN = object()
+
+
+class _PreparedKernelAccess:
+    """One-service capability required to seal already locked authority facts."""
+
+    __slots__ = ()
 
 
 class AuthorizationService:
@@ -161,9 +172,21 @@ class AuthorizationService:
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
         self._sealed_prelocked: set[_PrelockedAuthority] = set()
+        self._prepared_access: _PreparedKernelAccess | None = _PreparedKernelAccess()
+        self._claimed_prepared_access: _PreparedKernelAccess | None = None
+
+    def _claim_prepared_access(self) -> _PreparedKernelAccess:
+        """Transfer the sole sealing capability to one prepared service."""
+        access = self._prepared_access
+        if access is None:
+            raise TypeError("prepared kernel access is already claimed")
+        self._prepared_access = None
+        self._claimed_prepared_access = access
+        return access
 
     def _seal_prelocked(
         self,
+        access: _PreparedKernelAccess,
         *,
         context: AuthorizationContext,
         action_id: ActionId,
@@ -173,6 +196,8 @@ class AuthorizationService:
         permission_id: PermissionId,
     ) -> _PrelockedAuthority:
         """Seal locked facts to this service and its current root transaction."""
+        if access is not self._claimed_prepared_access:
+            raise TypeError("invalid prepared kernel access")
         if self._session.in_nested_transaction():
             raise TypeError("prelocked authority requires one root transaction")
         transaction = self._session.sync_session.get_transaction()

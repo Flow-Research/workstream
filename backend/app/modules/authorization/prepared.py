@@ -109,6 +109,7 @@ class PreparedAuthorizationService:
         self._session = session
         self._context = context
         self._authorization = authorization
+        self._kernel_access = authorization._claim_prepared_access()
         self._repository = repository
         self._issued: dict[PreparedAuthorizationHandle, _Issuance | _Consumed] = {}
         self._closed = False
@@ -205,6 +206,7 @@ class PreparedAuthorizationService:
                 lifecycle or AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             )
         authority = self._authorization._seal_prelocked(
+            self._kernel_access,
             context=context,
             action_id=action_id,
             scope_project_id=requested_authority_scope.project_id,

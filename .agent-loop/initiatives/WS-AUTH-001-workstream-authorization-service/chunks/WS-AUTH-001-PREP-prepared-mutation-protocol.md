@@ -185,6 +185,12 @@ global capability registry, generic transaction manager, service locator, or cal
   kernel seam exactly once and stages exactly one bounded decision
   using the final resource digest. No arbitrary evaluator callback, feature
   repository import, service locator, or caller-provided lock function exists.
+- A fixed-service planned-action preparation returns the refreshed bounded
+  `action_unavailable` outcome without evidence because no final resource
+  context exists and no handle is issued. A denial during exact `consume`
+  stages one decision inside the caller transaction, then the caller-owned
+  rollback removes that evidence with participant state; PREP never restages or
+  commits denial evidence in a separate teardown transaction.
 - The route or service command owns one commit; AUTH and feature participants
   flush only. `get_authorization_service` success teardown must not commit and
   PREP supplies no teardown commit path. The test command harness proves one

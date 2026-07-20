@@ -156,7 +156,7 @@ feature action availability.
 | `WS-AUTH-001-09E` | PR gate | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | - | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain. |
 | `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
 | `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
-| `WS-AUTH-001-PREP` | Implementation | `codex/ws-auth-001-prep` | - | Approved L1 contract; runtime and focused evidence are in progress from trusted `fe0e4492`. |
+| `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |

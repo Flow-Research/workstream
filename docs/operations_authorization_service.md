@@ -697,6 +697,11 @@ unchanged. The handle remains consumed after every exact attempt, including a
 rolled-back or cancelled attempt, and dependency teardown invalidates all
 outstanding handles.
 
+Do not restage a prepared denial after rollback. Its staged decision belongs to
+the failed caller transaction and rolls back with participant state. Planned
+fixed-service preparation returns bounded `action_unavailable` without evidence
+because it issues no handle and has no final resource context.
+
 Operationally, actor-self preparation locks profile then exact link. An
 administrative preparation locks `AuthorityControl(id=1)`, request profile,
 exact request link, and deterministic matched AdminRoleGrant before participant

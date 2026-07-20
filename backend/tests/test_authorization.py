@@ -38,11 +38,12 @@ from app.modules.audit.schemas import (
 )
 from app.modules.audit.service import AuditService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
-from app.modules.actors.service import ActorService
+from app.modules.actors.service import ActorService, ResolvedActor
 from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
 from app.modules.authorization import catalogue as authorization_catalogue
 from app.modules.authorization import kernel as authorization_kernel
 from app.modules.authorization import router as authorization_router
+from app.modules.authorization.admin_schemas import AdminRoleGrantRevokeBody
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
     ActorLifecycleMutationResponse,
@@ -54,6 +55,7 @@ from app.modules.authorization.lifecycle_service import (
     IdentityLinkLifecycleConflict,
     IdentityLinkLifecycleService,
 )
+from app.modules.authorization.models import AdminRoleGrant
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     ACTION_DEFINITIONS,
@@ -131,6 +133,7 @@ from app.modules.authorization.runtime import (
     AuthorizationDecision,
     AuthorizationDenied,
     AuthorizationDenialCode,
+    AuthorizationEvidenceUnavailable,
     HumanAuthorizationContext,
     IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
@@ -1566,6 +1569,19 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
     handle = await prepared.prepare(
         ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
     )
+    sealed = prepared._issued[handle].authority  # type: ignore[union-attr]
+    with pytest.raises(AttributeError):
+        sealed.matched_grant_status = "active"
+    with pytest.raises(TypeError, match="invalid prepared kernel access"):
+        authorization._seal_prelocked(
+            object(),  # type: ignore[arg-type]
+            context=context,
+            action_id=ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            scope_project_id=None,
+            matched_grant_id=uuid4(),
+            matched_grant_status="active",
+            permission_id=PermissionId.ACTOR_PROFILE_UPDATE_SELF,
+        )
     assert repr(handle) == "<PreparedAuthorizationHandle>"
     assert facts.calls == 1
 
@@ -2064,12 +2080,11 @@ async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_roo
 
 
 @pytest.mark.asyncio
-async def test_prepared_actor_self_commits_evidence_and_neutral_participant_together(
+async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
     authorization_factory,
 ) -> None:
-    """Real PostgreSQL proves AUTH evidence and participant share caller commit."""
+    """Real caller transactions roll back participant/evidence and spend handles."""
     profile_id, link_id = uuid4(), uuid4()
-    request_id, correlation_id = uuid4(), uuid4()
     now = datetime.now(UTC)
     async with authorization_factory() as session:
         session.add_all(
@@ -2085,7 +2100,7 @@ async def test_prepared_actor_self_commits_evidence_and_neutral_participant_toge
                     id=str(link_id),
                     actor_profile_id=str(profile_id),
                     issuer="https://identity.flowresearch.tech",
-                    subject=f"prepared-{profile_id}",
+                    subject=f"prepared-failure-{profile_id}",
                     subject_kind="human",
                     status="active",
                     linked_by=str(profile_id),
@@ -2094,21 +2109,19 @@ async def test_prepared_actor_self_commits_evidence_and_neutral_participant_toge
             ]
         )
         await session.commit()
-
         await session.execute(
-            text("create temporary table prepared_participant (id int primary key, value int)")
+            text("create temporary table prepared_failure_participant (id int primary key, value int)")
         )
-        await session.execute(text("insert into prepared_participant values (1, 0)"))
+        await session.execute(text("insert into prepared_failure_participant values (1, 0)"))
         await session.commit()
-
         context = HumanAuthorizationContext(
             actor_profile_id=profile_id,
             actor_kind=ActorKind.HUMAN,
             actor_status=ActorStatus.ACTIVE,
             identity_link_id=link_id,
             identity_link_status=IdentityLinkStatus.ACTIVE,
-            request_id=request_id,
-            correlation_id=correlation_id,
+            request_id=uuid4(),
+            correlation_id=uuid4(),
         )
         authorization = AuthorizationService(session, context)
         prepared = PreparedAuthorizationService(
@@ -2117,89 +2130,142 @@ async def test_prepared_actor_self_commits_evidence_and_neutral_participant_toge
             authorization,
             AdminAuthorizationRepository(session),
         )
-        caller_input = PreparedAuthorizationInput(
-            idempotency_key=uuid4(),
-            request_value={"display_name": "end-to-end"},
-        )
         scope = PreparedAuthorityScope(
             kind=PreparedAuthorityScopeKind.ACTOR_SELF,
             actor_profile_id=profile_id,
         )
+        resource = ActorSelfResourceContext(
+            resource_type="actor_profile",
+            resource_id=profile_id,
+            requested_fields=("display_name",),
+        )
 
+        success_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "commit"}
+        )
         await session.begin()
-        handle = await prepared.prepare(
-            ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
+        success_handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, success_input, scope
+        )
+        success_decision = await prepared.consume(
+            success_handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            success_input,
+            resource,
         )
         await session.execute(
-            text("select value from prepared_participant where id=1 for update")
+            text("update prepared_failure_participant set value=1 where id=1")
         )
-        decision = await prepared.consume(
-            handle,
-            ActionId.ACTOR_PROFILE_UPDATE_SELF,
-            caller_input,
-            ActorSelfResourceContext(
-                resource_type="actor_profile",
-                resource_id=profile_id,
-                requested_fields=("display_name",),
-            ),
-        )
-        await session.execute(text("update prepared_participant set value=1 where id=1"))
         await session.commit()
         assert await session.scalar(
-            text("select value from prepared_participant where id=1")
+            text("select value from prepared_failure_participant where id=1")
         ) == 1
         assert await session.scalar(
-            text("select count(*) from audit_events where id=:event_id"),
-            {"event_id": str(decision.decision_id)},
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(success_decision.decision_id)},
         ) == 1
-        await session.rollback()
+        await session.execute(
+            text("update prepared_failure_participant set value=0 where id=1")
+        )
+        await session.commit()
 
-        rollback_input = PreparedAuthorizationInput(
-            idempotency_key=uuid4(),
-            request_value={"display_name": "rollback"},
+        participant_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "participant"}
         )
         await session.begin()
-        rollback_handle = await prepared.prepare(
-            ActionId.ACTOR_PROFILE_UPDATE_SELF, rollback_input, scope
+        participant_handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, participant_input, scope
+        )
+        participant_decision = await prepared.consume(
+            participant_handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            participant_input,
+            resource,
         )
         await session.execute(
-            text("select value from prepared_participant where id=1 for update")
+            text("update prepared_failure_participant set value=1 where id=1")
         )
-        rolled_back = await prepared.consume(
-            rollback_handle,
-            ActionId.ACTOR_PROFILE_UPDATE_SELF,
-            rollback_input,
-            ActorSelfResourceContext(
-                resource_type="actor_profile",
-                resource_id=profile_id,
-                requested_fields=("display_name",),
-            ),
-        )
-        await session.execute(text("update prepared_participant set value=2 where id=1"))
-        await session.rollback()
+        try:
+            raise RuntimeError("injected participant failure")
+        except RuntimeError:
+            await session.rollback()
         assert await session.scalar(
-            text("select value from prepared_participant where id=1")
-        ) == 1
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:event_id"),
-            {"event_id": str(rolled_back.decision_id)},
+            text("select value from prepared_failure_participant where id=1")
         ) == 0
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(participant_decision.decision_id)},
+        ) == 0
+        await session.rollback()
+
+        evidence_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "evidence"}
+        )
+        await session.begin()
+        evidence_handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, evidence_input, scope
+        )
+
+        class FailingEvidence:
+            async def add_authority_event(self, _event):
+                raise SQLAlchemyError("injected evidence failure")
+
+        original_audit = authorization._audit
+        authorization._audit = FailingEvidence()  # type: ignore[assignment]
+        with pytest.raises(AuthorizationEvidenceUnavailable):
+            await prepared.consume(
+                evidence_handle,
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                evidence_input,
+                resource,
+            )
+        await session.rollback()
+        authorization._audit = original_audit
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(
+                evidence_handle,
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                evidence_input,
+                resource,
+            )
+
+        cancellation_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "cancellation"}
+        )
+        entered = asyncio.Event()
+        blocked = asyncio.Event()
+
+        async def cancelled_command():
+            try:
+                await session.begin()
+                await prepared.prepare(
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF, cancellation_input, scope
+                )
+                entered.set()
+                await blocked.wait()
+            except BaseException:
+                await session.rollback()
+                raise
+
+        cancellation_task = asyncio.create_task(cancelled_command())
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        cancellation_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await cancellation_task
+        assert await session.scalar(text("select 1")) == 1
         await session.rollback()
 
         await session.execute(text("alter table audit_events disable trigger user"))
         await session.execute(
-            text("delete from audit_events where id=:event_id"),
-            {"event_id": str(decision.decision_id)},
+            text("delete from audit_events where id=:id"),
+            {"id": str(success_decision.decision_id)},
         )
         await session.execute(text("alter table audit_events enable trigger user"))
         await session.execute(
             text("delete from actor_identity_links where id=:id"), {"id": str(link_id)}
         )
-        await session.execute(
-            text("delete from actor_profiles where id=:id"), {"id": str(profile_id)}
-        )
+        await session.execute(text("delete from actor_profiles where id=:id"), {"id": str(profile_id)})
         await session.commit()
-
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -2356,6 +2422,280 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
         await cleanup.execute(text("alter table audit_events enable trigger user"))
         await cleanup.execute(text("delete from actor_identity_links where id=:link"), values)
         await cleanup.execute(text("delete from actor_profiles where id=:actor"), values)
+        await cleanup.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mutation_kind", ["suspend", "deactivate", "link_revoke", "grant_revoke"]
+)
+@pytest.mark.parametrize("ordering", ["prepared_first", "mutation_first"])
+async def test_prepared_crosses_real_lifecycle_service_transactions(
+    authorization_factory,
+    mutation_kind,
+    ordering,
+) -> None:
+    """Cross PREP with the existing authorized lifecycle service lock graph."""
+    target_profile_id, target_link_id = uuid4(), uuid4()
+    mutator_profile_id, mutator_link_id = uuid4(), uuid4()
+    target_grant_id, mutator_grant_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    async with authorization_factory() as seed:
+        target_profile = ActorProfile(
+            id=str(target_profile_id),
+            actor_kind="human",
+            status="active",
+            provisioning_method="automatic_first_access",
+            created_by=str(target_profile_id),
+        )
+        target_link = ActorIdentityLink(
+            id=str(target_link_id),
+            actor_profile_id=str(target_profile_id),
+            issuer="https://identity.flowresearch.tech",
+            subject=f"prepared-real-target-{target_profile_id}",
+            subject_kind="human",
+            status="active",
+            linked_by=str(target_profile_id),
+            last_verified_at=now,
+        )
+        mutator_profile = ActorProfile(
+            id=str(mutator_profile_id),
+            actor_kind="human",
+            status="active",
+            provisioning_method="automatic_first_access",
+            created_by=str(mutator_profile_id),
+        )
+        mutator_link = ActorIdentityLink(
+            id=str(mutator_link_id),
+            actor_profile_id=str(mutator_profile_id),
+            issuer="https://identity.flowresearch.tech",
+            subject=f"prepared-real-mutator-{mutator_profile_id}",
+            subject_kind="human",
+            status="active",
+            linked_by=str(mutator_profile_id),
+            last_verified_at=now,
+        )
+        seed.add_all(
+            [
+                target_profile,
+                target_link,
+                mutator_profile,
+                mutator_link,
+                AdminRoleGrant(
+                    id=target_grant_id,
+                    target_actor_profile_id=str(target_profile_id),
+                    role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                    scope_type=AdminScope.SYSTEM.value,
+                    status="active",
+                    version=1,
+                    granted_by_system_principal="workstream:system:bootstrap",
+                    grant_reason="prepared race fixture",
+                    granted_at=now,
+                ),
+                AdminRoleGrant(
+                    id=mutator_grant_id,
+                    target_actor_profile_id=str(mutator_profile_id),
+                    role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                    scope_type=AdminScope.SYSTEM.value,
+                    status="active",
+                    version=1,
+                    granted_by_system_principal="workstream:system:bootstrap",
+                    grant_reason="prepared race fixture",
+                    granted_at=now,
+                ),
+            ]
+        )
+        await seed.commit()
+
+    target_context = HumanAuthorizationContext(
+        actor_profile_id=target_profile_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=target_link_id,
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value={"service": "artifact_verifier"}
+    )
+    prepared_scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    final_resource = ServiceActorProvisionResourceContext(
+        resource_type="service_actor_provisioning",
+        resource_id=ServiceIdentity.ARTIFACT_VERIFIER,
+    )
+    mutation_entered = asyncio.Event()
+    release_mutation = asyncio.Event()
+
+    async def run_mutation(*, pause_after_authority: bool) -> None:
+        async with authorization_factory() as mutation_session:
+            resolved_profile = await mutation_session.get(
+                ActorProfile, str(mutator_profile_id)
+            )
+            resolved_link = await mutation_session.get(
+                ActorIdentityLink, str(mutator_link_id)
+            )
+            assert resolved_profile is not None and resolved_link is not None
+            resolved = ResolvedActor(resolved_profile, resolved_link)
+            mutation_context = HumanAuthorizationContext(
+                actor_profile_id=mutator_profile_id,
+                actor_kind=ActorKind.HUMAN,
+                actor_status=ActorStatus.ACTIVE,
+                identity_link_id=mutator_link_id,
+                identity_link_status=IdentityLinkStatus.ACTIVE,
+                request_id=uuid4(),
+                correlation_id=uuid4(),
+            )
+            authorization = AuthorizationService(mutation_session, mutation_context)
+            if pause_after_authority:
+                repository = authorization._admin
+                original_find = repository.find_effective_grant
+
+                async def find_and_pause(*args, **kwargs):
+                    grant = await original_find(*args, **kwargs)
+                    mutation_entered.set()
+                    await release_mutation.wait()
+                    return grant
+
+                repository.find_effective_grant = find_and_pause  # type: ignore[method-assign]
+            reason = f"prepared real {mutation_kind}"
+            if mutation_kind == "grant_revoke":
+                await authorization_router.revoke_admin_role_grant(
+                    grant_id=target_grant_id,
+                    payload=AdminRoleGrantRevokeBody(reason=reason),
+                    idempotency_key=uuid4(),
+                    resolved=resolved,
+                    authorization=authorization,
+                    session=mutation_session,
+                )
+            elif mutation_kind == "link_revoke":
+                await authorization_router._mutate_identity_link_lifecycle(
+                    identity_link_id=target_link_id,
+                    payload=ActorLifecycleBody(reason=reason),
+                    idempotency_key=uuid4(),
+                    resolved=resolved,
+                    authorization=authorization,
+                    session=mutation_session,
+                    operation=AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE,
+                    action=ActionId.ACTOR_IDENTITY_LINK_REVOKE,
+                    transition="revoke",
+                )
+            else:
+                operation = (
+                    AuthorityOperation.ACTOR_PROFILE_SUSPEND
+                    if mutation_kind == "suspend"
+                    else AuthorityOperation.ACTOR_PROFILE_DEACTIVATE
+                )
+                action = (
+                    ActionId.ACTOR_PROFILE_SUSPEND
+                    if mutation_kind == "suspend"
+                    else ActionId.ACTOR_PROFILE_DEACTIVATE
+                )
+                await authorization_router._mutate_actor_lifecycle(
+                    actor_profile_id=target_profile_id,
+                    payload=ActorLifecycleBody(reason=reason),
+                    idempotency_key=uuid4(),
+                    resolved=resolved,
+                    authorization=authorization,
+                    session=mutation_session,
+                    operation=operation,
+                    action=action,
+                    transition=mutation_kind,
+                )
+
+    async with authorization_factory() as prepared_session:
+        await prepared_session.begin()
+        authorization = AuthorizationService(prepared_session, target_context)
+        prepared = PreparedAuthorizationService(
+            prepared_session,
+            target_context,
+            authorization,
+            AdminAuthorizationRepository(prepared_session),
+        )
+        if ordering == "prepared_first":
+            handle = await prepared.prepare(
+                ActionId.ACTOR_SERVICE_PROVISION, caller_input, prepared_scope
+            )
+            mutation_task = asyncio.create_task(run_mutation(pause_after_authority=False))
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(mutation_task), timeout=0.2)
+            decision = await prepared.consume(
+                handle,
+                ActionId.ACTOR_SERVICE_PROVISION,
+                caller_input,
+                final_resource,
+            )
+            await prepared_session.commit()
+            await asyncio.wait_for(mutation_task, timeout=5)
+            assert decision.allowed is True
+        else:
+            mutation_task = asyncio.create_task(run_mutation(pause_after_authority=True))
+            await asyncio.wait_for(mutation_entered.wait(), timeout=5)
+            prepare_task = asyncio.create_task(
+                prepared.prepare(
+                    ActionId.ACTOR_SERVICE_PROVISION, caller_input, prepared_scope
+                )
+            )
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(prepare_task), timeout=0.2)
+            release_mutation.set()
+            await asyncio.wait_for(mutation_task, timeout=5)
+            with pytest.raises(PreparedAuthorizationUnsupported) as denied:
+                await asyncio.wait_for(prepare_task, timeout=5)
+            expected = (
+                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
+                if mutation_kind == "link_revoke"
+                else (
+                    AuthorizationDenialCode.ACTOR_SUSPENDED
+                    if mutation_kind == "suspend"
+                    else (
+                        AuthorizationDenialCode.ACTOR_DEACTIVATED
+                        if mutation_kind == "deactivate"
+                        else AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                    )
+                )
+            )
+            assert denied.value.denial_code is expected
+            await prepared_session.rollback()
+
+    async with authorization_factory() as cleanup:
+        actor_ids = (str(target_profile_id), str(mutator_profile_id))
+        await cleanup.execute(text("alter table audit_events disable trigger user"))
+        await cleanup.execute(
+            text(
+                "delete from audit_events where actor_ref in (:target, :mutator) "
+                "or target_actor_ref in (:target, :mutator)"
+            ),
+            {"target": actor_ids[0], "mutator": actor_ids[1]},
+        )
+        await cleanup.execute(text("alter table audit_events enable trigger user"))
+        await cleanup.execute(
+            text("alter table authority_idempotency_records disable trigger user")
+        )
+        await cleanup.execute(
+            text(
+                "delete from authority_idempotency_records "
+                "where actor_ref in (:target, :mutator)"
+            ),
+            {"target": actor_ids[0], "mutator": actor_ids[1]},
+        )
+        await cleanup.execute(
+            text("alter table authority_idempotency_records enable trigger user")
+        )
+        await cleanup.execute(text("alter table admin_role_grants disable trigger user"))
+        await cleanup.execute(
+            text("delete from admin_role_grants where id in (:target, :mutator)"),
+            {"target": target_grant_id, "mutator": mutator_grant_id},
+        )
+        await cleanup.execute(text("alter table admin_role_grants enable trigger user"))
+        await cleanup.execute(
+            text("delete from actor_identity_links where id in (:target, :mutator)"),
+            {"target": str(target_link_id), "mutator": str(mutator_link_id)},
+        )
+        await cleanup.execute(
+            text("delete from actor_profiles where id in (:target, :mutator)"),
+            {"target": actor_ids[0], "mutator": actor_ids[1]},
+        )
         await cleanup.commit()
 
 

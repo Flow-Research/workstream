@@ -594,6 +594,12 @@ attempt consumes the handle permanently before evaluation or evidence staging.
 Cancellation and failures propagate to caller-owned rollback and never restore
 the capability.
 
+Preparation-time planned fixed-service denial has no final resource context, so
+it returns the bounded `action_unavailable` outcome without staging evidence.
+An exact-consume denial stages its decision only in the caller transaction; the
+required rollback removes that event with participant state. PREP never
+restages or commits denial evidence separately.
+
 PREP intentionally ships no feature consumer. Its PostgreSQL participant is a
 test-only neutral row proving that final facts, one decision event, participant
 work, and caller commit or rollback share the same transaction. Fixed services
