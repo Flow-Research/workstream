@@ -173,9 +173,9 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: c60902b012bd31e662a800373c889f31b65c1eef
+Reviewed code SHA: 785336e7b36e7518a4cacea0a4abca529993cea3
 
-Reviewed at: 2026-07-19T23:53:35Z
+Reviewed at: 2026-07-20T07:10:23Z
 
 Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
@@ -186,7 +186,7 @@ Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-
 | Security/auth | PASS WITH LOW RISKS | none | Existing Auth verification, exact bearer-equivalent redaction, actor isolation, and retryable Auth outage handling are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS WITH LOW RISKS | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS WITH LOW RISKS | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `3b1d637` is integrated. |
+| CI integrity | PASS WITH LOW RISKS | none | Least privilege and a two-decimal 90 percent coverage gate are enforced; current `main` at `42a89b2` is integrated without changing MCP files. |
 | Docs | PASS WITH LOW RISKS | none | Initiative and operator docs are accurate; composed task reads await an authoritative aggregate API for snapshot consistency. |
 | Reuse/dedup | PASS | none | Boundary validation, mapping, replay, and observability remain centralized. |
 | Test delta | PASS WITH LOW RISKS | none | The remediation set is covered; direct 429/5xx verifier branch cases remain a low test risk. |
@@ -199,8 +199,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reviewed code head `c60902b`. |
-| CodeRabbit | Findings addressed locally; re-review pending | Original findings, bounded ASGI replay, direct `sse-starlette` dependency, and distinct output-validation error path are addressed through `c60902b`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reconciled head `785336e`. |
+| CodeRabbit | Findings addressed locally; re-review pending | Original findings remain addressed through reconciled head `785336e`; rerun after push. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity

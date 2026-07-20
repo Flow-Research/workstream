@@ -12,9 +12,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: c60902b012bd31e662a800373c889f31b65c1eef
+Reviewed code SHA: 785336e7b36e7518a4cacea0a4abca529993cea3
 
-Reviewed at: 2026-07-19T23:53:35Z
+Reviewed at: 2026-07-20T07:10:23Z
 
 Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
@@ -29,7 +29,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 | security/auth | PASS WITH LOW RISKS | none | Exact UUID-equivalent redaction, actor isolation, fail-closed authority, and distinct retryable Auth outage handling are covered; direct 429/5xx verifier branch tests remain a low risk. |
 | product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
 | architecture | PASS WITH LOW RISKS | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
-| CI integrity | PASS WITH LOW RISKS | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `3b1d637` is fully integrated and all local gates pass. |
+| CI integrity | PASS WITH LOW RISKS | none | MCP CI has least-privilege permissions and enforces 90 percent coverage at two-decimal precision; current `main` at `42a89b2` is fully integrated and all local gates pass. |
 | docs | PASS WITH LOW RISKS | none | Operator and initiative records accurately distinguish foundation readiness from complete Sections 18 and 20 acceptance; composed task reads cannot guarantee a cross-request snapshot until an authoritative aggregate API exists. |
 | reuse/dedup | PASS | none | Stable-reference validation, metadata bounds, error mapping, observability, replay input, and actor keys remain centralized. |
 | test delta | PASS WITH LOW RISKS | none | 112 tests cover the remediation set; direct 429/5xx verifier branches remain a low risk while network-outage and protocol-level 503 behavior are covered. |
@@ -62,7 +62,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Bounded replay delegates to the original ASGI receiver after the coalesced body, preserving real disconnect delivery and the Streamable HTTP SSE response lifecycle.
 - Revision context records the reviewed submission reference/version, and a revised submission creates the next deterministic review offer in the test-only scenario.
 - An MCP operator README documents install, validation, STDIO, secure Streamable HTTP, local-only insecure issuer override, allowlists, API timeout, body byte/frame/deadline caps, and scenario isolation.
-- Current upstream `main` at `3b1d637` is integrated. Exact-head reviewers confirmed that its artifact and contributor-identity changes preserve MCP runtime, auth, transport safety, CI coverage, and agent-gate integration.
+- Current upstream `main` at `42a89b2` is integrated as `785336e`. The merge changed no MCP package or MCP workflow file; the complete MCP suite and repository compatibility checks pass on the reconciled head.
 - The refreshed task APIs still separate claim from start, retain operator release semantics, and lack durable submission replay; contributor list, contribution, and review APIs remain unavailable, so the MCP's fail-closed production boundaries remain correct.
 - All seven tools now publish authoritative titles, usage boundaries, parameter guidance, examples, constraints, and typed output schemas through the actual FastMCP registrations.
 - Tool execution failures publish MCP errors while a coherent completed checker failure remains a valid negative business outcome.

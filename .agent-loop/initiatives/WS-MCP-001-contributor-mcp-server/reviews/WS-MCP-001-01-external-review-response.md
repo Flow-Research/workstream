@@ -10,7 +10,8 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through `c60902b`, and current `main` at `3b1d637` is integrated.
+addressed through reconciled head `785336e`, with current `main` at `42a89b2`
+integrated without changing MCP files.
 CodeRabbit and GitHub checks must rerun after the final evidence commit is
 pushed.
 
@@ -73,6 +74,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until reviewed code head `c60902b` and its
+Do not resolve the review as complete until reconciled head `785336e` and its
 evidence commit are pushed and CodeRabbit/GitHub checks report against that head.
 Do not merge without explicit human approval.
