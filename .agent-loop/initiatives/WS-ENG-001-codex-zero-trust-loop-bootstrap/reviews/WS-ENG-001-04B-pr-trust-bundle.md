@@ -39,9 +39,9 @@ payment, reputation, PR approval, or automated merge behavior changes.
 
 ## Reviewer results
 
-All nine required tracks pass exact implementation SHA `a93a58b2` after valid
-findings were repaired: senior, QA, security, product/ops, architecture, CI,
-docs, reuse/dedup, and test delta.
+All nine required tracks pass final exact head `01e726ac` after valid findings
+were repaired: senior, QA, security, product/ops, architecture, CI, docs,
+reuse/dedup, and test delta.
 
 ## Remaining risk and external review
 

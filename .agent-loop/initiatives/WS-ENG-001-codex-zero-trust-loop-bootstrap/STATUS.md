@@ -9,7 +9,7 @@
   projections passed
 - `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
   workflow, cutover inventory, tests, CI coverage gates, operations policy, and
-  all nine exact-SHA reviewer tracks pass at `a93a58b2`
+  all nine exact-SHA reviewer tracks pass at `01e726ac`
 - Current gate: PR publication, hosted checks, CodeRabbit, and explicit human
   merge review
 - Product runtime: unchanged

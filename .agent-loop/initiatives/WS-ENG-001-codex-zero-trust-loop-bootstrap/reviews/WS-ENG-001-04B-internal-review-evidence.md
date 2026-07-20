@@ -1,8 +1,8 @@
 # WS-ENG-001-04B Internal Review Evidence
 
-Reviewed code SHA: `a93a58b2890fa82ba055e75cccd3358759708d8e`
+Reviewed code SHA: `01e726ac6ff361cdf0e77d161fc09020613fa7e3`
 
-Reviewed at: 2026-07-20T22:41:31Z
+Reviewed at: 2026-07-20T23:09:00Z
 
 Reviewer run IDs: senior-engineering/architecture/reuse-dedup=`timeout_senior_docs`; QA/test/CI-integrity/test-delta=`timeout_ci_qa`; security/auth/product/ops/docs=`timeout_sec_ops`
 
@@ -14,7 +14,8 @@ Reviewed against trusted main: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
 
 ## Deterministic evidence
 
-- 149 relevant tests pass with plugin autoload disabled.
+- 149 relevant tests pass with plugin autoload disabled at the executable head;
+  the final exact-head delta is documentation/evidence only.
 - `update_post_merge_memory.py` passes its independent 90 percent branch gate
   at 90.01 percent; `check_loop_memory_state.py` passes at 91.07 percent.
 - Ruff, compilation, merge-intent validation, Markdown links, stale wording,
