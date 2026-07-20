@@ -8,9 +8,9 @@
 - `WS-ENG-001-04A`: merged through PR #161; signed replay and complete
   projections passed
 - `WS-ENG-001-04B`: explicitly started by the user on 2026-07-20; planning and
-  required preimplementation review are active
-- Current gate: preimplementation plan review and human approval of the final
-  reviewed chunk contract before implementation
+  required preimplementation review pass at `7ffaa59b`
+- Current gate: human approval of the final reviewed chunk contract before
+  implementation
 - Product runtime: unchanged
 
 ## Last Update
@@ -24,6 +24,5 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Complete all nine preimplementation reviewer tracks, repair valid findings, and
-present the final 04B contract for human implementation approval. Do not write
-workflow or generator code before that checkpoint.
+Obtain explicit human implementation approval for the final 04B contract. Do
+not write workflow or generator code before that checkpoint.
