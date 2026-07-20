@@ -73,13 +73,15 @@ No reviewer session remains open.
 - A local full-suite attempt was stopped at the user's request because host
   contention was slowing their machine. It is not pass evidence. Pytest had
   emitted one failure marker before interruption; no final traceback was
-  produced. Hosted GitHub Backend is authoritative for the exact published head,
-  complete suite, 78 percent repository floor, and cumulative scoped floors.
+  produced. Hosted GitHub Backend run 29751926993 is authoritative: 1,783 tests
+  passed in 1,357.81 seconds, global coverage was 87.23 percent against the
+  78 percent floor, and every cumulative scoped coverage gate passed at or above
+  90 percent.
 
 ## Remaining Risks
 
-- Hosted Backend must pass on the exact published evidence head. Any failure is
-  a repair input, not a waived condition.
+- The hosted full suite and coverage gates pass on the exact published evidence
+  head. Future dependency changes must preserve the same proof.
 - Test-only rollback inspection uses private SQLAlchemy transaction attributes;
   dependency upgrades must preserve the focused regression proof.
 - Production execution remains unavailable until AUTH separately activates the

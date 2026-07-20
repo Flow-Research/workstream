@@ -49,8 +49,10 @@ git diff --check: PASS
 ```
 
 The local full suite was stopped at the user's request because the machine was
-under heavy contention. It is not pass evidence. Hosted Backend must prove the
-exact published head, full suite, 78 percent global floor, and scoped floors.
+under heavy contention. It is not pass evidence. Hosted Backend run 29751926993
+then proved the exact published head: 1,783 tests passed, global coverage was
+87.23 percent, and all cumulative scoped coverage gates passed at or above
+90 percent.
 
 ## CI Integrity And Review
 
@@ -63,15 +65,15 @@ required external condition.
 
 | Source | Status | Notes |
 |---|---:|---|
-| GitHub Agent Gates | Pending rerun | Earlier published head passed; exact evidence head must rerun. |
-| GitHub Backend | Pending rerun | Run 29739194203 failed two outbox privacy assertions; bounded repair is ready for hosted proof. |
-| CodeRabbit | Pending current-head review | Earlier head passed with no comments; no result is carried forward. |
+| GitHub Agent Gates | PASS | Run 29751926808 passed on the exact evidence head in 24 seconds. |
+| GitHub Backend | PASS | Run 29751926993: 1,783 passed, 87.23% global coverage, all scoped floors passed. |
+| CodeRabbit | PASS | Current-head review completed with no findings. |
 | Human review | Pending | Only the user may approve this PR for merge. |
 
 ## Remaining Risks And Human Focus
 
-- Confirm hosted Backend closes both original outbox privacy failures without a
-  new artifact regression or coverage drop.
+- Hosted Backend closed both original outbox privacy failures without a new
+  artifact regression or coverage drop.
 - Confirm stale generations, changed resource facts, or revoked identities
   cannot persist terminal state.
 - Confirm acknowledgement loss cannot cause a second provider write.

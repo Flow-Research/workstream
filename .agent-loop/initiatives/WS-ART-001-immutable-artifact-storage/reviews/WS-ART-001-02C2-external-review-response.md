@@ -15,9 +15,9 @@ PR: #159, `https://github.com/Flow-Research/workstream/pull/159`
 
 | Source | Status | Notes |
 |---|---:|---|
-| GitHub Agent Gates | Pending rerun | Exact evidence head is not published yet. |
-| GitHub Backend | Pending rerun | Prior run 29739194203 failed two outbox privacy assertions. |
-| CodeRabbit | Pending current-head review | Earlier published head passed with no findings. |
+| GitHub Agent Gates | PASS | Run 29751926808 passed on the exact evidence head in 24 seconds. |
+| GitHub Backend | PASS | Run 29751926993: 1,783 passed, 87.23% global coverage, all scoped floors passed. |
+| CodeRabbit | PASS | Current-head review completed with no findings. |
 | Human review | Pending | Only the user may approve merge. |
 
 ## Comments Addressed
@@ -37,7 +37,11 @@ PR: #159, `https://github.com/Flow-Research/workstream/pull/159`
 - The focused helper/outbox matrix passes 84 tests. All nine internal reviewers
   accepted the bounded repair on the exact reviewed SHA.
 - CodeRabbit reported no findings on the earlier head. No old pass is treated as
-  current-head evidence.
+  current-head evidence. Its new exact-head review also completed with no
+  findings.
+- Hosted Backend run 29751926993 passed all 1,783 tests in 1,357.81 seconds.
+  Global coverage remained 87.23 percent and all scoped gates remained at or
+  above 90 percent.
 
 ## Comments Deferred
 
@@ -67,7 +71,7 @@ hosted Backend is authoritative.
 
 ## Remaining Risks
 
-- Hosted Backend must pass the exact published head and all coverage floors.
+- Hosted Backend passes the exact published head and all coverage floors.
 - The test-only SQLAlchemy rollback inspection is version-coupled.
 - PR #158 ART custody and PR #160 REV custody remain availability-neutral; all
   transferred actions are still planned.
