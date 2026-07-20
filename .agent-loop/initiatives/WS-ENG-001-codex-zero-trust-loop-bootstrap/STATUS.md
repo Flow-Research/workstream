@@ -9,9 +9,10 @@
   projections passed
 - `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
   workflow, cutover inventory, tests, CI coverage gates, operations policy, and
-  all nine exact-SHA reviewer tracks pass at `01e726ac`
-- Current gate: PR publication, hosted checks, CodeRabbit, and explicit human
-  merge review
+  all nine exact-SHA reviewer tracks pass at `da9b2291`
+- Current gate: push the repaired evidence head to open PR #165, then obtain
+  fresh hosted checks, CodeRabbit re-review, and any renewed human approval
+  required by branch policy before explicit user merge authority
 - Product runtime: unchanged
 
 ## Last Update
@@ -25,5 +26,6 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Publish one PR with the trust bundle, resolve hosted findings, and stop for
-explicit human merge review. Do not begin another chunk.
+Push the repaired evidence head to PR #165, obtain fresh hosted and CodeRabbit
+results plus any policy-required renewed approval, and stop for explicit user
+merge authority. Do not begin another chunk.

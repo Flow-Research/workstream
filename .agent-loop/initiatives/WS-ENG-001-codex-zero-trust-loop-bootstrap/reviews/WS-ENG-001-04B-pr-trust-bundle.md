@@ -31,23 +31,26 @@ payment, reputation, PR approval, or automated merge behavior changes.
 
 ## Proof, test delta, and CI integrity
 
-- 149 tests pass.
-- Updater/checker independent branch coverage: 90.01/91.07 percent.
+- 151 relevant tests pass; the repair-focused suite passes 134 tests.
+- Updater/checker independent branch coverage: 90.16/91.07 percent.
 - Ruff, compilation, merge intent, links, stale wording, dependency hashes, and
   diff integrity pass.
 - Tests are additive; no assertion, skip, required check, or threshold weakened.
 
 ## Reviewer results
 
-All nine required tracks pass final exact head `01e726ac` after valid findings
+All nine required tracks pass final exact head `da9b2291` after valid findings
 were repaired: senior, QA, security, product/ops, architecture, CI, docs,
 reuse/dedup, and test delta.
 
 ## Remaining risk and external review
 
-CodeRabbit, hosted checks, and human PR review have not run. The protected live
-environment is configured with required review, no self-review/admin bypass,
-and protected-branch-only deployment. The workflow reuses the existing
+Hosted checks and human review passed on pre-repair PR head `e8ade1f8`.
+CodeRabbit identified replay wording and mutable cutover-inventory risks; both
+are repaired and independently reviewed. Fresh hosted checks, incremental
+CodeRabbit review, and any branch-policy-required renewed approval remain after
+push. The protected live environment requires review, disables self-review/admin
+bypass, and allows protected branches only. The workflow reuses the existing
 repository-managed loop-memory signing identity; no second key was created or
 transferred.
 
