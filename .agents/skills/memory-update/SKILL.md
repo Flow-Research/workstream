@@ -28,12 +28,20 @@ The trusted `Loop Memory` workflow records:
 - `.agent-loop/STATE.json`
 - `.agent-loop/LOOP_STATE.md`
 - `.agent-loop/MERGE_LOG.jsonl`
+- `.agent-loop/WORK_QUEUE.md`
+- `.agent-loop/INITIATIVE_STATE/<initiative-id>.md`
+- `.agent-loop/MANIFEST.json`
 - `.agent-loop/STATE.sig`
 
 on `automation/loop-memory`.
 
 Do not open a manual post-merge memory PR or rerun internal reviewers when this
 automation succeeds.
+
+The generated queue and initiative files are merge-derived stopped/next
+projections. Until signed explicit-start events are implemented, they do not
+attest work started only in conversation or an unmerged worktree. Verify the
+complete manifest/signature rather than trusting one file in isolation.
 
 ## Manual Updates As Applicable
 

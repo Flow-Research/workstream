@@ -46,3 +46,44 @@
   create drift.
 - Adding CI without pinned actions would regress prior CI supply-chain hardening.
 - Weak PR automation could accidentally imply Codex may merge without approval.
+
+## 2026-07-20 Loop Projection Discovery
+
+### Observations
+
+- `.github/workflows/loop-memory.yml` stages only
+  `.agent-loop/{STATE.json,LOOP_STATE.md,MERGE_LOG.jsonl,STATE.sig}`.
+- `scripts/update_post_merge_memory.py` defines those same four paths and
+  renders only `LOOP_STATE.md`.
+- `scripts/check_loop_memory_state.py --state-root` validates `STATE.json`,
+  `LOOP_STATE.md`, and `MERGE_LOG.jsonl`; the workflow verifies their signature.
+  It does not validate `WORK_QUEUE.md` or initiative `STATUS.md` in that mode.
+- Authored queue/status scanning occurs only without `--state-root`; authored
+  checks and generated-state validation are distinct modes.
+- Loop Memory run `29721110272` succeeded for AUTH-09E PR #157. Generated commit
+  `a5b9bad3` correctly recorded 09E completion but did not touch the stale queue
+  or AUTH status copies.
+
+### Tests and gaps
+
+- Existing tests cover intent validation, signed replay, hostile path types,
+  corruption, escaping, workflow isolation, and protected-main freshness.
+- No test requires a closed automation-branch file manifest.
+- No projection reduces `MERGE_LOG.jsonl` to latest state per initiative.
+- No generated queue/status is compared byte-for-byte with a renderer.
+- No authenticated explicit-start event exists; merge output always reports no
+  active planning or implementation chunk.
+
+### Dependencies, risks, and unknowns
+
+GitHub PR/check metadata, protected `main`, repository replay, the Actions-only
+Ed25519 key, and merge-intent schema v2 are existing inputs. A single global
+last-merge record cannot render all initiatives; the ledger must be reduced per
+initiative. The automation branch currently has 626 tracked legacy files, so an
+enumerated deletion list would be brittle and an in-place recursive cleanup
+would be unsafe. A fresh deterministic Git tree can instead be built from an
+empty temporary index and an empty generated-output directory, committed as a
+normal child of the authenticated state-branch tip, and pushed fast-forward.
+This omits legacy paths without traversing or deleting their worktree objects.
+04B defers the start-event schema, actor/environment protection, and mandatory
+cancel/correct semantics; none is required for 04A.

@@ -17,3 +17,9 @@
 | Generated branch is edited manually | High | Declare workflow-only ownership, validate JSON/render/ledger agreement, and reject conflicting replay state. |
 | One initiative declares another initiative's next lifecycle gate | High | Schema v2 requires a non-null next chunk to share the completed initiative prefix; global priority remains human-owned. |
 | Invalid schema-v1 state contaminates the corrected ledger | Critical | Reject it completely, clear only fixed generated paths, and bootstrap schema v2 from WS-ENG-001-03. |
+| Signed state is correct while generated queue/status projections are stale | High | 04A derives every canonical projection from the authenticated ledger, signs the complete manifest, and validates byte-for-byte agreement. |
+| Cleanup deletes non-automation branch content | Critical | Generate in an empty directory and construct a fresh tree from an empty temporary Git index; commit it as a normal child without traversing legacy paths or force-pushing. |
+| Last merged PR is presented as every initiative's state | High | Reduce the authenticated ledger to the latest record per initiative and render compact initiative projections deterministically. |
+| Merge automation falsely claims conversational work is active | High | 04A renders stopped/next merge state only; 04B separately owns authenticated explicit-start events. |
+| Start workflow bypasses human authority or selects arbitrary work | Critical | 04B requires protected dispatch, current-main binding, exact successor equality, contract validation, signed event provenance, and fail-closed replay/conflict handling. |
+| A mistaken or abandoned explicit start wedges an initiative | High | 04B cannot pass preimplementation review until an attributable signed cancel/correct event with reason, replay protection, and projection semantics is explicit. |

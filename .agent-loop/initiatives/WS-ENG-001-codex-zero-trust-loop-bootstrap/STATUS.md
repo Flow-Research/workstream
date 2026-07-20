@@ -5,7 +5,10 @@
 - `WS-ENG-001-01`: merged through PR #23 on 2026-06-20; complete
 - `WS-ENG-001-02`: merged through PR #122 as `fc89fb6`; complete
 - `WS-ENG-001-03`: corrective schema-v2 contract for initiative-local next gates
-- Current gate: canonical completion is recorded only by signed post-merge state
+- `WS-ENG-001-04A`: implementation, deterministic evidence, one repair cycle,
+  and all nine exact-SHA reviewer tracks pass at `e5679d4c`
+- `WS-ENG-001-04B`: proposed only; requires 04A merge/replay and a separate start
+- Current gate: PR publication, hosted checks, and explicit human merge review
 - Product runtime: unchanged
 
 ## Last Update
@@ -19,5 +22,8 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Do not select a product chunk from this authored file. Read verified signed
-post-merge state, then require a separate explicit user start.
+Implementation is complete. Stop for external checks and explicit human merge
+approval; do not start 04B.
+AUTH ART custody merged through PR #158 and REV custody merged through PR #160
+while this plan was under review. Live replay must bind dynamically to current
+protected `main`; those transitions remain historical regression fixtures.

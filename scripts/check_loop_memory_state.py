@@ -99,7 +99,10 @@ GENERATED_FILES = (
     ".agent-loop/STATE.json",
     ".agent-loop/LOOP_STATE.md",
     ".agent-loop/MERGE_LOG.jsonl",
+    ".agent-loop/WORK_QUEUE.md",
+    ".agent-loop/MANIFEST.json",
 )
+INITIATIVE_STATE_ROOT = ".agent-loop/INITIATIVE_STATE"
 SCHEMA_VERSION = 2
 STATE_BRANCH = "automation/loop-memory"
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
@@ -121,8 +124,10 @@ def _is_bounded_single_line(value: object, maximum: int) -> bool:
     if not isinstance(value, str):
         return False
     normalized = value.strip()
-    return bool(normalized) and len(normalized) <= maximum and not any(
-        ord(char) < 32 for char in normalized
+    return (
+        bool(normalized)
+        and len(normalized) <= maximum
+        and not any(ord(char) < 32 for char in normalized)
     )
 
 
@@ -234,8 +239,7 @@ def _record_failures(record: object, label: str) -> list[str]:
         isinstance(repository, str)
         and isinstance(pr_number, int)
         and not isinstance(pr_number, bool)
-        and source.get("pr_url")
-        != f"https://github.com/{repository}/pull/{pr_number}"
+        and source.get("pr_url") != f"https://github.com/{repository}/pull/{pr_number}"
     ):
         failures.append(f"{label}: invalid source pr_url")
     for field, maximum in (("pr_title", 240), ("head_ref", 240), ("merged_by", 160)):
@@ -375,6 +379,63 @@ def _render_state(state: dict) -> str:
     )
 
 
+def _latest_by_initiative(records: list[dict]) -> dict[str, dict]:
+    """Return latest independently validated records by initiative."""
+    latest = {}
+    for record in records:
+        latest[record["completed_chunk"]["initiative_id"]] = record
+    return latest
+
+
+def _render_work_queue(records: list[dict]) -> str:
+    """Independently render the generated work queue."""
+    lines = [
+        "# Generated Workstream Work Queue",
+        "",
+        "> Merge-derived projection. Pre-start unmerged work is not represented.",
+        "",
+        "| Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |",
+        "|---|---|---|---|---|",
+    ]
+    for initiative_id, record in sorted(_latest_by_initiative(records).items()):
+        completed, gate = record["completed_chunk"], record["gate"]
+        lines.append(
+            f"| `{initiative_id}` | `{completed['chunk_id']}` | "
+            f"`{gate['status']}` | `{gate['next_chunk_id'] or 'none'}` | "
+            f"{'yes' if gate['next_requires_explicit_start'] else 'no'} |"
+        )
+    lines.extend(
+        ["", f"Latest global merge: `{records[-1]['source']['main_sha']}`", ""]
+    )
+    return "\n".join(lines)
+
+
+def _render_initiative_state(record: dict) -> str:
+    """Independently render one generated initiative projection."""
+    source, completed, gate = (
+        record["source"],
+        record["completed_chunk"],
+        record["gate"],
+    )
+    return "\n".join(
+        [
+            "# Generated Merge/Start Projection",
+            "",
+            "> Merge-derived state. Pre-start unmerged work is not represented.",
+            "",
+            f"- Initiative: `{completed['initiative_id']}`",
+            f"- Latest completed chunk: `{completed['chunk_id']}` - {_markdown_text(completed['chunk_title'])}",
+            f"- Gate: `{gate['status']}`",
+            f"- Next chunk: `{gate['next_chunk_id'] or 'none'}`",
+            f"- Separate explicit start required: `{str(gate['next_requires_explicit_start']).lower()}`",
+            f"- Source PR: [#{source['pr_number']}]({source['pr_url']})",
+            f"- Source merge: `{source['main_sha']}`",
+            f"- Source event time: `{source['merged_at']}`",
+            "",
+        ]
+    )
+
+
 def generated_state_failures(root: Path) -> list[str]:
     """Return consistency failures for generated automation-branch state."""
     paths = [root / path for path in GENERATED_FILES]
@@ -392,6 +453,8 @@ def generated_state_failures(root: Path) -> list[str]:
             if line
         ]
         rendered = paths[1].read_text(encoding="utf-8")
+        work_queue = paths[3].read_text(encoding="utf-8")
+        manifest = json.loads(paths[4].read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return [f"generated loop memory is unreadable: {exc.__class__.__name__}"]
     if not isinstance(state, dict):
@@ -449,6 +512,70 @@ def generated_state_failures(root: Path) -> list[str]:
         failures.append(
             ".agent-loop/LOOP_STATE.md: rendered state does not match canonical JSON"
         )
+    latest = _latest_by_initiative(ledger_records) if ledger_records else {}
+    if not failures and work_queue != _render_work_queue(ledger_records):
+        failures.append(
+            ".agent-loop/WORK_QUEUE.md: rendered queue does not match ledger"
+        )
+    expected_payloads = {
+        ".agent-loop/STATE.json",
+        ".agent-loop/LOOP_STATE.md",
+        ".agent-loop/MERGE_LOG.jsonl",
+        ".agent-loop/WORK_QUEUE.md",
+        *(f"{INITIATIVE_STATE_ROOT}/{initiative_id}.md" for initiative_id in latest),
+    }
+    for initiative_id, record in latest.items():
+        path = root / INITIATIVE_STATE_ROOT / f"{initiative_id}.md"
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or path.read_text(encoding="utf-8") != _render_initiative_state(record)
+        ):
+            failures.append(
+                f"{path.relative_to(root)}: rendered initiative state does not match ledger"
+            )
+    if not isinstance(manifest, dict) or set(manifest) != {
+        "schema_version",
+        "payloads",
+    }:
+        failures.append(".agent-loop/MANIFEST.json: invalid manifest schema")
+        payloads = []
+    else:
+        payloads = manifest.get("payloads", [])
+    observed_paths = []
+    for item in payloads if isinstance(payloads, list) else []:
+        if not isinstance(item, dict) or set(item) != {"path", "sha256"}:
+            failures.append(".agent-loop/MANIFEST.json: invalid payload entry")
+            break
+        relative = item["path"]
+        payload_path = root / relative if isinstance(relative, str) else root
+        observed_paths.append(relative)
+        if (
+            not isinstance(relative, str)
+            or not payload_path.is_file()
+            or payload_path.is_symlink()
+        ):
+            failures.append(".agent-loop/MANIFEST.json: unsafe payload path")
+            break
+        if hashlib.sha256(payload_path.read_bytes()).hexdigest() != item.get("sha256"):
+            failures.append(f"{relative}: digest does not match manifest")
+    if set(observed_paths) != expected_payloads or observed_paths != sorted(
+        observed_paths
+    ):
+        failures.append(
+            ".agent-loop/MANIFEST.json: payload path set or order is invalid"
+        )
+    expected_tree = expected_payloads | {".agent-loop/MANIFEST.json"}
+    signature_path = root / ".agent-loop/STATE.sig"
+    if signature_path.exists() or signature_path.is_symlink():
+        expected_tree.add(".agent-loop/STATE.sig")
+    actual_tree = {
+        path.relative_to(root).as_posix()
+        for path in (root / ".agent-loop").rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    if actual_tree != expected_tree:
+        failures.append(".agent-loop: generated tree does not match manifest")
     return failures
 
 
