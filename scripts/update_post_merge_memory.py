@@ -930,6 +930,13 @@ def render_state(
     active_line = "- Active implementation chunks: " + (
         ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
     )
+    authority_lines: list[str] = []
+    if _event_type(state) in {"start", "cancel"}:
+        event = state["event"]
+        authority_lines = [
+            f"- Latest authority event: `{event['type']}` for `{event['chunk_id']}`",
+            f"- Authority initiative: `{event['initiative_id']}`",
+        ]
     return "\n".join(
         [
             "# Generated Workstream Loop State",
@@ -947,6 +954,7 @@ def render_state(
             f"{_markdown_text(completed['chunk_title'])}",
             "- Active planning chunks: none",
             active_line,
+            *authority_lines,
             f"- Current gate: `{gate['status']}`",
             next_line,
             f"- Required check evidence: {integrity}",
@@ -963,8 +971,12 @@ def _latest_by_initiative(records: list[dict[str, Any]]) -> dict[str, dict[str, 
     """Return the latest authenticated merge record for each initiative."""
     latest: dict[str, dict[str, Any]] = {}
     for record in records:
-        initiative_id = record["completed_chunk"]["initiative_id"]
-        latest[initiative_id] = record
+        projected = record
+        if _event_type(record) in {"start", "cancel"}:
+            projected = json.loads(_canonical_json(record))
+            projected.update(projected["authority_state"])
+        initiative_id = projected["completed_chunk"]["initiative_id"]
+        latest[initiative_id] = projected
     return latest
 
 
@@ -1148,23 +1160,32 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         event = record["event"]
         base = json.loads(_canonical_json(record))
         base.pop("event")
+        authority = base.pop("authority_state", None)
         base["updated_at"] = base["source"]["merged_at"]
-        metadata = parse_loop_metadata(_canonical_json(base["completed_chunk"]))
-        base["active"] = {"planning_chunk": None, "implementation_chunk": None}
-        base["gate"] = {
+        _validate_record(base)
+        if not isinstance(authority, dict) or set(authority) != {
+            "source", "completed_chunk", "active", "gate"
+        }:
+            raise LoopMemoryError("authority lifecycle state has an invalid schema")
+        lifecycle = json.loads(_canonical_json(base))
+        lifecycle.update(authority)
+        lifecycle["updated_at"] = lifecycle["source"]["merged_at"]
+        metadata = parse_loop_metadata(_canonical_json(lifecycle["completed_chunk"]))
+        lifecycle["active"] = {"planning_chunk": None, "implementation_chunk": None}
+        lifecycle["gate"] = {
             "status": "stopped_after_merge",
             "next_chunk_id": metadata.next_chunk_id,
             "next_chunk_title": metadata.next_chunk_title,
             "next_requires_explicit_start": metadata.next_requires_explicit_start,
         }
-        _validate_record(base)
+        _validate_record(lifecycle)
         if record.get("updated_at") != event["created_at"]:
             raise LoopMemoryError("authority state time does not match event time")
         expected_active = {
             "planning_chunk": None,
             "implementation_chunk": event["chunk_id"] if event_type == "start" else None,
         }
-        if record.get("active") != expected_active:
+        if authority.get("active") != expected_active:
             raise LoopMemoryError("authority event active state is inconsistent")
         expected_gate = {
             "status": "active" if event_type == "start" else "stopped_after_cancel",
@@ -1172,7 +1193,7 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             "next_chunk_title": metadata.next_chunk_title,
             "next_requires_explicit_start": True,
         }
-        if record.get("gate") != expected_gate:
+        if authority.get("gate") != expected_gate:
             raise LoopMemoryError("authority event gate is inconsistent")
         return metadata
     expected_record_keys = {
@@ -1449,22 +1470,26 @@ def apply_authority_event(
     else:
         if basis["active"]["implementation_chunk"] != event["chunk_id"]:
             raise LoopMemoryError("cancel chunk is not the active chunk")
-    updated = json.loads(_canonical_json(basis))
+    updated = json.loads(_canonical_json(_latest_merge_record(records)))
     if "legacy_exemptions" in state:
         updated["legacy_exemptions"] = json.loads(
             _canonical_json(state["legacy_exemptions"])
         )
     updated["updated_at"] = event["created_at"]
     updated["event"] = event
-    updated["active"] = {
-        "planning_chunk": None,
-        "implementation_chunk": event["chunk_id"] if event_type == "start" else None,
-    }
-    updated["gate"] = {
-        "status": "active" if event_type == "start" else "stopped_after_cancel",
-        "next_chunk_id": event["chunk_id"],
-        "next_chunk_title": basis["gate"]["next_chunk_title"],
-        "next_requires_explicit_start": True,
+    updated["authority_state"] = {
+        "source": basis["source"],
+        "completed_chunk": basis["completed_chunk"],
+        "active": {
+            "planning_chunk": None,
+            "implementation_chunk": event["chunk_id"] if event_type == "start" else None,
+        },
+        "gate": {
+            "status": "active" if event_type == "start" else "stopped_after_cancel",
+            "next_chunk_id": event["chunk_id"],
+            "next_chunk_title": basis["gate"]["next_chunk_title"],
+            "next_requires_explicit_start": True,
+        },
     }
     _validate_record(updated)
     previous_hash = ledger[-1]["entry_hash"]

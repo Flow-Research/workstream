@@ -213,19 +213,17 @@ def _record_failures(record: object, label: str) -> list[str]:
             return [f"{label}: invalid authority event"]
         base = json.loads(json.dumps(record))
         base.pop("event")
+        authority = base.pop("authority_state", None)
         metadata = base.get("completed_chunk", {})
         source = base.get("source", {})
         base["updated_at"] = source.get("merged_at")
-        base["active"] = {"planning_chunk": None, "implementation_chunk": None}
-        base["gate"] = {
-            "status": "stopped_after_merge",
-            "next_chunk_id": metadata.get("next_chunk_id"),
-            "next_chunk_title": metadata.get("next_chunk_title"),
-            "next_requires_explicit_start": metadata.get(
-                "next_requires_explicit_start"
-            ),
-        }
         failures = _record_failures(base, label)
+        if not isinstance(authority, dict) or set(authority) != {
+            "source", "completed_chunk", "active", "gate"
+        }:
+            failures.append(f"{label}: invalid authority lifecycle state")
+            return failures
+        metadata = authority["completed_chunk"]
         expected_event_keys = {
             "type", "event_id", "run_id", "created_at", "dispatcher",
             "approvers", "reason", "main_sha", "prior_state_tip",
@@ -256,7 +254,7 @@ def _record_failures(record: object, label: str) -> list[str]:
             "planning_chunk": None,
             "implementation_chunk": event.get("chunk_id") if event_type == "start" else None,
         }
-        if record.get("active") != expected_active:
+        if authority.get("active") != expected_active:
             failures.append(f"{label}: authority active state is inconsistent")
         expected_gate = {
             "status": "active" if event_type == "start" else "stopped_after_cancel",
@@ -264,7 +262,7 @@ def _record_failures(record: object, label: str) -> list[str]:
             "next_chunk_title": metadata.get("next_chunk_title"),
             "next_requires_explicit_start": True,
         }
-        if record.get("gate") != expected_gate:
+        if authority.get("gate") != expected_gate:
             failures.append(f"{label}: authority gate is inconsistent")
         return failures
     expected = {
@@ -476,6 +474,15 @@ def _render_state(state: dict, records: list[dict] | None = None) -> str:
     active_line = "- Active implementation chunks: " + (
         ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
     )
+    authority_lines = []
+    if isinstance(state.get("event"), dict) and state["event"].get("type") in {
+        "start", "cancel"
+    }:
+        event = state["event"]
+        authority_lines = [
+            f"- Latest authority event: `{event['type']}` for `{event['chunk_id']}`",
+            f"- Authority initiative: `{event['initiative_id']}`",
+        ]
     return "\n".join(
         [
             "# Generated Workstream Loop State",
@@ -494,6 +501,7 @@ def _render_state(state: dict, records: list[dict] | None = None) -> str:
             f"{_markdown_text(completed['chunk_title'])}",
             "- Active planning chunks: none",
             active_line,
+            *authority_lines,
             f"- Current gate: `{gate['status']}`",
             next_line,
             f"- Required check evidence: {integrity}",
@@ -510,7 +518,11 @@ def _latest_by_initiative(records: list[dict]) -> dict[str, dict]:
     """Return latest independently validated records by initiative."""
     latest = {}
     for record in records:
-        latest[record["completed_chunk"]["initiative_id"]] = record
+        projected = record
+        if isinstance(record.get("authority_state"), dict):
+            projected = json.loads(json.dumps(record))
+            projected.update(projected["authority_state"])
+        latest[projected["completed_chunk"]["initiative_id"]] = projected
     return latest
 
 

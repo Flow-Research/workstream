@@ -58,8 +58,8 @@ def _authority_record(tmp_path: Path) -> dict:
         lambda record: record["event"].update(approvers=[]),
         lambda record: record["event"].update(main_sha="bad"),
         lambda record: record.update(updated_at="wrong"),
-        lambda record: record.update(active={"planning_chunk": None, "implementation_chunk": None}),
-        lambda record: record["gate"].update(status="stopped_after_merge"),
+        lambda record: record.update(active={"planning_chunk": None, "implementation_chunk": "WS-BAD-001"}),
+        lambda record: record["authority_state"]["gate"].update(status="stopped_after_merge"),
     ],
 )
 def test_checker_rejects_malformed_authority_records(

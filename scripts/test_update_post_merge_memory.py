@@ -93,7 +93,7 @@ def test_start_cancel_retry_and_replay_are_monotonic(tmp_path: Path) -> None:
     start = _event("start")
     assert loop.apply_authority_event(state_root, start, repository_root=repository_root)
     assert not loop.apply_authority_event(state_root, start, repository_root=repository_root)
-    assert json.loads((state_root / loop.STATE_PATH).read_text())["active"][
+    assert json.loads((state_root / loop.STATE_PATH).read_text())["authority_state"]["active"][
         "implementation_chunk"
     ] == "WS-ENG-001-04B"
     cancel = _event("cancel", 42)
@@ -483,9 +483,25 @@ def test_cross_initiative_start_preserves_latest_global_merge(tmp_path: Path) ->
     event = _event("start")
     event["main_sha"] = "c" * 40
     loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    art_contract = repository_root / ".agent-loop/initiatives/art/chunks/WS-ART-001-03-recovery.md"
+    art_contract.parent.mkdir(parents=True)
+    art_contract.write_text("# Chunk Contract: WS-ART-001-03\n")
+    art_event = _event("start", 44)
+    art_event.update(
+        main_sha="c" * 40,
+        initiative_id="WS-ART-001",
+        chunk_id="WS-ART-001-03",
+    )
+    loop.apply_authority_event(
+        state_root, art_event, repository_root=repository_root
+    )
     rendered = (state_root / loop.RENDERED_PATH).read_text()
     queue = (state_root / loop.WORK_QUEUE_PATH).read_text()
     assert "`c" + "c" * 39 + "`" in rendered
+    assert "`WS-ENG-001-04B`, `WS-ART-001-03`" not in rendered
+    assert "`WS-ART-001-03`, `WS-ENG-001-04B`" in rendered
+    assert "Completed chunk: `WS-ART-001-02`" in rendered
+    assert "Next chunk: `WS-ART-001-03`" in rendered
     assert f"Latest global merge: `{'c' * 40}`" in queue
 
 
