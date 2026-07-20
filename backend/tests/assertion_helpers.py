@@ -40,12 +40,18 @@ def assert_secret_not_retained(
             traceback_module_prefixes=traceback_module_prefixes,
         )
     elif isinstance(value, Session):
+        rollback_errors: list[object] = []
+        transaction = value.get_transaction()
+        while transaction is not None:
+            rollback_errors.append(getattr(transaction, "_rollback_exception", None))
+            transaction = getattr(transaction, "_parent", None)
         retained_state = (
             dict(value.info),
             tuple(value.new),
             tuple(value.dirty),
             tuple(value.deleted),
             tuple(value.identity_map.values()),
+            tuple(rollback_errors),
         )
         assert_secret_not_retained(
             retained_state,
