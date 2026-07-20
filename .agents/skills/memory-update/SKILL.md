@@ -79,7 +79,9 @@ in isolation.
 - Generated state is exempt from repeated review only on
   `automation/loop-memory`, only when written by the trusted workflow, and only
   while its public-key signature verifies.
-- If automation fails, send the documented `loop-memory-replay`
-  `repository_dispatch` with the current protected-main SHA after correcting
-  permissions. Stale replay targets fail closed.
+- If `.github/workflows/loop-memory.yml` fails, send the documented
+  `loop-memory-replay` `repository_dispatch` with the current protected-main SHA
+  after correcting permissions. Stale replay targets fail closed. A failed
+  `.github/workflows/loop-memory-start.yml` run instead requires a fresh,
+  attributable dispatch through its protected approval path.
   Merge-intent content is immutable after merge; do not edit generated state.

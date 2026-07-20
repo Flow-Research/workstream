@@ -345,6 +345,47 @@ def test_apply_event_cli_routes_authenticated_inputs(
     assert "event applied" in capsys.readouterr().out
 
 
+def test_update_cli_applies_cutover_only_from_explicit_repository_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = _record()
+    record["completed_chunk"] = {
+        **record["completed_chunk"],
+        "chunk_id": "WS-ENG-001-04B",
+    }
+    captured: list[dict] = []
+    repository_root = tmp_path / "repository"
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args: record.copy())
+    monkeypatch.setattr(loop, "validate_generated_state", lambda _root: None)
+    monkeypatch.setattr(
+        loop, "apply_merge_record", lambda _root, supplied: captured.append(supplied) or True
+    )
+    monkeypatch.setattr(
+        loop,
+        "load_legacy_exemptions",
+        lambda root: [{"repository_root": str(root)}],
+    )
+
+    common = [
+        "update",
+        "--repository", "Flow-Research/workstream",
+        "--repository-root", str(repository_root),
+        "--merge-sha", "a" * 40,
+        "--state-root", str(tmp_path / "state"),
+    ]
+    assert loop.main(common) == 0
+    assert "event" not in captured[-1]
+
+    assert loop.main(common + ["--cutover-chunk-id", "WS-ENG-001-04B"]) == 0
+    assert captured[-1]["event"]["type"] == "cutover"
+    assert captured[-1]["legacy_exemptions"] == [
+        {"repository_root": str(repository_root)}
+    ]
+
+
 def test_publish_cli_routes_repository_owned_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

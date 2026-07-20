@@ -120,9 +120,11 @@ jobs:
           for merge_sha in "${merge_shas[@]}"; do
             python3 scripts/update_post_merge_memory.py update \
               --repository "${GITHUB_REPOSITORY}" \
+              --repository-root . \
               --merge-sha "${merge_sha}" \
               --state-root "${state_dir}" \
-              --branch-root "${branch_dir}"
+              --branch-root "${branch_dir}" \
+              --cutover-chunk-id WS-ENG-001-04B
           done
 
       - name: Validate generated state

@@ -2046,11 +2046,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     update = subparsers.add_parser("update")
     update.add_argument("--repository", required=True)
+    update.add_argument("--repository-root", type=Path, default=Path("."))
     update.add_argument("--merge-sha", required=True)
     update.add_argument("--state-root", type=Path, required=True)
     update.add_argument("--branch-root", type=Path)
     update.add_argument("--token-env", default="GITHUB_TOKEN")
     update.add_argument("--api-url", default="https://api.github.com")
+    update.add_argument(
+        "--cutover-chunk-id",
+        help="Explicitly apply the reviewed legacy exemption inventory at this chunk",
+    )
 
     authority = subparsers.add_parser("apply-event")
     authority.add_argument("--repository", required=True)
@@ -2139,8 +2144,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.repository,
                 args.merge_sha,
             )
-            if record["completed_chunk"]["chunk_id"] == "WS-ENG-001-04B":
-                record["legacy_exemptions"] = load_legacy_exemptions(Path("."))
+            if (
+                args.cutover_chunk_id
+                and record["completed_chunk"]["chunk_id"] == args.cutover_chunk_id
+            ):
+                record["legacy_exemptions"] = load_legacy_exemptions(
+                    args.repository_root
+                )
                 record["event"] = {
                     "type": "cutover",
                     "main_sha": record["source"]["main_sha"],
