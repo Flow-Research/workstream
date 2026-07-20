@@ -1,16 +1,20 @@
 # WS-AUTH-001-PREP Internal Review Evidence
 
-Reviewed code SHA: `6c1e296fca8390aeeed9f5bdf63b649a783c5030`
+Reviewed code SHA: `eaa7073d45fa4a8382f2b44401b93cae7df34744`
 
 Reviewed implementation SHA: `38acb8f91d3ddd2edd4cc26fb1e36b67fa130fd9`
 
 Reviewed pre-sync status SHA: `5e190aae142c354bf4293041d2375f124d4a51ce`
 
+Reviewed sync SHA: `6c1e296fca8390aeeed9f5bdf63b649a783c5030`
+
+Reviewed CI-repair SHA: `eaa7073d45fa4a8382f2b44401b93cae7df34744`
+
 Original implementation entry base: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567`
 
 Reviewed against trusted main: `c12ba1c8d4bbde86d0e2c19826f5791afc130489`
 
-Reviewed at: `2026-07-20T16:18:17Z`
+Reviewed at: `2026-07-20T16:37:21Z`
 
 Reviewer run IDs: `rev_plan_core`, `rev_plan_security_qa`,
 `rev_plan_ops_ci_docs`
