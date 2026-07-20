@@ -89,8 +89,9 @@ After 04A merge/replay and a separate user start:
    fresh dispatch after inspecting signed state.
 4. Add `.github/workflows/loop-memory-start.yml` using `workflow_dispatch` only.
    Require ref `main`, `run_attempt == 1`, an exact expected current-main SHA,
-   the fixed `loop-memory-start` protected environment, a closed minimal
-   permissions map, the shared non-cancelling concurrency group, credential-free
+   the fixed `loop-memory-start` protected environment, permissions of exactly
+   `actions: read` and `contents: write` with all others absent/none, the shared
+   non-cancelling concurrency group, credential-free
    checkout of independently resolved current main, and the fixed
    `automation/loop-memory` fast-forward destination. Parsed-YAML tests must
    reject every additional trigger, permission, ref, or destination path.
@@ -112,8 +113,9 @@ After 04A merge/replay and a separate user start:
    and signing-key rotation/compromise handling.
 8. Prove event/schema reduction, deterministic rendering, signing, replay,
    stale/conflict rejection, cancel/retry, active-merge mismatch, failure
-   atomicity, hostile paths, and exact workflow structure. Enforce at least 90
-   percent combined branch coverage for materially changed
+   atomicity, hostile paths, and exact workflow structure. Extend the required
+   Agent Gates PR job with hash-pinned test/coverage dependencies and enforce at
+   least 90 percent branch coverage independently for materially changed
    `update_post_merge_memory.py` and `check_loop_memory_state.py`, without
    weakening any existing CI gate.
 

@@ -42,12 +42,14 @@ AGENTS.md
 .agent-loop/merge-intents/WS-ENG-001-04B.json
 .github/workflows/loop-memory-start.yml
 .github/workflows/loop-memory.yml
+.github/workflows/agent-gates.yml
 docs/operations_post_merge_memory.md
 scripts/update_post_merge_memory.py
 scripts/check_loop_memory_state.py
 scripts/test_agent_gates.py
 scripts/test_update_post_merge_memory.py
 scripts/test_check_loop_memory_state.py
+scripts/agent-gate-requirements.txt
 ```
 
 ## Not allowed
@@ -96,25 +98,30 @@ of a second chunk while the same initiative is active.
   without history rewrite. Signature/tree/render/write/push failure and every
   rejected event leave canonical branch state unchanged.
 - Parsed-YAML tests enforce the exact trigger, job-level main/first-attempt
-  guard, environment, closed permissions, non-cancelling shared concurrency,
-  credential-free trusted-main checkout, fixed push ref, and absence of
-  caller-controlled ref/destination values.
+  guard, environment, permissions of exactly `actions: read` and
+  `contents: write` with all others absent/none, non-cancelling shared
+  concurrency, credential-free trusted-main checkout, fixed push ref, and
+  absence of caller-controlled ref/destination values.
 - Before publication, GitHub settings/API evidence proves required reviewers,
   disabled self-review/admin bypass, protected-main deployment restriction, and
   environment-only secret placement; a misconfigured environment fails rollout.
 - Materially changed `update_post_merge_memory.py` and
-  `check_loop_memory_state.py` remain at or above 90 percent combined branch
-  coverage without weakening an existing gate.
+  `check_loop_memory_state.py` each remain at or above 90 percent branch
+  coverage in the required Agent Gates PR job. Test/coverage dependencies are
+  hash-pinned and no existing gate is weakened.
 
 ## Verification commands
 
 ```text
 python3 -m pytest -q scripts/test_agent_gates.py
 python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
-python3 -m pytest -q --cov=scripts.update_post_merge_memory --cov=scripts.check_loop_memory_state --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
+python3 -m pytest -q --cov=scripts.update_post_merge_memory --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
+python3 -m pytest -q --cov=scripts.check_loop_memory_state --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
 python3 scripts/check_loop_memory_state.py --state-root <fixture-root>
 gh api repos/{owner}/{repo}/environments/loop-memory-start
 gh api repositories/{repository_id}/environments/loop-memory-start/secrets
+gh api repos/{owner}/{repo}/actions/secrets
+gh api orgs/{org}/actions/secrets
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 git diff --check
@@ -130,4 +137,5 @@ integrity, docs, reuse/dedup, and test delta.
 Stop if protected environment review cannot gate the signing secret, current
 protected `main` cannot be resolved independently, an event would select a
 non-successor/cross-initiative chunk, cancellation would rewrite history, or
+the required Agent Gates job cannot enforce each coverage floor. Also stop if
 scope expands into product runtime, automatic merge, or another chunk.

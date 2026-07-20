@@ -52,6 +52,12 @@ current protected-main state during 2026-07-20.
 - Prohibited a parallel start-specific state path; 04B must extend the existing
   reconciliation, renderer, signer, manifest, exact-tree, and fast-forward
   machinery.
+- Tightened coverage to an independent 90 percent branch floor for each changed
+  loop-memory script, connected it to the required Agent Gates PR job with
+  hash-pinned dependencies, and fixed workflow permissions to exactly
+  `actions: read` plus `contents: write`.
+- Required repository and organization secret inventories to prove the
+  environment-only signing secret has no same-name fallback.
 
 ## Gate
 
