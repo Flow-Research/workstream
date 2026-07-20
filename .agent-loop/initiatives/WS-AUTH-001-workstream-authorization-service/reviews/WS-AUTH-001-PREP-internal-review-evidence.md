@@ -1,6 +1,6 @@
 # WS-AUTH-001-PREP Internal Review Evidence
 
-Reviewed code SHA: `eaa7073d45fa4a8382f2b44401b93cae7df34744`
+Reviewed code SHA: `9e926d04511e04122beeb1f88110f80b88c34907`
 
 Reviewed implementation SHA: `38acb8f91d3ddd2edd4cc26fb1e36b67fa130fd9`
 
@@ -10,11 +10,14 @@ Reviewed sync SHA: `6c1e296fca8390aeeed9f5bdf63b649a783c5030`
 
 Reviewed CI-repair SHA: `eaa7073d45fa4a8382f2b44401b93cae7df34744`
 
+Reviewed trusted-main CI-acceleration sync SHA:
+`9e926d04511e04122beeb1f88110f80b88c34907`
+
 Original implementation entry base: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567`
 
-Reviewed against trusted main: `c12ba1c8d4bbde86d0e2c19826f5791afc130489`
+Reviewed against trusted main: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
 
-Reviewed at: `2026-07-20T16:37:21Z`
+Reviewed at: `2026-07-20T22:27:32Z`
 
 Reviewer run IDs: `rev_plan_core`, `rev_plan_security_qa`,
 `rev_plan_ops_ci_docs`
@@ -42,10 +45,11 @@ architecture, CI integrity, docs, reuse/dedup, and test delta
   loop-memory state, merge-intent validation, and diff integrity pass.
 - Alembic remains at `0029_shared_transactional_outbox`; no migration or product
   mutation consumer is included.
-- The local environment has no `WORKSTREAM_TEST_DATABASE_URL`. The unchanged
-  GitHub Backend workflow remains the authoritative full-suite and coverage
-  proof, preserving the 78 percent repository baseline and 90 percent coverage
-  requirement for the materially changed authorization subsystem.
+- The local environment has no `WORKSTREAM_TEST_DATABASE_URL`. The trusted-main
+  sharded GitHub Backend workflow, unchanged by PREP, remains the authoritative
+  full-suite and coverage proof, preserving the 78 percent repository baseline
+  and 90 percent coverage requirement for the materially changed authorization
+  subsystem.
 
 ## Reviewer Results
 
