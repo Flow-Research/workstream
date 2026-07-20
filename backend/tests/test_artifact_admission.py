@@ -52,7 +52,9 @@ from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
     AuthorizationContext,
+    HumanAuthorizationContext,
     IdentityLinkStatus,
+    ServiceAuthorizationContext,
 )
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
@@ -137,15 +139,21 @@ def _context(
     identity_link_id: UUID | None = None,
     actor_kind: ActorKind = ActorKind.HUMAN,
 ) -> AuthorizationContext:
-    return AuthorizationContext(
+    common = dict(
         actor_profile_id=actor_profile_id or uuid4(),
-        actor_kind=actor_kind,
         actor_status=ActorStatus.ACTIVE,
         identity_link_id=identity_link_id or uuid4(),
         identity_link_status=IdentityLinkStatus.ACTIVE,
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
+    if actor_kind is ActorKind.SERVICE:
+        return ServiceAuthorizationContext(
+            actor_kind=ActorKind.SERVICE,
+            service_identity=ServiceIdentity.ARTIFACT_CHECKER_OUTPUT,
+            **common,
+        )
+    return HumanAuthorizationContext(actor_kind=ActorKind.HUMAN, **common)
 
 
 async def _seed_human_actor(

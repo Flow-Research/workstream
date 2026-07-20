@@ -4,8 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Internal review passed at `4d1fc507`; PR/external checks pending; aggregate coverage mandatory in Backend |
-| `WS-ART-001-02C1` | Admission And Put-Attempt Foundation | L1 | Active after PR #151 and explicit user start; implementation and deterministic proof in progress |
+| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.
@@ -15,10 +14,9 @@ output. This authored queue records the separately approved parallel chunks.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-QUAL-001-01B2` | Baseline Evidence And CI Ratchet | L1 | Paused for AUTH priority; no valid replacement baseline yet |
-| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Inactive until contributor-foundation merge/memory and explicit user start |
 | `WS-QUAL-001-02` | Project Service Coverage | L1 | Inactive until 01B2 merge/memory plus explicit user start |
 | `WS-POL-002-04` | Locked Runtime Execution And Routing Hardening | L1 | Inactive pending relevant authorization proof and a separate explicit user start |
-| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Inactive until 02C1 merge and explicit user start |
+| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | 02C1 merged; inactive until explicit user start |
 | `WS-ART-001-02C3` | Recovery Attempt And Idempotency Chain | L1 | Inactive until 02C2 merge and explicit user start |
 | `WS-ART-001-02D` | Operator Artifact Operations And AWS Readiness | L1 | Inactive until 02C3 and exact AUTH prerequisites |
 
@@ -26,6 +24,7 @@ output. This authored queue records the separately approved parallel chunks.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
+| `WS-ART-001-02C1` | Admission And Put-Attempt Foundation | L1 | Merged through PR #154 as `44f2467c` on 2026-07-19 |
 | `WS-ART-001-02B1` | S3-Compatible MinIO And AWS | L1 | Merged through PR #151 as `1b5422fc` on 2026-07-19 |
 | `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | Merged through PR #148 as `99ae4c9` on 2026-07-18 |
 | `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | Merged through PR #146 as `0ffdabf` on 2026-07-18 |

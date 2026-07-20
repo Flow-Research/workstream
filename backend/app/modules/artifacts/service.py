@@ -39,7 +39,9 @@ from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
     AuthorizationContext,
+    HumanAuthorizationContext,
     IdentityLinkStatus,
+    ServiceAuthorizationContext,
 )
 
 
@@ -290,7 +292,10 @@ class ArtifactAdmissionService:
             CheckerOutputArtifactAdmissionRequest,
         }:
             raise TypeError("invalid artifact admission request")
-        if type(request.authorization_context) is not AuthorizationContext:
+        if type(request.authorization_context) not in {
+            HumanAuthorizationContext,
+            ServiceAuthorizationContext,
+        }:
             raise TypeError("invalid artifact admission authorization context")
         if type(request.source) is not CommittedArtifactSource:
             raise TypeError("invalid artifact admission source")

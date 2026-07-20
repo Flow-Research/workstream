@@ -113,6 +113,7 @@ def issue_flow_token(
     issued_at: datetime | None = None,
     expires_at: datetime | None = None,
     not_before: datetime | None = None,
+    subject_kind: str = "human",
 ) -> str:
     """Issue a local Flow-compatible signed token for one QA actor.
 
@@ -125,28 +126,33 @@ def issue_flow_token(
         issued_at: Optional issued-at timestamp override.
         expires_at: Optional expiration timestamp override.
         not_before: Optional not-before timestamp override.
+        subject_kind: Canonical human or fixed-service token kind.
 
     Returns:
         HMAC-signed bearer token consumed by ``FlowAuthVerifier``.
     """
     now = issued_at or datetime.now(UTC)
     header = base64url_json({"alg": "HS256", "typ": "JWT"})
-    payload = base64url_json(
-        {
-            "iss": issuer,
-            "aud": audience,
-            "sub": subject,
-            "jti": f"local-e2e-{uuid4()}",
-            "subject_kind": "human",
-            "scope": "workstream:access",
-            "email": f"{subject}@flow.local",
-            "name": subject.replace("-", " ").title(),
-            "roles": roles,
-            "iat": int(now.timestamp()),
-            "nbf": int((not_before or (now - timedelta(seconds=5))).timestamp()),
-            "exp": int((expires_at or (now + timedelta(minutes=30))).timestamp()),
-        }
-    )
+    claims = {
+        "iss": issuer,
+        "aud": audience,
+        "sub": subject,
+        "jti": f"local-e2e-{uuid4()}",
+        "subject_kind": subject_kind,
+        "scope": "workstream:service" if subject_kind == "service" else "workstream:access",
+        "iat": int(now.timestamp()),
+        "nbf": int((not_before or (now - timedelta(seconds=5))).timestamp()),
+        "exp": int((expires_at or (now + timedelta(minutes=30))).timestamp()),
+    }
+    if subject_kind == "human":
+        claims.update(
+            {
+                "email": f"{subject}@flow.local",
+                "name": subject.replace("-", " ").title(),
+                "roles": roles,
+            }
+        )
+    payload = base64url_json(claims)
     signed_content = f"{header}.{payload}".encode()
     signature = hmac.new(secret.encode(), signed_content, hashlib.sha256).digest()
     return f"{header}.{payload}.{base64url_bytes(signature)}"
@@ -988,6 +994,23 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "subject": f"real-api-artifact-verifier-{run_id}",
             "reason": "Real HTTP controlled service provisioning proof",
         }
+        fixed_service_token = issue_flow_token(
+            service_payload["subject"],
+            [],
+            issuer=flow_issuer,
+            audience=flow_audience,
+            secret=flow_secret,
+            subject_kind="service",
+        )
+        unprovisioned_service = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert unprovisioned_service.status_code == 403
+        assert (
+            unprovisioned_service.json()["error"]["code"]
+            == "service_actor_not_provisioned"
+        )
         service_headers = auth_headers(manager_token) | {
             "Idempotency-Key": str(uuid4()),
             "X-Request-ID": str(uuid4()),
@@ -1028,6 +1051,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert service_admin_profile["last_seen_at"] is None
         assert service_admin_link["subject_kind"] == "service"
         assert service_admin_link["last_verified_at"] is None
+        admitted_service = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert admitted_service.status_code == 403
+        assert admitted_service.json()["error"]["code"] == "permission_not_granted"
         serialized_service_reads = json.dumps(
             [service_admin_profile, service_admin_link],
             sort_keys=True,
@@ -1049,12 +1078,27 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "http_status": 200,
         }
         assert lifecycle_reason not in suspended_service.text
+        suspended_service_admission = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert suspended_service_admission.status_code == 403
+        assert suspended_service_admission.json()["error"]["code"] == "actor_suspended"
         reactivated_service = await client.post(
             f"/api/v1/actors/{service_actor_id}/reactivate",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Real HTTP service profile correction"},
         )
         assert reactivated_service.status_code == 200, reactivated_service.text
+        reactivated_service_admission = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert reactivated_service_admission.status_code == 403
+        assert (
+            reactivated_service_admission.json()["error"]["code"]
+            == "permission_not_granted"
+        )
 
         service_link_id = service_admin_link["identity_link_id"]
         link_lifecycle_key = str(uuid4())
@@ -1073,6 +1117,15 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "http_status": 200,
         }
         assert link_lifecycle_reason not in revoked_service_link.text
+        revoked_service_admission = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert revoked_service_admission.status_code == 403
+        assert (
+            revoked_service_admission.json()["error"]["code"]
+            == "identity_link_revoked"
+        )
         replayed_service_link = await client.post(
             f"/api/v1/actor-identity-links/{service_link_id}/revoke",
             headers=auth_headers(manager_token)
@@ -1113,6 +1166,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert repaired_service_link_view["status"] == "active"
         assert repaired_service_link_view["last_verified_at"] is None
+        repaired_service_admission = await client.get(
+            "/api/v1/actors/me",
+            headers=auth_headers(fixed_service_token),
+        )
+        assert repaired_service_admission.status_code == 403
+        assert repaired_service_admission.json()["error"]["code"] == "permission_not_granted"
 
         deactivated_service = await client.post(
             f"/api/v1/actors/{service_actor_id}/deactivate",
