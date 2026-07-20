@@ -43,3 +43,65 @@ across Jarvis, OmniCoreAgent, and other Flow projects.
 - Whether this bootstrap structure is the permanent Workstream engineering loop.
 - Whether later projects should adopt the same structure directly or through a
   packaged Codex plugin.
+
+## 2026-07-20 Projection Consistency Extension
+
+### Problem being solved
+
+Signed schema-v2 state and `LOOP_STATE.md` correctly recorded AUTH-09E PR #157,
+but `automation/loop-memory` retained stale `WORK_QUEUE.md` and AUTH `STATUS.md`
+copies describing AUTH-05B because the workflow neither generates nor validates
+them.
+
+### Why this work matters
+
+Humans and agents must not receive contradictory completed, stopped, next, or
+active state from files presented on the canonical automation branch. The fix
+must preserve the removal of manual post-merge memory PRs.
+
+### Current behavior
+
+- A trusted `main` push updates signed `STATE.json`, `MERGE_LOG.jsonl`, and
+  deterministic `LOOP_STATE.md`.
+- Cloning the existing automation branch preserves unrelated legacy files.
+- State-root validation ignores those files.
+- A merge event records completion but cannot prove a later human start that
+  exists only in conversation or an unmerged worktree.
+
+### Target behavior and design chosen
+
+Split the repair into `WS-ENG-001-04A` for complete merge projections and
+`WS-ENG-001-04B` for explicit-start events. Every canonical Markdown view is
+derived from typed authenticated state. Authored initiative histories on `main`
+remain reviewed context rather than automation output.
+
+### Alternatives considered
+
+- Manual memory PRs: rejected as duplicate review of deterministic output.
+- Copy authored queue/status files after merge: rejected because mutable prose
+  and parallel-work claims are not derivable from one merged PR.
+- Treat conversation as automation input: rejected because it is not a durable,
+  authenticated repository event.
+- Combine merge and start automation: rejected as an oversized write-capable
+  workflow change that conflates distinct authorities.
+
+### Boundaries preserved
+
+Protected `main`, explicit human merge approval, initiative-local successors,
+signature verification, trusted-main execution, fixed branch writes, and all
+implementation/reviewer gates remain unchanged.
+
+### Expected risks and non-goals
+
+The main risks are signing an incomplete projection set, unsafe cleanup,
+misrepresenting one last merge as every initiative's state, or permitting a
+stale/unauthenticated start. No product behavior, schema, migration, dependency,
+coverage threshold, PR approval, or merge authority changes.
+
+### Proof and human decisions
+
+Fixture-driven Git-tree rebuild, signature-tamper, unexpected-file, interleaved-
+initiative, replay, stale-event, renderer, and workflow-structure tests must
+pass with at least 90 percent branch coverage for changed loop-memory scripts.
+The user must approve 04A implementation after planning review, then separately
+approve 04B only after 04A merge and replay proof.

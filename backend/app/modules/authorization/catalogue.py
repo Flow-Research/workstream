@@ -174,20 +174,21 @@ class ActionOwner(StrEnum):
     AUTH_09D_B = "WS-AUTH-001-09D-B"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
-    REV_05 = "WS-REV-001-05"
-    REV_06 = "WS-REV-001-06"
-    REV_07 = "WS-REV-001-07"
-    REV_08 = "WS-REV-001-08"
-    REV_09A = "WS-REV-001-09A"
-    REV_11 = "WS-REV-001-11"
-    REV_12 = "WS-REV-001-12"
-    ART_02D = "WS-ART-001-02D"
-    ART_03 = "WS-ART-001-03"
-    ART_04A = "WS-ART-001-04A"
-    ART_04B = "WS-ART-001-04B"
-    ART_05 = "WS-ART-001-05"
-    ART_06A = "WS-ART-001-06A"
-    ART_06B = "WS-ART-001-06B"
+    AUTH_REV_05 = "WS-AUTH-001-REV-05"
+    AUTH_REV_06 = "WS-AUTH-001-REV-06"
+    AUTH_REV_07 = "WS-AUTH-001-REV-07"
+    AUTH_REV_08 = "WS-AUTH-001-REV-08"
+    AUTH_REV_09A = "WS-AUTH-001-REV-09A"
+    AUTH_REV_11 = "WS-AUTH-001-REV-11"
+    AUTH_REV_12 = "WS-AUTH-001-REV-12"
+    AUTH_ART_02D_INTERNAL = "WS-AUTH-001-ART-02D-INTERNAL"
+    AUTH_ART_02D_OPERATOR = "WS-AUTH-001-ART-02D-OPERATOR"
+    AUTH_ART_03 = "WS-AUTH-001-ART-03"
+    AUTH_ART_04A = "WS-AUTH-001-ART-04A"
+    AUTH_ART_04B = "WS-AUTH-001-ART-04B"
+    AUTH_ART_05 = "WS-AUTH-001-ART-05"
+    AUTH_ART_06A = "WS-AUTH-001-ART-06A"
+    AUTH_ART_06B = "WS-AUTH-001-ART-06B"
 
 
 @unique
@@ -324,195 +325,205 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_14,
     ),
     _planned(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
-    _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.REV_05),
+    _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(
         ActionId.REVIEW_QUEUE_INSPECT,
         PermissionId.REVIEW_QUEUE_INSPECT,
-        ActionOwner.REV_05,
+        ActionOwner.AUTH_REV_05,
     ),
-    _planned(ActionId.REVIEW_CLAIM, PermissionId.REVIEW_CLAIM, ActionOwner.REV_06),
-    _planned(ActionId.REVIEW_RELEASE, PermissionId.REVIEW_RELEASE, ActionOwner.REV_06),
+    _planned(ActionId.REVIEW_CLAIM, PermissionId.REVIEW_CLAIM, ActionOwner.AUTH_REV_06),
+    _planned(ActionId.REVIEW_RELEASE, PermissionId.REVIEW_RELEASE, ActionOwner.AUTH_REV_06),
     _planned(
         ActionId.REVIEW_DECLINE_PREFERENCE,
         PermissionId.REVIEW_DECLINE_PREFERENCE,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_PREFERENCE_EXPIRY_RUN,
         PermissionId.OPERATIONS_TIMER_RUN,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_LEASE_EXPIRY_RUN,
         PermissionId.OPERATIONS_TIMER_RUN,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_CONTEXT_READ,
         PermissionId.SUBMISSION_READ_FOR_REVIEW,
-        ActionOwner.REV_07,
+        ActionOwner.AUTH_REV_07,
     ),
-    _planned(ActionId.REVIEW_CHAIN_READ, PermissionId.REVIEW_CHAIN_READ, ActionOwner.REV_07),
+    _planned(ActionId.REVIEW_CHAIN_READ, PermissionId.REVIEW_CHAIN_READ, ActionOwner.AUTH_REV_07),
     _planned(
         ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
         PermissionId.REVIEW_DECISION,
-        ActionOwner.REV_07,
+        ActionOwner.AUTH_REV_07,
     ),
-    _planned(ActionId.REVIEW_DECISION, PermissionId.REVIEW_DECISION, ActionOwner.REV_08),
+    _planned(ActionId.REVIEW_DECISION, PermissionId.REVIEW_DECISION, ActionOwner.AUTH_REV_08),
     _planned(
         ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
         PermissionId.SUBMISSION_CREATE,
-        ActionOwner.REV_09A,
+        ActionOwner.AUTH_REV_09A,
     ),
     _planned(
         ActionId.REVIEW_LEASE_FORCE_RELEASE,
         PermissionId.REVIEW_LEASE_FORCE_RELEASE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_ROUTING_OVERRIDE,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_ROUTING_CORRECT,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_CLOSE,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_RECONCILE_RUN,
         PermissionId.OPERATIONS_RECONCILE_RUN,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE,
         PermissionId.OPERATIONS_RECONCILE_RUN,
-        ActionOwner.REV_12,
+        ActionOwner.AUTH_REV_12,
     ),
     _planned(
         ActionId.REVIEW_PROJECTION_REBUILD,
         PermissionId.OPERATIONS_PROJECTION_REBUILD,
-        ActionOwner.REV_12,
+        ActionOwner.AUTH_REV_12,
     ),
     _planned(
-        ActionId.ARTIFACT_BINDING_READ, PermissionId.ARTIFACT_BINDING_READ, ActionOwner.ART_02D
+        ActionId.ARTIFACT_BINDING_READ,
+        PermissionId.ARTIFACT_BINDING_READ,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
-        ActionId.ARTIFACT_REPLICA_READ, PermissionId.ARTIFACT_REPLICA_READ, ActionOwner.ART_02D
+        ActionId.ARTIFACT_REPLICA_READ,
+        PermissionId.ARTIFACT_REPLICA_READ,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
-        ActionId.ARTIFACT_RECEIPT_READ, PermissionId.ARTIFACT_RECEIPT_READ, ActionOwner.ART_02D
+        ActionId.ARTIFACT_RECEIPT_READ,
+        PermissionId.ARTIFACT_RECEIPT_READ,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
         ActionId.ARTIFACT_VERIFICATION_JOB_READ,
         PermissionId.ARTIFACT_VERIFICATION_JOB_READ,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
         ActionId.ARTIFACT_VERIFICATION_JOB_RETRY,
         PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
         ActionId.ARTIFACT_RECOVERY_ATTEMPT_READ,
         PermissionId.ARTIFACT_RECOVERY_ATTEMPT_READ,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
-    _planned(ActionId.ARTIFACT_AUDIT_READ, PermissionId.ARTIFACT_AUDIT_READ, ActionOwner.ART_02D),
+    _planned(
+        ActionId.ARTIFACT_AUDIT_READ,
+        PermissionId.ARTIFACT_AUDIT_READ,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
+    ),
     _planned(
         ActionId.OPERATIONS_ARTIFACT_STORAGE_ADMISSION_READ,
         PermissionId.OPERATIONS_STATUS_READ,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_OPERATOR,
     ),
     _planned(
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        ActionOwner.ART_03,
+        ActionOwner.AUTH_ART_03,
     ),
     _planned(
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
         PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
-        ActionOwner.ART_03,
+        ActionOwner.AUTH_ART_03,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_SESSION_CREATE,
         PermissionId.ARTIFACT_UPLOAD_SESSION_CREATE,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_SESSION_READ,
         PermissionId.ARTIFACT_UPLOAD_SESSION_READ,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_ITEM_WRITE,
         PermissionId.ARTIFACT_UPLOAD_ITEM_WRITE,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_SESSION_SEAL,
         PermissionId.ARTIFACT_UPLOAD_SESSION_SEAL,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_SESSION_CANCEL,
         PermissionId.ARTIFACT_UPLOAD_SESSION_CANCEL,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
         PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
-        ActionOwner.ART_04A,
+        ActionOwner.AUTH_ART_04A,
     ),
     _planned(
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
-        ActionOwner.ART_03,
+        ActionOwner.AUTH_ART_03,
     ),
     _planned(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
-        ActionOwner.ART_05,
+        ActionOwner.AUTH_ART_05,
     ),
     _planned(
         ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
         PermissionId.ARTIFACT_BINDING_CREATE,
-        ActionOwner.ART_06B,
+        ActionOwner.AUTH_ART_06B,
     ),
     _planned(
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
     _planned(
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
     _planned(
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-        ActionOwner.ART_02D,
+        ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
     _planned(
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-        ActionOwner.ART_04B,
+        ActionOwner.AUTH_ART_04B,
     ),
     _planned(
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-        ActionOwner.ART_06A,
+        ActionOwner.AUTH_ART_06A,
     ),
     _planned(
         ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
         PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-        ActionOwner.ART_06B,
+        ActionOwner.AUTH_ART_06B,
     ),
 )
 
@@ -669,47 +680,47 @@ def _index_service_actions(
     expected_metadata = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
             PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
-            ActionOwner.ART_02D,
+            ActionOwner.AUTH_ART_02D_INTERNAL,
         ),
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
             PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-            ActionOwner.ART_02D,
+            ActionOwner.AUTH_ART_02D_INTERNAL,
         ),
         ActionId.ARTIFACT_PENDING_WORK_SCAN: (
             PermissionId.ARTIFACT_PENDING_WORK_SCAN,
-            ActionOwner.ART_02D,
+            ActionOwner.AUTH_ART_02D_INTERNAL,
         ),
         ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE: (
             PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
-            ActionOwner.ART_04A,
+            ActionOwner.AUTH_ART_04A,
         ),
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
-            ActionOwner.ART_03,
+            ActionOwner.AUTH_ART_03,
         ),
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
-            ActionOwner.ART_05,
+            ActionOwner.AUTH_ART_05,
         ),
         ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
-            ActionOwner.ART_06B,
+            ActionOwner.AUTH_ART_06B,
         ),
         ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
             PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
-            ActionOwner.ART_03,
+            ActionOwner.AUTH_ART_03,
         ),
         ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
             PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-            ActionOwner.ART_04B,
+            ActionOwner.AUTH_ART_04B,
         ),
         ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
             PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
-            ActionOwner.ART_06A,
+            ActionOwner.AUTH_ART_06A,
         ),
         ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE: (
             PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-            ActionOwner.ART_06B,
+            ActionOwner.AUTH_ART_06B,
         ),
     }
     if set(rows) != SERVICE_IDENTITIES:

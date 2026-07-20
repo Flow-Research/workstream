@@ -76,6 +76,7 @@ unavailable or incompatible.
 - `.agent-loop/initiatives/WS-MCP-001-contributor-mcp-server/**`
 - `.agent-loop/merge-intents/WS-MCP-001-01.json`
 - `.github/workflows/backend.yml`
+- `.github/workflows/mcp.yml`
 - `mcp_server/**`
 - `scripts/check_internal_review_evidence.py`
 - `scripts/test_agent_gates.py`

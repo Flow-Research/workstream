@@ -1,5 +1,36 @@
 # Review Log
 
+## 2026-07-20 - WS-AUTH-001-ART-CUSTODY Internal Review Passed
+
+- Exact code SHA `abb3fb1a035f544f5ee07b7d725451dfa2d90864` passes senior
+  engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+  docs, reuse/dedup, and test-delta review against trusted main `42a89b2d`.
+- Initial candidate `e7c2602e` had self-referential owner expectations and
+  permissive documentation proof. The repair freezes literal owner truth,
+  parses exact custody tables and operations invariants, and proves no planned
+  ART action reaches revalidation or administrative grant dependencies.
+- Forty-five focused cases, Ruff, stale scans, Markdown links, loop state,
+  merge intent, Alembic `0029`, migration no-diff, and diff integrity pass.
+  Hosted Backend remains the authoritative full-suite coverage gate.
+
+## 2026-07-20 - WS-AUTH-001-ART-CUSTODY Preimplementation Review Passed
+
+- PR #157 merged AUTH-09E to trusted `main` as `42a89b2d`; signed schema-v2
+  memory `a5b9bad3` stopped and named ART custody. The user explicitly started
+  this chunk on 2026-07-20.
+- Initial QA/security/product/CI/test-delta review rejected self-derived
+  baselines, ambiguous database-owner parity, incomplete all-action denial
+  proof, unclear `OPERATOR` wording, missing non-ART freeze and hosted CI gate,
+  and insufficient reuse/test-preservation constraints before runtime edits.
+- The repaired contract freezes all 65 action mappings and availability values,
+  exact counts and service matrix, the 25-row/eight-custodian ART map, every
+  non-ART owner, Alembic head `0029`, and zero migration delta. It requires all
+  25 actions to remain unavailable through the real kernel and keeps ART, REV,
+  and PREP as separate human-started chunks.
+- Senior engineering, QA/test, security/auth, product/ops, architecture, CI
+  integrity, docs, reuse/dedup, and test-delta tracks pass. Implementation may
+  begin for ART custody only; no action availability or ART behavior may change.
+
 ## 2026-07-20 - WS-AUTH-001-09E External Review Repair
 
 CodeRabbit raised two valid findings. The specification now says the service
@@ -2615,3 +2646,17 @@ rejected the stale pre-final evidence record. This state-transition commit is
 therefore the exact review target; its evidence-only descendant must bind the
 reviewed SHA, record every reviewer run, pass the evidence gate, and then receive
 final CI/docs confirmation before external checks resume.
+## 2026-07-20 - WS-AUTH-001-REV-CUSTODY Internal Review
+
+The inherited REV custody contract failed preimplementation review because it
+did not independently freeze the exact 19-row transfer, non-dispatch denial,
+documentation parity, migration boundary, or hosted coverage gates. The
+repaired contract passed all nine plan-review tracks before production edits.
+
+Implementation candidate `c95239b9` then received all nine required tracks.
+Review found a retained ART documentation regression and a stale spec statement
+that still described REV custody as pending. Candidate `baa86dfe` restores the
+exact ART no-migration invariant, records REV no-migration separately, and
+states the completed owner-only transfer. Sixty-three focused cases and all
+deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
+finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.

@@ -103,7 +103,7 @@ BACKEND_FULL_SUITE_COVERAGE_COMMAND = "\n".join(
         'metadata_dir="$(mktemp -d)"',
         "trap 'rm -rf \"$metadata_dir\"' EXIT",
         "python scripts/run_isolated_tests.py "
-        '--metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- '
+        '--metadata-json "$metadata_dir/result.json" --timeout-seconds 4800 -- '
         "python -m pytest -q --ignore=tests/test_isolated_database_runner.py "
         "--cov=app --cov-report=term-missing --cov-fail-under=78",
     )
@@ -113,7 +113,7 @@ BACKEND_API_CONTRACT_E2E_COMMAND = "\n".join(
         'metadata_dir="$(mktemp -d)"',
         "trap 'rm -rf \"$metadata_dir\"' EXIT",
         "python scripts/run_isolated_tests.py "
-        '--metadata-json "$metadata_dir/result.json" --timeout-seconds 3600 -- '
+        '--metadata-json "$metadata_dir/result.json" --timeout-seconds 1500 -- '
         "python scripts/api_contract_e2e.py",
     )
 )
@@ -2071,6 +2071,318 @@ def test_post_merge_state_is_idempotent_and_monotonic() -> None:
             raise AssertionError("older merge replaced live state")
 
 
+def test_loop_memory_projects_latest_gate_for_interleaved_initiatives() -> None:
+    """Queue and initiative views retain each initiative's latest stopped gate."""
+    updater = load_module(
+        "post_merge_projections", "scripts/update_post_merge_memory.py"
+    )
+    checker = load_module(
+        "post_merge_projection_checker", "scripts/check_loop_memory_state.py"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        auth_first = loop_record(updater)
+        auth_first["completed_chunk"].update(
+            chunk_id="WS-AUTH-001-09E",
+            chunk_title="Fixed Service Runtime Admission",
+            next_chunk_id="WS-AUTH-001-ART-CUSTODY",
+            next_chunk_title="ART Activation Custody Transfer",
+        )
+        auth_first["source"]["intent_path"] = (
+            ".agent-loop/merge-intents/WS-AUTH-001-09E.json"
+        )
+        auth_first["gate"].update(
+            next_chunk_id="WS-AUTH-001-ART-CUSTODY",
+            next_chunk_title="ART Activation Custody Transfer",
+        )
+        art = loop_record(
+            updater,
+            sha="b" * 40,
+            first_parent_sha="a" * 40,
+            pr_number=121,
+            merged_at="2026-07-14T20:00:00Z",
+        )
+        art["completed_chunk"].update(
+            initiative_id="WS-ART-001",
+            chunk_id="WS-ART-001-02C1",
+            chunk_title="Admission Foundation",
+            next_chunk_id="WS-ART-001-02C2",
+            next_chunk_title="Verification Publication And Fencing",
+        )
+        art["source"]["intent_path"] = ".agent-loop/merge-intents/WS-ART-001-02C1.json"
+        art["gate"].update(
+            next_chunk_id="WS-ART-001-02C2",
+            next_chunk_title="Verification Publication And Fencing",
+        )
+        auth_second = loop_record(
+            updater,
+            sha="c" * 40,
+            first_parent_sha="b" * 40,
+            pr_number=122,
+            merged_at="2026-07-14T21:00:00Z",
+        )
+        auth_second["completed_chunk"].update(
+            chunk_id="WS-AUTH-001-ART-CUSTODY",
+            chunk_title="ART Activation Custody Transfer",
+            next_chunk_id="WS-AUTH-001-REV-CUSTODY",
+            next_chunk_title="REV Activation Custody Transfer",
+        )
+        auth_second["source"]["intent_path"] = (
+            ".agent-loop/merge-intents/WS-AUTH-001-ART-CUSTODY.json"
+        )
+        auth_second["gate"].update(
+            next_chunk_id="WS-AUTH-001-REV-CUSTODY",
+            next_chunk_title="REV Activation Custody Transfer",
+        )
+        for record in (auth_first, art, auth_second):
+            assert updater.apply_merge_record(root, record) is True
+        updater.validate_generated_state(root)
+        assert checker.generated_state_failures(root) == []
+        queue = (root / updater.WORK_QUEUE_PATH).read_text(encoding="utf-8")
+        assert "`WS-AUTH-001-ART-CUSTODY`" in queue
+        assert "`WS-AUTH-001-REV-CUSTODY`" in queue
+        assert "`WS-ART-001-02C1`" in queue
+        assert queue.index("`WS-ART-001`") < queue.index("`WS-AUTH-001`")
+        assert (root / updater.INITIATIVE_STATE_ROOT / "WS-AUTH-001.md").is_file()
+        assert (root / updater.INITIATIVE_STATE_ROOT / "WS-ART-001.md").is_file()
+
+
+def test_prepare_output_migrates_authenticated_legacy_tree_without_traversal() -> None:
+    """Legacy branch content is omitted from one fresh authenticated output tree."""
+    updater = load_module(
+        "post_merge_fresh_output", "scripts/update_post_merge_memory.py"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        source = root / "source"
+        output = root / "output"
+        source.mkdir()
+        private_key = root / "private.pem"
+        public_key = root / "public.pem"
+        subprocess.run(
+            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", private_key],
+            check=True,
+        )
+        subprocess.run(
+            ["openssl", "pkey", "-in", private_key, "-pubout", "-out", public_key],
+            check=True,
+        )
+        record = loop_record(updater)
+        entry = updater._ledger_entry(record, None)
+        (source / updater.STATE_PATH).parent.mkdir(parents=True)
+        (source / updater.STATE_PATH).write_text(
+            updater._canonical_json(record, pretty=True), encoding="utf-8"
+        )
+        (source / updater.RENDERED_PATH).write_text(
+            updater.render_state(record), encoding="utf-8"
+        )
+        (source / updater.LEDGER_PATH).write_text(
+            f"{updater._canonical_json(entry)}\n", encoding="utf-8"
+        )
+        sign_loop_state_with_domain(
+            updater, source, private_key, b"workstream-loop-memory-signature-v2\0"
+        )
+        legacy = source / "backend/legacy.py"
+        legacy.parent.mkdir()
+        legacy.write_text("legacy\n", encoding="utf-8")
+        sentinel = root / "sentinel"
+        sentinel.write_text("preserve\n", encoding="utf-8")
+        assert updater.prepare_generated_output(source, output, public_key) is True
+        assert not (output / "backend").exists()
+        assert sentinel.read_text(encoding="utf-8") == "preserve\n"
+        updater.sign_generated_state(output, private_key)
+        updater.verify_generated_state_signature(output, public_key, "a" * 40)
+        assert {
+            path.relative_to(output).as_posix()
+            for path in output.rglob("*")
+            if path.is_file()
+        } == {
+            *(
+                item["path"]
+                for item in json.loads(
+                    (output / updater.MANIFEST_PATH).read_text(encoding="utf-8")
+                )["payloads"]
+            ),
+            updater.MANIFEST_PATH.as_posix(),
+            updater.SIGNATURE_PATH.as_posix(),
+        }
+
+
+def test_generated_tree_publication_is_exact_fast_forward_and_bootstrappable() -> None:
+    """Real Git plumbing preserves signed bytes, parentage, and root bootstrap."""
+    updater = load_module(
+        "post_merge_git_tree_publication", "scripts/update_post_merge_memory.py"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        output = root / "output"
+        private_key = root / "private.pem"
+        subprocess.run(
+            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", private_key],
+            check=True,
+        )
+        updater.apply_merge_record(output, loop_record(updater))
+        updater.sign_generated_state(output, private_key)
+        sentinel = root / "outside-sentinel"
+        sentinel.write_text("preserve\n", encoding="utf-8")
+
+        def initialize_repository(path: Path, *, with_parent: bool) -> str | None:
+            subprocess.run(
+                ["git", "init", "--initial-branch", updater.STATE_BRANCH, str(path)],
+                check=True,
+                stdout=subprocess.PIPE,
+            )
+            subprocess.run(
+                ["git", "-C", str(path), "config", "user.email", "test@example.test"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(path), "config", "user.name", "Test"], check=True
+            )
+            if not with_parent:
+                return None
+            legacy = path / "backend/legacy.py"
+            legacy.parent.mkdir()
+            legacy.write_text("legacy\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(path), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(path), "commit", "-m", "legacy"],
+                check=True,
+                stdout=subprocess.PIPE,
+            )
+            return subprocess.run(
+                ["git", "-C", str(path), "rev-parse", "HEAD"],
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+
+        def stage_tree(repository: Path, index: Path) -> str:
+            env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+            subprocess.run(
+                ["git", "-C", str(repository), "read-tree", "--empty"],
+                check=True,
+                env=env,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    f"--git-dir={repository / '.git'}",
+                    f"--work-tree={output}",
+                    "add",
+                    "-f",
+                    "--",
+                    ".agent-loop",
+                ],
+                check=True,
+                env=env,
+            )
+            return subprocess.run(
+                ["git", "-C", str(repository), "write-tree"],
+                check=True,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+
+        repository = root / "state"
+        parent = initialize_repository(repository, with_parent=True)
+        index = root / "generated.index"
+        tree = stage_tree(repository, index)
+        updater.validate_generated_git_tree(repository, tree, output)
+        env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+        executable = updater.STATE_PATH.as_posix()
+        object_sha = subprocess.run(
+            ["git", "-C", str(repository), "ls-files", "-s", "--", executable],
+            check=True,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.split()[1]
+        subprocess.run(
+            ["git", "-C", str(repository), "update-index", "--index-info"],
+            input=f"100755 {object_sha}\t{executable}\n",
+            check=True,
+            env=env,
+            text=True,
+        )
+        unsafe_tree = subprocess.run(
+            ["git", "-C", str(repository), "write-tree"],
+            check=True,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+        assert_loop_error(
+            updater,
+            lambda: updater.validate_generated_git_tree(
+                repository, unsafe_tree, output
+            ),
+            "unsafe file mode",
+        )
+        index.unlink()
+        tree = stage_tree(repository, index)
+        commit = subprocess.run(
+            ["git", "-C", str(repository), "commit-tree", tree, "-p", parent],
+            input="generated\n",
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+        assert (
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repository),
+                    "merge-base",
+                    "--is-ancestor",
+                    parent,
+                    commit,
+                ]
+            ).returncode
+            == 0
+        )
+        assert subprocess.run(
+            ["git", "-C", str(repository), "ls-tree", "-r", "--name-only", commit],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.splitlines() == sorted(
+            path.relative_to(output).as_posix()
+            for path in output.rglob("*")
+            if path.is_file()
+        )
+        assert sentinel.read_text(encoding="utf-8") == "preserve\n"
+
+        root_repository = root / "root-state"
+        initialize_repository(root_repository, with_parent=False)
+        root_tree = stage_tree(root_repository, root / "root.index")
+        updater.validate_generated_git_tree(root_repository, root_tree, output)
+        root_commit = subprocess.run(
+            ["git", "-C", str(root_repository), "commit-tree", root_tree],
+            input="generated root\n",
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+        assert subprocess.run(
+            [
+                "git",
+                "-C",
+                str(root_repository),
+                "rev-list",
+                "--parents",
+                "-n",
+                "1",
+                root_commit,
+            ],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.split() == [root_commit]
+
+
 def test_post_merge_reconciliation_bootstraps_and_recovers_every_commit() -> None:
     """Empty and existing state both enumerate the complete first-parent range."""
     updater = load_module(
@@ -2434,7 +2746,8 @@ def test_generated_loop_memory_validator_detects_drift() -> None:
         rendered_path.write_text("stale\n", encoding="utf-8")
         failures = checker.generated_state_failures(root)
         assert failures == [
-            ".agent-loop/LOOP_STATE.md: rendered state does not match canonical JSON"
+            ".agent-loop/LOOP_STATE.md: rendered state does not match canonical JSON",
+            ".agent-loop/LOOP_STATE.md: digest does not match manifest",
         ]
 
 
@@ -2468,10 +2781,11 @@ def test_generated_loop_memory_signature_authenticates_every_canonical_file() ->
         updater.apply_merge_record(root, loop_record(updater))
         updater.sign_generated_state(root, private_key)
         updater.verify_generated_state_signature(root, public_key)
-        signed_paths = (
-            updater.STATE_PATH,
-            updater.RENDERED_PATH,
-            updater.LEDGER_PATH,
+        manifest = json.loads(
+            (root / updater.MANIFEST_PATH).read_text(encoding="utf-8")
+        )
+        signed_paths = tuple(Path(item["path"]) for item in manifest["payloads"]) + (
+            updater.MANIFEST_PATH,
             updater.SIGNATURE_PATH,
         )
         old_signed_snapshot = {
@@ -2581,7 +2895,7 @@ def test_schema_v1_signed_state_is_discarded_before_clean_v2_bootstrap() -> None
             private_key,
             b"workstream-loop-memory-signature-v1\0",
         )
-        sentinel = agent_loop / "preserved.txt"
+        sentinel = root / "preserved.txt"
         sentinel.write_text("not generated\n", encoding="utf-8")
 
         assert updater.prepare_generated_state_root(root, public_key) is False
@@ -2689,6 +3003,7 @@ def test_live_and_historical_records_reject_cross_initiative_gates() -> None:
         (root / updater.LEDGER_PATH).write_text(
             f"{updater._canonical_json(entry)}\n", encoding="utf-8"
         )
+        updater._write_projections(root, [record])
         assert_loop_error(
             updater,
             lambda: updater.validate_generated_state(root),
@@ -3080,10 +3395,15 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "LOOP_MEMORY_PRIVATE_KEY" not in workflow
     assert "trap 'rm -f \"${private_key}\"' EXIT" in workflow
     assert "prepare-state" in workflow
-    assert ".agent-loop/STATE.sig" in workflow
-    assert 'git -C "${state_dir}" add -f --' in workflow
+    assert "prepare-output" in workflow
+    assert "validate-tree" in workflow
+    assert "read-tree --empty" in workflow
+    assert 'commit_args=(commit-tree "${generated_tree}")' in workflow
+    assert 'commit_args+=(-p "${parent_sha}")' in workflow
+    assert "rev-parse --verify HEAD" in workflow
+    assert '"${generated_commit}:refs/heads/${STATE_BRANCH}"' in workflow
     assert "--expected-main-sha" in workflow
-    assert "HEAD:refs/heads/${STATE_BRANCH}" in workflow
+    assert "HEAD:refs/heads/${STATE_BRANCH}" not in workflow
     assert "HEAD:refs/heads/main" not in workflow
     assert "gh pr create" not in workflow
     assert "plan-commits" in workflow
@@ -3661,7 +3981,9 @@ def test_generated_loop_memory_validator_covers_corruption_matrix() -> None:
     )
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
-        assert len(checker.generated_state_failures(root)) == 3
+        assert len(checker.generated_state_failures(root)) == len(
+            checker.GENERATED_FILES
+        )
         (root / ".agent-loop").mkdir()
         for relative in checker.GENERATED_FILES:
             (root / relative).write_text("not-json\n", encoding="utf-8")
@@ -3669,6 +3991,9 @@ def test_generated_loop_memory_validator_covers_corruption_matrix() -> None:
 
         (root / checker.GENERATED_FILES[0]).write_text("[]\n", encoding="utf-8")
         (root / checker.GENERATED_FILES[2]).write_text("{}\n", encoding="utf-8")
+        (root / checker.GENERATED_FILES[4]).write_text(
+            '{"schema_version":2,"payloads":[]}\n', encoding="utf-8"
+        )
         assert "expected a JSON object" in checker.generated_state_failures(root)[0]
 
         valid_root = root / "valid"
@@ -4201,8 +4526,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         assert stale_text not in work_queue
     assert (
         "Runtime, focused evidence, and all nine internal tracks pass after "
-        "repair; hosted Backend CI and human review remain"
-        in work_queue
+        "repair; hosted Backend CI and human review remain" in work_queue
     )
     assert "PR-gate chunk: `WS-AUTH-001-09E`" in loop_state
     assert "ActionIds, with 17 active actions" in loop_state
@@ -4218,17 +4542,17 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert (
         "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
         "Runtime, focused evidence, and all nine internal tracks pass after "
-        "repair; hosted Backend CI and human review remain"
-        in auth_map
+        "repair; hosted Backend CI and human review remain" in auth_map
     )
     assert "| `WS-AUTH-001-09E` | PR gate |" in auth_status
     assert (
         "| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | "
         "Runtime, focused evidence, and all nine internal tracks pass after "
-        "repair; hosted Backend CI and human review remain"
-        in work_queue
+        "repair; hosted Backend CI and human review remain" in work_queue
     )
-    assert "No feature action or call site becomes active" in " ".join(loop_state.split())
+    assert "No feature action or call site becomes active" in " ".join(
+        loop_state.split()
+    )
     assert "Merged through PR #129 as `9a04434`" in artifact_map
     assert "Merged through PR #141 as `a10d901`" in artifact_map
     assert "Merged through PR #151 as `1b5422fc`" in artifact_map
@@ -4890,68 +5214,117 @@ def test_local_minio_compose_is_regression_protected() -> None:
 
 
 def test_backend_coverage_thresholds_are_regression_protected() -> None:
-    """Keep both the approved global floor and stricter artifact floor fail closed."""
+    """Keep parallel full-suite fan-in and every coverage floor fail closed."""
     workflow_path = ROOT / ".github/workflows/backend.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
     parsed_workflow = yaml.safe_load(workflow)
-    test_job = parsed_workflow["jobs"]["test"]
-    assert set(test_job) == {"runs-on", "timeout-minutes", "services", "steps"}
-    steps = test_job["steps"]
+    assert parsed_workflow["name"] == "Backend"
+    assert parsed_workflow["permissions"] == {"contents": "read"}
+    assert "pull_request_target" not in workflow
+    assert "paths-ignore" not in workflow and "continue-on-error" not in workflow
+    jobs = parsed_workflow["jobs"]
+    assert set(jobs) == {"preflight", "shards", "api_e2e", "test"}
+
+    postgres_image = (
+        "public.ecr.aws/docker/library/postgres:16@sha256:"
+        "33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
+    )
+    for job_name in ("preflight", "shards", "api_e2e"):
+        assert jobs[job_name]["services"]["postgres"]["image"] == postgres_image
+
+    preflight = jobs["preflight"]
+    assert set(preflight["outputs"]) == {"tree_sha"}
+    assert any(
+        step.get("name") == "Isolated database runner test"
+        and step.get("run") == "python -m pytest -q tests/test_isolated_database_runner.py"
+        for step in preflight["steps"]
+    )
+    plan_steps = [
+        step for step in preflight["steps"] if step.get("name") == "Collect and plan exact test inventory"
+    ]
+    assert len(plan_steps) == 1
+    assert "ci_test_shards.py plan" in str(plan_steps[0]["run"])
+    assert "--shards 4" in str(plan_steps[0]["run"])
+
+    shard_job = jobs["shards"]
+    assert shard_job["needs"] == "preflight"
+    assert shard_job["strategy"] == {
+        "fail-fast": False,
+        "matrix": {"shard": [1, 2, 3, 4]},
+    }
+    shard_steps = shard_job["steps"]
     minio_steps = [
-        step for step in steps if step.get("name") == "Start real MinIO artifact provider"
+        step for step in shard_steps if step.get("name") == "Start real MinIO artifact provider"
     ]
     assert len(minio_steps) == 1
-    assert set(minio_steps[0]) == {"name", "run"}
-    assert str(minio_steps[0]["run"]).strip() == BACKEND_MINIO_START_COMMAND
+    assert "${MINIO_IMAGE}" in str(minio_steps[0]["run"])
+    run_shard_steps = [
+        step for step in shard_steps if str(step.get("name", "")).startswith("Run isolated shard")
+    ]
+    assert len(run_shard_steps) == 1
+    assert "ci_test_shards.py run-shard" in str(run_shard_steps[0]["run"])
+    assert "--cov-fail-under" not in str(run_shard_steps[0]["run"])
+
+    api_steps = jobs["api_e2e"]["steps"]
+    api_e2e_steps = [
+        step for step in api_steps if step.get("name") == "API contract real API e2e"
+    ]
+    assert len(api_e2e_steps) == 1
+    assert "scripts/run_isolated_tests.py" in str(api_e2e_steps[0]["run"])
+    assert "scripts/api_contract_e2e.py" in str(api_e2e_steps[0]["run"])
+    shard_tool = (ROOT / "backend/scripts/ci_test_shards.py").read_text(encoding="utf-8")
+    assert 4800 <= jobs["shards"]["timeout-minutes"] * 60 - 600
+    assert '"4800"' in shard_tool
+    assert 1500 <= jobs["api_e2e"]["timeout-minutes"] * 60 - 300
+    assert "--timeout-seconds 1500" in str(api_e2e_steps[0]["run"])
+
+    test_job = parsed_workflow["jobs"]["test"]
+    assert set(test_job) == {"if", "needs", "runs-on", "timeout-minutes", "steps"}
+    assert test_job["if"] == "${{ always() }}"
+    assert test_job["needs"] == ["preflight", "shards", "api_e2e"]
+    steps = test_job["steps"]
+    upstream = [step for step in steps if step.get("name") == "Require every upstream proof"]
+    assert len(upstream) == 1
+    assert upstream[0]["env"] == {
+        "PREFLIGHT_RESULT": "${{ needs.preflight.result }}",
+        "SHARDS_RESULT": "${{ needs.shards.result }}",
+        "API_E2E_RESULT": "${{ needs.api_e2e.result }}",
+    }
+    assert str(upstream[0]["run"]).count('= success') == 3
+    downloads = [step for step in steps if "actions/download-artifact@" in step.get("uses", "")]
+    assert len(downloads) == 5
+    assert all(
+        step["uses"]
+        == "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
+        and "pattern" not in step.get("with", {})
+        for step in downloads
+    )
+    uploads = [
+        step
+        for job in jobs.values()
+        for step in job["steps"]
+        if "actions/upload-artifact@" in step.get("uses", "")
+    ]
+    assert len(uploads) == 3
+    assert all(
+        step["uses"]
+        == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+        for step in uploads
+    )
+    fan_in = [step for step in steps if step.get("name") == "Validate exact fan-in and combine coverage"]
+    assert len(fan_in) == 1
+    assert "ci_test_shards.py fan-in" in str(fan_in[0]["run"])
+    assert "coverage combine ../.ci/combined-coverage" in str(fan_in[0]["run"])
+
     full_suite_steps = [
         step for step in steps if step.get("name") == "Backend full-suite coverage"
     ]
     assert len(full_suite_steps) == 1
-    full_suite_run = full_suite_steps[0]["run"]
     assert full_suite_steps[0].get("working-directory") == "backend"
-    assert full_suite_steps[0].get("env") == {
-        "WORKSTREAM_TEST_ADMIN_DATABASE_URL": (
-            "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
-        ),
-        "WORKSTREAM_TEST_MINIO_ENDPOINT": "http://127.0.0.1:9000",
-    }
-    for forbidden_key in ("if", "continue-on-error", "shell"):
+    assert full_suite_steps[0]["run"] == "coverage report --precision=2 --fail-under=78"
+    for forbidden_key in ("if", "continue-on-error", "shell", "env"):
         assert forbidden_key not in full_suite_steps[0]
-    assert full_suite_run.strip() == BACKEND_FULL_SUITE_COVERAGE_COMMAND
-    assert "/tmp/workstream-database.json" not in workflow
     full_suite_index = steps.index(full_suite_steps[0])
-    assert steps.index(minio_steps[0]) < full_suite_index
-    isolated_steps = [
-        step for step in steps if step.get("name") == "Isolated database runner test"
-    ]
-    assert len(isolated_steps) == 1
-    isolated_step = isolated_steps[0]
-    assert isolated_step == {
-        "name": "Isolated database runner test",
-        "working-directory": "backend",
-        "env": {
-            "WORKSTREAM_TEST_ADMIN_DATABASE_URL": (
-                "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
-            )
-        },
-        "run": "python -m pytest -q tests/test_isolated_database_runner.py",
-    }
-    assert steps.index(isolated_step) < full_suite_index
-    api_e2e_steps = [
-        step for step in steps if step.get("name") == "API contract real API e2e"
-    ]
-    assert len(api_e2e_steps) == 1
-    api_e2e_step = api_e2e_steps[0]
-    assert set(api_e2e_step) == {"name", "working-directory", "env", "run"}
-    assert api_e2e_step["working-directory"] == "backend"
-    assert api_e2e_step["env"] == {
-        "WORKSTREAM_TEST_ADMIN_DATABASE_URL": (
-            "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
-        )
-    }
-    assert str(api_e2e_step["run"]).strip() == BACKEND_API_CONTRACT_E2E_COMMAND
-    assert steps.index(api_e2e_step) > full_suite_index
-    assert "WORKSTREAM_DATABASE_URL" not in api_e2e_step["env"]
     auth_coverage_steps = [
         step
         for step in steps
@@ -4961,7 +5334,7 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         AUTH_09B_COVERAGE_COMMANDS
     )
     for coverage_step in auth_coverage_steps:
-        assert full_suite_index < steps.index(coverage_step) < steps.index(api_e2e_step)
+        assert full_suite_index < steps.index(coverage_step)
         assert coverage_step.get("working-directory") == "backend"
         for forbidden_key in ("if", "continue-on-error", "shell", "env"):
             assert forbidden_key not in coverage_step
@@ -4987,8 +5360,8 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     later_commands = artifact_expected_coverage_commands_for("06B")
     assert later_commands[0] == FOUNDATION_ARTIFACT_COVERAGE_COMMAND
     assert any("app/modules/checkers/*" in command for command in later_commands)
-    assert workflow.count("--cov-fail-under=78") == 1
-    assert ("--cov=app --cov-report=term-missing --cov-fail-under=78") in workflow
+    assert workflow.count("--fail-under=78") == 1
+    assert "--cov-fail-under" not in workflow
     assert workflow.count("--fail-under=90") == len(expected_coverage) + len(
         AUTH_09B_COVERAGE_COMMANDS
     )

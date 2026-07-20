@@ -26,6 +26,9 @@ STATE_BRANCH = "automation/loop-memory"
 STATE_PATH = Path(".agent-loop/STATE.json")
 RENDERED_PATH = Path(".agent-loop/LOOP_STATE.md")
 LEDGER_PATH = Path(".agent-loop/MERGE_LOG.jsonl")
+WORK_QUEUE_PATH = Path(".agent-loop/WORK_QUEUE.md")
+MANIFEST_PATH = Path(".agent-loop/MANIFEST.json")
+INITIATIVE_STATE_ROOT = Path(".agent-loop/INITIATIVE_STATE")
 SIGNATURE_PATH = Path(".agent-loop/STATE.sig")
 INTENT_PREFIX = ".agent-loop/merge-intents/"
 BOOTSTRAP_INTENT_PATH = f"{INTENT_PREFIX}WS-ENG-001-03.json"
@@ -171,9 +174,7 @@ def parse_loop_metadata(intent_text: str) -> LoopMetadata:
         raise LoopMemoryError(
             "next_chunk_id and next_chunk_title must both be null or both be set"
         )
-    if next_chunk_id is not None and not next_chunk_id.startswith(
-        f"{initiative_id}-"
-    ):
+    if next_chunk_id is not None and not next_chunk_id.startswith(f"{initiative_id}-"):
         raise LoopMemoryError("next_chunk_id must belong to initiative_id")
     explicit_start = payload["next_requires_explicit_start"]
     if not isinstance(explicit_start, bool):
@@ -335,9 +336,7 @@ def _validate_remote_successor_contract(
     """Bind a non-null successor to one contract on the reviewed PR head."""
     if metadata.next_chunk_id is None:
         return
-    tree = client.get_json(
-        f"/repos/{repository}/git/trees/{head_sha}?recursive=1"
-    )
+    tree = client.get_json(f"/repos/{repository}/git/trees/{head_sha}?recursive=1")
     if (
         not isinstance(tree, dict)
         or tree.get("truncated") is not False
@@ -806,6 +805,67 @@ def render_state(state: dict[str, Any]) -> str:
     )
 
 
+def _latest_by_initiative(records: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Return the latest authenticated merge record for each initiative."""
+    latest: dict[str, dict[str, Any]] = {}
+    for record in records:
+        initiative_id = record["completed_chunk"]["initiative_id"]
+        latest[initiative_id] = record
+    return latest
+
+
+def render_work_queue(records: list[dict[str, Any]]) -> str:
+    """Render deterministic stopped/next gates for every observed initiative."""
+    lines = [
+        "# Generated Workstream Work Queue",
+        "",
+        "> Merge-derived projection. Pre-start unmerged work is not represented.",
+        "",
+        "| Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |",
+        "|---|---|---|---|---|",
+    ]
+    for initiative_id, record in sorted(_latest_by_initiative(records).items()):
+        completed = record["completed_chunk"]
+        gate = record["gate"]
+        next_chunk = gate["next_chunk_id"] or "none"
+        explicit = "yes" if gate["next_requires_explicit_start"] else "no"
+        lines.append(
+            f"| `{initiative_id}` | `{completed['chunk_id']}` | "
+            f"`{gate['status']}` | `{next_chunk}` | {explicit} |"
+        )
+    lines.extend(
+        ["", f"Latest global merge: `{records[-1]['source']['main_sha']}`", ""]
+    )
+    return "\n".join(lines)
+
+
+def render_initiative_state(record: dict[str, Any]) -> str:
+    """Render one deterministic merge-derived initiative projection."""
+    source = record["source"]
+    completed = record["completed_chunk"]
+    gate = record["gate"]
+    next_chunk = gate["next_chunk_id"] or "none"
+    return "\n".join(
+        [
+            "# Generated Merge/Start Projection",
+            "",
+            "> Merge-derived state. Pre-start unmerged work is not represented.",
+            "",
+            f"- Initiative: `{completed['initiative_id']}`",
+            f"- Latest completed chunk: `{completed['chunk_id']}` - "
+            f"{_markdown_text(completed['chunk_title'])}",
+            f"- Gate: `{gate['status']}`",
+            f"- Next chunk: `{next_chunk}`",
+            f"- Separate explicit start required: "
+            f"`{str(gate['next_requires_explicit_start']).lower()}`",
+            f"- Source PR: [#{source['pr_number']}]({source['pr_url']})",
+            f"- Source merge: `{source['main_sha']}`",
+            f"- Source event time: `{source['merged_at']}`",
+            "",
+        ]
+    )
+
+
 def _canonical_json(value: Any, *, pretty: bool = False) -> str:
     """Return deterministic JSON text."""
     if pretty:
@@ -831,6 +891,52 @@ def _atomic_write(path: Path, content: str) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(content, encoding="utf-8")
     temporary.replace(path)
+
+
+def _payload_paths(records: list[dict[str, Any]]) -> tuple[Path, ...]:
+    """Return the ordered generated payload paths for the authenticated ledger."""
+    initiative_paths = tuple(
+        INITIATIVE_STATE_ROOT / f"{initiative_id}.md"
+        for initiative_id in sorted(_latest_by_initiative(records))
+    )
+    return tuple(
+        sorted(
+            (
+                STATE_PATH,
+                LEDGER_PATH,
+                RENDERED_PATH,
+                WORK_QUEUE_PATH,
+                *initiative_paths,
+            ),
+            key=lambda path: path.as_posix(),
+        )
+    )
+
+
+def _write_projections(state_root: Path, records: list[dict[str, Any]]) -> None:
+    """Write every deterministic projection and its ordered digest manifest."""
+    latest = _latest_by_initiative(records)
+    _atomic_write(state_root / WORK_QUEUE_PATH, render_work_queue(records))
+    for initiative_id, record in sorted(latest.items()):
+        _atomic_write(
+            state_root / INITIATIVE_STATE_ROOT / f"{initiative_id}.md",
+            render_initiative_state(record),
+        )
+    entries = []
+    for relative_path in _payload_paths(records):
+        content = (state_root / relative_path).read_bytes()
+        entries.append(
+            {
+                "path": relative_path.as_posix(),
+                "sha256": hashlib.sha256(content).hexdigest(),
+            }
+        )
+    _atomic_write(
+        state_root / MANIFEST_PATH,
+        _canonical_json(
+            {"schema_version": SCHEMA_VERSION, "payloads": entries}, pretty=True
+        ),
+    )
 
 
 def _load_json(path: Path) -> dict[str, Any] | None:
@@ -1078,6 +1184,7 @@ def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
     _atomic_write(
         ledger_path, "".join(f"{_canonical_json(entry)}\n" for entry in ledger)
     )
+    _write_projections(state_root, records + [record])
     return True
 
 
@@ -1096,10 +1203,72 @@ def validate_generated_state(state_root: Path) -> None:
         encoding="utf-8"
     ) != render_state(state):
         raise LoopMemoryError("rendered loop state does not match canonical JSON")
+    if not (state_root / WORK_QUEUE_PATH).is_file() or (
+        state_root / WORK_QUEUE_PATH
+    ).read_text(encoding="utf-8") != render_work_queue(records):
+        raise LoopMemoryError("generated work queue does not match merge ledger")
+    latest = _latest_by_initiative(records)
+    for initiative_id, record in latest.items():
+        path = state_root / INITIATIVE_STATE_ROOT / f"{initiative_id}.md"
+        if not path.is_file() or path.read_text(
+            encoding="utf-8"
+        ) != render_initiative_state(record):
+            raise LoopMemoryError(
+                "generated initiative state does not match merge ledger"
+            )
+    manifest = _load_json(state_root / MANIFEST_PATH)
+    expected_entries = []
+    for relative_path in _payload_paths(records):
+        path = state_root / relative_path
+        if not path.is_file() or path.is_symlink():
+            raise LoopMemoryError("generated manifest payload is missing or unsafe")
+        expected_entries.append(
+            {
+                "path": relative_path.as_posix(),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    expected_manifest = {"schema_version": SCHEMA_VERSION, "payloads": expected_entries}
+    if manifest != expected_manifest:
+        raise LoopMemoryError("generated manifest does not match payloads")
+    expected_tree = {item["path"] for item in expected_entries} | {
+        MANIFEST_PATH.as_posix(),
+    }
+    signature_path = state_root / SIGNATURE_PATH
+    if signature_path.exists() or signature_path.is_symlink():
+        expected_tree.add(SIGNATURE_PATH.as_posix())
+    agent_loop = state_root / ".agent-loop"
+    actual_tree = {
+        path.relative_to(state_root).as_posix()
+        for path in agent_loop.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    if actual_tree != expected_tree:
+        raise LoopMemoryError("generated state tree does not match closed manifest")
 
 
 def _signature_payload(state_root: Path) -> bytes:
     """Return an unambiguous payload covering every canonical generated file."""
+    payload = bytearray(b"workstream-loop-memory-signature-v2-projections\0")
+    manifest_bytes = (state_root / MANIFEST_PATH).read_bytes()
+    payload.extend(len(manifest_bytes).to_bytes(8, "big"))
+    payload.extend(manifest_bytes)
+    manifest = _load_json(state_root / MANIFEST_PATH)
+    if manifest is None:
+        raise LoopMemoryError("generated manifest is missing")
+    for item in manifest["payloads"]:
+        relative_path = Path(item["path"])
+        path_bytes = relative_path.as_posix().encode("ascii")
+        content = (state_root / relative_path).read_bytes()
+        payload.extend(len(path_bytes).to_bytes(4, "big"))
+        payload.extend(path_bytes)
+        payload.extend(len(content).to_bytes(8, "big"))
+        payload.extend(content)
+    return bytes(payload)
+
+
+def _legacy_signature_payload(state_root: Path) -> bytes:
+    """Return the pre-04A schema-v2 signature payload for one-time migration."""
     payload = bytearray(b"workstream-loop-memory-signature-v2\0")
     for relative_path in (STATE_PATH, RENDERED_PATH, LEDGER_PATH):
         path_bytes = relative_path.as_posix().encode("ascii")
@@ -1146,7 +1315,23 @@ def verify_generated_state_signature(
     expected_main_sha: str | None = None,
 ) -> None:
     """Verify canonical generated files, signature, and optional main freshness."""
-    validate_generated_state(state_root)
+    legacy = not (state_root / MANIFEST_PATH).exists()
+    if legacy:
+        state = _load_json(state_root / STATE_PATH)
+        ledger = _load_ledger(state_root / LEDGER_PATH)
+        records = _validate_ledger_entries(ledger)
+        if (
+            state is None
+            or not records
+            or _canonical_json(records[-1]) != _canonical_json(state)
+        ):
+            raise LoopMemoryError("legacy generated state is inconsistent")
+        if (state_root / RENDERED_PATH).read_text(encoding="utf-8") != render_state(
+            state
+        ):
+            raise LoopMemoryError("legacy rendered state is inconsistent")
+    else:
+        validate_generated_state(state_root)
     try:
         encoded_signature = (state_root / SIGNATURE_PATH).read_text(encoding="ascii")
         signature = base64.b64decode(encoded_signature.strip(), validate=True)
@@ -1160,7 +1345,11 @@ def verify_generated_state_signature(
     ):
         signature_file.write(signature)
         signature_file.flush()
-        payload_file.write(_signature_payload(state_root))
+        payload_file.write(
+            _legacy_signature_payload(state_root)
+            if legacy
+            else _signature_payload(state_root)
+        )
         payload_file.flush()
         result = subprocess.run(
             [
@@ -1213,7 +1402,15 @@ def prepare_generated_state_root(state_root: Path, public_key: Path) -> bool:
 
     generated_paths = tuple(
         state_root / path
-        for path in (STATE_PATH, RENDERED_PATH, LEDGER_PATH, SIGNATURE_PATH)
+        for path in (
+            STATE_PATH,
+            RENDERED_PATH,
+            LEDGER_PATH,
+            WORK_QUEUE_PATH,
+            MANIFEST_PATH,
+            INITIATIVE_STATE_ROOT,
+            SIGNATURE_PATH,
+        )
     )
     if not any(path.exists() or path.is_symlink() for path in generated_paths):
         return False
@@ -1234,6 +1431,87 @@ def prepare_generated_state_root(state_root: Path, public_key: Path) -> bool:
             _remove_path(path)
         return False
     return True
+
+
+def prepare_generated_output(
+    source_root: Path, output_root: Path, public_key: Path
+) -> bool:
+    """Authenticate prior state and copy only canonical inputs to a fresh root."""
+    if output_root.exists():
+        raise LoopMemoryError("generated output root must not already exist")
+    output_root.mkdir(parents=True)
+    authenticated = prepare_generated_state_root(source_root, public_key)
+    if not authenticated:
+        return False
+    if (source_root / MANIFEST_PATH).exists():
+        manifest = _load_json(source_root / MANIFEST_PATH)
+        if manifest is None:
+            raise LoopMemoryError("generated manifest is missing")
+        source_paths = [Path(item["path"]) for item in manifest["payloads"]]
+    else:
+        source_paths = [STATE_PATH, RENDERED_PATH, LEDGER_PATH]
+    for relative_path in source_paths:
+        source = source_root / relative_path
+        if source.is_symlink() or not source.is_file():
+            raise LoopMemoryError("authenticated canonical input is unsafe")
+        target = output_root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
+    records = _validate_ledger_entries(_load_ledger(output_root / LEDGER_PATH))
+    if not records:
+        raise LoopMemoryError("authenticated canonical input has no ledger records")
+    _write_projections(output_root, records)
+    return True
+
+
+def validate_generated_git_tree(
+    repository_root: Path, tree_sha: str, output_root: Path
+) -> None:
+    """Verify one staged Git tree exactly preserves signed generated bytes."""
+    _validate_sha(tree_sha)
+    validate_generated_state(output_root)
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), "ls-tree", "-r", "-z", tree_sha],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise LoopMemoryError("cannot inspect generated Git tree")
+    entries: dict[str, tuple[str, str]] = {}
+    for raw_entry in result.stdout.split(b"\0"):
+        if not raw_entry:
+            continue
+        try:
+            metadata, raw_path = raw_entry.split(b"\t", 1)
+            mode, object_type, object_sha = metadata.decode("ascii").split()
+            relative_path = raw_path.decode("utf-8")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise LoopMemoryError("generated Git tree entry is malformed") from exc
+        if mode != "100644" or object_type != "blob":
+            raise LoopMemoryError("generated Git tree contains an unsafe file mode")
+        entries[relative_path] = (object_sha, mode)
+    expected_paths = {
+        path.relative_to(output_root).as_posix()
+        for path in (output_root / ".agent-loop").rglob("*")
+        if path.is_file() and not path.is_symlink()
+    }
+    if set(entries) != expected_paths:
+        raise LoopMemoryError(
+            "generated Git tree path set does not match signed output"
+        )
+    for relative_path, (object_sha, _mode) in entries.items():
+        blob = subprocess.run(
+            ["git", "-C", str(repository_root), "cat-file", "blob", object_sha],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if (
+            blob.returncode != 0
+            or blob.stdout != (output_root / relative_path).read_bytes()
+        ):
+            raise LoopMemoryError("generated Git tree blob differs from signed output")
 
 
 def _assert_state_branch(state_root: Path) -> None:
@@ -1275,6 +1553,7 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--repository", required=True)
     update.add_argument("--merge-sha", required=True)
     update.add_argument("--state-root", type=Path, required=True)
+    update.add_argument("--branch-root", type=Path)
     update.add_argument("--token-env", default="GITHUB_TOKEN")
     update.add_argument("--api-url", default="https://api.github.com")
 
@@ -1293,6 +1572,16 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_state = subparsers.add_parser("prepare-state")
     prepare_state.add_argument("--state-root", type=Path, required=True)
     prepare_state.add_argument("--public-key", type=Path, required=True)
+
+    prepare_output = subparsers.add_parser("prepare-output")
+    prepare_output.add_argument("--source-root", type=Path, required=True)
+    prepare_output.add_argument("--output-root", type=Path, required=True)
+    prepare_output.add_argument("--public-key", type=Path, required=True)
+
+    validate_tree = subparsers.add_parser("validate-tree")
+    validate_tree.add_argument("--repository-root", type=Path, required=True)
+    validate_tree.add_argument("--tree-sha", required=True)
+    validate_tree.add_argument("--output-root", type=Path, required=True)
 
     show = subparsers.add_parser("show")
     show.add_argument("--state-root", type=Path, required=True)
@@ -1326,7 +1615,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.command == "update":
-            _assert_state_branch(args.state_root)
+            _assert_state_branch(args.branch_root or args.state_root)
             token = os.environ.get(args.token_env, "")
             record = collect_merge_record(
                 GitHubClient(token, args.api_url),
@@ -1357,6 +1646,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             outcome = "authenticated" if authenticated else "ready for rebuild"
             print(f"Generated loop memory state is {outcome}.")
+        elif args.command == "prepare-output":
+            authenticated = prepare_generated_output(
+                args.source_root, args.output_root, args.public_key
+            )
+            outcome = "authenticated" if authenticated else "ready for rebuild"
+            print(f"Generated loop memory output is {outcome}.")
+        elif args.command == "validate-tree":
+            validate_generated_git_tree(
+                args.repository_root, args.tree_sha, args.output_root
+            )
+            print("Generated Git tree matches signed output.")
         elif args.command == "show":
             validate_generated_state(args.state_root)
             print((args.state_root / RENDERED_PATH).read_text(encoding="utf-8"), end="")

@@ -614,17 +614,30 @@ actions, `actor.service.provision`, `actor.profile.read`,
 identity-link lifecycle actions are active; the other 48 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
-AUTH activation owner, and availability. Until the availability-neutral custody
-transfers merge, the 25 ART and 19 REV rows retain their historical feature
-owner values as an explicitly blocked exception.
+AUTH activation owner, and availability. The availability-neutral custody
+transfers assign all 25 ART rows to eight exact AUTH custodians and all 19 REV
+rows to seven exact AUTH custodians without changing mappings or planned
+availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
+`WS-AUTH-001-REV-05`, `WS-AUTH-001-REV-06`, `WS-AUTH-001-REV-07`,
+`WS-AUTH-001-REV-08`, `WS-AUTH-001-REV-09A`, `WS-AUTH-001-REV-11`, and
+`WS-AUTH-001-REV-12`. Custodian labels grant no reviewer, Operator, or service
+authority; all 19 REV actions remain planned and unavailable. The REV transfer
+adds no migration, registration, evaluator, route, job, service identity, or
+lifecycle behavior, and the four proposed REV lifecycle actions remain
+unregistered.
 Their owning feature must publish the approved principal/resource/guard/surface/
 transaction contract before registration or activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
 blocker, not a reason to relax catalogue checks.
 
 PR #139 requires availability-neutral transfer of all 25 ART and 19 REV owner
-rows to exact AUTH chunks before feature activation. Counts and mappings remain
-unchanged. Catalogue totals are derived from the trusted entry head: four later
+rows to exact AUTH chunks before feature activation. Both transfers are now
+complete. Counts and mappings remain unchanged. The ART transfer adds no migration.
+The REV transfer adds no migration. The ART transfer does not grant Operator
+authority; its `OPERATOR` suffix denotes only future activation custody, and
+verification retry remains independently gated from read/status actions.
+Catalogue totals remain 74 PermissionIds, 65 ActionIds, 17 active actions, and
+48 planned actions. Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
 action, in either order. Neither addition is operational until its complete

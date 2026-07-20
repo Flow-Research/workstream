@@ -1,4 +1,4 @@
-# Chunk Contract: WS-AUTH-001-PREP — Prepared Mutation Authorization Protocol
+# Chunk Contract: WS-AUTH-001-PREP - Prepared Mutation Authorization Protocol
 
 ## Parent initiative
 

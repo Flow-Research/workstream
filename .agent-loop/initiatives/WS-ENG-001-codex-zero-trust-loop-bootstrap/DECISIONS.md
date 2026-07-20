@@ -26,6 +26,27 @@
   cannot be asserted by immutable post-merge metadata.
 - Reject schema v1 everywhere and start the replacement signed ledger from the
   `WS-ENG-001-03` schema-v2 merge intent.
+- Extend `WS-ENG-001` rather than create a parallel engineering-loop initiative.
+- Split projection consistency (`04A`) from explicit-start events (`04B`) so
+  merge completion and human start remain separate authorities.
+- Derive automation-branch Markdown only from typed authenticated state; do not
+  copy authored narrative files from `main` as live projections.
+- Derive global initiative summaries from the latest authenticated ledger record
+  per initiative, not from the single last-merge record alone.
+- Keep manual post-merge memory PRs retired when automation succeeds.
+- Store compact generated initiative projections under the dedicated
+  `.agent-loop/INITIATIVE_STATE/<initiative-id>.md` namespace; never overwrite
+  authored initiative `STATUS.md` histories.
+- Use an ordered `.agent-loop/MANIFEST.json` containing every generated payload
+  path and content digest. The manifest and `STATE.sig` are excluded from the
+  manifest's self-referential entries. Validate the exact Git tree and safe file
+  types first, then sign the manifest bytes followed by its ordered
+  `(path, bytes)` payload entries; only `STATE.sig` is excluded from signature
+  input.
+- Migrate the legacy automation branch by creating a fresh exact tree from an
+  empty temporary Git index and output directory, then make a normal
+  fast-forward child commit. Do not recursively delete the cloned worktree and
+  do not force-push.
 
 ## Deferred
 
@@ -34,3 +55,5 @@
 - Automating reviewer fanout beyond Codex's explicit subagent workflow.
 - Packaging generated-state storage behind a GitHub App or external service;
   the repository-scoped automation branch is sufficient for the current loop.
+- Any external work-coordination registry beyond bounded signed start and
+  cancel/correct events.
