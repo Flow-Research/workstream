@@ -3122,6 +3122,120 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
         await cleanup.commit()
 
 
+@pytest.mark.asyncio
+async def test_prepared_postgresql_rejects_duplicate_supported_grant_and_reuses_sole_row(
+    authorization_factory,
+) -> None:
+    """Current uniqueness makes two same-role eligible mutation grants impossible."""
+    profile_id, link_id = uuid4(), uuid4()
+    grant_id, duplicate_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    async with authorization_factory() as seed:
+        seed.add_all(
+            [
+                ActorProfile(
+                    id=str(profile_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(profile_id),
+                ),
+                ActorIdentityLink(
+                    id=str(link_id),
+                    actor_profile_id=str(profile_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"prepared-sole-grant-{profile_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(profile_id),
+                    last_verified_at=now,
+                ),
+                AdminRoleGrant(
+                    id=grant_id,
+                    target_actor_profile_id=str(profile_id),
+                    role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                    scope_type=AdminScope.SYSTEM.value,
+                    status="active",
+                    version=1,
+                    granted_by_system_principal="workstream:system:bootstrap",
+                    grant_reason="prepared sole grant proof",
+                    granted_at=now,
+                ),
+            ]
+        )
+        await seed.commit()
+
+    async with authorization_factory() as duplicate:
+        duplicate.add(
+            AdminRoleGrant(
+                id=duplicate_id,
+                target_actor_profile_id=str(profile_id),
+                role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                scope_type=AdminScope.SYSTEM.value,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="must violate active system uniqueness",
+                granted_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await duplicate.commit()
+        await duplicate.rollback()
+
+    context = HumanAuthorizationContext(
+        actor_profile_id=profile_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=link_id,
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    async with authorization_factory() as session:
+        await session.begin()
+        repository = AdminAuthorizationRepository(session)
+        authorization = AuthorizationService(
+            session, context, admin_repository=repository
+        )
+        prepared = PreparedAuthorizationService(
+            session, context, authorization, repository
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "sole_grant"}
+        )
+        handle = await prepared.prepare(
+            ActionId.ACTOR_SERVICE_PROVISION,
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+        decision = await prepared.consume(
+            handle,
+            ActionId.ACTOR_SERVICE_PROVISION,
+            caller_input,
+            ServiceActorProvisionResourceContext(
+                resource_type="service_actor_provisioning",
+                resource_id=ServiceIdentity.ARTIFACT_VERIFIER,
+            ),
+        )
+        assert decision.matched_grant_id == grant_id
+        await session.rollback()
+
+    async with authorization_factory() as cleanup:
+        await cleanup.execute(text("alter table admin_role_grants disable trigger user"))
+        await cleanup.execute(
+            text("delete from admin_role_grants where id=:id"), {"id": grant_id}
+        )
+        await cleanup.execute(text("alter table admin_role_grants enable trigger user"))
+        await cleanup.execute(
+            text("delete from actor_identity_links where id=:id"), {"id": str(link_id)}
+        )
+        await cleanup.execute(
+            text("delete from actor_profiles where id=:id"), {"id": str(profile_id)}
+        )
+        await cleanup.commit()
+
+
 class _AdminPolicyFacts:
     """Configurable canonical facts for focused kernel policy tests."""
 

@@ -168,8 +168,14 @@ global capability registry, generic transaction manager, service locator, or cal
   their legitimate target actor/link/grant/project queries after the prepared
   binding and final scope are verified; these queries cannot replace or alter
   the locked request authority. Ordinary `require()` remains unchanged; no second
-  evaluator or decision type is added. Exploding-query tests plus system/project,
-  project-A/project-B, and same-role/two-grant cases reject substitution.
+  evaluator or decision type is added. Exploding-query tests plus system/project
+  and project-A/project-B cases reject substitution. Current supported mutation
+  permissions admit only `access_administrator`, while the active system-role
+  uniqueness constraint makes same-role/two-grant authority structurally
+  impossible. Real PostgreSQL proof rejects that duplicate and shows PREP locks
+  and reports the sole canonical grant. Any future schema/policy that permits
+  two eligible rows must add deterministic precedence and substitution proof
+  before activation.
 - `service_identity`, static service-action matrix membership, and action
   availability are immutable code-owned validations performed after the service
   profile/link locks. They are not database rows and must never be described or
