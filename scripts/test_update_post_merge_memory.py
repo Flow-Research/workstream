@@ -303,6 +303,55 @@ def test_load_legacy_exemptions_is_closed_and_sorted(tmp_path: Path) -> None:
         loop.load_legacy_exemptions(tmp_path)
 
 
+def test_cutover_inventory_is_loaded_from_exact_historical_commit(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    policy = repository / loop.LEGACY_EXEMPTIONS_PATH
+    policy.parent.mkdir(parents=True)
+    subprocess.run(["git", "init", str(repository)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.name", "Loop Test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.email", "loop@test.invalid"],
+        check=True,
+    )
+    inventory_a = {
+        "schema_version": 1,
+        "exemptions": [
+            {"initiative_id": "WS-ART-001", "chunk_id": "WS-ART-001-02C2", "pr_number": 159}
+        ],
+    }
+    inventory_b = {
+        "schema_version": 1,
+        "exemptions": [
+            {"initiative_id": "WS-AUTH-001", "chunk_id": "WS-AUTH-001-PREP", "pr_number": 162}
+        ],
+    }
+    policy.write_text(json.dumps(inventory_a), encoding="utf-8")
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "-m", "cutover"],
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    cutover_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    policy.write_text(json.dumps(inventory_b), encoding="utf-8")
+
+    assert loop.load_legacy_exemptions_at_commit(repository, cutover_sha) == inventory_a[
+        "exemptions"
+    ]
+    with pytest.raises(loop.LoopMemoryError, match="no bounded"):
+        loop.load_legacy_exemptions_at_commit(repository, "f" * 40)
+
+
 def test_apply_event_cli_routes_authenticated_inputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -365,8 +414,8 @@ def test_update_cli_applies_cutover_only_from_explicit_repository_root(
     )
     monkeypatch.setattr(
         loop,
-        "load_legacy_exemptions",
-        lambda root: [{"repository_root": str(root)}],
+        "load_legacy_exemptions_at_commit",
+        lambda root, sha: [{"repository_root": str(root), "commit_sha": sha}],
     )
 
     common = [
@@ -382,7 +431,7 @@ def test_update_cli_applies_cutover_only_from_explicit_repository_root(
     assert loop.main(common + ["--cutover-chunk-id", "WS-ENG-001-04B"]) == 0
     assert captured[-1]["event"]["type"] == "cutover"
     assert captured[-1]["legacy_exemptions"] == [
-        {"repository_root": str(repository_root)}
+        {"repository_root": str(repository_root), "commit_sha": "a" * 40}
     ]
 
 

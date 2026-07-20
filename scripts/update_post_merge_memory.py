@@ -1349,10 +1349,12 @@ def _is_valid_exemption_id(initiative_id: Any, chunk_id: Any) -> bool:
     )
 
 
-def load_legacy_exemptions(repository_root: Path) -> list[dict[str, Any]]:
-    """Load the reviewed, exact pre-cutover merge-only inventory."""
-    payload = _load_json(repository_root / LEGACY_EXEMPTIONS_PATH)
-    if payload is None or set(payload) != {"schema_version", "exemptions"}:
+def _validate_legacy_exemptions(payload: Any) -> list[dict[str, Any]]:
+    """Validate and canonicalize the closed legacy exemption inventory."""
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version",
+        "exemptions",
+    }:
         raise LoopMemoryError("legacy exemption inventory has an invalid schema")
     if payload.get("schema_version") != 1 or not isinstance(payload.get("exemptions"), list):
         raise LoopMemoryError("legacy exemption inventory is unsupported")
@@ -1367,6 +1369,43 @@ def load_legacy_exemptions(repository_root: Path) -> list[dict[str, Any]]:
     if result != sorted(result, key=lambda item: (item["initiative_id"], item["chunk_id"])):
         raise LoopMemoryError("legacy exemption inventory must be sorted")
     return result
+
+
+def load_legacy_exemptions(repository_root: Path) -> list[dict[str, Any]]:
+    """Load the reviewed inventory from the repository working tree."""
+    return _validate_legacy_exemptions(
+        _load_json(repository_root / LEGACY_EXEMPTIONS_PATH)
+    )
+
+
+def load_legacy_exemptions_at_commit(
+    repository_root: Path, commit_sha: str
+) -> list[dict[str, Any]]:
+    """Load the inventory from its immutable cutover commit."""
+    _validate_sha(commit_sha)
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository_root),
+            "show",
+            f"{commit_sha}:{LEGACY_EXEMPTIONS_PATH.as_posix()}",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or len(result.stdout) > 64 * 1024:
+        raise LoopMemoryError(
+            "cutover commit has no bounded legacy exemption inventory"
+        )
+    try:
+        payload = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LoopMemoryError(
+            "cutover commit legacy exemption inventory is invalid JSON"
+        ) from exc
+    return _validate_legacy_exemptions(payload)
 
 
 def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2148,8 +2187,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.cutover_chunk_id
                 and record["completed_chunk"]["chunk_id"] == args.cutover_chunk_id
             ):
-                record["legacy_exemptions"] = load_legacy_exemptions(
-                    args.repository_root
+                record["legacy_exemptions"] = load_legacy_exemptions_at_commit(
+                    args.repository_root,
+                    record["source"]["main_sha"],
                 )
                 record["event"] = {
                     "type": "cutover",

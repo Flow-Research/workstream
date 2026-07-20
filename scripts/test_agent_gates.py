@@ -3393,6 +3393,10 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "HEAD:refs/heads/main" not in workflow
     assert "gh pr create" not in workflow
     assert "plan-commits" in workflow
+    assert workflow.count("--repository-root .") >= 1
+    assert workflow.count("--cutover-chunk-id") == 1
+    assert "--cutover-chunk-id WS-ENG-001-04B" in workflow
+    assert "--cutover-chunk-id ${{" not in workflow
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
     assert "TARGET_SHA" in workflow
