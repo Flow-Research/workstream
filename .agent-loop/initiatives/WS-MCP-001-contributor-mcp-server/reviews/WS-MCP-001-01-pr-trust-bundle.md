@@ -44,6 +44,7 @@ Link the initiative and chunk contract:
 - Required strict coherent checker responses and exact validated Review Context references before publishing successful outcomes.
 - Kept malformed output-schema failures on the server-error path and aligned their operation telemetry with the client-visible infrastructure error.
 - Closed overlapping compact-UUID redaction, Auth-outage classification, locked-context error mapping, and local HTTP operator-documentation gaps found during final review.
+- Reused one closed HTTP client per composed task-resource operation after CodeRabbit identified repeated connection setup.
 
 ## Why It Changed
 
@@ -109,7 +110,7 @@ git diff --check
 ### Result Summary
 
 ```text
-MCP tests: 112 passed at 95.25 percent statement coverage.
+MCP tests: 113 passed at 95.27 percent statement coverage.
 MCP ruff: passed.
 Stale wording, Markdown, authorization, and artifact-contract checks: passed.
 Agent gate regression: 88 passed.
@@ -173,16 +174,16 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 785336e7b36e7518a4cacea0a4abca529993cea3
+Reviewed code SHA: 07b7311e7c19da33774661f11ee384d6ef81849d
 
-Reviewed at: 2026-07-20T07:10:23Z
+Reviewed at: 2026-07-20T07:46:58Z
 
 Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
 | Reviewer | Result | Blocking Findings | Notes |
 |---|---:|---|---|
 | Senior engineering | PASS WITH LOW RISKS | none | No actionable exact-head engineering findings; unavailable authoritative APIs remain explicit follow-up work. |
-| QA/test | PASS WITH LOW RISKS | none | 112 tests pass at 95.25 percent coverage, including agent-facing catalogue, distinct input/output error boundaries, and real SDK HTTP journeys. |
+| QA/test | PASS WITH LOW RISKS | none | 113 tests pass at 95.27 percent coverage, including agent-facing catalogue, composed-client reuse, distinct error boundaries, and real SDK HTTP journeys. |
 | Security/auth | PASS WITH LOW RISKS | none | Existing Auth verification, exact bearer-equivalent redaction, actor isolation, and retryable Auth outage handling are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS WITH LOW RISKS | none | No backend, persistence, or session ownership moved into MCP. |
@@ -199,8 +200,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reconciled head `785336e`. |
-| CodeRabbit | Findings addressed locally; re-review pending | Original findings remain addressed through reconciled head `785336e`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through code head `07b7311`. |
+| CodeRabbit | Findings addressed locally; re-review pending | The composed-client reuse nitpick and all earlier findings are addressed through `07b7311`; rerun after push. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity

@@ -12,9 +12,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 785336e7b36e7518a4cacea0a4abca529993cea3
+Reviewed code SHA: 07b7311e7c19da33774661f11ee384d6ef81849d
 
-Reviewed at: 2026-07-20T07:10:23Z
+Reviewed at: 2026-07-20T07:46:58Z
 
 Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
@@ -25,7 +25,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS WITH LOW RISKS | none | Exact-head review found no actionable engineering issue; unavailable authoritative APIs and full conformance evidence remain bounded follow-up work. |
-| QA/test | PASS WITH LOW RISKS | none | 112 MCP tests prove the catalogue, auth wiring, review lifecycle, safe errors, strict gateway outcomes, and Streamable HTTP response lifecycle at 95.25 percent package coverage. |
+| QA/test | PASS WITH LOW RISKS | none | 113 MCP tests prove the catalogue, auth wiring, review lifecycle, safe errors, strict gateway outcomes, connection reuse, and Streamable HTTP response lifecycle at 95.27 percent package coverage. |
 | security/auth | PASS WITH LOW RISKS | none | Exact UUID-equivalent redaction, actor isolation, fail-closed authority, and distinct retryable Auth outage handling are covered; direct 429/5xx verifier branch tests remain a low risk. |
 | product/ops | PASS AFTER FIXES | none | Revision context identifies the reviewed submission and revised work returns to review while the foundation remains truthful about unavailable APIs. |
 | architecture | PASS WITH LOW RISKS | none | Production remains a thin API adapter with no direct database access, MCP-owned sessions, or scenario runtime configuration. |
@@ -75,6 +75,7 @@ After the reviewed SHA, only review evidence, PR trust-bundle, and status files 
 - Workstream Auth network, throttling, and server failures now produce a secret-safe retryable HTTP `503`, while rejected credentials remain `401`.
 - Invalid authoritative task locked-context responses no longer masquerade as submission errors.
 - The operator README now documents a collision-free local HTTP topology, the `/mcp` endpoint, and every production surface that intentionally fails closed.
+- Composed Task Context and Task Status reads now reuse and close one `httpx.AsyncClient` per gateway operation, preserving connection pooling without creating long-lived credential state.
 
 ## WS-MCP-001 Specification Status
 
@@ -109,7 +110,7 @@ git diff --check
 ## Result Summary
 
 ```text
-MCP tests: 112 passed at 95.25 percent statement coverage.
+MCP tests: 113 passed at 95.27 percent statement coverage.
 MCP ruff: passed.
 Stale wording: passed.
 Markdown links: passed for 11 changed Markdown files.

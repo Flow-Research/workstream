@@ -10,7 +10,7 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through reconciled head `785336e`, with current `main` at `42a89b2`
+addressed through code head `07b7311`, with current `main` at `42a89b2`
 integrated without changing MCP files.
 CodeRabbit and GitHub checks must rerun after the final evidence commit is
 pushed.
@@ -20,7 +20,8 @@ pushed.
 | Finding | Disposition | Evidence |
 |---|---|---|
 | Restrict the MCP job token permissions. | Addressed | The MCP job declares `permissions: contents: read`; checkout credentials remain disabled. |
-| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 95.25 percent. |
+| Enforce 90 percent MCP coverage. | Addressed | CI runs pytest-cov with `--cov-fail-under=90 --cov-precision=2`; the current result is 95.27 percent. |
+| Reuse an HTTP client across composed reads. | Addressed | Task Context and Task Status create one operation-scoped client, reuse it for every subrequest, and close it; a focused regression proves creation count and closure. |
 | Redact secrets inside sets. | Addressed | Recursive set redaction and a regression canary were added. |
 | Hide completed review lease/routing details. | Addressed | `none_available` now returns only source, project, and state. |
 | Check review replay before fixture matching. | Addressed | `claim_review` performs actor-scoped replay/conflict validation before availability checks. |
@@ -62,7 +63,7 @@ pushed.
   active bearer token.
 - Required strict, coherent checker responses and exact review-context references
   before publishing successful MCP outcomes.
-- Expanded protocol regressions; the complete package has 95.25 percent coverage.
+- Expanded protocol regressions; the complete package has 95.27 percent coverage.
 - Redacted exact compact UUID equivalents even when an overlapping hexadecimal window precedes them.
 - Preserved retryable Auth outages as HTTP `503` responses instead of reporting invalid contributor credentials.
 - Documented the production capability boundary and a collision-free local Streamable HTTP topology.
@@ -74,6 +75,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until reconciled head `785336e` and its
+Do not resolve the review as complete until code head `07b7311` and its
 evidence commit are pushed and CodeRabbit/GitHub checks report against that head.
 Do not merge without explicit human approval.
