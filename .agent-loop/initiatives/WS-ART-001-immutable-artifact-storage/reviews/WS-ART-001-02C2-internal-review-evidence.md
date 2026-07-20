@@ -49,11 +49,11 @@ exact-SHA review.
 | architecture | PASS WITH LOW RISKS | None | No runtime, migration, transaction, provider, or activation boundary drift. |
 | QA/test | PASS WITH LOW RISKS | None | Focused proof passes; hosted full suite is the authoritative outstanding gate. |
 | security/auth | PASS WITH LOW RISKS | None | Prior rollback-exception retention blocker is resolved; fail-closed custody is preserved. |
-| product/ops | PASS WITH CONDITIONS | None | Custody is availability-neutral; hosted Backend and human approval remain. |
+| product/ops | PASS WITH LOW RISKS | None | Custody is availability-neutral; hosted Backend and human approval remain external gates. |
 | reuse/dedup | PASS WITH LOW RISKS | None | Existing provider, authority, outbox, fence, and state abstractions are reused. |
-| CI integrity | PASS WITH HOSTED-CI CONDITION | None | No bypass or threshold change; require hosted full suite and coverage gates. |
+| CI integrity | PASS WITH LOW RISKS | None | No bypass or threshold change; hosted full suite and coverage gates remain mandatory. |
 | test delta | PASS WITH LOW RISKS | None | No removed/skipped/weakened test or coverage exclusion. |
-| docs | PASS after evidence refresh | None | Runtime/state docs pass; closure artifacts now bind the final candidate and latest main. |
+| docs | PASS WITH LOW RISKS | None | Closure docs bind the final candidate; hosted current-head checks remain external gates. |
 
 All nine tracks confirmed the exact reviewed SHA or its latest-main-only delta.
 No reviewer session remains open.
