@@ -3,12 +3,14 @@ from __future__ import annotations
 import ast
 import asyncio
 import base64
+import copy
 from collections import UserDict
 from collections.abc import Iterator, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 import inspect
 import json
+import pickle
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -22,8 +24,12 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.api.deps.authorization import get_authorization_actor, get_authorization_service
-from app.core.api_controls import StructuredHTTPException
+from app.api.deps.authorization import (
+    get_authorization_actor,
+    get_authorization_service,
+    get_prepared_authorization_service,
+)
+from app.core.api_controls import StructuredHTTPException, request_ids
 from app.core.config import get_settings
 from app.modules.audit.schemas import (
     ActorReferenceKind,
@@ -96,6 +102,10 @@ from app.modules.authorization.schemas import (
 )
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.prepared import (
+    PreparedAuthorizationHandle,
+    PreparedAuthorizationService,
+)
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.admin_service import (
     AdminRoleGrantService,
@@ -123,6 +133,11 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     HumanAuthorizationContext,
     IdentityLinkStatus,
+    PreparedAuthorizationHandleInvalid,
+    PreparedAuthorizationInput,
+    PreparedAuthorizationUnsupported,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
     ServiceActorProvisionResourceContext,
@@ -1446,6 +1461,542 @@ def _runtime_service(
     evidence = _DecisionEvidence()
     service._audit = evidence  # type: ignore[assignment]
     return service, evidence
+
+
+class _PreparedTestSession:
+    """Minimal stable-root session contract for capability unit tests."""
+
+    def __init__(self) -> None:
+        self.root = SimpleNamespace(is_active=True)
+        self.nested = False
+        self.sync_session = self
+
+    def get_transaction(self):
+        return self.root
+
+    def in_nested_transaction(self) -> bool:
+        return self.nested
+
+
+class _PreparedActorFacts:
+    def __init__(self, context: HumanAuthorizationContext) -> None:
+        self.context = context
+        self.calls = 0
+
+    async def lock_actor_self(self, actor_profile_id, identity_link_id):
+        self.calls += 1
+        return (
+            SimpleNamespace(
+                id=str(identity_link_id),
+                actor_profile_id=str(actor_profile_id),
+                status="active",
+            ),
+            SimpleNamespace(
+                id=str(actor_profile_id), actor_kind="human", status="active"
+            ),
+        )
+
+
+class _PreparedAdminFacts(_PreparedActorFacts):
+    def __init__(self, context: HumanAuthorizationContext) -> None:
+        super().__init__(context)
+        self.grant_id = uuid4()
+        self.control_calls = 0
+        self.grant_calls = 0
+        self.target_calls = 0
+
+    async def lock_control(self):
+        self.control_calls += 1
+        return SimpleNamespace(id=1)
+
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        return await self.lock_actor_self(actor_profile_id, identity_link_id)
+
+    async def find_effective_grant(self, *_args, **_kwargs):
+        self.grant_calls += 1
+        return SimpleNamespace(id=self.grant_id, status="active")
+
+    async def lock_eligible_human(self, actor_profile_id):
+        self.target_calls += 1
+        return (
+            SimpleNamespace(id=str(uuid4()), actor_profile_id=str(actor_profile_id)),
+            SimpleNamespace(id=str(actor_profile_id)),
+        )
+
+    async def project_exists(self, _project_id, *, for_update=False):
+        return True
+
+
+@pytest.mark.asyncio
+async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bound():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context)
+    facts = _PreparedActorFacts(context)
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(),
+        request_value={"display_name": "Prepared"},
+    )
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+        actor_profile_id=context.actor_profile_id,
+    )
+    handle = await prepared.prepare(
+        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
+    )
+    assert repr(handle) == "<PreparedAuthorizationHandle>"
+    assert facts.calls == 1
+
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ACTOR_PROFILE_READ_SELF,
+            caller_input,
+            ActorSelfResourceContext(
+                resource_type="actor_profile",
+                resource_id=context.actor_profile_id,
+                requested_fields=("display_name",),
+            ),
+        )
+    assert evidence.events == []
+
+    decision = await prepared.consume(
+        handle,
+        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+        caller_input,
+        ActorSelfResourceContext(
+            resource_type="actor_profile",
+            resource_id=context.actor_profile_id,
+            requested_fields=("display_name",),
+        ),
+    )
+    assert decision.allowed is True
+    assert len(evidence.events) == 1
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            caller_input,
+            ActorSelfResourceContext(
+                resource_type="actor_profile",
+                resource_id=context.actor_profile_id,
+                requested_fields=("display_name",),
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context)
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        _PreparedActorFacts(context),  # type: ignore[arg-type]
+    )
+    idempotency_key = uuid4()
+    original = PreparedAuthorizationInput(idempotency_key=idempotency_key, request_value={"v": 1})
+    handle = await prepared.prepare(
+        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+        original,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+            actor_profile_id=context.actor_profile_id,
+        ),
+    )
+    resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=("contact_email",),
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            PreparedAuthorizationInput(
+                idempotency_key=idempotency_key, request_value={"v": 2}
+            ),
+            resource,
+        )
+    assert evidence.events == []
+
+    old_root = session.root
+    session.root = SimpleNamespace(is_active=True)
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, original, resource
+        )
+    session.root = old_root
+    decision = await prepared.consume(
+        handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, original, resource
+    )
+    assert decision.allowed is True
+
+
+def test_prepared_handle_rejects_construction_and_serializable_inputs():
+    with pytest.raises(TypeError):
+        PreparedAuthorizationHandle()
+    with pytest.raises(ValidationError):
+        PreparedAuthorizationInput(
+            idempotency_key=uuid4(),
+            request_value={"not_json": object()},  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roots():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, _ = _runtime_service(context)
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        _PreparedActorFacts(context),  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value={"display_name": "opaque"}
+    )
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+        actor_profile_id=context.actor_profile_id,
+    )
+    handle = await prepared.prepare(
+        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
+    )
+    forged = object.__new__(PreparedAuthorizationHandle)
+    resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=("display_name",),
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            forged, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+    with pytest.raises(copy.Error):
+        copy.copy(handle)
+    with pytest.raises(copy.Error):
+        copy.deepcopy(handle)
+    with pytest.raises(TypeError):
+        pickle.dumps(handle)
+    with pytest.raises(TypeError):
+        json.dumps(handle)
+    with pytest.raises(AttributeError):
+        handle.capability = "leak"  # type: ignore[attr-defined]
+
+    session.nested = True
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+    session.nested = False
+    prepared.close()
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepared_admin_consume_reuses_exact_locked_grant_without_requery():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context)
+    facts = _PreparedAdminFacts(context)
+    authorization._admin = facts  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value={"role": "project_manager"}
+    )
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    handle = await prepared.prepare(ActionId.ADMIN_ROLE_GRANT_ISSUE, caller_input, scope)
+    assert (facts.control_calls, facts.calls, facts.grant_calls) == (1, 1, 1)
+    target_id = uuid4()
+    decision = await prepared.consume(
+        handle,
+        ActionId.ADMIN_ROLE_GRANT_ISSUE,
+        caller_input,
+        AdminRoleGrantIssueResourceContext(
+            resource_type="admin_role_grant_issue",
+            resource_id=target_id,
+            role=AdminRole.ACCESS_ADMINISTRATOR,
+            scope_type=AdminScope.SYSTEM,
+        ),
+    )
+    assert decision.allowed is True
+    assert decision.matched_grant_id == facts.grant_id
+    assert (facts.control_calls, facts.calls, facts.grant_calls) == (1, 1, 1)
+    assert facts.target_calls == 1
+    assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_prepared_exact_consume_remains_spent_after_cancellation():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, _ = _runtime_service(context)
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        _PreparedActorFacts(context),  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value={"display_name": "cancel"}
+    )
+    handle = await prepared.prepare(
+        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+        caller_input,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+            actor_profile_id=context.actor_profile_id,
+        ),
+    )
+    entered = asyncio.Event()
+    blocked = asyncio.Event()
+
+    async def wait_during_evaluation(*_args):
+        entered.set()
+        await blocked.wait()
+
+    authorization._require_prelocked = wait_during_evaluation  # type: ignore[method-assign]
+    resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=("display_name",),
+    )
+    task = asyncio.create_task(
+        prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+    )
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepared_fixed_service_refreshes_rows_before_planned_denial():
+    context = _runtime_context(actor_kind=ActorKind.SERVICE)
+    assert isinstance(context, ServiceAuthorizationContext)
+
+    class ServiceFacts:
+        calls = 0
+
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            self.calls += 1
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind="service",
+                    status="active",
+                    service_identity=context.service_identity.value,
+                ),
+            )
+
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context)
+    facts = ServiceFacts()
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported):
+        await prepared.prepare(
+            ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    assert facts.calls == 1
+    assert evidence.events == []
+
+
+@pytest.mark.asyncio
+async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_root():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, _ = _runtime_service(context)
+    facts = _PreparedAdminFacts(context)
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
+    with pytest.raises(PreparedAuthorizationUnsupported):
+        await prepared.prepare(
+            ActionId.ACTOR_PROFILE_SUSPEND,
+            caller_input,
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()
+            ),
+        )
+    with pytest.raises(PreparedAuthorizationUnsupported):
+        await prepared.prepare(
+            "unknown",  # type: ignore[arg-type]
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    async def missing_grant(*_args, **_kwargs):
+        return None
+
+    facts.find_effective_grant = missing_grant  # type: ignore[method-assign]
+    with pytest.raises(PreparedAuthorizationUnsupported):
+        await prepared.prepare(
+            ActionId.ADMIN_ROLE_GRANT_ISSUE,
+            caller_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    session.root.is_active = False
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            caller_input,
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+                actor_profile_id=context.actor_profile_id,
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_prepared_actor_self_commits_evidence_and_neutral_participant_together(
+    authorization_factory,
+) -> None:
+    """Real PostgreSQL proves AUTH evidence and participant share caller commit."""
+    profile_id, link_id = uuid4(), uuid4()
+    request_id, correlation_id = uuid4(), uuid4()
+    now = datetime.now(UTC)
+    async with authorization_factory() as session:
+        session.add_all(
+            [
+                ActorProfile(
+                    id=str(profile_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(profile_id),
+                ),
+                ActorIdentityLink(
+                    id=str(link_id),
+                    actor_profile_id=str(profile_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"prepared-{profile_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(profile_id),
+                    last_verified_at=now,
+                ),
+            ]
+        )
+        await session.commit()
+        await session.execute(
+            text("create temporary table prepared_participant (id int primary key, value int)")
+        )
+        await session.execute(text("insert into prepared_participant values (1, 0)"))
+        await session.commit()
+
+        context = HumanAuthorizationContext(
+            actor_profile_id=profile_id,
+            actor_kind=ActorKind.HUMAN,
+            actor_status=ActorStatus.ACTIVE,
+            identity_link_id=link_id,
+            identity_link_status=IdentityLinkStatus.ACTIVE,
+            request_id=request_id,
+            correlation_id=correlation_id,
+        )
+        authorization = AuthorizationService(session, context)
+        prepared = PreparedAuthorizationService(
+            session,
+            context,
+            authorization,
+            AdminAuthorizationRepository(session),
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(),
+            request_value={"display_name": "end-to-end"},
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+            actor_profile_id=profile_id,
+        )
+
+        await session.begin()
+        handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
+        )
+        await session.execute(
+            text("select value from prepared_participant where id=1 for update")
+        )
+        decision = await prepared.consume(
+            handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            caller_input,
+            ActorSelfResourceContext(
+                resource_type="actor_profile",
+                resource_id=profile_id,
+                requested_fields=("display_name",),
+            ),
+        )
+        await session.execute(
+            text("update prepared_participant set value=1 where id=1")
+        )
+        await session.commit()
+        assert await session.scalar(
+            text("select value from prepared_participant where id=1")
+        ) == 1
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:event_id"),
+            {"event_id": str(decision.decision_id)},
+        ) == 1
+        await session.rollback()
+
+        await session.execute(text("alter table audit_events disable trigger user"))
+        await session.execute(
+            text("delete from audit_events where id=:event_id"),
+            {"event_id": str(decision.decision_id)},
+        )
+        await session.execute(text("alter table audit_events enable trigger user"))
+        await session.execute(
+            text("delete from actor_identity_links where id=:id"), {"id": str(link_id)}
+        )
+        await session.execute(
+            text("delete from actor_profiles where id=:id"), {"id": str(profile_id)}
+        )
+        await session.commit()
 
 
 class _AdminPolicyFacts:
@@ -3097,6 +3648,44 @@ async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction
 
     assert len(evidence.events) == 1
     assert session.rollback_count == 1
+
+
+async def test_prepared_dependency_closes_handles_without_committing() -> None:
+    class Session:
+        commit_count = 0
+
+        async def commit(self):
+            self.commit_count += 1
+
+    actor_id, link_id = uuid4(), uuid4()
+    resolved = SimpleNamespace(
+        profile=SimpleNamespace(id=str(actor_id), actor_kind="human", status="active"),
+        identity_link=SimpleNamespace(id=str(link_id), status="active"),
+    )
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+    context = HumanAuthorizationContext(
+        actor_profile_id=actor_id,
+        actor_kind=ActorKind.HUMAN,
+        actor_status=ActorStatus.ACTIVE,
+        identity_link_id=link_id,
+        identity_link_status=IdentityLinkStatus.ACTIVE,
+        request_id=UUID(request_ids(request)[0]),
+        correlation_id=UUID(request_ids(request)[1]),
+    )
+    session = Session()
+    authorization, _ = _runtime_service(context)
+    dependency = get_prepared_authorization_service(
+        request,
+        resolved,  # type: ignore[arg-type]
+        session,  # type: ignore[arg-type]
+        authorization,
+    )
+    service = await anext(dependency)
+    assert service._closed is False
+    with pytest.raises(StopAsyncIteration):
+        await anext(dependency)
+    assert service._closed is True
+    assert session.commit_count == 0
 
 
 async def test_authorization_dependency_admits_service_without_human_rate_control(

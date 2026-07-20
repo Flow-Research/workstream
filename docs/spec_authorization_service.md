@@ -581,6 +581,28 @@ AUTH locks AuthorityControl first when final-admin safety applies
 -> route or service command commits once
 ```
 
+The PREP foundation currently issues handles only for
+`actor.profile.update_self` and the eight active AdminRoleGrant-backed
+administrative mutations. Actor-self preparation locks the exact caller
+profile and then its exact identity link. Administrative preparation locks
+`AuthorityControl(id=1)`, the exact request profile, exact request identity
+link, and one deterministic effective AdminRoleGrant. The caller supplies an
+independent expected ActionId when consuming the handle; AUTH checks it before
+consumption, then checks the canonical request digest, idempotency UUID, exact
+root transaction, and final actor-self/system/exact-project scope. A matching
+attempt consumes the handle permanently before evaluation or evidence staging.
+Cancellation and failures propagate to caller-owned rollback and never restore
+the capability.
+
+PREP intentionally ships no feature consumer. Its PostgreSQL participant is a
+test-only neutral row proving that final facts, one decision event, participant
+work, and caller commit or rollback share the same transaction. Fixed services
+are locked and refreshed before their current planned-action denial, but no
+positive fixed-service prepared capability exists until the first separately
+activated consumer proves it. ProjectRoleGrant does not exist in PREP; AUTH-10
+must add its exact row lock, evaluator branch, and crossed-revocation evidence
+before an exact-project product consumer can use that authority source.
+
 Service identity, static service-action matrix membership, and action
 availability are immutable code-owned validations after the service profile and
 link locks; they are not database rows or lock targets. Existing actor-self,
@@ -608,7 +630,9 @@ deactivation, exact grant revocation, and final-admin mutation.
 For the two active self actions, the default human authority source is
 `actor_self`; token roles and client-supplied permissions never enter the
 context. Self-read requires an active link and an active or suspended actor.
-Self-update additionally locks the exact link followed by its linked profile,
+Self-update through ordinary request authorization retains its existing
+revalidation behavior; prepared self-update locks the exact profile followed by
+its exact link,
 rebuilds current context inside the caller transaction, and requires an active
 actor plus a non-empty subset of `display_name` and `contact_email`. Revoked
 links, deactivated actors, and suspended updates deny in that order. Planned

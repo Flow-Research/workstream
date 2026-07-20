@@ -26,6 +26,8 @@ from app.modules.actors.service import (
 )
 from app.modules.api_controls.service import FIRST_ACCESS_SCOPE, RateControlService
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.prepared import PreparedAuthorizationService
+from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorSelfResourceContext,
@@ -204,3 +206,24 @@ async def get_authorization_service(
     else:
         if session.in_transaction():
             await session.rollback()
+
+
+async def get_prepared_authorization_service(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+) -> AsyncIterator[PreparedAuthorizationService]:
+    """Compose one request-local prepared service without taking commit ownership."""
+    request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    context = _authorization_context(resolved, request_id, correlation_id)
+    service = PreparedAuthorizationService(
+        session,
+        context,
+        authorization,
+        AdminAuthorizationRepository(session),
+    )
+    try:
+        yield service
+    finally:
+        service.close()

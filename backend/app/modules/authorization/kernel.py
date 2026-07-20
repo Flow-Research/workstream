@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -19,6 +20,7 @@ from app.modules.authorization.catalogue import (
     SERVICE_ACTIONS_BY_IDENTITY,
     ActionAvailability,
     ActionId,
+    PermissionId,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
@@ -94,6 +96,18 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _PrelockedAuthority:
+    """AUTH-private authority facts locked by the prepared protocol."""
+
+    context: AuthorizationContext
+    action_id: ActionId
+    scope_project_id: UUID | None
+    matched_grant_id: UUID | None
+    matched_grant_status: str | None
+    permission_id: PermissionId
 
 
 class AuthorizationService:
@@ -172,6 +186,72 @@ class AuthorizationService:
             matched_grant_id=matched_grant_id,
             matched_scope_project_id=matched_project_id,
             revalidated=revalidated,
+            request_id=context.request_id,
+            correlation_id=context.correlation_id,
+        )
+        await self._stage_decision(decision, context.actor_profile_id)
+        if not decision.allowed:
+            self._pending_denial = decision
+            raise AuthorizationDenied(decision)
+        return decision
+
+    async def _require_prelocked(
+        self,
+        action_id: ActionId,
+        resource_context: AuthorizationResourceContext,
+        authority: _PrelockedAuthority,
+    ) -> AuthorizationDecision:
+        """Evaluate final facts using exact authority already locked by AUTH."""
+        self._pending_denial = None
+        action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
+        context = authority.context
+        denial: AuthorizationDenialCode | None
+        matched_kind = None
+        matched_grant_id = None
+        matched_project_id = None
+        if action is None or authority.action_id is not action_id:
+            denial = AuthorizationDenialCode.UNKNOWN_ACTION
+        elif authority.permission_id != action.permission_id:
+            denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+        elif action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF:
+            denial = self._denial(action_id, action, resource_context, context, True)
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.ACTOR_SELF
+        elif action_id in _ADMIN_MUTATIONS:
+            denial = self._lifecycle_denial(context)
+            if denial is None and action.availability is not ActionAvailability.ACTIVE:
+                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+            if denial is None and not self._admin_resource_matches(action_id, resource_context):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            final_scope = self._resource_project_id(resource_context)
+            if denial is None and final_scope != authority.scope_project_id:
+                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+            if denial is None and (
+                authority.matched_grant_id is None
+                or authority.matched_grant_status != "active"
+            ):
+                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            if denial is None:
+                denial = await self._admin_guard(action_id, resource_context, context)
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
+                matched_grant_id = authority.matched_grant_id
+                matched_project_id = authority.scope_project_id
+        else:
+            denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+        decision = AuthorizationDecision(
+            decision_id=uuid4(),
+            action_id=action.action_id if action is not None else None,
+            permission_id=action.permission_id if action is not None else None,
+            allowed=denial is None,
+            denial_code=denial,
+            resource_type=resource_context.resource_type,
+            resource_id=resource_context.resource_id,
+            resource_context_digest=authorization_resource_digest(resource_context),
+            matched_authority_kind=matched_kind,
+            matched_grant_id=matched_grant_id,
+            matched_scope_project_id=matched_project_id,
+            revalidated=True,
             request_id=context.request_id,
             correlation_id=context.correlation_id,
         )
