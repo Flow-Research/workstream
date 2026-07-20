@@ -3382,12 +3382,12 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "trap 'rm -f \"${private_key}\"' EXIT" in workflow
     assert "prepare-state" in workflow
     assert "prepare-output" in workflow
-    assert "validate-tree" in workflow
-    assert "read-tree --empty" in workflow
-    assert 'commit_args=(commit-tree "${generated_tree}")' in workflow
-    assert 'commit_args+=(-p "${parent_sha}")' in workflow
+    assert "update_post_merge_memory.py publish" in workflow
+    assert "validate-tree" not in workflow
+    assert "read-tree --empty" not in workflow
+    assert "commit-tree" not in workflow
     assert "rev-parse --verify HEAD" in workflow
-    assert '"${generated_commit}:refs/heads/${STATE_BRANCH}"' in workflow
+    assert "git push" not in workflow
     assert "--expected-main-sha" in workflow
     assert "HEAD:refs/heads/${STATE_BRANCH}" not in workflow
     assert "HEAD:refs/heads/main" not in workflow

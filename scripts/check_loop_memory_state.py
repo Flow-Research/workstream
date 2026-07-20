@@ -190,6 +190,23 @@ def _metadata_failures(metadata: object, label: str) -> list[str]:
 
 def _record_failures(record: object, label: str) -> list[str]:
     """Independently validate one complete schema-v2 state record."""
+    if (
+        isinstance(record, dict)
+        and isinstance(record.get("event"), dict)
+        and record["event"].get("type") == "cutover"
+    ):
+        event = record["event"]
+        base = json.loads(json.dumps(record))
+        base.pop("event")
+        failures = _record_failures(base, label)
+        if set(event) != {"type", "main_sha", "legacy_exemptions"}:
+            failures.append(f"{label}: invalid cutover event schema")
+        elif (
+            event.get("main_sha") != record.get("source", {}).get("main_sha")
+            or event.get("legacy_exemptions") != record.get("legacy_exemptions")
+        ):
+            failures.append(f"{label}: cutover event does not match signed state")
+        return failures
     if isinstance(record, dict) and "event" in record:
         event = record.get("event")
         if not isinstance(event, dict) or event.get("type") not in {"start", "cancel"}:
@@ -413,12 +430,23 @@ def _markdown_text(value: str) -> str:
     )
 
 
-def _render_state(state: dict) -> str:
+def _is_merge_record(record: dict) -> bool:
+    return "event" not in record or record.get("event", {}).get("type") in {
+        "merge", "cutover"
+    }
+
+
+def _latest_merge_record(records: list[dict]) -> dict:
+    return next(record for record in reversed(records) if _is_merge_record(record))
+
+
+def _render_state(state: dict, records: list[dict] | None = None) -> str:
     """Independently render the expected human-readable state."""
-    source = state["source"]
-    completed = state["completed_chunk"]
+    global_record = _latest_merge_record(records) if records is not None else state
+    source = global_record["source"]
+    completed = global_record["completed_chunk"]
     gate = state["gate"]
-    checks = state["checks"]
+    checks = global_record["checks"]
     next_line = "- Next chunk: none recorded."
     if gate["next_chunk_id"]:
         start = (
@@ -435,11 +463,18 @@ def _render_state(state: dict) -> str:
         for name in REQUIRED_CHECKS
     ]
     integrity = "passed" if checks["all_required_passed"] else "attention required"
-    active_chunk = state["active"]["implementation_chunk"]
-    active_line = (
-        f"- Active implementation chunk: `{active_chunk}`"
-        if active_chunk
-        else "- Active implementation chunk: none"
+    active_chunks = []
+    if records is None:
+        active = state["active"]["implementation_chunk"]
+        active_chunks = [active] if active else []
+    else:
+        active_chunks = sorted(
+            record["active"]["implementation_chunk"]
+            for record in _latest_by_initiative(records).values()
+            if record["active"]["implementation_chunk"]
+        )
+    active_line = "- Active implementation chunks: " + (
+        ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
     )
     return "\n".join(
         [
@@ -457,7 +492,7 @@ def _render_state(state: dict) -> str:
             f"`{source['intent_blob_sha']}`",
             f"- Completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
-            "- Active planning chunk: none",
+            "- Active planning chunks: none",
             active_line,
             f"- Current gate: `{gate['status']}`",
             next_line,
@@ -496,9 +531,8 @@ def _render_work_queue(records: list[dict]) -> str:
             f"`{gate['status']}` | `{gate['next_chunk_id'] or 'none'}` | "
             f"{'yes' if gate['next_requires_explicit_start'] else 'no'} |"
         )
-    lines.extend(
-        ["", f"Latest global merge: `{records[-1]['source']['main_sha']}`", ""]
-    )
+    latest_merge = _latest_merge_record(records)
+    lines.extend(["", f"Latest global merge: `{latest_merge['source']['main_sha']}`", ""])
     return "\n".join(lines)
 
 
@@ -608,7 +642,7 @@ def generated_state_failures(root: Path) -> list[str]:
         failures.append(
             ".agent-loop/MERGE_LOG.jsonl: ledger tail does not match live state"
         )
-    if not failures and rendered != _render_state(state):
+    if not failures and rendered != _render_state(state, ledger_records):
         failures.append(
             ".agent-loop/LOOP_STATE.md: rendered state does not match canonical JSON"
         )

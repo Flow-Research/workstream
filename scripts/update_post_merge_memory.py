@@ -819,6 +819,17 @@ def _validate_event(event: Any) -> str:
     return event_type
 
 
+def _validate_cutover_event(event: Any, exemptions: Any, main_sha: Any) -> None:
+    if not isinstance(event, dict) or set(event) != {
+        "type", "main_sha", "legacy_exemptions"
+    }:
+        raise LoopMemoryError("cutover event has an invalid schema")
+    if event.get("type") != "cutover" or event.get("main_sha") != main_sha:
+        raise LoopMemoryError("cutover event is not bound to its merge")
+    if event.get("legacy_exemptions") != exemptions:
+        raise LoopMemoryError("cutover event exemptions do not match signed state")
+
+
 def collect_authority_event(
     client: GitHubClient,
     repository: str,
@@ -846,14 +857,16 @@ def collect_authority_event(
         raise LoopMemoryError("workflow dispatcher evidence does not match")
     if not isinstance(approvals, list):
         raise LoopMemoryError("workflow approval history is invalid")
+    approved = [item for item in approvals if isinstance(item, dict) and item.get("state") == "approved"]
+    if not approved or any(
+        not isinstance(item.get("environments"), list)
+        or len(item["environments"]) != 1
+        or item["environments"][0].get("name") != "loop-memory-start"
+        for item in approved
+    ):
+        raise LoopMemoryError("approval history is not bound to loop-memory-start")
     reviewers = sorted(
-        {
-            item.get("user", {}).get("login")
-            for item in approvals
-            if isinstance(item, dict)
-            and item.get("state") == "approved"
-            and item.get("user", {}).get("login")
-        }
+        {item.get("user", {}).get("login") for item in approved if item.get("user", {}).get("login")}
     )
     event = {
         "type": action,
@@ -872,12 +885,22 @@ def collect_authority_event(
     return event
 
 
-def render_state(state: dict[str, Any]) -> str:
+def _latest_merge_record(records: list[dict[str, Any]]) -> dict[str, Any]:
+    for record in reversed(records):
+        if _event_type(record) in {"merge", "cutover"}:
+            return record
+    raise LoopMemoryError("ledger has no merge record")
+
+
+def render_state(
+    state: dict[str, Any], records: list[dict[str, Any]] | None = None
+) -> str:
     """Render the canonical JSON state as a concise human-readable view."""
-    source = state["source"]
-    completed = state["completed_chunk"]
+    global_record = _latest_merge_record(records) if records is not None else state
+    source = global_record["source"]
+    completed = global_record["completed_chunk"]
     gate = state["gate"]
-    checks = state["checks"]
+    checks = global_record["checks"]
     next_line = "- Next chunk: none recorded."
     if gate["next_chunk_id"]:
         start = (
@@ -894,11 +917,18 @@ def render_state(state: dict[str, Any]) -> str:
         result = checks["required"][name]
         check_lines.append(f"  - `{name}`: `{result['conclusion'] or 'missing'}`")
     integrity = "passed" if checks["all_required_passed"] else "attention required"
-    active_chunk = state["active"]["implementation_chunk"]
-    active_line = (
-        f"- Active implementation chunk: `{active_chunk}`"
-        if active_chunk
-        else "- Active implementation chunk: none"
+    active_chunks = []
+    if records is None:
+        active = state["active"]["implementation_chunk"]
+        active_chunks = [active] if active else []
+    else:
+        active_chunks = sorted(
+            record["active"]["implementation_chunk"]
+            for record in _latest_by_initiative(records).values()
+            if record["active"]["implementation_chunk"]
+        )
+    active_line = "- Active implementation chunks: " + (
+        ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
     )
     return "\n".join(
         [
@@ -915,7 +945,7 @@ def render_state(state: dict[str, Any]) -> str:
             f"- Merge intent: `{source['intent_path']}` at blob `{source['intent_blob_sha']}`",
             f"- Completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
-            "- Active planning chunk: none",
+            "- Active planning chunks: none",
             active_line,
             f"- Current gate: `{gate['status']}`",
             next_line,
@@ -957,9 +987,8 @@ def render_work_queue(records: list[dict[str, Any]]) -> str:
             f"| `{initiative_id}` | `{completed['chunk_id']}` | "
             f"`{gate['status']}` | `{next_chunk}` | {explicit} |"
         )
-    lines.extend(
-        ["", f"Latest global merge: `{records[-1]['source']['main_sha']}`", ""]
-    )
+    latest_merge = _latest_merge_record(records)
+    lines.extend(["", f"Latest global merge: `{latest_merge['source']['main_sha']}`", ""])
     return "\n".join(lines)
 
 
@@ -1158,7 +1187,12 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         "checks",
     }
     allowed_record_keys = expected_record_keys | {"legacy_exemptions"}
-    if frozenset(record) not in {frozenset(expected_record_keys), frozenset(allowed_record_keys)} or not _is_current_schema_version(
+    cutover_record_keys = allowed_record_keys | {"event"}
+    if frozenset(record) not in {
+        frozenset(expected_record_keys),
+        frozenset(allowed_record_keys),
+        frozenset(cutover_record_keys),
+    } or not _is_current_schema_version(
         record.get("schema_version")
     ):
         raise LoopMemoryError("loop-memory record has an invalid schema")
@@ -1181,6 +1215,10 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             ):
                 raise LoopMemoryError("legacy exemption is invalid or duplicated")
             identities.add(identity)
+    if event_type == "cutover":
+        _validate_cutover_event(
+            record.get("event"), exemptions, record.get("source", {}).get("main_sha")
+        )
     if record.get("state_branch") != STATE_BRANCH:
         raise LoopMemoryError("loop-memory record has an invalid state branch")
 
@@ -1331,7 +1369,7 @@ def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, An
             raise LoopMemoryError("merge ledger entry hash is invalid")
         source = record.get("source", {})
         if (
-            _event_type(record) == "merge"
+            _event_type(record) in {"merge", "cutover"}
             and
             previous_main_sha is not None
             and source.get("first_parent_sha") != previous_main_sha
@@ -1355,6 +1393,7 @@ def apply_authority_event(
     event: dict[str, Any],
     *,
     repository_root: Path,
+    branch_root: Path | None = None,
 ) -> bool:
     """Apply one protected start/cancel event to authenticated canonical state."""
     event_type = _validate_event(event)
@@ -1388,6 +1427,9 @@ def apply_authority_event(
     )
     if event["main_sha"] != current_main_sha:
         raise LoopMemoryError("authority event main is stale")
+    actual_tip = _state_branch_tip(branch_root or state_root)
+    if event["prior_state_tip"] != actual_tip:
+        raise LoopMemoryError("authority event prior state tip is stale")
     latest = _latest_by_initiative(records)
     basis = latest.get(event["initiative_id"])
     if basis is None:
@@ -1428,13 +1470,28 @@ def apply_authority_event(
     previous_hash = ledger[-1]["entry_hash"]
     ledger.append(_ledger_entry(updated, previous_hash))
     _atomic_write(state_root / STATE_PATH, _canonical_json(updated, pretty=True))
-    _atomic_write(state_root / RENDERED_PATH, render_state(updated))
+    _atomic_write(state_root / RENDERED_PATH, render_state(updated, records + [updated]))
     _atomic_write(
         state_root / LEDGER_PATH,
         "".join(f"{_canonical_json(entry)}\n" for entry in ledger),
     )
     _write_projections(state_root, records + [updated])
     return True
+
+
+def _state_branch_tip(branch_root: Path) -> str:
+    """Resolve the authenticated state branch tip used by an authority event."""
+    result = subprocess.run(
+        ["git", "-C", str(branch_root), "rev-parse", "HEAD"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    tip = result.stdout.strip()
+    if result.returncode != 0 or not SHA_PATTERN.fullmatch(tip):
+        raise LoopMemoryError("cannot resolve authenticated state branch tip")
+    return tip
 
 
 def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
@@ -1482,21 +1539,22 @@ def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
         remaining_exemptions = existing.get("legacy_exemptions")
         if remaining_exemptions is not None:
             remaining_exemptions = json.loads(_canonical_json(remaining_exemptions))
+            match = next(
+                (
+                    exemption
+                    for exemption in remaining_exemptions
+                    if exemption["initiative_id"] == initiative_id
+                    and exemption["chunk_id"] == record["completed_chunk"]["chunk_id"]
+                    and exemption["pr_number"] == record["source"]["pr_number"]
+                ),
+                None,
+            )
             if active_chunk is None:
-                match = next(
-                    (
-                        exemption
-                        for exemption in remaining_exemptions
-                        if exemption["initiative_id"] == initiative_id
-                        and exemption["chunk_id"] == record["completed_chunk"]["chunk_id"]
-                        and exemption["pr_number"] == record["source"]["pr_number"]
-                    ),
-                    None,
-                )
                 if match is None:
                     raise LoopMemoryError(
                         "post-cutover merge has no signed start or exemption"
                     )
+            if match is not None:
                 remaining_exemptions.remove(match)
             record["legacy_exemptions"] = remaining_exemptions
             _validate_record(record)
@@ -1515,7 +1573,7 @@ def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
     previous_hash = ledger[-1]["entry_hash"] if ledger else None
     ledger.append(_ledger_entry(record, previous_hash))
     _atomic_write(state_path, _canonical_json(record, pretty=True))
-    _atomic_write(rendered_path, render_state(record))
+    _atomic_write(rendered_path, render_state(record, records + [record]))
     _atomic_write(
         ledger_path, "".join(f"{_canonical_json(entry)}\n" for entry in ledger)
     )
@@ -1536,7 +1594,7 @@ def validate_generated_state(state_root: Path) -> None:
     rendered_path = state_root / RENDERED_PATH
     if not rendered_path.exists() or rendered_path.read_text(
         encoding="utf-8"
-    ) != render_state(state):
+    ) != render_state(state, records):
         raise LoopMemoryError("rendered loop state does not match canonical JSON")
     if not (state_root / WORK_QUEUE_PATH).is_file() or (
         state_root / WORK_QUEUE_PATH
@@ -1662,7 +1720,7 @@ def verify_generated_state_signature(
         ):
             raise LoopMemoryError("legacy generated state is inconsistent")
         if (state_root / RENDERED_PATH).read_text(encoding="utf-8") != render_state(
-            state
+            state, records
         ):
             raise LoopMemoryError("legacy rendered state is inconsistent")
     else:
@@ -1867,6 +1925,46 @@ def _assert_state_branch(state_root: Path) -> None:
         raise LoopMemoryError(f"state root must be checked out on {STATE_BRANCH}")
 
 
+def publish_generated_state(
+    branch_root: Path,
+    output_root: Path,
+    *,
+    expected_prior_tip: str,
+    message: str,
+) -> str | None:
+    """Build and fast-forward publish one exact signed tree from the state tip."""
+    _assert_state_branch(branch_root)
+    if expected_prior_tip:
+        _validate_sha(expected_prior_tip)
+        if _state_branch_tip(branch_root) != expected_prior_tip:
+            raise LoopMemoryError("state branch moved before publication")
+    _bounded_text(message, "publication message", maximum=240)
+    validate_generated_state(output_root)
+    descriptor, index_name = tempfile.mkstemp(prefix="loop-memory-index-")
+    os.close(descriptor)
+    index_path = Path(index_name)
+    try:
+        env = {**os.environ, "GIT_INDEX_FILE": str(index_path)}
+        subprocess.run(["git", "-C", str(branch_root), "read-tree", "--empty"], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(["git", f"--git-dir={branch_root / '.git'}", f"--work-tree={output_root}", "add", "-f", "--", ".agent-loop"], env=env, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        tree = subprocess.run(["git", "-C", str(branch_root), "write-tree"], env=env, check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+        validate_generated_git_tree(branch_root, tree, output_root)
+        if expected_prior_tip:
+            parent_tree = subprocess.run(["git", "-C", str(branch_root), "rev-parse", "HEAD^{tree}"], check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+            if tree == parent_tree:
+                return None
+        commit_args = ["git", "-C", str(branch_root), "commit-tree", tree]
+        if expected_prior_tip:
+            commit_args.extend(["-p", expected_prior_tip])
+        commit = subprocess.run(commit_args, input=f"{message}\n", check=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.strip()
+        subprocess.run(["git", "-C", str(branch_root), "push", "origin", f"{commit}:refs/heads/{STATE_BRANCH}"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return commit
+    except subprocess.CalledProcessError as exc:
+        raise LoopMemoryError("cannot publish generated state by fast-forward") from exc
+    finally:
+        index_path.unlink(missing_ok=True)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1939,6 +2037,12 @@ def build_parser() -> argparse.ArgumentParser:
     validate_tree.add_argument("--tree-sha", required=True)
     validate_tree.add_argument("--output-root", type=Path, required=True)
 
+    publish = subparsers.add_parser("publish")
+    publish.add_argument("--branch-root", type=Path, required=True)
+    publish.add_argument("--output-root", type=Path, required=True)
+    publish.add_argument("--expected-prior-tip", default="")
+    publish.add_argument("--message", required=True)
+
     show = subparsers.add_parser("show")
     show.add_argument("--state-root", type=Path, required=True)
     return parser
@@ -1980,6 +2084,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             if record["completed_chunk"]["chunk_id"] == "WS-ENG-001-04B":
                 record["legacy_exemptions"] = load_legacy_exemptions(Path("."))
+                record["event"] = {
+                    "type": "cutover",
+                    "main_sha": record["source"]["main_sha"],
+                    "legacy_exemptions": json.loads(
+                        _canonical_json(record["legacy_exemptions"])
+                    ),
+                }
             changed = apply_merge_record(args.state_root, record)
             validate_generated_state(args.state_root)
             result = "updated" if changed else "already current"
@@ -2000,7 +2111,10 @@ def main(argv: list[str] | None = None) -> int:
                 prior_state_tip=args.prior_state_tip,
             )
             changed = apply_authority_event(
-                args.state_root, event, repository_root=args.repository_root
+                args.state_root,
+                event,
+                repository_root=args.repository_root,
+                branch_root=args.branch_root,
             )
             validate_generated_state(args.state_root)
             result = "applied" if changed else "already recorded"
@@ -2036,6 +2150,15 @@ def main(argv: list[str] | None = None) -> int:
                 args.repository_root, args.tree_sha, args.output_root
             )
             print("Generated Git tree matches signed output.")
+        elif args.command == "publish":
+            commit = publish_generated_state(
+                args.branch_root,
+                args.output_root,
+                expected_prior_tip=args.expected_prior_tip,
+                message=args.message,
+            )
+            outcome = f"published as {commit}" if commit else "already current"
+            print(f"Generated state {outcome}.")
         elif args.command == "show":
             validate_generated_state(args.state_root)
             print((args.state_root / RENDERED_PATH).read_text(encoding="utf-8"), end="")

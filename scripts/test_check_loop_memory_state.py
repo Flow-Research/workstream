@@ -13,6 +13,11 @@ from scripts import test_update_post_merge_memory as fixtures
 from scripts import update_post_merge_memory as loop
 
 
+@pytest.fixture(autouse=True)
+def _fixed_state_tip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(loop, "_state_branch_tip", lambda _root: "e" * 40)
+
+
 def test_checker_accepts_signed_start_projection(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     fixtures._contract(repository_root)
@@ -79,11 +84,16 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     text = path.read_text(encoding="utf-8")
     workflow = yaml.load(text, Loader=yaml.BaseLoader)
     assert set(workflow["on"]) == {"workflow_dispatch"}
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {
+        "action", "initiative_id", "chunk_id", "reason", "expected_main_sha"
+    }
     assert workflow["permissions"] == {"actions": "read", "contents": "write"}
     assert workflow["concurrency"] == {
         "group": "workstream-loop-memory",
         "cancel-in-progress": "false",
     }
+    assert set(workflow["jobs"]) == {"explicit-event"}
     job = workflow["jobs"]["explicit-event"]
     assert job["if"] == "github.ref == 'refs/heads/main' && github.run_attempt == 1"
     assert job["environment"] == "loop-memory-start"
@@ -99,3 +109,32 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     assert "LOOP_MEMORY_START_SIGNING_KEY" in text
     assert "inputs.expected_main_sha" in text
     assert "inputs.destination" not in text and "inputs.ref" not in text
+    assert job["env"] == {"STATE_BRANCH": "automation/loop-memory"}
+    assert [step.get("name", "checkout") for step in job["steps"]] == [
+        "checkout",
+        "Resolve trusted protected-main target",
+        "Prepare authenticated state and reconcile main",
+        "Apply protected authority event",
+        "Sign, validate, and publish exact generated tree",
+    ]
+    assert all("${{ inputs." not in step.get("run", "") for step in job["steps"])
+    assert "git push" not in text and "commit-tree" not in text
+    assert text.count("update_post_merge_memory.py publish") == 1
+
+
+def test_checker_accepts_typed_cutover_and_rejects_mismatch(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    record = fixtures._record()
+    record["legacy_exemptions"] = [
+        {"initiative_id": "WS-AUTH-001", "chunk_id": "WS-AUTH-001-PREP", "pr_number": 162}
+    ]
+    record["event"] = {
+        "type": "cutover",
+        "main_sha": "a" * 40,
+        "legacy_exemptions": json.loads(json.dumps(record["legacy_exemptions"])),
+    }
+    loop.apply_merge_record(state_root, record)
+    assert checker.generated_state_failures(state_root) == []
+    broken = json.loads(json.dumps(record))
+    broken["event"]["main_sha"] = "f" * 40
+    assert checker._record_failures(broken, "cutover")

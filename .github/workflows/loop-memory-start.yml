@@ -120,6 +120,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LOOP_MEMORY_START_SIGNING_KEY: ${{ secrets.LOOP_MEMORY_START_SIGNING_KEY }}
+          EVENT_ACTION: ${{ inputs.action }}
+          EVENT_CHUNK_ID: ${{ inputs.chunk_id }}
         run: |
           set -euo pipefail
           branch_dir="${{ steps.state.outputs.branch_dir }}"
@@ -137,20 +139,10 @@ jobs:
             --public-key .agent-loop/keys/loop-memory-signing-public.pem \
             --expected-main-sha "${TARGET_SHA}"
           python3 scripts/check_loop_memory_state.py --state-root "${output_dir}"
-          generated_index="${RUNNER_TEMP}/loop-memory-generated.index"
-          GIT_INDEX_FILE="${generated_index}" git -C "${branch_dir}" read-tree --empty
-          GIT_INDEX_FILE="${generated_index}" git --git-dir="${branch_dir}/.git" \
-            --work-tree="${output_dir}" add -f -- .agent-loop
-          generated_tree=$(GIT_INDEX_FILE="${generated_index}" git -C "${branch_dir}" write-tree)
-          python3 scripts/update_post_merge_memory.py validate-tree \
-            --repository-root "${branch_dir}" --tree-sha "${generated_tree}" \
-            --output-root "${output_dir}"
           git -C "${branch_dir}" config user.name "workstream-loop-memory[bot]"
           git -C "${branch_dir}" config user.email \
             "workstream-loop-memory[bot]@users.noreply.github.com"
-          parent_sha=$(git -C "${branch_dir}" rev-parse HEAD)
-          generated_commit=$(printf 'chore(loop-memory): record %s for %s\n' \
-            "${{ inputs.action }}" "${{ inputs.chunk_id }}" | \
-            git -C "${branch_dir}" commit-tree "${generated_tree}" -p "${parent_sha}")
-          git -C "${branch_dir}" push origin \
-            "${generated_commit}:refs/heads/${STATE_BRANCH}"
+          python3 scripts/update_post_merge_memory.py publish \
+            --branch-root "${branch_dir}" --output-root "${output_dir}" \
+            --expected-prior-tip "${{ steps.state.outputs.prior_tip }}" \
+            --message "chore(loop-memory): record ${EVENT_ACTION} for ${EVENT_CHUNK_ID}"

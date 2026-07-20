@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from scripts import update_post_merge_memory as loop
+
+
+@pytest.fixture(autouse=True)
+def _fixed_state_tip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(loop, "_state_branch_tip", lambda _root: "e" * 40)
 
 
 def _record() -> dict:
@@ -153,6 +160,11 @@ def test_cutover_exemption_is_exact_and_consumed_once(tmp_path: Path) -> None:
             "pr_number": 162,
         }
     ]
+    cutover["event"] = {
+        "type": "cutover",
+        "main_sha": "a" * 40,
+        "legacy_exemptions": json.loads(json.dumps(cutover["legacy_exemptions"])),
+    }
     loop.apply_merge_record(state_root, cutover)
     exempt = _record()
     exempt["source"].update(
@@ -207,7 +219,11 @@ def test_collect_authority_event_binds_run_and_approval_evidence() -> None:
             "created_at": "2026-07-20T11:00:00Z",
         },
         approvals=[
-            {"state": "approved", "user": {"login": "reviewer"}},
+            {
+                "state": "approved",
+                "user": {"login": "reviewer"},
+                "environments": [{"id": 7, "name": "loop-memory-start"}],
+            },
             {"state": "rejected", "user": {"login": "ignored"}},
         ],
     )
@@ -251,7 +267,7 @@ def test_collect_authority_event_rejects_untrusted_run(
     run[field] = value
     with pytest.raises(loop.LoopMemoryError, match=message):
         loop.collect_authority_event(
-            _Client(run, [{"state": "approved", "user": {"login": "reviewer"}}]),
+            _Client(run, [{"state": "approved", "user": {"login": "reviewer"}, "environments": [{"id": 7, "name": "loop-memory-start"}]}]),
             "Flow-Research/workstream",
             action="start",
             initiative_id="WS-ENG-001",
@@ -304,7 +320,7 @@ def test_apply_event_cli_routes_authenticated_inputs(
     monkeypatch.setattr(
         loop,
         "apply_authority_event",
-        lambda _root, supplied, repository_root: supplied is event,
+        lambda _root, supplied, repository_root, branch_root: supplied is event,
     )
     monkeypatch.setattr(loop, "validate_generated_state", lambda _root: None)
     result = loop.main(
@@ -327,6 +343,49 @@ def test_apply_event_cli_routes_authenticated_inputs(
     assert result == 0
     assert captured["run_id"] == 41
     assert "event applied" in capsys.readouterr().out
+
+
+def test_publish_cli_routes_repository_owned_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured = {}
+
+    def publish(branch, output, **kwargs):
+        captured.update(branch=branch, output=output, **kwargs)
+        return "f" * 40
+
+    monkeypatch.setattr(loop, "publish_generated_state", publish)
+    assert loop.main(
+        [
+            "publish", "--branch-root", str(tmp_path / "branch"),
+            "--output-root", str(tmp_path / "output"),
+            "--expected-prior-tip", "e" * 40,
+            "--message", "bounded message",
+        ]
+    ) == 0
+    assert captured["expected_prior_tip"] == "e" * 40
+    assert "published as" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"type": "cutover"},
+        {"type": "cutover", "main_sha": "f" * 40, "legacy_exemptions": []},
+        {"type": "cutover", "main_sha": "a" * 40, "legacy_exemptions": [{"bad": True}]},
+    ],
+)
+def test_cutover_event_must_match_merge_and_inventory(event: dict) -> None:
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_cutover_event(event, [], "a" * 40)
+
+
+def test_state_tip_resolution_fails_closed_outside_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.undo()
+    with pytest.raises(loop.LoopMemoryError, match="cannot resolve"):
+        loop._state_branch_tip(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -366,3 +425,148 @@ def test_collect_authority_event_rejects_invalid_approval_shape() -> None:
             dispatcher="dispatcher", main_sha="a" * 40,
             prior_state_tip="e" * 40,
         )
+
+
+def test_well_formed_stale_state_tip_is_rejected(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    event = _event("start")
+    event["prior_state_tip"] = "f" * 40
+    before = {path: path.read_bytes() for path in state_root.rglob("*") if path.is_file()}
+    with pytest.raises(loop.LoopMemoryError, match="prior state tip is stale"):
+        loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    assert before == {path: path.read_bytes() for path in state_root.rglob("*") if path.is_file()}
+
+
+def test_same_event_id_with_different_bytes_is_collision(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    event = _event("start")
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    conflict = json.loads(json.dumps(event))
+    conflict["reason"] = "Different signed bytes"
+    with pytest.raises(loop.LoopMemoryError, match="different bytes"):
+        loop.apply_authority_event(state_root, conflict, repository_root=repository_root)
+
+
+def test_cancel_rejects_inactive_chunk(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    with pytest.raises(loop.LoopMemoryError, match="not the active chunk"):
+        loop.apply_authority_event(
+            state_root, _event("cancel"), repository_root=repository_root
+        )
+
+
+def test_cross_initiative_start_preserves_latest_global_merge(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    later = _record()
+    later["source"].update(
+        main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=170,
+        pr_url="https://github.com/Flow-Research/workstream/pull/170",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-02.json",
+    )
+    later["completed_chunk"].update(
+        initiative_id="WS-ART-001", chunk_id="WS-ART-001-02",
+        chunk_title="Artifact Custody", next_chunk_id="WS-ART-001-03",
+        next_chunk_title="Artifact Recovery",
+    )
+    later["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    loop.apply_merge_record(state_root, later)
+    event = _event("start")
+    event["main_sha"] = "c" * 40
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    rendered = (state_root / loop.RENDERED_PATH).read_text()
+    queue = (state_root / loop.WORK_QUEUE_PATH).read_text()
+    assert "`c" + "c" * 39 + "`" in rendered
+    assert f"Latest global merge: `{'c' * 40}`" in queue
+
+
+def test_exact_active_merge_closes_and_consumes_exemption(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    base = _record()
+    base["legacy_exemptions"] = [
+        {"initiative_id": "WS-ENG-001", "chunk_id": "WS-ENG-001-04B", "pr_number": 171}
+    ]
+    loop.apply_merge_record(state_root, base)
+    loop.apply_authority_event(state_root, _event("start"), repository_root=repository_root)
+    merged = _record()
+    merged["source"].update(
+        main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=171,
+        pr_url="https://github.com/Flow-Research/workstream/pull/171",
+        intent_path=".agent-loop/merge-intents/WS-ENG-001-04B.json",
+    )
+    merged["completed_chunk"].update(
+        chunk_id="WS-ENG-001-04B", chunk_title="Signed Explicit Start Events",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    merged["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    assert loop.apply_merge_record(state_root, merged)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    assert state["active"]["implementation_chunk"] is None
+    assert state["legacy_exemptions"] == []
+
+
+def test_publication_push_failure_leaves_remote_tip_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    branch, remote, output, repository_root = (
+        tmp_path / "branch", tmp_path / "remote.git", tmp_path / "output", tmp_path / "repo"
+    )
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "init", "--initial-branch", loop.STATE_BRANCH, str(branch)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "-C", str(branch), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(branch), "config", "user.email", "test@example.com"], check=True)
+    loop.apply_merge_record(branch, _record())
+    subprocess.run(["git", "-C", str(branch), "add", ".agent-loop"], check=True)
+    subprocess.run(["git", "-C", str(branch), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "-C", str(branch), "remote", "add", "origin", str(remote)], check=True)
+    subprocess.run(["git", "-C", str(branch), "push", "origin", loop.STATE_BRANCH], check=True, stdout=subprocess.PIPE)
+    prior = subprocess.run(["git", "-C", str(branch), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+    shutil.copytree(branch / ".agent-loop", output / ".agent-loop")
+    _contract(repository_root)
+    event = _event("start")
+    event["prior_state_tip"] = prior
+    def real_tip(root: Path) -> str:
+        return subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+    monkeypatch.setattr(loop, "_state_branch_tip", real_tip)
+    loop.apply_authority_event(output, event, repository_root=repository_root, branch_root=branch)
+    real_run = subprocess.run
+
+    def fail_push(args, **kwargs):
+        if isinstance(args, list) and "push" in args:
+            raise subprocess.CalledProcessError(1, args)
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(loop.subprocess, "run", fail_push)
+    with pytest.raises(loop.LoopMemoryError, match="fast-forward"):
+        loop.publish_generated_state(
+            branch, output, expected_prior_tip=prior, message="test publication"
+        )
+    monkeypatch.setattr(loop.subprocess, "run", real_run)
+    remote_tip = subprocess.run(["git", "--git-dir", str(remote), "rev-parse", loop.STATE_BRANCH], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+    assert remote_tip == prior
+    published = loop.publish_generated_state(
+        branch, output, expected_prior_tip=prior, message="test publication"
+    )
+    assert published and published != prior
+    remote_tip = subprocess.run(
+        ["git", "--git-dir", str(remote), "rev-parse", loop.STATE_BRANCH],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    assert remote_tip == published

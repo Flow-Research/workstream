@@ -151,16 +151,44 @@ ID and creation time, current-main SHA, prior state-branch tip, reason,
 initiative, and chunk. The workflow catches signed state up through main before
 applying the event and rechecks main immediately before signing and publication.
 
+Dispatch and audit with:
+
+```bash
+main_sha=$(git rev-parse origin/main)
+gh workflow run loop-memory-start.yml --ref main \
+  -f action=start -f initiative_id=WS-ENG-001 \
+  -f chunk_id=WS-ENG-001-04B -f reason='Approved implementation' \
+  -f expected_main_sha="${main_sha}"
+gh run view <run-id> --log
+gh api repos/Flow-Research/workstream/actions/runs/<run-id>/approvals
+```
+
+Verify deployment configuration before enabling it:
+
+```bash
+gh api repos/Flow-Research/workstream/environments/loop-memory-start
+gh api repositories/<repository-id>/environments/loop-memory-start/secrets
+gh api repos/Flow-Research/workstream/actions/secrets
+gh api orgs/Flow-Research/actions/secrets
+```
+
 Do not rerun a failed job. Inspect the signed automation branch first. If no
 event was published, dispatch a fresh run; if it was published, its event ID and
 active projection are authoritative. A push race leaves the branch unchanged.
 Recover branch corruption with authenticated replay, never force-push or hand
 edits.
 
+Failure handling is closed: stale main/tip, wrong successor, missing or
+same-dispatcher approval, rerun, collision, active conflict, and moved branch
+all require inspection followed by a fresh dispatch. Invalid signature/tree or
+branch corruption requires disabling writes and authenticated recovery. A push
+race publishes nothing and also requires inspection before redispatch.
+
 The cutover inventory is fixed in
 `.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry
 can close once without a signed start and is then consumed. No new exemption may
-be added after merge. For signing-key rotation, replace the protected
-environment secret and reviewed public key together through a separately
-approved chunk. On suspected compromise, disable both loop-memory workflows,
-preserve the branch for audit, rotate the key, and replay from trusted main.
+be added after merge. Signing-key rotation is not supported by this chunk:
+start/cancel evidence cannot be reconstructed from main, so replacing the key
+would break audit continuity. Suspected compromise is a blocking incident:
+disable both workflows, preserve the branch and audit logs, and require a new
+reviewed key-continuity design before any rotation or replay.
