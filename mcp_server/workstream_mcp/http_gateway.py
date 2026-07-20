@@ -70,22 +70,28 @@ class HTTPContributorGateway:
     async def get_task_context(self, context: RequestContext, *, task_id: str) -> dict[str, Any]:
         """Return task context by composing available Workstream task APIs."""
         task_segment = _path_segment(task_id, context)
-        task = await self._request(context, "GET", f"/api/v1/tasks/{task_segment}")
-        work_context = await self._request(
-            context,
-            "GET",
-            f"/api/v1/tasks/{task_segment}/work-context",
-        )
-        requirements = await self._request(
-            context,
-            "GET",
-            f"/api/v1/tasks/{task_segment}/submission-requirements",
-        )
-        submissions = await self._request(
-            context,
-            "GET",
-            f"/api/v1/tasks/{task_segment}/submissions",
-        )
+        async with self._client() as client:
+            task = await self._request(
+                context, "GET", f"/api/v1/tasks/{task_segment}", client=client
+            )
+            work_context = await self._request(
+                context,
+                "GET",
+                f"/api/v1/tasks/{task_segment}/work-context",
+                client=client,
+            )
+            requirements = await self._request(
+                context,
+                "GET",
+                f"/api/v1/tasks/{task_segment}/submission-requirements",
+                client=client,
+            )
+            submissions = await self._request(
+                context,
+                "GET",
+                f"/api/v1/tasks/{task_segment}/submissions",
+                client=client,
+            )
         return {
             "task": task,
             "work_context": work_context,
@@ -96,22 +102,29 @@ class HTTPContributorGateway:
     async def get_task_status(self, context: RequestContext, *, task_id: str) -> dict[str, Any]:
         """Return actor-facing task status from available task and submission APIs."""
         task_segment = _path_segment(task_id, context)
-        task = await self._request(context, "GET", f"/api/v1/tasks/{task_segment}")
-        submissions = await self._request(
-            context,
-            "GET",
-            f"/api/v1/tasks/{task_segment}/submissions",
-        )
-        latest_submission = (
-            submissions[-1] if isinstance(submissions, list) and submissions else None
-        )
-        checker_runs: list[dict[str, Any]] = []
-        if latest_submission and latest_submission.get("id"):
-            checker_runs = await self._request(
+        async with self._client() as client:
+            task = await self._request(
+                context, "GET", f"/api/v1/tasks/{task_segment}", client=client
+            )
+            submissions = await self._request(
                 context,
                 "GET",
-                f"/api/v1/submissions/{_path_segment(str(latest_submission['id']), context)}/checker-runs",
+                f"/api/v1/tasks/{task_segment}/submissions",
+                client=client,
             )
+            latest_submission = (
+                submissions[-1]
+                if isinstance(submissions, list) and submissions
+                else None
+            )
+            checker_runs: list[dict[str, Any]] = []
+            if latest_submission and latest_submission.get("id"):
+                checker_runs = await self._request(
+                    context,
+                    "GET",
+                    f"/api/v1/submissions/{_path_segment(str(latest_submission['id']), context)}/checker-runs",
+                    client=client,
+                )
         return {
             "task_id": task_id,
             "task": task,
@@ -244,28 +257,33 @@ class HTTPContributorGateway:
         *,
         request_id: str | None = None,
         json: dict[str, Any] | None = None,
+        client: httpx.AsyncClient | None = None,
     ) -> Any:
         """Send one Workstream HTTP request and return decoded JSON."""
-        async with httpx.AsyncClient(
-            base_url=self._base_url,
-            timeout=self._timeout,
-            transport=self._transport,
-            trust_env=False,
-        ) as client:
-            try:
-                response = await client.request(
+        if client is None:
+            async with self._client() as scoped_client:
+                return await self._request(
+                    context,
                     method,
                     path,
-                    headers=authorization_headers(context, request_id=request_id),
+                    request_id=request_id,
                     json=json,
+                    client=scoped_client,
                 )
-            except httpx.HTTPError as exc:
-                raise WorkstreamMCPError(
-                    map_http_status(503, correlation_id=context.correlation_id).code,
-                    "Workstream is temporarily unavailable.",
-                    retryable=True,
-                    correlation_id=context.correlation_id,
-                ) from exc
+        try:
+            response = await client.request(
+                method,
+                path,
+                headers=authorization_headers(context, request_id=request_id),
+                json=json,
+            )
+        except httpx.HTTPError as exc:
+            raise WorkstreamMCPError(
+                map_http_status(503, correlation_id=context.correlation_id).code,
+                "Workstream is temporarily unavailable.",
+                retryable=True,
+                correlation_id=context.correlation_id,
+            ) from exc
         if response.status_code >= 400:
             try:
                 error_payload = response.json()
@@ -286,6 +304,15 @@ class HTTPContributorGateway:
                 "Workstream returned an invalid response.",
                 correlation_id=context.correlation_id,
             ) from exc
+
+    def _client(self) -> httpx.AsyncClient:
+        """Create one secret-safe client for a complete gateway operation."""
+        return httpx.AsyncClient(
+            base_url=self._base_url,
+            timeout=self._timeout,
+            transport=self._transport,
+            trust_env=False,
+        )
 
 
 def _missing_backend_api(context: RequestContext, surface: str) -> WorkstreamMCPError:

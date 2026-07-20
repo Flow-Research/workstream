@@ -492,6 +492,36 @@ async def test_available_task_resources_compose_current_workstream_apis() -> Non
 
 
 @pytest.mark.asyncio
+async def test_task_context_reuses_and_closes_one_http_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composed reads share connection pooling within one gateway operation."""
+    real_client = httpx.AsyncClient
+    clients: list[httpx.AsyncClient] = []
+
+    class TrackingAsyncClient(real_client):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            clients.append(self)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/submissions"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json={})
+
+    monkeypatch.setattr(httpx, "AsyncClient", TrackingAsyncClient)
+    gateway = HTTPContributorGateway(
+        base_url="http://workstream.test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    await gateway.get_task_context(context(), task_id="task-1")
+
+    assert len(clients) == 1
+    assert clients[0].is_closed is True
+
+
+@pytest.mark.asyncio
 async def test_http_gateway_handles_empty_error_and_network_responses() -> None:
     """Empty success, non-JSON error, and transport failures remain safe outcomes."""
     empty_gateway = HTTPContributorGateway(
