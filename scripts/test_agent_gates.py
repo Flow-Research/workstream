@@ -5172,10 +5172,13 @@ def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
     requirements = (ROOT / "scripts/agent-gate-requirements.txt").read_text(
         encoding="utf-8"
     )
-    assert requirements == (
-        "PyYAML==6.0.3 "
-        "--hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc\n"
-    )
+    requirement_lines = requirements.splitlines()
+    assert {line.split("==", 1)[0].lower() for line in requirement_lines} == {
+        "coverage", "iniconfig", "packaging", "pluggy", "pygments", "pytest",
+        "pytest-cov", "pyyaml",
+    }
+    assert all(" --hash=sha256:" in line for line in requirement_lines)
+    assert all(len(line.rsplit("sha256:", 1)[1]) == 64 for line in requirement_lines)
 
 
 def test_local_minio_compose_is_regression_protected() -> None:

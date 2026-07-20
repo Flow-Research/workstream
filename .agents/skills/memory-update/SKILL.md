@@ -38,10 +38,18 @@ on `automation/loop-memory`.
 Do not open a manual post-merge memory PR or rerun internal reviewers when this
 automation succeeds.
 
-The generated queue and initiative files are merge-derived stopped/next
-projections. Until signed explicit-start events are implemented, they do not
-attest work started only in conversation or an unmerged worktree. Verify the
-complete manifest/signature rather than trusting one file in isolation.
+## Explicit Start And Cancel
+
+Use `.github/workflows/loop-memory-start.yml` on exact protected `main` to start
+the recorded same-initiative successor or cancel that exact active chunk. The
+protected environment approval is authority; the dispatcher is attribution.
+Never infer a start from chat, a worktree, or PR prose. Do not rerun a failed
+dispatch: inspect authenticated state and create a fresh attributable dispatch.
+
+The generated queue and initiative files reduce signed merge, start, and cancel
+events. They never attest work started only in conversation or an unmerged
+worktree. Verify the complete manifest/signature rather than trusting one file
+in isolation.
 
 ## Manual Updates As Applicable
 

@@ -130,3 +130,37 @@ Implementation, specification, generator, workflow, policy, and hand-edited
 memory changes retain all normal review requirements. Only deterministic output
 committed by `Loop Memory` to `automation/loop-memory` skips the second review
 and PR cycle.
+
+## Explicit Start And Cancel Operations
+
+`Loop Memory Explicit Event` is the only authority for starting a reviewed
+successor or cancelling its active state. Dispatch it from `main` with the exact
+current-main SHA, initiative ID, chunk ID, action, and a bounded single-line
+reason. A reviewer other than the dispatcher must approve the
+`loop-memory-start` environment deployment.
+
+Configure that environment with required reviewers, self-review disabled,
+administrator bypass disabled, and deployment restricted to protected `main`.
+Store `LOOP_MEMORY_START_SIGNING_KEY` only as an environment secret. Before
+enabling the workflow, inspect the environment and its secret inventory through
+the GitHub API and verify repository and organization Actions secrets do not
+contain the same name.
+
+Every signed event records the dispatcher, approving reviewers, immutable run
+ID and creation time, current-main SHA, prior state-branch tip, reason,
+initiative, and chunk. The workflow catches signed state up through main before
+applying the event and rechecks main immediately before signing and publication.
+
+Do not rerun a failed job. Inspect the signed automation branch first. If no
+event was published, dispatch a fresh run; if it was published, its event ID and
+active projection are authoritative. A push race leaves the branch unchanged.
+Recover branch corruption with authenticated replay, never force-push or hand
+edits.
+
+The cutover inventory is fixed in
+`.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry
+can close once without a signed start and is then consumed. No new exemption may
+be added after merge. For signing-key rotation, replace the protected
+environment secret and reviewed public key together through a separately
+approved chunk. On suspected compromise, disable both loop-memory workflows,
+preserve the branch for audit, rotate the key, and replay from trusted main.

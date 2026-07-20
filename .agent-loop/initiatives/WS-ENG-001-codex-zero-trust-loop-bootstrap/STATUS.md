@@ -7,10 +7,10 @@
 - `WS-ENG-001-03`: corrective schema-v2 contract for initiative-local next gates
 - `WS-ENG-001-04A`: merged through PR #161; signed replay and complete
   projections passed
-- `WS-ENG-001-04B`: explicitly started by the user on 2026-07-20; planning and
-  required preimplementation review pass at `7ffaa59b`
-- Current gate: human approval of the final reviewed chunk contract before
-  implementation
+- `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
+  workflow, cutover inventory, tests, CI coverage gates, and operations policy
+  are under deterministic verification
+- Current gate: implementation evidence and exact-SHA internal review
 - Product runtime: unchanged
 
 ## Last Update
@@ -24,5 +24,5 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Obtain explicit human implementation approval for the final 04B contract. Do
-not write workflow or generator code before that checkpoint.
+Complete deterministic evidence and all nine implementation reviewer tracks,
+then publish one PR trust bundle. Do not begin another chunk.

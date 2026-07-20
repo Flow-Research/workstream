@@ -1,0 +1,156 @@
+name: Loop Memory Explicit Event
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Signed authority event
+        required: true
+        type: choice
+        options: [start, cancel]
+      initiative_id:
+        description: Exact initiative ID
+        required: true
+        type: string
+      chunk_id:
+        description: Exact reviewed successor or active chunk ID
+        required: true
+        type: string
+      reason:
+        description: Bounded audit reason
+        required: true
+        type: string
+      expected_main_sha:
+        description: Exact protected-main SHA reviewed by the dispatcher
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: workstream-loop-memory
+  cancel-in-progress: false
+
+jobs:
+  explicit-event:
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    environment: loop-memory-start
+    runs-on: ubuntu-latest
+    env:
+      STATE_BRANCH: automation/loop-memory
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: main
+
+      - name: Resolve trusted protected-main target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${EXPECTED_MAIN_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          gh auth setup-git
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          target_sha=$(git rev-parse --verify refs/remotes/origin/main)
+          [[ "${target_sha}" == "${EXPECTED_MAIN_SHA}" ]]
+          git checkout --detach "${target_sha}"
+          echo "TARGET_SHA=${target_sha}" >> "${GITHUB_ENV}"
+
+      - name: Prepare authenticated state and reconcile main
+        id: state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          branch_dir="${RUNNER_TEMP}/loop-memory-state"
+          git clone --depth 1 --single-branch --branch "${STATE_BRANCH}" \
+            "https://github.com/${GITHUB_REPOSITORY}.git" "${branch_dir}"
+          output_dir="${RUNNER_TEMP}/loop-memory-output"
+          python3 scripts/update_post_merge_memory.py prepare-output \
+            --source-root "${branch_dir}" --output-root "${output_dir}" \
+            --public-key .agent-loop/keys/loop-memory-signing-public.pem
+          current_sha=$(python3 -c \
+            'import json,sys; s=json.load(open(sys.argv[1],encoding="utf-8")); print(s.get("event",{}).get("main_sha") or s["source"]["main_sha"])' \
+            "${output_dir}/.agent-loop/STATE.json")
+          plan_file=$(mktemp)
+          python3 scripts/update_post_merge_memory.py plan-commits \
+            --repository-root . --target-sha "${TARGET_SHA}" \
+            --current-sha "${current_sha}" > "${plan_file}"
+          while IFS= read -r merge_sha; do
+            [[ -z "${merge_sha}" ]] || python3 scripts/update_post_merge_memory.py update \
+              --repository "${GITHUB_REPOSITORY}" --merge-sha "${merge_sha}" \
+              --state-root "${output_dir}" --branch-root "${branch_dir}"
+          done < "${plan_file}"
+          echo "branch_dir=${branch_dir}" >> "${GITHUB_OUTPUT}"
+          echo "output_dir=${output_dir}" >> "${GITHUB_OUTPUT}"
+          echo "prior_tip=$(git -C "${branch_dir}" rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+
+      - name: Apply protected authority event
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_ACTION: ${{ inputs.action }}
+          INITIATIVE_ID: ${{ inputs.initiative_id }}
+          CHUNK_ID: ${{ inputs.chunk_id }}
+          EVENT_REASON: ${{ inputs.reason }}
+        run: |
+          set -euo pipefail
+          python3 scripts/update_post_merge_memory.py apply-event \
+            --repository "${GITHUB_REPOSITORY}" --repository-root . \
+            --state-root "${{ steps.state.outputs.output_dir }}" \
+            --branch-root "${{ steps.state.outputs.branch_dir }}" \
+            --action "${EVENT_ACTION}" --initiative-id "${INITIATIVE_ID}" \
+            --chunk-id "${CHUNK_ID}" --reason "${EVENT_REASON}" \
+            --run-id "${GITHUB_RUN_ID}" --dispatcher "${GITHUB_ACTOR}" \
+            --main-sha "${TARGET_SHA}" \
+            --prior-state-tip "${{ steps.state.outputs.prior_tip }}"
+
+      - name: Sign, validate, and publish exact generated tree
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LOOP_MEMORY_START_SIGNING_KEY: ${{ secrets.LOOP_MEMORY_START_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          branch_dir="${{ steps.state.outputs.branch_dir }}"
+          output_dir="${{ steps.state.outputs.output_dir }}"
+          private_key=$(mktemp "${RUNNER_TEMP}/loop-memory-key.XXXXXX")
+          trap 'rm -f "${private_key}"' EXIT
+          chmod 600 "${private_key}"
+          printf '%s\n' "${LOOP_MEMORY_START_SIGNING_KEY}" > "${private_key}"
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          [[ "$(git rev-parse refs/remotes/origin/main)" == "${TARGET_SHA}" ]]
+          python3 scripts/update_post_merge_memory.py sign-state \
+            --state-root "${output_dir}" --private-key "${private_key}"
+          python3 scripts/update_post_merge_memory.py verify-state \
+            --state-root "${output_dir}" \
+            --public-key .agent-loop/keys/loop-memory-signing-public.pem \
+            --expected-main-sha "${TARGET_SHA}"
+          python3 scripts/check_loop_memory_state.py --state-root "${output_dir}"
+          generated_index="${RUNNER_TEMP}/loop-memory-generated.index"
+          GIT_INDEX_FILE="${generated_index}" git -C "${branch_dir}" read-tree --empty
+          GIT_INDEX_FILE="${generated_index}" git --git-dir="${branch_dir}/.git" \
+            --work-tree="${output_dir}" add -f -- .agent-loop
+          generated_tree=$(GIT_INDEX_FILE="${generated_index}" git -C "${branch_dir}" write-tree)
+          python3 scripts/update_post_merge_memory.py validate-tree \
+            --repository-root "${branch_dir}" --tree-sha "${generated_tree}" \
+            --output-root "${output_dir}"
+          git -C "${branch_dir}" config user.name "workstream-loop-memory[bot]"
+          git -C "${branch_dir}" config user.email \
+            "workstream-loop-memory[bot]@users.noreply.github.com"
+          parent_sha=$(git -C "${branch_dir}" rev-parse HEAD)
+          generated_commit=$(printf 'chore(loop-memory): record %s for %s\n' \
+            "${{ inputs.action }}" "${{ inputs.chunk_id }}" | \
+            git -C "${branch_dir}" commit-tree "${generated_tree}" -p "${parent_sha}")
+          git -C "${branch_dir}" push origin \
+            "${generated_commit}:refs/heads/${STATE_BRANCH}"

@@ -8,7 +8,7 @@
 | `WS-ENG-001-02` | Automated Post-Merge Memory | L1 | Merged through PR #122 as `fc89fb6` |
 | `WS-ENG-001-03` | Initiative-Local Loop Gates | L1 | Corrective schema-v2 clean cut; completion recorded by signed automation |
 | `WS-ENG-001-04A` | Complete Loop Memory Projections | L1 | Merged through PR #161; replay and signed projections passed |
-| `WS-ENG-001-04B` | Signed Explicit Start Events | L1 | Explicitly started; preimplementation plan review in progress |
+| `WS-ENG-001-04B` | Signed Explicit Start Events | L1 | Implementation and deterministic evidence in progress |
 
 ## Future Work
 

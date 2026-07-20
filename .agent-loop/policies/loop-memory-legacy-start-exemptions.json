@@ -1,0 +1,20 @@
+{
+  "exemptions": [
+    {
+      "chunk_id": "WS-ART-001-02C2",
+      "initiative_id": "WS-ART-001",
+      "pr_number": 159
+    },
+    {
+      "chunk_id": "WS-AUTH-001-PREP",
+      "initiative_id": "WS-AUTH-001",
+      "pr_number": 162
+    },
+    {
+      "chunk_id": "WS-MCP-001-01",
+      "initiative_id": "WS-MCP-001",
+      "pr_number": 149
+    }
+  ],
+  "schema_version": 1
+}
