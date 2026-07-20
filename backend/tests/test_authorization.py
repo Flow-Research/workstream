@@ -1569,6 +1569,11 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
         kind=PreparedAuthorityScopeKind.ACTOR_SELF,
         actor_profile_id=context.actor_profile_id,
     )
+    with pytest.raises(TypeError, match="invalid prepared authorization consumer"):
+        await authorization._prepare_prelocked(
+            object(), ActionId.ACTOR_PROFILE_UPDATE_SELF, scope
+        )
+    assert facts.calls == 0
     handle = await prepared.prepare(
         ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
     )
@@ -1686,6 +1691,77 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
         )
 
 
+@pytest.mark.asyncio
+async def test_prepared_rejects_cross_context_service_session_and_concurrent_consume():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    facts = _PreparedActorFacts(context)
+    authorization, evidence = _runtime_service(context, session=session)
+    authorization._admin = facts  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    other_context = context.model_copy(
+        update={"actor_profile_id": uuid4(), "identity_link_id": uuid4()}
+    )
+    with pytest.raises(TypeError, match="invalid prepared authorization composition"):
+        PreparedAuthorizationService(
+            session,  # type: ignore[arg-type]
+            other_context,
+            authorization,
+            facts,  # type: ignore[arg-type]
+        )
+    with pytest.raises(TypeError, match="one exact session"):
+        PreparedAuthorizationService(
+            _PreparedTestSession(),  # type: ignore[arg-type]
+            context,
+            authorization,
+            facts,  # type: ignore[arg-type]
+        )
+
+    sibling = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={})
+    scope = PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.ACTOR_SELF,
+        actor_profile_id=context.actor_profile_id,
+    )
+    handle = await prepared.prepare(
+        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
+    )
+    resource = ActorSelfResourceContext(
+        resource_type="actor_profile",
+        resource_id=context.actor_profile_id,
+        requested_fields=("display_name",),
+    )
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await sibling.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        )
+    outcomes = await asyncio.gather(
+        prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        ),
+        prepared.consume(
+            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
+        ),
+        return_exceptions=True,
+    )
+    assert sum(isinstance(item, AuthorizationDecision) for item in outcomes) == 1
+    assert sum(
+        isinstance(item, PreparedAuthorizationHandleInvalid) for item in outcomes
+    ) == 1
+    assert len(evidence.events) == 1
+
+
 def test_prepared_handle_rejects_construction_and_serializable_inputs():
     with pytest.raises(TypeError):
         PreparedAuthorizationHandle()
@@ -1750,6 +1826,7 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
     forged_authority = object.__new__(authorization_kernel._PrelockedAuthority)
     with pytest.raises(TypeError, match="invalid prelocked authority"):
         await authorization._require_prelocked(
+            prepared._consumer_token,
             ActionId.ACTOR_PROFILE_UPDATE_SELF,
             resource,
             forged_authority,
@@ -2239,11 +2316,12 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         )
         entered = asyncio.Event()
         blocked = asyncio.Event()
+        issued_holder = {}
 
         async def cancelled_command():
             try:
                 await session.begin()
-                await prepared.prepare(
+                issued_holder["handle"] = await prepared.prepare(
                     ActionId.ACTOR_PROFILE_UPDATE_SELF, cancellation_input, scope
                 )
                 entered.set()
@@ -2259,6 +2337,13 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             await cancellation_task
         assert await session.scalar(text("select 1")) == 1
         await session.rollback()
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(
+                issued_holder["handle"],
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                cancellation_input,
+                resource,
+            )
 
         commit_failure_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "commit_failure"}
@@ -2330,6 +2415,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             )
             phase_entered = asyncio.Event()
             phase_blocked = asyncio.Event()
+            phase_holder = {}
 
             async def command():
                 try:
@@ -2343,6 +2429,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
                         phase_input,
                         resource,
                     )
+                    phase_holder.update(handle=phase_handle, decision=phase_decision)
                     await session.execute(
                         text(
                             "update prepared_failure_participant set value=4 where id=1"
@@ -2363,7 +2450,25 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             assert await session.scalar(
                 text("select value from prepared_failure_participant where id=1")
             ) == 0
+            assert await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(phase_holder["decision"].decision_id)},
+            ) == 0
+            assert await session.scalar(
+                text(
+                    "select count(*) from authority_idempotency_records "
+                    "where idempotency_key=:key"
+                ),
+                {"key": phase_input.idempotency_key},
+            ) == 0
             await session.rollback()
+            with pytest.raises(PreparedAuthorizationHandleInvalid):
+                await prepared.consume(
+                    phase_holder["handle"],
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                    phase_input,
+                    resource,
+                )
 
         await cancel_after_consume("participant_cancel")
 
@@ -2372,9 +2477,11 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         )
         evidence_entered = asyncio.Event()
         evidence_blocked = asyncio.Event()
+        evidence_holder = {}
 
         class PausingEvidence:
             async def add_authority_event(self, _event):
+                evidence_holder["decision_id"] = _event.event_id
                 evidence_entered.set()
                 await evidence_blocked.wait()
 
@@ -2385,6 +2492,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
                     ActionId.ACTOR_PROFILE_UPDATE_SELF, evidence_cancel_input, scope
                 )
                 authorization._audit = PausingEvidence()  # type: ignore[assignment]
+                evidence_holder["handle"] = handle
                 await prepared.consume(
                     handle,
                     ActionId.ACTOR_PROFILE_UPDATE_SELF,
@@ -2403,6 +2511,18 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         authorization._audit = original_audit
         assert await session.scalar(text("select 1")) == 1
         await session.rollback()
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(evidence_holder["decision_id"])},
+        ) == 0
+        await session.rollback()
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(
+                evidence_holder["handle"],
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                evidence_cancel_input,
+                resource,
+            )
 
         commit_cancel_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "commit_cancel"}
@@ -2410,6 +2530,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         commit_entered = asyncio.Event()
         commit_blocked = asyncio.Event()
         original_commit = session.commit
+        commit_holder = {}
 
         async def pausing_commit():
             commit_entered.set()
@@ -2421,12 +2542,13 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
                 handle = await prepared.prepare(
                     ActionId.ACTOR_PROFILE_UPDATE_SELF, commit_cancel_input, scope
                 )
-                await prepared.consume(
+                decision = await prepared.consume(
                     handle,
                     ActionId.ACTOR_PROFILE_UPDATE_SELF,
                     commit_cancel_input,
                     resource,
                 )
+                commit_holder.update(handle=handle, decision=decision)
                 await session.execute(
                     text("update prepared_failure_participant set value=5 where id=1")
                 )
@@ -2445,7 +2567,18 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         assert await session.scalar(
             text("select value from prepared_failure_participant where id=1")
         ) == 0
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(commit_holder["decision"].decision_id)},
+        ) == 0
         await session.rollback()
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(
+                commit_holder["handle"],
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                commit_cancel_input,
+                resource,
+            )
 
         async with authorization_factory() as locker:
             await locker.begin()

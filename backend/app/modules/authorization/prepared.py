@@ -102,6 +102,12 @@ class PreparedAuthorizationService:
         self._repository = repository
         self._issued: dict[PreparedAuthorizationHandle, _Issuance | _Consumed] = {}
         self._closed = False
+        self._consumer_token = authorization._register_prepared_consumer(
+            self,
+            session=session,
+            repository=repository,
+            context=context,
+        )
 
     async def prepare(
         self,
@@ -113,7 +119,7 @@ class PreparedAuthorizationService:
         transaction = self._root_transaction()
         binding = self._binding(action_id, caller_input, requested_authority_scope)
         authority = await self._authorization._prepare_prelocked(
-            action_id, requested_authority_scope
+            self._consumer_token, action_id, requested_authority_scope
         )
         handle = PreparedAuthorizationHandle(_HANDLE_CONSTRUCTOR_TOKEN)
         self._issued[handle] = _Issuance(binding, transaction, authority)
@@ -145,7 +151,10 @@ class PreparedAuthorizationService:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
         return await self._authorization._require_prelocked(
-            expected_action_id, final_resource_context, issuance.authority
+            self._consumer_token,
+            expected_action_id,
+            final_resource_context,
+            issuance.authority,
         )
 
     def close(self) -> None:
@@ -153,6 +162,9 @@ class PreparedAuthorizationService:
         for issuance in self._issued.values():
             if isinstance(issuance, _Issuance):
                 self._authorization._discard_prelocked(issuance.authority)
+        self._authorization._unregister_prepared_consumer(
+            self._consumer_token, self
+        )
         self._closed = True
         self._issued.clear()
 

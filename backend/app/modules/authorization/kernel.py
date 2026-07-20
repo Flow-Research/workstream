@@ -170,13 +170,47 @@ class AuthorizationService:
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
         self._sealed_prelocked: set[_PrelockedAuthority] = set()
+        self._prepared_consumers: dict[object, object] = {}
+
+    def _register_prepared_consumer(
+        self,
+        owner: object,
+        *,
+        session: AsyncSession,
+        repository: AdminAuthorizationRepository,
+        context: AuthorizationContext,
+    ) -> object:
+        """Issue one opaque kernel token only to an exactly composed PREP service."""
+        from app.modules.authorization.prepared import PreparedAuthorizationService
+
+        if (
+            type(owner) is not PreparedAuthorizationService
+            or session is not self._session
+            or repository is not self._admin
+            or context != self._context
+        ):
+            raise TypeError("invalid prepared authorization composition")
+        token = object()
+        self._prepared_consumers[token] = owner
+        return token
+
+    def _unregister_prepared_consumer(self, token: object, owner: object) -> None:
+        """Revoke one prepared service's access to the private kernel seam."""
+        if self._prepared_consumers.get(token) is owner:
+            del self._prepared_consumers[token]
+
+    def _validate_prepared_consumer(self, token: object) -> None:
+        if token not in self._prepared_consumers:
+            raise TypeError("invalid prepared authorization consumer")
 
     async def _prepare_prelocked(
         self,
+        consumer_token: object,
         action_id: ActionId,
         scope: PreparedAuthorityScope,
     ) -> _PrelockedAuthority:
         """Lock, validate, and seal one closed authority plan without caller facts."""
+        self._validate_prepared_consumer(consumer_token)
         if self._session.in_nested_transaction():
             raise TypeError("prelocked authority requires one root transaction")
         transaction = self._session.sync_session.get_transaction()
@@ -385,11 +419,13 @@ class AuthorizationService:
 
     async def _require_prelocked(
         self,
+        consumer_token: object,
         action_id: ActionId,
         resource_context: AuthorizationResourceContext,
         authority: _PrelockedAuthority,
     ) -> AuthorizationDecision:
         """Evaluate final facts using exact authority already locked by AUTH."""
+        self._validate_prepared_consumer(consumer_token)
         transaction = self._session.sync_session.get_transaction()
         if (
             type(authority) is not _PrelockedAuthority
