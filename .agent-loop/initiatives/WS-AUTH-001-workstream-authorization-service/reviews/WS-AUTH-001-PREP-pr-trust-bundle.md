@@ -65,11 +65,13 @@ No CI configuration, coverage threshold, dependency, or migration changed.
 
 ## External Review And Remaining Risks
 
-GitHub Backend, Agent Gates, and CodeRabbit remain pending until publication.
-The primary remaining risk is an unforeseen transaction/cancellation behavior
-under the hosted PostgreSQL matrix; the full hosted suite is the required gate.
-Product integration risk is intentionally deferred because this chunk has no
-consumer.
+Agent Gates passed and CodeRabbit completed without comments. The first GitHub
+Backend run exposed invalid PostgreSQL fixture setup/teardown: bootstrap-only
+provenance and immutable-history triggers rejected synthetic test data cleanup,
+then the leaked evidence caused cascading migration errors. The fixture-only
+repair bypasses user triggers while retaining database indexes and constraints.
+The hosted Backend rerun remains the required full-suite proof. Product
+integration risk is intentionally deferred because this chunk has no consumer.
 
 ## Follow-Up And Human Review Focus
 

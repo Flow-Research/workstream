@@ -2675,3 +2675,11 @@ Implementation candidate `38acb8f9` passes senior engineering, QA/test,
 security/auth, product/ops, architecture, CI integrity, docs, reuse/dedup, and
 test-delta review with no open finding. No migration or product consumer is
 included. GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
+
+The first hosted Backend run then found invalid setup/teardown in the new real
+PostgreSQL proof. Synthetic bootstrap-provenance grants and immutable actor
+history cleanup were rejected by user triggers; the cleanup rollback leaked
+evidence and produced cascading migration errors. The fixture-only repair
+disables and restores the relevant user triggers while leaving unique indexes
+and constraints active. Focused PREP tests and Ruff pass; exact-SHA internal
+repair review and the hosted Backend rerun remain.
