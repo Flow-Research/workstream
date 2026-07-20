@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29696471801/job/88217972715"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29704033172/job/88237847294"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29696471153/job/88217970984"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29703948511/job/88237626397"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-REV-001-02A",
-    "chunk_title": "Guide Chronology And Task Locking Split",
-    "initiative_id": "WS-REV-001",
-    "next_chunk_id": "WS-REV-001-02A1",
-    "next_chunk_title": "Project And Setup Publication Fence",
+    "chunk_id": "WS-CON-001-02A",
+    "chunk_title": "Shared Transactional Outbox Persistence",
+    "initiative_id": "WS-CON-001",
+    "next_chunk_id": "WS-CON-001-02B",
+    "next_chunk_title": "Shared Outbox Dispatcher And Recovery",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-REV-001-02A1",
-    "next_chunk_title": "Project And Setup Publication Fence",
+    "next_chunk_id": "WS-CON-001-02B",
+    "next_chunk_title": "Shared Outbox Dispatcher And Recovery",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "44f2467cedc266d2efe261119cfff436ac6b7715",
-    "head_ref": "codex/ws-rev-001-02a-split-contracts",
-    "head_sha": "efefe1c44f5233d3636793ddba05f6ffb0b8205a",
-    "intent_blob_sha": "67141704b370b767596b8550ec86308adc4263ad",
-    "intent_path": ".agent-loop/merge-intents/WS-REV-001-02A.json",
-    "main_sha": "3b1d63796c086f53fc2b0aeefe096387b82485ec",
-    "merged_at": "2026-07-19T17:40:28Z",
+    "first_parent_sha": "3b1d63796c086f53fc2b0aeefe096387b82485ec",
+    "head_ref": "codex/ws-con-001-02a-shared-outbox-persistence",
+    "head_sha": "da9deef5e1fff8bfda8b0076dd5485a0a0b95094",
+    "intent_blob_sha": "f099bbdd8aa70f73f735aba3ca47f5afe1e79052",
+    "intent_path": ".agent-loop/merge-intents/WS-CON-001-02A.json",
+    "main_sha": "cb9d5f9f9c311e644ed20a988c69843d3618a6b0",
+    "merged_at": "2026-07-20T03:58:51Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 156,
-    "pr_title": "docs(rev): split guide chronology and task locking contracts",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/156"
+    "pr_number": 155,
+    "pr_title": "Add shared transactional outbox persistence",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/155"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-19T17:40:28Z"
+  "updated_at": "2026-07-20T03:58:51Z"
 }
