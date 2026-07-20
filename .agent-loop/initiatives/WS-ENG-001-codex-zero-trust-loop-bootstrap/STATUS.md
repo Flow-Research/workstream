@@ -10,8 +10,8 @@
 - `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
   workflow, cutover inventory, tests, CI coverage gates, operations policy, and
   all nine exact-SHA reviewer tracks pass at `a93a58b2`
-- Current gate: configure and evidence the protected `loop-memory-start`
-  environment before PR publication
+- Current gate: PR publication, hosted checks, CodeRabbit, and explicit human
+  merge review
 - Product runtime: unchanged
 
 ## Last Update
@@ -25,6 +25,5 @@ Workstream product runtime is active in this engineering chunk.
 
 ## Next Required Event
 
-Create the protected environment with the required controls, record settings
-evidence, then publish one PR. Reuse the existing loop-memory signing identity;
-do not create or transfer another key. Do not begin another chunk.
+Publish one PR with the trust bundle, resolve hosted findings, and stop for
+explicit human merge review. Do not begin another chunk.

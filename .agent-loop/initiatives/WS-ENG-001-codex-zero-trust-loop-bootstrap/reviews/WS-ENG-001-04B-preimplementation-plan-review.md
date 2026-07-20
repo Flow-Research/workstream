@@ -20,7 +20,7 @@ planning SHA `7ffaa59bcb61baa287a125ee9c01c08c0ff29cf5`.
   credentials require complete fail-closed evidence
 - Why: this chunk changes the authenticated engineering-loop state machine and
   adds a write-capable, protected-environment-authorized job that uses the
-  existing organization-managed signing identity.
+  existing repository-managed signing identity.
 
 ## Reviewer tracks
 

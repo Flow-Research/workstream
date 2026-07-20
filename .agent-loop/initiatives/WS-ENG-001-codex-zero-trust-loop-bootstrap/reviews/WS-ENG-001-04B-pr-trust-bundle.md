@@ -45,10 +45,11 @@ docs, reuse/dedup, and test delta.
 
 ## Remaining risk and external review
 
-CodeRabbit, hosted checks, and human PR review have not run because publication
-was blocked by missing live environment configuration. The workflow cannot be
-enabled until its protected reviewer/settings are evidenced. It reuses the
-existing loop-memory signing identity; no second key is created or transferred.
+CodeRabbit, hosted checks, and human PR review have not run. The protected live
+environment is configured with required review, no self-review/admin bypass,
+and protected-branch-only deployment. The workflow reuses the existing
+repository-managed loop-memory signing identity; no second key was created or
+transferred.
 
 ## Human review focus
 

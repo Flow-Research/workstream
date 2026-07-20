@@ -141,10 +141,10 @@ reason. A reviewer other than the dispatcher must approve the
 
 Configure that environment with required reviewers, self-review disabled,
 administrator bypass disabled, and deployment restricted to protected `main`.
-The job reuses the existing organization-managed `LOOP_MEMORY_SIGNING_KEY` used
+The job reuses the existing repository-managed `LOOP_MEMORY_SIGNING_KEY` used
 by trusted merge memory. Do not create, transfer, or paste a second private key.
 The protected environment authorizes the start/cancel job; it does not redefine
-the existing key's organization scope.
+the existing key's repository scope.
 
 Every signed event records the dispatcher, approving reviewers, immutable run
 ID and creation time, current-main SHA, prior state-branch tip, reason,

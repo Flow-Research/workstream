@@ -54,9 +54,15 @@ Reviewed against trusted main: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
   fixed fast-forward push for both workflows.
 - Replaced unsafe key-rotation guidance with a fail-closed incident boundary.
 
+## Deployment evidence
+
+GitHub environment `loop-memory-start` is configured as environment ID
+`18466331045` with `durutheguru` as required reviewer, self-review disabled,
+administrator bypass disabled, and protected-branch-only deployment. The
+existing repository secret `LOOP_MEMORY_SIGNING_KEY` is present; no second key
+was created or transferred.
+
 ## Remaining gate
 
-Code review is complete. PR publication and workflow enablement remain blocked
-until `loop-memory-start` exists with required distinct reviewers, self-review
-and administrator bypass disabled, and protected-main deployment restriction.
-No second signing key is required.
+Code review and environment configuration are complete. Hosted checks,
+CodeRabbit, and explicit human merge review remain after PR publication.
