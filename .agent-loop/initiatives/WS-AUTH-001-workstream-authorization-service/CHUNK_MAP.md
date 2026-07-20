@@ -206,5 +206,6 @@ user explicitly started 09D-B; exact contract `9ec6390b` passed required L1
 review. PR #152 merged it as `93dd392`; signed memory `912a6254` passed and
 stopped. The user explicitly started the contributor foundation. Its first L1
 review rejected the underspecified contract before runtime edits; PR #153 later
-merged its repaired implementation as `8d5eb15`. AUTH-09E and POL-002-04 remain
-inactive pending their own gates and explicit starts.
+merged its repaired implementation as `8d5eb15`. PR #157 merged AUTH-09E as
+`42a89b2d`; its feature actions remain planned and inactive. POL-002-04 remains
+inactive pending its own gate and explicit start.

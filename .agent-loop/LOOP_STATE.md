@@ -33,8 +33,9 @@
 - AUTH-09D-B merged through PR #152 as `93dd392`; signed schema-v2 memory at
   `912a6254` stopped and named the contributor foundation as its exact
   successor.
-- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`; ART-02C2
-  now integrates that trusted `main` state without activating AUTH-09E.
+- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`, and PR #157
+  merged AUTH-09E as `42a89b2d`; ART-02C2 integrates that trusted `main` state
+  without activating the three ART internal feature actions.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
