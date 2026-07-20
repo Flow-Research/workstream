@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#161](https://github.com/Flow-Research/workstream/pull/161) - fix(loop-memory): complete consistent projections
-- Merge commit: `c12ba1c8d4bbde86d0e2c19826f5791afc130489`
-- Final PR head: `fa90632ae2b88136f9849526d899d7d9be52e3ae`
-- Merged at: `2026-07-20T15:16:20Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ENG-001-04A.json` at blob `b745b9d1342e215aa649559c6fb739f8ae35a939`
-- Completed chunk: `WS-ENG-001-04A` - Complete Loop Memory Projections
+- Last merged PR: [#163](https://github.com/Flow-Research/workstream/pull/163) - ci(backend): parallelize full-suite coverage
+- Merge commit: `b0f9ad6476bb836a99c0adac7073705eb5206f4c`
+- Final PR head: `1fa072b89407e6a705d85eb06cd8ac26f774e4fd`
+- Merged at: `2026-07-20T18:11:28Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-CI-001-01.json` at blob `5d6e839c9b7fc7a98646999f735e71b8bd9349b3`
+- Completed chunk: `WS-CI-001-01` - Parallel Full-Suite Coverage
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-ENG-001-04B` - Signed Explicit Start Events; requires a separate explicit start.
+- Next chunk: none recorded.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`

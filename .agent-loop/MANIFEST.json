@@ -9,6 +9,10 @@
       "sha256": "c5a81749cb66df6325677b0fc44911f24dc1bcb965a1ab81f77678d63eb633fe"
     },
     {
+      "path": ".agent-loop/INITIATIVE_STATE/WS-CI-001.md",
+      "sha256": "22260436a3a9bc755cac909d7fd77d271af6f00de23b45cf09963f41dced4def"
+    },
+    {
       "path": ".agent-loop/INITIATIVE_STATE/WS-CON-001.md",
       "sha256": "1ba71d4ea30f60ad3e2153e466d0b713dcef10778e69542534667ef11dd81f15"
     },
@@ -26,19 +30,19 @@
     },
     {
       "path": ".agent-loop/LOOP_STATE.md",
-      "sha256": "8c8c836bc07731377d84b8ef1e8e0d3650d8f2b46ab638b22a52361db5e70348"
+      "sha256": "f6911e217ccedbc43e4c4153905371f70573d2fd8233fa90effbac36e3ff81e3"
     },
     {
       "path": ".agent-loop/MERGE_LOG.jsonl",
-      "sha256": "1d7d3a14fcd7b900329689bbadd52d3c4dfcc6bc9c88cb3a0d8ce47f1ce6a24c"
+      "sha256": "adae16a291e2e995f9e58e470082f6d643b7a6a984ea5ca40114bad34224acaf"
     },
     {
       "path": ".agent-loop/STATE.json",
-      "sha256": "77e410f587853ef93cc0389682ac0224c5a66fe11d2c85795eaa15ce67da9541"
+      "sha256": "2620cf5b78f7d5e2205b94116a3ce60f6a4c0213668ddfb2e3ab2d12e4f2efa5"
     },
     {
       "path": ".agent-loop/WORK_QUEUE.md",
-      "sha256": "46ba4ba07f912b0fde4b176ea5ab89c246a585273bc7134a2451235cd3405bfb"
+      "sha256": "aeb1acdbe7304f46bddaf9d80487a4336533b45a02ea79240f74f208866a6bd2"
     }
   ],
   "schema_version": 2
