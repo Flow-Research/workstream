@@ -19,7 +19,8 @@ planning SHA `7ffaa59bcb61baa287a125ee9c01c08c0ff29cf5`.
 - Budget posture: proof-heavy; start authority, state signatures, and workflow
   credentials require complete fail-closed evidence
 - Why: this chunk changes the authenticated engineering-loop state machine and
-  adds a write-capable workflow that uses an environment-scoped signing secret.
+  adds a write-capable, protected-environment-authorized job that uses the
+  existing organization-managed signing identity.
 
 ## Reviewer tracks
 

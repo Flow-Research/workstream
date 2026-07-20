@@ -132,7 +132,7 @@ integrity, docs, reuse/dedup, and test delta.
 
 ## Stop condition
 
-Stop if protected environment review cannot gate the signing secret, current
+Stop if protected environment review cannot authorize the start/cancel job, current
 protected `main` cannot be resolved independently, an event would select a
 non-successor/cross-initiative chunk, cancellation would rewrite history, or
 the required Agent Gates job cannot enforce each coverage floor. Also stop if
