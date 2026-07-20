@@ -14,6 +14,12 @@
   Database indexes and constraints remain active, so the duplicate active
   same-role grant case still proves rejection through the canonical unique
   index.
+- CodeRabbit run `d64c773b-4f76-491e-ae6e-cab19d25dc4b` correctly found that
+  the trust bundle did not bind its external-check statements to the exact
+  published SHA. The bundle now names head
+  `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, passing Agent Gates run
+  `29784118660`, the CodeRabbit run, and pending sharded Backend run
+  `29784025021` separately.
 
 ## Comments Deferred
 
@@ -35,6 +41,6 @@ than the slow local machine.
 
 ## Remaining Risks
 
-The repaired PostgreSQL cases and full repository coverage must pass on the
-next GitHub Backend run. Agent Gates passed, and CodeRabbit completed without
-comments on the prior published SHA.
+The repaired PostgreSQL cases and full repository coverage must pass in sharded
+Backend run `29784025021`. This documentation repair creates a descendant SHA,
+so its refreshed external checks must also complete before merge readiness.

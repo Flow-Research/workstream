@@ -67,12 +67,16 @@ is unchanged by PREP; no coverage threshold, dependency, or migration changed.
 
 ## External Review And Remaining Risks
 
-Agent Gates passed and CodeRabbit completed without comments. The first GitHub
-Backend run exposed invalid PostgreSQL fixture setup/teardown: bootstrap-only
-provenance and immutable-history triggers rejected synthetic test data cleanup,
-then the leaked evidence caused cascading migration errors. The fixture-only
-repair bypasses user triggers while retaining database indexes and constraints.
-The hosted Backend rerun remains the required full-suite proof. Product
+For published head `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, Agent Gates
+run `29784118660` passed. CodeRabbit run
+`d64c773b-4f76-491e-ae6e-cab19d25dc4b` completed with one minor provenance
+comment, addressed by explicitly binding these statuses here. The trusted-main
+sharded Backend run `29784025021` remains pending and is the required
+full-suite proof for this candidate. Earlier single-job Backend runs exposed
+invalid PostgreSQL fixture setup/teardown: bootstrap-only provenance and
+immutable-history triggers rejected synthetic test data cleanup, then leaked
+evidence caused cascading migration errors. The fixture-only repair bypasses
+user triggers while retaining database indexes and constraints. Product
 integration risk is intentionally deferred because this chunk has no consumer.
 
 ## Follow-Up And Human Review Focus

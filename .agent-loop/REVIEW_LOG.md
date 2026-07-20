@@ -2683,3 +2683,11 @@ evidence and produced cascading migration errors. The fixture-only repair
 disables and restores the relevant user triggers while leaving unique indexes
 and constraints active. Focused PREP tests and Ruff pass; exact-SHA internal
 repair review and the hosted Backend rerun remain.
+
+After trusted-main CI acceleration sync, candidate `9e926d04` passed all nine
+internal tracks and evidence descendant `8a705e5b` passed Agent Gates. CodeRabbit
+reported one minor external-status provenance ambiguity: the trust bundle did
+not identify which SHA and runs its results described. The response now binds
+Agent Gates `29784118660` and CodeRabbit
+`d64c773b-4f76-491e-ae6e-cab19d25dc4b` to published head `8a705e5b` and keeps
+sharded Backend `29784025021` explicitly pending.
