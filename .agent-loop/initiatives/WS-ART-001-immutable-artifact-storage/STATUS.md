@@ -56,7 +56,7 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 ## Gate
 
 Deterministic 02C2 proof and all nine exact-SHA internal reviewer tracks are
-complete for reviewed implementation SHA `e714ef99`. The current gate is
+complete for reviewed implementation SHA `e59a6dfc`. The current gate is
 external CI/review followed by explicit human merge approval. Production
 activation and recovery remain in later owning chunks. No later artifact chunk
 starts automatically, and only the user may approve merge.
