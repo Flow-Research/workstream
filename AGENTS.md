@@ -20,6 +20,11 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Codex custom reviewer agents live under `.codex/agents/`.
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
 - Canonical live post-merge state is generated on `automation/loop-memory` from trusted `main` after a PR merge. Do not open a manual post-merge memory PR when that workflow succeeds.
+- The automation branch is a closed generated tree. Verify its signed manifest,
+  JSON/ledger, loop view, work queue, and initiative projections together; do
+  not treat authored narrative status copied from `main` as live automation
+  state. Before signed start events exist, merge projections intentionally show
+  stopped/next state and cannot attest conversational or unmerged starts.
 - Do not add Claude-specific files unless the user explicitly asks for cross-tool support.
 - Do not use old names such as "task-production control plane" or "Garden roadmap".
 - Spreadsheet exports live locally under ignored `sheets/`; do not commit them.

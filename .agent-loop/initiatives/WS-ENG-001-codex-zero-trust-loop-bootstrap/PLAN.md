@@ -39,3 +39,41 @@ Bootstrap Workstream's engineering loop using Codex-native surfaces first:
 - Run stale wording scan.
 - Run Markdown link check for changed Markdown files.
 - Run required internal reviewer tracks and record findings.
+
+## 2026-07-20 Projection Consistency Plan
+
+### 04A: complete post-merge projections
+
+1. Define `.agent-loop/MANIFEST.json` as the ordered generated-file manifest.
+2. Reduce the authenticated ledger to latest stopped/next state per initiative.
+3. Render loop state, work queue, and compact initiative projections at
+   `.agent-loop/INITIATIVE_STATE/<initiative-id>.md`, ordered lexicographically,
+   from the same typed data. Label them merge-derived stopped/next projections,
+   not narrative or complete live-work histories.
+4. Include the complete projection manifest in the signature domain.
+5. Authenticate the existing canonical state, generate into a newly created
+   empty output directory, construct a new tree from an empty temporary Git
+   index containing only the manifest paths, validate it, and commit it as a
+   normal child of the existing branch tip. Do not delete or traverse legacy
+   worktree paths and do not force-push.
+6. Independently reproduce and compare every projection byte-for-byte.
+7. Preserve trusted-main execution, fixed push destination, concurrency, and
+   protected-main freshness.
+8. Resolve protected `main` at replay time and prove the generated latest merge,
+   completed chunk, stopped gate, and successor exactly match that target's
+   immutable merge intent and check evidence. Retain AUTH-09E/ART-custody and
+   ART-custody/REV-custody transitions as historical fixtures rather than a
+   hard-coded live target.
+
+### 04B: authenticated explicit starts
+
+After 04A merge/replay and a separate user start, define a signed start event,
+protected human-triggered workflow, exact-successor/current-main checks, active
+projection rendering, and fail-closed stale/replay/conflict behavior.
+
+### Alternatives and verification
+
+Do not generate narrative histories, write protected `main`, or automatically
+activate merge-intent successors. Use isolated state-root fixtures to prove
+rendering, signature coverage, ledger reduction, exact cleanup, idempotency,
+hostile path handling, and workflow permissions/order.

@@ -19,12 +19,23 @@ write that did not come from trusted automation, while an expected protected-
 `main` SHA rejects replay of an older valid signed snapshot. Invalid branch
 state is discarded and deterministically rebuilt from the immutable bootstrap.
 
-The generated branch contains:
+The generated branch is a closed tree containing:
 
 - `.agent-loop/STATE.json` - canonical live state
 - `.agent-loop/LOOP_STATE.md` - generated human view
 - `.agent-loop/MERGE_LOG.jsonl` - append-only merge history
-- `.agent-loop/STATE.sig` - signature over all three canonical generated files
+- `.agent-loop/WORK_QUEUE.md` - latest merge-derived gate per initiative
+- `.agent-loop/INITIATIVE_STATE/<initiative-id>.md` - compact per-initiative
+  merge/start projection
+- `.agent-loop/MANIFEST.json` - ordered payload paths and SHA-256 digests
+- `.agent-loop/STATE.sig` - signature over manifest bytes and every ordered
+  `(path, bytes)` payload
+
+Exact-tree validation rejects missing, extra, symlinked, or substituted paths.
+Projection timestamps come from authenticated merge events, never render time.
+Before signed start events exist, queue and initiative views intentionally show
+the latest completed/stopped/next gate and cannot attest chat-only or unmerged
+starts.
 
 ## Merge Intent
 
@@ -67,7 +78,9 @@ fresh checks and human review before merge.
    `main` exactly.
 3. The updater validates the committed merge intent and records observed
    Backend, Agent Gates, and CodeRabbit conclusions from each final PR head.
-4. The workflow commits generated files directly to `automation/loop-memory`.
+4. The workflow renders into an empty output directory, builds an exact Git tree
+   through an empty temporary index, commits a normal child of the prior state
+   tip, and pushes it fast-forward to `automation/loop-memory`.
 5. Work stops. A next chunk starts only under the generated explicit gate.
 
 ## Read Current State
@@ -76,6 +89,8 @@ fresh checks and human review before merge.
 git fetch origin automation/loop-memory
 git show origin/automation/loop-memory:.agent-loop/STATE.json
 git show origin/automation/loop-memory:.agent-loop/LOOP_STATE.md
+git show origin/automation/loop-memory:.agent-loop/WORK_QUEUE.md
+git show origin/automation/loop-memory:.agent-loop/MANIFEST.json
 python3 scripts/update_post_merge_memory.py verify-state \
   --state-root <checked-out-state-branch> \
   --public-key .agent-loop/keys/loop-memory-signing-public.pem \
@@ -96,11 +111,18 @@ gh api --method POST repos/Flow-Research/workstream/dispatches \
 `repository_dispatch` always selects the workflow from the default branch;
 callers cannot choose feature-branch workflow code for the write token. Stale
 replay SHAs fail closed before generated state is inspected. Replays are
-idempotent and reconcile skipped intermediate commits. Schema-v1 generated
-state and signatures are rejected and the four fixed generated paths are
-cleared before the schema-v2 bootstrap; no schema-v1 intent is parsed or
-normalized. Invalid immutable schema-v2 intent requires an explicit corrective
+idempotent and reconcile skipped intermediate commits. An unexpected tracked
+path is recovered by the same replay: retained canonical inputs are
+authenticated, output is rebuilt in an empty directory, and a normal
+fast-forward child replaces the tree. The workflow never recursively deletes
+the legacy checkout, edits generated files by hand, or force-pushes. Schema-v1
+generated state and signatures remain rejected; no schema-v1 intent is parsed
+or normalized. Invalid immutable schema-v2 intent requires an explicit corrective
 engineering PR; generated files must not be edited by hand.
+
+If the automation branch is absent, the same trusted workflow creates a signed
+generated root commit. Existing branches always retain their prior tip as the
+new commit's parent and update by fast-forward only.
 
 ## Review Policy
 
