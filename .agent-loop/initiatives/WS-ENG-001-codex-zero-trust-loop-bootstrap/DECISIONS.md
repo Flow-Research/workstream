@@ -47,6 +47,14 @@
   empty temporary Git index and output directory, then make a normal
   fast-forward child commit. Do not recursively delete the cloned worktree and
   do not force-push.
+- For 04B, use a `workflow_dispatch` job on `main` protected by the
+  `loop-memory-start` GitHub environment. Environment reviewers control access
+  to the signing secret; actor and unique run ID become signed event evidence.
+- Model correction as an attributable corrective cancellation that restores the
+  same reviewed successor gate, followed by a separate protected start. Do not
+  introduce arbitrary active-chunk replacement.
+- Require exact active-chunk closure when active state exists, while allowing
+  legacy merge-only reconciliation for work already in flight at 04B rollout.
 
 ## Deferred
 

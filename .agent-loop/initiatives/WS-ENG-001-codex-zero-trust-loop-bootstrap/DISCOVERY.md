@@ -87,3 +87,50 @@ normal child of the authenticated state-branch tip, and pushed fast-forward.
 This omits legacy paths without traversing or deleting their worktree objects.
 04B defers the start-event schema, actor/environment protection, and mandatory
 cancel/correct semantics; none is required for 04A.
+
+## 2026-07-20 Explicit-Start Discovery
+
+### Current trusted surfaces
+
+- `.github/workflows/loop-memory.yml` runs reviewed code from protected `main`,
+  serializes writes with `workstream-loop-memory`, signs the complete generated
+  tree with an Actions-only Ed25519 key, and pushes only
+  `automation/loop-memory` by fast-forward.
+- `scripts/update_post_merge_memory.py` already authenticates the prior state,
+  rebuilds into an empty output root, renders every canonical projection, and
+  validates exact Git trees. These are the reusable mutation boundaries.
+- Schema-v2 merge intent supplies the only reviewed same-initiative successor.
+  Current state records `stopped_after_merge`, the successor or `null`, and the
+  protected-main SHA that produced it.
+- GitHub `workflow_dispatch` is attributable, but dispatch alone is not enough:
+  a caller can select a ref and rerun metadata can differ. The workflow must
+  require `refs/heads/main`, resolve current protected `main` independently,
+  reject stale expected SHAs, and use a protected environment whose reviewers
+  control access to the signing secret.
+
+### State and lifecycle gaps
+
+- The ledger currently contains merge records only; it needs a closed typed
+  event union without rewriting merge history.
+- Projections have no active state, start actor, start event ID, or start reason.
+- A duplicated workflow run, stale dispatch, null successor, wrong initiative,
+  wrong chunk, already-active initiative, or same event ID with different bytes
+  must fail closed.
+- Cancellation must not erase history. It returns the initiative to the same
+  stopped successor gate so a later protected start can retry. A correction is
+  represented as an attributable corrective cancellation plus a later start,
+  avoiding an arbitrary replacement path.
+- Existing in-flight initiatives predate signed starts. Merge reconciliation
+  must close an exact active chunk when one exists, while retaining legacy
+  merge-only reconciliation for already-approved work that began before 04B.
+
+### Tests and operational dependencies
+
+- Existing fixture helpers can construct signed state roots and Git trees.
+- New tests must cover typed-event schema, signature coverage, projection bytes,
+  stale-main, replay, event-ID collision, actor/reason validation, null/wrong
+  successor, active conflict, cancel/retry, active-merge mismatch, workflow ref,
+  environment, permissions, concurrency, fixed push target, and secret handling.
+- Repository configuration must create and protect the `loop-memory-start`
+  environment with required human reviewers before the workflow can succeed.
+  This external configuration is a deployment gate, not repository code.

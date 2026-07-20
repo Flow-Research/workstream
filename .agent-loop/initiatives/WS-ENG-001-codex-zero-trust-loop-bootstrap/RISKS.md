@@ -23,3 +23,7 @@
 | Merge automation falsely claims conversational work is active | High | 04A renders stopped/next merge state only; 04B separately owns authenticated explicit-start events. |
 | Start workflow bypasses human authority or selects arbitrary work | Critical | 04B requires protected dispatch, current-main binding, exact successor equality, contract validation, signed event provenance, and fail-closed replay/conflict handling. |
 | A mistaken or abandoned explicit start wedges an initiative | High | 04B cannot pass preimplementation review until an attributable signed cancel/correct event with reason, replay protection, and projection semantics is explicit. |
+| Dispatch runs feature-branch workflow code with a write token | Critical | Require `workflow_dispatch` on `refs/heads/main`, independently resolve protected main, detach at that SHA, and fix the state-branch destination. |
+| A write-capable collaborator bypasses intended human start authority | Critical | Gate the signing secret and job behind the protected `loop-memory-start` environment with required reviewers; record actor and run ID. |
+| Rerun or duplicate dispatch replays an authority event | Critical | Require first run attempt and append-only unique event IDs; identical replay is non-mutating and collisions fail closed. |
+| 04B blocks already-approved work started before deployment | High | Enforce exact active-chunk closure when active state exists; retain legacy merge-only reconciliation for pre-04B in-flight work. |

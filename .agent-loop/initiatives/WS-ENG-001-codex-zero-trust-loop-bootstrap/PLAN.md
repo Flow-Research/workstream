@@ -67,9 +67,36 @@ Bootstrap Workstream's engineering loop using Codex-native surfaces first:
 
 ### 04B: authenticated explicit starts
 
-After 04A merge/replay and a separate user start, define a signed start event,
-protected human-triggered workflow, exact-successor/current-main checks, active
-projection rendering, and fail-closed stale/replay/conflict behavior.
+After 04A merge/replay and a separate user start:
+
+1. Extend the append-only ledger with a closed schema-v2 event union for
+   `merge`, `start`, and `cancel`. Start/cancel events bind GitHub actor, unique
+   workflow run ID, event time, reason, protected-main SHA, initiative, chunk,
+   and prior signed-state tip. Do not rewrite earlier records.
+2. Reduce events per initiative. `start` changes only the exact recorded
+   same-initiative successor from `stopped_after_merge` to `active`; `cancel`
+   returns that same chunk to the stopped explicit-start gate. Correction uses
+   an attributable corrective cancellation followed by a fresh start.
+3. Add repository-owned commands that apply a validated event to an already
+   authenticated state root, rerender the complete closed tree, sign it, and
+   validate it with the existing manifest/tree boundary.
+4. Add `.github/workflows/loop-memory-start.yml` using `workflow_dispatch` only.
+   Require ref `main`, `run_attempt == 1`, an exact expected current-main SHA,
+   the fixed `loop-memory-start` protected environment, minimal read/write
+   permissions, the shared concurrency group, reviewed code from current main,
+   and the fixed `automation/loop-memory` fast-forward destination.
+5. Keep the signing key environment-scoped. Treat environment approval and
+   GitHub actor attribution as the human authority; never accept chat text,
+   feature-branch code, arbitrary successors, or caller-selected destinations.
+6. When merge reconciliation encounters an active initiative, require the
+   merged chunk to equal that active chunk before clearing it. Preserve
+   merge-only handling for work already in flight when 04B deploys.
+7. Update policy, skill, AGENTS, and operations guidance with dispatch, cancel,
+   recovery, environment setup, audit, and rollout rules.
+8. Prove event/schema reduction, deterministic rendering, signing, replay,
+   stale/conflict rejection, cancel/retry, active-merge mismatch, hostile paths,
+   and workflow permissions/order. Preserve at least 90 percent branch coverage
+   for materially changed loop-memory scripts.
 
 ### Alternatives and verification
 

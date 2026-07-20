@@ -103,5 +103,20 @@ coverage threshold, PR approval, or merge authority changes.
 Fixture-driven Git-tree rebuild, signature-tamper, unexpected-file, interleaved-
 initiative, replay, stale-event, renderer, and workflow-structure tests must
 pass with at least 90 percent branch coverage for changed loop-memory scripts.
-The user must approve 04A implementation after planning review, then separately
-approve 04B only after 04A merge and replay proof.
+The user approved 04B on 2026-07-20 after 04A merge/replay and the CI
+acceleration repair. Human authority remains limited to protected GitHub
+environment approval; the implementation must not treat chat as a signed event.
+
+### Explicit-start boundaries and proof
+
+The target is an attributable, append-only start/cancel event that updates the
+same signed canonical projections without a bookkeeping PR. Only the exact
+reviewed successor on current protected `main` may start. Cancellation restores
+that same gate without deleting history; correction is cancellation with a
+reason followed by a new start. Automatic activation, cross-initiative
+selection, feature-ref dispatch, arbitrary replacement, direct `main` writes,
+and automated merge remain non-goals.
+
+Proof requires deterministic event reduction, signature and exact-tree checks,
+stale/replay/collision/conflict rejection, active-merge matching, workflow
+permission/ref/environment assertions, and documented environment deployment.
