@@ -2660,3 +2660,17 @@ exact ART no-migration invariant, records REV no-migration separately, and
 states the completed owner-only transfer. Sixty-three focused cases and all
 deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
 finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.
+
+## 2026-07-20 - WS-AUTH-001-PREP Internal Review
+
+Prepared mutation authorization now uses a kernel-issued opaque single-use
+handle, exact service/session/root-transaction binding, canonical authority
+locks and facts, and terminal tombstoning across success, denial, failure,
+timeout, and cancellation. Real PostgreSQL proof covers both supported mutation
+race orders and confirms that active system-role uniqueness makes a second
+eligible same-role administrative grant structurally impossible.
+
+Implementation candidate `38acb8f9` passes senior engineering, QA/test,
+security/auth, product/ops, architecture, CI integrity, docs, reuse/dedup, and
+test-delta review with no open finding. No migration or product consumer is
+included. GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
