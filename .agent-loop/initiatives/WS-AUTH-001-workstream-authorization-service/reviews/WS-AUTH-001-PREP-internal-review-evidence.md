@@ -1,5 +1,7 @@
 # WS-AUTH-001-PREP Internal Review Evidence
 
+Reviewed code SHA: `38acb8f91d3ddd2edd4cc26fb1e36b67fa130fd9`
+
 Reviewed implementation SHA: `38acb8f91d3ddd2edd4cc26fb1e36b67fa130fd9`
 
 Reviewed against trusted main: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567`
@@ -15,8 +17,8 @@ architecture, CI integrity, docs, reuse/dedup, and test delta
 ## Deterministic Evidence
 
 - Ruff passed for the complete backend application and test trees before the
-  final test-only proof, then passed for the application and all three changed
-  test modules at the reviewed SHA.
+  final test-only proof, then passed for the application and the changed
+  `tests/test_authorization.py` module at the reviewed SHA.
 - Eighteen focused non-database PREP cases passed locally. They cover every
   supported mutation action plus substitution, forgery, replay, context,
   transaction, rollback, and evidence-failure boundaries.
@@ -61,8 +63,9 @@ Early candidates lacked complete race/failure proof, allowed an insufficiently
 sealed prelocked boundary, and did not bind consumption to the issuing service
 and exact context. The repaired implementation makes prelocked entry points
 require a service-private registered token, derives authority only through the
-kernel, binds sealed authority to the root transaction, and tombstones every
-issued handle on success, denial, failure, timeout, or cancellation. The final
+kernel and binds sealed authority to the root transaction. Exact consume
+attempts tombstone before evaluation; pre-consume cancellation or rollback
+invalidates the issuance through transaction binding and cleanup. The final
 QA retry added real-database proof for the unique active system-role grant
 invariant. All nine tracks passed the reviewed SHA with no remaining finding.
 

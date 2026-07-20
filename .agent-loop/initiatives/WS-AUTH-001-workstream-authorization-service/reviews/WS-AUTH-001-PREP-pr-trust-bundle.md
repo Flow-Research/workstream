@@ -19,8 +19,9 @@ end, while keeping the full suite on GitHub because the local machine is slow.
   facts, seal authority to the exact service/session/root transaction, and
   register the only valid consumption capability.
 - Requires the participant to consume inside the same transaction after its
-  product lock; one shared completion path records the canonical decision,
-  evidence, and idempotency result.
+  product lock; one shared AUTH completion path records the canonical decision
+  and evidence. The participant command retains ownership of durable
+  idempotency.
 - Adds a FastAPI dependency that owns rollback on denial or failure and never
   stages or commits product state itself.
 - Adds focused and real-PostgreSQL proof for all supported actions, both race
