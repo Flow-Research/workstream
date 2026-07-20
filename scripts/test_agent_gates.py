@@ -4229,7 +4229,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "`d541521`" in artifact_status
     )
     assert "`WS-ART-001-02C2` is active" in artifact_status
-    assert "The current gate is deterministic 02C2 proof followed by all nine" in (
+    assert "The current gate is external CI/review followed by explicit human" in (
         artifact_status.replace("\n", " ")
     )
     assert "No later artifact chunk starts automatically" in artifact_status.replace(
