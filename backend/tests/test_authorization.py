@@ -1448,6 +1448,7 @@ def _runtime_service(
     context: AuthorizationContext,
     *,
     session=None,
+    admin_repository=None,
     revalidate=_DEFAULT_REVALIDATOR,
     revalidate_service=None,
 ) -> tuple[AuthorizationService, _DecisionEvidence]:
@@ -1461,6 +1462,7 @@ def _runtime_service(
         context,
         revalidate_actor_self=revalidate,
         revalidate_service=revalidate_service,
+        admin_repository=admin_repository,
     )
     evidence = _DecisionEvidence()
     service._audit = evidence  # type: ignore[assignment]
@@ -1552,6 +1554,7 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
     facts = _PreparedActorFacts(context)
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
@@ -1572,16 +1575,7 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
     sealed = prepared._issued[handle].authority  # type: ignore[union-attr]
     with pytest.raises(AttributeError):
         sealed.matched_grant_status = "active"
-    with pytest.raises(TypeError, match="invalid prepared kernel access"):
-        authorization._seal_prelocked(
-            object(),  # type: ignore[arg-type]
-            context=context,
-            action_id=ActionId.ACTOR_PROFILE_UPDATE_SELF,
-            scope_project_id=None,
-            matched_grant_id=uuid4(),
-            matched_grant_status="active",
-            permission_id=PermissionId.ACTOR_PROFILE_UPDATE_SELF,
-        )
+    assert not hasattr(authorization, "_seal_prelocked")
     assert repr(handle) == "<PreparedAuthorizationHandle>"
     assert facts.calls == 1
 
@@ -1628,12 +1622,14 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
+    facts = _PreparedActorFacts(context)
     authorization, evidence = _runtime_service(context, session=session)
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
         authorization,
-        _PreparedActorFacts(context),  # type: ignore[arg-type]
+        facts,  # type: ignore[arg-type]
     )
     idempotency_key = uuid4()
     original = PreparedAuthorizationInput(idempotency_key=idempotency_key, request_value={"v": 1})
@@ -1705,12 +1701,14 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
+    facts = _PreparedActorFacts(context)
     authorization, _ = _runtime_service(context, session=session)
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
         authorization,
-        _PreparedActorFacts(context),  # type: ignore[arg-type]
+        facts,  # type: ignore[arg-type]
     )
     caller_input = PreparedAuthorizationInput(
         idempotency_key=uuid4(), request_value={"display_name": "opaque"}
@@ -1939,12 +1937,14 @@ async def test_prepared_exact_consume_remains_spent_after_cancellation():
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
+    facts = _PreparedActorFacts(context)
     authorization, _ = _runtime_service(context, session=session)
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
         authorization,
-        _PreparedActorFacts(context),  # type: ignore[arg-type]
+        facts,  # type: ignore[arg-type]
     )
     caller_input = PreparedAuthorizationInput(
         idempotency_key=uuid4(), request_value={"display_name": "cancel"}
@@ -2012,6 +2012,7 @@ async def test_prepared_fixed_service_refreshes_rows_before_planned_denial():
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
     facts = ServiceFacts()
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
@@ -2036,6 +2037,7 @@ async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_roo
     session = _PreparedTestSession()
     authorization, _ = _runtime_service(context, session=session)
     facts = _PreparedAdminFacts(context)
+    authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
         context,
@@ -2123,12 +2125,15 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             request_id=uuid4(),
             correlation_id=uuid4(),
         )
-        authorization = AuthorizationService(session, context)
+        repository = AdminAuthorizationRepository(session)
+        authorization = AuthorizationService(
+            session, context, admin_repository=repository
+        )
         prepared = PreparedAuthorizationService(
             session,
             context,
             authorization,
-            AdminAuthorizationRepository(session),
+            repository,
         )
         scope = PreparedAuthorityScope(
             kind=PreparedAuthorityScopeKind.ACTOR_SELF,
@@ -2255,6 +2260,230 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         assert await session.scalar(text("select 1")) == 1
         await session.rollback()
 
+        commit_failure_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "commit_failure"}
+        )
+        await session.begin()
+        commit_failure_handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, commit_failure_input, scope
+        )
+        commit_failure_decision = await prepared.consume(
+            commit_failure_handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            commit_failure_input,
+            resource,
+        )
+        await session.execute(
+            text("update prepared_failure_participant set value=2 where id=1")
+        )
+        original_commit = session.commit
+
+        async def fail_commit():
+            raise SQLAlchemyError("injected commit failure")
+
+        session.commit = fail_commit  # type: ignore[method-assign]
+        with pytest.raises(SQLAlchemyError):
+            await session.commit()
+        session.commit = original_commit  # type: ignore[method-assign]
+        await session.rollback()
+        assert await session.scalar(
+            text("select value from prepared_failure_participant where id=1")
+        ) == 0
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(commit_failure_decision.decision_id)},
+        ) == 0
+        await session.rollback()
+
+        timeout_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "timeout"}
+        )
+        await session.begin()
+        timeout_handle = await prepared.prepare(
+            ActionId.ACTOR_PROFILE_UPDATE_SELF, timeout_input, scope
+        )
+        timeout_decision = await prepared.consume(
+            timeout_handle,
+            ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            timeout_input,
+            resource,
+        )
+        await session.execute(
+            text("update prepared_failure_participant set value=3 where id=1")
+        )
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.01):
+                await asyncio.Event().wait()
+        await session.rollback()
+        assert await session.scalar(
+            text("select value from prepared_failure_participant where id=1")
+        ) == 0
+        assert await session.scalar(
+            text("select count(*) from audit_events where id=:id"),
+            {"id": str(timeout_decision.decision_id)},
+        ) == 0
+        await session.rollback()
+
+        async def cancel_after_consume(phase: str):
+            phase_input = PreparedAuthorizationInput(
+                idempotency_key=uuid4(), request_value={"case": phase}
+            )
+            phase_entered = asyncio.Event()
+            phase_blocked = asyncio.Event()
+
+            async def command():
+                try:
+                    await session.begin()
+                    phase_handle = await prepared.prepare(
+                        ActionId.ACTOR_PROFILE_UPDATE_SELF, phase_input, scope
+                    )
+                    phase_decision = await prepared.consume(
+                        phase_handle,
+                        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                        phase_input,
+                        resource,
+                    )
+                    await session.execute(
+                        text(
+                            "update prepared_failure_participant set value=4 where id=1"
+                        )
+                    )
+                    phase_entered.set()
+                    await phase_blocked.wait()
+                    return phase_decision
+                except BaseException:
+                    await session.rollback()
+                    raise
+
+            task = asyncio.create_task(command())
+            await asyncio.wait_for(phase_entered.wait(), timeout=5)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert await session.scalar(
+                text("select value from prepared_failure_participant where id=1")
+            ) == 0
+            await session.rollback()
+
+        await cancel_after_consume("participant_cancel")
+
+        evidence_cancel_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "evidence_cancel"}
+        )
+        evidence_entered = asyncio.Event()
+        evidence_blocked = asyncio.Event()
+
+        class PausingEvidence:
+            async def add_authority_event(self, _event):
+                evidence_entered.set()
+                await evidence_blocked.wait()
+
+        async def cancel_during_evidence():
+            try:
+                await session.begin()
+                handle = await prepared.prepare(
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF, evidence_cancel_input, scope
+                )
+                authorization._audit = PausingEvidence()  # type: ignore[assignment]
+                await prepared.consume(
+                    handle,
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                    evidence_cancel_input,
+                    resource,
+                )
+            except BaseException:
+                await session.rollback()
+                raise
+
+        evidence_task = asyncio.create_task(cancel_during_evidence())
+        await asyncio.wait_for(evidence_entered.wait(), timeout=5)
+        evidence_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await evidence_task
+        authorization._audit = original_audit
+        assert await session.scalar(text("select 1")) == 1
+        await session.rollback()
+
+        commit_cancel_input = PreparedAuthorizationInput(
+            idempotency_key=uuid4(), request_value={"case": "commit_cancel"}
+        )
+        commit_entered = asyncio.Event()
+        commit_blocked = asyncio.Event()
+        original_commit = session.commit
+
+        async def pausing_commit():
+            commit_entered.set()
+            await commit_blocked.wait()
+
+        async def cancel_during_commit():
+            try:
+                await session.begin()
+                handle = await prepared.prepare(
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF, commit_cancel_input, scope
+                )
+                await prepared.consume(
+                    handle,
+                    ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                    commit_cancel_input,
+                    resource,
+                )
+                await session.execute(
+                    text("update prepared_failure_participant set value=5 where id=1")
+                )
+                await session.commit()
+            except BaseException:
+                await session.rollback()
+                raise
+
+        session.commit = pausing_commit  # type: ignore[method-assign]
+        commit_task = asyncio.create_task(cancel_during_commit())
+        await asyncio.wait_for(commit_entered.wait(), timeout=5)
+        commit_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await commit_task
+        session.commit = original_commit  # type: ignore[method-assign]
+        assert await session.scalar(
+            text("select value from prepared_failure_participant where id=1")
+        ) == 0
+        await session.rollback()
+
+        async with authorization_factory() as locker:
+            await locker.begin()
+            await locker.execute(
+                text("select id from actor_profiles where id=:id for update"),
+                {"id": str(profile_id)},
+            )
+            async with authorization_factory() as waiter:
+                waiter_repository = AdminAuthorizationRepository(waiter)
+                waiter_authorization = AuthorizationService(
+                    waiter, context, admin_repository=waiter_repository
+                )
+                waiter_prepared = PreparedAuthorizationService(
+                    waiter,
+                    context,
+                    waiter_authorization,
+                    waiter_repository,
+                )
+                await waiter.begin()
+                wait_task = asyncio.create_task(
+                    waiter_prepared.prepare(
+                        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                        PreparedAuthorizationInput(
+                            idempotency_key=uuid4(), request_value={"case": "lock_wait"}
+                        ),
+                        scope,
+                    )
+                )
+                with pytest.raises(TimeoutError):
+                    await asyncio.wait_for(asyncio.shield(wait_task), timeout=0.2)
+                wait_task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await wait_task
+                await waiter.rollback()
+                assert await waiter.scalar(text("select 1")) == 1
+                await waiter.rollback()
+            await locker.rollback()
+
         await session.execute(text("alter table audit_events disable trigger user"))
         await session.execute(
             text("delete from audit_events where id=:id"),
@@ -2355,12 +2584,15 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
 
     async with authorization_factory() as authority_session:
         await authority_session.begin()
-        authorization = AuthorizationService(authority_session, context)
+        repository = AdminAuthorizationRepository(authority_session)
+        authorization = AuthorizationService(
+            authority_session, context, admin_repository=repository
+        )
         prepared = PreparedAuthorizationService(
             authority_session,
             context,
             authorization,
-            AdminAuthorizationRepository(authority_session),
+            repository,
         )
         handle = await prepared.prepare(
             ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
@@ -2396,12 +2628,17 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
     )
     async with authorization_factory() as denied_session:
         await denied_session.begin()
-        denied_authorization = AuthorizationService(denied_session, mutation_first_context)
+        denied_repository = AdminAuthorizationRepository(denied_session)
+        denied_authorization = AuthorizationService(
+            denied_session,
+            mutation_first_context,
+            admin_repository=denied_repository,
+        )
         denied_prepared = PreparedAuthorizationService(
             denied_session,
             mutation_first_context,
             denied_authorization,
-            AdminAuthorizationRepository(denied_session),
+            denied_repository,
         )
         with pytest.raises(PreparedAuthorizationUnsupported) as denied:
             await asyncio.wait_for(
@@ -2605,12 +2842,15 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
 
     async with authorization_factory() as prepared_session:
         await prepared_session.begin()
-        authorization = AuthorizationService(prepared_session, target_context)
+        repository = AdminAuthorizationRepository(prepared_session)
+        authorization = AuthorizationService(
+            prepared_session, target_context, admin_repository=repository
+        )
         prepared = PreparedAuthorizationService(
             prepared_session,
             target_context,
             authorization,
-            AdminAuthorizationRepository(prepared_session),
+            repository,
         )
         if ordering == "prepared_first":
             handle = await prepared.prepare(
@@ -2657,6 +2897,56 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             )
             assert denied.value.denial_code is expected
             await prepared_session.rollback()
+
+    async with authorization_factory() as verify:
+        assert await verify.scalar(
+            text(
+                "select count(*) from admin_role_grants g "
+                "join actor_profiles p on p.id=g.target_actor_profile_id "
+                "join actor_identity_links l on l.actor_profile_id=p.id "
+                "where g.id in (:target, :mutator) and g.status='active' "
+                "and p.status='active' and l.status='active'"
+            ),
+            {"target": target_grant_id, "mutator": mutator_grant_id},
+        ) == 1
+        if mutation_kind == "grant_revoke":
+            assert await verify.scalar(
+                text("select status from admin_role_grants where id=:id"),
+                {"id": target_grant_id},
+            ) == "revoked"
+            assert await verify.scalar(
+                text("select version from admin_role_grants where id=:id"),
+                {"id": target_grant_id},
+            ) == 2
+        elif mutation_kind == "link_revoke":
+            assert await verify.scalar(
+                text("select status from actor_identity_links where id=:id"),
+                {"id": str(target_link_id)},
+            ) == "revoked"
+        else:
+            assert await verify.scalar(
+                text("select status from actor_profiles where id=:id"),
+                {"id": str(target_profile_id)},
+            ) == ("suspended" if mutation_kind == "suspend" else "deactivated")
+        assert await verify.scalar(
+            text(
+                "select count(*) from authority_idempotency_records "
+                "where actor_ref=:actor and status='committed'"
+            ),
+            {"actor": str(mutator_profile_id)},
+        ) == 1
+        prepared_allowed = await verify.scalar(
+            text(
+                "select count(*) from audit_events where action_id=:action "
+                "and actor_ref=:actor and event_type='sensitive_authorization_allowed'"
+            ),
+            {
+                "action": ActionId.ACTOR_SERVICE_PROVISION.value,
+                "actor": str(target_profile_id),
+            },
+        )
+        assert prepared_allowed == (1 if ordering == "prepared_first" else 0)
+        await verify.rollback()
 
     async with authorization_factory() as cleanup:
         actor_ids = (str(target_profile_id), str(mutator_profile_id))

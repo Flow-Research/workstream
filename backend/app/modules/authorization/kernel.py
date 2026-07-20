@@ -45,6 +45,9 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
+    PreparedAuthorizationUnsupported,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
     ServiceAuthorizationContext,
     ServiceActorProvisionResourceContext,
     authorization_resource_digest,
@@ -147,12 +150,6 @@ class _PrelockedAuthority:
 _PRELOCKED_CONSTRUCTOR_TOKEN = object()
 
 
-class _PreparedKernelAccess:
-    """One-service capability required to seal already locked authority facts."""
-
-    __slots__ = ()
-
-
 class AuthorizationService:
     """Evaluate one request against closed action definitions and stage evidence."""
 
@@ -163,59 +160,168 @@ class AuthorizationService:
         *,
         revalidate_actor_self: ContextRevalidator | None = None,
         revalidate_service: ServiceContextRevalidator | None = None,
+        admin_repository: AdminAuthorizationRepository | None = None,
     ) -> None:
         self._session = session
         self._audit = AuditService(session)
-        self._admin = AdminAuthorizationRepository(session)
+        self._admin = admin_repository or AdminAuthorizationRepository(session)
         self._context = context
         self._revalidate_actor_self = revalidate_actor_self
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
         self._sealed_prelocked: set[_PrelockedAuthority] = set()
-        self._prepared_access: _PreparedKernelAccess | None = _PreparedKernelAccess()
-        self._claimed_prepared_access: _PreparedKernelAccess | None = None
 
-    def _claim_prepared_access(self) -> _PreparedKernelAccess:
-        """Transfer the sole sealing capability to one prepared service."""
-        access = self._prepared_access
-        if access is None:
-            raise TypeError("prepared kernel access is already claimed")
-        self._prepared_access = None
-        self._claimed_prepared_access = access
-        return access
-
-    def _seal_prelocked(
+    async def _prepare_prelocked(
         self,
-        access: _PreparedKernelAccess,
-        *,
-        context: AuthorizationContext,
         action_id: ActionId,
-        scope_project_id: UUID | None,
-        matched_grant_id: UUID | None,
-        matched_grant_status: str | None,
-        permission_id: PermissionId,
+        scope: PreparedAuthorityScope,
     ) -> _PrelockedAuthority:
-        """Seal locked facts to this service and its current root transaction."""
-        if access is not self._claimed_prepared_access:
-            raise TypeError("invalid prepared kernel access")
+        """Lock, validate, and seal one closed authority plan without caller facts."""
         if self._session.in_nested_transaction():
             raise TypeError("prelocked authority requires one root transaction")
         transaction = self._session.sync_session.get_transaction()
         if transaction is None or not transaction.is_active:
             raise TypeError("prelocked authority requires one active root transaction")
+        action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
+        if action is None:
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.UNKNOWN_ACTION)
+        context = self._context
+        grant = None
+        if isinstance(context, ServiceAuthorizationContext):
+            if action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
+            locked = await self._admin.lock_request_actor(
+                context.identity_link_id, context.actor_profile_id
+            )
+            context = self._locked_service_context(locked, context)
+            lifecycle = self._lifecycle_denial(context)
+            if lifecycle is not None:
+                raise PreparedAuthorizationUnsupported(lifecycle)
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+        if action.availability is not ActionAvailability.ACTIVE:
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+        if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF:
+            if (
+                scope.kind is not PreparedAuthorityScopeKind.ACTOR_SELF
+                or scope.actor_profile_id != context.actor_profile_id
+            ):
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                )
+            locked = await self._admin.lock_actor_self(
+                context.actor_profile_id, context.identity_link_id
+            )
+            context = self._locked_human_context(locked, context)
+        elif action_id in _ADMIN_MUTATIONS:
+            if not isinstance(context, HumanAuthorizationContext):
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
+            if scope.kind not in {
+                PreparedAuthorityScopeKind.SYSTEM,
+                PreparedAuthorityScopeKind.PROJECT,
+            }:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+                )
+            if (
+                scope.kind is PreparedAuthorityScopeKind.PROJECT
+                and action_id is not ActionId.ADMIN_ROLE_GRANT_ISSUE
+            ):
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+                )
+            await self._admin.lock_control()
+            locked = await self._admin.lock_request_actor(
+                context.identity_link_id, context.actor_profile_id
+            )
+            context = self._locked_human_context(locked, context)
+            grant = await self._admin.find_effective_grant(
+                context.actor_profile_id,
+                action.permission_id,
+                scope_project_id=scope.project_id,
+                system_scope_only=scope.project_id is None,
+                for_update=True,
+            )
+            if grant is None:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
+        else:
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+        lifecycle = self._lifecycle_denial(context)
+        if lifecycle is not None or context.actor_kind is not ActorKind.HUMAN:
+            raise PreparedAuthorizationUnsupported(
+                lifecycle or AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
         authority = _PrelockedAuthority(
             _PRELOCKED_CONSTRUCTOR_TOKEN,
             issuer=self,
             transaction=transaction,
             context=context,
             action_id=action_id,
-            scope_project_id=scope_project_id,
-            matched_grant_id=matched_grant_id,
-            matched_grant_status=matched_grant_status,
-            permission_id=permission_id,
+            scope_project_id=scope.project_id,
+            matched_grant_id=UUID(str(grant.id)) if grant is not None else None,
+            matched_grant_status=grant.status if grant is not None else None,
+            permission_id=action.permission_id,
         )
         self._sealed_prelocked.add(authority)
         return authority
+
+    @staticmethod
+    def _locked_human_context(locked, original) -> HumanAuthorizationContext:
+        if locked is None:
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
+            )
+        link, profile = locked
+        if (
+            profile.id != str(original.actor_profile_id)
+            or link.id != str(original.identity_link_id)
+            or link.actor_profile_id != profile.id
+        ):
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
+        return HumanAuthorizationContext(
+            actor_profile_id=UUID(profile.id),
+            actor_kind=ActorKind(profile.actor_kind),
+            actor_status=ActorStatus(profile.status),
+            identity_link_id=UUID(link.id),
+            identity_link_status=IdentityLinkStatus(link.status),
+            request_id=original.request_id,
+            correlation_id=original.correlation_id,
+        )
+
+    @staticmethod
+    def _locked_service_context(locked, original) -> ServiceAuthorizationContext:
+        if locked is None:
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
+            )
+        link, profile = locked
+        if (
+            profile.id != str(original.actor_profile_id)
+            or link.id != str(original.identity_link_id)
+            or link.actor_profile_id != profile.id
+            or profile.actor_kind != ActorKind.SERVICE.value
+            or profile.service_identity != original.service_identity.value
+        ):
+            raise PreparedAuthorizationUnsupported(
+                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            )
+        return ServiceAuthorizationContext(
+            actor_profile_id=UUID(profile.id),
+            actor_kind=ActorKind.SERVICE,
+            actor_status=ActorStatus(profile.status),
+            identity_link_id=UUID(link.id),
+            identity_link_status=IdentityLinkStatus(link.status),
+            service_identity=original.service_identity,
+            request_id=original.request_id,
+            correlation_id=original.correlation_id,
+        )
 
     def _discard_prelocked(self, authority: _PrelockedAuthority) -> None:
         """Release one unconsumed sealed authority during handle invalidation."""

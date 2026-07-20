@@ -184,6 +184,7 @@ def _compose_authorization_service(
     session: AsyncSession,
     request_id: UUID,
     correlation_id: UUID,
+    admin_repository: AdminAuthorizationRepository | None = None,
 ) -> AuthorizationService:
     """Build the shared kernel without assigning transaction ownership."""
     actor_service = ActorService(session)
@@ -220,6 +221,7 @@ def _compose_authorization_service(
         context,
         revalidate_actor_self=revalidate_actor_self,
         revalidate_service=revalidate_service,
+        admin_repository=admin_repository,
     )
 
 
@@ -231,14 +233,15 @@ async def get_prepared_authorization_service(
     """Compose one request-local prepared service without taking commit ownership."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
+    repository = AdminAuthorizationRepository(session)
     authorization = _compose_authorization_service(
-        resolved, session, request_id, correlation_id
+        resolved, session, request_id, correlation_id, repository
     )
     service = PreparedAuthorizationService(
         session,
         context,
         authorization,
-        AdminAuthorizationRepository(session),
+        repository,
     )
     try:
         yield service
