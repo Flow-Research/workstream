@@ -17,9 +17,10 @@ PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
 `d541521`. ART now consumes AUTH's canonical activation-custody and prepared
 mutation contracts without editing or activating AUTH runtime behavior.
 AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
-#152 as `93dd392`, and the contributor foundation merged through PR #153 as
-`8d5eb15b`; all are integrated into the ART candidate. AUTH-09E remains
-inactive.
+#152 as `93dd392`, the contributor foundation merged through PR #153 as
+`8d5eb15b`, and AUTH-09E merged through PR #157 as `42a89b2d`; all are
+integrated into the ART candidate. The three ART internal feature actions
+remain planned and inactive.
 
 The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks
 but failed internal review on recovery/API completeness. Before repair, the user
