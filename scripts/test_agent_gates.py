@@ -4241,11 +4241,18 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert (
         "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | "
-        "Deterministic proof and all nine internal tracks complete" in work_queue
+        "Trusted-main integration and Backend outbox-retention repair complete" in work_queue
     )
-    assert "Current ART gate: deterministic 02C2 proof and all nine exact-SHA" in loop_state
-    assert "external CI/review and explicit human merge" in loop_state.replace("\n", " ")
-    assert "external CI/review and explicit human merge approval are current" in work_queue
+    assert (
+        "| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | "
+        "Merged through PR #158 as `be2a79a2`" in work_queue
+    )
+    assert "all 25 ART actions remain planned" in work_queue
+    assert (
+        "Current ART gate: the trusted-main integration and bounded repair" in loop_state
+    )
+    assert "external CI/review, and explicit human" in loop_state.replace("\n", " ")
+    assert "external reruns, and explicit human merge approval remain" in work_queue
     assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
 
 
