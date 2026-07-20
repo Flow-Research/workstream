@@ -224,6 +224,21 @@ def _record_failures(record: object, label: str) -> list[str]:
             failures.append(f"{label}: invalid authority lifecycle state")
             return failures
         metadata = authority["completed_chunk"]
+        lifecycle = json.loads(json.dumps(base))
+        lifecycle.update(authority)
+        lifecycle_source = lifecycle.get("source", {})
+        lifecycle["updated_at"] = lifecycle_source.get("merged_at")
+        lifecycle_metadata = lifecycle.get("completed_chunk", {})
+        lifecycle["active"] = {"planning_chunk": None, "implementation_chunk": None}
+        lifecycle["gate"] = {
+            "status": "stopped_after_merge",
+            "next_chunk_id": lifecycle_metadata.get("next_chunk_id"),
+            "next_chunk_title": lifecycle_metadata.get("next_chunk_title"),
+            "next_requires_explicit_start": lifecycle_metadata.get(
+                "next_requires_explicit_start"
+            ),
+        }
+        failures.extend(_record_failures(lifecycle, f"{label} authority basis"))
         expected_event_keys = {
             "type", "event_id", "run_id", "created_at", "dispatcher",
             "approvers", "reason", "main_sha", "prior_state_tip",
@@ -250,6 +265,12 @@ def _record_failures(record: object, label: str) -> list[str]:
                 failures.append(f"{label}: invalid event {field}")
         if record.get("updated_at") != event.get("created_at"):
             failures.append(f"{label}: event time does not match state")
+        if event.get("main_sha") != source.get("main_sha"):
+            failures.append(f"{label}: event main does not match global state")
+        if metadata.get("initiative_id") != event.get("initiative_id"):
+            failures.append(f"{label}: event initiative does not match authority state")
+        if metadata.get("next_chunk_id") != event.get("chunk_id"):
+            failures.append(f"{label}: event chunk does not match reviewed successor")
         expected_active = {
             "planning_chunk": None,
             "implementation_chunk": event.get("chunk_id") if event_type == "start" else None,
@@ -575,6 +596,33 @@ def _render_initiative_state(record: dict) -> str:
     )
 
 
+def _authority_transition_failures(
+    record: dict, prior_records: list[dict], label: str
+) -> list[str]:
+    event = record.get("event")
+    if not isinstance(event, dict) or event.get("type") not in {"start", "cancel"}:
+        return []
+    authority = record.get("authority_state", {})
+    if authority.get("completed_chunk", {}).get("initiative_id") != event.get("initiative_id"):
+        return [f"{label}: authority initiative does not match event"]
+    basis = _latest_by_initiative(prior_records).get(event["initiative_id"])
+    if basis is None:
+        return [f"{label}: authority event has no preceding basis"]
+    failures = []
+    if authority.get("source") != basis.get("source") or authority.get(
+        "completed_chunk"
+    ) != basis.get("completed_chunk"):
+        failures.append(f"{label}: authority lifecycle does not copy signed basis")
+    if event["type"] == "start":
+        if basis["active"]["implementation_chunk"] is not None:
+            failures.append(f"{label}: authority start basis is already active")
+        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+            failures.append(f"{label}: authority start is not basis successor")
+    elif basis["active"]["implementation_chunk"] != event["chunk_id"]:
+        failures.append(f"{label}: authority cancel does not match active basis")
+    return failures
+
+
 def generated_state_failures(root: Path) -> list[str]:
     """Return consistency failures for generated automation-branch state."""
     paths = [root / path for path in GENERATED_FILES]
@@ -622,6 +670,7 @@ def generated_state_failures(root: Path) -> list[str]:
             failures.append(f"{label}: entry record is not an object")
             break
         failures.extend(_record_failures(record, label))
+        failures.extend(_authority_transition_failures(record, ledger_records, label))
         payload = (
             f"{previous_hash or ''}\n"
             f"{json.dumps(record, sort_keys=True, separators=(',', ':'), ensure_ascii=True)}"

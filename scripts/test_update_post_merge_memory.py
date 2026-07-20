@@ -391,6 +391,47 @@ def test_state_tip_resolution_fails_closed_outside_git(
 @pytest.mark.parametrize(
     "mutation",
     [
+        lambda record: record["authority_state"]["completed_chunk"].update(
+            initiative_id="WS-ART-001"
+        ),
+        lambda record: record["authority_state"]["source"].update(pr_number=999),
+        lambda record: record["authority_state"]["completed_chunk"].update(
+            chunk_title="Tampered basis"
+        ),
+        lambda record: record["event"].update(chunk_id="WS-ENG-001-99"),
+    ],
+)
+def test_authority_transition_is_bound_to_preceding_basis(
+    tmp_path: Path, mutation
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    records = [entry["record"] for entry in loop._load_ledger(state_root / loop.LEDGER_PATH)]
+    authority = json.loads(json.dumps(records[-1]))
+    mutation(authority)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_authority_transition(authority, records[:-1])
+
+
+def test_authority_transition_requires_prior_basis(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    authority = loop._load_ledger(state_root / loop.LEDGER_PATH)[-1]["record"]
+    with pytest.raises(loop.LoopMemoryError, match="no preceding"):
+        loop._validate_authority_transition(authority, [])
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
         lambda event: event.update(event_id="wrong"),
         lambda event: event.update(run_id=0),
         lambda event: event.update(approvers=[]),

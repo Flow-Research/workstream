@@ -1179,6 +1179,12 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             "next_requires_explicit_start": metadata.next_requires_explicit_start,
         }
         _validate_record(lifecycle)
+        if metadata.initiative_id != event["initiative_id"]:
+            raise LoopMemoryError("authority lifecycle initiative does not match event")
+        if metadata.next_chunk_id != event["chunk_id"]:
+            raise LoopMemoryError("authority event chunk is not the reviewed successor")
+        if event["main_sha"] != base["source"]["main_sha"]:
+            raise LoopMemoryError("authority event main does not match global state")
         if record.get("updated_at") != event["created_at"]:
             raise LoopMemoryError("authority state time does not match event time")
         expected_active = {
@@ -1383,6 +1389,7 @@ def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, An
         if not isinstance(record, dict):
             raise LoopMemoryError("merge ledger entry record must be a JSON object")
         _validate_record(record)
+        _validate_authority_transition(record, records)
         if entry.get("previous_entry_hash") != previous_hash:
             raise LoopMemoryError("merge ledger previous hash chain is invalid")
         expected_hash = _ledger_hash(previous_hash, record)
@@ -1407,6 +1414,31 @@ def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, An
             else main_sha
         )
     return records
+
+
+def _validate_authority_transition(
+    record: dict[str, Any], prior_records: list[dict[str, Any]]
+) -> None:
+    """Bind an authority event to the exact preceding initiative lifecycle."""
+    event_type = _event_type(record)
+    if event_type not in {"start", "cancel"}:
+        return
+    event = record["event"]
+    authority = record["authority_state"]
+    if authority["completed_chunk"]["initiative_id"] != event["initiative_id"]:
+        raise LoopMemoryError("authority lifecycle initiative does not match event")
+    basis = _latest_by_initiative(prior_records).get(event["initiative_id"])
+    if basis is None:
+        raise LoopMemoryError("authority event has no preceding initiative basis")
+    if authority["source"] != basis["source"] or authority["completed_chunk"] != basis["completed_chunk"]:
+        raise LoopMemoryError("authority lifecycle does not copy its signed basis")
+    if event_type == "start":
+        if basis["active"]["implementation_chunk"] is not None:
+            raise LoopMemoryError("authority start follows an already-active basis")
+        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+            raise LoopMemoryError("authority start is not the basis successor")
+    elif basis["active"]["implementation_chunk"] != event["chunk_id"]:
+        raise LoopMemoryError("authority cancel does not match the basis active chunk")
 
 
 def apply_authority_event(
