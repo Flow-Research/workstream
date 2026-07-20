@@ -124,6 +124,10 @@ class PreparedAuthorizationHandleInvalid(Exception):
 class PreparedAuthorizationUnsupported(Exception):
     """Fail-closed preparation outcome for actions without a current lock plan."""
 
+    def __init__(self, denial_code: AuthorizationDenialCode) -> None:
+        self.denial_code = denial_code
+        super().__init__("prepared authorization is unsupported")
+
 
 class ActorSelfResourceContext(BaseModel):
     """Server-composed facts for the caller's own actor profile."""

@@ -142,41 +142,12 @@ async def get_authorization_service(
 ) -> AsyncIterator[AuthorizationService]:
     """Yield one service and own final decision transaction cleanup."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    service = _compose_authorization_service(
+        resolved, session, request_id, correlation_id
+    )
     actor_service = ActorService(session)
 
-    async def revalidate_actor_self(
-        context: AuthorizationContext,
-        resource: ActorSelfResourceContext,
-    ) -> AuthorizationContext:
-        """Rebuild actor state from exact rows locked in the caller transaction."""
-        if resource.resource_id != context.actor_profile_id:
-            return context
-        locked = await actor_service.lock_actor_self_for_authorization(resolved)
-        return _authorization_context(locked, request_id, correlation_id)
-
-    async def revalidate_service(
-        context: ServiceAuthorizationContext,
-        _action_id: ActionId,
-    ) -> ServiceAuthorizationContext | None:
-        """Rebuild fixed-service authority from exact locked actor rows."""
-        try:
-            locked = await actor_service.lock_actor_for_authorization(resolved)
-            refreshed = _authorization_context(locked, request_id, correlation_id)
-        except (RuntimeError, ValueError):
-            return None
-        if not isinstance(refreshed, ServiceAuthorizationContext):
-            return None
-        if refreshed.service_identity is not context.service_identity:
-            return None
-        return refreshed
-
     context = _authorization_context(resolved, request_id, correlation_id)
-    service = AuthorizationService(
-        session,
-        context,
-        revalidate_actor_self=revalidate_actor_self,
-        revalidate_service=revalidate_service,
-    )
     try:
         if (
             isinstance(context, ServiceAuthorizationContext)
@@ -208,15 +179,61 @@ async def get_authorization_service(
             await session.rollback()
 
 
+def _compose_authorization_service(
+    resolved: ResolvedActor,
+    session: AsyncSession,
+    request_id: UUID,
+    correlation_id: UUID,
+) -> AuthorizationService:
+    """Build the shared kernel without assigning transaction ownership."""
+    actor_service = ActorService(session)
+
+    async def revalidate_actor_self(
+        context: AuthorizationContext,
+        resource: ActorSelfResourceContext,
+    ) -> AuthorizationContext:
+        """Rebuild actor state from exact rows locked in the caller transaction."""
+        if resource.resource_id != context.actor_profile_id:
+            return context
+        locked = await actor_service.lock_actor_self_for_authorization(resolved)
+        return _authorization_context(locked, request_id, correlation_id)
+
+    async def revalidate_service(
+        context: ServiceAuthorizationContext,
+        _action_id: ActionId,
+    ) -> ServiceAuthorizationContext | None:
+        """Rebuild fixed-service authority from exact locked actor rows."""
+        try:
+            locked = await actor_service.lock_actor_for_authorization(resolved)
+            refreshed = _authorization_context(locked, request_id, correlation_id)
+        except (RuntimeError, ValueError):
+            return None
+        if not isinstance(refreshed, ServiceAuthorizationContext):
+            return None
+        if refreshed.service_identity is not context.service_identity:
+            return None
+        return refreshed
+
+    context = _authorization_context(resolved, request_id, correlation_id)
+    return AuthorizationService(
+        session,
+        context,
+        revalidate_actor_self=revalidate_actor_self,
+        revalidate_service=revalidate_service,
+    )
+
+
 async def get_prepared_authorization_service(
     request: Request,
     resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
 ) -> AsyncIterator[PreparedAuthorizationService]:
     """Compose one request-local prepared service without taking commit ownership."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
+    authorization = _compose_authorization_service(
+        resolved, session, request_id, correlation_id
+    )
     service = PreparedAuthorizationService(
         session,
         context,
@@ -225,5 +242,20 @@ async def get_prepared_authorization_service(
     )
     try:
         yield service
+    except AuthorizationDenied as exc:
+        await session.rollback()
+        raise authorization_http_error(exc) from exc
+    except AuthorizationEvidenceUnavailable as exc:
+        await session.rollback()
+        raise actor_registry_unavailable_error() from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise actor_registry_unavailable_error() from exc
+    except BaseException:
+        await session.rollback()
+        raise
+    else:
+        if session.in_transaction():
+            await session.rollback()
     finally:
         service.close()

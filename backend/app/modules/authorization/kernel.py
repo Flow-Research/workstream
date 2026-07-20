@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -98,16 +97,49 @@ _ADMIN_MUTATIONS = frozenset(
 )
 
 
-@dataclass(frozen=True, slots=True)
 class _PrelockedAuthority:
     """AUTH-private authority facts locked by the prepared protocol."""
 
-    context: AuthorizationContext
-    action_id: ActionId
-    scope_project_id: UUID | None
-    matched_grant_id: UUID | None
-    matched_grant_status: str | None
-    permission_id: PermissionId
+    __slots__ = (
+        "action_id",
+        "context",
+        "issuer",
+        "matched_grant_id",
+        "matched_grant_status",
+        "permission_id",
+        "scope_project_id",
+        "transaction",
+    )
+
+    def __new__(cls, token: object = None, **_kwargs):
+        if token is not _PRELOCKED_CONSTRUCTOR_TOKEN:
+            raise TypeError("prelocked authority is internal")
+        return super().__new__(cls)
+
+    def __init__(
+        self,
+        token: object,
+        *,
+        issuer: AuthorizationService,
+        transaction: object,
+        context: AuthorizationContext,
+        action_id: ActionId,
+        scope_project_id: UUID | None,
+        matched_grant_id: UUID | None,
+        matched_grant_status: str | None,
+        permission_id: PermissionId,
+    ) -> None:
+        self.issuer = issuer
+        self.transaction = transaction
+        self.context = context
+        self.action_id = action_id
+        self.scope_project_id = scope_project_id
+        self.matched_grant_id = matched_grant_id
+        self.matched_grant_status = matched_grant_status
+        self.permission_id = permission_id
+
+
+_PRELOCKED_CONSTRUCTOR_TOKEN = object()
 
 
 class AuthorizationService:
@@ -121,12 +153,48 @@ class AuthorizationService:
         revalidate_actor_self: ContextRevalidator | None = None,
         revalidate_service: ServiceContextRevalidator | None = None,
     ) -> None:
+        self._session = session
         self._audit = AuditService(session)
         self._admin = AdminAuthorizationRepository(session)
         self._context = context
         self._revalidate_actor_self = revalidate_actor_self
         self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
+        self._sealed_prelocked: set[_PrelockedAuthority] = set()
+
+    def _seal_prelocked(
+        self,
+        *,
+        context: AuthorizationContext,
+        action_id: ActionId,
+        scope_project_id: UUID | None,
+        matched_grant_id: UUID | None,
+        matched_grant_status: str | None,
+        permission_id: PermissionId,
+    ) -> _PrelockedAuthority:
+        """Seal locked facts to this service and its current root transaction."""
+        if self._session.in_nested_transaction():
+            raise TypeError("prelocked authority requires one root transaction")
+        transaction = self._session.sync_session.get_transaction()
+        if transaction is None or not transaction.is_active:
+            raise TypeError("prelocked authority requires one active root transaction")
+        authority = _PrelockedAuthority(
+            _PRELOCKED_CONSTRUCTOR_TOKEN,
+            issuer=self,
+            transaction=transaction,
+            context=context,
+            action_id=action_id,
+            scope_project_id=scope_project_id,
+            matched_grant_id=matched_grant_id,
+            matched_grant_status=matched_grant_status,
+            permission_id=permission_id,
+        )
+        self._sealed_prelocked.add(authority)
+        return authority
+
+    def _discard_prelocked(self, authority: _PrelockedAuthority) -> None:
+        """Release one unconsumed sealed authority during handle invalidation."""
+        self._sealed_prelocked.discard(authority)
 
     async def require(
         self,
@@ -173,27 +241,16 @@ class AuthorizationService:
             denial = self._denial(action_id, action, resource_context, context, revalidated)
             if denial is None:
                 matched_kind = MatchedAuthorityKind.ACTOR_SELF
-        decision = AuthorizationDecision(
-            decision_id=uuid4(),
-            action_id=action.action_id if action is not None else None,
-            permission_id=action.permission_id if action is not None else None,
-            allowed=denial is None,
-            denial_code=denial,
-            resource_type=resource_context.resource_type,
-            resource_id=resource_context.resource_id,
-            resource_context_digest=authorization_resource_digest(resource_context),
-            matched_authority_kind=matched_kind,
+        return await self._complete_decision(
+            action=action,
+            denial=denial,
+            resource_context=resource_context,
+            context=context,
+            matched_kind=matched_kind,
             matched_grant_id=matched_grant_id,
-            matched_scope_project_id=matched_project_id,
+            matched_project_id=matched_project_id,
             revalidated=revalidated,
-            request_id=context.request_id,
-            correlation_id=context.correlation_id,
         )
-        await self._stage_decision(decision, context.actor_profile_id)
-        if not decision.allowed:
-            self._pending_denial = decision
-            raise AuthorizationDenied(decision)
-        return decision
 
     async def _require_prelocked(
         self,
@@ -202,6 +259,18 @@ class AuthorizationService:
         authority: _PrelockedAuthority,
     ) -> AuthorizationDecision:
         """Evaluate final facts using exact authority already locked by AUTH."""
+        transaction = self._session.sync_session.get_transaction()
+        if (
+            type(authority) is not _PrelockedAuthority
+            or authority not in self._sealed_prelocked
+            or authority.issuer is not self
+            or transaction is None
+            or not transaction.is_active
+            or transaction is not authority.transaction
+            or self._session.in_nested_transaction()
+        ):
+            raise TypeError("invalid prelocked authority")
+        self._sealed_prelocked.remove(authority)
         self._pending_denial = None
         action = ACTION_BY_ID.get(action_id) if isinstance(action_id, ActionId) else None
         context = authority.context
@@ -239,6 +308,30 @@ class AuthorizationService:
                 matched_project_id = authority.scope_project_id
         else:
             denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+        return await self._complete_decision(
+            action=action,
+            denial=denial,
+            resource_context=resource_context,
+            context=context,
+            matched_kind=matched_kind,
+            matched_grant_id=matched_grant_id,
+            matched_project_id=matched_project_id,
+            revalidated=True,
+        )
+
+    async def _complete_decision(
+        self,
+        *,
+        action,
+        denial: AuthorizationDenialCode | None,
+        resource_context: AuthorizationResourceContext,
+        context: AuthorizationContext,
+        matched_kind: MatchedAuthorityKind | None,
+        matched_grant_id: UUID | None,
+        matched_project_id: UUID | None,
+        revalidated: bool,
+    ) -> AuthorizationDecision:
+        """Construct, evidence, and enforce one canonical authorization decision."""
         decision = AuthorizationDecision(
             decision_id=uuid4(),
             action_id=action.action_id if action is not None else None,
@@ -251,7 +344,7 @@ class AuthorizationService:
             matched_authority_kind=matched_kind,
             matched_grant_id=matched_grant_id,
             matched_scope_project_id=matched_project_id,
-            revalidated=True,
+            revalidated=revalidated,
             request_id=context.request_id,
             correlation_id=context.correlation_id,
         )
