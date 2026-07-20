@@ -49,6 +49,10 @@ FOUNDATION_ARTIFACT_COVERAGE_COMMAND = (
     "app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,"
     "app/modules/artifacts/*' --precision=2 --fail-under=90"
 )
+PROJECT_SUBSYSTEM_COVERAGE_COMMAND = (
+    "coverage report --include='app/modules/projects/*' "
+    "--precision=2 --fail-under=90"
+)
 ARTIFACT_COVERAGE_COMMAND_OWNERS = {
     "foundation": (FOUNDATION_ARTIFACT_COVERAGE_COMMAND,),
     "02A1": (
@@ -77,8 +81,7 @@ ARTIFACT_COVERAGE_COMMAND_OWNERS = {
         "coverage report --include='app/api/router.py' --precision=2 --fail-under=90",
     ),
     "03": (
-        "coverage report --include='app/modules/projects/*' "
-        "--precision=2 --fail-under=90",
+        PROJECT_SUBSYSTEM_COVERAGE_COMMAND,
         "coverage report "
         "--include='app/adapters/project_agents/*,app/interfaces/project_agents.py' "
         "--precision=2 --fail-under=90",
@@ -4960,13 +4963,16 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
             assert forbidden_key not in coverage_step
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
+    expected_with_projects = expected_coverage
+    if PROJECT_SUBSYSTEM_COVERAGE_COMMAND not in expected_with_projects:
+        expected_with_projects = (*expected_with_projects, PROJECT_SUBSYSTEM_COVERAGE_COMMAND)
     actual_coverage = tuple(
         str(step.get("run", "")).strip()
         for step in steps
         if str(step.get("run", "")).strip().startswith("coverage report ")
         and "--fail-under=90" in str(step.get("run", ""))
     )
-    assert actual_coverage == (*expected_coverage, *AUTH_09B_COVERAGE_COMMANDS)
+    assert actual_coverage == (*expected_with_projects, *AUTH_09B_COVERAGE_COMMANDS)
     for command in expected_coverage:
         matches = [
             step for step in steps if str(step.get("run", "")).strip() == command
@@ -4977,12 +4983,23 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         assert coverage_step.get("working-directory") == "backend"
         for forbidden_key in ("if", "continue-on-error", "shell", "env"):
             assert forbidden_key not in coverage_step
+    project_steps = [
+        step
+        for step in steps
+        if str(step.get("run", "")).strip() == PROJECT_SUBSYSTEM_COVERAGE_COMMAND
+    ]
+    assert len(project_steps) == 1
+    project_step = project_steps[0]
+    assert full_suite_index < steps.index(project_step) < steps.index(api_e2e_step)
+    assert project_step.get("working-directory") == "backend"
+    for forbidden_key in ("if", "continue-on-error", "shell", "env"):
+        assert forbidden_key not in project_step
     later_commands = artifact_expected_coverage_commands_for("06B")
     assert later_commands[0] == FOUNDATION_ARTIFACT_COVERAGE_COMMAND
     assert any("app/modules/checkers/*" in command for command in later_commands)
     assert workflow.count("--cov-fail-under=78") == 1
     assert ("--cov=app --cov-report=term-missing --cov-fail-under=78") in workflow
-    assert workflow.count("--fail-under=90") == len(expected_coverage) + len(
+    assert workflow.count("--fail-under=90") == len(expected_with_projects) + len(
         AUTH_09B_COVERAGE_COMMANDS
     )
     assert "continue-on-error" not in workflow

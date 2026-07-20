@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import hashlib
 import inspect
@@ -15,7 +16,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
@@ -59,8 +60,13 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 from app.modules.projects import service as project_service_module
-from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.repository import (
+    PROJECT_SETUP_PUBLICATION_LOCK_ORDER,
+    ProjectRepository,
+    ProjectRepositoryIntegrityError,
+)
 from app.modules.projects.service import (
+    AgentRuntimeUnavailable,
     GUIDE_SOURCE_MATERIAL_FIELDS,
     PROJECT_GUIDE_SUFFICIENCY_AGENT_NAME,
     PROJECT_GUIDE_SUFFICIENCY_AGENT_VERSION,
@@ -68,6 +74,7 @@ from app.modules.projects.service import (
     POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_VERSION,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+    GuideEditBlocked,
     PolicySetupBlocked,
     ProjectSetupQueueError,
     ProjectService,
@@ -308,6 +315,465 @@ def test_setup_mutations_use_locked_guide_helper() -> None:
         assert source.index("_get_project_guide(project_id, guide_id)") < source.index(
             "_lock_project_guide_for_setup"
         )
+
+
+def test_project_setup_publication_lock_order_is_complete_and_stable() -> None:
+    assert PROJECT_SETUP_PUBLICATION_LOCK_ORDER == (
+        ProjectGuide,
+        GuideSourceSnapshot,
+        GuideSufficiencyReport,
+        ProjectSetupRun,
+        SubmissionArtifactPolicy,
+        EffectiveProjectSubmissionArtifactPolicy,
+        PreSubmitCheckerPolicy,
+        PostSubmitCheckerPolicy,
+        ReviewPolicy,
+        RevisionPolicy,
+        PaymentPolicy,
+    )
+    source = inspect.getsource(ProjectRepository.lock_project_setup_publication_graph)
+    assert source.index("self.get_project(project_id, for_update=True)") < source.index(
+        "for model in PROJECT_SETUP_PUBLICATION_LOCK_ORDER"
+    )
+    assert ".order_by(model.id)" in source
+    assert ".execution_options(populate_existing=True)" in source
+    assert ".with_for_update()" in source
+
+
+def test_project_setup_writer_inventory_is_ast_derived_and_fenced() -> None:
+    expected_writers = {
+        "create_guide",
+        "update_draft_guide",
+        "create_guide_source_snapshot",
+        "approve_current_post_submit_checker_policy",
+        "request_post_submit_checker_policy_correction",
+        "create_guide_sufficiency_report",
+        "run_guide_sufficiency_agent",
+        "acknowledge_guide_sufficiency_warnings",
+        "create_submission_artifact_policy",
+        "run_submission_artifact_policy_derivation_agent",
+        "run_post_submit_checker_policy_derivation_agent",
+        "update_submission_artifact_policy",
+        "approve_submission_artifact_policy",
+        "activate_guide",
+        "update_project_setup_run_task_id",
+        "update_project_setup_run_status",
+        "start_post_submit_setup_continuation",
+    }
+    service_class = ast.parse(inspect.getsource(ProjectService)).body[0]
+    discovered_writers = set()
+    for method in service_class.body:
+        if not isinstance(method, (ast.AsyncFunctionDef, ast.FunctionDef)):
+            continue
+        if method.name.startswith("_") or method.name == "create_project":
+            continue
+        mutates_setup_graph = any(
+            (
+                isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Attribute) for target in node.targets)
+            )
+            or (
+                isinstance(node, ast.AugAssign)
+                and isinstance(node.target, ast.Attribute)
+            )
+            or (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and (
+                    node.func.attr in {"commit", "flush"}
+                    or node.func.attr.startswith(("add_", "upsert_"))
+                )
+            )
+            for node in ast.walk(method)
+        )
+        if mutates_setup_graph:
+            discovered_writers.add(method.name)
+
+    assert discovered_writers == expected_writers
+    guide_fenced = expected_writers - {
+        "create_guide",
+        "update_project_setup_run_task_id",
+        "update_project_setup_run_status",
+        "start_post_submit_setup_continuation",
+    }
+    for method_name in guide_fenced:
+        assert "_lock_project_guide_for_setup" in inspect.getsource(
+            getattr(ProjectService, method_name)
+        )
+    assert "_lock_project_setup_publication_graph" in inspect.getsource(
+        ProjectService.create_guide
+    )
+    for method_name in expected_writers - guide_fenced - {"create_guide"}:
+        assert "_lock_project_setup_run_for_update" in inspect.getsource(
+            getattr(ProjectService, method_name)
+        )
+
+
+def test_project_setup_enqueue_and_worker_remain_indirect_writers() -> None:
+    enqueue_source = inspect.getsource(
+        ProjectService._enqueue_pre_submit_setup_pipeline_after_commit
+    )
+    assert "update_project_setup_run_task_id" in enqueue_source
+    assert ".celery_task_id =" not in enqueue_source
+    worker_source = (Path(__file__).parents[1] / "app/workers/project_setup.py").read_text()
+    assert "app.modules.projects.models" not in worker_source
+    for method_name in (
+        "activate_guide(",
+        "approve_submission_artifact_policy(",
+        "approve_current_post_submit_checker_policy(",
+        "acknowledge_guide_sufficiency_warnings(",
+    ):
+        assert method_name not in worker_source
+
+
+def test_project_agent_remote_io_precedes_publication_fence() -> None:
+    runtime_calls = {
+        "run_guide_sufficiency_agent": "analyze_guide_sufficiency",
+        "run_submission_artifact_policy_derivation_agent": (
+            "derive_submission_artifact_policy"
+        ),
+        "run_post_submit_checker_policy_derivation_agent": (
+            "derive_post_submit_checker_policy"
+        ),
+    }
+    for method_name, runtime_call in runtime_calls.items():
+        source = inspect.getsource(getattr(ProjectService, method_name))
+        rollback_index = source.index("await self._session.rollback()")
+        runtime_index = source.index(runtime_call, rollback_index)
+        fence_index = source.index("_lock_project_guide_for_setup", runtime_index)
+
+        assert rollback_index < runtime_index < fence_index
+
+
+async def test_project_setup_publication_fence_observes_every_writer_wait_order(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    writer_rows = (
+        "create_guide",
+        "update_draft_guide",
+        "create_guide_source_snapshot",
+        "approve_current_post_submit_checker_policy",
+        "request_post_submit_checker_policy_correction",
+        "create_guide_sufficiency_report",
+        "run_guide_sufficiency_agent persistence phase",
+        "acknowledge_guide_sufficiency_warnings",
+        "create_submission_artifact_policy",
+        "run_submission_artifact_policy_derivation_agent persistence phase",
+        "run_post_submit_checker_policy_derivation_agent persistence phase",
+        "update_submission_artifact_policy",
+        "approve_submission_artifact_policy",
+        "activate_guide",
+        "update_project_setup_run_task_id",
+        "update_project_setup_run_status",
+        "start_post_submit_setup_continuation",
+        "post-commit setup enqueue task-id bookkeeping",
+    )
+
+    async def wait_until_blocked(observer, backend_pid: int) -> None:
+        async with asyncio.timeout(5):
+            while not await observer.scalar(
+                text("select cardinality(pg_blocking_pids(:pid)) > 0"),
+                {"pid": backend_pid},
+            ):
+                pass
+
+    session_factory = db_session.get_session_factory()
+    observed_orders = set()
+    for writer_row in writer_rows:
+        for first_owner in ("writer", "activation"):
+            async with (
+                session_factory() as first_session,
+                session_factory() as second_session,
+                session_factory() as observer,
+            ):
+                first_repo = ProjectRepository(first_session)
+                second_repo = ProjectRepository(second_session)
+                assert await first_repo.lock_project_setup_publication_graph(project["id"])
+                second_pid = await second_session.scalar(text("select pg_backend_pid()"))
+                assert second_pid is not None
+                blocked_lock = asyncio.create_task(
+                    second_repo.lock_project_setup_publication_graph(project["id"])
+                )
+                await wait_until_blocked(observer, second_pid)
+                observed_orders.add((writer_row, first_owner))
+                await first_session.rollback()
+                assert await blocked_lock is not None
+                await second_session.rollback()
+
+    assert observed_orders == {
+        (writer_row, first_owner)
+        for writer_row in writer_rows
+        for first_owner in ("writer", "activation")
+    }
+
+
+async def test_project_setup_publication_fence_refreshes_stale_identity_map(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    session_factory = db_session.get_session_factory()
+    async with session_factory() as stale_session, session_factory() as writer_session:
+        stale_guide = await stale_session.get(ProjectGuide, guide["id"])
+        assert stale_guide is not None
+        await stale_session.rollback()
+        await writer_session.execute(
+            update(ProjectGuide)
+            .where(ProjectGuide.id == guide["id"])
+            .values(change_summary="Committed after stale read")
+        )
+        await writer_session.commit()
+
+        repository = ProjectRepository(stale_session)
+        await repository.lock_project_setup_publication_graph(project["id"])
+        refreshed = await repository.get_guide_after_publication_fence(guide["id"])
+
+        assert refreshed is stale_guide
+        assert refreshed.change_summary == "Committed after stale read"
+        await stale_session.rollback()
+
+
+async def test_sufficiency_remote_io_has_no_transaction_and_stale_output_loses(
+    project_client: AsyncClient,
+) -> None:
+    from app.workers.project_setup import project_setup_pipeline_actor
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    session_factory = db_session.get_session_factory()
+
+    async with session_factory() as service_session:
+        class ActivatingRuntime(DeterministicTestProjectGuideAgentRuntime):
+            async def analyze_guide_sufficiency(
+                self,
+                material: GuideSourceMaterial,
+            ) -> GuideSufficiencyAgentResult:
+                assert not service_session.in_transaction()
+                async with session_factory() as activation_session:
+                    await activation_session.execute(
+                        update(ProjectGuide)
+                        .where(ProjectGuide.id == guide["id"])
+                        .values(
+                            status="active",
+                            approved_by="concurrent-project-manager",
+                            effective_at=datetime.now(UTC),
+                        )
+                    )
+                    await activation_session.commit()
+                return await super().analyze_guide_sufficiency(material)
+
+        service = ProjectService(service_session, agent_runtime=ActivatingRuntime())
+        with pytest.raises(GuideEditBlocked, match="only draft guides"):
+            await service.run_guide_sufficiency_agent(
+                project_setup_pipeline_actor(),
+                project["id"],
+                guide["id"],
+                snapshot["id"],
+            )
+        await service_session.rollback()
+
+    async with session_factory() as assertion_session:
+        reports = await assertion_session.scalars(
+            select(GuideSufficiencyReport).where(
+                GuideSufficiencyReport.source_snapshot_id == snapshot["id"]
+            )
+        )
+        assert reports.all() == []
+
+
+async def test_sufficiency_remote_failure_leaves_no_transaction_or_partial_write(
+    project_client: AsyncClient,
+) -> None:
+    from app.workers.project_setup import project_setup_pipeline_actor
+
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    session_factory = db_session.get_session_factory()
+    async with session_factory() as service_session:
+        class FailingRuntime(DeterministicTestProjectGuideAgentRuntime):
+            async def analyze_guide_sufficiency(
+                self,
+                material: GuideSourceMaterial,
+            ) -> GuideSufficiencyAgentResult:
+                assert material.source_snapshot_id == snapshot["id"]
+                assert not service_session.in_transaction()
+                raise ProjectAgentRuntimeError("provider unavailable")
+
+        service = ProjectService(service_session, agent_runtime=FailingRuntime())
+        with pytest.raises(AgentRuntimeUnavailable):
+            await service.run_guide_sufficiency_agent(
+                project_setup_pipeline_actor(),
+                project["id"],
+                guide["id"],
+                snapshot["id"],
+            )
+        assert not service_session.in_transaction()
+
+    async with session_factory() as assertion_session:
+        assert await assertion_session.scalar(
+            select(GuideSufficiencyReport.id).where(
+                GuideSufficiencyReport.source_snapshot_id == snapshot["id"]
+            )
+        ) is None
+
+
+async def test_submission_policy_remote_output_loses_after_guide_changes(
+    project_client: AsyncClient,
+) -> None:
+    from app.workers.project_setup import project_setup_pipeline_actor
+
+    actor = project_setup_pipeline_actor()
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    session_factory = db_session.get_session_factory()
+    async with session_factory() as report_session:
+        report_service = ProjectService(
+            report_session,
+            agent_runtime=DeterministicTestProjectGuideAgentRuntime(),
+        )
+        _, created = await report_service.run_guide_sufficiency_agent(
+            actor,
+            project["id"],
+            guide["id"],
+            snapshot["id"],
+        )
+        assert created is True
+
+    async with session_factory() as service_session:
+        class ActivatingRuntime(DeterministicTestProjectGuideAgentRuntime):
+            async def derive_submission_artifact_policy(
+                self,
+                material: GuideSourceMaterial,
+                sufficiency_report: GuideSufficiencyAgentResult,
+            ) -> SubmissionArtifactPolicyDerivationResult:
+                assert not service_session.in_transaction()
+                async with session_factory() as activation_session:
+                    await activation_session.execute(
+                        update(ProjectGuide)
+                        .where(ProjectGuide.id == guide["id"])
+                        .values(
+                            status="active",
+                            approved_by="concurrent-project-manager",
+                            effective_at=datetime.now(UTC),
+                        )
+                    )
+                    await activation_session.commit()
+                return await super().derive_submission_artifact_policy(
+                    material,
+                    sufficiency_report,
+                )
+
+        service = ProjectService(service_session, agent_runtime=ActivatingRuntime())
+        with pytest.raises(GuideEditBlocked, match="only draft guides"):
+            await service.run_submission_artifact_policy_derivation_agent(
+                actor,
+                project["id"],
+                guide["id"],
+                snapshot["id"],
+            )
+        await service_session.rollback()
+
+    async with session_factory() as assertion_session:
+        policies = await assertion_session.scalars(
+            select(SubmissionArtifactPolicy).where(
+                SubmissionArtifactPolicy.source_snapshot_id == snapshot["id"]
+            )
+        )
+        assert policies.all() == []
+
+
+async def test_post_submit_policy_remote_output_loses_after_guide_changes(
+    project_client: AsyncClient,
+) -> None:
+    from app.workers.project_setup import project_setup_pipeline_actor
+
+    actor = project_setup_pipeline_actor()
+    project = await create_project(project_client)
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
+    report = await create_sufficiency_report(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    policy = await create_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        snapshot["id"],
+    )
+    effective = await approve_submission_artifact_policy(
+        project_client,
+        project["id"],
+        guide["id"],
+        policy["id"],
+    )
+    pre_submit = await load_pre_submit_checker_policy(effective)
+    setup_run_id = str(uuid4())
+    session_factory = db_session.get_session_factory()
+    async with session_factory() as setup_session:
+        setup_session.add(
+            ProjectSetupRun(
+                id=setup_run_id,
+                project_id=project["id"],
+                guide_id=guide["id"],
+                guide_version=guide["version"],
+                source_snapshot_id=snapshot["id"],
+                source_snapshot_hash=snapshot["bundle_hash"],
+                status="policy_draft_ready",
+                current_step="submission_artifact_policy_derivation",
+                output_sufficiency_report_id=report["id"],
+                output_submission_artifact_policy_id=policy["id"],
+                created_by=actor.actor_id,
+            )
+        )
+        await setup_session.commit()
+
+    async with session_factory() as service_session:
+        class ActivatingRuntime(DeterministicTestProjectGuideAgentRuntime):
+            async def derive_post_submit_checker_policy(
+                self,
+                material: GuideSourceMaterial,
+                context: PostSubmitCheckerPolicyDerivationContext,
+            ) -> PostSubmitCheckerPolicyDerivationResult:
+                assert not service_session.in_transaction()
+                async with session_factory() as activation_session:
+                    await activation_session.execute(
+                        update(ProjectGuide)
+                        .where(ProjectGuide.id == guide["id"])
+                        .values(
+                            status="active",
+                            approved_by="concurrent-project-manager",
+                            effective_at=datetime.now(UTC),
+                        )
+                    )
+                    await activation_session.commit()
+                return await super().derive_post_submit_checker_policy(material, context)
+
+        service = ProjectService(service_session, agent_runtime=ActivatingRuntime())
+        with pytest.raises(GuideEditBlocked, match="only draft guides"):
+            await service.run_post_submit_checker_policy_derivation_agent(
+                actor,
+                project["id"],
+                guide["id"],
+                snapshot["id"],
+                effective["id"],
+                pre_submit["id"],
+                setup_run_id,
+            )
+        await service_session.rollback()
+
+    async with session_factory() as assertion_session:
+        assert await assertion_session.scalar(
+            select(PostSubmitCheckerPolicy.id).where(
+                PostSubmitCheckerPolicy.guide_id == guide["id"]
+            )
+        ) is None
 
 
 def test_policy_models_have_project_guide_foreign_keys() -> None:

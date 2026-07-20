@@ -150,6 +150,14 @@ jobs:
           --precision=2
           --fail-under=90
 
+      - name: Project subsystem coverage
+        working-directory: backend
+        run: >-
+          coverage report
+          --include='app/modules/projects/*'
+          --precision=2
+          --fail-under=90
+
       - name: Actor subsystem coverage
         working-directory: backend
         run: >-

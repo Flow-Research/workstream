@@ -24,6 +24,20 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 
+PROJECT_SETUP_PUBLICATION_LOCK_ORDER = (
+    ProjectGuide,
+    GuideSourceSnapshot,
+    GuideSufficiencyReport,
+    ProjectSetupRun,
+    SubmissionArtifactPolicy,
+    EffectiveProjectSubmissionArtifactPolicy,
+    PreSubmitCheckerPolicy,
+    PostSubmitCheckerPolicy,
+    ReviewPolicy,
+    RevisionPolicy,
+    PaymentPolicy,
+)
+
 
 class ProjectRepositoryIntegrityError(RuntimeError):
     """Raised when persisted project data violates repository invariants."""
@@ -91,8 +105,30 @@ class ProjectRepository:
         if not for_update:
             return await self._session.get(Project, project_id)
         return await self._session.scalar(
-            select(Project).where(Project.id == project_id).with_for_update()
+            select(Project)
+            .where(Project.id == project_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
         )
+
+    async def lock_project_setup_publication_graph(
+        self,
+        project_id: str,
+    ) -> Project | None:
+        """Lock and refresh one Project setup graph in canonical order."""
+        project = await self.get_project(project_id, for_update=True)
+        if project is None:
+            return None
+        for model in PROJECT_SETUP_PUBLICATION_LOCK_ORDER:
+            result = await self._session.execute(
+                select(model)
+                .where(model.project_id == project_id)
+                .order_by(model.id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
+            )
+            result.scalars().all()
+        return project
 
     async def add_guide(self, guide: ProjectGuide) -> ProjectGuide:
         """Persist a new project guide and refresh generated database fields.
@@ -119,14 +155,16 @@ class ProjectRepository:
         """
         return await self._session.get(ProjectGuide, guide_id)
 
-    async def lock_project_guide(self, guide_id: str) -> ProjectGuide | None:
-        """Load one project guide with a transactional row lock."""
-        result = await self._session.execute(
+    async def get_guide_after_publication_fence(
+        self,
+        guide_id: str,
+    ) -> ProjectGuide | None:
+        """Refresh one guide already protected by its Project publication fence."""
+        return await self._session.scalar(
             select(ProjectGuide)
             .where(ProjectGuide.id == guide_id)
-            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
 
     async def get_active_guide(self, project_id: str) -> ProjectGuide | None:
         """Load the active guide for a project.
@@ -292,14 +330,22 @@ class ProjectRepository:
         """Load one project setup run by primary key."""
         return await self._session.get(ProjectSetupRun, setup_run_id)
 
-    async def lock_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
-        """Load one project setup run with a transactional row lock."""
-        result = await self._session.execute(
+    async def get_project_id_for_setup_run(self, setup_run_id: str) -> str | None:
+        """Project setup-run projection used only to locate its root fence."""
+        return await self._session.scalar(
+            select(ProjectSetupRun.project_id).where(ProjectSetupRun.id == setup_run_id)
+        )
+
+    async def get_project_setup_run_after_publication_fence(
+        self,
+        setup_run_id: str,
+    ) -> ProjectSetupRun | None:
+        """Refresh one setup run already protected by its Project fence."""
+        return await self._session.scalar(
             select(ProjectSetupRun)
             .where(ProjectSetupRun.id == setup_run_id)
-            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-        return result.scalar_one_or_none()
 
     async def get_latest_project_setup_run(
         self,
