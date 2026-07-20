@@ -16,6 +16,7 @@ from app.modules.audit.schemas import (
 from app.modules.audit.service import AuditService
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
+    SERVICE_ACTIONS_BY_IDENTITY,
     ActionAvailability,
     ActionId,
 )
@@ -39,15 +40,21 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     AuthorizationEvidenceUnavailable,
     AuthorizationResourceContext,
+    HumanAuthorizationContext,
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
+    ServiceAuthorizationContext,
     ServiceActorProvisionResourceContext,
     authorization_resource_digest,
 )
 
 ContextRevalidator = Callable[
-    [AuthorizationContext, ActorSelfResourceContext], Awaitable[AuthorizationContext]
+    [HumanAuthorizationContext, ActorSelfResourceContext], Awaitable[HumanAuthorizationContext]
+]
+ServiceContextRevalidator = Callable[
+    [ServiceAuthorizationContext, ActionId],
+    Awaitable[ServiceAuthorizationContext | None],
 ]
 
 _ADMIN_ACTIONS = frozenset(
@@ -98,11 +105,13 @@ class AuthorizationService:
         context: AuthorizationContext,
         *,
         revalidate_actor_self: ContextRevalidator | None = None,
+        revalidate_service: ServiceContextRevalidator | None = None,
     ) -> None:
         self._audit = AuditService(session)
         self._admin = AdminAuthorizationRepository(session)
         self._context = context
         self._revalidate_actor_self = revalidate_actor_self
+        self._revalidate_service = revalidate_service
         self._pending_denial: AuthorizationDecision | None = None
 
     async def require(
@@ -118,7 +127,13 @@ class AuthorizationService:
         matched_grant_id = None
         matched_project_id = None
         matched_kind = None
-        if action is not None and action.action_id in _ADMIN_ACTIONS:
+        if isinstance(context, ServiceAuthorizationContext):
+            denial, context, revalidated = await self._service_denial(
+                action_id,
+                action,
+                context,
+            )
+        elif action is not None and action.action_id in _ADMIN_ACTIONS:
             (
                 denial,
                 context,
@@ -166,6 +181,39 @@ class AuthorizationService:
             raise AuthorizationDenied(decision)
         return decision
 
+    async def _service_denial(
+        self,
+        requested_action: object,
+        action,
+        context: ServiceAuthorizationContext,
+    ) -> tuple[AuthorizationDenialCode | None, ServiceAuthorizationContext, bool]:
+        """Evaluate one fixed service before every human authority path."""
+        lifecycle = self._lifecycle_denial(context)
+        if lifecycle is not None:
+            return lifecycle, context, False
+        if action is None:
+            return AuthorizationDenialCode.UNKNOWN_ACTION, context, False
+        if requested_action not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
+            return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, context, False
+        if action.availability is not ActionAvailability.ACTIVE:
+            return AuthorizationDenialCode.ACTION_UNAVAILABLE, context, False
+        if self._revalidate_service is None:
+            return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, context, False
+        refreshed = await self._revalidate_service(context, action.action_id)
+        if refreshed is None:
+            return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, context, True
+        lifecycle = self._lifecycle_denial(refreshed)
+        if lifecycle is not None:
+            return lifecycle, refreshed, True
+        if (
+            refreshed.service_identity is not context.service_identity
+            or action.action_id
+            not in SERVICE_ACTIONS_BY_IDENTITY[refreshed.service_identity]
+            or ACTION_BY_ID[action.action_id].availability is not ActionAvailability.ACTIVE
+        ):
+            return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, refreshed, True
+        return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, refreshed, True
+
     async def _admin_denial(
         self,
         action,
@@ -201,7 +249,9 @@ class AuthorizationService:
             if locked is None:
                 return AuthorizationDenialCode.IDENTITY_LINK_REVOKED, context, None, None, True
             link, profile = locked
-            context = AuthorizationContext(
+            if profile.actor_kind != ActorKind.HUMAN.value:
+                return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, context, None, None, True
+            context = HumanAuthorizationContext(
                 actor_profile_id=UUID(profile.id),
                 actor_kind=ActorKind(profile.actor_kind),
                 actor_status=ActorStatus(profile.status),

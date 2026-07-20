@@ -22,7 +22,6 @@ from app.modules.actors.service import (
     ActorRegistryError,
     ActorService,
     ResolvedActor,
-    ServiceActorNotProvisioned,
     UnsupportedSubjectKind,
 )
 from app.modules.api_controls.service import FIRST_ACCESS_SCOPE, RateControlService
@@ -34,8 +33,12 @@ from app.modules.authorization.runtime import (
     AuthorizationContext,
     AuthorizationDenied,
     AuthorizationEvidenceUnavailable,
+    HumanAuthorizationContext,
     IdentityLinkStatus,
+    ServiceAuthorizationContext,
 )
+from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.authorization.catalogue import ActionId
 from app.schemas.auth import AuthVerificationResult
 
 
@@ -45,15 +48,21 @@ def _authorization_context(
     correlation_id: UUID,
 ) -> AuthorizationContext:
     """Project canonical actor rows into the strict request context."""
-    return AuthorizationContext(
+    common = dict(
         actor_profile_id=UUID(resolved.profile.id),
-        actor_kind=ActorKind(resolved.profile.actor_kind),
         actor_status=ActorStatus(resolved.profile.status),
         identity_link_id=UUID(resolved.identity_link.id),
         identity_link_status=IdentityLinkStatus(resolved.identity_link.status),
         request_id=request_id,
         correlation_id=correlation_id,
     )
+    if resolved.profile.actor_kind == ActorKind.SERVICE:
+        return ServiceAuthorizationContext(
+            actor_kind=ActorKind.SERVICE,
+            service_identity=ServiceIdentity(resolved.profile.service_identity),
+            **common,
+        )
+    return HumanAuthorizationContext(actor_kind=ActorKind.HUMAN, **common)
 
 
 async def get_authorization_actor(
@@ -62,15 +71,13 @@ async def get_authorization_actor(
     session: Annotated[AsyncSession, Depends(get_db_session)],
     rate_control: Annotated[RateControlService, Depends(get_rate_control_service)],
 ) -> ResolvedActor:
-    """Resolve an exact human self target without pre-kernel lifecycle denial."""
-    if result.token.subject_kind == "service":
-        raise actor_registry_http_error(
-            ServiceActorNotProvisioned("Service actor is not provisioned")
-        )
-    if result.token.subject_kind != "human":
+    """Resolve an exact human or fixed-service target before kernel lifecycle denial."""
+    if result.token.subject_kind not in {"human", "service"}:
         raise actor_registry_http_error(UnsupportedSubjectKind("Unsupported subject kind"))
     service = ActorService(session)
     try:
+        if result.token.subject_kind == "service":
+            return await service.resolve_service_for_authorization(result.token)
         existing = await service.find_actor_for_authorization(result.token)
         if existing is None:
             settings = request.app.state.settings
@@ -145,12 +152,36 @@ async def get_authorization_service(
         locked = await actor_service.lock_actor_self_for_authorization(resolved)
         return _authorization_context(locked, request_id, correlation_id)
 
+    async def revalidate_service(
+        context: ServiceAuthorizationContext,
+        _action_id: ActionId,
+    ) -> ServiceAuthorizationContext | None:
+        """Rebuild fixed-service authority from exact locked actor rows."""
+        try:
+            locked = await actor_service.lock_actor_for_authorization(resolved)
+            refreshed = _authorization_context(locked, request_id, correlation_id)
+        except (RuntimeError, ValueError):
+            return None
+        if not isinstance(refreshed, ServiceAuthorizationContext):
+            return None
+        if refreshed.service_identity is not context.service_identity:
+            return None
+        return refreshed
+
+    context = _authorization_context(resolved, request_id, correlation_id)
     service = AuthorizationService(
         session,
-        _authorization_context(resolved, request_id, correlation_id),
+        context,
         revalidate_actor_self=revalidate_actor_self,
+        revalidate_service=revalidate_service,
     )
     try:
+        if (
+            isinstance(context, ServiceAuthorizationContext)
+            and context.actor_status is ActorStatus.ACTIVE
+            and context.identity_link_status is IdentityLinkStatus.ACTIVE
+        ):
+            await actor_service.touch_after_authorization(resolved)
         yield service
     except AuthorizationDenied as exc:
         await session.rollback()
@@ -162,6 +193,9 @@ async def get_authorization_service(
             raise actor_registry_unavailable_error() from persistence_error
         raise authorization_http_error(exc) from exc
     except AuthorizationEvidenceUnavailable as exc:
+        await session.rollback()
+        raise actor_registry_unavailable_error() from exc
+    except SQLAlchemyError as exc:
         await session.rollback()
         raise actor_registry_unavailable_error() from exc
     except BaseException:

@@ -2,9 +2,12 @@
 
 ## Proposed approach
 
-Adopt merged REV PR #128 plus trusted main `053242b`, including AUTH-09A,
-AUTH-09B PR #143, AUTH PR #140, and the underlying WS-XINT PR #139 boundary
-before runtime work, then deliver WS-CON through hidden, reviewable chunks. The
+Adopt contributor-foundation PR #153, AUTH-09D-B PR #152, ART-02B1 PR #151, planning-only REV PLAN2 PR #150, AUTH-09D-A PR #148,
+merged REV-02 PR #147, REV-01 PR #145, and the underlying REV planning PR #128
+plus trusted main `8d5eb15b`, including
+AUTH-09C PR #146, ART PR #141, AUTH-09A, AUTH-09B PR #143, AUTH PR #140, and
+the underlying WS-XINT PR #139 boundary before runtime work, then deliver WS-CON through
+hidden, reviewable chunks. The
 core path is PostgreSQL-local and has no ART dependency:
 
 ```text
@@ -161,12 +164,22 @@ models, routes, lifecycle decisions, or commits.
 
 ## Authorization boundary
 
-Trusted `main` is `053242b`, merging AUTH-09B PR #143 after REV PR #128,
-AUTH-09A, AUTH PR #140, and WS-XINT PR #139. Runtime catalogue counts are 74
-PermissionIds, 65 ActionIds, ten active actions, and 55 planned actions. No
-WS-CON or task-claim ActionId is registered. AUTH-09B activates only the
-controlled human `actor.service.provision` operation and grants no service
-execution or runtime admission. PR #140 adds reviewed AUTH
+Trusted `main` is `8d5eb15b`, merging contributor-foundation PR #153 after
+AUTH-09D-B PR #152 and ART-02B1 PR #151 and after planning-only REV
+PLAN2 PR #150, AUTH-09D-A PR #148 and REV-02 PR #147,
+REV-01 PR #145, AUTH-09C PR #146, ART PR #141, AUTH-09B PR #143, REV planning
+PR #128, AUTH-09A, AUTH PR #140, and WS-XINT PR #139.
+Runtime catalogue counts are 74 PermissionIds, 65 ActionIds, 17 active actions,
+and 48 planned actions. No WS-CON or task-claim ActionId is registered. AUTH-09B
+activates only the controlled human `actor.service.provision` operation;
+AUTH-09C activates only administrative `actor.profile.read` and
+`actor.identity_link.read`; AUTH-09D-A activates only the three actor-profile
+lifecycle actions; AUTH-09D-B activates only identity-link revoke/reactivate.
+None grants service execution or runtime admission. The contributor foundation
+is merged: TaskAssignment and Submission now use canonical human
+`contributor_id`, and contributor writes revalidate an active human profile and
+identity link. It changes no ActionId, PermissionId, grant, evaluator, service
+admission, or review lifecycle. AUTH-09E remains proposed. PR #140 adds reviewed AUTH
 custody/PREP/activation contracts only; the custody transfers and prepared
 protocol remain proposed runtime work.
 
@@ -364,11 +377,16 @@ subsystem owns no contribution, award, adapter, review, or provider semantics.
     port returning outbox/fulfillment counts and the maximum root ordinal. REV-
     12A injects the one shared `JointLifecycleMutationFence`, persists the
     generation cutoff, and owns release-control state; CON creates no second
-    controller. REV-13 owns final public release and the joint live drill.
+    controller. REV-13C owns final public release and the joint live drill.
 
 Every chunk refreshes trusted-main SHA, migration custody, exact port/action
 symbols, and merged dependency evidence. No cross-initiative successor starts
 automatically.
+
+`REV-12A` and `REV-13` are canonical non-executable parent split records. Their
+concrete runtime children control this plan: REV-12A1 persists the sole joint
+controller, REV-12A3 composes the CON writer/dispatcher/callback/cutoff/drain
+fences, and REV-13C alone releases the public product surface.
 
 ### Merged REV interleaving
 
@@ -380,22 +398,24 @@ REV-02 immutable Submission/TaskAssignment attribution
   -> CON-05A/B task freeze and retired-field cutover
 
 CON-03B ContributionPolicyVersion persistence
-  -> REV-03 ReviewLease foreign key
+  -> REV-03A ReviewLease foreign key
 
 CON-02A shared outbox + CON-02C lifecycle audit participant
-  -> REV-04 Review/FinalAcceptance persistence
+  -> REV-04B Review/FinalAcceptance persistence
   -> CON-03C exact contribution source schema
 
 CON-06 reviewer policy freeze
-  -> REV-06 claim composition
+  -> REV-06A claim composition
 
 REV-09B stable lineage + CON-03C schema + CON-07 two-operation participant
   -> REV-10 first canonical Review-committing transaction
 
-CON-11 writer/dispatch/callback/ordinal/drain manifest + REV-12 observations
-  -> REV-12A shared lifecycle controller/fence
+CON-02B dispatcher/handler registry -> REV-12P1 projection handler
+
+CON-11 writer/dispatch/callback/ordinal/drain manifest + REV-12P3 observations
+  -> REV-12A1 controller persistence -> REV-12A3 CON fence composition
   -> AUTH action-specific activation
-  -> REV-13 joint release
+  -> REV-13C joint release
 ```
 
 The merged REV plan proves ownership and ordering only. Each arrow still waits
@@ -405,8 +425,9 @@ for the exact runtime predecessor on then-current trusted main.
 
 - Isolated PostgreSQL migration, constraint, rollback, idempotency, and both-
   order concurrency tests.
-- Same-run repository coverage at or above 78 percent and each new/materially
-  changed subsystem at or above 90 percent.
+- Bounded local focused coverage for each new/materially changed subsystem at
+  or above 90 percent; after PR push, GitHub CI runs the repository-wide suite
+  and enforces repository coverage at or above 78 percent.
 - Exact contribution cardinality for all three decisions and repeated/revision
   Reviews; accept-only FinalAcceptance one-to-one constraints; mutually
   exclusive reviewer/submitter source shapes; automated checks create none.

@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-09E",
+  "chunk_title": "Fixed Service Runtime Admission",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-ART-CUSTODY",
+  "next_chunk_title": "ART Activation Custody Transfer",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

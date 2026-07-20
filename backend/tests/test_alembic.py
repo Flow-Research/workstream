@@ -119,6 +119,106 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
         command.downgrade(config, "base")
 
 
+def test_outbox_migration_schema_and_downgrade_writer_guard(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove exact 0029 schema plus ACCESS EXCLUSIVE commit/rollback behavior."""
+    config = _alembic_config()
+    committed_project_id = str(uuid4())
+    rolled_back_project_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            schema = asyncio.run(_outbox_schema(isolated_database_env))
+            assert schema == {
+                "revision": "0029_shared_transactional_outbox",
+                "columns": {
+                    "aggregate_id",
+                    "aggregate_type",
+                    "archived_at",
+                    "attempt_count",
+                    "causation_event_id",
+                    "claim_expires_at",
+                    "claim_generation",
+                    "claim_owner",
+                    "claimed_at",
+                    "correlation_id",
+                    "delivery_state",
+                    "event_id",
+                    "event_type",
+                    "event_version",
+                    "finalized_at",
+                    "idempotency_key",
+                    "last_attempt_at",
+                    "last_error_code",
+                    "next_attempt_at",
+                    "occurred_at",
+                    "payload",
+                    "payload_digest",
+                    "producer",
+                    "project_id",
+                },
+                "nullable": {
+                    "next_attempt_at",
+                    "causation_event_id",
+                    "claim_owner",
+                    "claimed_at",
+                    "claim_expires_at",
+                    "last_attempt_at",
+                    "last_error_code",
+                    "finalized_at",
+                    "archived_at",
+                },
+                "indexes": {
+                    "ix_outbox_events_aggregate",
+                    "ix_outbox_events_eligible",
+                    "ix_outbox_events_expired_claims",
+                    "ix_outbox_events_project_drain",
+                    "ix_outbox_events_retention",
+                    "pk_outbox_events",
+                    "uq_outbox_events_idempotency_key",
+                },
+                "triggers": {"outbox_events_custody", "outbox_events_reject_truncate"},
+            }
+
+            committed = asyncio.run(
+                _outbox_downgrade_writer_race(
+                    isolated_database_env,
+                    config,
+                    project_id=committed_project_id,
+                    commit_writer=True,
+                )
+            )
+            assert committed == "refused_after_commit"
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0029_shared_transactional_outbox"
+            )
+            asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
+            command.downgrade(config, "0028_artifact_admission")
+            assert "outbox_events" not in asyncio.run(_fetch_table_names(isolated_database_env))
+
+            command.upgrade(config, "head")
+            rolled_back = asyncio.run(
+                _outbox_downgrade_writer_race(
+                    isolated_database_env,
+                    config,
+                    project_id=rolled_back_project_id,
+                    commit_writer=False,
+                )
+            )
+            assert rolled_back == "succeeded_after_rollback"
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0028_artifact_admission"
+            )
+        finally:
+            command.upgrade(config, "head")
+            asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
+            asyncio.run(_remove_outbox_migration_row(isolated_database_env, rolled_back_project_id))
+            command.downgrade(config, "base")
+
+
 def test_current_schema_uses_project_policy_contract(
     isolated_database_env: str,
     migration_lock,
@@ -163,6 +263,9 @@ def test_current_schema_uses_project_policy_contract(
         "artifact_replicas.provider_object_ref",
         "artifact_replicas.storage_namespace_id",
         "artifact_operation_receipts.request_digest",
+        "outbox_events.event_id",
+        "outbox_events.payload_digest",
+        "outbox_events.delivery_state",
     }.issubset(columns)
     discarded_columns = {
         "projects.base_amount",
@@ -1818,7 +1921,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
     isolated_database_env: str,
     migration_lock,
 ) -> None:
-    """Keep 0026 intact for every profile, link, or denial evidence branch."""
+    """Keep the full head intact for every lifecycle-evidence branch."""
     config = _alembic_config()
     actor_id = str(uuid4())
 
@@ -2528,6 +2631,139 @@ def test_authority_idempotency_schema_preserves_audit_and_guards_downgrade(
     assert downgrade_lock_observed is True
     assert refused == {"revision": "0019_authority_idempotency", "records": 1, "orphan": 1}
     assert preserved == {"revision": "0018_authority_audit_evidence", "records": None, "orphan": 1}
+
+
+async def _outbox_schema(database_url: str) -> dict[str, object]:
+    """Return the exact shared-outbox migration surface."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            column_rows = (
+                await connection.execute(
+                    text(
+                        "select column_name, is_nullable from information_schema.columns "
+                        "where table_schema='public' and table_name='outbox_events'"
+                    )
+                )
+            ).all()
+            indexes = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select indexname from pg_indexes "
+                            "where schemaname='public' and tablename='outbox_events'"
+                        )
+                    )
+                ).all()
+            )
+            triggers = set(
+                (
+                    await connection.scalars(
+                        text(
+                            "select tgname from pg_trigger "
+                            "where tgrelid='outbox_events'::regclass and not tgisinternal"
+                        )
+                    )
+                ).all()
+            )
+            return {
+                "revision": str(
+                    await connection.scalar(text("select version_num from alembic_version"))
+                ),
+                "columns": {row.column_name for row in column_rows},
+                "nullable": {
+                    row.column_name for row in column_rows if row.is_nullable == "YES"
+                },
+                "indexes": indexes,
+                "triggers": triggers,
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _outbox_downgrade_writer_race(
+    database_url: str,
+    config: Config,
+    *,
+    project_id: str,
+    commit_writer: bool,
+) -> str:
+    """Hold one append open while downgrade waits, then commit or roll it back."""
+    engine = create_async_engine(database_url)
+    event_id = str(uuid4())
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            await connection.execute(
+                text(
+                    "insert into projects(id,name,slug,status) "
+                    "values (:id,'Outbox migration',:slug,'active')"
+                ),
+                {"id": project_id, "slug": f"outbox-migration-{project_id}"},
+            )
+            await connection.execute(
+                text(
+                    "insert into outbox_events "
+                    "(event_id,event_type,event_version,aggregate_type,aggregate_id,project_id,"
+                    "correlation_id,idempotency_key,payload,payload_digest) values "
+                    "(:event_id,'MigrationProbe',1,'migration_probe',:aggregate_id,:project_id,"
+                    ":correlation_id,:idempotency_key,'{}'::jsonb,:digest)"
+                ),
+                {
+                    "event_id": event_id,
+                    "aggregate_id": str(uuid4()),
+                    "project_id": project_id,
+                    "correlation_id": f"migration:{event_id}",
+                    "idempotency_key": f"migration:{event_id}:v1",
+                    "digest": "sha256:" + ("0" * 64),
+                },
+            )
+            downgrade = asyncio.create_task(
+                asyncio.to_thread(
+                    command.downgrade,
+                    config,
+                    "0028_artifact_admission",
+                )
+            )
+            await asyncio.sleep(0.1)
+            assert not downgrade.done()
+            if commit_writer:
+                await transaction.commit()
+                with pytest.raises(RuntimeError, match="cannot downgrade with shared outbox events"):
+                    await asyncio.wait_for(downgrade, timeout=5)
+                return "refused_after_commit"
+            await transaction.rollback()
+            await asyncio.wait_for(downgrade, timeout=5)
+            return "succeeded_after_rollback"
+    finally:
+        await engine.dispose()
+
+
+async def _remove_outbox_migration_row(database_url: str, project_id: str) -> None:
+    """Remove only migration-test truth under explicit disabled trigger custody."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            table_exists = await connection.scalar(
+                text("select to_regclass('public.outbox_events') is not null")
+            )
+            if table_exists:
+                await connection.execute(text("alter table outbox_events disable trigger user"))
+                await connection.execute(
+                    text("delete from outbox_events where project_id=:project_id"),
+                    {"project_id": project_id},
+                )
+                await connection.execute(text("alter table outbox_events enable trigger user"))
+            project_exists = await connection.scalar(
+                text("select to_regclass('public.projects') is not null")
+            )
+            if project_exists:
+                await connection.execute(
+                    text("delete from projects where id=:project_id"),
+                    {"project_id": project_id},
+                )
+    finally:
+        await engine.dispose()
 
 
 async def _fetch_columns(database_url: str) -> set[str]:

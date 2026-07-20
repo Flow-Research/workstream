@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
 
 from pydantic import SecretStr, ValidationError
 
@@ -21,7 +22,7 @@ def assert_secret_not_retained(
         return
     seen.add(id(value))
     if isinstance(value, str):
-        assert secret not in value
+        assert not str.__contains__(value, secret)
     elif isinstance(value, (bytes, bytearray, memoryview)):
         assert secret.encode("utf-8") not in bytes(value)
     elif isinstance(value, SecretStr):
@@ -52,8 +53,10 @@ def assert_secret_not_retained(
                     traceback_module_prefixes=traceback_module_prefixes,
                 )
             traceback = traceback.tb_next
-    elif isinstance(value, Mapping):
-        for key, item in value.items():
+    elif issubclass(type(value), dict):
+        # Snapshot before recursive inspection: traversing nested framework state
+        # can lazily import modules and mutate a module-globals dictionary.
+        for key, item in tuple(dict.items(value)):
             assert_secret_not_retained(
                 key,
                 secret,
@@ -62,6 +65,72 @@ def assert_secret_not_retained(
             )
             assert_secret_not_retained(
                 item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif isinstance(value, Mapping):
+        try:
+            items = tuple(value.items())
+        except Exception:
+            state = getattr(value, "__dict__", None)
+            assert isinstance(state, dict), "mapping state could not be inspected"
+            assert_secret_not_retained(
+                state,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+            return
+        for key, item in items:
+            assert_secret_not_retained(
+                key,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+            assert_secret_not_retained(
+                item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif isinstance(value, list):
+        for item in list.__iter__(value):
+            assert_secret_not_retained(
+                item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif isinstance(value, tuple):
+        for item in tuple.__iter__(value):
+            assert_secret_not_retained(
+                item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif isinstance(value, set):
+        for item in set.__iter__(value):
+            assert_secret_not_retained(
+                item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif isinstance(value, frozenset):
+        for item in frozenset.__iter__(value):
+            assert_secret_not_retained(
+                item,
+                secret,
+                seen,
+                traceback_module_prefixes=traceback_module_prefixes,
+            )
+    elif is_dataclass(value) and not isinstance(value, type):
+        for field in fields(value):
+            assert_secret_not_retained(
+                object.__getattribute__(value, field.name),
                 secret,
                 seen,
                 traceback_module_prefixes=traceback_module_prefixes,
@@ -88,11 +157,3 @@ def assert_secret_not_retained(
             seen,
             traceback_module_prefixes=traceback_module_prefixes,
         )
-    elif isinstance(value, (list, tuple, set)):
-        for item in value:
-            assert_secret_not_retained(
-                item,
-                secret,
-                seen,
-                traceback_module_prefixes=traceback_module_prefixes,
-            )

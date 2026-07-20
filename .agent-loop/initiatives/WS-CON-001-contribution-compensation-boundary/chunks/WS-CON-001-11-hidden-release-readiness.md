@@ -55,7 +55,7 @@ archival input edits
 - [ ] Manifest names mandatory CON obligation-writer, dispatch, callback, and
   same-session `FulfillmentLifecycleDrainObservationPort` hooks plus
   `OutboxClaimValidationPort`, injection seams, phase mappings, denial states,
-  and fail-closed construction. REV-12A injects the one shared
+  and fail-closed construction. REV-12A3 injects the one shared
   `JointLifecycleMutationFence`; CON defines no second controller or optional/
   no-op fence.
 - [ ] The manifest enumerates every fulfillment-obligation root creation,

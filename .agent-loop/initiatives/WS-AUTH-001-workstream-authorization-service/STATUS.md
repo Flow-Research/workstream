@@ -115,15 +115,14 @@ None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-CONTRIBUTOR-FOUNDATION` - Contributor Fields And Canonical-Human
-Lineage. Explicitly started from trusted `main` at `93dd392`; exact contract
-`2a21166d` passed required L1 review. Internal review passed at code SHA
-`4d1fc507`; PR/external checks are current and aggregate coverage is mandatory
-in Backend.
+`WS-AUTH-001-09E` - Fixed Service Runtime Admission. Explicitly started from
+trusted `main` at `8d5eb15b`; the refreshed contract passed all nine required
+L1 preimplementation tracks. Runtime implementation is active and changes no
+feature action availability.
 
 ## Current review branch
 
-`codex/ws-auth-001-contributor-foundation`
+`codex/ws-auth-001-09e-fixed-service-runtime-admission`
 
 ## Chunk status
 
@@ -153,8 +152,8 @@ in Backend.
 | `WS-AUTH-001-09D` | Split | `codex/ws-auth-001-09d-actor-identity-lifecycle` | - | Required L1 review rejected the combined contract before runtime edits. |
 | `WS-AUTH-001-09D-A` | Merged | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | Merged as `99ae4c9`; signed memory `cf8a3e8` passed and stopped. |
 | `WS-AUTH-001-09D-B` | Merged | `codex/ws-auth-001-09d-b-identity-link-lifecycle` | #152 | Merged as `93dd392`; signed memory `912a6254` passed and stopped. |
-| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | PR ready | `codex/ws-auth-001-contributor-foundation` | - | Internal review passed at `4d1fc507`; PR/external checks pending; Backend coverage mandatory. |
-| `WS-AUTH-001-09E` | Proposed | - | - | Fixed service runtime admission after the contributor foundation. |
+| `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged | `codex/ws-auth-001-contributor-foundation` | #153 | Merged as `8d5eb15b`; signed memory `66ab58d` passed and stopped. |
+| `WS-AUTH-001-09E` | PR gate | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | - | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain. |
 | `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
 | `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
 | `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
@@ -182,7 +181,13 @@ required L1 track. Initial implementation candidate `e41c33c0` failed privacy,
 proof, docs, and evidence review. Bounded repair and deterministic evidence are
 complete; exact code SHA `4d1fc507` passed all nine internal tracks. PR/external
 checks are current and aggregate coverage remains mandatory in Backend.
-AUTH-09E remains inactive behind that foundation.
+The user explicitly started AUTH-09E after contributor foundation PR #153 and
+signed memory completed. Its first preimplementation review rejected missing
+verification commands and an overbroad feature-resource revalidation claim.
+The refreshed contract limits this chunk to AUTH-owned service authority
+resolution/revalidation, defers feature-row recomposition to later activation
+chunks, and passed all nine required L1 tracks. Runtime implementation is
+active; all feature actions remain planned.
 
 The four proposed REV lifecycle actions and review-evidence binding action are
 blocked on complete feature-owned typed manifests. REV fixed services are also
