@@ -4,70 +4,43 @@
 
 `WS-ART-001-02C2` - Verification Publication And Fencing
 
-Reviewed implementation SHA: `e59a6dfc977fa63ad7177ab9adb8338333aa1daf`
+Reviewed implementation SHA: `ad46958ac11e8b1acff98c0c5f79c9a2a68797b9`
 
-Trusted base: `42a89b2d`
+Trusted base: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567`
 
 Merge intent: `.agent-loop/merge-intents/WS-ART-001-02C2.json`
 
-## Goal And Human-Approved Intent
+## Goal And Scope
 
 Resolve committed artifact puts, publish bounded pending work, verify complete
-provider reads, and fence every terminal transition without activating product
-callers, recovery, Operator routes, or background write replay.
+provider reads, and fence terminal transitions without activating product
+callers, recovery, Operator routes, background writes, or schedules.
 
-## What Changed And Why
+## What Changed
 
-- Added caller-only provider write execution and read-only ambiguous-result
-  observation so acknowledgement loss cannot cause a second write.
-- Added durable verification jobs and separate operation, observation, and
-  verification receipts for auditable outcomes.
-- Added PostgreSQL executor UUID/generation leases and same-transaction
-  authority revalidation so stale or revoked work cannot commit terminal facts.
-- Added bounded post-commit publication scanning and total complete-read
-  deadlines.
-- Integrated current main and linearized migrations as outbox 0029 followed by
-  artifact verification 0030, eliminating the duplicate-head collision.
+- Added caller-only provider writes and read-only ambiguous-result observation.
+- Added durable verification jobs and operation, observation, and verification
+  receipts with executor/generation fences and total read deadlines.
+- Added bounded post-commit publication scanning; production remains deny-only
+  with no Beat entry.
+- Kept migrations linear through `0030_artifact_verification` after shared
+  outbox migration 0029.
+- Fixed hosted outbox privacy failures by severing sanitized error tracebacks
+  from service/session/rollback state and bounding test inspection to causal ORM
+  state. No commit, rollback, close, envelope, success, or persistence behavior
+  changed.
+- Integrated PR #158 ART custody and PR #160 REV custody. Both only transfer
+  owner metadata; all 25 ART and 19 REV actions remain planned.
 
-## Design And Alternatives
-
-The orchestrator owns provider execution through `ArtifactStore`; product
-services do not receive raw provider access. Background resolution observes
-only and never retries writes. Production tasks remain deny-only with no Beat
-schedule. Ad hoc provider factories, a second AUTH evaluator, background write
-replay, and dual scanner/outbox publication were rejected.
-
-## Scope Control And Product Behavior
-
-No task, submission, checker, review, revision, contribution, compensation,
-reputation, deletion, recovery, Operator API, R2, Flow Node, or product-cutover
-behavior changed. Review decisions remain `accept`, `needs_revision`, and
-`reject`. The three ART internal actions remain planned and inactive.
-
-## Acceptance Criteria Proof
-
-- [x] One linear Alembic head after trusted main integration.
-- [x] Provider writes occur only in the caller-owned orchestrator path.
-- [x] Acknowledgement loss resolves through read-only observation.
-- [x] Missing, mismatch, conflict, unavailable, and verified outcomes are typed
-  and fenced.
-- [x] Stale executor/generation or authority drift writes zero terminal facts.
-- [x] Verification reads have a total deadline and lease safety margin.
-- [x] Publication is bounded, duplicate-safe, post-commit, and not scheduled in
-  production.
-- [x] Exactly one schema-v2 merge intent names inactive successor `02C3` and
-  requires a separate explicit start.
-
-## Tests And Checks
+## Acceptance Evidence
 
 ```text
 Alembic heads: 0030_artifact_verification (single head)
 Fresh isolated migration integration: 3 passed
+Focused outbox/helper privacy matrix: 84 passed
 Agent gates: 88 passed
-Focused ART matrix: 342 passed, 1 transient failure, coverage 92.75% (floor 90%)
-Exact failed parameter rerun: 1 passed
-Paired denial matrix rerun: 2 passed
-Reviewer repeated denial matrix: 12/12 passed
+Focused ART matrix: 342 passed, 1 disclosed non-reproduced observation
+Scoped ART coverage: 92.75% (floor 90%)
 Verification + architecture smoke: 15 passed
 Ruff: PASS
 Stale wording/contracts: PASS
@@ -75,49 +48,39 @@ Markdown links: PASS
 git diff --check: PASS
 ```
 
-The transient failure is disclosed, not converted into a green aggregate. It
-is non-reproduced and reviewers found no assertion weakening or fixture defect.
+The local full suite was stopped at the user's request because the machine was
+under heavy contention. It is not pass evidence. Hosted Backend must prove the
+exact published head, full suite, 78 percent global floor, and scoped floors.
 
-## CI Integrity And Test Delta
+## CI Integrity And Review
 
-No workflow, threshold, ignore, skip, xfail, retry, or failure-bypass change was
-introduced. The 90 percent affected-subsystem floor and 78 percent repository
-floor remain intact. Thirty-two named tests were added and none removed or
-skipped.
-
-## Reviewer Results
-
-All nine exact-SHA tracks completed: senior engineering PASS; security PASS;
-product/ops PASS; reuse PASS; CI integrity PASS; docs PASS; architecture, QA,
-and test delta PASS WITH LOW RISKS. No required fix remains and no reviewer
-session is open.
+No workflow, threshold, ignore, skip, xfail, retry, or failure bypass was added.
+All nine exact-SHA internal tracks completed. No implementation blocker remains;
+CI, QA, product/ops, and senior review explicitly retain hosted Backend as a
+required external condition.
 
 ## External Review
 
 | Source | Status | Notes |
 |---|---:|---|
-| GitHub Agent Gates | Pending | Must run on the published evidence head. |
-| GitHub Backend | Pending | Must prove final isolated suite and coverage floors. |
-| CodeRabbit | Pending | Fresh current-head review required after publication. |
+| GitHub Agent Gates | Pending rerun | Earlier published head passed; exact evidence head must rerun. |
+| GitHub Backend | Pending rerun | Run 29739194203 failed two outbox privacy assertions; bounded repair is ready for hosted proof. |
+| CodeRabbit | Pending current-head review | Earlier head passed with no comments; no result is carried forward. |
 | Human review | Pending | Only the user may approve this PR for merge. |
 
-## Remaining Risks And Follow-Up
+## Remaining Risks And Human Focus
 
-- Monitor the non-reproduced denial-test observation in hosted CI.
-- AUTH-owned action activation, 02C3 recovery, 02D Operator/readiness work, and
-  product cutover remain separate, explicitly started chunks.
-
-## Human Review Focus
-
-- Can any stale generation, changed resource fact, or revoked identity persist
-  terminal state?
-- Can acknowledgement loss cause a second provider write?
-- Does migration 0030 safely compose after main's outbox 0029?
-- Are hidden tasks still deny-only, unscheduled, and unreachable by products?
+- Confirm hosted Backend closes both original outbox privacy failures without a
+  new artifact regression or coverage drop.
+- Confirm stale generations, changed resource facts, or revoked identities
+  cannot persist terminal state.
+- Confirm acknowledgement loss cannot cause a second provider write.
+- Confirm production tasks remain deny-only, unscheduled, and unreachable.
+- AUTH activation, 02C3 recovery, 02D Operator/readiness, and product cutover
+  remain separately started work.
 
 ## Human Merge Ownership
 
-- [ ] I can explain what changed and why.
-- [ ] I understand the disclosed transient-test risk.
-- [ ] GitHub CI and external review pass on the final head.
-- [ ] I explicitly approve this PR for merge.
+- [ ] GitHub CI and current-head external review pass.
+- [ ] I understand the disclosed local interrupted-run limitation.
+- [ ] I explicitly approve PR #159 for merge.

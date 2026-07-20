@@ -60,8 +60,8 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 ## Gate
 
 The candidate integrates trusted main `fe0e4492` and contains the bounded
-repair for the hosted Backend outbox-retention failures. Exact-head full-suite
-proof and refreshed evidence remain prepublication requirements. The current
-gate is external CI/review followed by explicit human merge approval.
+repair for the hosted Backend outbox-retention failures. Refreshed internal
+evidence is complete; hosted exact-head full-suite proof remains a publication
+gate. The current gate is external CI/review followed by explicit human merge approval.
 Production activation and recovery remain in later owning chunks. No later
 artifact chunk starts automatically, and only the user may approve merge.

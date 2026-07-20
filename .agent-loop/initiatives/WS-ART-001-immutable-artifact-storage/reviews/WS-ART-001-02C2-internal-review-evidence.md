@@ -4,14 +4,17 @@
 
 `WS-ART-001-02C2`: Verification Publication And Fencing
 
-Reviewed code SHA: `e59a6dfc977fa63ad7177ab9adb8338333aa1daf`
+Reviewed code SHA: `ad46958ac11e8b1acff98c0c5f79c9a2a68797b9`
 
-Reviewed at: 2026-07-20T11:13:23Z
+Reviewed at: 2026-07-20T14:27:29Z
 
-Reviewer run IDs: senior/security/qa/architecture/ci/docs=`/root/*_review_69d`;
-reuse/product-ops/test-delta=`/root/*_review_610`
+Reviewer run IDs: senior=`/root/senior_review_f716`;
+security=`/root/security_review_f716`; QA=`/root/qa_review_f716`;
+architecture=`/root/architecture_review_f716`; CI=`/root/ci_review_f716`;
+docs=`/root/docs_review_f716`; product-ops=`/root/product_ops_review_610`;
+reuse=`/root/reuse_review_610`; test-delta=`/root/test_delta_review_610`
 
-Trusted main: `42a89b2d` (PR #157)
+Trusted main: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567` (PR #160)
 
 Open sub-agent sessions: none
 
@@ -25,66 +28,66 @@ exact-SHA review.
 ## Reviewed Change
 
 - Adds caller-owned committed put execution, read-only acknowledgement-loss
-  resolution, verification jobs, bounded pending-work publication, immutable
-  typed receipts, and executor/generation terminal fencing.
-- Keeps provider access behind the provider-neutral `ArtifactStore` and keeps
-  production composition deny-only and unscheduled.
-- Rebases artifact migration ownership after merged main: the single chain is
-  `0028_artifact_admission` -> `0029_shared_transactional_outbox` ->
-  `0030_artifact_verification`.
-- Reconciles active state documents with merged AUTH-09E while leaving the
-  three ART feature actions planned and inactive.
+  resolution, durable verification jobs, bounded pending-work publication,
+  immutable receipts, and executor/generation terminal fencing.
+- Keeps provider access behind `ArtifactStore`; production composition remains
+  deny-only and unscheduled while the three ART actions stay planned.
+- Preserves the linear migration chain `0028_artifact_admission` ->
+  `0029_shared_transactional_outbox` -> `0030_artifact_verification`.
+- Repairs sanitized outbox failures so their traceback cannot retain the
+  service, repository, SQLAlchemy session, rollback exception, or payload.
+  Caller transaction ownership and success/persistence behavior are unchanged.
+- Integrates PR #158 ART custody and PR #160 REV custody. Both transfers are
+  availability-neutral. The three 02C2 actions await future
+  `WS-AUTH-001-ART-02D-INTERNAL`; all 25 ART and 19 REV actions remain planned.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---:|---|
-| senior engineering | PASS | None | Bounded and maintainable. |
-| architecture | PASS WITH LOW RISKS | None | Preserve same-session authority injection and one future publication mechanism. |
-| QA/test | PASS WITH LOW RISKS | None | Monitor one non-reproduced authority-denial failure in hosted CI. |
-| security/auth | PASS | None | Authority, tenant, audit, and fence boundaries pass. |
-| product/ops | PASS | None | Stale state wording repaired. |
-| reuse/dedup | PASS | None | Existing provider, AUTH, repository, and trigger seams are reused. |
-| CI integrity | PASS | None | No gate, threshold, workflow, or test bypass. |
-| test delta | PASS WITH LOW RISKS | None | No skip, retry masking, removed test, or weakened assertion. |
-| docs | PASS | None | Active-state reconciliation complete. |
+| senior engineering | PASS WITH LOW RISKS | None | Hosted Backend remains required; test-only SQLAlchemy private-field coupling is low risk. |
+| architecture | PASS WITH LOW RISKS | None | No runtime, migration, transaction, provider, or activation boundary drift. |
+| QA/test | PASS WITH LOW RISKS | None | Focused proof passes; hosted full suite is the authoritative outstanding gate. |
+| security/auth | PASS WITH LOW RISKS | None | Prior rollback-exception retention blocker is resolved; fail-closed custody is preserved. |
+| product/ops | PASS WITH CONDITIONS | None | Custody is availability-neutral; hosted Backend and human approval remain. |
+| reuse/dedup | PASS WITH LOW RISKS | None | Existing provider, authority, outbox, fence, and state abstractions are reused. |
+| CI integrity | PASS WITH HOSTED-CI CONDITION | None | No bypass or threshold change; require hosted full suite and coverage gates. |
+| test delta | PASS WITH LOW RISKS | None | No removed/skipped/weakened test or coverage exclusion. |
+| docs | PASS after evidence refresh | None | Runtime/state docs pass; closure artifacts now bind the final candidate and latest main. |
 
-Every track explicitly confirmed the final reviewed SHA, including the
-canonical successor-heading and synchronized external-gate corrections. All
-reviewer sessions completed.
+All nine tracks confirmed the exact reviewed SHA or its latest-main-only delta.
+No reviewer session remains open.
 
 ## Deterministic Proof
 
 - Alembic reports one head: `0030_artifact_verification`.
-- Fresh isolated migration proof passed full upgrade/downgrade, the shared
-  outbox writer/downgrade guard, and populated v1 receipt promotion with guarded
-  downgrade: 3 passed. The outbox guard also passed alone after its head
-  expectation was repaired.
-- Agent gates: 88 passed.
-- Focused ART matrix: 342 passed, one transient authority-denial failure,
-  92.75 percent scoped coverage against the required 90 percent floor. The
-  exact failed parameter then passed 1/1, its paired matrix passed 2/2, and
-  test-delta review repeated the denial matrix three times for 12/12 passes.
-- Verification and architecture reviewer smoke: 15 passed.
-- Ruff: PASS.
-- Stale authorization and artifact scans: PASS.
-- Markdown links: PASS.
-- `git diff --check`: PASS.
-
-The transient failure is retained as a low-risk observation, not normalized
-into a fully green aggregate claim. GitHub Backend remains authoritative for
-the final isolated full-repository suite and the 78 percent global floor.
+- Fresh isolated migration integration: 3 passed.
+- Focused helper and outbox matrix after the privacy repair: 84 passed.
+- Agent gates after both custody integrations: 88 passed.
+- Focused ART matrix before the privacy repair: 342 passed with one disclosed,
+  non-reproduced authority-denial observation; scoped coverage was 92.75 percent
+  against the 90 percent floor. The exact case and repeated denial matrix passed.
+- Verification and architecture reviewer smoke: 15 passed; architecture-only
+  confirmation after latest main: 5 passed.
+- Ruff, stale wording scans, markdown links, and `git diff --check`: PASS.
+- A local full-suite attempt was stopped at the user's request because host
+  contention was slowing their machine. It is not pass evidence. Pytest had
+  emitted one failure marker before interruption; no final traceback was
+  produced. Hosted GitHub Backend is authoritative for the exact published head,
+  complete suite, 78 percent repository floor, and cumulative scoped floors.
 
 ## Remaining Risks
 
-- Recurrence of the authority-denial observation should preserve the first
-  traceback and PostgreSQL lock/deadlock diagnostics.
-- Production execution remains unavailable until AUTH activates the three
-  planned ART actions through its separately owned custody chunk.
-- Recovery attempts, Operator routes, product cutover, and native AWS live
-  readiness remain outside 02C2.
+- Hosted Backend must pass on the exact published evidence head. Any failure is
+  a repair input, not a waived condition.
+- Test-only rollback inspection uses private SQLAlchemy transaction attributes;
+  dependency upgrades must preserve the focused regression proof.
+- Production execution remains unavailable until AUTH separately activates the
+  three planned actions through `WS-AUTH-001-ART-02D-INTERNAL`.
+- Recovery, Operator routes, product cutover, and AWS live readiness remain
+  outside 02C2.
 
 ## Stop Condition
 
-Publish this evidence-bound candidate for external checks and human review.
-Do not merge without explicit user approval and do not start `02C3`.
+Publish this evidence-bound candidate for hosted external checks and human
+review. Do not merge without explicit user approval and do not start `02C3`.

@@ -46,8 +46,8 @@
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
 - Current ART gate: the trusted-main integration and bounded repair for the
-  hosted Backend outbox-retention failures are complete; exact-head full-suite
-  proof, refreshed internal evidence, external CI/review, and explicit human
+  hosted Backend outbox-retention failures and refreshed internal evidence are
+  complete; hosted exact-head full-suite proof remains; external CI/review, and explicit human
   merge approval are current. Production composition remains deny-only for
   feature actions after merged AUTH-09E runtime admission.
   No feature action or service call site becomes active in ART-02C2.
