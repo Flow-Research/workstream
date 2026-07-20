@@ -3393,10 +3393,13 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "HEAD:refs/heads/main" not in workflow
     assert "gh pr create" not in workflow
     assert "plan-commits" in workflow
-    assert workflow.count("--repository-root .") >= 1
+    update_command = workflow.split(
+        "python3 scripts/update_post_merge_memory.py update", 1
+    )[1].split("          done", 1)[0]
+    assert "--repository-root ." in update_command
     assert workflow.count("--cutover-chunk-id") == 1
-    assert "--cutover-chunk-id WS-ENG-001-04B" in workflow
-    assert "--cutover-chunk-id ${{" not in workflow
+    assert "--cutover-chunk-id WS-ENG-001-04B" in update_command
+    assert "--cutover-chunk-id $" not in update_command
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
     assert "TARGET_SHA" in workflow
