@@ -60,9 +60,13 @@ eleven-membership service matrix is unchanged.
 | `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
 | `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
 
-`WS-AUTH-001-REV-CUSTODY` performs the atomic 19-row transfer and removes the
-seven historical REV owner enum values. It changes no mapping or availability
-and adds no migration.
+`WS-AUTH-001-REV-CUSTODY` atomically transfers these 19 rows with exact owner
+cardinalities `2/5/3/1/1/5/2` in the table order above and removes the seven
+historical REV owner enum values. It changes no mapping or availability and
+adds no migration. All 19 actions remain planned and unavailable; these AUTH
+custodian labels grant no reviewer, Operator, or service authority. The four
+proposed lifecycle actions remain unregistered, and PREP remains separately
+human-gated.
 
 ## Additive registration gates
 

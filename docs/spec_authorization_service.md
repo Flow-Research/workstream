@@ -288,35 +288,51 @@ route, typed resource context, evaluator, guards, transaction proof, and
 availability change. AUTH-09A supplies none of those runtime paths.
 
 The submission/review dependency matrix is closed. AUTH-07A registers only the
-four stable planned fields shown here; resource facts, candidates, guards, and
-hidden behavior remain with the listed feature owner. The current owner values
-are planned pre-transfer catalogue state, not permission for a feature chunk to
-activate. Before any review action activates, AUTH must transfer activation
-custody according to `ACTIVATION_CUSTODY.md` and the reviewed
+stable planned fields shown here; resource facts, candidates, guards, and
+hidden behavior remain with REV. `WS-AUTH-001-REV-CUSTODY` has replaced only
+the 19 historical REV owner values with the exact AUTH activation custodians
+below. Mappings and planned availability are unchanged, and the custodian
+labels grant no reviewer, Operator, or service authority. Before any review
+action activates, its dedicated AUTH custodian must integrate the complete
+feature proof according to `ACTIVATION_CUSTODY.md` and the reviewed
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_REV_HANDOFF.md`.
 
-| ActionId | PermissionId | Historical pre-transfer owner value |
+| AUTH activation custodian | Exact planned ActionIds |
+|---|---|
+| `WS-AUTH-001-REV-05` | `review.queue.read`, `review.queue.inspect` |
+| `WS-AUTH-001-REV-06` | `review.claim`, `review.release`, `review.decline_preference`, `review.preference_expiry.run`, `review.lease_expiry.run` |
+| `WS-AUTH-001-REV-07` | `review.context.read`, `review.chain.read`, `review.finding_evidence.ingest` |
+| `WS-AUTH-001-REV-08` | `review.decision` |
+| `WS-AUTH-001-REV-09A` | `review.finding_response_evidence.ingest` |
+| `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
+| `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+
+All 19 actions remain planned and unavailable. The transfer adds no migration,
+registration, evaluator, route, job, grant, service identity, or lifecycle
+behavior. The four proposed REV lifecycle actions remain unregistered.
+
+| ActionId | PermissionId | AUTH activation custodian |
 |---|---|---|
 | `submission.create` | `submission.create` | `WS-AUTH-001-14` |
-| `review.queue.read` | `review.queue.read` | `WS-REV-001-05` |
-| `review.queue.inspect` | `review.queue.inspect` | `WS-REV-001-05` |
-| `review.claim` | `review.claim` | `WS-REV-001-06` |
-| `review.release` | `review.release` | `WS-REV-001-06` |
-| `review.decline_preference` | `review.decline_preference` | `WS-REV-001-06` |
-| `review.preference_expiry.run` | `operations.timer.run` | `WS-REV-001-06` |
-| `review.lease_expiry.run` | `operations.timer.run` | `WS-REV-001-06` |
-| `review.context.read` | `submission.read_for_review` | `WS-REV-001-07` |
-| `review.chain.read` | `review.chain.read` | `WS-REV-001-07` |
-| `review.finding_evidence.ingest` | `review.decision` | `WS-REV-001-07` |
-| `review.decision` | `review.decision` | `WS-REV-001-08` |
-| `review.finding_response_evidence.ingest` | `submission.create` | `WS-REV-001-09A` |
-| `review.lease.force_release` | `review.lease.force_release` | `WS-REV-001-11` |
-| `review.queue.routing.override` | `review.queue.override` | `WS-REV-001-11` |
-| `review.queue.routing.correct` | `review.queue.override` | `WS-REV-001-11` |
-| `review.queue.close` | `review.queue.override` | `WS-REV-001-11` |
-| `review.reconcile.run` | `operations.reconcile.run` | `WS-REV-001-11` |
-| `review.artifact_reference.reconcile` | `operations.reconcile.run` | `WS-REV-001-12` |
-| `review.projection.rebuild` | `operations.projection.rebuild` | `WS-REV-001-12` |
+| `review.queue.read` | `review.queue.read` | `WS-AUTH-001-REV-05` |
+| `review.queue.inspect` | `review.queue.inspect` | `WS-AUTH-001-REV-05` |
+| `review.claim` | `review.claim` | `WS-AUTH-001-REV-06` |
+| `review.release` | `review.release` | `WS-AUTH-001-REV-06` |
+| `review.decline_preference` | `review.decline_preference` | `WS-AUTH-001-REV-06` |
+| `review.preference_expiry.run` | `operations.timer.run` | `WS-AUTH-001-REV-06` |
+| `review.lease_expiry.run` | `operations.timer.run` | `WS-AUTH-001-REV-06` |
+| `review.context.read` | `submission.read_for_review` | `WS-AUTH-001-REV-07` |
+| `review.chain.read` | `review.chain.read` | `WS-AUTH-001-REV-07` |
+| `review.finding_evidence.ingest` | `review.decision` | `WS-AUTH-001-REV-07` |
+| `review.decision` | `review.decision` | `WS-AUTH-001-REV-08` |
+| `review.finding_response_evidence.ingest` | `submission.create` | `WS-AUTH-001-REV-09A` |
+| `review.lease.force_release` | `review.lease.force_release` | `WS-AUTH-001-REV-11` |
+| `review.queue.routing.override` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.queue.routing.correct` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.queue.close` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.reconcile.run` | `operations.reconcile.run` | `WS-AUTH-001-REV-11` |
+| `review.artifact_reference.reconcile` | `operations.reconcile.run` | `WS-AUTH-001-REV-12` |
+| `review.projection.rebuild` | `operations.projection.rebuild` | `WS-AUTH-001-REV-12` |
 
 Initial and revision submission use the same `submission.create` action,
 permission, and route. Revision preparation is an internal participant and
@@ -389,8 +405,9 @@ The `OPERATOR` suffix names future activation custody only; it creates no
 Operator grant or entitlement. All 25 actions remain planned and unavailable.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
 independent activation proof; read/status proof cannot activate retry. The
-transfer adds no migration, and all 19 REV rows retain their historical owners
-until the separately started REV custody chunk.
+ART transfer adds no migration. The separately started REV custody transfer is
+also complete: all 19 REV rows now name exact AUTH custodians, remain planned
+and unavailable, and add no migration.
 
 | ActionId | PermissionId | Principal class | Canonical resource | Resource-owning WS-ART chunk |
 |---|---|---|---|---|

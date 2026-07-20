@@ -174,13 +174,13 @@ class ActionOwner(StrEnum):
     AUTH_09D_B = "WS-AUTH-001-09D-B"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
-    REV_05 = "WS-REV-001-05"
-    REV_06 = "WS-REV-001-06"
-    REV_07 = "WS-REV-001-07"
-    REV_08 = "WS-REV-001-08"
-    REV_09A = "WS-REV-001-09A"
-    REV_11 = "WS-REV-001-11"
-    REV_12 = "WS-REV-001-12"
+    AUTH_REV_05 = "WS-AUTH-001-REV-05"
+    AUTH_REV_06 = "WS-AUTH-001-REV-06"
+    AUTH_REV_07 = "WS-AUTH-001-REV-07"
+    AUTH_REV_08 = "WS-AUTH-001-REV-08"
+    AUTH_REV_09A = "WS-AUTH-001-REV-09A"
+    AUTH_REV_11 = "WS-AUTH-001-REV-11"
+    AUTH_REV_12 = "WS-AUTH-001-REV-12"
     AUTH_ART_02D_INTERNAL = "WS-AUTH-001-ART-02D-INTERNAL"
     AUTH_ART_02D_OPERATOR = "WS-AUTH-001-ART-02D-OPERATOR"
     AUTH_ART_03 = "WS-AUTH-001-ART-03"
@@ -325,80 +325,80 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_14,
     ),
     _planned(ActionId.SUBMISSION_CREATE, PermissionId.SUBMISSION_CREATE, ActionOwner.AUTH_14),
-    _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.REV_05),
+    _planned(ActionId.REVIEW_QUEUE_READ, PermissionId.REVIEW_QUEUE_READ, ActionOwner.AUTH_REV_05),
     _planned(
         ActionId.REVIEW_QUEUE_INSPECT,
         PermissionId.REVIEW_QUEUE_INSPECT,
-        ActionOwner.REV_05,
+        ActionOwner.AUTH_REV_05,
     ),
-    _planned(ActionId.REVIEW_CLAIM, PermissionId.REVIEW_CLAIM, ActionOwner.REV_06),
-    _planned(ActionId.REVIEW_RELEASE, PermissionId.REVIEW_RELEASE, ActionOwner.REV_06),
+    _planned(ActionId.REVIEW_CLAIM, PermissionId.REVIEW_CLAIM, ActionOwner.AUTH_REV_06),
+    _planned(ActionId.REVIEW_RELEASE, PermissionId.REVIEW_RELEASE, ActionOwner.AUTH_REV_06),
     _planned(
         ActionId.REVIEW_DECLINE_PREFERENCE,
         PermissionId.REVIEW_DECLINE_PREFERENCE,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_PREFERENCE_EXPIRY_RUN,
         PermissionId.OPERATIONS_TIMER_RUN,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_LEASE_EXPIRY_RUN,
         PermissionId.OPERATIONS_TIMER_RUN,
-        ActionOwner.REV_06,
+        ActionOwner.AUTH_REV_06,
     ),
     _planned(
         ActionId.REVIEW_CONTEXT_READ,
         PermissionId.SUBMISSION_READ_FOR_REVIEW,
-        ActionOwner.REV_07,
+        ActionOwner.AUTH_REV_07,
     ),
-    _planned(ActionId.REVIEW_CHAIN_READ, PermissionId.REVIEW_CHAIN_READ, ActionOwner.REV_07),
+    _planned(ActionId.REVIEW_CHAIN_READ, PermissionId.REVIEW_CHAIN_READ, ActionOwner.AUTH_REV_07),
     _planned(
         ActionId.REVIEW_FINDING_EVIDENCE_INGEST,
         PermissionId.REVIEW_DECISION,
-        ActionOwner.REV_07,
+        ActionOwner.AUTH_REV_07,
     ),
-    _planned(ActionId.REVIEW_DECISION, PermissionId.REVIEW_DECISION, ActionOwner.REV_08),
+    _planned(ActionId.REVIEW_DECISION, PermissionId.REVIEW_DECISION, ActionOwner.AUTH_REV_08),
     _planned(
         ActionId.REVIEW_FINDING_RESPONSE_EVIDENCE_INGEST,
         PermissionId.SUBMISSION_CREATE,
-        ActionOwner.REV_09A,
+        ActionOwner.AUTH_REV_09A,
     ),
     _planned(
         ActionId.REVIEW_LEASE_FORCE_RELEASE,
         PermissionId.REVIEW_LEASE_FORCE_RELEASE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_ROUTING_OVERRIDE,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_ROUTING_CORRECT,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_QUEUE_CLOSE,
         PermissionId.REVIEW_QUEUE_OVERRIDE,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_RECONCILE_RUN,
         PermissionId.OPERATIONS_RECONCILE_RUN,
-        ActionOwner.REV_11,
+        ActionOwner.AUTH_REV_11,
     ),
     _planned(
         ActionId.REVIEW_ARTIFACT_REFERENCE_RECONCILE,
         PermissionId.OPERATIONS_RECONCILE_RUN,
-        ActionOwner.REV_12,
+        ActionOwner.AUTH_REV_12,
     ),
     _planned(
         ActionId.REVIEW_PROJECTION_REBUILD,
         PermissionId.OPERATIONS_PROJECTION_REBUILD,
-        ActionOwner.REV_12,
+        ActionOwner.AUTH_REV_12,
     ),
     _planned(
         ActionId.ARTIFACT_BINDING_READ,

@@ -266,6 +266,76 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
 }
 
+REV_CUSTODY_EXPECTATIONS = {
+    "review.queue.read": ("review.queue.read", "WS-AUTH-001-REV-05", "planned"),
+    "review.queue.inspect": ("review.queue.inspect", "WS-AUTH-001-REV-05", "planned"),
+    "review.claim": ("review.claim", "WS-AUTH-001-REV-06", "planned"),
+    "review.release": ("review.release", "WS-AUTH-001-REV-06", "planned"),
+    "review.decline_preference": (
+        "review.decline_preference",
+        "WS-AUTH-001-REV-06",
+        "planned",
+    ),
+    "review.preference_expiry.run": (
+        "operations.timer.run",
+        "WS-AUTH-001-REV-06",
+        "planned",
+    ),
+    "review.lease_expiry.run": (
+        "operations.timer.run",
+        "WS-AUTH-001-REV-06",
+        "planned",
+    ),
+    "review.context.read": (
+        "submission.read_for_review",
+        "WS-AUTH-001-REV-07",
+        "planned",
+    ),
+    "review.chain.read": ("review.chain.read", "WS-AUTH-001-REV-07", "planned"),
+    "review.finding_evidence.ingest": (
+        "review.decision",
+        "WS-AUTH-001-REV-07",
+        "planned",
+    ),
+    "review.decision": ("review.decision", "WS-AUTH-001-REV-08", "planned"),
+    "review.finding_response_evidence.ingest": (
+        "submission.create",
+        "WS-AUTH-001-REV-09A",
+        "planned",
+    ),
+    "review.lease.force_release": (
+        "review.lease.force_release",
+        "WS-AUTH-001-REV-11",
+        "planned",
+    ),
+    "review.queue.routing.override": (
+        "review.queue.override",
+        "WS-AUTH-001-REV-11",
+        "planned",
+    ),
+    "review.queue.routing.correct": (
+        "review.queue.override",
+        "WS-AUTH-001-REV-11",
+        "planned",
+    ),
+    "review.queue.close": ("review.queue.override", "WS-AUTH-001-REV-11", "planned"),
+    "review.reconcile.run": (
+        "operations.reconcile.run",
+        "WS-AUTH-001-REV-11",
+        "planned",
+    ),
+    "review.artifact_reference.reconcile": (
+        "operations.reconcile.run",
+        "WS-AUTH-001-REV-12",
+        "planned",
+    ),
+    "review.projection.rebuild": (
+        "operations.projection.rebuild",
+        "WS-AUTH-001-REV-12",
+        "planned",
+    ),
+}
+
 
 def _admin_resource_context(
     request: AdminRoleGrantIssueRequest | AdminRoleGrantRevokeRequest,
@@ -327,31 +397,10 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ),
         "operations.checker.retry": ("operations.checker.retry", "WS-AUTH-001-14"),
         "submission.create": ("submission.create", "WS-AUTH-001-14"),
-        "review.queue.read": ("review.queue.read", "WS-REV-001-05"),
-        "review.queue.inspect": ("review.queue.inspect", "WS-REV-001-05"),
-        "review.claim": ("review.claim", "WS-REV-001-06"),
-        "review.release": ("review.release", "WS-REV-001-06"),
-        "review.decline_preference": ("review.decline_preference", "WS-REV-001-06"),
-        "review.preference_expiry.run": ("operations.timer.run", "WS-REV-001-06"),
-        "review.lease_expiry.run": ("operations.timer.run", "WS-REV-001-06"),
-        "review.context.read": ("submission.read_for_review", "WS-REV-001-07"),
-        "review.chain.read": ("review.chain.read", "WS-REV-001-07"),
-        "review.finding_evidence.ingest": ("review.decision", "WS-REV-001-07"),
-        "review.decision": ("review.decision", "WS-REV-001-08"),
-        "review.finding_response_evidence.ingest": (
-            "submission.create",
-            "WS-REV-001-09A",
-        ),
-        "review.lease.force_release": ("review.lease.force_release", "WS-REV-001-11"),
-        "review.queue.routing.override": ("review.queue.override", "WS-REV-001-11"),
-        "review.queue.routing.correct": ("review.queue.override", "WS-REV-001-11"),
-        "review.queue.close": ("review.queue.override", "WS-REV-001-11"),
-        "review.reconcile.run": ("operations.reconcile.run", "WS-REV-001-11"),
-        "review.artifact_reference.reconcile": (
-            "operations.reconcile.run",
-            "WS-REV-001-12",
-        ),
-        "review.projection.rebuild": ("operations.projection.rebuild", "WS-REV-001-12"),
+        **{
+            action: (permission, owner)
+            for action, (permission, owner, _availability) in REV_CUSTODY_EXPECTATIONS.items()
+        },
         **{
             action: (permission, owner)
             for action, (permission, owner, _availability) in ART_CUSTODY_EXPECTATIONS.items()
@@ -420,6 +469,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         for action in ART_CUSTODY_EXPECTATIONS
     } == ART_CUSTODY_EXPECTATIONS
     assert {
+        action: (
+            ACTION_BY_ID[ActionId(action)].permission_id.value,
+            ACTION_BY_ID[ActionId(action)].owner.value,
+            ACTION_BY_ID[ActionId(action)].availability.value,
+        )
+        for action in REV_CUSTODY_EXPECTATIONS
+    } == REV_CUSTODY_EXPECTATIONS
+    assert {
         owner: sum(definition.owner is owner for definition in ACTION_DEFINITIONS)
         for owner in {
             ActionOwner.AUTH_ART_02D_OPERATOR,
@@ -442,6 +499,33 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionOwner.AUTH_ART_06B: 2,
     }
     assert all(not owner.value.startswith("WS-ART-") for owner in ActionOwner)
+    assert {
+        owner: sum(definition.owner is owner for definition in ACTION_DEFINITIONS)
+        for owner in {
+            ActionOwner.AUTH_REV_05,
+            ActionOwner.AUTH_REV_06,
+            ActionOwner.AUTH_REV_07,
+            ActionOwner.AUTH_REV_08,
+            ActionOwner.AUTH_REV_09A,
+            ActionOwner.AUTH_REV_11,
+            ActionOwner.AUTH_REV_12,
+        }
+    } == {
+        ActionOwner.AUTH_REV_05: 2,
+        ActionOwner.AUTH_REV_06: 5,
+        ActionOwner.AUTH_REV_07: 3,
+        ActionOwner.AUTH_REV_08: 1,
+        ActionOwner.AUTH_REV_09A: 1,
+        ActionOwner.AUTH_REV_11: 5,
+        ActionOwner.AUTH_REV_12: 2,
+    }
+    assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
+    assert {
+        "review.revision_context.repair",
+        "review.revision_context.legacy_close",
+        "review.revision_obligation.close",
+        "review.lifecycle.activation.manage",
+    }.isdisjoint(action.value for action in ACTION_IDS)
     assert sum(
         definition.availability is ActionAvailability.ACTIVE
         for definition in ACTION_DEFINITIONS
@@ -494,6 +578,32 @@ def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
         SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]
 
 
+def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str, str]:
+    rows = document.read_text(encoding="utf-8").splitlines()
+    for header_index, row in enumerate(rows):
+        if row not in {
+            "| AUTH activation custodian | Exact planned ActionIds |",
+            "| AUTH activation chunk | Exact planned ActionIds |",
+        }:
+            continue
+        parsed: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for table_row in rows[header_index + 2 :]:
+            if not table_row.startswith("|"):
+                break
+            cells = [cell.strip() for cell in table_row.split("|")]
+            assert len(cells) == 4
+            owner = cells[1].strip("`")
+            for action in cells[2].split("`")[1::2]:
+                if action in parsed:
+                    duplicates.add(action)
+                parsed[action] = owner
+        assert duplicates == set()
+        if set(parsed) == expected_actions:
+            return parsed
+    raise AssertionError(f"exact custody table missing from {document}")
+
+
 def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
     repository_root = Path(__file__).resolve().parents[2]
     custody_documents = (
@@ -518,32 +628,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     }
 
     for document in custody_documents:
-        rows = document.read_text(encoding="utf-8").splitlines()
-        header_index = next(
-            index
-            for index, row in enumerate(rows)
-            if row
-            in {
-                "| AUTH activation custodian | Exact planned ActionIds |",
-                "| AUTH activation chunk | Exact planned ActionIds |",
-            }
-        )
-        table_rows: list[str] = []
-        for row in rows[header_index + 2 :]:
-            if not row.startswith("|"):
-                break
-            table_rows.append(row)
-        parsed: dict[str, str] = {}
-        duplicates: set[str] = set()
-        for row in table_rows:
-            cells = [cell.strip() for cell in row.split("|")]
-            assert len(cells) == 4
-            owner = cells[1].strip("`")
-            for action in cells[2].split("`")[1::2]:
-                if action in parsed:
-                    duplicates.add(action)
-                parsed[action] = owner
-        assert duplicates == set()
+        parsed = _parse_custody_table(document, set(expected_custody))
         assert parsed == expected_custody
         assert {
             owner: sum(parsed_owner == owner for parsed_owner in parsed.values())
@@ -571,11 +656,66 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
         encoding="utf-8"
     )
     assert "all 25 ART rows to eight exact AUTH custodians" in operations
-    assert "The 19 REV rows retain their historical" in operations
+    assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
     assert "The ART transfer adds no migration" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert "74 PermissionIds, 65 ActionIds, 17 active actions, and\n48 planned actions" in operations
+
+
+def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    custody_documents = (
+        repository_root / "docs/spec_authorization_service.md",
+        repository_root
+        / ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service"
+        / "ACTIVATION_CUSTODY.md",
+    )
+    expected_custody = {
+        action: owner
+        for action, (_permission, owner, _availability) in REV_CUSTODY_EXPECTATIONS.items()
+    }
+    expected_owner_counts = {
+        "WS-AUTH-001-REV-05": 2,
+        "WS-AUTH-001-REV-06": 5,
+        "WS-AUTH-001-REV-07": 3,
+        "WS-AUTH-001-REV-08": 1,
+        "WS-AUTH-001-REV-09A": 1,
+        "WS-AUTH-001-REV-11": 5,
+        "WS-AUTH-001-REV-12": 2,
+    }
+    for document in custody_documents:
+        parsed = _parse_custody_table(document, set(expected_custody))
+        assert parsed == expected_custody
+        assert {
+            owner: sum(parsed_owner == owner for parsed_owner in parsed.values())
+            for owner in set(parsed.values())
+        } == expected_owner_counts
+
+    spec_rows = (repository_root / "docs/spec_authorization_service.md").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    parsed_permissions: dict[str, str] = {}
+    for row in spec_rows:
+        cells = [cell.strip() for cell in row.split("|")]
+        if len(cells) < 5:
+            continue
+        action = cells[1].strip("`")
+        if action in REV_CUSTODY_EXPECTATIONS:
+            assert action not in parsed_permissions
+            parsed_permissions[action] = cells[2].strip("`")
+    assert parsed_permissions == {
+        action: permission
+        for action, (permission, _owner, _availability) in REV_CUSTODY_EXPECTATIONS.items()
+    }
+
+    operations = (repository_root / "docs/operations_authorization_service.md").read_text(
+        encoding="utf-8"
+    )
+    assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
+    assert "all 19 REV actions remain planned and unavailable" in operations
+    assert "The REV transfer\nadds no migration" in operations
+    assert "four proposed REV lifecycle actions remain\nunregistered" in operations
 
 
 @pytest.mark.parametrize(
@@ -1196,6 +1336,55 @@ def test_action_catalogue_rejects_count_and_permission_partition_drift(
         patch.setattr(authorization_catalogue, "HISTORICAL_PERMISSION_IDS", frozenset())
         with pytest.raises(RuntimeError, match="permission boundary mismatch"):
             _index_actions(ACTION_DEFINITIONS)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["historical_owner", "wrong_custodian", "swapped_custodians", "mapping", "availability"],
+)
+def test_rev_custody_catalogue_mutations_fail_closed(mutation: str) -> None:
+    definitions = list(ACTION_DEFINITIONS)
+    first_index = next(
+        index
+        for index, definition in enumerate(definitions)
+        if definition.action_id is ActionId.REVIEW_QUEUE_READ
+    )
+    second_index = next(
+        index
+        for index, definition in enumerate(definitions)
+        if definition.action_id is ActionId.REVIEW_CLAIM
+    )
+    if mutation == "historical_owner":
+        definitions[first_index] = replace(
+            definitions[first_index], owner="WS-REV-001-05"  # type: ignore[arg-type]
+        )
+        message = "invalid row"
+    elif mutation == "wrong_custodian":
+        definitions[first_index] = replace(
+            definitions[first_index], owner=ActionOwner.AUTH_REV_12
+        )
+        message = "metadata mismatch"
+    elif mutation == "swapped_custodians":
+        definitions[first_index] = replace(
+            definitions[first_index], owner=ActionOwner.AUTH_REV_06
+        )
+        definitions[second_index] = replace(
+            definitions[second_index], owner=ActionOwner.AUTH_REV_05
+        )
+        message = "metadata mismatch"
+    elif mutation == "mapping":
+        definitions[first_index] = replace(
+            definitions[first_index], permission_id=PermissionId.REVIEW_QUEUE_INSPECT
+        )
+        message = "metadata mismatch"
+    else:
+        definitions[first_index] = replace(
+            definitions[first_index], availability=ActionAvailability.ACTIVE
+        )
+        message = "active action boundary mismatch"
+
+    with pytest.raises(RuntimeError, match=message):
+        _index_actions(tuple(definitions))
 
 
 def _runtime_context(
@@ -3469,7 +3658,7 @@ async def test_authorization_kernel_denies_active_action_without_implemented_aut
     active_unhandled = ActionDefinition(
         action_id=ActionId.REVIEW_QUEUE_READ,
         permission_id=PermissionId.REVIEW_QUEUE_READ,
-        owner=ActionOwner.REV_05,
+        owner=ActionOwner.AUTH_REV_05,
         availability=ActionAvailability.ACTIVE,
     )
     monkeypatch.setattr(
@@ -3487,9 +3676,9 @@ async def test_authorization_kernel_denies_active_action_without_implemented_aut
 
 @pytest.mark.parametrize(
     ("action_id", "expected_metadata"),
-    ART_CUSTODY_EXPECTATIONS.items(),
+    {**ART_CUSTODY_EXPECTATIONS, **REV_CUSTODY_EXPECTATIONS}.items(),
 )
-async def test_art_custody_actions_remain_unavailable_without_runtime_dispatch(
+async def test_custody_actions_remain_unavailable_without_runtime_dispatch(
     action_id: str,
     expected_metadata: tuple[str, str, str],
 ) -> None:
@@ -3498,12 +3687,12 @@ async def test_art_custody_actions_remain_unavailable_without_runtime_dispatch(
     context = _runtime_context()
 
     async def unexpected_revalidation(*_args, **_kwargs):
-        raise AssertionError("planned ART custody action reached runtime revalidation")
+        raise AssertionError("planned custody action reached runtime revalidation")
 
     class UnexpectedAuthorizationDependency:
         def __getattr__(self, name: str):
             async def unexpected(*_args, **_kwargs):
-                raise AssertionError(f"planned ART custody action reached {name}")
+                raise AssertionError(f"planned custody action reached {name}")
 
             return unexpected
 

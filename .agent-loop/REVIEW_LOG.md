@@ -2646,3 +2646,17 @@ rejected the stale pre-final evidence record. This state-transition commit is
 therefore the exact review target; its evidence-only descendant must bind the
 reviewed SHA, record every reviewer run, pass the evidence gate, and then receive
 final CI/docs confirmation before external checks resume.
+## 2026-07-20 - WS-AUTH-001-REV-CUSTODY Internal Review
+
+The inherited REV custody contract failed preimplementation review because it
+did not independently freeze the exact 19-row transfer, non-dispatch denial,
+documentation parity, migration boundary, or hosted coverage gates. The
+repaired contract passed all nine plan-review tracks before production edits.
+
+Implementation candidate `c95239b9` then received all nine required tracks.
+Review found a retained ART documentation regression and a stale spec statement
+that still described REV custody as pending. Candidate `baa86dfe` restores the
+exact ART no-migration invariant, records REV no-migration separately, and
+states the completed owner-only transfer. Sixty-three focused cases and all
+deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
+finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.
