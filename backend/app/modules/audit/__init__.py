@@ -1,1 +1,0 @@
-"""Shared audit persistence module."""

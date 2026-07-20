@@ -1,4 +1,0 @@
-paths:
-  - app
-exclude: .*/tests
-fail_under: 80

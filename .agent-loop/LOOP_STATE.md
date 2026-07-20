@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#160](https://github.com/Flow-Research/workstream/pull/160) - AUTH: transfer REV activation custody
-- Merge commit: `fe0e4492a7de8699c06a52921cbdaa8a1a22e567`
-- Final PR head: `ec77e64c746947c24b3da47a221869dd11bce642`
-- Merged at: `2026-07-20T13:58:14Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-REV-CUSTODY.json` at blob `9067950d154648983a04727ee554942c3a55f40d`
-- Completed chunk: `WS-AUTH-001-REV-CUSTODY` - REV Activation Custody Transfer
+- Last merged PR: [#161](https://github.com/Flow-Research/workstream/pull/161) - fix(loop-memory): complete consistent projections
+- Merge commit: `c12ba1c8d4bbde86d0e2c19826f5791afc130489`
+- Final PR head: `fa90632ae2b88136f9849526d899d7d9be52e3ae`
+- Merged at: `2026-07-20T15:16:20Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-001-04A.json` at blob `b745b9d1342e215aa649559c6fb739f8ae35a939`
+- Completed chunk: `WS-ENG-001-04A` - Complete Loop Memory Projections
 - Active planning chunk: none
 - Active implementation chunk: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-AUTH-001-PREP` - Prepared Mutation Authorization Protocol; requires a separate explicit start.
+- Next chunk: `WS-ENG-001-04B` - Signed Explicit Start Events; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`

@@ -1,2 +1,0 @@
-"""Workstream backend application package."""
-

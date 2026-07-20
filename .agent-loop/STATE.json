@@ -14,45 +14,45 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29745741452/job/88363115326"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29752233404/job/88385435368"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29743407774/job/88355326286"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29752233451/job/88385435082"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-REV-CUSTODY",
-    "chunk_title": "REV Activation Custody Transfer",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-PREP",
-    "next_chunk_title": "Prepared Mutation Authorization Protocol",
+    "chunk_id": "WS-ENG-001-04A",
+    "chunk_title": "Complete Loop Memory Projections",
+    "initiative_id": "WS-ENG-001",
+    "next_chunk_id": "WS-ENG-001-04B",
+    "next_chunk_title": "Signed Explicit Start Events",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-PREP",
-    "next_chunk_title": "Prepared Mutation Authorization Protocol",
+    "next_chunk_id": "WS-ENG-001-04B",
+    "next_chunk_title": "Signed Explicit Start Events",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "be2a79a243ec50049c37f1f634322a9b3ab895ba",
-    "head_ref": "codex/ws-auth-001-rev-custody",
-    "head_sha": "ec77e64c746947c24b3da47a221869dd11bce642",
-    "intent_blob_sha": "9067950d154648983a04727ee554942c3a55f40d",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-REV-CUSTODY.json",
-    "main_sha": "fe0e4492a7de8699c06a52921cbdaa8a1a22e567",
-    "merged_at": "2026-07-20T13:58:14Z",
+    "first_parent_sha": "fe0e4492a7de8699c06a52921cbdaa8a1a22e567",
+    "head_ref": "workstream_orchestrator",
+    "head_sha": "fa90632ae2b88136f9849526d899d7d9be52e3ae",
+    "intent_blob_sha": "b745b9d1342e215aa649559c6fb739f8ae35a939",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-001-04A.json",
+    "main_sha": "c12ba1c8d4bbde86d0e2c19826f5791afc130489",
+    "merged_at": "2026-07-20T15:16:20Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 160,
-    "pr_title": "AUTH: transfer REV activation custody",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/160"
+    "pr_number": 161,
+    "pr_title": "fix(loop-memory): complete consistent projections",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/161"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-20T13:58:14Z"
+  "updated_at": "2026-07-20T15:16:20Z"
 }
