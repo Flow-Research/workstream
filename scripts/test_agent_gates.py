@@ -3396,10 +3396,17 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     update_command = workflow.split(
         "python3 scripts/update_post_merge_memory.py update", 1
     )[1].split("          done", 1)[0]
-    assert "--repository-root ." in update_command
+    update_lines = [line.strip() for line in update_command.splitlines()]
+    repository_root_lines = [
+        line for line in update_lines if line.startswith("--repository-root")
+    ]
+    cutover_lines = [
+        line for line in update_lines if line.startswith("--cutover-chunk-id")
+    ]
+    assert repository_root_lines == ["--repository-root . \\"]
+    assert cutover_lines == ["--cutover-chunk-id WS-ENG-001-04B"]
+    assert all("$" not in line for line in repository_root_lines + cutover_lines)
     assert workflow.count("--cutover-chunk-id") == 1
-    assert "--cutover-chunk-id WS-ENG-001-04B" in update_command
-    assert "--cutover-chunk-id $" not in update_command
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
     assert "TARGET_SHA" in workflow
