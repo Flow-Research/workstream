@@ -37,6 +37,9 @@
   merged AUTH-09E as `42a89b2d`, and PR #158 merged the availability-neutral
   ART custody transfer as `be2a79a2`; ART-02C2 integrates that trusted `main`
   state without activating the three ART internal feature actions.
+- PR #160 merged the separately owned availability-neutral REV custody transfer
+  as `fe0e4492`; all 19 REV actions remain planned and the merge changes no ART
+  behavior or migration ownership.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
@@ -72,9 +75,9 @@
   #127, #129, #141, #151, and #154. ART-02C2 is active and
   adds hidden fenced put resolution and independent verification mechanics.
 - Authorization checkpoint: AUTH-07B through AUTH-09D-B, the contributor
-  foundation, AUTH-09E, and the ART custody transfer merged through PRs #130,
-  #131, #132, #143, #146, #148, #152, #153, #157, and #158. The 25 transferred
-  ART actions remain planned.
+  foundation, AUTH-09E, and the ART and REV custody transfers merged through
+  PRs #130, #131, #132, #143, #146, #148, #152, #153, #157, #158, and #160.
+  The 25 transferred ART and 19 transferred REV actions remain planned.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

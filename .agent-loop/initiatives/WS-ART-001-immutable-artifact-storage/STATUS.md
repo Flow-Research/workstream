@@ -20,8 +20,9 @@ AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
 #152 as `93dd392`, the contributor foundation merged through PR #153 as
 `8d5eb15b`, AUTH-09E merged through PR #157 as `42a89b2d`, and the
 availability-neutral ART custody transfer merged through PR #158 as
-`be2a79a2`; all are integrated into the ART candidate. The three ART internal
-feature actions are now assigned to future
+`be2a79a2`, and the unrelated availability-neutral REV custody transfer merged
+through PR #160 as `fe0e4492`; all are integrated into the ART candidate. The
+three ART internal feature actions are now assigned to future
 `WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
 inactive.
 
@@ -58,7 +59,7 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 
 ## Gate
 
-The candidate integrates trusted main `be2a79a2` and contains the bounded
+The candidate integrates trusted main `fe0e4492` and contains the bounded
 repair for the hosted Backend outbox-retention failures. Exact-head full-suite
 proof and refreshed evidence remain prepublication requirements. The current
 gate is external CI/review followed by explicit human merge approval.

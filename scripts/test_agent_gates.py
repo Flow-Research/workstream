@@ -4249,6 +4249,11 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert "all 25 ART actions remain planned" in work_queue
     assert (
+        "| `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | "
+        "Merged through PR #160 as `fe0e4492`" in work_queue
+    )
+    assert "all 19 REV actions remain planned" in work_queue
+    assert (
         "Current ART gate: the trusted-main integration and bounded repair" in loop_state
     )
     assert "external CI/review, and explicit human" in loop_state.replace("\n", " ")

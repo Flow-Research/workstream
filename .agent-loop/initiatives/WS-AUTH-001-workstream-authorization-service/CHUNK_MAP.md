@@ -38,7 +38,7 @@ stopped.
 | `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15b`; signed memory `66ab58d` passed and stopped |
 | `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Merged through PR #157 as `42a89b2d` on 2026-07-20 |
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; all 25 ART actions remain planned |
-| `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
+| `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Inactive until 09E merge/memory and explicit start |
 | `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Proposed |
 | `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
@@ -208,5 +208,6 @@ stopped. The user explicitly started the contributor foundation. Its first L1
 review rejected the underspecified contract before runtime edits; PR #153 later
 merged its repaired implementation as `8d5eb15`. PR #157 merged AUTH-09E as
 `42a89b2d`, and PR #158 merged the availability-neutral ART custody transfer as
-`be2a79a2`; all 25 ART actions remain planned and inactive. POL-002-04 remains
-inactive pending its own gate and explicit start.
+`be2a79a2`, and PR #160 merged the availability-neutral REV custody transfer as
+`fe0e4492`; all 25 ART and 19 REV actions remain planned and inactive.
+POL-002-04 remains inactive pending its own gate and explicit start.
