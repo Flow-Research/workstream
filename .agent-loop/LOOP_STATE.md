@@ -33,18 +33,20 @@
 - AUTH-09D-B merged through PR #152 as `93dd392`; signed schema-v2 memory at
   `912a6254` stopped and named the contributor foundation as its exact
   successor.
-- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`, and PR #157
-  merged AUTH-09E as `42a89b2d`; ART-02C2 integrates that trusted `main` state
-  without activating the three ART internal feature actions.
+- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`, PR #157
+  merged AUTH-09E as `42a89b2d`, and PR #158 merged the availability-neutral
+  ART custody transfer as `be2a79a2`; ART-02C2 integrates that trusted `main`
+  state without activating the three ART internal feature actions.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
-- Current ART gate: deterministic 02C2 proof and all nine exact-SHA internal
-  reviewer tracks are complete; external CI/review and explicit human merge
-  approval are current. Production composition remains deny-only for feature
-  actions after merged AUTH-09E runtime admission.
+- Current ART gate: the trusted-main integration and bounded repair for the
+  hosted Backend outbox-retention failures are complete; exact-head full-suite
+  proof, refreshed internal evidence, external CI/review, and explicit human
+  merge approval are current. Production composition remains deny-only for
+  feature actions after merged AUTH-09E runtime admission.
   No feature action or service call site becomes active in ART-02C2.
   No later ART chunk starts automatically.
 - PR #157 merged `WS-AUTH-001-09E` as `42a89b2d` on 2026-07-20; fixed-service
@@ -69,9 +71,10 @@
 - Parallel artifact checkpoint: ART-02A1 through ART-02C1 merged through PRs
   #127, #129, #141, #151, and #154. ART-02C2 is active and
   adds hidden fenced put resolution and independent verification mechanics.
-- Authorization checkpoint: AUTH-07B through AUTH-09D-B and the contributor
-  foundation merged through PRs #130, #131, #132, #143, #146, #148, #152,
-  #153, and #157. AUTH-09E is merged; its feature actions remain planned.
+- Authorization checkpoint: AUTH-07B through AUTH-09D-B, the contributor
+  foundation, AUTH-09E, and the ART custody transfer merged through PRs #130,
+  #131, #132, #143, #146, #148, #152, #153, #157, and #158. The 25 transferred
+  ART actions remain planned.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

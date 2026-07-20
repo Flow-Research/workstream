@@ -18,9 +18,12 @@ PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
 mutation contracts without editing or activating AUTH runtime behavior.
 AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
 #152 as `93dd392`, the contributor foundation merged through PR #153 as
-`8d5eb15b`, and AUTH-09E merged through PR #157 as `42a89b2d`; all are
-integrated into the ART candidate. The three ART internal feature actions
-remain planned and inactive.
+`8d5eb15b`, AUTH-09E merged through PR #157 as `42a89b2d`, and the
+availability-neutral ART custody transfer merged through PR #158 as
+`be2a79a2`; all are integrated into the ART candidate. The three ART internal
+feature actions are now assigned to future
+`WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
+inactive.
 
 The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks
 but failed internal review on recovery/API completeness. Before repair, the user
@@ -55,8 +58,8 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 
 ## Gate
 
-Deterministic 02C2 proof and all nine exact-SHA internal reviewer tracks are
-complete for reviewed implementation SHA `e59a6dfc`. The current gate is
-external CI/review followed by explicit human merge approval. Production
+The candidate integrates trusted main `be2a79a2` and contains the bounded
+repair for the hosted Backend outbox-retention failures. Exact-head full-suite
+proof, refreshed evidence, and external reruns are the current gate. Production
 activation and recovery remain in later owning chunks. No later artifact chunk
 starts automatically, and only the user may approve merge.
