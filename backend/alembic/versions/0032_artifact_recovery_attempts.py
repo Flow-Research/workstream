@@ -230,9 +230,18 @@ def upgrade() -> None:
         create function validate_artifact_verification_lineage() returns trigger
         language plpgsql as $$
         begin
-          if old.originating_put_attempt_id is distinct from new.originating_put_attempt_id
-             or old.replica_id is distinct from new.replica_id
-             or old.parent_verification_job_id is distinct from new.parent_verification_job_id then
+          if (
+            old.parent_verification_job_id is not null
+            or exists(
+              select 1 from artifact_recovery_attempts
+              where source_verification_job_id = old.id
+                 or retry_verification_job_id = old.id
+            )
+          ) and (
+            old.originating_put_attempt_id is distinct from new.originating_put_attempt_id
+            or old.replica_id is distinct from new.replica_id
+            or old.parent_verification_job_id is distinct from new.parent_verification_job_id
+          ) then
             raise exception 'artifact verification lineage is immutable' using errcode='55000';
           end if;
           return new;

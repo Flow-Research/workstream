@@ -26,3 +26,7 @@
 - Accepted low risks are limited to legacy terminal-audit top-level metadata,
   private audit-builder ownership coupling, and duplicated human-proof shape;
   none changes authorization, recovery custody, or product lifecycle state.
+- GitHub Actions run `29851665477` found two valid integration issues: an
+  over-broad lineage trigger and an incomplete integrity-mismatch upload-item
+  transition. Both received bounded repairs and their three failing tests pass
+  locally; final internal re-review and hosted rerun remain.

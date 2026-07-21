@@ -1005,6 +1005,8 @@ class ArtifactStorageOrchestrator:
                             item_changed = True
                     elif outcome == "integrity_mismatch":
                         item.state = "failed"
+                        item.content_id = None
+                        item.provider_object_ref = None
                         item.error_code = "artifact_integrity_failure"
                         item_changed = True
                     if item_changed:

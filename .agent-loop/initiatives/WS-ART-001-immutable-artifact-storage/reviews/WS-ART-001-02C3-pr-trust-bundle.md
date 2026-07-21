@@ -85,6 +85,11 @@ No tests were removed, skipped, or weakened.
 
 External review and hosted CI are pending publication of the PR.
 
+The first complete hosted run passed agent gates, preflight, API E2E, and
+shards 3-4. Shards 1-2 found an over-broad lineage trigger and an incomplete
+integrity-mismatch item transition; both were repaired and their three exact
+failing tests pass locally. A full hosted rerun remains required.
+
 ## Remaining Risks And Follow-Up
 
 Low risks: legacy terminal audit metadata describes the verifier imperfectly,
