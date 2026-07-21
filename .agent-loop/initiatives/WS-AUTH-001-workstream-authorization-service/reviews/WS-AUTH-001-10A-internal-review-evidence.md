@@ -1,12 +1,12 @@
 # WS-AUTH-001-10A Internal Review Evidence
 
-Reviewed code SHA: `184404a0c0744402b2582ce4a3a27c8207bc8cf8`
+Reviewed code SHA: `933f17f7c932e6faee46107ef300c1cf956c5dc9`
 
 Reviewed implementation SHA: `e8d9c37e6fd552439ff9f0db8b2972337a3b019f`
 
-Reviewed against trusted main: `70f9c7bcdb63680e545f661a956929379df138e4`
+Reviewed against trusted main: `dda60ed0cb97d9de4a375df4147f31172cb3839b`
 
-Reviewed at: `2026-07-21T13:37:12Z`
+Reviewed at: `2026-07-21T13:46:52Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
@@ -60,6 +60,13 @@ existing-row composite ownership proof, successful unrelated-history
 preservation, and executable operator preflight queries.
 
 Valid findings addressed: yes
+
+All tracks then re-reviewed the exact integrated and repaired SHA `933f17f7`
+after trusted main advanced. The integration preserved the reviewed AUTH-10A
+implementation byte-for-byte. One new fail-closed validator finding was fixed:
+the merge intent successor title now exactly matches the reviewed 10B contract
+heading. Senior engineering, architecture, reuse/dedup, security/auth, QA/test,
+test delta, product/ops, CI integrity, and docs all passed the repaired SHA.
 
 Open sub-agent sessions: none
 
