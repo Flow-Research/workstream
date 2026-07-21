@@ -1,12 +1,12 @@
 # WS-AUTH-001-10A Internal Review Evidence
 
-Reviewed code SHA: `933f17f7c932e6faee46107ef300c1cf956c5dc9`
+Reviewed code SHA: `3e6ba3dbf265ce287b4f8bf114f3c3081f63f94e`
 
 Reviewed implementation SHA: `e8d9c37e6fd552439ff9f0db8b2972337a3b019f`
 
 Reviewed against trusted main: `dda60ed0cb97d9de4a375df4147f31172cb3839b`
 
-Reviewed at: `2026-07-21T13:46:52Z`
+Reviewed at: `2026-07-21T14:01:09Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
@@ -67,6 +67,13 @@ implementation byte-for-byte. One new fail-closed validator finding was fixed:
 the merge intent successor title now exactly matches the reviewed 10B contract
 heading. Senior engineering, architecture, reuse/dedup, security/auth, QA/test,
 test delta, product/ops, CI integrity, and docs all passed the repaired SHA.
+
+All tracks also reviewed CI repair SHA `3e6ba3db`. The repair keeps the
+historical 0021 action-parity test scoped to actions present at that revision
+and extends the transaction-scoped privileged test reset to clear the two new
+immutable role-history tables without weakening their production guards. The
+dedicated 0031 tests retain proof of all five new action pairs. All tracks
+passed with no open finding.
 
 Open sub-agent sessions: none
 
