@@ -170,7 +170,8 @@ transition may mutate lifecycle fields.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/audit tests/test_authorization.py tests/test_alembic.py tests/test_audit.py)
-(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_authorization.py tests/test_audit.py -k 'project_role or qualification')
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_authorization.py -k 'project_role or qualification')
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_audit.py)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
