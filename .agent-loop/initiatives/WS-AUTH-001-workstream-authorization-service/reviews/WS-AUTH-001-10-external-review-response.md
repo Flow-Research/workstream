@@ -46,7 +46,12 @@ git diff --check
 Agent Gate regression result: 88 passed. The evidence check intentionally
 required exact-SHA repair review and an evidence-only descendant; internal
 review passed repair SHA `1623e5b2dd85cc65df92af89989fda2ce7881bd0`, and the
-reviewed-code binding now names that SHA.
+initial evidence-only descendant bound that SHA.
+
+All required internal tracks subsequently passed the five-finding CodeRabbit
+repair at exact SHA `6a89dd5018d28be149dc6e77f1466a0b3c707296`; the final
+PREP wording was repaired once more before that pass so final authorization
+occurs only through `consume()` after canonical feature facts are locked.
 
 ## Remaining risks
 

@@ -1,6 +1,6 @@
 # WS-AUTH-001-10 Internal Review Evidence
 
-Reviewed code SHA: `1623e5b2dd85cc65df92af89989fda2ce7881bd0`
+Reviewed code SHA: `6a89dd5018d28be149dc6e77f1466a0b3c707296`
 
 Reviewed planning SHA: `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2`
 
@@ -28,6 +28,10 @@ architecture, CI integrity, docs, reuse/dedup, and test delta
   uses the canonical evidence provenance label. All three reviewer groups
   passed repair SHA `1623e5b2dd85cc65df92af89989fda2ce7881bd0` with no
   remaining finding; 88 Agent Gate regression tests pass locally.
+- All three reviewer groups also pass CodeRabbit repair SHA
+  `6a89dd5018d28be149dc6e77f1466a0b3c707296`. The five findings close parent
+  scope, persisted versioning, planned activation wording, canonical PREP
+  consumption/idempotency order, and `/api/v1` namespace consistency.
 - GitHub remains the owner of the full sharded suite, aggregate 78 percent and
   changed-authorization 90 percent coverage gates, API E2E, and Agent Gates for
   each implementation child.
