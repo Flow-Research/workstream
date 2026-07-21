@@ -15,10 +15,17 @@ Pre-repair published head: `e0af0a6dddb5ede4707d309d2894409344733446`
 - The Backend aggregate `test` job failed only because preflight failed and its
   shards/API E2E prerequisites were skipped. No runtime test executed and no
   backend defect was reported.
+- CodeRabbit posted five valid contract findings. The parent now explicitly
+  allows `.agent-loop/REVIEW_LOG.md`; the grant `version` is persisted with the
+  exact active-1/revoked-2 invariant; 10B/10C state that their 10A registrations
+  remain planned until the owning child activates them with routes; the
+  canonical issue operation includes idempotency, AuthorityControl/PREP locks,
+  advisory absence serialization, and one route commit; and every endpoint
+  example uses `/api/v1`.
 
 ## Comments deferred
 
-- CodeRabbit review remains in progress; no actionable comment exists yet.
+None.
 
 ## Human decisions needed
 
@@ -29,6 +36,11 @@ None.
 ```bash
 python3 scripts/test_agent_gates.py
 python3 scripts/check_internal_review_evidence.py
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_markdown_links.py
+python3 scripts/update_post_merge_memory.py validate-merge-intent --base-ref origin/main
+git diff --check
 ```
 
 Agent Gate regression result: 88 passed. The evidence check intentionally
@@ -38,6 +50,6 @@ reviewed-code binding now names that SHA.
 
 ## Remaining risks
 
-Fresh GitHub preflight, Backend orchestration, Agent Gates, CodeRabbit, and
-human review remain. No runtime, migration, CI, test, or coverage behavior was
-changed by this repair.
+Fresh GitHub checks, CodeRabbit re-review, and human review remain. No runtime,
+migration, CI, test, or coverage behavior was changed by these documentation
+repairs.

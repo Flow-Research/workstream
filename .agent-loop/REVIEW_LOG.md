@@ -2745,3 +2745,10 @@ live active/review projection. The Backend aggregate failure was consequential:
 preflight blocked shards and API E2E, so no runtime test failed. All 88 Agent
 Gate regression tests pass locally. Exact-SHA internal repair review, an
 evidence-only binding descendant, fresh GitHub checks, and CodeRabbit remain.
+
+CodeRabbit later posted five valid planning/specification findings. The repair
+adds review-log scope to the parent contract, persists the exact active-1/
+revoked-2 grant version, keeps child actions planned until their owning child
+activates them with routes, records the complete PREP/idempotency/advisory-lock
+issue order, and makes `/api/v1` the sole endpoint namespace. Exact-SHA internal
+review and fresh external checks remain.

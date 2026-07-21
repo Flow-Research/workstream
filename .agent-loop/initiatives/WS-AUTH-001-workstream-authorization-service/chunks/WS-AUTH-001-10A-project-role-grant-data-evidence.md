@@ -85,8 +85,10 @@ secret, URL credential, or automatically inferred authority is stored.
 `ProjectRoleGrant` is one immutable issuance row for exactly `submitter`,
 `reviewer`, or `adjudicator`, with active/revoked lifecycle, manual method,
 composite snapshot reference, issuer profile/grant provenance, bounded reason,
-database timestamps, and terminal revocation provenance. Only active version 1
-to revoked version 2 may mutate lifecycle fields.
+database timestamps, terminal revocation provenance, and a persisted integer
+`version`. The invariant is exact: active grants persist version 1 and revoked
+grants persist version 2. Only the active-version-1 to revoked-version-2
+transition may mutate lifecycle fields.
 
 ## Acceptance criteria
 

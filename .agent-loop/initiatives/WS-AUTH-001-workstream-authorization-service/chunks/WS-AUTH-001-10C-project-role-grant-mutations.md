@@ -64,10 +64,13 @@ commit inside PREP, kernel, service, or repository
 | `project_role_grant.issue` | `project.role_grant.manage` | covered Project Manager only | `POST /api/v1/projects/{project_id}/role-grants` |
 | `project_role_grant.revoke` | `project.role_grant.manage` | covered Project Manager only | `POST /api/v1/projects/{project_id}/role-grants/{grant_id}/revoke` |
 
-Both are human-only, owned by `WS-AUTH-001-10C`, active with their route, and
-use existing mutation rate controls. Audit Authority, Access Administrator,
-Operator, Finance Authority, contributor grants, services, agents, and Space do
-not substitute for Project Manager authority.
+Both are human-only and registered as planned by 10A with
+`ActionOwner.AUTH_10C`. They remain planned and non-callable until this exact
+10C child is separately started and implements them; 10C then changes each row
+to active atomically with its route. They use existing mutation rate controls.
+Audit Authority, Access Administrator, Operator, Finance Authority, contributor
+grants, services, agents, and Space do not substitute for Project Manager
+authority.
 
 ## Exact lock and transaction order
 

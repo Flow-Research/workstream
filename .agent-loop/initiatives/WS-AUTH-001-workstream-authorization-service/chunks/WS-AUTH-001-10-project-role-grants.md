@@ -46,6 +46,7 @@ automatically.
 ```text
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/merge-intents/WS-AUTH-001-10.json
+.agent-loop/REVIEW_LOG.md
 docs/reference_specs/WS-AUTH-001-actor-profile-role-and-authorization-service-specification.md
 ```
 

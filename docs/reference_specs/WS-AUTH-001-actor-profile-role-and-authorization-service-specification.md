@@ -322,6 +322,7 @@ ProjectRoleGrant:
   actor_profile_id: uuid
   role: enum [submitter, reviewer, adjudicator]
   status: enum [active, revoked]
+  version: integer
 
   grant_method: literal [manual]
   qualification_snapshot_id: uuid
@@ -348,6 +349,9 @@ ProjectRoleGrant:
 - At most one active ProjectRoleGrant exists for a contributor, project, and
   exact role. All three distinct roles may be active concurrently.
 - Revoking or regranting one role never changes another role.
+- `version` is persisted. The invariant is exact: active grants persist version
+  1 and revoked grants persist version 2. Only the active-version-1 to
+  revoked-version-2 transition may mutate lifecycle fields.
 - Grant and revocation reasons are one to 500 UTF-8 bytes, equal their Python
   `str.strip()` result, and contain no Unicode control character.
 - A submitter action requires an active exact `submitter` grant.
@@ -955,7 +959,7 @@ Effects:
 - bearer token verification may succeed;
 - ActorResolver returns the suspended ActorProfile;
 - all business mutations are denied with `actor_suspended`;
-- `/v1/actors/me` may return minimal status and support information;
+- `/api/v1/actors/me` may return minimal status and support information;
 - active AdminRoleGrants and ProjectRoleGrants remain recorded but ineffective;
 - active review leases and other exclusive work claims are invalidated through `AuthorityInvalidationRequested` and consuming lifecycle reconciliation;
 - historical records remain unchanged.
@@ -1042,7 +1046,7 @@ The first Access Administrator cannot be created through an endpoint that alread
 
 ### 19.2 Bootstrap sequence
 
-1. The initial human signs in normally and calls `/v1/actors/me`.
+1. The initial human signs in normally and calls `/api/v1/actors/me`.
 2. Workstream creates the human ActorProfile and ActorIdentityLink.
 3. An authorized deployment operator runs the Workstream-local bootstrap management operation with the exact ActorProfile ID.
 4. The operation verifies that no active Access Administrator exists.
@@ -1133,23 +1137,31 @@ The transaction MUST:
 
 The transaction MUST:
 
-1. authorize `project.role_grant.manage` for the exact project;
-2. lock the target ActorProfile and project active-grant selector;
-3. require an active human target;
-4. prohibit self-grant;
-5. create the immutable qualification snapshot;
-6. reject an existing active grant for the same exact role;
-7. create the new manual ProjectRoleGrant without changing another role;
-8. append snapshot and grant-issued audit evidence;
-9. commit once.
+1. require and reserve the typed `Idempotency-Key` in the caller/operation
+   namespace, rejecting a mismatched replay;
+2. run PREP by locking `AuthorityControl(id=1)`, then locking distinct caller
+   and target ActorProfiles in lexical ID order, each followed by its exact
+   active identity link, and finally locking the caller's deterministic covered
+   Project Manager grant;
+3. authorize `project.role_grant.manage` for the exact project;
+4. lock the canonical project;
+5. take the transaction advisory key for
+   `(actor_profile_id, project_id, requested_role)` to serialize absence;
+6. reload the target, scope, and active exact-role selector under those locks;
+7. require an active human target and prohibit self-grant;
+8. reject an existing active grant for the same exact role;
+9. create the immutable qualification snapshot and new manual ProjectRoleGrant
+   without changing another role;
+10. append snapshot and grant-issued audit evidence and commit the idempotency
+    response reference;
+11. commit once at the route boundary.
 
 ---
 
 ## 21. API Contract
 
-Repository implementation uses the canonical `/api/v1` namespace. Any older
-`/v1` example in this imported reference is superseded by that repository
-decision.
+Repository implementation and every endpoint example below use the canonical
+`/api/v1` namespace.
 
 ### 21.1 Current actor
 
@@ -1190,11 +1202,11 @@ Capabilities are computed server-side from a registered allowlist. Clients canno
 ### 21.2 Actor administration
 
 ```http
-GET  /v1/admin/actors
-GET  /v1/admin/actors/{actor_profile_id}
-POST /v1/admin/actors/{actor_profile_id}/suspend
-POST /v1/admin/actors/{actor_profile_id}/reactivate
-POST /v1/admin/actors/{actor_profile_id}/deactivate
+GET  /api/v1/admin/actors
+GET  /api/v1/admin/actors/{actor_profile_id}
+POST /api/v1/admin/actors/{actor_profile_id}/suspend
+POST /api/v1/admin/actors/{actor_profile_id}/reactivate
+POST /api/v1/admin/actors/{actor_profile_id}/deactivate
 ```
 
 State-change request:
@@ -1208,9 +1220,9 @@ State-change request:
 ### 21.3 Identity-link administration
 
 ```http
-GET  /v1/admin/actors/{actor_profile_id}/identity-link
-POST /v1/admin/identity-links/{identity_link_id}/revoke
-POST /v1/admin/identity-links/{identity_link_id}/reactivate
+GET  /api/v1/admin/actors/{actor_profile_id}/identity-link
+POST /api/v1/admin/identity-links/{identity_link_id}/revoke
+POST /api/v1/admin/identity-links/{identity_link_id}/reactivate
 ```
 
 No endpoint adds a second human identity link in v0.1.
@@ -1218,18 +1230,18 @@ No endpoint adds a second human identity link in v0.1.
 ### 21.4 Service actors
 
 ```http
-POST /v1/admin/service-actors
-GET  /v1/admin/service-actors
-GET  /v1/admin/service-actors/{actor_profile_id}
+POST /api/v1/admin/service-actors
+GET  /api/v1/admin/service-actors
+GET  /api/v1/admin/service-actors/{actor_profile_id}
 ```
 
 ### 21.5 Admin-role grants
 
 ```http
-POST /v1/admin-role-grants
-GET  /v1/admin-role-grants
-GET  /v1/actors/{actor_profile_id}/admin-role-grants
-POST /v1/admin-role-grants/{grant_id}/revoke
+POST /api/v1/admin-role-grants
+GET  /api/v1/admin-role-grants
+GET  /api/v1/actors/{actor_profile_id}/admin-role-grants
+POST /api/v1/admin-role-grants/{grant_id}/revoke
 ```
 
 Create request:
@@ -1779,7 +1791,7 @@ The live drill MUST use supported Workstream APIs and the bootstrap operation. D
 ### 32.1 Drill sequence
 
 1. Start Workstream with no ActorProfiles or Access Administrators.
-2. Human A presents a valid issuer token and calls `/v1/actors/me`.
+2. Human A presents a valid issuer token and calls `/api/v1/actors/me`.
 3. Prove Human A has one active ActorProfile, Contributor domain, and no roles/grants.
 4. Run the one-time bootstrap operation for Human A.
 5. Prove Human A now has system-scoped `access_administrator` only.

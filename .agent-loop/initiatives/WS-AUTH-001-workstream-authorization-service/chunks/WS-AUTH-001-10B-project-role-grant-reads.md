@@ -65,10 +65,13 @@ identity-link, contact, skills, reputation, or cross-project activity disclosure
 | `project_role_grant.list` | `project.role_grant.read` | covered Project Manager or Audit Authority | canonical project | `GET /api/v1/projects/{project_id}/role-grants` |
 | `project_role_grant.read` | `project.role_grant.read` | covered Project Manager or Audit Authority | grant joined to canonical project | `GET /api/v1/projects/{project_id}/role-grants/{grant_id}` |
 
-All are human-only, owned by `WS-AUTH-001-10B`, active with their route, and
-use non-locking canonical project reads. System-scoped candidates cover every
-project only for the retained permission; project scope must equal the loaded
-project. Services, agents, and Space principals deny before lookup.
+All are human-only and registered as planned by 10A with
+`ActionOwner.AUTH_10B`. They remain planned and non-callable until this exact
+10B child is separately started and implements them; 10B then changes each row
+to active atomically with its route. They use non-locking canonical project
+reads. System-scoped candidates cover every project only for the retained
+permission; project scope must equal the loaded project. Services, agents, and
+Space principals deny before lookup.
 
 ## Acceptance criteria
 
