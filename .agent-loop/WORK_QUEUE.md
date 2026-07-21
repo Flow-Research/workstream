@@ -1,6 +1,6 @@
 # Generated Workstream Work Queue
 
-> Merge-derived projection. Pre-start unmerged work is not represented.
+> Signed merge/start/cancel projection. Unsigned chat or worktree starts are not represented.
 
 | Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |
 |---|---|---|---|---|
@@ -12,7 +12,8 @@
 | `WS-ENG-002` | `WS-ENG-002-01` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-003` | `WS-ENG-003-01` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-004` | `WS-ENG-004-01R1` | `stopped_after_merge` | `none` | yes |
+| `WS-ENG-005` | `WS-ENG-005-01` | `stopped_after_merge` | `none` | yes |
 | `WS-REV-001` | `WS-REV-001-02A` | `stopped_after_merge` | `WS-REV-001-02A1` | yes |
 | `WS-XINT-001` | `WS-XINT-001-PLAN` | `stopped_after_merge` | `none` | yes |
 
-Latest global merge: `d9d447119ec8afebc658afadca622061265bca68`
+Latest global merge: `f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734`

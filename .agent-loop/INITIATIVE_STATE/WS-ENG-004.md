@@ -1,6 +1,6 @@
 # Generated Merge/Start Projection
 
-> Merge-derived state. Pre-start unmerged work is not represented.
+> Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.
 
 - Initiative: `WS-ENG-004`
 - Latest completed chunk: `WS-ENG-004-01R1` - Renderer-Safe Recovery Bootstrap

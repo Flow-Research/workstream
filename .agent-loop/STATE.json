@@ -4,37 +4,37 @@
     "planning_chunk": null
   },
   "checks": {
-    "all_required_passed": true,
+    "all_required_passed": false,
     "required": {
       "CodeRabbit": {
-        "conclusion": "success",
+        "conclusion": "failure",
         "kind": "status",
         "url": null
       },
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29843098908/job/88676678421"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29845392634/job/88684577158"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29839874961/job/88669981666"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29845392620/job/88688497518"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-10A",
-    "chunk_title": "Project Role Grant Data And Evidence Foundation",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-10B",
-    "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
+    "chunk_id": "WS-ENG-005-01",
+    "chunk_title": "Initiative-Local Concurrency",
+    "initiative_id": "WS-ENG-005",
+    "next_chunk_id": null,
+    "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-10B",
-    "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
+    "next_chunk_id": null,
+    "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -48,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a",
-    "head_ref": "codex/ws-auth-001-10a-project-role-grant-data-evidence",
-    "head_sha": "7d3031f53181e82da41a703cfb3ef3aed9193aba",
-    "intent_blob_sha": "4c6f1044eb1bfb24d5d2fd7711ab944d36ac56be",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10A.json",
-    "main_sha": "d9d447119ec8afebc658afadca622061265bca68",
-    "merged_at": "2026-07-21T15:36:49Z",
+    "first_parent_sha": "d9d447119ec8afebc658afadca622061265bca68",
+    "head_ref": "codex/ws-eng-005-parallel-initiative-starts",
+    "head_sha": "06c0438963288b85b71fd8e388bdfa5bb41809d9",
+    "intent_blob_sha": "34cb0eefbbc7a62aae609e4a389ab3e514e070c0",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-005-01.json",
+    "main_sha": "f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734",
+    "merged_at": "2026-07-21T16:00:42Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 170,
-    "pr_title": "AUTH-10A: add project role grant data and evidence foundation",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/170"
+    "pr_number": 172,
+    "pr_title": "fix(loop): allow parallel initiative starts",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/172"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T15:36:49Z"
+  "updated_at": "2026-07-21T16:00:42Z"
 }

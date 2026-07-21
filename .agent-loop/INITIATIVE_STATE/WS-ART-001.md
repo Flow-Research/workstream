@@ -1,6 +1,6 @@
 # Generated Merge/Start Projection
 
-> Merge-derived state. Pre-start unmerged work is not represented.
+> Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.
 
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02C2` - Verification Publication And Fencing
