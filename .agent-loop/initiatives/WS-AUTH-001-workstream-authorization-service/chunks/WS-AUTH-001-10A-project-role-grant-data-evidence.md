@@ -98,6 +98,26 @@ to revoked version 2 may mutate lifecycle fields.
 - Typed and PostgreSQL audit/idempotency validators accept only the three exact
   roles and issued/revoked success events. Replacement fields/events/reasons
   and `both` are absent.
+- Migration `0031` reserves availability-neutral typed and PostgreSQL evidence
+  parity for exactly these future action/permission pairs, without adding an
+  `ActionDefinition`, `ActionOwner`, route, or callable behavior:
+
+  ```text
+  project.contributor_candidate.list -> project.role_grant.manage
+  project_role_grant.list            -> project.role_grant.read
+  project_role_grant.read            -> project.role_grant.read
+  project_role_grant.issue           -> project.role_grant.manage
+  project_role_grant.revoke          -> project.role_grant.manage
+  ```
+
+  It likewise reserves exactly the future denial codes
+  `project_role_grant_already_revoked` and
+  `project_role_grant_replay_state_changed` in the typed and PostgreSQL denial
+  vocabularies. Reservation does not make an action active; 10B and 10C own
+  their respective action definitions, owners, routes, and emissions.
+- Migration and schema tests prove all five pairs and both denial codes are
+  admitted, a neighboring unreserved value is rejected, and the action
+  registry/owner manifest remains unchanged by 10A.
 - Upgrade inspects exact existing storage and refuses before DDL when any
   `audit_events` row with `event_domain='authority'` has
   `before_facts->>'role'='both'`, `after_facts->>'role'='both'`, a
