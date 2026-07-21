@@ -18,7 +18,7 @@
   the trust bundle did not bind its external-check statements to the exact
   published SHA. The bundle now names head
   `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, passing Agent Gates run
-  `29784118660`, the CodeRabbit run, and pending sharded Backend run
+  `29784118660`, the CodeRabbit run, and then-pending sharded Backend run
   `29784025021` separately.
 - Sharded Backend run `29784025021` completed with shard 2 failing in the eight
   PREP/real-lifecycle race cases. Focused PostgreSQL reproduction identified

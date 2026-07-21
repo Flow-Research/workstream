@@ -2692,6 +2692,19 @@ Agent Gates `29784118660` and CodeRabbit
 `d64c773b-4f76-491e-ae6e-cab19d25dc4b` to published head `8a705e5b` and keeps
 sharded Backend `29784025021` explicitly pending.
 
+That sharded Backend run later completed with shard 2 failing in the eight
+PREP/real-lifecycle race cases. Focused PostgreSQL reproduction found fixture
+state and assertion drift rather than a runtime PREP defect: duplicate
+bootstrap provenance, legacy audit names, incomplete bootstrap-control cleanup,
+and over-specific mutation-first denial expectations. Repair candidate
+`349ac313` establishes one valid bootstrap administrator, restores the control
+singleton during teardown, uses canonical audit fields/tokens, and asserts the
+kernel's privacy-safe `permission_not_granted` result. Thirteen focused
+PostgreSQL PREP/race cases pass locally. Senior engineering, architecture,
+reuse/dedup, QA/test, security/auth, test-delta, product/ops, and CI-integrity
+reviews pass; docs requested the chronology corrections recorded in this
+paragraph and the external-review response before exact-SHA re-review.
+
 ## 2026-07-20 - WS-ENG-001-04B External Review Repair
 
 Pre-repair PR #165 head `e8ade1f8` passed Agent Gates, backend preflight, API
