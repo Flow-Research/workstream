@@ -10,9 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-005-01.json` at blob `34cb0eefbbc7a62aae609e4a389ab3e514e070c0`
 - Completed chunk: `WS-ENG-005-01` - Initiative-Local Concurrency
 - Active planning chunks: none
-- Active implementation chunks: `WS-AUTH-001-10B`
-- Latest authority event: `start` for `WS-AUTH-001-10B`
-- Authority initiative: `WS-AUTH-001`
+- Active implementation chunks: `WS-ART-001-02C3`, `WS-AUTH-001-10B`
+- Latest authority event: `start` for `WS-ART-001-02C3`
+- Authority initiative: `WS-ART-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: none recorded.
 - Required check evidence: attention required

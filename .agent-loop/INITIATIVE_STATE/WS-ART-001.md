@@ -4,9 +4,9 @@
 
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02C2` - Verification Publication And Fencing
-- Gate: `stopped_after_merge`
+- Gate: `active`
 - Active planning chunk: `none`
-- Active implementation chunk: `none`
+- Active implementation chunk: `WS-ART-001-02C3`
 - Next chunk: `WS-ART-001-02C3`
 - Separate explicit start required: `true`
 - Source PR: [#159](https://github.com/Flow-Research/workstream/pull/159)
