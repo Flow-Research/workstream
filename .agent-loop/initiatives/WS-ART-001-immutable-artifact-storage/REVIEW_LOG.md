@@ -14,3 +14,8 @@
   authority seam defaults to deny until AUTH-owned activation, authorization
   evidence is retained in the initiation audit, and focused guide/authority
   drift tests were added. No publication claim is recorded yet.
+- Re-review cleared taskless-guide and architecture blockers, then identified
+  an authorization-ordering bypass on exact replay. Every normal and
+  concurrent-winner replay now revalidates the persisted human identity and
+  exact recovery authority before returning identifiers; denied replay is
+  covered with zero-write assertions.

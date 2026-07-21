@@ -1194,6 +1194,7 @@ class ArtifactRecoveryService:
             async with self._session.begin():
                 existing = await self._repo.lock_recovery_by_source(source_id)
                 if existing is not None and self._is_exact_replay(existing, request, digest):
+                    await self._authorize_request(request)
                     return self._result(existing, replayed=True)
                 if existing is not None:
                     raise ArtifactRecoveryConflictError(
@@ -1207,6 +1208,7 @@ class ArtifactRecoveryService:
         existing = await self._repo.lock_recovery_by_source(source_id)
         if existing is not None:
             if self._is_exact_replay(existing, request, digest):
+                await self._authorize_request(request)
                 return self._result(existing, replayed=True)
             raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
         source = await self._repo.lock_verification_job(source_id)
@@ -1233,40 +1235,7 @@ class ArtifactRecoveryService:
         ):
             raise ArtifactRecoveryConflictError("artifact recovery resource facts changed")
         context = request.authorization_context
-        actor = await self._actors.lock_admission_proof(
-            context.actor_profile_id, context.identity_link_id
-        )
-        if (
-            context.actor_kind is not ActorKind.HUMAN
-            or context.actor_status is not ActorStatus.ACTIVE
-            or context.identity_link_status is not IdentityLinkStatus.ACTIVE
-            or actor is None
-            or actor.actor_kind != "human"
-            or actor.actor_status != "active"
-            or actor.service_identity is not None
-            or actor.identity_link_id != str(context.identity_link_id)
-            or actor.identity_link_subject_kind != "human"
-            or actor.identity_link_status != "active"
-        ):
-            raise ArtifactRecoveryConflictError("artifact recovery requester is unavailable")
-        authorization = await self._authority.authorize(
-            authorization_context=context,
-            facts=ArtifactRecoveryAuthorityFacts(
-                project_id=request.project_id,
-                task_id=request.task_id,
-                submission_id=request.submission_id,
-                source_verification_job_id=request.source_verification_job_id,
-                expected_source_job_cas_version=request.expected_source_job_cas_version,
-            ),
-        )
-        if (
-            authorization.action_id is not ActionId.ARTIFACT_VERIFICATION_JOB_RETRY
-            or authorization.permission_id
-            != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
-        ):
-            raise ArtifactRecoveryConflictError(
-                "artifact recovery authorization evidence is invalid"
-            )
+        authorization = await self._authorize_request(request)
         parent = await self._repo.lock_recovery_by_retry(source_id)
         retry_id = str(uuid4())
         recovery_id = str(uuid4())
@@ -1323,6 +1292,45 @@ class ArtifactRecoveryService:
         )
         await self._repo.add_recovery_attempt(recovery)
         return self._result(recovery, replayed=False)
+
+    async def _authorize_request(self, request: ArtifactRecoveryRequest):
+        """Revalidate the human requester and exact Operator action on every call."""
+        context = request.authorization_context
+        actor = await self._actors.lock_admission_proof(
+            context.actor_profile_id, context.identity_link_id
+        )
+        if (
+            context.actor_kind is not ActorKind.HUMAN
+            or context.actor_status is not ActorStatus.ACTIVE
+            or context.identity_link_status is not IdentityLinkStatus.ACTIVE
+            or actor is None
+            or actor.actor_kind != "human"
+            or actor.actor_status != "active"
+            or actor.service_identity is not None
+            or actor.identity_link_id != str(context.identity_link_id)
+            or actor.identity_link_subject_kind != "human"
+            or actor.identity_link_status != "active"
+        ):
+            raise ArtifactRecoveryConflictError("artifact recovery requester is unavailable")
+        authorization = await self._authority.authorize(
+            authorization_context=context,
+            facts=ArtifactRecoveryAuthorityFacts(
+                project_id=request.project_id,
+                task_id=request.task_id,
+                submission_id=request.submission_id,
+                source_verification_job_id=request.source_verification_job_id,
+                expected_source_job_cas_version=request.expected_source_job_cas_version,
+            ),
+        )
+        if (
+            authorization.action_id is not ActionId.ARTIFACT_VERIFICATION_JOB_RETRY
+            or authorization.permission_id
+            != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
+        ):
+            raise ArtifactRecoveryConflictError(
+                "artifact recovery authorization evidence is invalid"
+            )
+        return authorization
 
     @staticmethod
     def _validate_request(request: ArtifactRecoveryRequest) -> None:

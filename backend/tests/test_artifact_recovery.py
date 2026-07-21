@@ -429,6 +429,18 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
             ).create(request)
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await ArtifactRecoveryService(
+                    session, settings, DenyArtifactRecoveryAuthority()
+                ).create(request)
+            assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
+            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
+            assert await session.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.event_type == "ArtifactRecoveryInitiated"
+                )
+            ) == 1
+            await session.rollback()
             replay = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
             ).create(request)
