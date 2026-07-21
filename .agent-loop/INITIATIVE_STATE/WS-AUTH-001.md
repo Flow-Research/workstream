@@ -5,6 +5,7 @@
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-REV-CUSTODY` - REV Activation Custody Transfer
 - Gate: `stopped_after_merge`
+- Active implementation chunk: `none`
 - Next chunk: `WS-AUTH-001-PREP`
 - Separate explicit start required: `true`
 - Source PR: [#160](https://github.com/Flow-Research/workstream/pull/160)

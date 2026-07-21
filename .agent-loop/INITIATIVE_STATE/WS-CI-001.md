@@ -5,6 +5,7 @@
 - Initiative: `WS-CI-001`
 - Latest completed chunk: `WS-CI-001-01R1` - Timeout Cleanup Repair
 - Gate: `stopped_after_merge`
+- Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`
 - Source PR: [#164](https://github.com/Flow-Research/workstream/pull/164)

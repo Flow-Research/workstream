@@ -5,6 +5,7 @@
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02C1` - Admission And Put-Attempt Foundation
 - Gate: `stopped_after_merge`
+- Active implementation chunk: `none`
 - Next chunk: `WS-ART-001-02C2`
 - Separate explicit start required: `true`
 - Source PR: [#154](https://github.com/Flow-Research/workstream/pull/154)

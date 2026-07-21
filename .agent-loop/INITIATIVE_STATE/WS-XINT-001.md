@@ -5,6 +5,7 @@
 - Initiative: `WS-XINT-001`
 - Latest completed chunk: `WS-XINT-001-PLAN` - Lifecycle Boundary Reconciliation
 - Gate: `stopped_after_merge`
+- Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`
 - Source PR: [#139](https://github.com/Flow-Research/workstream/pull/139)

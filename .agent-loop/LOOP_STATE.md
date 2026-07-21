@@ -3,20 +3,20 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#164](https://github.com/Flow-Research/workstream/pull/164) - fix(ci): preserve isolated runner cleanup time
-- Merge commit: `61bc0390947ad397a0b9bdd088c5111bd5477da1`
-- Final PR head: `aa73e1078406e7d6eaee32f83a04d39e20890da2`
-- Merged at: `2026-07-20T18:46:43Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-CI-001-01R1.json` at blob `3d7bcb5d9dc1c466d41b473c496b5695571b8b91`
-- Completed chunk: `WS-CI-001-01R1` - Timeout Cleanup Repair
-- Active planning chunk: none
-- Active implementation chunk: none
+- Last merged PR: [#165](https://github.com/Flow-Research/workstream/pull/165) - WS-ENG-001-04B: add signed explicit loop start events
+- Merge commit: `58d0514aa5f6751a310d750f8dab8a946ca08fa5`
+- Final PR head: `16f913a5dd03663c20c87adc4224cdc8f15a78da`
+- Merged at: `2026-07-21T05:25:30Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-001-04B.json` at blob `1189ffc150a857f43069d09a0ca02f67e2538368`
+- Completed chunk: `WS-ENG-001-04B` - Signed Explicit Start Events
+- Active planning chunks: none
+- Active implementation chunks: none
 - Current gate: `stopped_after_merge`
 - Next chunk: none recorded.
-- Required check evidence: passed
+- Required check evidence: attention required
   - `agent-gates`: `success`
   - `test`: `success`
-  - `CodeRabbit`: `success`
+  - `CodeRabbit`: `failure`
 
 Machine-readable state: `.agent-loop/STATE.json`
 Append-only merge ledger: `.agent-loop/MERGE_LOG.jsonl`
