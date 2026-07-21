@@ -1,0 +1,719 @@
+"""Focused regression tests for signed explicit loop-memory events."""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from scripts import update_post_merge_memory as loop
+
+
+@pytest.fixture(autouse=True)
+def _fixed_state_tip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(loop, "_state_branch_tip", lambda _root: "e" * 40)
+
+
+def _record() -> dict:
+    metadata = {
+        "schema_version": 2,
+        "initiative_id": "WS-ENG-001",
+        "chunk_id": "WS-ENG-001-04A",
+        "chunk_title": "Complete Loop Memory Projections",
+        "next_chunk_id": "WS-ENG-001-04B",
+        "next_chunk_title": "Signed Explicit Start Events",
+        "next_requires_explicit_start": True,
+    }
+    return {
+        "schema_version": 2,
+        "repository": "Flow-Research/workstream",
+        "state_branch": loop.STATE_BRANCH,
+        "updated_at": "2026-07-20T10:00:00Z",
+        "source": {
+            "main_sha": "a" * 40,
+            "first_parent_sha": "0" * 40,
+            "pr_number": 161,
+            "pr_url": "https://github.com/Flow-Research/workstream/pull/161",
+            "pr_title": "Complete loop-memory projections",
+            "head_sha": "b" * 40,
+            "head_ref": "codex/ws-eng-001-04a",
+            "merged_at": "2026-07-20T10:00:00Z",
+            "merged_by": "manager",
+            "intent_path": ".agent-loop/merge-intents/WS-ENG-001-04A.json",
+            "intent_blob_sha": "d" * 40,
+        },
+        "completed_chunk": metadata,
+        "active": {"planning_chunk": None, "implementation_chunk": None},
+        "gate": {
+            "status": "stopped_after_merge",
+            "next_chunk_id": "WS-ENG-001-04B",
+            "next_chunk_title": "Signed Explicit Start Events",
+            "next_requires_explicit_start": True,
+        },
+        "checks": {
+            "required": {
+                name: {"kind": "check_run", "conclusion": "success", "url": None}
+                for name in loop.REQUIRED_CHECKS
+            },
+            "all_required_passed": True,
+        },
+    }
+
+
+def _event(kind: str, run_id: int = 41) -> dict:
+    return {
+        "type": kind,
+        "event_id": f"github-actions:{run_id}:{kind}",
+        "run_id": run_id,
+        "created_at": f"2026-07-20T1{run_id % 10}:00:00Z",
+        "dispatcher": "dispatcher",
+        "approvers": ["reviewer"],
+        "reason": "Human-approved bounded chunk",
+        "main_sha": "a" * 40,
+        "prior_state_tip": "e" * 40,
+        "initiative_id": "WS-ENG-001",
+        "chunk_id": "WS-ENG-001-04B",
+    }
+
+
+def _contract(root: Path) -> None:
+    path = root / ".agent-loop/initiatives/eng/chunks/WS-ENG-001-04B-events.md"
+    path.parent.mkdir(parents=True)
+    path.write_text("# Chunk Contract: WS-ENG-001-04B\n", encoding="utf-8")
+
+
+def test_start_cancel_retry_and_replay_are_monotonic(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    start = _event("start")
+    assert loop.apply_authority_event(state_root, start, repository_root=repository_root)
+    assert not loop.apply_authority_event(state_root, start, repository_root=repository_root)
+    assert json.loads((state_root / loop.STATE_PATH).read_text())["authority_state"]["active"][
+        "implementation_chunk"
+    ] == "WS-ENG-001-04B"
+    cancel = _event("cancel", 42)
+    assert loop.apply_authority_event(state_root, cancel, repository_root=repository_root)
+    retry = _event("start", 43)
+    assert loop.apply_authority_event(state_root, retry, repository_root=repository_root)
+    loop.validate_generated_state(state_root)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda event: event.update(main_sha="f" * 40), "stale"),
+        (lambda event: event.update(chunk_id="WS-ENG-001-99"), "reviewed successor"),
+        (lambda event: event.update(initiative_id="WS-ART-001"), "crosses initiative"),
+        (lambda event: event.update(approvers=["dispatcher"]), "differ"),
+        (lambda event: event.update(reason="bad\nreason"), "reason"),
+    ],
+)
+def test_start_rejects_invalid_authority(
+    tmp_path: Path, mutation, message: str
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    before = (state_root / loop.LEDGER_PATH).read_bytes()
+    event = _event("start")
+    mutation(event)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    assert (state_root / loop.LEDGER_PATH).read_bytes() == before
+
+
+def test_same_run_cannot_authorize_two_events(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(state_root, _event("start"), repository_root=repository_root)
+    with pytest.raises(loop.LoopMemoryError, match="run ID"):
+        loop.apply_authority_event(
+            state_root, _event("cancel"), repository_root=repository_root
+        )
+
+
+def test_active_merge_must_match_exact_chunk(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(state_root, _event("start"), repository_root=repository_root)
+    wrong = _record()
+    wrong["source"].update(main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=162)
+    wrong["source"]["pr_url"] = "https://github.com/Flow-Research/workstream/pull/162"
+    with pytest.raises(loop.LoopMemoryError, match="active signed chunk"):
+        loop.apply_merge_record(state_root, wrong)
+
+
+def test_cutover_exemption_is_exact_and_consumed_once(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    cutover = _record()
+    cutover["legacy_exemptions"] = [
+        {
+            "initiative_id": "WS-AUTH-001",
+            "chunk_id": "WS-AUTH-001-PREP",
+            "pr_number": 162,
+        }
+    ]
+    cutover["event"] = {
+        "type": "cutover",
+        "main_sha": "a" * 40,
+        "legacy_exemptions": json.loads(json.dumps(cutover["legacy_exemptions"])),
+    }
+    loop.apply_merge_record(state_root, cutover)
+    exempt = _record()
+    exempt["source"].update(
+        main_sha="c" * 40,
+        first_parent_sha="a" * 40,
+        pr_number=162,
+        pr_url="https://github.com/Flow-Research/workstream/pull/162",
+        intent_path=".agent-loop/merge-intents/WS-AUTH-001-PREP.json",
+    )
+    exempt["completed_chunk"].update(
+        initiative_id="WS-AUTH-001",
+        chunk_id="WS-AUTH-001-PREP",
+        chunk_title="Prepared Mutation Authorization Protocol",
+        next_chunk_id="WS-AUTH-001-10",
+        next_chunk_title="Project Qualification Grants",
+    )
+    exempt["gate"].update(
+        next_chunk_id="WS-AUTH-001-10",
+        next_chunk_title="Project Qualification Grants",
+    )
+    assert loop.apply_merge_record(state_root, exempt)
+    assert json.loads((state_root / loop.STATE_PATH).read_text())["legacy_exemptions"] == []
+    later = _record()
+    later["source"].update(
+        main_sha="f" * 40,
+        first_parent_sha="c" * 40,
+        pr_number=163,
+        pr_url="https://github.com/Flow-Research/workstream/pull/163",
+    )
+    with pytest.raises(loop.LoopMemoryError, match="no signed start or exemption"):
+        loop.apply_merge_record(state_root, later)
+
+
+@dataclass
+class _Client:
+    run: object
+    approvals: object
+
+    def get_json(self, path: str):
+        return self.approvals if path.endswith("/approvals") else self.run
+
+
+def test_collect_authority_event_binds_run_and_approval_evidence() -> None:
+    client = _Client(
+        run={
+            "id": 41,
+            "run_attempt": 1,
+            "event": "workflow_dispatch",
+            "head_branch": "main",
+            "head_sha": "a" * 40,
+            "actor": {"login": "dispatcher"},
+            "created_at": "2026-07-20T11:00:00Z",
+        },
+        approvals=[
+            {
+                "state": "approved",
+                "user": {"login": "reviewer"},
+                "environments": [{"id": 7, "name": "loop-memory-start"}],
+            },
+            {"state": "rejected", "user": {"login": "ignored"}},
+        ],
+    )
+    assert loop.collect_authority_event(
+        client,
+        "Flow-Research/workstream",
+        action="start",
+        initiative_id="WS-ENG-001",
+        chunk_id="WS-ENG-001-04B",
+        reason="Approved",
+        run_id=41,
+        dispatcher="dispatcher",
+        main_sha="a" * 40,
+        prior_state_tip="e" * 40,
+    )["approvers"] == ["reviewer"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("id", 99, "run_id"),
+        ("run_attempt", 2, "first-attempt"),
+        ("event", "push", "first-attempt"),
+        ("head_branch", "feature", "expected main"),
+        ("head_sha", "f" * 40, "expected main"),
+        ("actor", {"login": "other"}, "dispatcher"),
+    ],
+)
+def test_collect_authority_event_rejects_untrusted_run(
+    field: str, value: object, message: str
+) -> None:
+    run = {
+        "id": 41,
+        "run_attempt": 1,
+        "event": "workflow_dispatch",
+        "head_branch": "main",
+        "head_sha": "a" * 40,
+        "actor": {"login": "dispatcher"},
+        "created_at": "2026-07-20T11:00:00Z",
+    }
+    run[field] = value
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop.collect_authority_event(
+            _Client(run, [{"state": "approved", "user": {"login": "reviewer"}, "environments": [{"id": 7, "name": "loop-memory-start"}]}]),
+            "Flow-Research/workstream",
+            action="start",
+            initiative_id="WS-ENG-001",
+            chunk_id="WS-ENG-001-04B",
+            reason="Approved",
+            run_id=41,
+            dispatcher="dispatcher",
+            main_sha="a" * 40,
+            prior_state_tip="e" * 40,
+        )
+
+
+def test_load_legacy_exemptions_is_closed_and_sorted(tmp_path: Path) -> None:
+    policy = tmp_path / loop.LEGACY_EXEMPTIONS_PATH
+    policy.parent.mkdir(parents=True)
+    policy.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "exemptions": [
+                    {
+                        "initiative_id": "WS-AUTH-001",
+                        "chunk_id": "WS-AUTH-001-PREP",
+                        "pr_number": 162,
+                    }
+                ],
+            }
+        )
+    )
+    assert loop.load_legacy_exemptions(tmp_path)[0]["pr_number"] == 162
+    policy.write_text('{"schema_version":1,"exemptions":"bad"}')
+    with pytest.raises(loop.LoopMemoryError, match="unsupported"):
+        loop.load_legacy_exemptions(tmp_path)
+
+
+def test_cutover_inventory_is_loaded_from_exact_historical_commit(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repository"
+    policy = repository / loop.LEGACY_EXEMPTIONS_PATH
+    policy.parent.mkdir(parents=True)
+    subprocess.run(["git", "init", str(repository)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.name", "Loop Test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repository), "config", "user.email", "loop@test.invalid"],
+        check=True,
+    )
+    inventory_a = {
+        "schema_version": 1,
+        "exemptions": [
+            {"initiative_id": "WS-ART-001", "chunk_id": "WS-ART-001-02C2", "pr_number": 159}
+        ],
+    }
+    inventory_b = {
+        "schema_version": 1,
+        "exemptions": [
+            {"initiative_id": "WS-AUTH-001", "chunk_id": "WS-AUTH-001-PREP", "pr_number": 162}
+        ],
+    }
+    policy.write_text(json.dumps(inventory_a), encoding="utf-8")
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(
+        ["git", "-C", str(repository), "commit", "-m", "cutover"],
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    cutover_sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    policy.write_text(json.dumps(inventory_b), encoding="utf-8")
+
+    assert loop.load_legacy_exemptions_at_commit(repository, cutover_sha) == inventory_a[
+        "exemptions"
+    ]
+    with pytest.raises(loop.LoopMemoryError, match="no bounded"):
+        loop.load_legacy_exemptions_at_commit(repository, "f" * 40)
+
+
+def test_apply_event_cli_routes_authenticated_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    event = _event("start")
+    captured = {}
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+
+    def collect(_client, _repository, **kwargs):
+        captured.update(kwargs)
+        return event
+
+    monkeypatch.setattr(loop, "collect_authority_event", collect)
+    monkeypatch.setattr(
+        loop,
+        "apply_authority_event",
+        lambda _root, supplied, repository_root, branch_root: supplied is event,
+    )
+    monkeypatch.setattr(loop, "validate_generated_state", lambda _root: None)
+    result = loop.main(
+        [
+            "apply-event",
+            "--repository", "Flow-Research/workstream",
+            "--repository-root", str(tmp_path),
+            "--state-root", str(tmp_path / "state"),
+            "--branch-root", str(tmp_path / "branch"),
+            "--action", "start",
+            "--initiative-id", "WS-ENG-001",
+            "--chunk-id", "WS-ENG-001-04B",
+            "--reason", "Approved",
+            "--run-id", "41",
+            "--dispatcher", "dispatcher",
+            "--main-sha", "a" * 40,
+            "--prior-state-tip", "e" * 40,
+        ]
+    )
+    assert result == 0
+    assert captured["run_id"] == 41
+    assert "event applied" in capsys.readouterr().out
+
+
+def test_update_cli_applies_cutover_only_from_explicit_repository_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = _record()
+    record["completed_chunk"] = {
+        **record["completed_chunk"],
+        "chunk_id": "WS-ENG-001-04B",
+    }
+    captured: list[dict] = []
+    repository_root = tmp_path / "repository"
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args: record.copy())
+    monkeypatch.setattr(loop, "validate_generated_state", lambda _root: None)
+    monkeypatch.setattr(
+        loop, "apply_merge_record", lambda _root, supplied: captured.append(supplied) or True
+    )
+    monkeypatch.setattr(
+        loop,
+        "load_legacy_exemptions_at_commit",
+        lambda root, sha: [{"repository_root": str(root), "commit_sha": sha}],
+    )
+
+    common = [
+        "update",
+        "--repository", "Flow-Research/workstream",
+        "--repository-root", str(repository_root),
+        "--merge-sha", "a" * 40,
+        "--state-root", str(tmp_path / "state"),
+    ]
+    assert loop.main(common) == 0
+    assert "event" not in captured[-1]
+
+    assert loop.main(common + ["--cutover-chunk-id", "WS-ENG-001-04B"]) == 0
+    assert captured[-1]["event"]["type"] == "cutover"
+    assert captured[-1]["legacy_exemptions"] == [
+        {"repository_root": str(repository_root), "commit_sha": "a" * 40}
+    ]
+
+
+def test_publish_cli_routes_repository_owned_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    captured = {}
+
+    def publish(branch, output, **kwargs):
+        captured.update(branch=branch, output=output, **kwargs)
+        return "f" * 40
+
+    monkeypatch.setattr(loop, "publish_generated_state", publish)
+    assert loop.main(
+        [
+            "publish", "--branch-root", str(tmp_path / "branch"),
+            "--output-root", str(tmp_path / "output"),
+            "--expected-prior-tip", "e" * 40,
+            "--message", "bounded message",
+        ]
+    ) == 0
+    assert captured["expected_prior_tip"] == "e" * 40
+    assert "published as" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"type": "cutover"},
+        {"type": "cutover", "main_sha": "f" * 40, "legacy_exemptions": []},
+        {"type": "cutover", "main_sha": "a" * 40, "legacy_exemptions": [{"bad": True}]},
+    ],
+)
+def test_cutover_event_must_match_merge_and_inventory(event: dict) -> None:
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_cutover_event(event, [], "a" * 40)
+
+
+def test_state_tip_resolution_fails_closed_outside_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.undo()
+    with pytest.raises(loop.LoopMemoryError, match="cannot resolve"):
+        loop._state_branch_tip(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda record: record["authority_state"]["completed_chunk"].update(
+            initiative_id="WS-ART-001"
+        ),
+        lambda record: record["authority_state"]["source"].update(pr_number=999),
+        lambda record: record["authority_state"]["completed_chunk"].update(
+            chunk_title="Tampered basis"
+        ),
+        lambda record: record["event"].update(chunk_id="WS-ENG-001-99"),
+    ],
+)
+def test_authority_transition_is_bound_to_preceding_basis(
+    tmp_path: Path, mutation
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    records = [entry["record"] for entry in loop._load_ledger(state_root / loop.LEDGER_PATH)]
+    authority = json.loads(json.dumps(records[-1]))
+    mutation(authority)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_authority_transition(authority, records[:-1])
+
+
+def test_authority_transition_requires_prior_basis(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    authority = loop._load_ledger(state_root / loop.LEDGER_PATH)[-1]["record"]
+    with pytest.raises(loop.LoopMemoryError, match="no preceding"):
+        loop._validate_authority_transition(authority, [])
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda event: event.update(event_id="wrong"),
+        lambda event: event.update(run_id=0),
+        lambda event: event.update(approvers=[]),
+        lambda event: event.update(approvers=["reviewer", "reviewer"]),
+        lambda event: event.update(prior_state_tip="bad"),
+        lambda event: event.update(chunk_id="bad"),
+    ],
+)
+def test_authority_event_schema_rejects_malformed_evidence(mutation) -> None:
+    event = _event("start")
+    mutation(event)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_event(event)
+
+
+def test_collect_authority_event_rejects_invalid_approval_shape() -> None:
+    run = {
+        "id": 41,
+        "run_attempt": 1,
+        "event": "workflow_dispatch",
+        "head_branch": "main",
+        "head_sha": "a" * 40,
+        "actor": {"login": "dispatcher"},
+        "created_at": "2026-07-20T11:00:00Z",
+    }
+    with pytest.raises(loop.LoopMemoryError, match="approval history"):
+        loop.collect_authority_event(
+            _Client(run, {}),
+            "Flow-Research/workstream",
+            action="start", initiative_id="WS-ENG-001",
+            chunk_id="WS-ENG-001-04B", reason="Approved", run_id=41,
+            dispatcher="dispatcher", main_sha="a" * 40,
+            prior_state_tip="e" * 40,
+        )
+
+
+def test_well_formed_stale_state_tip_is_rejected(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    event = _event("start")
+    event["prior_state_tip"] = "f" * 40
+    before = {path: path.read_bytes() for path in state_root.rglob("*") if path.is_file()}
+    with pytest.raises(loop.LoopMemoryError, match="prior state tip is stale"):
+        loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    assert before == {path: path.read_bytes() for path in state_root.rglob("*") if path.is_file()}
+
+
+def test_same_event_id_with_different_bytes_is_collision(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    event = _event("start")
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    conflict = json.loads(json.dumps(event))
+    conflict["reason"] = "Different signed bytes"
+    with pytest.raises(loop.LoopMemoryError, match="different bytes"):
+        loop.apply_authority_event(state_root, conflict, repository_root=repository_root)
+
+
+def test_cancel_rejects_inactive_chunk(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    with pytest.raises(loop.LoopMemoryError, match="not the active chunk"):
+        loop.apply_authority_event(
+            state_root, _event("cancel"), repository_root=repository_root
+        )
+
+
+def test_cross_initiative_start_preserves_latest_global_merge(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    later = _record()
+    later["source"].update(
+        main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=170,
+        pr_url="https://github.com/Flow-Research/workstream/pull/170",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-02.json",
+    )
+    later["completed_chunk"].update(
+        initiative_id="WS-ART-001", chunk_id="WS-ART-001-02",
+        chunk_title="Artifact Custody", next_chunk_id="WS-ART-001-03",
+        next_chunk_title="Artifact Recovery",
+    )
+    later["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    loop.apply_merge_record(state_root, later)
+    event = _event("start")
+    event["main_sha"] = "c" * 40
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    art_contract = repository_root / ".agent-loop/initiatives/art/chunks/WS-ART-001-03-recovery.md"
+    art_contract.parent.mkdir(parents=True)
+    art_contract.write_text("# Chunk Contract: WS-ART-001-03\n")
+    art_event = _event("start", 44)
+    art_event.update(
+        main_sha="c" * 40,
+        initiative_id="WS-ART-001",
+        chunk_id="WS-ART-001-03",
+    )
+    loop.apply_authority_event(
+        state_root, art_event, repository_root=repository_root
+    )
+    rendered = (state_root / loop.RENDERED_PATH).read_text()
+    queue = (state_root / loop.WORK_QUEUE_PATH).read_text()
+    assert "`c" + "c" * 39 + "`" in rendered
+    assert "`WS-ENG-001-04B`, `WS-ART-001-03`" not in rendered
+    assert "`WS-ART-001-03`, `WS-ENG-001-04B`" in rendered
+    assert "Completed chunk: `WS-ART-001-02`" in rendered
+    assert "Next chunk: `WS-ART-001-03`" in rendered
+    assert f"Latest global merge: `{'c' * 40}`" in queue
+
+
+def test_exact_active_merge_closes_and_consumes_exemption(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    base = _record()
+    base["legacy_exemptions"] = [
+        {"initiative_id": "WS-ENG-001", "chunk_id": "WS-ENG-001-04B", "pr_number": 171}
+    ]
+    loop.apply_merge_record(state_root, base)
+    loop.apply_authority_event(state_root, _event("start"), repository_root=repository_root)
+    merged = _record()
+    merged["source"].update(
+        main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=171,
+        pr_url="https://github.com/Flow-Research/workstream/pull/171",
+        intent_path=".agent-loop/merge-intents/WS-ENG-001-04B.json",
+    )
+    merged["completed_chunk"].update(
+        chunk_id="WS-ENG-001-04B", chunk_title="Signed Explicit Start Events",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    merged["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    assert loop.apply_merge_record(state_root, merged)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    assert state["active"]["implementation_chunk"] is None
+    assert state["legacy_exemptions"] == []
+
+
+def test_publication_push_failure_leaves_remote_tip_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    branch, remote, output, repository_root = (
+        tmp_path / "branch", tmp_path / "remote.git", tmp_path / "output", tmp_path / "repo"
+    )
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "init", "--initial-branch", loop.STATE_BRANCH, str(branch)], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "-C", str(branch), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(branch), "config", "user.email", "test@example.com"], check=True)
+    loop.apply_merge_record(branch, _record())
+    subprocess.run(["git", "-C", str(branch), "add", ".agent-loop"], check=True)
+    subprocess.run(["git", "-C", str(branch), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "-C", str(branch), "remote", "add", "origin", str(remote)], check=True)
+    subprocess.run(["git", "-C", str(branch), "push", "origin", loop.STATE_BRANCH], check=True, stdout=subprocess.PIPE)
+    prior = subprocess.run(["git", "-C", str(branch), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+    shutil.copytree(branch / ".agent-loop", output / ".agent-loop")
+    _contract(repository_root)
+    event = _event("start")
+    event["prior_state_tip"] = prior
+    def real_tip(root: Path) -> str:
+        return subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.strip()
+    monkeypatch.setattr(loop, "_state_branch_tip", real_tip)
+    loop.apply_authority_event(output, event, repository_root=repository_root, branch_root=branch)
+    real_run = subprocess.run
+
+    def fail_push(args, **kwargs):
+        if isinstance(args, list) and "push" in args:
+            raise subprocess.CalledProcessError(1, args)
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(loop.subprocess, "run", fail_push)
+    with pytest.raises(loop.LoopMemoryError, match="fast-forward"):
+        loop.publish_generated_state(
+            branch, output, expected_prior_tip=prior, message="test publication"
+        )
+    monkeypatch.setattr(loop.subprocess, "run", real_run)
+    remote_tip = subprocess.run(["git", "--git-dir", str(remote), "rev-parse", loop.STATE_BRANCH], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+    assert remote_tip == prior
+    published = loop.publish_generated_state(
+        branch, output, expected_prior_tip=prior, message="test publication"
+    )
+    assert published and published != prior
+    remote_tip = subprocess.run(
+        ["git", "--git-dir", str(remote), "rev-parse", loop.STATE_BRANCH],
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+    assert remote_tip == published

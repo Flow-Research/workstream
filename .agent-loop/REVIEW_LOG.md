@@ -2660,3 +2660,18 @@ exact ART no-migration invariant, records REV no-migration separately, and
 states the completed owner-only transfer. Sixty-three focused cases and all
 deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
 finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.
+
+## 2026-07-20 - WS-ENG-001-04B External Review Repair
+
+Pre-repair PR #165 head `e8ade1f8` passed Agent Gates, backend preflight, API
+e2e, all four backend shards, the aggregate 78 percent coverage gate, and human
+review. CodeRabbit found that replay guidance was not workflow-specific and that
+cutover depended on mutable working-tree policy. The repair scopes replay
+correctly, makes cutover explicit, loads the exemption inventory from the
+immutable cutover merge, fails closed on missing or invalid historical data, and
+pins exact non-interpolated production arguments. All nine internal tracks pass
+exact SHA `acc15aa5`; fresh hosted checks, CodeRabbit incremental re-review, and
+any branch-policy-required renewed approval remain after publication.
+The later documentation-only audit reconciliation is reviewed independently and
+bound by the chunk's internal-review evidence; it does not replace `acc15aa5` as
+the canonical implementation and closeout evidence head.

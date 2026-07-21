@@ -20,6 +20,7 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Codex custom reviewer agents live under `.codex/agents/`.
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
 - Canonical live post-merge state is generated on `automation/loop-memory` from trusted `main` after a PR merge. Do not open a manual post-merge memory PR when that workflow succeeds.
+- Start or cancel a declared successor only through the protected `Loop Memory Explicit Event` workflow on exact current `main`. A distinct `loop-memory-start` environment reviewer authorizes the event; chat and local state never do. Rerun recovery uses a fresh dispatch after inspecting signed state.
 - The automation branch is a closed generated tree. Verify its signed manifest,
   JSON/ledger, loop view, work queue, and initiative projections together; do
   not treat authored narrative status copied from `main` as live automation
