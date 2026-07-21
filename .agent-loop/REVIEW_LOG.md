@@ -2691,3 +2691,18 @@ not identify which SHA and runs its results described. The response now binds
 Agent Gates `29784118660` and CodeRabbit
 `d64c773b-4f76-491e-ae6e-cab19d25dc4b` to published head `8a705e5b` and keeps
 sharded Backend `29784025021` explicitly pending.
+
+## 2026-07-20 - WS-ENG-001-04B External Review Repair
+
+Pre-repair PR #165 head `e8ade1f8` passed Agent Gates, backend preflight, API
+e2e, all four backend shards, the aggregate 78 percent coverage gate, and human
+review. CodeRabbit found that replay guidance was not workflow-specific and that
+cutover depended on mutable working-tree policy. The repair scopes replay
+correctly, makes cutover explicit, loads the exemption inventory from the
+immutable cutover merge, fails closed on missing or invalid historical data, and
+pins exact non-interpolated production arguments. All nine internal tracks pass
+exact SHA `acc15aa5`; fresh hosted checks, CodeRabbit incremental re-review, and
+any branch-policy-required renewed approval remain after publication.
+The later documentation-only audit reconciliation is reviewed independently and
+bound by the chunk's internal-review evidence; it does not replace `acc15aa5` as
+the canonical implementation and closeout evidence head.
