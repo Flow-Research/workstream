@@ -41,10 +41,13 @@ automation succeeds.
 ## Explicit Start And Cancel
 
 Use `.github/workflows/loop-memory-start.yml` on exact protected `main` to start
-the recorded same-initiative successor or cancel that exact active chunk. The
-protected environment approval is authority; the dispatcher is attribution.
-Never infer a start from chat, a worktree, or PR prose. Do not rerun a failed
-dispatch: inspect authenticated state and create a fresh attributable dispatch.
+the recorded same-initiative successor or a unique reviewed contract, or cancel
+that exact active chunk. A start requires globally idle signed state and the
+dispatcher's current GitHub `write`/`push`, `maintain`, or `admin` permission;
+that authenticated dispatch is the single authority checkpoint. Cancellation
+retains the distinct protected-environment approval. Never infer a start from
+chat, a worktree, or PR prose. Do not rerun a failed dispatch: inspect
+authenticated state and create a fresh attributable dispatch.
 
 The generated queue and initiative files reduce signed merge, start, and cancel
 events. They never attest work started only in conversation or an unmerged

@@ -38,6 +38,45 @@ def test_checker_accepts_dispatcher_authorized_start_projection(tmp_path: Path) 
     assert checker.generated_state_failures(state_root) == []
 
 
+def test_checker_accepts_writer_directed_planning_projection(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    assert checker.generated_state_failures(state_root, repository_root) == []
+
+
+def test_checker_rejects_forged_writer_selection_mode(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    state["event"]["selection"]["mode"] = "declared_successor"
+    assert checker._authority_transition_failures(state, [record], "fixture")
+
+
+def test_checker_binds_selection_to_exact_main_blob(tmp_path: Path) -> None:
+    _state_root, repository_root, _record, event = fixtures._selected_start_fixture(tmp_path)
+    assert checker._selection_tree_failures(event, repository_root, "fixture") == []
+    event["selection"]["contract_blob_sha"] = "f" * 40
+    assert checker._selection_tree_failures(event, repository_root, "fixture")
+
+
+def test_checker_rejects_start_transition_after_globally_active_work(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    active = json.loads((state_root / loop.STATE_PATH).read_text())
+    forged = json.loads(json.dumps(active))
+    forged["event"].update(
+        run_id=99, event_id="github-actions:99:start",
+        created_at="2026-07-20T19:00:00Z",
+    )
+    failures = checker._authority_transition_failures(
+        forged, [record, active], "fixture"
+    )
+    assert any("globally active" in failure for failure in failures)
+
+
 def test_checker_rejects_authority_projection_drift(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     fixtures._contract(repository_root)
@@ -103,7 +142,7 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     assert set(workflow["on"]) == {"workflow_dispatch"}
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert set(inputs) == {
-        "action", "initiative_id", "chunk_id", "reason", "expected_main_sha"
+        "action", "initiative_id", "chunk_id", "phase", "reason", "expected_main_sha"
     }
     assert workflow["permissions"] == {"actions": "read", "contents": "write"}
     assert workflow["concurrency"] == {

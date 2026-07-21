@@ -222,11 +222,29 @@ def _contract_title(contract_text: str, chunk_id: str) -> str | None:
     """Return the title from one canonical chunk-contract heading."""
     lines = contract_text.splitlines()
     first_line = lines[0] if lines else ""
-    prefix = f"# Chunk Contract: {chunk_id} - "
-    if not first_line.startswith(prefix):
+    prefixes = (
+        f"# Chunk Contract: {chunk_id} - ",
+        f"# Chunk Contract: {chunk_id} — ",
+    )
+    prefix = next((value for value in prefixes if first_line.startswith(value)), None)
+    if prefix is None:
         return None
     title = first_line[len(prefix) :].strip()
     return title or None
+
+
+def _contract_start_phase(contract_text: str) -> str | None:
+    """Return one explicit writer-directed lifecycle phase from a contract."""
+    headings = re.findall(r"(?m)^## Start phase\s*$", contract_text)
+    matches = re.findall(
+        r"(?m)^## Start phase\s*\n\s*`?(planning|implementation)`?\s*$",
+        contract_text,
+    )
+    if not headings:
+        return None
+    if len(headings) != 1 or len(matches) != 1:
+        raise LoopMemoryError("start phase declaration is ambiguous or invalid")
+    return matches[0]
 
 
 def _initiative_directory_from_path(path: str, initiative_id: str) -> str | None:
@@ -256,6 +274,139 @@ def _successor_contract_name_matches(name: str, chunk_id: str) -> bool:
     return name == f"{chunk_id}.md" or (
         name.startswith(f"{chunk_id}-") and name.endswith(".md")
     )
+
+
+def _git_output(repository_root: Path, *args: str) -> str:
+    """Return one bounded Git result or fail closed."""
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    value = result.stdout.strip()
+    if result.returncode != 0 or not value:
+        raise LoopMemoryError("cannot resolve reviewed contract from current main")
+    return value
+
+
+def resolve_start_selection(
+    repository_root: Path,
+    *,
+    initiative_id: str,
+    chunk_id: str,
+    phase: str,
+    main_sha: str,
+    declared_successor: bool,
+) -> dict[str, Any]:
+    """Bind one start selection to a unique regular contract on exact main."""
+    _validate_sha(main_sha)
+    if phase not in {"planning", "implementation"}:
+        raise LoopMemoryError("start phase is invalid")
+    if _git_output(repository_root, "rev-parse", "HEAD") != main_sha:
+        raise LoopMemoryError("start contract tree is not exact current main")
+    tree_output = _git_output(repository_root, "ls-tree", "-r", "--full-tree", "HEAD")
+    tree_rows: list[tuple[str, str, str, str]] = []
+    for line in tree_output.splitlines():
+        try:
+            metadata, path = line.split("\t", 1)
+            mode, kind, blob_sha = metadata.split(" ", 2)
+        except ValueError as exc:
+            raise LoopMemoryError("current-main contract tree is malformed") from exc
+        tree_rows.append((mode, kind, blob_sha, path))
+    initiative_directories = sorted(
+        {
+            directory
+            for _mode, _kind, _blob, path in tree_rows
+            if (directory := _initiative_directory_from_path(path, initiative_id))
+        }
+    )
+    if len(initiative_directories) != 1:
+        raise LoopMemoryError("start initiative directory is not unique on current main")
+    initiative_directory = initiative_directories[0]
+    all_candidates = sorted(
+        row
+        for row in tree_rows
+        if _successor_contract_name_matches(row[3].rsplit("/", 1)[-1], chunk_id)
+        and row[3].startswith(CHUNK_CONTRACT_ROOT)
+    )
+    if any(
+        _initiative_directory_from_path(path, initiative_id) != initiative_directory
+        for _mode, _kind, _blob, path in all_candidates
+    ):
+        raise LoopMemoryError("start chunk contract crosses initiative directory")
+    candidates = [
+        row
+        for row in all_candidates
+        if row[0] == "100644"
+        and row[1] == "blob"
+        and _is_chunk_contract_path(row[3], initiative_directory)
+    ]
+    if len(candidates) != 1:
+        raise LoopMemoryError("start chunk contract is not one regular file on current main")
+    _mode, _kind, blob_sha, relative = candidates[0]
+    _validate_sha(blob_sha)
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), "cat-file", "blob", blob_sha],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        raw = result.stdout
+        if result.returncode != 0 or len(raw) > 262144:
+            raise LoopMemoryError("start chunk contract exceeds 262144 bytes")
+        contract_text = raw.decode("utf-8")
+        title = _contract_title(contract_text, chunk_id)
+    except UnicodeDecodeError as exc:
+        raise LoopMemoryError("cannot read start chunk contract") from exc
+    if not title:
+        raise LoopMemoryError("start chunk contract has no canonical heading")
+    declared_phase = _contract_start_phase(contract_text)
+    expected_phase = declared_phase or ("implementation" if declared_successor else None)
+    if expected_phase is None:
+        raise LoopMemoryError("writer-directed contract has no explicit start phase")
+    if phase != expected_phase:
+        raise LoopMemoryError("requested start phase does not match reviewed contract")
+    return {
+        "schema_version": 1,
+        "mode": "declared_successor" if declared_successor else "writer_directed",
+        "phase": phase,
+        "contract_path": relative,
+        "contract_title": title,
+        "contract_blob_sha": blob_sha,
+    }
+
+
+def _validate_start_selection(selection: Any, event: dict[str, Any]) -> dict[str, Any]:
+    """Validate the closed signed contract-selection envelope."""
+    required = {
+        "schema_version", "mode", "phase", "contract_path",
+        "contract_title", "contract_blob_sha",
+    }
+    if not isinstance(selection, dict) or set(selection) != required:
+        raise LoopMemoryError("start selection has an invalid schema")
+    if selection.get("schema_version") != 1 or selection.get("mode") not in {
+        "declared_successor", "writer_directed"
+    } or selection.get("phase") not in {"planning", "implementation"}:
+        raise LoopMemoryError("start selection is unsupported")
+    path = selection.get("contract_path")
+    title = selection.get("contract_title")
+    blob = selection.get("contract_blob_sha")
+    initiative_directory = (
+        _initiative_directory_from_path(path, event["initiative_id"])
+        if isinstance(path, str) else None
+    )
+    if (
+        initiative_directory is None
+        or not _is_chunk_contract_path(path, initiative_directory)
+        or not _successor_contract_name_matches(path.rsplit("/", 1)[-1], event["chunk_id"])
+    ):
+        raise LoopMemoryError("start selection contract path is invalid")
+    _bounded_text(title, "start selection title", maximum=160)
+    _validate_sha(blob)
+    return selection
 
 
 def _validate_local_successor_contract(
@@ -795,9 +946,13 @@ def _validate_event(event: Any) -> str:
         "chunk_id",
     }
     dispatcher_authorized = historical - {"approvers"} | {"authorization"}
+    selected_start = dispatcher_authorized | {"selection"}
+    selected_cancel = historical | {"selection"}
     if event_type not in {"start", "cancel"} or frozenset(event) not in {
         frozenset(historical),
         frozenset(dispatcher_authorized),
+        frozenset(selected_start),
+        frozenset(selected_cancel),
     }:
         raise LoopMemoryError("authority event has an invalid schema")
     run_id = event.get("run_id")
@@ -819,12 +974,28 @@ def _validate_event(event: Any) -> str:
             raise LoopMemoryError("authority event reviewer must differ from dispatcher")
     else:
         authorization = event["authorization"]
-        if event_type != "start" or authorization != {
+        legacy_authorization = {
             "schema_version": 1,
             "type": "github_workflow_dispatch",
             "actor": event["dispatcher"],
-        }:
+        }
+        repository_permission = {
+            "schema_version": 2,
+            "type": "github_repository_permission",
+            "actor": event["dispatcher"],
+            "permission": authorization.get("permission") if isinstance(authorization, dict) else None,
+        }
+        if (
+            event_type != "start"
+            or authorization not in (legacy_authorization, repository_permission)
+            or (
+                authorization == repository_permission
+                and authorization["permission"] not in {"write", "push", "maintain", "admin"}
+            )
+        ):
             raise LoopMemoryError("dispatcher authorization is invalid")
+    if "selection" in event:
+        _validate_start_selection(event["selection"], event)
     _validate_sha(event.get("main_sha"))
     _validate_sha(event.get("prior_state_tip"))
     for field in ("initiative_id", "chunk_id"):
@@ -859,7 +1030,8 @@ def collect_authority_event(
     dispatcher: str,
     main_sha: str,
     prior_state_tip: str,
-    start_authorities: frozenset[str],
+    start_permissions: frozenset[str],
+    selection: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Collect immutable GitHub authority evidence for a start/cancel event."""
     _validate_repository_and_sha(repository, main_sha)
@@ -872,8 +1044,17 @@ def collect_authority_event(
         raise LoopMemoryError("authority event is not bound to expected main")
     if run.get("actor", {}).get("login") != dispatcher:
         raise LoopMemoryError("workflow dispatcher evidence does not match")
-    if action == "start" and dispatcher.casefold() not in start_authorities:
-        raise LoopMemoryError("workflow dispatcher is not an authorized starter")
+    permission = None
+    if action == "start":
+        permission_payload = client.get_json(
+            f"/repos/{repository}/collaborators/{dispatcher}/permission"
+        )
+        permission = (
+            permission_payload.get("permission")
+            if isinstance(permission_payload, dict) else None
+        )
+        if permission not in start_permissions:
+            raise LoopMemoryError("workflow dispatcher has no permitted repository write access")
     event = {
         "type": action,
         "event_id": f"github-actions:{run_id}:{action}",
@@ -888,10 +1069,13 @@ def collect_authority_event(
     }
     if action == "start":
         event["authorization"] = {
-            "schema_version": 1,
-            "type": "github_workflow_dispatch",
+            "schema_version": 2,
+            "type": "github_repository_permission",
             "actor": dispatcher,
+            "permission": permission,
         }
+        if selection is not None:
+            event["selection"] = selection
     else:
         approvals = client.get_json(
             f"/repos/{repository}/actions/runs/{run_id}/approvals"
@@ -919,27 +1103,24 @@ def collect_authority_event(
                 if item.get("user", {}).get("login")
             }
         )
+        if selection is not None:
+            event["selection"] = selection
     _validate_event(event)
     return event
 
 
-def load_start_authorities(repository_root: Path) -> frozenset[str]:
-    """Load the closed start-authority allowlist from trusted repository code."""
+def load_start_permissions(repository_root: Path) -> frozenset[str]:
+    """Load repository permissions eligible to dispatch a signed start."""
     policy = _load_json(repository_root / START_AUTHORITIES_PATH)
-    if not isinstance(policy, dict) or set(policy) != {"schema_version", "actors"}:
+    if not isinstance(policy, dict) or set(policy) != {"schema_version", "permissions"}:
         raise LoopMemoryError("start-authority policy has an invalid schema")
-    actors = policy.get("actors")
-    if policy.get("schema_version") != 1 or not isinstance(actors, list) or not actors:
-        raise LoopMemoryError("start-authority policy has no valid actors")
-    normalized = []
-    for actor in actors:
-        value = _bounded_text(actor, "start-authority actor", maximum=39)
-        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", value):
-            raise LoopMemoryError("start-authority actor is invalid")
-        normalized.append(value.casefold())
-    if len(set(normalized)) != len(normalized):
-        raise LoopMemoryError("start-authority actors must be unique")
-    return frozenset(normalized)
+    permissions = policy.get("permissions")
+    if (
+        policy.get("schema_version") != 2
+        or permissions != ["admin", "maintain", "push", "write"]
+    ):
+        raise LoopMemoryError("start-authority policy has invalid permissions")
+    return frozenset(permissions)
 
 
 def _latest_merge_record(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -975,17 +1156,28 @@ def render_state(
         check_lines.append(f"  - `{name}`: `{result['conclusion'] or 'missing'}`")
     integrity = "passed" if checks["all_required_passed"] else "attention required"
     active_chunks = []
+    planning_chunks = []
     if records is None:
         active = state["active"]["implementation_chunk"]
         active_chunks = [active] if active else []
+        planning = state["active"]["planning_chunk"]
+        planning_chunks = [planning] if planning else []
     else:
         active_chunks = sorted(
             record["active"]["implementation_chunk"]
             for record in _latest_by_initiative(records).values()
             if record["active"]["implementation_chunk"]
         )
+        planning_chunks = sorted(
+            record["active"]["planning_chunk"]
+            for record in _latest_by_initiative(records).values()
+            if record["active"]["planning_chunk"]
+        )
     active_line = "- Active implementation chunks: " + (
         ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
+    )
+    planning_line = "- Active planning chunks: " + (
+        ", ".join(f"`{chunk}`" for chunk in planning_chunks) if planning_chunks else "none"
     )
     authority_lines: list[str] = []
     if _event_type(state) in {"start", "cancel"}:
@@ -1009,7 +1201,7 @@ def render_state(
             f"- Merge intent: `{source['intent_path']}` at blob `{source['intent_blob_sha']}`",
             f"- Completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
-            "- Active planning chunks: none",
+            planning_line,
             active_line,
             *authority_lines,
             f"- Current gate: `{gate['status']}`",
@@ -1067,6 +1259,7 @@ def render_initiative_state(record: dict[str, Any]) -> str:
     completed = record["completed_chunk"]
     gate = record["gate"]
     next_chunk = gate["next_chunk_id"] or "none"
+    planning_chunk = record["active"]["planning_chunk"] or "none"
     active_chunk = record["active"]["implementation_chunk"] or "none"
     return "\n".join(
         [
@@ -1078,6 +1271,7 @@ def render_initiative_state(record: dict[str, Any]) -> str:
             f"- Latest completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
             f"- Gate: `{gate['status']}`",
+            f"- Active planning chunk: `{planning_chunk}`",
             f"- Active implementation chunk: `{active_chunk}`",
             f"- Next chunk: `{next_chunk}`",
             f"- Separate explicit start required: "
@@ -1238,22 +1432,36 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         _validate_record(lifecycle)
         if metadata.initiative_id != event["initiative_id"]:
             raise LoopMemoryError("authority lifecycle initiative does not match event")
-        if metadata.next_chunk_id != event["chunk_id"]:
-            raise LoopMemoryError("authority event chunk is not the reviewed successor")
+        selection = event.get("selection")
+        if selection is None:
+            if metadata.next_chunk_id != event["chunk_id"]:
+                raise LoopMemoryError("authority event chunk is not the reviewed successor")
+            selected_title = metadata.next_chunk_title
+            selected_phase = "implementation"
+        else:
+            _validate_start_selection(selection, event)
+            selected_title = selection["contract_title"]
+            selected_phase = selection["phase"]
         if event["main_sha"] != base["source"]["main_sha"]:
             raise LoopMemoryError("authority event main does not match global state")
         if record.get("updated_at") != event["created_at"]:
             raise LoopMemoryError("authority state time does not match event time")
         expected_active = {
-            "planning_chunk": None,
-            "implementation_chunk": event["chunk_id"] if event_type == "start" else None,
+            "planning_chunk": (
+                event["chunk_id"]
+                if event_type == "start" and selected_phase == "planning" else None
+            ),
+            "implementation_chunk": (
+                event["chunk_id"]
+                if event_type == "start" and selected_phase == "implementation" else None
+            ),
         }
         if authority.get("active") != expected_active:
             raise LoopMemoryError("authority event active state is inconsistent")
         expected_gate = {
             "status": "active" if event_type == "start" else "stopped_after_cancel",
             "next_chunk_id": event["chunk_id"],
-            "next_chunk_title": metadata.next_chunk_title,
+            "next_chunk_title": selected_title,
             "next_requires_explicit_start": True,
         }
         if authority.get("gate") != expected_gate:
@@ -1486,18 +1694,30 @@ def _load_json_at_commit(
 
 def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
     """Validate the closed one-use recovery certificate."""
-    if not isinstance(payload, dict) or set(payload) != {
-        "schema_version", "activation", "recovered_merge"
-    }:
+    if not isinstance(payload, dict):
+        raise LoopMemoryError("recovery policy has an invalid schema")
+    version = payload.get("schema_version")
+    if version == 2 and "recovered_merge" in payload:
+        raise LoopMemoryError("recovery policy is unsupported")
+    expected = (
+        {"schema_version", "activation", "recovered_merge"}
+        if version == 1
+        else {"schema_version", "activation", "mode"}
+    )
+    if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    recovered = payload.get("recovered_merge")
-    if payload.get("schema_version") != 1 or not isinstance(activation, dict):
+    if version not in {1, 2} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
     ):
         raise LoopMemoryError("recovery activation identity is invalid")
+    if version == 2:
+        if payload.get("mode") != "exact_single_target":
+            raise LoopMemoryError("recovery policy mode is unsupported")
+        return json.loads(_canonical_json(payload))
+    recovered = payload.get("recovered_merge")
     if not isinstance(recovered, dict) or set(recovered) != {
         "initiative_id", "chunk_id", "pr_number", "merge_sha"
     }:
@@ -1547,6 +1767,21 @@ def prepare_recovery_exemptions(
         or target_identity["chunk_id"] != activation["chunk_id"]
     ):
         return []
+    if policy["schema_version"] == 2:
+        signed_main = (
+            state.get("event", {}).get("main_sha")
+            if _event_type(state) in {"start", "cancel"}
+            else state.get("source", {}).get("main_sha")
+        )
+        if planned_shas != [target_sha]:
+            raise LoopMemoryError("single-target recovery plan is not exact")
+        if target_record.get("source", {}).get("first_parent_sha") != signed_main:
+            raise LoopMemoryError("single-target recovery is not the signed first parent")
+        exemption = target_identity
+        existing = state.get("legacy_exemptions", [])
+        if not isinstance(existing, list) or exemption in existing:
+            raise LoopMemoryError("recovery exemption collides with signed state")
+        return [exemption]
     recovered = policy["recovered_merge"]
     if planned_shas != [recovered["merge_sha"], target_sha]:
         raise LoopMemoryError("recovery plan is not the exact two-merge sequence")
@@ -1652,12 +1887,35 @@ def _validate_authority_transition(
     if authority["source"] != basis["source"] or authority["completed_chunk"] != basis["completed_chunk"]:
         raise LoopMemoryError("authority lifecycle does not copy its signed basis")
     if event_type == "start":
-        if basis["active"]["implementation_chunk"] is not None:
+        latest = _latest_by_initiative(prior_records)
+        if any(
+            _event_type(item) in {"merge", "cutover"}
+            and item["completed_chunk"]["initiative_id"] == event["initiative_id"]
+            and item["completed_chunk"]["chunk_id"] == event["chunk_id"]
+            for item in prior_records
+        ):
+            raise LoopMemoryError("authority start selects an already-completed chunk")
+        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
+            raise LoopMemoryError("authority start follows globally active work")
+        selection = event.get("selection")
+        if basis["active"]["implementation_chunk"] is not None or basis["active"]["planning_chunk"] is not None:
             raise LoopMemoryError("authority start follows an already-active basis")
-        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+        if selection is None and basis["gate"]["next_chunk_id"] != event["chunk_id"]:
             raise LoopMemoryError("authority start is not the basis successor")
+        if selection is not None:
+            _validate_start_selection(selection, event)
+            expected_mode = (
+                "declared_successor"
+                if basis["gate"]["next_chunk_id"] == event["chunk_id"]
+                else "writer_directed"
+            )
+            if selection["mode"] != expected_mode:
+                raise LoopMemoryError("start selection mode does not match signed basis")
     elif basis["active"]["implementation_chunk"] != event["chunk_id"]:
-        raise LoopMemoryError("authority cancel does not match the basis active chunk")
+        if basis["active"]["planning_chunk"] != event["chunk_id"]:
+            raise LoopMemoryError("authority cancel does not match the basis active chunk")
+    if event_type == "cancel" and event.get("selection") != basis.get("event", {}).get("selection"):
+        raise LoopMemoryError("authority cancel selection does not match active start")
 
 
 def apply_authority_event(
@@ -1707,19 +1965,46 @@ def apply_authority_event(
     if basis is None:
         raise LoopMemoryError("authority event initiative has no signed gate")
     if event_type == "start":
-        if basis["active"]["implementation_chunk"] is not None:
+        if any(
+            _event_type(item) in {"merge", "cutover"}
+            and item["completed_chunk"]["initiative_id"] == event["initiative_id"]
+            and item["completed_chunk"]["chunk_id"] == event["chunk_id"]
+            for item in records
+        ):
+            raise LoopMemoryError("cannot start an already-completed chunk")
+        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
+            raise LoopMemoryError("cannot start while signed work is globally active")
+        if basis["active"]["implementation_chunk"] is not None or basis["active"]["planning_chunk"] is not None:
             raise LoopMemoryError("initiative already has an active chunk")
-        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
-            raise LoopMemoryError("start chunk is not the reviewed successor")
-        matches = list(
-            repository_root.glob(
-                f".agent-loop/initiatives/**/chunks/{event['chunk_id']}-*.md"
+        selection = event.get("selection")
+        if selection is None:
+            if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+                raise LoopMemoryError("start chunk is not the reviewed successor")
+            selected_title = basis["gate"]["next_chunk_title"]
+            selected_phase = "implementation"
+        else:
+            expected = resolve_start_selection(
+                repository_root,
+                initiative_id=event["initiative_id"],
+                chunk_id=event["chunk_id"],
+                phase=selection["phase"],
+                main_sha=event["main_sha"],
+                declared_successor=(basis["gate"]["next_chunk_id"] == event["chunk_id"]),
             )
-        )
-        if len(matches) != 1:
-            raise LoopMemoryError("start chunk contract is not unique on current main")
+            if selection != expected:
+                raise LoopMemoryError("signed start selection does not match current main")
+            selected_title = selection["contract_title"]
+            selected_phase = selection["phase"]
     else:
-        if basis["active"]["implementation_chunk"] != event["chunk_id"]:
+        if event.get("selection") != basis.get("event", {}).get("selection"):
+            raise LoopMemoryError("cancel selection does not match active start")
+        if event.get("selection") is not None:
+            selected_title = event["selection"]["contract_title"]
+            selected_phase = event["selection"]["phase"]
+        else:
+            selected_title = basis["gate"]["next_chunk_title"]
+            selected_phase = "implementation"
+        if event["chunk_id"] not in basis["active"].values():
             raise LoopMemoryError("cancel chunk is not the active chunk")
     updated = json.loads(_canonical_json(_latest_merge_record(records)))
     if "legacy_exemptions" in state:
@@ -1732,13 +2017,13 @@ def apply_authority_event(
         "source": basis["source"],
         "completed_chunk": basis["completed_chunk"],
         "active": {
-            "planning_chunk": None,
-            "implementation_chunk": event["chunk_id"] if event_type == "start" else None,
+            "planning_chunk": event["chunk_id"] if event_type == "start" and selected_phase == "planning" else None,
+            "implementation_chunk": event["chunk_id"] if event_type == "start" and selected_phase == "implementation" else None,
         },
         "gate": {
             "status": "active" if event_type == "start" else "stopped_after_cancel",
             "next_chunk_id": event["chunk_id"],
-            "next_chunk_title": basis["gate"]["next_chunk_title"],
+            "next_chunk_title": selected_title,
             "next_requires_explicit_start": True,
         },
     }
@@ -1811,11 +2096,18 @@ def apply_merge_record(
     if existing is not None:
         initiative_id = record["completed_chunk"]["initiative_id"]
         initiative_state = _latest_by_initiative(records).get(initiative_id)
-        active_chunk = (
-            initiative_state.get("active", {}).get("implementation_chunk")
-            if initiative_state
-            else None
-        )
+        active_values = initiative_state.get("active", {}) if initiative_state else {}
+        active_chunks = [
+            value
+            for value in (
+                active_values.get("planning_chunk"),
+                active_values.get("implementation_chunk"),
+            )
+            if value is not None
+        ]
+        if len(active_chunks) > 1:
+            raise LoopMemoryError("initiative has multiple active chunks")
+        active_chunk = active_chunks[0] if active_chunks else None
         remaining_exemptions = existing.get("legacy_exemptions")
         if recovery_exemptions:
             recovery_match = [
@@ -2314,6 +2606,9 @@ def build_parser() -> argparse.ArgumentParser:
     authority.add_argument("--state-root", type=Path, required=True)
     authority.add_argument("--branch-root", type=Path, required=True)
     authority.add_argument("--action", choices=("start", "cancel"), required=True)
+    authority.add_argument(
+        "--phase", choices=("planning", "implementation"), default="implementation"
+    )
     authority.add_argument("--initiative-id", required=True)
     authority.add_argument("--chunk-id", required=True)
     authority.add_argument("--reason", required=True)
@@ -2445,6 +2740,24 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "apply-event":
             _assert_state_branch(args.branch_root)
             token = os.environ.get(args.token_env, "")
+            state = _load_json(args.state_root / STATE_PATH)
+            records = _validate_ledger_entries(_load_ledger(args.state_root / LEDGER_PATH))
+            basis = _latest_by_initiative(records).get(args.initiative_id)
+            if not isinstance(state, dict) or basis is None:
+                raise LoopMemoryError("authority event has no signed initiative basis")
+            if args.action == "start":
+                selection = resolve_start_selection(
+                    args.repository_root,
+                    initiative_id=args.initiative_id,
+                    chunk_id=args.chunk_id,
+                    phase=args.phase,
+                    main_sha=args.main_sha,
+                    declared_successor=(
+                        basis["gate"]["next_chunk_id"] == args.chunk_id
+                    ),
+                )
+            else:
+                selection = basis.get("event", {}).get("selection")
             event = collect_authority_event(
                 GitHubClient(token, args.api_url),
                 args.repository,
@@ -2456,11 +2769,12 @@ def main(argv: list[str] | None = None) -> int:
                 dispatcher=args.dispatcher,
                 main_sha=args.main_sha,
                 prior_state_tip=args.prior_state_tip,
-                start_authorities=(
-                    load_start_authorities(args.repository_root)
+                start_permissions=(
+                    load_start_permissions(args.repository_root)
                     if args.action == "start"
                     else frozenset()
                 ),
+                selection=selection,
             )
             changed = apply_authority_event(
                 args.state_root,
