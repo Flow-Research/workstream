@@ -79,8 +79,24 @@ project. Services, agents, and Space principals deny before lookup.
 - Grant list/detail remain readable for every existing project state so
   immutable history is inspectable; unauthorized/nonexistent/path-mismatch
   cases are indistinguishable before disclosure.
-- List/detail expose bounded grant/snapshot provenance but no external identity
-  or contact metadata.
+- Candidate accepts only `limit` (default 50, range 1..100) and `cursor` (at
+  most 512 characters). Its item is exactly `{actor_profile_id, display_name}`
+  with nullable display name. Grant list accepts only `status` (optional exact
+  `active|revoked`), `role` (optional exact
+  `submitter|reviewer|adjudicator`), `limit` (default 50, range 1..100), and
+  `cursor` (at most 512 characters). Both list envelopes are exactly
+  `{items, next_cursor}` and intentionally expose no total count.
+- Grant list items and detail responses share one strict schema containing
+  exactly `id`, `project_id`, `actor_profile_id`, `role`, `status`, `version`,
+  `grant_method`, `qualification_snapshot`,
+  `granted_by_actor_profile_id`, `granted_by_admin_role_grant_id`, `granted_at`,
+  `grant_reason`, `revoked_by_actor_profile_id`, `revoked_at`, and
+  `revoked_reason`. The nested snapshot contains exactly `id`, `requested_role`,
+  the two 10A availability objects, `prior_project_work_refs`,
+  `external_expertise_refs`, `captured_by_actor_profile_id`,
+  `captured_by_admin_role_grant_id`, and `captured_at`. Nullable revocation
+  fields remain present. Strict schemas reject all other fields, especially
+  identity issuer/subject/link status, contact data, raw claims, and secrets.
 - 10B introduces one shared authorization pagination codec using HMAC-SHA256 and
   a required base64-decoded 32-byte
   `WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET`. The versioned cursor payload binds

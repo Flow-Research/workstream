@@ -98,12 +98,21 @@ to revoked version 2 may mutate lifecycle fields.
 - Typed and PostgreSQL audit/idempotency validators accept only the three exact
   roles and issued/revoked success events. Replacement fields/events/reasons
   and `both` are absent.
-- Upgrade refuses, without mutation, an audit/idempotency row whose project-role
-  facts contain `role='both'`, a replacement/supersession key, operation/event
-  `ProjectRoleGrantReplaced`, or replacement reason token. Downgrade refuses
-  without mutation when either new table contains any row or an authority audit
-  or idempotency row contains `role='adjudicator'`. Each predicate and the
-  combined predicate have no-mutation proof.
+- Upgrade inspects exact existing storage and refuses before DDL when any
+  `audit_events` row with `event_domain='authority'` has
+  `before_facts->>'role'='both'`, `after_facts->>'role'='both'`, a
+  `replaced_grant_id` key in either facts object,
+  `event_type='ProjectRoleGrantReplaced'`, or
+  `reason='authority_replacement'`. It also refuses any
+  `authority_idempotency_records.operation` in
+  `('project_role_grant.issue','project_role_grant.revoke')`, because those
+  records contain only a digest/resource reference and cannot prove an
+  independent-role request safely. No other replacement/supersession key or
+  fuzzy reason search is implied.
+- Downgrade refuses before DDL when either new table contains any row or an
+  authority audit row has `before_facts->>'role'='adjudicator'` or
+  `after_facts->>'role'='adjudicator'`. Each individual predicate and their
+  combined form have transaction-level no-mutation proof.
 - Fresh install, prior-head upgrade, downgrade/refusal, replay, constraints,
   immutability, and preserved unrelated history are proven on PostgreSQL.
 - No migration, model, schema, or fixture accepts automated creation.

@@ -103,8 +103,11 @@ schemas reject undeclared fields, including identity-link and contact data.
 Stable errors are HTTP 400 `invalid_request`, HTTP 403
 `self_grant_forbidden` or `self_role_revoke_forbidden`, concealed HTTP 404
 `resource_not_found`, HTTP 409 `idempotency_mismatch` or
-`project_role_grant_exists`, HTTP 422 `qualification_snapshot_invalid`, and
-fail-closed HTTP 503 `service_unavailable`.
+`project_role_grant_exists` or `project_role_grant_already_revoked`, HTTP 422
+`qualification_snapshot_invalid`, and fail-closed HTTP 503
+`service_unavailable`. A same-key/same-body revoke replay reauthorizes and
+returns the prior canonical HTTP 200 revoked response; a new-key revoke of an
+already-revoked grant returns HTTP 409 `project_role_grant_already_revoked`.
 
 ## Acceptance criteria
 
@@ -137,9 +140,12 @@ fail-closed HTTP 503 `service_unavailable`.
   authority loss, timeout, and cancellation.
 - Live API proof uses the same unexpired manager token to issue, read the active
   grant through 10B, revoke, read the historical revoked grant, and prove a
-  second revoke and an old replay are reauthorized/denied without direct
-  database edits. Contributor-capability denial remains explicitly deferred to
-  AUTH-11/13 where a real consumer action exists.
+  same-key/same-body revoke replay returns the prior HTTP 200 response after
+  reauthorization while a new-key second revoke returns HTTP 409
+  `project_role_grant_already_revoked`; an old issue replay after revocation is
+  reauthorized and denied without stale disclosure or direct database edits.
+  Contributor-capability denial remains explicitly deferred to AUTH-11/13 where
+  a real consumer action exists.
 
 ## Verification commands
 
