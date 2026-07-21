@@ -9,7 +9,7 @@
   projections passed
 - `WS-ENG-001-04B`: implementation approved; signed event reducer, protected
   workflow, cutover inventory, tests, CI coverage gates, operations policy, and
-  all nine exact-SHA reviewer tracks pass at `da9b2291`
+  all nine exact-SHA reviewer tracks pass at `acc15aa5`
 - Current gate: push the repaired evidence head to open PR #165, then obtain
   fresh hosted checks, CodeRabbit re-review, and any renewed human approval
   required by branch policy before explicit user merge authority
