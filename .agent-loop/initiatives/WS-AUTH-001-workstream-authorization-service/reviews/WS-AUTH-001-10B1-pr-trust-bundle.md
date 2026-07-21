@@ -26,11 +26,17 @@ route attachment, disclosure, concealment, cursors, and action activation.
 
 ## Evidence and review
 
-Exact code commit `fc5ba78b6ead358326b8493ea62c488d2f0c8495`
+Exact code commit `a8a0daef60c1374f103e26c092b59600f5465480`
 passed all nine required internal tracks against trusted main `1473f7a0`.
 Focused PostgreSQL, dependency, migration, concurrency, Ruff, Agent Gates,
 stale-doc, Markdown-link, and diff-integrity checks pass. Full sharded tests and
 coverage run in GitHub Actions because the local full suite takes hours.
+
+The first GitHub run exposed three stale tests that still named `0031` as
+current head. The narrow repair updates only those expectations to `0032`; a
+fresh isolated PostgreSQL pair passed and all nine tracks re-reviewed the exact
+repair SHA. Intentional assertions for failed downgrades retained at `0031`
+remain unchanged.
 
 ## Risks and controls
 

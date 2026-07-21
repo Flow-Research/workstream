@@ -1,10 +1,10 @@
 # WS-AUTH-001-10B1 Internal Review Evidence
 
-Reviewed code SHA: `fc5ba78b6ead358326b8493ea62c488d2f0c8495`
+Reviewed code SHA: `a8a0daef60c1374f103e26c092b59600f5465480`
 
 Reviewed against trusted main: `1473f7a0cab6d879c7b7c049a9b94f557ad712c2`
 
-Reviewed at: `2026-07-21T22:08:30Z`
+Reviewed at: `2026-07-21T22:38:00Z`
 
 Reviewer run IDs: `auth10b1_final_core`,
 `auth10b1_final_security_qa`, and `auth10b1_final_ops_docs_ci`
@@ -23,6 +23,8 @@ adds no route, action activation, cursor, disclosure, or mutation behavior.
 - Focused isolated selector: PASS, 27 tests; 174 deselected.
 - Migration/new-scope database proofs: PASS, 4 tests.
 - Final old/new-scope concurrent consumption proof: PASS, 2 tests.
+- Post-CI migration-head repair proof: PASS, 2 tests together in a fresh
+  isolated PostgreSQL database.
 - Dependency and digest proofs: PASS, 6 tests.
 - Ruff on all contract-owned Python paths: PASS.
 - Agent Gates: PASS, 89 tests.
@@ -55,6 +57,14 @@ new scope's own 429 and private 503 behavior under test, regression-protected
 the additive coverage command, and documented safe constraint-drift recovery.
 Old first-access and admin-mutation proofs remain present alongside the new
 scope; no test was removed, skipped, or weakened.
+
+GitHub shard 3 initially failed because three pre-existing migration tests
+still treated `0031_project_role_grants` as current `head`. The first stale
+assertion aborted before test-owned cleanup and caused the remaining downgrade
+failures. Repair `a8a0daef` changes only those three current-head expectations
+to `0032_authorization_read_rate`; assertions for intentional retained
+lower-revision states remain unchanged. All nine tracks re-reviewed that exact
+repair SHA and passed.
 
 Valid findings addressed: yes
 
