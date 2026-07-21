@@ -1,0 +1,13 @@
+{
+  "activation": {
+    "chunk_id": "WS-ENG-003-01",
+    "initiative_id": "WS-ENG-003"
+  },
+  "recovered_merge": {
+    "chunk_id": "WS-ENG-002-01",
+    "initiative_id": "WS-ENG-002",
+    "merge_sha": "6445ce6276a85c4ddef29d0f5e93cdbffe5d45bc",
+    "pr_number": 166
+  },
+  "schema_version": 1
+}

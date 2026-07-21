@@ -36,6 +36,7 @@ LEGACY_EXEMPTIONS_PATH = Path(
 START_AUTHORITIES_PATH = Path(
     ".agent-loop/policies/loop-memory-start-authorities.json"
 )
+RECOVERY_POLICY_PATH = Path(".agent-loop/policies/loop-memory-recovery.json")
 INTENT_PREFIX = ".agent-loop/merge-intents/"
 BOOTSTRAP_INTENT_PATH = f"{INTENT_PREFIX}WS-ENG-001-03.json"
 CHUNK_CONTRACT_ROOT = ".agent-loop/initiatives/"
@@ -1464,6 +1465,129 @@ def load_legacy_exemptions_at_commit(
     return _validate_legacy_exemptions(payload)
 
 
+def _load_json_at_commit(
+    repository_root: Path, commit_sha: str, path: Path, label: str
+) -> Any:
+    """Load bounded JSON from an immutable repository commit."""
+    _validate_sha(commit_sha)
+    result = subprocess.run(
+        ["git", "-C", str(repository_root), "show", f"{commit_sha}:{path}"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0 or len(result.stdout) > 64 * 1024:
+        raise LoopMemoryError(f"target commit has no bounded {label}")
+    try:
+        return json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LoopMemoryError(f"target commit {label} is invalid JSON") from exc
+
+
+def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
+    """Validate the closed one-use recovery certificate."""
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema_version", "activation", "recovered_merge"
+    }:
+        raise LoopMemoryError("recovery policy has an invalid schema")
+    activation = payload.get("activation")
+    recovered = payload.get("recovered_merge")
+    if payload.get("schema_version") != 1 or not isinstance(activation, dict):
+        raise LoopMemoryError("recovery policy is unsupported")
+    if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
+        activation.get("initiative_id"), activation.get("chunk_id")
+    ):
+        raise LoopMemoryError("recovery activation identity is invalid")
+    if not isinstance(recovered, dict) or set(recovered) != {
+        "initiative_id", "chunk_id", "pr_number", "merge_sha"
+    }:
+        raise LoopMemoryError("recovered merge identity is invalid")
+    if not _is_valid_exemption_id(
+        recovered.get("initiative_id"), recovered.get("chunk_id")
+    ) or type(recovered.get("pr_number")) is not int or recovered["pr_number"] <= 0:
+        raise LoopMemoryError("recovered merge identity is invalid")
+    _validate_sha(recovered.get("merge_sha"))
+    return json.loads(_canonical_json(payload))
+
+
+def _record_exemption(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "initiative_id": record["completed_chunk"]["initiative_id"],
+        "chunk_id": record["completed_chunk"]["chunk_id"],
+        "pr_number": record["source"]["pr_number"],
+    }
+
+
+def prepare_recovery_exemptions(
+    client: GitHubClient,
+    repository: str,
+    *,
+    repository_root: Path,
+    state_root: Path,
+    target_sha: str,
+    planned_shas: list[str],
+) -> list[dict[str, Any]]:
+    """Prepare exact exemptions before sequential recovery reconciliation."""
+    _validate_repository_and_sha(repository, target_sha)
+    state = _load_json(state_root / STATE_PATH)
+    if not isinstance(state, dict):
+        raise LoopMemoryError("recovery preparation requires canonical state")
+    if not planned_shas and state.get("source", {}).get("main_sha") == target_sha:
+        return []
+    policy = _validate_recovery_policy(
+        _load_json_at_commit(
+            repository_root, target_sha, RECOVERY_POLICY_PATH, "recovery policy"
+        )
+    )
+    target_record = collect_merge_record(client, repository, target_sha)
+    activation = policy["activation"]
+    target_identity = _record_exemption(target_record)
+    if (
+        target_identity["initiative_id"] != activation["initiative_id"]
+        or target_identity["chunk_id"] != activation["chunk_id"]
+    ):
+        return []
+    recovered = policy["recovered_merge"]
+    if planned_shas != [recovered["merge_sha"], target_sha]:
+        raise LoopMemoryError("recovery plan is not the exact two-merge sequence")
+    recovered_record = collect_merge_record(client, repository, recovered["merge_sha"])
+    if _record_exemption(recovered_record) != {
+        "initiative_id": recovered["initiative_id"],
+        "chunk_id": recovered["chunk_id"],
+        "pr_number": recovered["pr_number"],
+    }:
+        raise LoopMemoryError("recovered merge does not match its certificate")
+    exemptions = [_record_exemption(recovered_record), target_identity]
+    if exemptions != sorted(
+        exemptions, key=lambda item: (item["initiative_id"], item["chunk_id"])
+    ):
+        raise LoopMemoryError("recovery exemption order is invalid")
+    existing = state.get("legacy_exemptions", [])
+    if not isinstance(existing, list) or any(item in existing for item in exemptions):
+        raise LoopMemoryError("recovery exemption collides with signed state")
+    return exemptions
+
+
+def assert_recovery_consumed(
+    state_root: Path, target_sha: str, exemptions: list[dict[str, Any]]
+) -> None:
+    """Require exact target state with no surviving recovery identity."""
+    _validate_sha(target_sha)
+    state = _load_json(state_root / STATE_PATH)
+    if not isinstance(state, dict) or state.get("source", {}).get("main_sha") != target_sha:
+        raise LoopMemoryError("recovery did not reach the exact target")
+    remaining = state.get("legacy_exemptions", [])
+    if not isinstance(remaining, list) or any(item in remaining for item in exemptions):
+        raise LoopMemoryError("recovery exemption was not fully consumed")
+    records = _validate_ledger_entries(_load_ledger(state_root / LEDGER_PATH))
+    if any(
+        exemption in record.get("legacy_exemptions", [])
+        for record in records
+        for exemption in exemptions
+    ):
+        raise LoopMemoryError("recovery exemption leaked into signed history")
+
+
 def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Validate the full ledger hash and first-parent chains."""
     records: list[dict[str, Any]] = []
@@ -1646,7 +1770,11 @@ def _state_branch_tip(branch_root: Path) -> str:
     return tip
 
 
-def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
+def apply_merge_record(
+    state_root: Path,
+    record: dict[str, Any],
+    recovery_exemptions: list[dict[str, Any]] | None = None,
+) -> bool:
     """Apply one monotonic, idempotent merge record to a state directory."""
     _validate_record(record)
     state_path = state_root / STATE_PATH
@@ -1689,6 +1817,19 @@ def apply_merge_record(state_root: Path, record: dict[str, Any]) -> bool:
             else None
         )
         remaining_exemptions = existing.get("legacy_exemptions")
+        if recovery_exemptions:
+            recovery_match = [
+                item for item in recovery_exemptions
+                if item == _record_exemption(record)
+            ]
+            if len(recovery_match) != 1:
+                raise LoopMemoryError("merge has no unique exact recovery exemption")
+            current = remaining_exemptions or []
+            if any(item in current for item in recovery_exemptions):
+                raise LoopMemoryError("recovery exemption collides with signed state")
+            remaining_exemptions = json.loads(
+                _canonical_json(current + recovery_match)
+            )
         if remaining_exemptions is not None:
             remaining_exemptions = json.loads(_canonical_json(remaining_exemptions))
             match = next(
@@ -2151,6 +2292,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--cutover-chunk-id",
         help="Explicitly apply the reviewed legacy exemption inventory at this chunk",
     )
+    update.add_argument("--recovery-file", type=Path)
+
+    prepare_recovery = subparsers.add_parser("prepare-recovery")
+    prepare_recovery.add_argument("--repository", required=True)
+    prepare_recovery.add_argument("--repository-root", type=Path, default=Path("."))
+    prepare_recovery.add_argument("--state-root", type=Path, required=True)
+    prepare_recovery.add_argument("--target-sha", required=True)
+    prepare_recovery.add_argument("--plan-file", type=Path, required=True)
+    prepare_recovery.add_argument("--token-env", default="GITHUB_TOKEN")
+    prepare_recovery.add_argument("--api-url", default="https://api.github.com")
+
+    assert_recovery = subparsers.add_parser("assert-recovery-consumed")
+    assert_recovery.add_argument("--state-root", type=Path, required=True)
+    assert_recovery.add_argument("--target-sha", required=True)
+    assert_recovery.add_argument("--recovery-file", type=Path, required=True)
 
     authority = subparsers.add_parser("apply-event")
     authority.add_argument("--repository", required=True)
@@ -2254,10 +2410,38 @@ def main(argv: list[str] | None = None) -> int:
                         _canonical_json(record["legacy_exemptions"])
                     ),
                 }
-            changed = apply_merge_record(args.state_root, record)
+            recovery_exemptions = []
+            if args.recovery_file:
+                recovery_exemptions = _validate_legacy_exemptions(
+                    _load_json(args.recovery_file)
+                )
+            if recovery_exemptions:
+                changed = apply_merge_record(
+                    args.state_root, record,
+                    recovery_exemptions=recovery_exemptions,
+                )
+            else:
+                changed = apply_merge_record(args.state_root, record)
             validate_generated_state(args.state_root)
             result = "updated" if changed else "already current"
             print(f"Loop memory {result} for PR #{record['source']['pr_number']}.")
+        elif args.command == "prepare-recovery":
+            token = os.environ.get(args.token_env, "")
+            planned_shas = [
+                line.strip()
+                for line in args.plan_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            exemptions = prepare_recovery_exemptions(
+                GitHubClient(token, args.api_url), args.repository,
+                repository_root=args.repository_root, state_root=args.state_root,
+                target_sha=args.target_sha, planned_shas=planned_shas,
+            )
+            print(_canonical_json({"schema_version": 1, "exemptions": exemptions}))
+        elif args.command == "assert-recovery-consumed":
+            exemptions = _validate_legacy_exemptions(_load_json(args.recovery_file))
+            assert_recovery_consumed(args.state_root, args.target_sha, exemptions)
+            print("Loop-memory recovery inventory is fully consumed.")
         elif args.command == "apply-event":
             _assert_state_branch(args.branch_root)
             token = os.environ.get(args.token_env, "")
