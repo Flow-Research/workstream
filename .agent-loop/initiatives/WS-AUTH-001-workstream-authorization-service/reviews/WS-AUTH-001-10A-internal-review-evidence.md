@@ -1,12 +1,12 @@
 # WS-AUTH-001-10A Internal Review Evidence
 
-Reviewed code SHA: `07bb38a9b40a87eecdcd0518ec3122dad6553a59`
+Reviewed code SHA: `90a2f98667ab6bd0419665f185e05b7acd669688`
 
 Reviewed implementation SHA: `e8d9c37e6fd552439ff9f0db8b2972337a3b019f`
 
-Reviewed against trusted main: `dda60ed0cb97d9de4a375df4147f31172cb3839b`
+Reviewed against trusted main: `dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a`
 
-Reviewed at: `2026-07-21T14:31:09Z`
+Reviewed at: `2026-07-21T14:34:49Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
@@ -89,6 +89,13 @@ All tracks then reviewed CodeRabbit repair SHA `07bb38a9`. The valid finding
 was resolved by matching the ORM to migration 0031 for composite `RESTRICT`,
 identifier widths, and database-owned status/version/method defaults. Direct
 metadata verification and Ruff passed. All tracks passed with no open finding.
+
+All tracks re-reviewed final integration merge SHA `90a2f986` after trusted
+main advanced through PR #171. AUTH-10A remained byte-identical to its reviewed
+parent, both review histories were preserved, the updated merge-intent
+validator passed, and the incoming loop-recovery tooling did not alter AUTH
+behavior, tests, migration, thresholds, or successor semantics. All tracks
+passed with no open finding.
 
 Open sub-agent sessions: none
 
