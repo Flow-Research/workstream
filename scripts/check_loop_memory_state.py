@@ -691,7 +691,7 @@ def _render_work_queue(records: list[dict]) -> str:
     lines = [
         "# Generated Workstream Work Queue",
         "",
-        "> Merge-derived projection. Pre-start unmerged work is not represented.",
+        "> Signed merge/start/cancel projection. Unsigned chat or worktree starts are not represented.",
         "",
         "| Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |",
         "|---|---|---|---|---|",
@@ -719,7 +719,7 @@ def _render_initiative_state(record: dict) -> str:
         [
             "# Generated Merge/Start Projection",
             "",
-            "> Merge-derived state. Pre-start unmerged work is not represented.",
+            "> Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.",
             "",
             f"- Initiative: `{completed['initiative_id']}`",
             f"- Latest completed chunk: `{completed['chunk_id']}` - {_markdown_text(completed['chunk_title'])}",

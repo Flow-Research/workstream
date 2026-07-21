@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import check_loop_memory_state as checker
 from scripts import update_post_merge_memory as loop
 
 
@@ -1445,8 +1446,9 @@ def test_cross_initiative_start_preserves_parallel_active_work(tmp_path: Path) -
     loop.validate_generated_state(state_root)
 
 
+@pytest.mark.parametrize("close_order", ["merge_then_cancel", "cancel_then_merge"])
 def test_three_initiatives_mix_phases_and_isolate_close_operations(
-    tmp_path: Path,
+    tmp_path: Path, close_order: str,
 ) -> None:
     state_root, repository_root, ci_record, ci_event = _selected_start_fixture(tmp_path)
     _contract(repository_root)
@@ -1507,6 +1509,8 @@ def test_three_initiatives_mix_phases_and_isolate_close_operations(
     assert "Active implementation chunks: `WS-ART-001-03`, `WS-ENG-001-04B`" in rendered
     assert "Active planning chunks: `WS-CI-001-02`" in rendered
     queue = (state_root / loop.WORK_QUEUE_PATH).read_text(encoding="utf-8")
+    assert "Signed merge/start/cancel projection" in queue
+    assert "Unsigned chat or worktree starts are not represented" in queue
     for initiative_id, chunk_id in (
         ("WS-ENG-001", "WS-ENG-001-04B"),
         ("WS-ART-001", "WS-ART-001-03"),
@@ -1537,22 +1541,71 @@ def test_three_initiatives_mix_phases_and_isolate_close_operations(
     with pytest.raises(loop.LoopMemoryError):
         loop.apply_merge_record(state_root, wrong_merge)
 
-    art_cancel = _event("cancel", 45)
-    art_cancel.update(
-        main_sha=main_sha, initiative_id="WS-ART-001", chunk_id="WS-ART-001-03"
+    eng_merge = json.loads(json.dumps(eng_record))
+    eng_merge["source"].update(
+        main_sha="f" * 40, first_parent_sha=main_sha, pr_number=181,
+        pr_url="https://github.com/Flow-Research/workstream/pull/181",
+        intent_path=".agent-loop/merge-intents/WS-ENG-001-04B.json",
     )
-    assert loop.apply_authority_event(
-        state_root, art_cancel, repository_root=repository_root
+    eng_merge["completed_chunk"].update(
+        chunk_id="WS-ENG-001-04B", chunk_title="Signed Explicit Start Events",
+        next_chunk_id=None, next_chunk_title=None,
     )
+    eng_merge["gate"].update(next_chunk_id=None, next_chunk_title=None)
+
+    def merge_eng(*, expect_art_active: bool) -> None:
+        assert loop.apply_merge_record(state_root, eng_merge)
+        current = loop._latest_by_initiative(
+            loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+        )
+        assert current["WS-ENG-001"]["active"] == {
+            "planning_chunk": None, "implementation_chunk": None,
+        }
+        assert current["WS-ART-001"]["active"]["implementation_chunk"] == (
+            "WS-ART-001-03" if expect_art_active else None
+        )
+        assert current["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+
+    def cancel_art(current_main: str) -> None:
+        art_cancel = _event("cancel", 45)
+        art_cancel.update(
+            main_sha=current_main, initiative_id="WS-ART-001",
+            chunk_id="WS-ART-001-03",
+        )
+        assert loop.apply_authority_event(
+            state_root, art_cancel, repository_root=repository_root
+        )
+        current = loop._latest_by_initiative(
+            loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+        )
+        assert current["WS-ART-001"]["active"] == {
+            "planning_chunk": None, "implementation_chunk": None,
+        }
+        assert current["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+
+    if close_order == "merge_then_cancel":
+        merge_eng(expect_art_active=True)
+        cancel_art("f" * 40)
+    else:
+        cancel_art(main_sha)
+        merge_eng(expect_art_active=False)
+
     latest = loop._latest_by_initiative(
         loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
     )
     assert latest["WS-ART-001"]["active"] == {
         "planning_chunk": None, "implementation_chunk": None,
     }
-    assert latest["WS-ENG-001"]["active"]["implementation_chunk"] == "WS-ENG-001-04B"
+    assert latest["WS-ENG-001"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
     assert latest["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+    ci_projection = (
+        state_root / loop.INITIATIVE_STATE_ROOT / "WS-CI-001.md"
+    ).read_text(encoding="utf-8")
+    assert "Signed merge/start/cancel state" in ci_projection
     loop.validate_generated_state(state_root)
+    assert checker.generated_state_failures(state_root, repository_root) == []
 
 
 def test_exact_active_merge_closes_and_consumes_exemption(tmp_path: Path) -> None:

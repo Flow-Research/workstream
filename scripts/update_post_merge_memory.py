@@ -1230,11 +1230,11 @@ def _latest_by_initiative(records: list[dict[str, Any]]) -> dict[str, dict[str, 
 
 
 def render_work_queue(records: list[dict[str, Any]]) -> str:
-    """Render deterministic stopped/next gates for every observed initiative."""
+    """Render deterministic signed lifecycle gates for every initiative."""
     lines = [
         "# Generated Workstream Work Queue",
         "",
-        "> Merge-derived projection. Pre-start unmerged work is not represented.",
+        "> Signed merge/start/cancel projection. Unsigned chat or worktree starts are not represented.",
         "",
         "| Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |",
         "|---|---|---|---|---|",
@@ -1254,7 +1254,7 @@ def render_work_queue(records: list[dict[str, Any]]) -> str:
 
 
 def render_initiative_state(record: dict[str, Any]) -> str:
-    """Render one deterministic merge-derived initiative projection."""
+    """Render one deterministic signed-lifecycle initiative projection."""
     source = record["source"]
     completed = record["completed_chunk"]
     gate = record["gate"]
@@ -1265,7 +1265,7 @@ def render_initiative_state(record: dict[str, Any]) -> str:
         [
             "# Generated Merge/Start Projection",
             "",
-            "> Merge-derived state. Pre-start unmerged work is not represented.",
+            "> Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.",
             "",
             f"- Initiative: `{completed['initiative_id']}`",
             f"- Latest completed chunk: `{completed['chunk_id']}` - "
