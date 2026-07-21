@@ -1,5 +1,12 @@
 # Review Log: Writer-Directed Workstream Start
 
+- 2026-07-21: Post-merge Loop Memory run `29835344158` failed closed because
+  rebuild authentication invoked the new renderer before authenticating prior
+  signed projections. The bounded 01R1 repair separates structural/signature
+  authentication from current projection validation and binds exact two-merge
+  recovery for PR #169 plus the repair. Plan review passed with conditions; all
+  conditions were incorporated before implementation review.
+
 - 2026-07-21: User confirmed repository-writer starts must not require an admin
   checkpoint and explicitly instructed the orchestrator to begin the repair.
 - 2026-07-21: Discovery confirmed the current successor-only rule strands

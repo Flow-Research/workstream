@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -2192,6 +2193,68 @@ def test_prepare_output_migrates_authenticated_legacy_tree_without_traversal() -
             updater.MANIFEST_PATH.as_posix(),
             updater.SIGNATURE_PATH.as_posix(),
         }
+
+
+def test_prepare_output_rebuilds_authenticated_renderer_drift() -> None:
+    """A signed old projection rebuilds without relaxing strict validation."""
+    updater = load_module(
+        "post_merge_renderer_rebuild", "scripts/update_post_merge_memory.py"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        source = root / "source"
+        output = root / "output"
+        private_key = root / "private.pem"
+        public_key = root / "public.pem"
+        subprocess.run(
+            ["openssl", "genpkey", "-algorithm", "ED25519", "-out", private_key],
+            check=True,
+        )
+        subprocess.run(
+            ["openssl", "pkey", "-in", private_key, "-pubout", "-out", public_key],
+            check=True,
+        )
+        updater.apply_merge_record(source, loop_record(updater))
+        projection = (
+            source / updater.INITIATIVE_STATE_ROOT / "WS-AUTH-001.md"
+        )
+        projection.write_text("# Signed projection from the prior renderer\n", encoding="utf-8")
+        manifest_path = source / updater.MANIFEST_PATH
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for item in manifest["payloads"]:
+            if item["path"] == projection.relative_to(source).as_posix():
+                item["sha256"] = hashlib.sha256(projection.read_bytes()).hexdigest()
+        manifest_path.write_text(
+            updater._canonical_json(manifest, pretty=True), encoding="utf-8"
+        )
+        with tempfile.NamedTemporaryFile() as payload_file:
+            payload_file.write(updater._signature_payload(source))
+            payload_file.flush()
+            signature = subprocess.run(
+                [
+                    "openssl", "pkeyutl", "-sign", "-rawin", "-inkey",
+                    str(private_key), "-in", payload_file.name,
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            ).stdout
+        (source / updater.SIGNATURE_PATH).write_text(
+            base64.b64encode(signature).decode("ascii") + "\n", encoding="ascii"
+        )
+
+        assert_loop_error(
+            updater,
+            lambda: updater.verify_generated_state_signature(source, public_key),
+            "initiative state does not match",
+        )
+        updater.verify_generated_state_rebuild_source(source, public_key)
+        assert updater.prepare_generated_output(source, output, public_key) is True
+        assert projection.read_text(encoding="utf-8").startswith("# Signed projection")
+        assert "# Signed projection" not in (
+            output / updater.INITIATIVE_STATE_ROOT / "WS-AUTH-001.md"
+        ).read_text(encoding="utf-8")
+        updater.validate_generated_state(output)
 
 
 def test_generated_tree_publication_is_exact_fast_forward_and_bootstrappable() -> None:
@@ -6319,6 +6382,7 @@ def main() -> int:
         test_post_merge_collection_binds_exact_pr_and_checks,
         test_generated_loop_memory_validator_detects_drift,
         test_generated_loop_memory_signature_authenticates_every_canonical_file,
+        test_prepare_output_rebuilds_authenticated_renderer_drift,
         test_schema_v1_signed_state_is_discarded_before_clean_v2_bootstrap,
         test_schema_v1_ledger_and_signature_domains_fail_independently,
         test_live_and_historical_records_reject_cross_initiative_gates,
