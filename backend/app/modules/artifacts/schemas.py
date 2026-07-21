@@ -162,3 +162,25 @@ class DenyArtifactInternalAuthority:
     ) -> None:
         del service_identity, action_id, facts
         raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryResult:
+    """Stable identifiers returned by an exact recovery request or replay."""
+
+    recovery_attempt_id: UUID
+    source_verification_job_id: UUID
+    retry_verification_job_id: UUID
+    replayed: bool
+
+
+class ArtifactRecoveryError(Exception):
+    """Base failure for an internal recovery request."""
+
+
+class ArtifactRecoveryConflictError(ArtifactRecoveryError):
+    """Raised when idempotency or lifetime source ownership conflicts."""
+
+
+class ArtifactRecoveryIneligibleError(ArtifactRecoveryError):
+    """Raised when the source job is not exhausted provider-unavailable work."""

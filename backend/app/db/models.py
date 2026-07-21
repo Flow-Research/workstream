@@ -12,6 +12,7 @@ from app.modules.artifacts.models import (  # noqa: F401
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactReplica,
+    ArtifactRecoveryAttempt,
     ArtifactUploadItem,
     ArtifactUploadSession,
 )

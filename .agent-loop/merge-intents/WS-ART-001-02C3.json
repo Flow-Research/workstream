@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-02C3",
+  "chunk_title": "Recovery Attempt And Idempotency Chain",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-02D",
+  "next_chunk_title": "Operator Artifact Operations",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}
