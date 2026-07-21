@@ -57,10 +57,14 @@ coverage, API E2E, and Agent Gates.
 
 ## External Review And Remaining Risks
 
-CodeRabbit and GitHub checks are pending publication. Remaining implementation
-risk is intentionally isolated into the three children: migration privacy and
-refusal in 10A, read disclosure/cursors in 10B, and mutation concurrency/replay
-in 10C. None may start from this PR alone.
+Initial GitHub preflight rejected a noncanonical reviewed-SHA heading, and Agent
+Gates rejected branch-authored live status. The external response records the
+minimal repairs: use the canonical evidence label and restore `STATUS.md` to
+trusted-main state because signed automation owns live projection. All 88 Agent
+Gate regression tests pass locally. CodeRabbit and fresh GitHub checks remain.
+Implementation risk is intentionally isolated into the three children:
+migration privacy/refusal in 10A, read disclosure/cursors in 10B, and mutation
+concurrency/replay in 10C. None may start from this PR alone.
 
 ## Follow-Up And Human Review Focus
 

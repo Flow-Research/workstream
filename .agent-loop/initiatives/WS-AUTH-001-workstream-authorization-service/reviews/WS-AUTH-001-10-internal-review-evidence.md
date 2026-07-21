@@ -1,6 +1,6 @@
 # WS-AUTH-001-10 Internal Review Evidence
 
-Reviewed planning SHA: `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2`
+Reviewed code SHA: `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2`
 
 Reviewed against trusted main: `5a8a924d9b3b347d4cc74b4682865518539c837e`
 
