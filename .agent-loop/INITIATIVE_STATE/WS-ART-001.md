@@ -3,11 +3,11 @@
 > Merge-derived state. Pre-start unmerged work is not represented.
 
 - Initiative: `WS-ART-001`
-- Latest completed chunk: `WS-ART-001-02C1` - Admission And Put-Attempt Foundation
+- Latest completed chunk: `WS-ART-001-02C2` - Verification Publication And Fencing
 - Gate: `stopped_after_merge`
 - Active implementation chunk: `none`
-- Next chunk: `WS-ART-001-02C2`
+- Next chunk: `WS-ART-001-02C3`
 - Separate explicit start required: `true`
-- Source PR: [#154](https://github.com/Flow-Research/workstream/pull/154)
-- Source merge: `44f2467cedc266d2efe261119cfff436ac6b7715`
-- Source event time: `2026-07-19T16:32:47Z`
+- Source PR: [#159](https://github.com/Flow-Research/workstream/pull/159)
+- Source merge: `bc5e6a42cc84bff3ec80978970dc0018fe060b35`
+- Source event time: `2026-07-21T07:17:20Z`

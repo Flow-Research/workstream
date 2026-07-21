@@ -4,46 +4,41 @@
     "planning_chunk": null
   },
   "checks": {
-    "all_required_passed": true,
+    "all_required_passed": false,
     "required": {
       "CodeRabbit": {
-        "conclusion": "success",
+        "conclusion": "failure",
         "kind": "status",
         "url": null
       },
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29806293606/job/88557427124"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29809839790/job/88568185683"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29806225054/job/88559243106"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29808967743/job/88567985220"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-PREP",
-    "chunk_title": "Prepared Mutation Authorization Protocol",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-10",
-    "next_chunk_title": "Project Qualification And Contributor Role Grants",
+    "chunk_id": "WS-ART-001-02C2",
+    "chunk_title": "Verification Publication And Fencing",
+    "initiative_id": "WS-ART-001",
+    "next_chunk_id": "WS-ART-001-02C3",
+    "next_chunk_title": "Recovery Attempt And Idempotency Chain",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-10",
-    "next_chunk_title": "Project Qualification And Contributor Role Grants",
+    "next_chunk_id": "WS-ART-001-02C3",
+    "next_chunk_title": "Recovery Attempt And Idempotency Chain",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
   "legacy_exemptions": [
-    {
-      "chunk_id": "WS-ART-001-02C2",
-      "initiative_id": "WS-ART-001",
-      "pr_number": 159
-    },
     {
       "chunk_id": "WS-MCP-001-01",
       "initiative_id": "WS-MCP-001",
@@ -53,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "58d0514aa5f6751a310d750f8dab8a946ca08fa5",
-    "head_ref": "codex/ws-auth-001-prep",
-    "head_sha": "917e9205f6098038316f3eaedc9988a5602074b7",
-    "intent_blob_sha": "03a41d4790104e74b4faa39443748689862a56ad",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-PREP.json",
-    "main_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
-    "merged_at": "2026-07-21T06:27:01Z",
+    "first_parent_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
+    "head_ref": "codex/ws-art-001-02c2-verification-publication-fencing",
+    "head_sha": "1bdb3d7bdc25423b115a80b16fe524dc0a731fe2",
+    "intent_blob_sha": "33033a0ea403ab4887a2410cddfd9a5c1d6f4808",
+    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02C2.json",
+    "main_sha": "bc5e6a42cc84bff3ec80978970dc0018fe060b35",
+    "merged_at": "2026-07-21T07:17:20Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 162,
-    "pr_title": "WS-AUTH-001-PREP: add prepared mutation authorization protocol",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/162"
+    "pr_number": 159,
+    "pr_title": "WS-ART-001-02C2: verification publication and fencing",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/159"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T06:27:01Z"
+  "updated_at": "2026-07-21T07:17:20Z"
 }
