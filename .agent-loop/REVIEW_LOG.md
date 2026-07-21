@@ -1,5 +1,15 @@
 # Review Log
 
+## 2026-07-21 - WS-ENG-004-01R1 Renderer Recovery Repair
+
+Post-merge run `29835344158` failed before consuming recovery: rebuild
+authentication applied current renderer equality to authenticated prior-renderer
+bytes and cleared otherwise valid signed state. Repair chunk WS-ENG-004-01R1
+authenticates the closed manifest, semantic state, ledger, and signature first;
+copies only state and ledger; regenerates every projection; and retains strict
+current-renderer validation before publication. The recovery policy binds exact
+PR #169 merge `dda60ed0` plus the repair and consumes both exemptions.
+
 ## 2026-07-20 - WS-AUTH-001-ART-CUSTODY Internal Review Passed
 
 - Exact code SHA `abb3fb1a035f544f5ee07b7d725451dfa2d90864` passes senior
