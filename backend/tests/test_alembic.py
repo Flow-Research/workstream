@@ -908,6 +908,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_09C,
                             ActionOwner.AUTH_09D_A,
                             ActionOwner.AUTH_09D_B,
+                            ActionOwner.AUTH_10B,
+                            ActionOwner.AUTH_10C,
                         }
                     ),
                 )
