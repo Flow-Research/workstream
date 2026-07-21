@@ -42,8 +42,9 @@ automation succeeds.
 
 Use `.github/workflows/loop-memory-start.yml` on exact protected `main` to start
 the recorded same-initiative successor or a unique reviewed contract, or cancel
-that exact active chunk. A start requires globally idle signed state and the
-dispatcher's current GitHub `write`/`push`, `maintain`, or `admin` permission;
+that exact active chunk. A start requires an idle target initiative; other
+initiatives may remain active concurrently. The dispatcher's current GitHub
+`write`/`push`, `maintain`, or `admin` permission is required;
 that authenticated dispatch is the single authority checkpoint. Cancellation
 retains the distinct protected-environment approval. Never infer a start from
 chat, a worktree, or PR prose. Do not rerun a failed dispatch: inspect

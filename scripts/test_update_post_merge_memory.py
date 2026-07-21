@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from scripts import check_loop_memory_state as checker
 from scripts import update_post_merge_memory as loop
 
 
@@ -304,7 +305,7 @@ def test_writer_directed_start_rejects_blob_and_title_drift(tmp_path: Path) -> N
         loop.apply_authority_event(state_root, wrong_title, repository_root=repository_root)
 
 
-def test_ledger_transition_rejects_start_after_globally_active_work(tmp_path: Path) -> None:
+def test_ledger_transition_rejects_second_start_in_same_initiative(tmp_path: Path) -> None:
     state_root, repository_root, record, event = _selected_start_fixture(tmp_path)
     loop.apply_merge_record(state_root, record)
     loop.apply_authority_event(state_root, event, repository_root=repository_root)
@@ -314,7 +315,7 @@ def test_ledger_transition_rejects_start_after_globally_active_work(tmp_path: Pa
         run_id=98, event_id="github-actions:98:start",
         created_at="2026-07-20T18:00:00Z",
     )
-    with pytest.raises(loop.LoopMemoryError, match="globally active"):
+    with pytest.raises(loop.LoopMemoryError, match="already-active basis"):
         loop._validate_authority_transition(forged, [record, active])
 
 
@@ -492,8 +493,32 @@ def test_exact_single_target_recovery_binds_signed_first_parent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     state_root = tmp_path / "state"
-    loop.apply_merge_record(state_root, _record())
-    target = _merge_record("WS-ENG-004", "WS-ENG-004-01", 169, "f" * 40, "a" * 40)
+    repository_root = tmp_path / "repo"
+    _contract(repository_root)
+    art = _merge_record("WS-ART-001", "WS-ART-001-02", 168, "a" * 40, "0" * 40)
+    art["completed_chunk"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    art["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    auth = _merge_record("WS-AUTH-001", "WS-AUTH-001-10", 169, "c" * 40, "a" * 40)
+    auth["completed_chunk"].update(
+        next_chunk_id="WS-AUTH-001-10A", next_chunk_title="Project Role Grants"
+    )
+    auth["gate"].update(
+        next_chunk_id="WS-AUTH-001-10A", next_chunk_title="Project Role Grants"
+    )
+    loop.apply_merge_record(state_root, art)
+    loop.apply_merge_record(state_root, auth)
+    auth_start = _event("start", 40)
+    auth_start.update(
+        main_sha="c" * 40, initiative_id="WS-AUTH-001", chunk_id="WS-AUTH-001-10A"
+    )
+    loop.apply_authority_event(
+        state_root, auth_start, repository_root=repository_root
+    )
+    target = _merge_record("WS-ENG-004", "WS-ENG-004-01", 170, "f" * 40, "c" * 40)
     policy = {
         "schema_version": 2,
         "mode": "exact_single_target",
@@ -506,7 +531,7 @@ def test_exact_single_target_recovery_binds_signed_first_parent(
         state_root=state_root, target_sha="f" * 40, planned_shas=["f" * 40],
     )
     assert exemptions == [
-        {"initiative_id": "WS-ENG-004", "chunk_id": "WS-ENG-004-01", "pr_number": 169}
+        {"initiative_id": "WS-ENG-004", "chunk_id": "WS-ENG-004-01", "pr_number": 170}
     ]
     target["source"]["first_parent_sha"] = "b" * 40
     with pytest.raises(loop.LoopMemoryError, match="signed first parent"):
@@ -514,7 +539,7 @@ def test_exact_single_target_recovery_binds_signed_first_parent(
             object(), "Flow-Research/workstream", repository_root=tmp_path,
             state_root=state_root, target_sha="f" * 40, planned_shas=["f" * 40],
         )
-    target["source"]["first_parent_sha"] = "a" * 40
+    target["source"]["first_parent_sha"] = "c" * 40
     with pytest.raises(loop.LoopMemoryError, match="not exact"):
         loop.prepare_recovery_exemptions(
             object(), "Flow-Research/workstream", repository_root=tmp_path,
@@ -525,6 +550,21 @@ def test_exact_single_target_recovery_binds_signed_first_parent(
     loop.assert_recovery_consumed(state_root, "f" * 40, exemptions)
     state = json.loads((state_root / loop.STATE_PATH).read_text())
     assert exemptions[0] not in state.get("legacy_exemptions", [])
+    latest = loop._latest_by_initiative(
+        loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+    )
+    assert latest["WS-AUTH-001"]["active"]["implementation_chunk"] == "WS-AUTH-001-10A"
+    auth_projection = (
+        state_root / loop.INITIATIVE_STATE_ROOT / "WS-AUTH-001.md"
+    ).read_text(encoding="utf-8")
+    assert "Active implementation chunk: `WS-AUTH-001-10A`" in auth_projection
+    art_start = _event("start", 41)
+    art_start.update(
+        main_sha="f" * 40, initiative_id="WS-ART-001", chunk_id="WS-ART-001-03"
+    )
+    assert loop.apply_authority_event(
+        state_root, art_start, repository_root=repository_root
+    )
     assert loop.prepare_recovery_exemptions(
         object(), "Flow-Research/workstream", repository_root=tmp_path,
         state_root=state_root, target_sha="f" * 40, planned_shas=[],
@@ -1364,7 +1404,7 @@ def test_cancel_rejects_inactive_chunk(tmp_path: Path) -> None:
         )
 
 
-def test_cross_initiative_start_rejects_parallel_active_work(tmp_path: Path) -> None:
+def test_cross_initiative_start_preserves_parallel_active_work(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)
     loop.apply_merge_record(state_root, _record())
@@ -1395,10 +1435,177 @@ def test_cross_initiative_start_rejects_parallel_active_work(tmp_path: Path) -> 
         initiative_id="WS-ART-001",
         chunk_id="WS-ART-001-03",
     )
-    with pytest.raises(loop.LoopMemoryError, match="globally active"):
+    assert loop.apply_authority_event(
+        state_root, art_event, repository_root=repository_root
+    )
+    latest = loop._latest_by_initiative(
+        loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+    )
+    assert latest["WS-ENG-001"]["active"]["implementation_chunk"] == "WS-ENG-001-04B"
+    assert latest["WS-ART-001"]["active"]["implementation_chunk"] == "WS-ART-001-03"
+    loop.validate_generated_state(state_root)
+
+
+@pytest.mark.parametrize("close_order", ["merge_then_cancel", "cancel_then_merge"])
+def test_three_initiatives_mix_phases_and_isolate_close_operations(
+    tmp_path: Path, close_order: str,
+) -> None:
+    state_root, repository_root, ci_record, ci_event = _selected_start_fixture(tmp_path)
+    _contract(repository_root)
+    main_sha = ci_record["source"]["main_sha"]
+
+    eng_record = _record()
+    art_record = json.loads(json.dumps(_record()))
+    art_record["source"].update(
+        main_sha="c" * 40, first_parent_sha="a" * 40, pr_number=170,
+        pr_url="https://github.com/Flow-Research/workstream/pull/170",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-02.json",
+    )
+    art_record["completed_chunk"].update(
+        initiative_id="WS-ART-001", chunk_id="WS-ART-001-02",
+        chunk_title="Artifact Custody", next_chunk_id="WS-ART-001-03",
+        next_chunk_title="Artifact Recovery",
+    )
+    art_record["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    ci_record["source"]["first_parent_sha"] = "c" * 40
+    loop.apply_merge_record(state_root, eng_record)
+    loop.apply_merge_record(state_root, art_record)
+    loop.apply_merge_record(state_root, ci_record)
+
+    eng_event = _event("start", 41)
+    eng_event["main_sha"] = main_sha
+    assert loop.apply_authority_event(
+        state_root, eng_event, repository_root=repository_root
+    )
+    duplicate_eng = _event("start", 46)
+    duplicate_eng["main_sha"] = main_sha
+    with pytest.raises(loop.LoopMemoryError, match="initiative already has an active chunk"):
         loop.apply_authority_event(
-            state_root, art_event, repository_root=repository_root
+            state_root, duplicate_eng, repository_root=repository_root
         )
+    art_event = _event("start", 42)
+    art_event.update(
+        main_sha=main_sha, initiative_id="WS-ART-001", chunk_id="WS-ART-001-03"
+    )
+    assert loop.apply_authority_event(
+        state_root, art_event, repository_root=repository_root
+    )
+    ci_event.update(
+        run_id=43, event_id="github-actions:43:start",
+        created_at="2026-07-20T13:00:00Z",
+    )
+    assert loop.apply_authority_event(
+        state_root, ci_event, repository_root=repository_root
+    )
+
+    records = loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+    latest = loop._latest_by_initiative(records)
+    assert latest["WS-ENG-001"]["active"]["implementation_chunk"] == "WS-ENG-001-04B"
+    assert latest["WS-ART-001"]["active"]["implementation_chunk"] == "WS-ART-001-03"
+    assert latest["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+    rendered = (state_root / loop.RENDERED_PATH).read_text(encoding="utf-8")
+    assert "Active implementation chunks: `WS-ART-001-03`, `WS-ENG-001-04B`" in rendered
+    assert "Active planning chunks: `WS-CI-001-02`" in rendered
+    queue = (state_root / loop.WORK_QUEUE_PATH).read_text(encoding="utf-8")
+    assert "Signed merge/start/cancel projection" in queue
+    assert "Unsigned chat or worktree starts are not represented" in queue
+    for initiative_id, chunk_id in (
+        ("WS-ENG-001", "WS-ENG-001-04B"),
+        ("WS-ART-001", "WS-ART-001-03"),
+        ("WS-CI-001", "WS-CI-001-02"),
+    ):
+        assert f"| `{initiative_id}`" in queue
+        assert f"| `active` | `{chunk_id}`" in queue
+
+    wrong_cancel = _event("cancel", 44)
+    wrong_cancel.update(
+        main_sha=main_sha, initiative_id="WS-ART-001", chunk_id="WS-ENG-001-04B"
+    )
+    with pytest.raises(loop.LoopMemoryError, match="crosses initiative scope"):
+        loop.apply_authority_event(
+            state_root, wrong_cancel, repository_root=repository_root
+        )
+    wrong_merge = json.loads(json.dumps(eng_record))
+    wrong_merge["source"].update(
+        main_sha="f" * 40, first_parent_sha=main_sha, pr_number=180,
+        pr_url="https://github.com/Flow-Research/workstream/pull/180",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-03.json",
+    )
+    wrong_merge["completed_chunk"].update(
+        chunk_id="WS-ART-001-03", chunk_title="Artifact Recovery",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    wrong_merge["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    with pytest.raises(loop.LoopMemoryError):
+        loop.apply_merge_record(state_root, wrong_merge)
+
+    eng_merge = json.loads(json.dumps(eng_record))
+    eng_merge["source"].update(
+        main_sha="f" * 40, first_parent_sha=main_sha, pr_number=181,
+        pr_url="https://github.com/Flow-Research/workstream/pull/181",
+        intent_path=".agent-loop/merge-intents/WS-ENG-001-04B.json",
+    )
+    eng_merge["completed_chunk"].update(
+        chunk_id="WS-ENG-001-04B", chunk_title="Signed Explicit Start Events",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    eng_merge["gate"].update(next_chunk_id=None, next_chunk_title=None)
+
+    def merge_eng(*, expect_art_active: bool) -> None:
+        assert loop.apply_merge_record(state_root, eng_merge)
+        current = loop._latest_by_initiative(
+            loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+        )
+        assert current["WS-ENG-001"]["active"] == {
+            "planning_chunk": None, "implementation_chunk": None,
+        }
+        assert current["WS-ART-001"]["active"]["implementation_chunk"] == (
+            "WS-ART-001-03" if expect_art_active else None
+        )
+        assert current["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+
+    def cancel_art(current_main: str) -> None:
+        art_cancel = _event("cancel", 45)
+        art_cancel.update(
+            main_sha=current_main, initiative_id="WS-ART-001",
+            chunk_id="WS-ART-001-03",
+        )
+        assert loop.apply_authority_event(
+            state_root, art_cancel, repository_root=repository_root
+        )
+        current = loop._latest_by_initiative(
+            loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+        )
+        assert current["WS-ART-001"]["active"] == {
+            "planning_chunk": None, "implementation_chunk": None,
+        }
+        assert current["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+
+    if close_order == "merge_then_cancel":
+        merge_eng(expect_art_active=True)
+        cancel_art("f" * 40)
+    else:
+        cancel_art(main_sha)
+        merge_eng(expect_art_active=False)
+
+    latest = loop._latest_by_initiative(
+        loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+    )
+    assert latest["WS-ART-001"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
+    assert latest["WS-ENG-001"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
+    assert latest["WS-CI-001"]["active"]["planning_chunk"] == "WS-CI-001-02"
+    ci_projection = (
+        state_root / loop.INITIATIVE_STATE_ROOT / "WS-CI-001.md"
+    ).read_text(encoding="utf-8")
+    assert "Signed merge/start/cancel state" in ci_projection
+    loop.validate_generated_state(state_root)
+    assert checker.generated_state_failures(state_root, repository_root) == []
 
 
 def test_exact_active_merge_closes_and_consumes_exemption(tmp_path: Path) -> None:

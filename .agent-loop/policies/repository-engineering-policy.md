@@ -39,6 +39,10 @@ pytest -q
 | Generated merge memory | `automation/loop-memory` | Trusted `main` automation owns a closed signed tree containing canonical state, ledger, manifest, loop/queue views, and compact initiative projections. Humans and agents do not edit it manually or trust isolated files without manifest/signature verification. Merge projections remain stopped/next-only until signed start events exist. |
 | Explicit engineering starts | `.github/workflows/loop-memory-start.yml` | An authenticated dispatcher whose current GitHub repository permission meets `.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main` may dispatch a signed start for a declared successor or exact reviewed contract; the orchestrator may dispatch after an explicit user instruction, but conversation is not canonical evidence. Cancellation retains a protected-environment reviewer distinct from the dispatcher. No automatic start is valid. |
 
+Explicit starts are initiative-local: each initiative may have at most one
+active planning or implementation chunk, while distinct initiatives may be
+active concurrently. Local worktrees are execution isolation, not authority.
+
 ## Dependency Policy
 
 - New production dependencies require explicit human approval.

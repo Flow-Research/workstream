@@ -1,5 +1,15 @@
 # Review Log
 
+## 2026-07-21 - WS-ENG-005 Parallel Initiative Execution Plan
+
+The user approved maximum safe concurrent work across distinct initiatives.
+The L1 plan retains exactly one active planning or implementation chunk per
+initiative, removes only the three global-idle checks, preserves serialized
+signed publication and reviewed merges, and bootstraps through one exact
+self-consuming WS-ENG-005-01 recovery. Plan review passed after adding a
+three-initiative mixed-phase proof, cross-initiative close isolation, exact
+projection expectations, and forward-only recovery after parallel history.
+
 ## 2026-07-21 - WS-ENG-004-01R1 Renderer Recovery Repair
 
 Post-merge run `29835344158` failed before consuming recovery: rebuild
