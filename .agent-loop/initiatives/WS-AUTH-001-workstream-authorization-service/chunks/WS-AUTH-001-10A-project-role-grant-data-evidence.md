@@ -119,7 +119,10 @@ transition may mutate lifecycle fields.
   replacement-event selection and `replaced_grant_id` matching: a project-role
   issue can validate only `ProjectRoleGrantIssued`, with no matched prior grant.
   This is availability-neutral evidence cleanup, not an issue/revoke product
-  service or callable behavior; no route invokes it until 10C.
+  service or callable behavior; no route invokes it until 10C. A dedicated
+  `test_project_role_*` regression proves issued-only success, null prior-grant
+  matching, and rejection of replacement fields/events so focused selection
+  cannot omit this service cleanup.
 - 10A adds the five `ActionId` enum members and closed `ActionDefinition` rows
   below with `ActionAvailability.PLANNED`; it adds exact `ActionOwner.AUTH_10B`
   and `ActionOwner.AUTH_10C` enum values and assigns each row to its named
