@@ -320,10 +320,30 @@ Exhaustion returns 429 with `Retry-After`.
 
 Before upgrading to `0032_authorization_read_rate`, confirm migration
 `0031_project_role_grants` is current and that no unreviewed constraint changes
-exist. Upgrade takes an access-exclusive lock on
+exist. Inspect the exact database-owned expression before either direction:
+
+```sql
+SELECT pg_get_expr(conbin, conrelid) AS scope_constraint
+FROM pg_constraint
+WHERE conrelid = 'api_rate_control_counters'::regclass
+  AND conname = 'ck_api_rate_control_counters_scope_token';
+```
+
+Before upgrade, the returned scope set must be exactly `first_access` and
+`admin_mutation`. Before downgrade, it must be exactly `first_access`,
+`admin_mutation`, and `authorization_read`. PostgreSQL may render these as an
+`ANY (ARRAY[...])` expression with text casts; compare the complete expression
+and values, not a substring. Upgrade takes an access-exclusive lock on
 `api_rate_control_counters`, replaces only its closed scope constraint, and
 preserves every existing counter. The dependency remains deliberately
 unattached after this migration.
+
+If either direction reports `unexpected API rate-control scope constraint`, it
+leaves the Alembic revision, constraint, and counter rows unchanged. Do not
+drop, bypass, or force the constraint. Compare the live definition with the
+reviewed migrations that actually ran, reconcile it to the canonical expected
+definition through a reviewed forward repair, and then retry the migration.
+Prefer forward recovery when the provenance of the drift is uncertain.
 
 Downgrade also takes the table lock before preflight and refuses while any live
 or expired `authorization_read` row exists:

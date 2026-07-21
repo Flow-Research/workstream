@@ -351,9 +351,13 @@ async def test_repository_persists_the_returned_database_timestamp(
     assert updated_at == consumed.db_now
 
 
+@pytest.mark.parametrize(
+    "concurrent_scope", [ADMIN_MUTATION_SCOPE, AUTHORIZATION_READ_SCOPE]
+)
 async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
     rate_control_factory,
     monkeypatch: pytest.MonkeyPatch,
+    concurrent_scope: str,
 ) -> None:
     original_consume = ApiRateControlRepository.consume
     all_started = asyncio.Event()
@@ -372,7 +376,7 @@ async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
 
     async def consume_once():
         return await service.consume(
-            control_scope=AUTHORIZATION_READ_SCOPE,
+            control_scope=concurrent_scope,
             issuer=RATE_ISSUER,
             subject="concurrent-subject",
             limit=7,
@@ -382,11 +386,9 @@ async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
 
     decisions = await asyncio.gather(*(consume_once() for _ in range(20)))
     digest = rate_key_digest(
-        RATE_SECRET, AUTHORIZATION_READ_SCOPE, RATE_ISSUER, "concurrent-subject"
+        RATE_SECRET, concurrent_scope, RATE_ISSUER, "concurrent-subject"
     )
-    persisted = await _stored_rate_row(
-        rate_control_factory, AUTHORIZATION_READ_SCOPE, digest
-    )
+    persisted = await _stored_rate_row(rate_control_factory, concurrent_scope, digest)
 
     assert sum(decision.allowed for decision in decisions) == 7
     assert sorted(decision.request_count for decision in decisions) == list(range(1, 21))
@@ -750,8 +752,8 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
     service = _DecisionService(
         [
             RateControlDecision(True, 1, 60),
+            RateControlDecision(False, 31, 17),
             RateControlDecision(True, 1, 60),
-            RateControlDecision(False, 121, 17),
         ]
     )
     app = create_app(
@@ -785,12 +787,12 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         allowed = await client.post("/_test/first-access-rate")
-        admin_allowed = await client.post("/_test/admin-mutation-rate")
-        denied = await client.get("/_test/authorization-read-rate")
+        denied = await client.post("/_test/admin-mutation-rate")
+        read_allowed = await client.get("/_test/authorization-read-rate")
 
     assert allowed.status_code == 200
     assert denied.status_code == 429
-    assert admin_allowed.status_code == 200
+    assert read_allowed.status_code == 200
     assert denied.headers["retry-after"] == "17"
     assert denied.json() == {
         "detail": "Rate limit exceeded",
@@ -813,6 +815,38 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
     assert all(call["subject"] == RATE_SUBJECT for call in service.calls)
 
 
+async def test_authorization_read_dependency_emits_canonical_429() -> None:
+    service = _DecisionService([RateControlDecision(False, 121, 17)])
+    app = create_app(
+        Settings(environment="test", api_rate_limit_key_secret=RATE_SECRET_TEXT)
+    )
+    app.dependency_overrides[get_auth_verification_result] = _verified_rate_identity
+    app.dependency_overrides[get_rate_control_service] = lambda: service
+
+    @app.get(
+        "/_test/authorization-read-rate-denied",
+        dependencies=[Depends(enforce_authorization_read_rate_limit)],
+    )
+    async def authorization_read() -> dict[str, bool]:
+        return {"allowed": True}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        denied = await client.get("/_test/authorization-read-rate-denied")
+
+    assert denied.status_code == 429
+    assert denied.headers["retry-after"] == "17"
+    assert denied.json()["error"] == {
+        "code": "rate_limit_exceeded",
+        "message": "Rate limit exceeded",
+        "details": {},
+        "correlation_id": denied.headers["x-correlation-id"],
+        "retryable": True,
+    }
+    assert service.calls[0]["control_scope"] == AUTHORIZATION_READ_SCOPE
+
+
 @pytest.mark.parametrize(
     ("settings", "subject", "service"),
     [
@@ -824,10 +858,15 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "dependency",
+    [enforce_first_access_rate_limit, enforce_authorization_read_rate_limit],
+)
 async def test_rate_dependency_unavailability_is_private_503(
     settings: Settings,
     subject: str,
     service,
+    dependency,
 ) -> None:
     app = create_app(settings)
     app.dependency_overrides[get_auth_verification_result] = lambda: _verified_rate_identity(
@@ -837,7 +876,7 @@ async def test_rate_dependency_unavailability_is_private_503(
 
     @app.post(
         "/_test/rate-unavailable",
-        dependencies=[Depends(enforce_authorization_read_rate_limit)],
+        dependencies=[Depends(dependency)],
     )
     async def unavailable() -> None:
         return None
