@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-AUTH-001-10B",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-AUTH-001-10A",
+      "chunk_title": "Project Role Grant Data And Evidence Foundation",
+      "initiative_id": "WS-AUTH-001",
+      "next_chunk_id": "WS-AUTH-001-10B",
+      "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-AUTH-001-10B",
+      "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a",
+      "head_ref": "codex/ws-auth-001-10a-project-role-grant-data-evidence",
+      "head_sha": "7d3031f53181e82da41a703cfb3ef3aed9193aba",
+      "intent_blob_sha": "4c6f1044eb1bfb24d5d2fd7711ab944d36ac56be",
+      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10A.json",
+      "main_sha": "d9d447119ec8afebc658afadca622061265bca68",
+      "merged_at": "2026-07-21T15:36:49Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 170,
+      "pr_title": "AUTH-10A: add project role grant data and evidence foundation",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/170"
+    }
+  },
   "checks": {
     "all_required_passed": false,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-AUTH-001-10B",
+    "created_at": "2026-07-21T16:02:00Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:29846748340:start",
+    "initiative_id": "WS-AUTH-001",
+    "main_sha": "f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734",
+    "prior_state_tip": "2710e8f630ca67584c08f163bdee0e4bc64b89bb",
+    "reason": "User explicitly requested start after AUTH-10A merge",
+    "run_id": 29846748340,
+    "selection": {
+      "contract_blob_sha": "7d1da867e34ee96366b220f943b26462ea48e6b7",
+      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-10B-project-role-grant-reads.md",
+      "contract_title": "Project Role Grant Read And Candidate Surfaces",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": null,
@@ -61,5 +121,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/172"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T16:00:42Z"
+  "updated_at": "2026-07-21T16:02:00Z"
 }
