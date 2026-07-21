@@ -4,8 +4,8 @@
 
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-10` - Project Qualification And Contributor Role Grants
-- Gate: `stopped_after_merge`
-- Active implementation chunk: `none`
+- Gate: `active`
+- Active implementation chunk: `WS-AUTH-001-10A`
 - Next chunk: `WS-AUTH-001-10A`
 - Separate explicit start required: `true`
 - Source PR: [#168](https://github.com/Flow-Research/workstream/pull/168)

@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-10.json` at blob `81a7d138fbae36d5e71ab32f0f0a43bda1d45bde`
 - Completed chunk: `WS-AUTH-001-10` - Project Qualification And Contributor Role Grants
 - Active planning chunks: none
-- Active implementation chunks: none
+- Active implementation chunks: `WS-AUTH-001-10A`
+- Latest authority event: `start` for `WS-AUTH-001-10A`
+- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-AUTH-001-10A` - Project Role Grant Data And Evidence Foundation; requires a separate explicit start.
 - Required check evidence: attention required
