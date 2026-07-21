@@ -3404,9 +3404,16 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
         line for line in update_lines if line.startswith("--cutover-chunk-id")
     ]
     assert repository_root_lines == ["--repository-root . \\"]
-    assert cutover_lines == ["--cutover-chunk-id WS-ENG-001-04B"]
+    assert cutover_lines == ["--cutover-chunk-id WS-ENG-001-04B \\"]
     assert all("$" not in line for line in repository_root_lines + cutover_lines)
     assert workflow.count("--cutover-chunk-id") == 1
+    assert workflow.count("prepare-recovery") == 1
+    assert workflow.count("assert-recovery-consumed") == 1
+    assert workflow.index("prepare-recovery") < workflow.index(
+        "python3 scripts/update_post_merge_memory.py update"
+    )
+    assert workflow.index("assert-recovery-consumed") < workflow.index("sign-state")
+    assert '--target-sha "${TARGET_SHA}"' in workflow
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
     assert "TARGET_SHA" in workflow

@@ -227,6 +227,319 @@ def test_cutover_exemption_is_exact_and_consumed_once(tmp_path: Path) -> None:
         loop.apply_merge_record(state_root, later)
 
 
+def _recovery_policy() -> dict:
+    return {
+        "schema_version": 1,
+        "activation": {
+            "initiative_id": "WS-ENG-003",
+            "chunk_id": "WS-ENG-003-01",
+        },
+        "recovered_merge": {
+            "initiative_id": "WS-ENG-002",
+            "chunk_id": "WS-ENG-002-01",
+            "pr_number": 166,
+            "merge_sha": "c" * 40,
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda policy: policy.update(extra=True), "invalid schema"),
+        (lambda policy: policy.update(schema_version=2), "unsupported"),
+        (lambda policy: policy.update(activation={"chunk_id": "bad"}), "activation"),
+        (lambda policy: policy.update(recovered_merge=[]), "recovered merge"),
+        (
+            lambda policy: policy["recovered_merge"].update(pr_number=0),
+            "recovered merge",
+        ),
+        (
+            lambda policy: policy["recovered_merge"].update(merge_sha="bad"),
+            "SHA",
+        ),
+    ],
+)
+def test_recovery_policy_schema_fails_closed(mutation, message: str) -> None:
+    policy = _recovery_policy()
+    mutation(policy)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop._validate_recovery_policy(policy)
+
+
+def test_load_recovery_policy_from_exact_commit(tmp_path: Path) -> None:
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    subprocess.run(["git", "-C", str(repository), "init"], check=True, stdout=subprocess.PIPE)
+    subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repository), "config", "user.name", "Test"], check=True)
+    policy_path = repository / loop.RECOVERY_POLICY_PATH
+    policy_path.parent.mkdir(parents=True)
+    policy_path.write_text(json.dumps(_recovery_policy()), encoding="utf-8")
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repository), "commit", "-m", "policy"], check=True, stdout=subprocess.PIPE)
+    sha = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    assert loop._load_json_at_commit(
+        repository, sha, loop.RECOVERY_POLICY_PATH, "recovery policy"
+    ) == _recovery_policy()
+    with pytest.raises(loop.LoopMemoryError, match="no bounded"):
+        loop._load_json_at_commit(repository, sha, Path("missing.json"), "recovery policy")
+
+
+def _merge_record(
+    initiative_id: str, chunk_id: str, pr_number: int, sha: str, parent: str
+) -> dict:
+    record = _record()
+    record["source"].update(
+        main_sha=sha,
+        first_parent_sha=parent,
+        pr_number=pr_number,
+        pr_url=f"https://github.com/Flow-Research/workstream/pull/{pr_number}",
+        intent_path=f".agent-loop/merge-intents/{chunk_id}.json",
+    )
+    record["completed_chunk"].update(
+        initiative_id=initiative_id,
+        chunk_id=chunk_id,
+        chunk_title=chunk_id,
+        next_chunk_id=None,
+        next_chunk_title=None,
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    return record
+
+
+def test_prepare_recovery_binds_exact_target_and_two_merge_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    recovered = _merge_record("WS-ENG-002", "WS-ENG-002-01", 166, "c" * 40, "a" * 40)
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: target if sha == "d" * 40 else recovered,
+    )
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="d" * 40,
+        planned_shas=["c" * 40, "d" * 40],
+    ) == [
+        {"initiative_id": "WS-ENG-002", "chunk_id": "WS-ENG-002-01", "pr_number": 166},
+        {"initiative_id": "WS-ENG-003", "chunk_id": "WS-ENG-003-01", "pr_number": 167},
+    ]
+
+
+def test_prepare_recovery_rejects_non_exact_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args: target)
+    with pytest.raises(loop.LoopMemoryError, match="exact two-merge"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="d" * 40,
+            planned_shas=["b" * 40, "c" * 40, "d" * 40],
+        )
+
+
+def test_prepare_recovery_ignores_non_activation_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    other = _merge_record("WS-ENG-004", "WS-ENG-004-01", 168, "d" * 40, "c" * 40)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args: other)
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="d" * 40,
+        planned_shas=["c" * 40, "d" * 40],
+    ) == []
+
+
+def test_prepare_recovery_requires_existing_state(tmp_path: Path) -> None:
+    with pytest.raises(loop.LoopMemoryError, match="requires canonical state"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=tmp_path / "missing", target_sha="d" * 40,
+            planned_shas=["c" * 40, "d" * 40],
+        )
+
+
+def test_prepare_recovery_rejects_wrong_recovered_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    wrong = _merge_record("WS-ENG-002", "WS-ENG-002-01", 999, "c" * 40, "a" * 40)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: target if sha == "d" * 40 else wrong,
+    )
+    with pytest.raises(loop.LoopMemoryError, match="does not match"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="d" * 40,
+            planned_shas=["c" * 40, "d" * 40],
+        )
+
+
+def test_prepare_recovery_rejects_signed_inventory_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["legacy_exemptions"] = [
+        {"initiative_id": "WS-ENG-002", "chunk_id": "WS-ENG-002-01", "pr_number": 166}
+    ]
+    loop.apply_merge_record(state_root, base)
+    recovered = _merge_record("WS-ENG-002", "WS-ENG-002-01", 166, "c" * 40, "a" * 40)
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: target if sha == "d" * 40 else recovered,
+    )
+    with pytest.raises(loop.LoopMemoryError, match="collides"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="d" * 40,
+            planned_shas=["c" * 40, "d" * 40],
+        )
+
+
+def test_recovery_exemptions_are_consumed_without_persisting(
+    tmp_path: Path,
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["legacy_exemptions"] = [
+        {"initiative_id": "WS-MCP-001", "chunk_id": "WS-MCP-001-01", "pr_number": 149}
+    ]
+    loop.apply_merge_record(state_root, base)
+    recovered = _merge_record("WS-ENG-002", "WS-ENG-002-01", 166, "c" * 40, "a" * 40)
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    exemptions = [
+        {"initiative_id": "WS-ENG-002", "chunk_id": "WS-ENG-002-01", "pr_number": 166},
+        {"initiative_id": "WS-ENG-003", "chunk_id": "WS-ENG-003-01", "pr_number": 167},
+    ]
+    assert loop.apply_merge_record(state_root, recovered, exemptions)
+    assert loop.apply_merge_record(state_root, target, exemptions)
+    loop.assert_recovery_consumed(state_root, "d" * 40, exemptions)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    assert state["legacy_exemptions"] == [
+        {"chunk_id": "WS-MCP-001-01", "initiative_id": "WS-MCP-001", "pr_number": 149}
+    ]
+    records = [entry["record"] for entry in loop._load_ledger(state_root / loop.LEDGER_PATH)]
+    assert all(
+        exemption not in record.get("legacy_exemptions", [])
+        for record in records
+        for exemption in exemptions
+    )
+    later = _merge_record("WS-ENG-004", "WS-ENG-004-01", 168, "f" * 40, "d" * 40)
+    with pytest.raises(loop.LoopMemoryError, match="no signed start or exemption"):
+        loop.apply_merge_record(state_root, later)
+
+
+def test_successful_recovery_replay_does_not_reinject(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    loop.apply_merge_record(state_root, target)
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="d" * 40, planned_shas=[],
+    ) == []
+
+
+def test_recovery_final_assertion_rejects_partial_consumption(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    target["legacy_exemptions"] = [
+        {"initiative_id": "WS-ENG-003", "chunk_id": "WS-ENG-003-01", "pr_number": 167}
+    ]
+    loop.apply_merge_record(state_root, target)
+    with pytest.raises(loop.LoopMemoryError, match="not fully consumed"):
+        loop.assert_recovery_consumed(
+            state_root, "d" * 40, target["legacy_exemptions"]
+        )
+
+
+def test_recovery_final_assertion_requires_exact_target(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    with pytest.raises(loop.LoopMemoryError, match="exact target"):
+        loop.assert_recovery_consumed(state_root, "d" * 40, [])
+
+
+def test_recovery_final_assertion_rejects_historical_leak(tmp_path: Path) -> None:
+    state_root = tmp_path / "state"
+    exemption = {
+        "initiative_id": "WS-ENG-003", "chunk_id": "WS-ENG-003-01", "pr_number": 167
+    }
+    base = _record()
+    base["legacy_exemptions"] = [exemption]
+    loop.apply_merge_record(state_root, base)
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "a" * 40)
+    loop.apply_merge_record(state_root, target)
+    with pytest.raises(loop.LoopMemoryError, match="signed history"):
+        loop.assert_recovery_consumed(state_root, "d" * 40, [exemption])
+
+
+def test_recovery_cli_round_trip_consumes_inventory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["legacy_exemptions"] = []
+    loop.apply_merge_record(state_root, base)
+    recovered = _merge_record("WS-ENG-002", "WS-ENG-002-01", 166, "c" * 40, "a" * 40)
+    target = _merge_record("WS-ENG-003", "WS-ENG-003-01", 167, "d" * 40, "c" * 40)
+    records = {"c" * 40: recovered, "d" * 40: target}
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy())
+    monkeypatch.setattr(
+        loop, "collect_merge_record", lambda _client, _repository, sha: records[sha]
+    )
+    plan_file = tmp_path / "plan"
+    plan_file.write_text(f"{'c' * 40}\n{'d' * 40}\n", encoding="utf-8")
+    assert loop.main([
+        "prepare-recovery", "--repository", "Flow-Research/workstream",
+        "--repository-root", str(tmp_path), "--state-root", str(state_root),
+        "--target-sha", "d" * 40, "--plan-file", str(plan_file),
+    ]) == 0
+    recovery_file = tmp_path / "recovery.json"
+    recovery_file.write_text(capsys.readouterr().out, encoding="utf-8")
+    common = [
+        "--repository", "Flow-Research/workstream", "--repository-root", str(tmp_path),
+        "--state-root", str(state_root), "--branch-root", str(state_root),
+    ]
+    assert loop.main([
+        "update", *common, "--merge-sha", "c" * 40,
+        "--recovery-file", str(recovery_file),
+    ]) == 0
+    assert loop.main([
+        "update", *common, "--merge-sha", "d" * 40,
+        "--recovery-file", str(recovery_file),
+    ]) == 0
+    assert loop.main([
+        "assert-recovery-consumed", "--state-root", str(state_root),
+        "--target-sha", "d" * 40, "--recovery-file", str(recovery_file),
+    ]) == 0
+
+
 @dataclass
 class _Client:
     run: object

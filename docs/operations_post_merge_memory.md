@@ -196,3 +196,21 @@ start/cancel evidence cannot be reconstructed from main, so replacing the key
 would break audit continuity. Suspected compromise is a blocking incident:
 disable both workflows, preserve the branch and audit logs, and require a new
 reviewed key-continuity design before any rotation or replay.
+
+## WS-ENG-003 One-Use Recovery
+
+PR #166 introduced single-checkpoint starts but necessarily began before that
+mechanism existed, so its merge had no predecessor signed start. The reviewed
+WS-ENG-003 recovery certificate binds exact merge
+`6445ce6276a85c4ddef29d0f5e93cdbffe5d45bc` (PR #166) and activates only when
+the resolved protected-main target is the `WS-ENG-003-01` recovery merge.
+
+Before reducing any missing merge, the workflow requires the plan to contain
+exactly PR #166 followed by the recovery target, derives the recovery PR number
+from GitHub's unique merge evidence, and rejects collisions with signed state.
+Each reducer receives only its matching authorization out of band; recovery
+entries are never written to canonical state or ledger history. Both exact
+exemptions must be consumed before signing or publication, while unrelated
+legacy exemptions remain intact. A successful replay has an empty plan and does
+not recreate recovery entries. This is not a general operator bypass and must
+not be extended to later chunks.
