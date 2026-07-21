@@ -27,7 +27,7 @@ security exception is requested.
 - `python3 -m ruff check scripts/update_post_merge_memory.py scripts/test_update_post_merge_memory.py scripts/test_agent_gates.py` — passed.
 - Markdown links, stale wording, internal review evidence, merge intent, and diff
   integrity — passed before publication; final evidence-only head is rechecked.
-- All nine internal reviewer tracks — pass at `acc15aa5`.
+- All nine internal reviewer tracks — pass at `26aca951`.
 
 ## Remaining risks
 
