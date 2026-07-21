@@ -51,4 +51,5 @@ CodeRabbit review, and human merge approval.
 
 Review the 10B1/10B2 boundary, migration `0032` ownership, action-aware
 concealment, cursor threat model, hosted coverage requirements, and exact
-successor order. The user retains approval for this specific PR and merge.
+successor order. The user retains final approval authority for this specific PR
+and merge.
