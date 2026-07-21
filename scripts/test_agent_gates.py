@@ -4580,7 +4580,8 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert (
         "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | "
-        "Trusted-main integration and Backend outbox-retention repair complete" in work_queue
+        "Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete"
+        in work_queue
     )
     assert (
         "| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | "
@@ -4593,10 +4594,15 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     )
     assert "all 19 REV actions remain planned" in work_queue
     assert (
-        "Current ART gate: the trusted-main integration and bounded repair" in loop_state
+        "| `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | "
+        "Merged through PR #162 as `c559d556`" in work_queue
     )
-    assert "external CI/review, and explicit human" in loop_state.replace("\n", " ")
-    assert "external reruns, and explicit human merge approval remain" in work_queue
+    assert "no feature consumer or activation" in work_queue
+    assert "Current ART gate: latest-main integration" in loop_state
+    assert "hosted checks, and explicit human merge approval remain" in " ".join(
+        loop_state.split()
+    )
+    assert "hosted reruns, and explicit human merge approval remain" in work_queue
     assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
 
 

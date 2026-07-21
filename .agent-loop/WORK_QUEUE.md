@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Trusted-main integration and Backend outbox-retention repair complete; exact-head proof, refreshed review evidence, external reruns, and explicit human merge approval remain |
+| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete; exact-SHA evidence, hosted reruns, and explicit human merge approval remain |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.
@@ -23,6 +23,7 @@ output. This authored queue records the separately approved parallel chunks.
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
+| `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556` on 2026-07-21; no feature consumer or activation |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned |
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2` on 2026-07-20; all 25 ART actions remain planned |
 | `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15` on 2026-07-19 |

@@ -40,15 +40,19 @@
 - PR #160 merged the separately owned availability-neutral REV custody transfer
   as `fe0e4492`; all 19 REV actions remain planned and the merge changes no ART
   behavior or migration ownership.
+- PRs #163 and #164 merged sharded Backend CI plus timeout cleanup as `b0f9ad64`
+  and `61bc0390`; PR #165 merged signed-start loop-memory planning as `58d0514a`;
+  PR #162 then merged AUTH-PREP as `c559d556`. ART-02C2 consumes the faster CI
+  and generic prepared-authority foundation without adding an ART consumer,
+  activation, schema change, or migration.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
-- Current ART gate: the trusted-main integration and bounded repair for the
-  hosted Backend outbox-retention failures and refreshed internal evidence are
-  complete; hosted exact-head full-suite proof remains; external CI/review, and explicit human
-  merge approval are current. Production composition remains deny-only for
+- Current ART gate: latest-main integration, sharded-CI reconciliation, and the
+  bounded outbox-retention repair are complete. Refreshed exact-SHA evidence,
+  hosted checks, and explicit human merge approval remain. Production composition remains deny-only for
   feature actions after merged AUTH-09E runtime admission.
   No feature action or service call site becomes active in ART-02C2.
   No later ART chunk starts automatically.
@@ -75,9 +79,10 @@
   #127, #129, #141, #151, and #154. ART-02C2 is active and
   adds hidden fenced put resolution and independent verification mechanics.
 - Authorization checkpoint: AUTH-07B through AUTH-09D-B, the contributor
-  foundation, AUTH-09E, and the ART and REV custody transfers merged through
-  PRs #130, #131, #132, #143, #146, #148, #152, #153, #157, #158, and #160.
-  The 25 transferred ART and 19 transferred REV actions remain planned.
+  foundation, AUTH-09E, the ART and REV custody transfers, and AUTH-PREP merged
+  through PRs #130, #131, #132, #143, #146, #148, #152, #153, #157, #158,
+  #160, and #162. The 25 transferred ART and 19 transferred REV actions remain
+  planned; PREP adds no feature consumer or activation.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

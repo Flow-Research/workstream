@@ -21,8 +21,12 @@ AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
 `8d5eb15b`, AUTH-09E merged through PR #157 as `42a89b2d`, and the
 availability-neutral ART custody transfer merged through PR #158 as
 `be2a79a2`, and the unrelated availability-neutral REV custody transfer merged
-through PR #160 as `fe0e4492`; all are integrated into the ART candidate. The
-three ART internal feature actions are now assigned to future
+through PR #160 as `fe0e4492`. Backend CI sharding and timeout repair merged
+through PRs #163 and #164 as `b0f9ad64` and `61bc0390`; signed-start loop-memory
+planning merged through PR #165 as `58d0514a`; and AUTH-PREP merged through PR
+#162 as `c559d556`. All are integrated into the ART candidate. AUTH-PREP adds no
+ART consumer or activation. The three ART internal feature actions remain
+assigned to future
 `WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
 inactive.
 
@@ -59,9 +63,9 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 
 ## Gate
 
-The candidate integrates trusted main `fe0e4492` and contains the bounded
-repair for the hosted Backend outbox-retention failures. Refreshed internal
-evidence is complete; hosted exact-head full-suite proof remains a publication
-gate. The current gate is external CI/review followed by explicit human merge approval.
+The candidate integrates trusted main `c559d556`, the sharded Backend workflow,
+and merged AUTH-PREP without activating ART. Exact-SHA internal evidence and
+hosted checks must be refreshed on the reconciled head. The current gate is
+external CI/review followed by explicit human merge approval.
 Production activation and recovery remain in later owning chunks. No later
 artifact chunk starts automatically, and only the user may approve merge.

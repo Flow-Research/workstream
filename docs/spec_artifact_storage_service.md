@@ -934,10 +934,12 @@ replica/attempt, recovery, and audit writes. Suspension, revocation, resource
 drift, stale executor, or generation mismatch writes no terminal fact. Race
 tests cover each authority input for both service-execution mutation classes.
 02C2 exposes a typed two-phase authority seam so hidden behavior can be tested,
-but only the deny implementation is available in production. AUTH-09E,
-AUTH-PREP, and the exact AUTH artifact-internal activation chunk later supply
-the real prepared revalidation path and scanner schedule; ART does not change
-action availability or inspect the static service-action matrix.
+but only the deny implementation is available in production. The merged
+AUTH-09E and AUTH-PREP foundations supply runtime admission and the generic
+prepared-authority protocol without an ART consumer or activation. The exact
+AUTH artifact-internal activation chunk later supplies evaluator integration
+and the scanner schedule; ART does not change action availability or inspect
+the static service-action matrix.
 
 ## Verification Result Matrix
 

@@ -117,10 +117,11 @@ principal, evaluate a human grant, or change action availability.
 The only production implementation added by this chunk denies before claim,
 provider I/O, broker publication, or database mutation because all three
 actions remain `planned`. An explicit test-only authority implementation may
-exercise hidden behavior. AUTH-09E, AUTH-PREP, and
-`WS-AUTH-001-ART-02D-INTERNAL` later replace that deny-only seam with the real
-prepared protocol and evaluator integration. Tests must prove the real kernel
-continues to return `action_unavailable` for all three actions.
+exercise hidden behavior. The merged AUTH-09E and AUTH-PREP foundations provide
+runtime admission and the prepared-authority protocol, but intentionally add no
+ART consumer or activation. `WS-AUTH-001-ART-02D-INTERNAL` later replaces the
+deny-only seam with the real evaluator integration. Tests must prove the real
+kernel continues to return `action_unavailable` for all three actions.
 
 Celery may register resolver and verifier task names for contract testing, but
 the production Beat schedule contains no 02C2 scanner entry and production

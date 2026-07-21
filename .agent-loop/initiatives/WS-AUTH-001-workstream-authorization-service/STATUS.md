@@ -154,7 +154,7 @@ None.
 | `WS-AUTH-001-09E` | Merged | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | #157 | Merged as `42a89b2d` on 2026-07-20. |
 | `WS-AUTH-001-ART-CUSTODY` | Merged | `codex/ws-auth-001-art-custody` | #158 | Merged as `be2a79a2` on 2026-07-20; all 25 ART actions remain planned. |
 | `WS-AUTH-001-REV-CUSTODY` | Merged | `codex/ws-auth-001-rev-custody` | #160 | Merged as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned. |
-| `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
+| `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
