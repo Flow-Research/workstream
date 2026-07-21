@@ -1,6 +1,8 @@
 # WS-AUTH-001-10 Internal Review Evidence
 
-Reviewed code SHA: `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2`
+Reviewed code SHA: `1623e5b2dd85cc65df92af89989fda2ce7881bd0`
+
+Reviewed planning SHA: `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2`
 
 Reviewed against trusted main: `5a8a924d9b3b347d4cc74b4682865518539c837e`
 
@@ -22,6 +24,10 @@ architecture, CI integrity, docs, reuse/dedup, and test delta
 - `git diff --check`: PASS.
 - This parent changes planning/specification artifacts only. No runtime,
   migration, test, CI, dependency, threshold, or product behavior changed.
+- The exact external-gate repair restores `STATUS.md` to trusted-main state and
+  uses the canonical evidence provenance label. All three reviewer groups
+  passed repair SHA `1623e5b2dd85cc65df92af89989fda2ce7881bd0` with no
+  remaining finding; 88 Agent Gate regression tests pass locally.
 - GitHub remains the owner of the full sharded suite, aggregate 78 percent and
   changed-authorization 90 percent coverage gates, API E2E, and Agent Gates for
   each implementation child.
@@ -47,9 +53,9 @@ The initial combined runtime contract was rejected as too broad and split into
 combined-role specification language, privacy and pagination ambiguity,
 migration refusal predicates, action/evidence migration custody, PREP lock
 ordering, strict request/response schemas, and issue/revoke replay states. The
-final repair places all five future actions in the existing closed catalogue as
+final planning repair places all five future actions in the existing closed catalogue as
 planned rows with exact 10B/10C owners; no parallel allowlist or active surface
-is created.
+is created. The later external-gate repair changes no approved plan semantics.
 
 Valid findings addressed: yes
 

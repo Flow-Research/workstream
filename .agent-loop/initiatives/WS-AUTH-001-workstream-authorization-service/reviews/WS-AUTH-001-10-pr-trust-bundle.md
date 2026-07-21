@@ -43,7 +43,9 @@ changes in this parent.
 - Merge-intent validation: PASS.
 - Diff integrity: PASS.
 - All nine required internal review tracks pass exact planning SHA
-  `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2` after fixes.
+  `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2` after fixes, and all required
+  tracks pass external-gate repair SHA
+  `1623e5b2dd85cc65df92af89989fda2ce7881bd0`.
 - No tests were added, modified, removed, skipped, or weakened because this is
   a planning-only parent. Each child owns focused local tests; GitHub owns its
   full suite and coverage proof.

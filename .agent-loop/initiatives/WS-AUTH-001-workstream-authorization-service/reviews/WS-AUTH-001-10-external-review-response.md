@@ -32,8 +32,9 @@ python3 scripts/check_internal_review_evidence.py
 ```
 
 Agent Gate regression result: 88 passed. The evidence check intentionally
-requires exact-SHA repair review and an evidence-only descendant before it can
-pass; that binding is completed after the repair review.
+required exact-SHA repair review and an evidence-only descendant; internal
+review passed repair SHA `1623e5b2dd85cc65df92af89989fda2ce7881bd0`, and the
+reviewed-code binding now names that SHA.
 
 ## Remaining risks
 
