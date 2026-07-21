@@ -278,15 +278,22 @@ The qualification snapshot records the evidence visible when a Project Manager m
 ProjectRoleQualificationSnapshot:
   id: uuid
   project_id: uuid
-  contributor_id: uuid
+  actor_profile_id: uuid
+  requested_role: enum [submitter, reviewer, adjudicator]
 
-  skills_snapshot: object
-  reputation_snapshot: object
+  skills_snapshot: QualificationAvailabilitySnapshot
+  reputation_snapshot: QualificationAvailabilitySnapshot
   prior_project_work_refs: list[uuid]
-  external_expertise_refs: list[string]
+  external_expertise_refs: list[bounded_reference_token]
 
-  captured_by: actor_id
+  captured_by_actor_profile_id: uuid
+  captured_by_admin_role_grant_id: uuid
   captured_at: timestamp
+
+QualificationAvailabilitySnapshot:
+  availability: enum [available, unavailable]
+  reference_ids: list[bounded_reference_token]
+  unavailable_reason: enum [not_collected, source_unavailable, no_record] | null
 ```
 
 #### Qualification snapshot invariants
@@ -296,6 +303,13 @@ ProjectRoleQualificationSnapshot:
 - Missing reputation does not block a manual v0.1 grant.
 - The snapshot is evidence for the grant decision, not an authorization decision by itself.
 - Snapshot payloads MUST exclude secrets and unnecessary personal information.
+- Each availability `reference_ids` list contains zero to 20 tokens. A bounded
+  reference token is one to 120 characters, matches
+  `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$`, and MUST NOT contain `://`.
+- `available` requires at least one reference and a null unavailable reason;
+  `unavailable` requires no references and exactly one unavailable reason.
+- `prior_project_work_refs` contains zero to 20 UUIDs and
+  `external_expertise_refs` contains zero to 20 bounded reference tokens.
 
 ### 6.5 ProjectRoleGrant
 
@@ -305,19 +319,19 @@ ProjectRoleQualificationSnapshot:
 ProjectRoleGrant:
   id: uuid
   project_id: uuid
-  contributor_id: uuid
+  actor_profile_id: uuid
   role: enum [submitter, reviewer, adjudicator]
   status: enum [active, revoked]
 
   grant_method: literal [manual]
-  qualification_snapshot_ref: uuid
+  qualification_snapshot_id: uuid
 
-  granted_by: actor_id
+  granted_by_actor_profile_id: uuid
   granted_by_admin_role_grant_id: uuid
   granted_at: timestamp
   grant_reason: string
 
-  revoked_by: actor_id | null
+  revoked_by_actor_profile_id: uuid | null
   revoked_at: timestamp | null
   revoked_reason: string | null
 ```
@@ -329,10 +343,13 @@ ProjectRoleGrant:
 - A Project Manager whose effective scope covers the project may issue or revoke it.
 - The issuing Project Manager cannot grant a ProjectRoleGrant to themselves.
 - `grant_method = manual` is the only accepted creation value in v0.1.
-- `qualification_snapshot_ref` is mandatory and must match the same project and contributor.
+- `qualification_snapshot_id` is mandatory and its snapshot must match the same
+  project, actor profile, and exact requested role.
 - At most one active ProjectRoleGrant exists for a contributor, project, and
   exact role. All three distinct roles may be active concurrently.
 - Revoking or regranting one role never changes another role.
+- Grant and revocation reasons are one to 500 UTF-8 bytes, equal their Python
+  `str.strip()` result, and contain no Unicode control character.
 - A submitter action requires an active exact `submitter` grant.
 - A reviewer action requires an active exact `reviewer` grant.
 - An `adjudicator` grant creates no adjudication capability until WS-REV defines
@@ -1241,25 +1258,31 @@ Create request:
 
 ```json
 {
-  "contributor_id": "uuid",
-  "role": "reviewer",
-  "grant_method": "manual",
-  "grant_reason": "Qualified project reviewer",
+  "target_actor_profile_id": "uuid",
+  "role": "submitter",
+  "reason": "Qualified project submitter",
   "qualification": {
-    "skills_snapshot": {},
-    "reputation_snapshot": {"status": "unavailable"},
+    "skills_snapshot": {
+      "availability": "available",
+      "reference_ids": ["skill:python"],
+      "unavailable_reason": null
+    },
+    "reputation_snapshot": {
+      "availability": "unavailable",
+      "reference_ids": [],
+      "unavailable_reason": "no_record"
+    },
     "prior_project_work_refs": [],
     "external_expertise_refs": []
-  },
-  "role": "submitter"
+  }
 }
 ```
 
 ### 21.7 Permission catalog
 
 ```http
-GET /v1/authorization/permissions
-GET /v1/authorization/admin-role-definitions
+GET /api/v1/authorization/permissions
+GET /api/v1/authorization/admin-role-definitions
 ```
 
 These endpoints return registered definitions. They do not expose or accept arbitrary dynamic policy code.
@@ -1326,7 +1349,7 @@ AdminRoleGrant:
     WHERE status = 'active' AND scope_type = 'project'
 
 ProjectRoleGrant:
-  partial UNIQUE(project_id, contributor_id)
+  partial UNIQUE(project_id, actor_profile_id, role)
     WHERE status = 'active'
 
 ProjectRoleQualificationSnapshot:
@@ -1358,7 +1381,7 @@ AdminRoleGrant:
 ProjectRoleGrant:
   role IN ('submitter', 'reviewer', 'adjudicator')
   status IN ('active', 'revoked')
-  manual => automation_policy_ref IS NULL
+  grant_method = 'manual'
 ```
 
 Foreign keys MUST prevent project/snapshot/contributor mismatches. Composite foreign keys MUST be used where necessary.
@@ -1371,9 +1394,9 @@ ActorProfile(last_seen_at)
 ActorIdentityLink(issuer, subject, status)
 AdminRoleGrant(actor_profile_id, status)
 AdminRoleGrant(role, scope_type, scope_project_id, status)
-ProjectRoleGrant(project_id, contributor_id, status)
-ProjectRoleGrant(contributor_id, status)
-ProjectRoleQualificationSnapshot(project_id, contributor_id, captured_at)
+ProjectRoleGrant(project_id, actor_profile_id, role, status)
+ProjectRoleGrant(actor_profile_id, role, status)
+ProjectRoleQualificationSnapshot(project_id, actor_profile_id, requested_role, captured_at)
 AuditEvent(actor_profile_id, occurred_at)
 AuditEvent(project_id, occurred_at)
 ```
@@ -1702,10 +1725,12 @@ Alert on:
 - Missing reputation may be recorded unavailable.
 - Submitter grant cannot review.
 - Reviewer grant cannot claim submission tasks.
-- Both grant supplies union but not self-review bypass.
+- Concurrent active submitter and reviewer grants supply the union of their
+  exact permissions but do not bypass self-review guards.
 - Admin role alone cannot submit or review.
 - Duplicate active project grant is prevented.
-- Replacement creates a new grant and revokes old history.
+- Regrant after revocation creates a new row and preserves revoked history;
+  issuance never implicitly replaces or revokes another row.
 - Revocation is visible on next request.
 
 ### 31.6 Permission matrix tests
@@ -1732,7 +1757,8 @@ For every permission identifier, create table-driven tests proving:
 
 - Concurrent human first access leaves one profile/link.
 - Concurrent identical AdminRoleGrant leaves one active grant.
-- Concurrent ProjectRoleGrant leaves one active grant.
+- Concurrent same-exact-role ProjectRoleGrant issue leaves one active grant;
+  concurrent distinct-role issue may leave each independent role active.
 - Concurrent final-admin suspension/revocation attempts leave at least one effective Access Administrator.
 - Grant revocation versus sensitive command produces one serializable authority outcome.
 

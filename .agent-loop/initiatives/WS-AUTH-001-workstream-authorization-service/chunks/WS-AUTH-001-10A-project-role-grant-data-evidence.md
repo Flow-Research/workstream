@@ -4,6 +4,11 @@
 
 `WS-AUTH-001` — Workstream Authorization Service
 
+## Status and prerequisite
+
+Proposed and inactive. Start only after planning parent AUTH-10 merges, signed
+memory names 10A, and a fresh explicit start event activates this exact child.
+
 ## Goal
 
 Create the immutable qualification-snapshot and independent three-role grant
@@ -64,15 +69,16 @@ Each availability snapshot is exactly:
 
 ```text
 availability: available | unavailable
-reference_ids: array[string], 0..20 items, each 1..120 UTF-8 bytes after
-               rejecting leading/trailing whitespace and control characters
+reference_ids: array[string], 0..20 items, each matching
+               ^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$ and containing no `://`
 unavailable_reason: not_collected | source_unavailable | no_record | null
 ```
 
 `available` requires one or more reference IDs and null reason. `unavailable`
 requires no references and one reason. Prior-work references are 0..20 UUIDs.
-External-expertise references are 0..20 tokens with the same byte/whitespace
-rules. No free-form narrative, score, contact field, issuer subject, raw claim,
+External-expertise references are 0..20 tokens with the same grammar. Issue and
+revoke reasons are 1..500 UTF-8 bytes, must equal Python `str.strip()`, and
+reject Unicode control characters. No free-form evidence narrative, score, contact field, issuer subject, raw claim,
 secret, URL credential, or automatically inferred authority is stored.
 
 `ProjectRoleGrant` is one immutable issuance row for exactly `submitter`,
@@ -92,10 +98,12 @@ to revoked version 2 may mutate lifecycle fields.
 - Typed and PostgreSQL audit/idempotency validators accept only the three exact
   roles and issued/revoked success events. Replacement fields/events/reasons
   and `both` are absent.
-- Upgrade refuses, without mutation, any obsolete combined/replacement evidence
-  in current authority audit/idempotency rows. Downgrade refuses without
-  mutation when either new table contains any row or new three-role evidence
-  cannot be represented by the prior validator.
+- Upgrade refuses, without mutation, an audit/idempotency row whose project-role
+  facts contain `role='both'`, a replacement/supersession key, operation/event
+  `ProjectRoleGrantReplaced`, or replacement reason token. Downgrade refuses
+  without mutation when either new table contains any row or an authority audit
+  or idempotency row contains `role='adjudicator'`. Each predicate and the
+  combined predicate have no-mutation proof.
 - Fresh install, prior-head upgrade, downgrade/refusal, replay, constraints,
   immutability, and preserved unrelated history are proven on PostgreSQL.
 - No migration, model, schema, or fixture accepts automated creation.

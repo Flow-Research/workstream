@@ -4,6 +4,11 @@
 
 `WS-AUTH-001` — Workstream Authorization Service
 
+## Status and prerequisite
+
+Proposed and inactive. Start only after 10A merges, signed memory names 10B,
+and a fresh explicit start event activates this exact child.
+
 ## Goal
 
 Expose privacy-safe contributor candidates and project-role grant history
@@ -29,9 +34,11 @@ backend/app/modules/actors/repository.py
 backend/app/modules/authorization/**
 backend/app/modules/projects/repository.py
 backend/app/api/router.py
+backend/app/core/config.py
 backend/tests/test_actors.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
+backend/tests/test_config.py
 backend/scripts/api_contract_e2e.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
@@ -74,9 +81,14 @@ project. Services, agents, and Space principals deny before lookup.
   cases are indistinguishable before disclosure.
 - List/detail expose bounded grant/snapshot provenance but no external identity
   or contact metadata.
-- Existing cursor convention is reused and binds project, status, exact optional
-  role, limit, and boundary. Malformed/tampered/cross-project/cross-filter
-  cursors reveal neither count nor rows.
+- 10B introduces one shared authorization pagination codec using HMAC-SHA256 and
+  a required base64-decoded 32-byte
+  `WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET`. The versioned cursor payload binds
+  action, project, status, exact optional role, limit, boundary timestamp/UUID,
+  and canonical query digest. Signature comparison is constant-time;
+  malformed/tampered/cross-project/cross-filter cursors reveal neither count
+  nor rows. The secret is configuration-only, never logged, serialized, stored,
+  or reused from auth/rate-limit secrets.
 - Existing read rate control is reused. Every surface has exactly one active
   OpenAPI declaration and manifest-delta proof.
 - `/actors/me/authorization-context` remains absent and planned for AUTH-11.
@@ -85,8 +97,8 @@ project. Services, agents, and Space principals deny before lookup.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/actors app/modules/authorization app/modules/projects tests/test_actors.py tests/test_authorization.py tests/test_projects.py)
-(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_projects.py -k 'project_role or contributor_candidate')
+(cd backend && .venv/bin/python -m ruff check app/modules/actors app/modules/authorization app/modules/projects app/core/config.py tests/test_actors.py tests/test_authorization.py tests/test_projects.py tests/test_config.py)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_projects.py tests/test_config.py -k 'project_role or contributor_candidate or pagination_cursor')
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py

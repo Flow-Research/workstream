@@ -4,6 +4,11 @@
 
 `WS-AUTH-001` — Workstream Authorization Service
 
+## Status and prerequisite
+
+Proposed and inactive. Start only after 10B merges, signed memory names 10C,
+and a fresh explicit start event activates this exact child.
+
 ## Goal
 
 Issue and revoke independent project contributor roles through PREP-bound,
@@ -66,11 +71,12 @@ not substitute for Project Manager authority.
 
 ## Exact lock and transaction order
 
-PREP is extended to accept the caller plus the known target human principal for
-issuance. It sorts distinct ActorProfile IDs lexically and locks each profile
-then its exact active link. It then locks the caller's one deterministic covered
-Project Manager AdminRoleGrant. `AuthorityControl` is not locked because these
-operations cannot remove final Access Administrator authority.
+PREP first locks `AuthorityControl(id=1)` as the shared authorization-order
+barrier used by administrative lifecycle mutations. It then accepts the caller
+plus the known target human principal for issuance, sorts distinct ActorProfile
+IDs lexically, and locks each profile then its exact active link. It finally
+locks the caller's one deterministic covered Project Manager AdminRoleGrant.
+The barrier is ordering coordination, not final-admin permission or safety.
 
 After PREP returns, issue locks canonical project, then takes one transaction
 advisory key for `(actor_profile_id, project_id, requested_role)` to serialize
@@ -78,8 +84,27 @@ absence, then reloads the target/scope facts and active exact-role selector.
 Revoke locks canonical project then the exact grant. Consume recomposes every
 fact and evaluates once; repositories flush only. The route commits once.
 
-Crossed-manager tests prove two managers targeting one another cannot deadlock
-because principal locks share the same global ordering.
+Crossed tests prove two managers targeting one another, issue versus target
+profile/link lifecycle, and issue versus caller-grant revocation cannot deadlock
+because all paths share the barrier and compatible principal order.
+
+## Exact request and response contract
+
+Issue requires `Idempotency-Key: <uuid>` and a strict body containing exactly
+`target_actor_profile_id`, `role`, `qualification`, and `reason`.
+`qualification` contains the two exact availability objects and reference lists
+defined by 10A. Revoke requires the same header and exactly `reason`. Reasons
+are 1..500 UTF-8 bytes, equal their Python `str.strip()` result, and contain no
+Unicode control character. Issue returns HTTP 201 with exactly `{id,
+qualification_snapshot_id, project_id, actor_profile_id, role, status:
+"active", version: 1}`. Revoke returns HTTP 200 with the same fields, the
+original snapshot ID, `status: "revoked"`, and `version: 2`. Strict response
+schemas reject undeclared fields, including identity-link and contact data.
+Stable errors are HTTP 400 `invalid_request`, HTTP 403
+`self_grant_forbidden` or `self_role_revoke_forbidden`, concealed HTTP 404
+`resource_not_found`, HTTP 409 `idempotency_mismatch` or
+`project_role_grant_exists`, HTTP 422 `qualification_snapshot_invalid`, and
+fail-closed HTTP 503 `service_unavailable`.
 
 ## Acceptance criteria
 
@@ -110,8 +135,11 @@ because principal locks share the same global ordering.
 - PostgreSQL tests cover identical-role issue, different-role issue, crossed
   managers, revoke versus regrant, revoke versus authorization, replay after
   authority loss, timeout, and cancellation.
-- Live API proof uses the same unexpired token to issue, exercise visibility,
-  revoke, and observe immediate denial without direct database edits.
+- Live API proof uses the same unexpired manager token to issue, read the active
+  grant through 10B, revoke, read the historical revoked grant, and prove a
+  second revoke and an old replay are reauthorized/denied without direct
+  database edits. Contributor-capability denial remains explicitly deferred to
+  AUTH-11/13 where a real consumer action exists.
 
 ## Verification commands
 
