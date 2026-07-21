@@ -1,12 +1,12 @@
 # WS-AUTH-001-10A Internal Review Evidence
 
-Reviewed code SHA: `3e6ba3dbf265ce287b4f8bf114f3c3081f63f94e`
+Reviewed code SHA: `12fe910a8d7369456bb66caa7a213f43d8bd262c`
 
 Reviewed implementation SHA: `e8d9c37e6fd552439ff9f0db8b2972337a3b019f`
 
 Reviewed against trusted main: `dda60ed0cb97d9de4a375df4147f31172cb3839b`
 
-Reviewed at: `2026-07-21T14:01:09Z`
+Reviewed at: `2026-07-21T14:10:33Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
@@ -73,6 +73,12 @@ historical 0021 action-parity test scoped to actions present at that revision
 and extends the transaction-scoped privileged test reset to clear the two new
 immutable role-history tables without weakening their production guards. The
 dedicated 0031 tests retain proof of all five new action pairs. All tracks
+passed with no open finding.
+
+All tracks reviewed follow-up CI repair SHA `12fe910a`. It applies the same
+revision-ownership boundary to the historical 0022 parity test; the dedicated
+0031 selector still asserts and exercises exactly five AUTH-10 action pairs.
+The previously failing focused bootstrap migration test passed. All tracks
 passed with no open finding.
 
 Open sub-agent sessions: none
