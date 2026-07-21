@@ -1064,6 +1064,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_09C,
                             ActionOwner.AUTH_09D_A,
                             ActionOwner.AUTH_09D_B,
+                            ActionOwner.AUTH_10B,
+                            ActionOwner.AUTH_10C,
                         }
                     ),
                 )
