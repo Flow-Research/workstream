@@ -38,13 +38,17 @@ _STRIP = (
 
 
 def _constraint_definition(name: str) -> str:
-    return op.get_bind().execute(
-        sa.text(
-            "select pg_get_constraintdef(oid) from pg_constraint "
-            "where conrelid='audit_events'::regclass and conname=:name"
-        ),
-        {"name": f"ck_audit_events_{name}"},
-    ).scalar_one()
+    return (
+        op.get_bind()
+        .execute(
+            sa.text(
+                "select pg_get_constraintdef(oid) from pg_constraint "
+                "where conrelid='audit_events'::regclass and conname=:name"
+            ),
+            {"name": f"ck_audit_events_{name}"},
+        )
+        .scalar_one()
+    )
 
 
 def _replace_constraint(name: str, definition: str) -> None:
@@ -90,9 +94,7 @@ def _replace_authority_registries(*, add: bool) -> None:
             raise RuntimeError("unexpected authority denial registry definition")
         definition = definition.replace(marker, marker + ", " + additions)
     else:
-        additions = ", " + ", ".join(
-            f"('{value}'::character varying)::text" for value in _DENIALS
-        )
+        additions = ", " + ", ".join(f"('{value}'::character varying)::text" for value in _DENIALS)
         if definition.count(additions) != 1:
             raise RuntimeError("unexpected authority denial registry definition")
         definition = definition.replace(additions, "")
@@ -111,9 +113,11 @@ def _replace_authority_registries(*, add: bool) -> None:
 
 
 def _function_definition(name: str) -> str:
-    return op.get_bind().execute(
-        sa.text("select pg_get_functiondef(cast(:name as regproc))"), {"name": name}
-    ).scalar_one()
+    return (
+        op.get_bind()
+        .execute(sa.text("select pg_get_functiondef(cast(:name as regproc))"), {"name": name})
+        .scalar_one()
+    )
 
 
 def _replace_audit_functions(*, add: bool) -> None:
@@ -177,7 +181,7 @@ def _create_helpers() -> None:
               select 1 from jsonb_array_elements(value) item
               where jsonb_typeof(item)<>'string' or
                 case when uuid_only then not (item #>> '{}') ~
-                  '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+                  '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                 else not project_role_reference_token_is_safe(item #>> '{}') end
             )
         $$
@@ -201,7 +205,9 @@ def _create_helpers() -> None:
         language plpgsql immutable strict as $$
         declare point integer; index integer;
         begin
-          if octet_length(value) not between 1 and 500 or value <> btrim(value, """ + _STRIP + r""") then return false; end if;
+          if octet_length(value) not between 1 and 500 or value <> btrim(value, """
+        + _STRIP
+        + r""") then return false; end if;
           for index in 1..char_length(value) loop
             point := ascii(substr(value,index,1));
             if point between 0 and 31 or point between 127 and 159
@@ -211,7 +217,7 @@ def _create_helpers() -> None:
           end loop;
           return true;
         end $$
-        """
+        """,
     )
     for statement in statements:
         op.execute(statement)
@@ -221,16 +227,20 @@ def _create_history_guards() -> None:
     statements = (
         """
         create function guard_project_role_snapshot_history() returns trigger language plpgsql as $$
-        begin raise exception 'project-role qualification snapshots are immutable' using errcode='55000'; end $$
+        begin
+          if tg_op='INSERT' then new.captured_at := clock_timestamp(); return new; end if;
+          raise exception 'project-role qualification snapshots are immutable' using errcode='55000';
+        end $$
         """,
         """
         create trigger trg_project_role_qualification_snapshots_immutable
-        before update or delete on project_role_qualification_snapshots
+        before insert or update or delete on project_role_qualification_snapshots
         for each row execute function guard_project_role_snapshot_history()
         """,
         """
         create function guard_project_role_grant_history() returns trigger language plpgsql as $$
         begin
+          if tg_op='INSERT' then new.granted_at := clock_timestamp(); return new; end if;
           if tg_op='DELETE' then raise exception 'project-role grants are immutable history' using errcode='55000'; end if;
           if (new.id,new.project_id,new.actor_profile_id,new.role,new.grant_method,
               new.qualification_snapshot_id,new.granted_by_actor_profile_id,
@@ -241,16 +251,29 @@ def _create_history_guards() -> None:
               old.granted_by_admin_role_grant_id,old.grant_reason,old.granted_at)
              or old.status<>'active' or old.version<>1 or new.status<>'revoked' or new.version<>2
              or new.revoked_by_actor_profile_id is null or new.revoked_by_admin_role_grant_id is null
-             or new.revoked_reason is null or new.revoked_at is null then
+             or new.revoked_reason is null then
             raise exception 'invalid project-role grant history transition' using errcode='23514';
           end if;
+          new.revoked_at := clock_timestamp();
           return new;
         end $$
         """,
         """
-        create trigger trg_project_role_grants_history before update or delete on project_role_grants
+        create trigger trg_project_role_grants_history before insert or update or delete on project_role_grants
         for each row execute function guard_project_role_grant_history()
+        """,
         """
+        create function reject_project_role_history_truncate() returns trigger language plpgsql as $$
+        begin raise exception 'project-role history cannot be truncated' using errcode='55000'; end $$
+        """,
+        """
+        create trigger trg_project_role_snapshots_reject_truncate before truncate
+        on project_role_qualification_snapshots execute function reject_project_role_history_truncate()
+        """,
+        """
+        create trigger trg_project_role_grants_reject_truncate before truncate
+        on project_role_grants execute function reject_project_role_history_truncate()
+        """,
     )
     for statement in statements:
         op.execute(statement)
@@ -259,15 +282,19 @@ def _create_history_guards() -> None:
 def upgrade() -> None:
     """Install exact-role history only after proving no replacement-era state exists."""
     bind = op.get_bind()
-    bind.execute(sa.text("lock table audit_events, authority_idempotency_records in access exclusive mode"))
-    blocked = bind.execute(sa.text("""
+    bind.execute(
+        sa.text("lock table audit_events, authority_idempotency_records in access exclusive mode")
+    )
+    blocked = bind.execute(
+        sa.text("""
       select exists(select 1 from audit_events where event_domain='authority' and (
         before_facts->>'role'='both' or after_facts->>'role'='both' or
         before_facts::jsonb ? 'replaced_grant_id' or after_facts::jsonb ? 'replaced_grant_id' or
         event_type='ProjectRoleGrantReplaced' or reason='authority_replacement')) or
       exists(select 1 from authority_idempotency_records where operation in
         ('project_role_grant.issue','project_role_grant.revoke'))
-    """)).scalar_one()
+    """)
+    ).scalar_one()
     if blocked:
         raise RuntimeError("cannot safely upgrade replacement-era project-role evidence")
     _create_helpers()
@@ -275,49 +302,124 @@ def upgrade() -> None:
         "project_role_qualification_snapshots",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("project_id", sa.String(36), sa.ForeignKey("projects.id"), nullable=False),
-        sa.Column("actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False),
+        sa.Column(
+            "actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False
+        ),
         sa.Column("requested_role", sa.String(24), nullable=False),
         sa.Column("skills_snapshot", postgresql.JSONB(), nullable=False),
         sa.Column("reputation_snapshot", postgresql.JSONB(), nullable=False),
         sa.Column("prior_project_work_refs", postgresql.JSONB(), nullable=False),
         sa.Column("external_expertise_refs", postgresql.JSONB(), nullable=False),
-        sa.Column("captured_by_actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False),
-        sa.Column("captured_by_admin_role_grant_id", sa.Uuid(), sa.ForeignKey("admin_role_grants.id"), nullable=False),
-        sa.Column("captured_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "captured_by_actor_profile_id",
+            sa.String(36),
+            sa.ForeignKey("actor_profiles.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "captured_by_admin_role_grant_id",
+            sa.Uuid(),
+            sa.ForeignKey("admin_role_grants.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "captured_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.CheckConstraint("requested_role in ('submitter','reviewer','adjudicator')", name="role"),
-        sa.CheckConstraint("project_role_availability_is_safe(skills_snapshot) and project_role_availability_is_safe(reputation_snapshot)", name="availability"),
-        sa.CheckConstraint("project_role_reference_array_is_safe(prior_project_work_refs,true)", name="prior_work_refs"),
-        sa.CheckConstraint("project_role_reference_array_is_safe(external_expertise_refs,false)", name="external_expertise_refs"),
-        sa.UniqueConstraint("id","actor_profile_id","project_id","requested_role", name="grant_reference"),
+        sa.CheckConstraint(
+            "project_role_availability_is_safe(skills_snapshot) and project_role_availability_is_safe(reputation_snapshot)",
+            name="availability",
+        ),
+        sa.CheckConstraint(
+            "project_role_reference_array_is_safe(prior_project_work_refs,true)",
+            name="prior_work_refs",
+        ),
+        sa.CheckConstraint(
+            "project_role_reference_array_is_safe(external_expertise_refs,false)",
+            name="external_expertise_refs",
+        ),
+        sa.UniqueConstraint(
+            "id", "actor_profile_id", "project_id", "requested_role", name="grant_reference"
+        ),
     )
-    op.create_index("ix_project_role_qualification_snapshots_history", "project_role_qualification_snapshots", ["project_id","actor_profile_id","requested_role","captured_at"])
+    op.create_index(
+        "ix_project_role_qualification_snapshots_history",
+        "project_role_qualification_snapshots",
+        ["project_id", "actor_profile_id", "requested_role", "captured_at"],
+    )
     op.create_table(
         "project_role_grants",
         sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("project_id", sa.String(36), sa.ForeignKey("projects.id"), nullable=False),
-        sa.Column("actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False),
+        sa.Column(
+            "actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False
+        ),
         sa.Column("role", sa.String(24), nullable=False),
         sa.Column("status", sa.String(16), nullable=False, server_default="active"),
         sa.Column("version", sa.SmallInteger(), nullable=False, server_default="1"),
         sa.Column("grant_method", sa.String(16), nullable=False, server_default="manual"),
         sa.Column("qualification_snapshot_id", sa.Uuid(), nullable=False),
-        sa.Column("granted_by_actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id"), nullable=False),
-        sa.Column("granted_by_admin_role_grant_id", sa.Uuid(), sa.ForeignKey("admin_role_grants.id"), nullable=False),
+        sa.Column(
+            "granted_by_actor_profile_id",
+            sa.String(36),
+            sa.ForeignKey("actor_profiles.id"),
+            nullable=False,
+        ),
+        sa.Column(
+            "granted_by_admin_role_grant_id",
+            sa.Uuid(),
+            sa.ForeignKey("admin_role_grants.id"),
+            nullable=False,
+        ),
         sa.Column("grant_reason", sa.Text(), nullable=False),
-        sa.Column("granted_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "granted_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        ),
         sa.Column("revoked_by_actor_profile_id", sa.String(36), sa.ForeignKey("actor_profiles.id")),
-        sa.Column("revoked_by_admin_role_grant_id", sa.Uuid(), sa.ForeignKey("admin_role_grants.id")),
+        sa.Column(
+            "revoked_by_admin_role_grant_id", sa.Uuid(), sa.ForeignKey("admin_role_grants.id")
+        ),
         sa.Column("revoked_reason", sa.Text()),
         sa.Column("revoked_at", sa.DateTime(timezone=True)),
         sa.CheckConstraint("role in ('submitter','reviewer','adjudicator')", name="role"),
         sa.CheckConstraint("grant_method='manual'", name="grant_method"),
-        sa.CheckConstraint("project_role_reason_is_safe(grant_reason) and (revoked_reason is null or project_role_reason_is_safe(revoked_reason))", name="reason"),
-        sa.CheckConstraint("(status='active' and version=1 and revoked_by_actor_profile_id is null and revoked_by_admin_role_grant_id is null and revoked_reason is null and revoked_at is null) or (status='revoked' and version=2 and revoked_by_actor_profile_id is not null and revoked_by_admin_role_grant_id is not null and revoked_reason is not null and revoked_at is not null)", name="lifecycle"),
-        sa.ForeignKeyConstraint(["qualification_snapshot_id","actor_profile_id","project_id","role"], ["project_role_qualification_snapshots.id","project_role_qualification_snapshots.actor_profile_id","project_role_qualification_snapshots.project_id","project_role_qualification_snapshots.requested_role"], name="qualification_ownership", ondelete="RESTRICT"),
+        sa.CheckConstraint(
+            "project_role_reason_is_safe(grant_reason) and (revoked_reason is null or project_role_reason_is_safe(revoked_reason))",
+            name="reason",
+        ),
+        sa.CheckConstraint(
+            "(status='active' and version=1 and revoked_by_actor_profile_id is null and revoked_by_admin_role_grant_id is null and revoked_reason is null and revoked_at is null) or (status='revoked' and version=2 and revoked_by_actor_profile_id is not null and revoked_by_admin_role_grant_id is not null and revoked_reason is not null and revoked_at is not null)",
+            name="lifecycle",
+        ),
+        sa.ForeignKeyConstraint(
+            ["qualification_snapshot_id", "actor_profile_id", "project_id", "role"],
+            [
+                "project_role_qualification_snapshots.id",
+                "project_role_qualification_snapshots.actor_profile_id",
+                "project_role_qualification_snapshots.project_id",
+                "project_role_qualification_snapshots.requested_role",
+            ],
+            name="qualification_ownership",
+            ondelete="RESTRICT",
+        ),
     )
-    op.create_index("uq_project_role_grants_active_exact_role", "project_role_grants", ["project_id","actor_profile_id","role"], unique=True, postgresql_where=sa.text("status='active'"))
-    op.create_index("ix_project_role_grants_project_actor_role_status", "project_role_grants", ["project_id","actor_profile_id","role","status"])
-    op.create_index("ix_project_role_grants_actor_role_status", "project_role_grants", ["actor_profile_id","role","status"])
+    op.create_index(
+        "uq_project_role_grants_active_exact_role",
+        "project_role_grants",
+        ["project_id", "actor_profile_id", "role"],
+        unique=True,
+        postgresql_where=sa.text("status='active'"),
+    )
+    op.create_index(
+        "ix_project_role_grants_project_actor_role_status",
+        "project_role_grants",
+        ["project_id", "actor_profile_id", "role", "status"],
+    )
+    op.create_index(
+        "ix_project_role_grants_actor_role_status",
+        "project_role_grants",
+        ["actor_profile_id", "role", "status"],
+    )
     _create_history_guards()
     _replace_authority_registries(add=True)
     _replace_action_registry(add=True)
@@ -327,8 +429,13 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Restore 0030 only when no 10A-owned truth or evidence exists."""
     bind = op.get_bind()
-    bind.execute(sa.text("lock table project_role_grants, project_role_qualification_snapshots, audit_events in access exclusive mode"))
-    blocked = bind.execute(sa.text("""
+    bind.execute(
+        sa.text(
+            "lock table project_role_grants, project_role_qualification_snapshots, audit_events in access exclusive mode"
+        )
+    )
+    blocked = bind.execute(
+        sa.text("""
       select exists(select 1 from project_role_grants) or
       exists(select 1 from project_role_qualification_snapshots) or
       exists(select 1 from audit_events where event_domain='authority' and (
@@ -336,7 +443,8 @@ def downgrade() -> None:
         action_id in ('project.contributor_candidate.list','project_role_grant.list',
           'project_role_grant.read','project_role_grant.issue','project_role_grant.revoke') or
         denial_code in ('project_role_grant_already_revoked','project_role_grant_replay_state_changed')))
-    """)).scalar_one()
+    """)
+    ).scalar_one()
     if blocked:
         raise RuntimeError("cannot downgrade project-role grant evidence")
     _replace_audit_functions(add=False)
@@ -346,6 +454,7 @@ def downgrade() -> None:
     op.drop_table("project_role_qualification_snapshots")
     op.execute("drop function guard_project_role_grant_history()")
     op.execute("drop function guard_project_role_snapshot_history()")
+    op.execute("drop function reject_project_role_history_truncate()")
     op.execute("drop function project_role_availability_is_safe(jsonb)")
     op.execute("drop function project_role_reference_array_is_safe(jsonb,boolean)")
     op.execute("drop function project_role_reference_token_is_safe(text)")

@@ -730,6 +730,38 @@ incompatible evidence; operators must remediate through a separately approved
 data decision, never an automatic conversion. A safe downgrade also refuses
 rather than deleting adjudicator or new exact-role evidence.
 
+Before upgrading to `0031`, run the following read-only preflight against the
+same database. Both counts must be zero:
+
+```sql
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='both' or after_facts->>'role'='both' or
+  before_facts::jsonb ? 'replaced_grant_id' or
+  after_facts::jsonb ? 'replaced_grant_id' or
+  event_type='ProjectRoleGrantReplaced' or reason='authority_replacement');
+select count(*) from authority_idempotency_records where operation in
+  ('project_role_grant.issue','project_role_grant.revoke');
+```
+
+Before downgrading from `0031`, both new tables must be empty and this count
+must be zero:
+
+```sql
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='adjudicator' or after_facts->>'role'='adjudicator' or
+  action_id in ('project.contributor_candidate.list','project_role_grant.list',
+    'project_role_grant.read','project_role_grant.issue','project_role_grant.revoke') or
+  denial_code in ('project_role_grant_already_revoked',
+    'project_role_grant_replay_state_changed'));
+```
+
+The migration repeats these checks while holding `ACCESS EXCLUSIVE` locks on
+the affected authority tables, so schedule a maintenance window that prevents
+authority writes. A refusal occurs before schema mutation. Keep the database at
+its current revision, investigate the exact nonzero predicate, and recover
+forward through a separately reviewed data decision; never delete or convert
+authority evidence merely to make the migration proceed.
+
 Project-role revocation is routed by exact role. Submitter invalidation may
 reach task assignment; reviewer invalidation reaches only REV; adjudicator
 invalidation remains dormant until that lifecycle exists. Verify grant ID,

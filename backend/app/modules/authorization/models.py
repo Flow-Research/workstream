@@ -217,6 +217,19 @@ class ProjectRoleQualificationSnapshot(Base):
     __tablename__ = "project_role_qualification_snapshots"
     __table_args__ = (
         CheckConstraint("requested_role in ('submitter','reviewer','adjudicator')", name="role"),
+        CheckConstraint(
+            "project_role_availability_is_safe(skills_snapshot) and "
+            "project_role_availability_is_safe(reputation_snapshot)",
+            name="availability",
+        ),
+        CheckConstraint(
+            "project_role_reference_array_is_safe(prior_project_work_refs,true)",
+            name="prior_work_refs",
+        ),
+        CheckConstraint(
+            "project_role_reference_array_is_safe(external_expertise_refs,false)",
+            name="external_expertise_refs",
+        ),
         UniqueConstraint(
             "id",
             "actor_profile_id",
@@ -259,14 +272,18 @@ class ProjectRoleGrant(Base):
     __table_args__ = (
         CheckConstraint("role in ('submitter','reviewer','adjudicator')", name="role"),
         CheckConstraint("grant_method='manual'", name="grant_method"),
-        CheckConstraint("octet_length(grant_reason) between 1 and 500", name="grant_reason"),
+        CheckConstraint(
+            "project_role_reason_is_safe(grant_reason) and "
+            "(revoked_reason is null or project_role_reason_is_safe(revoked_reason))",
+            name="reason",
+        ),
         CheckConstraint(
             "(status='active' and version=1 and revoked_by_actor_profile_id is null "
             "and revoked_by_admin_role_grant_id is null and revoked_reason is null "
             "and revoked_at is null) or (status='revoked' and version=2 and "
             "revoked_by_actor_profile_id is not null and "
             "revoked_by_admin_role_grant_id is not null and revoked_reason is not null "
-            "and octet_length(revoked_reason) between 1 and 500 and revoked_at is not null)",
+            "and revoked_at is not null)",
             name="lifecycle",
         ),
         ForeignKeyConstraint(
