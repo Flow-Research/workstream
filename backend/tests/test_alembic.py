@@ -2748,11 +2748,12 @@ def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
             with ThreadPoolExecutor(max_workers=2) as pool:
                 insert_future = pool.submit(
                     asyncio.run,
-                    _insert_authorization_read_until_released(
+                    _insert_rate_control_until_released(
                         isolated_database_env,
                         bytes([45]) * 32,
                         inserted,
                         release_insert,
+                        scope="authorization_read",
                     ),
                 )
                 assert inserted.wait(timeout=5)
@@ -2782,6 +2783,93 @@ def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
         finally:
             asyncio.run(_clear_api_rate_controls(isolated_database_env))
             command.upgrade(config, "head")
+
+
+def test_authorization_read_rate_scope_migration_refuses_constraint_drift(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Keep revision and counter state unchanged when the known constraint drifted."""
+    config = _alembic_config()
+
+    async def replace_constraint(definition: str) -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "alter table api_rate_control_counters drop constraint "
+                        "ck_api_rate_control_counters_scope_token"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table api_rate_control_counters add constraint "
+                        "ck_api_rate_control_counters_scope_token check "
+                        f"({definition})"
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    async def state() -> tuple[str, str, int]:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.connect() as connection:
+                revision = str(
+                    await connection.scalar(text("select version_num from alembic_version"))
+                )
+                definition = str(
+                    await connection.scalar(
+                        text(
+                            "select pg_get_expr(conbin,conrelid) from pg_constraint "
+                            "where conrelid='api_rate_control_counters'::regclass "
+                            "and conname='ck_api_rate_control_counters_scope_token'"
+                        )
+                    )
+                )
+                rows = int(
+                    await connection.scalar(
+                        text("select count(*) from api_rate_control_counters")
+                    )
+                )
+                return revision, definition, rows
+        finally:
+            await engine.dispose()
+
+    old_definition = "control_scope in ('first_access', 'admin_mutation')"
+    new_definition = (
+        "control_scope in "
+        "('first_access', 'admin_mutation', 'authorization_read')"
+    )
+    drifted_definition = "control_scope in ('first_access')"
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "0031_project_role_grants")
+            asyncio.run(replace_constraint(drifted_definition))
+            before_upgrade = asyncio.run(state())
+            with pytest.raises(
+                RuntimeError, match="unexpected API rate-control scope constraint"
+            ):
+                command.upgrade(config, "0032_authorization_read_rate")
+            assert asyncio.run(state()) == before_upgrade
+
+            asyncio.run(replace_constraint(old_definition))
+            command.upgrade(config, "0032_authorization_read_rate")
+            asyncio.run(replace_constraint(drifted_definition))
+            before_downgrade = asyncio.run(state())
+            with pytest.raises(
+                RuntimeError, match="unexpected API rate-control scope constraint"
+            ):
+                command.downgrade(config, "0031_project_role_grants")
+            assert asyncio.run(state()) == before_downgrade
+
+            asyncio.run(replace_constraint(new_definition))
+        finally:
+            command.upgrade(config, "head")
+
+
 def test_authority_audit_schema_preserves_legacy_and_guards_downgrade(
     isolated_database_env: str,
     migration_lock,
@@ -5148,6 +5236,8 @@ async def _insert_rate_control_until_released(
     digest: bytes,
     inserted: threading.Event,
     release: threading.Event,
+    *,
+    scope: str = "first_access",
 ) -> None:
     """Hold an uncommitted writer until the downgrade is waiting on its lock."""
     engine = create_async_engine(database_url)
@@ -5158,36 +5248,10 @@ async def _insert_rate_control_until_released(
                     "insert into api_rate_control_counters "
                     "(control_scope, key_digest, window_started_at, window_expires_at, "
                     "request_count, updated_at) values "
-                    "('first_access', :digest, statement_timestamp(), "
+                    "(:scope, :digest, statement_timestamp(), "
                     "statement_timestamp() + interval '1 minute', 1, statement_timestamp())"
                 ),
-                {"digest": digest},
-            )
-            inserted.set()
-            assert await asyncio.to_thread(release.wait, 5)
-    finally:
-        await engine.dispose()
-
-
-async def _insert_authorization_read_until_released(
-    database_url: str,
-    digest: bytes,
-    inserted: threading.Event,
-    release: threading.Event,
-) -> None:
-    """Hold a new-scope writer so downgrade must wait before checking rows."""
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "insert into api_rate_control_counters "
-                    "(control_scope,key_digest,window_started_at,window_expires_at,"
-                    "request_count,updated_at) values "
-                    "('authorization_read',:digest,statement_timestamp(),"
-                    "statement_timestamp()+interval '1 minute',1,statement_timestamp())"
-                ),
-                {"digest": digest},
+                {"scope": scope, "digest": digest},
             )
             inserted.set()
             assert await asyncio.to_thread(release.wait, 5)

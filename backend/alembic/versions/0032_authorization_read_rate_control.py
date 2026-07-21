@@ -21,6 +21,26 @@ _OLD_SCOPE_SQL = "control_scope in ('first_access', 'admin_mutation')"
 _NEW_SCOPE_SQL = (
     "control_scope in ('first_access', 'admin_mutation', 'authorization_read')"
 )
+_OLD_SCOPE_EXPRESSION = (
+    "((control_scope)::text = ANY ((ARRAY['first_access'::character varying, "
+    "'admin_mutation'::character varying])::text[]))"
+)
+_NEW_SCOPE_EXPRESSION = (
+    "((control_scope)::text = ANY ((ARRAY['first_access'::character varying, "
+    "'admin_mutation'::character varying, 'authorization_read'::character varying])::text[]))"
+)
+
+
+def _require_scope_constraint(expected: str) -> None:
+    definition = op.get_bind().execute(
+        sa.text(
+            "select pg_get_expr(conbin,conrelid) from pg_constraint "
+            "where conrelid=cast(:table as regclass) and conname=:constraint"
+        ),
+        {"table": _TABLE, "constraint": _CONSTRAINT},
+    ).scalar_one_or_none()
+    if definition != expected:
+        raise RuntimeError("unexpected API rate-control scope constraint")
 
 
 def _replace_scope_constraint(definition: str) -> None:
@@ -35,6 +55,7 @@ def _replace_scope_constraint(definition: str) -> None:
 def upgrade() -> None:
     """Add one closed scope while preserving all existing counters."""
     op.execute(sa.text(f"lock table {_TABLE} in access exclusive mode"))
+    _require_scope_constraint(_OLD_SCOPE_EXPRESSION)
     _replace_scope_constraint(_NEW_SCOPE_SQL)
 
 
@@ -42,6 +63,7 @@ def downgrade() -> None:
     """Restore the prior scope only when no authorization-read counters exist."""
     bind = op.get_bind()
     bind.execute(sa.text(f"lock table {_TABLE} in access exclusive mode"))
+    _require_scope_constraint(_NEW_SCOPE_EXPRESSION)
     has_rows = bind.execute(
         sa.text(
             f"select exists(select 1 from {_TABLE} "

@@ -137,6 +137,10 @@ def test_rate_key_digest_matches_literal_vector_and_separates_boundaries() -> No
     assert rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, "issuer", "subject") != (
         rate_key_digest(RATE_SECRET, ADMIN_MUTATION_SCOPE, "issuer", "subject")
     )
+    assert rate_key_digest(RATE_SECRET, AUTHORIZATION_READ_SCOPE, "issuer", "subject") not in {
+        rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, "issuer", "subject"),
+        rate_key_digest(RATE_SECRET, ADMIN_MUTATION_SCOPE, "issuer", "subject"),
+    }
 
 
 @pytest.mark.parametrize(
@@ -273,6 +277,61 @@ async def test_rate_control_commits_fixed_window_denials_and_resets_expiry(
     ).request_count == 1
 
 
+async def test_authorization_read_scope_enforces_and_resets_independently(
+    rate_control_factory,
+) -> None:
+    service = RateControlService(rate_control_factory)
+    decisions = [
+        await service.consume(
+            control_scope=AUTHORIZATION_READ_SCOPE,
+            issuer=RATE_ISSUER,
+            subject=RATE_SUBJECT,
+            limit=2,
+            window_seconds=60,
+            secret=RATE_SECRET,
+        )
+        for _ in range(3)
+    ]
+    digest = rate_key_digest(
+        RATE_SECRET, AUTHORIZATION_READ_SCOPE, RATE_ISSUER, RATE_SUBJECT
+    )
+    assert [decision.allowed for decision in decisions] == [True, True, False]
+    assert [decision.request_count for decision in decisions] == [1, 2, 3]
+
+    for scope in (FIRST_ACCESS_SCOPE, ADMIN_MUTATION_SCOPE):
+        decision = await service.consume(
+            control_scope=scope,
+            issuer=RATE_ISSUER,
+            subject=RATE_SUBJECT,
+            limit=2,
+            window_seconds=60,
+            secret=RATE_SECRET,
+        )
+        assert decision.request_count == 1
+
+    async with rate_control_factory() as session:
+        await session.execute(
+            text(
+                "update api_rate_control_counters set "
+                "window_started_at=statement_timestamp()-interval '2 seconds', "
+                "window_expires_at=statement_timestamp()-interval '1 second' "
+                "where control_scope=:scope and key_digest=:digest"
+            ),
+            {"scope": AUTHORIZATION_READ_SCOPE, "digest": digest},
+        )
+        await session.commit()
+
+    reset = await service.consume(
+        control_scope=AUTHORIZATION_READ_SCOPE,
+        issuer=RATE_ISSUER,
+        subject=RATE_SUBJECT,
+        limit=2,
+        window_seconds=60,
+        secret=RATE_SECRET,
+    )
+    assert reset == RateControlDecision(allowed=True, request_count=1, retry_after=60)
+
+
 async def test_repository_persists_the_returned_database_timestamp(
     rate_control_factory,
 ) -> None:
@@ -313,7 +372,7 @@ async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
 
     async def consume_once():
         return await service.consume(
-            control_scope=ADMIN_MUTATION_SCOPE,
+            control_scope=AUTHORIZATION_READ_SCOPE,
             issuer=RATE_ISSUER,
             subject="concurrent-subject",
             limit=7,
@@ -323,9 +382,11 @@ async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
 
     decisions = await asyncio.gather(*(consume_once() for _ in range(20)))
     digest = rate_key_digest(
-        RATE_SECRET, ADMIN_MUTATION_SCOPE, RATE_ISSUER, "concurrent-subject"
+        RATE_SECRET, AUTHORIZATION_READ_SCOPE, RATE_ISSUER, "concurrent-subject"
     )
-    persisted = await _stored_rate_row(rate_control_factory, ADMIN_MUTATION_SCOPE, digest)
+    persisted = await _stored_rate_row(
+        rate_control_factory, AUTHORIZATION_READ_SCOPE, digest
+    )
 
     assert sum(decision.allowed for decision in decisions) == 7
     assert sorted(decision.request_count for decision in decisions) == list(range(1, 21))
@@ -689,8 +750,8 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
     service = _DecisionService(
         [
             RateControlDecision(True, 1, 60),
-            RateControlDecision(False, 31, 17),
             RateControlDecision(True, 1, 60),
+            RateControlDecision(False, 121, 17),
         ]
     )
     app = create_app(
@@ -724,12 +785,12 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         allowed = await client.post("/_test/first-access-rate")
-        denied = await client.post("/_test/admin-mutation-rate")
-        read_allowed = await client.get("/_test/authorization-read-rate")
+        admin_allowed = await client.post("/_test/admin-mutation-rate")
+        denied = await client.get("/_test/authorization-read-rate")
 
     assert allowed.status_code == 200
     assert denied.status_code == 429
-    assert read_allowed.status_code == 200
+    assert admin_allowed.status_code == 200
     assert denied.headers["retry-after"] == "17"
     assert denied.json() == {
         "detail": "Rate limit exceeded",
@@ -776,7 +837,7 @@ async def test_rate_dependency_unavailability_is_private_503(
 
     @app.post(
         "/_test/rate-unavailable",
-        dependencies=[Depends(enforce_first_access_rate_limit)],
+        dependencies=[Depends(enforce_authorization_read_rate_limit)],
     )
     async def unavailable() -> None:
         return None

@@ -41,6 +41,7 @@ backend/tests/test_alembic.py
 backend/tests/test_api_rate_controls.py
 backend/tests/test_config.py
 .github/workflows/backend.yml
+scripts/test_agent_gates.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
