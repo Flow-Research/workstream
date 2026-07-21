@@ -1,12 +1,12 @@
 # WS-AUTH-001-10A Internal Review Evidence
 
-Reviewed code SHA: `12fe910a8d7369456bb66caa7a213f43d8bd262c`
+Reviewed code SHA: `07bb38a9b40a87eecdcd0518ec3122dad6553a59`
 
 Reviewed implementation SHA: `e8d9c37e6fd552439ff9f0db8b2972337a3b019f`
 
 Reviewed against trusted main: `dda60ed0cb97d9de4a375df4147f31172cb3839b`
 
-Reviewed at: `2026-07-21T14:10:33Z`
+Reviewed at: `2026-07-21T14:31:09Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
@@ -80,6 +80,15 @@ revision-ownership boundary to the historical 0022 parity test; the dedicated
 0031 selector still asserts and exercises exactly five AUTH-10 action pairs.
 The previously failing focused bootstrap migration test passed. All tracks
 passed with no open finding.
+
+All tracks reviewed CI compatibility repair SHA `5152c336`; the actor legacy
+activation test now recognizes the 0031 tables while proving it writes zero
+grant and qualification facts. The exact focused test passed.
+
+All tracks then reviewed CodeRabbit repair SHA `07bb38a9`. The valid finding
+was resolved by matching the ORM to migration 0031 for composite `RESTRICT`,
+identifier widths, and database-owned status/version/method defaults. Direct
+metadata verification and Ruff passed. All tracks passed with no open finding.
 
 Open sub-agent sessions: none
 
