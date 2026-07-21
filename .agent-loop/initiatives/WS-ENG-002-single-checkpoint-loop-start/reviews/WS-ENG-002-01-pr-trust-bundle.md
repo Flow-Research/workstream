@@ -22,18 +22,18 @@ No backend/frontend runtime, API, database, dependency, Workstream product lifec
 
 ## Proof, test delta, and CI integrity
 
-- 70 focused tests and 88 agent-gate regression tests pass.
+- 75 focused tests and 88 agent-gate regression tests pass on the integrated head.
 - Independent updater/checker branch coverage is 90.41/90.86 percent.
 - Link, stale wording, stale authorization, stale artifact, compilation, and diff checks pass.
 - Tests are additive; no CI permission, required check, or threshold was weakened.
 
 ## Reviewer results
 
-All nine tracks pass final reviewed code SHA `ef3b4fbd`: senior, QA, security, product/ops, architecture, CI integrity, docs, reuse/dedup, and test delta.
+All nine tracks pass integrated reviewed code SHA `2421751c`: senior, QA, security, product/ops, architecture, CI integrity, docs, reuse/dedup, and test delta.
 
 ## Remaining risks and external review
 
-Changing the allowlist requires a normal reviewed PR. The existing `loop-memory-start` environment name now describes cancellation protection only; retaining it avoids an unrelated environment migration. Hosted CI and external review remain.
+Changing the allowlist requires a normal reviewed PR. The existing `loop-memory-start` environment name now describes cancellation protection only; retaining it avoids an unrelated environment migration. Current main/ART was integrated without conflict or scope drift. Hosted CI and a fresh CodeRabbit review remain.
 
 ## Human review focus
 

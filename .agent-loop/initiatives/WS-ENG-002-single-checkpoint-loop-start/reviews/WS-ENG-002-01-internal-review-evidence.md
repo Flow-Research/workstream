@@ -1,8 +1,8 @@
 # WS-ENG-002-01 Internal Review Evidence
 
-Reviewed code SHA: `ef3b4fbd4ee7c7e8e486ecce41e39a14e6706c82`
+Reviewed code SHA: `2421751c1e71eee359654dee679271482ebda51f`
 
-Reviewed at: 2026-07-21T07:15:13Z
+Reviewed at: 2026-07-21T07:25:15Z
 
 Reviewer run IDs: senior/architecture/docs=`senior_arch_docs`; QA/test-delta/CI=`qa_test_ci`; security/product-ops/reuse=`security_ops_reuse`
 
@@ -10,11 +10,11 @@ Open sub-agent sessions: none
 
 Valid findings addressed: yes
 
-Reviewed against trusted main: `c559d556225761d4f5ab5842ea09d8b70df9be58`
+Reviewed against trusted main: `bc5e6a42cc84bff3ec80978970dc0018fe060b35`
 
 ## Deterministic evidence
 
-- Exact chunk commands pass: 70 focused loop-memory tests, 88 agent-gate regression tests, and Markdown link validation.
+- Exact chunk commands pass: 75 focused loop-memory tests, 88 agent-gate regression tests, and Markdown link validation.
 - Combined loop-memory suites pass 166 tests with independent branch coverage of 90.41 percent for the updater and 90.86 percent for the checker.
 - Python compilation, stale wording, stale authorization documentation, stale artifact contracts, and `git diff --check` pass.
 - No dependency, permission, required-check, coverage threshold, signing key, or product runtime change was made.
@@ -44,4 +44,4 @@ Reviewed against trusted main: `c559d556225761d4f5ab5842ea09d8b70df9be58`
 
 ## Remaining gate
 
-Hosted CI, external review, and explicit user approval for the resulting PR remain before merge.
+Hosted CI, fresh CodeRabbit review, and explicit user approval for PR #166 remain before merge.
