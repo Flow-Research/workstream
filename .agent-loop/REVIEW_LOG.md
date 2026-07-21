@@ -2752,3 +2752,16 @@ revoked-2 grant version, keeps child actions planned until their owning child
 activates them with routes, records the complete PREP/idempotency/advisory-lock
 issue order, and makes `/api/v1` the sole endpoint namespace. Exact-SHA internal
 review and fresh external checks remain.
+
+## 2026-07-21 - WS-ENG-004-01 Writer-Directed Starts
+
+The user confirmed ordinary engineering starts must work for current repository
+writers without a second admin checkpoint. The reviewed repair allows a
+declared successor or unique reviewed contract only on exact main, globally
+idle signed state, and an uncompleted identity. It binds exact Git path/title/
+blob/phase evidence and current GitHub write-level permission, preserves the
+distinct cancellation approval, and independently rechecks historical Git
+objects. A one-target self-consuming recovery certificate bootstraps this
+otherwise-unstartable repair. All nine reviewer tracks pass reviewed code SHA
+`dddf715fea413714395bc7ecf348f198e139a0fa`; 105 focused tests and 88 agent
+gates pass. External review and explicit human approval of the specific PR remain.
