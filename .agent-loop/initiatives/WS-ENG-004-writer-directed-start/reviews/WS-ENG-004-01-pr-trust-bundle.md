@@ -44,10 +44,11 @@ not change.
 
 ## Acceptance proof
 
-The 105 focused tests cover exact selection, phase, current permission,
+The focused tests cover exact selection, phase, current permission,
 global-idle parity, completed identity, cancellation/restart, independent tree
 checking, hostile contract shapes, exact recovery, consumption, and replay.
-Agent gates add 88 repository-policy regressions.
+The GitHub-equivalent coverage run passes 206 tests and reports 90.18 percent
+branch coverage for the independently implemented loop-memory checker.
 
 ## Test delta and CI integrity
 
@@ -63,7 +64,9 @@ test-delta passed with no blocker.
 
 ## External review
 
-Pending GitHub checks and CodeRabbit after publication.
+Agent Gates initially found checker branch coverage at 88.27 percent against the
+unchanged 90 percent floor. Focused negative tests raise it to 90.18 percent.
+Fresh GitHub checks and CodeRabbit remain pending on the repaired head.
 
 ## Remaining risks and follow-up
 

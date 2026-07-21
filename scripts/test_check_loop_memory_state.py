@@ -61,6 +61,49 @@ def test_checker_binds_selection_to_exact_main_blob(tmp_path: Path) -> None:
     assert checker._selection_tree_failures(event, repository_root, "fixture")
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda selection: selection.update(extra="field"), "schema"),
+        (lambda selection: selection.update(schema_version=2), "unsupported"),
+        (lambda selection: selection.update(mode="untrusted"), "unsupported"),
+        (lambda selection: selection.update(phase="delivery"), "unsupported"),
+        (lambda selection: selection.update(contract_path="README.md"), "path"),
+        (lambda selection: selection.update(contract_title=""), "title"),
+        (lambda selection: selection.update(contract_blob_sha="bad"), "blob"),
+    ],
+)
+def test_checker_rejects_malformed_start_selection(
+    tmp_path: Path, mutation, message: str
+) -> None:
+    _state_root, _repository_root, _record, event = fixtures._selected_start_fixture(
+        tmp_path
+    )
+    mutation(event["selection"])
+    failures = checker._selection_failures(event["selection"], event, "fixture")
+    assert any(message in failure for failure in failures)
+
+
+def test_checker_ignores_tree_binding_without_selection(tmp_path: Path) -> None:
+    assert checker._selection_tree_failures({}, tmp_path, "fixture") == []
+
+
+@pytest.mark.parametrize("field", ["main_sha", "contract_path"])
+def test_checker_requires_exact_selection_git_identity(
+    tmp_path: Path, field: str
+) -> None:
+    _state_root, repository_root, _record, event = fixtures._selected_start_fixture(
+        tmp_path
+    )
+    if field == "main_sha":
+        event[field] = None
+    else:
+        event["selection"][field] = None
+    assert "no exact Git identity" in checker._selection_tree_failures(
+        event, repository_root, "fixture"
+    )[0]
+
+
 def test_checker_rejects_start_transition_after_globally_active_work(tmp_path: Path) -> None:
     state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
     loop.apply_merge_record(state_root, record)

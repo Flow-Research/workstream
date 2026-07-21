@@ -2765,3 +2765,9 @@ objects. A one-target self-consuming recovery certificate bootstraps this
 otherwise-unstartable repair. All nine reviewer tracks pass reviewed code SHA
 `dddf715fea413714395bc7ecf348f198e139a0fa`; 105 focused tests and 88 agent
 gates pass. External review and explicit human approval of the specific PR remain.
+
+PR #169 Agent Gates then correctly rejected 88.27 percent branch coverage for
+the independent checker against its unchanged 90 percent floor. The repair adds
+focused malformed-selection and exact-Git-identity cases; the identical command
+now passes 206 tests at 90.18 percent branch coverage. Exact-SHA internal repair
+review and fresh hosted checks remain.
