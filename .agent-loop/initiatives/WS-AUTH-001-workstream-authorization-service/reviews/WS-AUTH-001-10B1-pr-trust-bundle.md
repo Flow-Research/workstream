@@ -26,7 +26,8 @@ route attachment, disclosure, concealment, cursors, and action activation.
 
 ## Evidence and review
 
-Exact code commit `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`
+Exact reviewed tree `9b33edea094fa997f03c3a7f7e57ecc9fd20bda8`
+with executable-code commit `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`
 passed all nine required internal tracks against trusted main `1473f7a0`.
 Focused PostgreSQL, dependency, migration, concurrency, Ruff, Agent Gates,
 stale-doc, Markdown-link, and diff-integrity checks pass. Full sharded tests and

@@ -1,6 +1,6 @@
 # WS-AUTH-001-10B1 Internal Review Evidence
 
-Reviewed code SHA: `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`
+Reviewed code SHA: `9b33edea094fa997f03c3a7f7e57ecc9fd20bda8`
 
 Reviewed against trusted main: `1473f7a0cab6d879c7b7c049a9b94f557ad712c2`
 
@@ -11,6 +11,10 @@ Reviewer run IDs: `auth10b1_final_core`,
 
 Reviewer tracks: senior engineering, QA/test, security/auth, product/ops,
 architecture, CI integrity, docs, reuse/dedup, and test delta
+
+Executable-code SHA: `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`;
+the reviewed tree SHA additionally contains the CodeRabbit-requested
+PostgreSQL-major operations prerequisite and its response record.
 
 ## Scope
 
