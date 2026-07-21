@@ -80,6 +80,17 @@ def _event(kind: str, run_id: int = 41) -> dict:
     }
 
 
+def _dispatcher_start(run_id: int = 41) -> dict:
+    event = _event("start", run_id)
+    event.pop("approvers")
+    event["authorization"] = {
+        "schema_version": 1,
+        "type": "github_workflow_dispatch",
+        "actor": "dispatcher",
+    }
+    return event
+
+
 def _contract(root: Path) -> None:
     path = root / ".agent-loop/initiatives/eng/chunks/WS-ENG-001-04B-events.md"
     path.parent.mkdir(parents=True)
@@ -100,6 +111,24 @@ def test_start_cancel_retry_and_replay_are_monotonic(tmp_path: Path) -> None:
     assert loop.apply_authority_event(state_root, cancel, repository_root=repository_root)
     retry = _event("start", 43)
     assert loop.apply_authority_event(state_root, retry, repository_root=repository_root)
+    loop.validate_generated_state(state_root)
+
+
+def test_dispatcher_start_and_historical_cancel_share_one_ledger(
+    tmp_path: Path,
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _dispatcher_start(), repository_root=repository_root
+    )
+    loop.apply_authority_event(
+        state_root, _event("cancel", 42), repository_root=repository_root
+    )
+    loop.apply_authority_event(
+        state_root, _dispatcher_start(43), repository_root=repository_root
+    )
     loop.validate_generated_state(state_root)
 
 
@@ -207,7 +236,7 @@ class _Client:
         return self.approvals if path.endswith("/approvals") else self.run
 
 
-def test_collect_authority_event_binds_run_and_approval_evidence() -> None:
+def test_collect_start_event_binds_dispatcher_authority_without_approval() -> None:
     client = _Client(
         run={
             "id": 41,
@@ -227,7 +256,7 @@ def test_collect_authority_event_binds_run_and_approval_evidence() -> None:
             {"state": "rejected", "user": {"login": "ignored"}},
         ],
     )
-    assert loop.collect_authority_event(
+    event = loop.collect_authority_event(
         client,
         "Flow-Research/workstream",
         action="start",
@@ -238,7 +267,42 @@ def test_collect_authority_event_binds_run_and_approval_evidence() -> None:
         dispatcher="dispatcher",
         main_sha="a" * 40,
         prior_state_tip="e" * 40,
-    )["approvers"] == ["reviewer"]
+        start_authorities=frozenset({"dispatcher"}),
+    )
+    assert event["authorization"] == {
+        "schema_version": 1,
+        "type": "github_workflow_dispatch",
+        "actor": "dispatcher",
+    }
+    assert "approvers" not in event
+
+
+def test_collect_cancel_event_retains_protected_approval() -> None:
+    client = _Client(
+        run={
+            "id": 42,
+            "run_attempt": 1,
+            "event": "workflow_dispatch",
+            "head_branch": "main",
+            "head_sha": "a" * 40,
+            "actor": {"login": "dispatcher"},
+            "created_at": "2026-07-20T12:00:00Z",
+        },
+        approvals=[{
+            "state": "approved",
+            "user": {"login": "reviewer"},
+            "environments": [{"id": 7, "name": "loop-memory-start"}],
+        }],
+    )
+    event = loop.collect_authority_event(
+        client, "Flow-Research/workstream", action="cancel",
+        initiative_id="WS-ENG-001", chunk_id="WS-ENG-001-04B",
+        reason="Cancel", run_id=42, dispatcher="dispatcher",
+        main_sha="a" * 40, prior_state_tip="e" * 40,
+        start_authorities=frozenset({"dispatcher"}),
+    )
+    assert event["approvers"] == ["reviewer"]
+    assert "authorization" not in event
 
 
 @pytest.mark.parametrize(
@@ -277,6 +341,7 @@ def test_collect_authority_event_rejects_untrusted_run(
             dispatcher="dispatcher",
             main_sha="a" * 40,
             prior_state_tip="e" * 40,
+            start_authorities=frozenset({"dispatcher"}),
         )
 
 
@@ -360,6 +425,9 @@ def test_apply_event_cli_routes_authenticated_inputs(
     monkeypatch.setenv("GITHUB_TOKEN", "token")
     monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
     monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(
+        loop, "load_start_authorities", lambda _root: frozenset({"dispatcher"})
+    )
 
     def collect(_client, _repository, **kwargs):
         captured.update(kwargs)
@@ -392,6 +460,39 @@ def test_apply_event_cli_routes_authenticated_inputs(
     assert result == 0
     assert captured["run_id"] == 41
     assert "event applied" in capsys.readouterr().out
+
+
+def test_cancel_cli_does_not_load_start_authority_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    event = _event("cancel")
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(
+        loop,
+        "load_start_authorities",
+        lambda _root: (_ for _ in ()).throw(AssertionError("must not load")),
+    )
+    monkeypatch.setattr(
+        loop, "collect_authority_event", lambda _client, _repository, **_kwargs: event
+    )
+    monkeypatch.setattr(
+        loop,
+        "apply_authority_event",
+        lambda _root, supplied, repository_root, branch_root: supplied is event,
+    )
+    monkeypatch.setattr(loop, "validate_generated_state", lambda _root: None)
+    assert loop.main(
+        [
+            "apply-event", "--repository", "Flow-Research/workstream",
+            "--repository-root", str(tmp_path), "--state-root", str(tmp_path / "state"),
+            "--branch-root", str(tmp_path / "branch"), "--action", "cancel",
+            "--initiative-id", "WS-ENG-001", "--chunk-id", "WS-ENG-001-04B",
+            "--reason", "Cancel", "--run-id", "41", "--dispatcher", "dispatcher",
+            "--main-sha", "a" * 40, "--prior-state-tip", "e" * 40,
+        ]
+    ) == 0
 
 
 def test_update_cli_applies_cutover_only_from_explicit_repository_root(
@@ -537,6 +638,22 @@ def test_authority_event_schema_rejects_malformed_evidence(mutation) -> None:
         loop._validate_event(event)
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda event: event["authorization"].update(actor="forged"),
+        lambda event: event["authorization"].update(schema_version=2),
+        lambda event: event["authorization"].update(type="environment"),
+        lambda event: event.update(type="cancel", event_id="github-actions:41:cancel"),
+    ],
+)
+def test_dispatcher_authority_schema_rejects_malformed_attribution(mutation) -> None:
+    event = _dispatcher_start()
+    mutation(event)
+    with pytest.raises(loop.LoopMemoryError, match="dispatcher authorization"):
+        loop._validate_event(event)
+
+
 def test_collect_authority_event_rejects_invalid_approval_shape() -> None:
     run = {
         "id": 41,
@@ -551,11 +668,42 @@ def test_collect_authority_event_rejects_invalid_approval_shape() -> None:
         loop.collect_authority_event(
             _Client(run, {}),
             "Flow-Research/workstream",
-            action="start", initiative_id="WS-ENG-001",
+            action="cancel", initiative_id="WS-ENG-001",
             chunk_id="WS-ENG-001-04B", reason="Approved", run_id=41,
             dispatcher="dispatcher", main_sha="a" * 40,
             prior_state_tip="e" * 40,
+            start_authorities=frozenset({"dispatcher"}),
         )
+
+
+def test_collect_start_rejects_writer_outside_trusted_allowlist() -> None:
+    run = {
+        "id": 41,
+        "run_attempt": 1,
+        "event": "workflow_dispatch",
+        "head_branch": "main",
+        "head_sha": "a" * 40,
+        "actor": {"login": "dispatcher"},
+        "created_at": "2026-07-20T11:00:00Z",
+    }
+    with pytest.raises(loop.LoopMemoryError, match="not an authorized starter"):
+        loop.collect_authority_event(
+            _Client(run, []), "Flow-Research/workstream", action="start",
+            initiative_id="WS-ENG-001", chunk_id="WS-ENG-001-04B",
+            reason="Approved", run_id=41, dispatcher="dispatcher",
+            main_sha="a" * 40, prior_state_tip="e" * 40,
+            start_authorities=frozenset({"another-writer"}),
+        )
+
+
+def test_load_start_authorities_is_closed_and_case_insensitive(tmp_path: Path) -> None:
+    policy = tmp_path / loop.START_AUTHORITIES_PATH
+    policy.parent.mkdir(parents=True)
+    policy.write_text(
+        json.dumps({"schema_version": 1, "actors": ["Abiorh001"]}),
+        encoding="utf-8",
+    )
+    assert loop.load_start_authorities(tmp_path) == frozenset({"abiorh001"})
 
 
 def test_well_formed_stale_state_tip_is_rejected(tmp_path: Path) -> None:

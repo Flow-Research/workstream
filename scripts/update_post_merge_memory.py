@@ -33,6 +33,9 @@ SIGNATURE_PATH = Path(".agent-loop/STATE.sig")
 LEGACY_EXEMPTIONS_PATH = Path(
     ".agent-loop/policies/loop-memory-legacy-start-exemptions.json"
 )
+START_AUTHORITIES_PATH = Path(
+    ".agent-loop/policies/loop-memory-start-authorities.json"
+)
 INTENT_PREFIX = ".agent-loop/merge-intents/"
 BOOTSTRAP_INTENT_PATH = f"{INTENT_PREFIX}WS-ENG-001-03.json"
 CHUNK_CONTRACT_ROOT = ".agent-loop/initiatives/"
@@ -777,7 +780,7 @@ def _validate_event(event: Any) -> str:
     if not isinstance(event, dict):
         raise LoopMemoryError("loop-memory event must be an object")
     event_type = event.get("type")
-    common = {
+    historical = {
         "type",
         "event_id",
         "run_id",
@@ -790,7 +793,11 @@ def _validate_event(event: Any) -> str:
         "initiative_id",
         "chunk_id",
     }
-    if event_type not in {"start", "cancel"} or set(event) != common:
+    dispatcher_authorized = historical - {"approvers"} | {"authorization"}
+    if event_type not in {"start", "cancel"} or frozenset(event) not in {
+        frozenset(historical),
+        frozenset(dispatcher_authorized),
+    }:
         raise LoopMemoryError("authority event has an invalid schema")
     run_id = event.get("run_id")
     if not isinstance(run_id, int) or isinstance(run_id, bool) or run_id <= 0:
@@ -800,14 +807,23 @@ def _validate_event(event: Any) -> str:
     _parse_timestamp(event.get("created_at"), "event created_at")
     for field, maximum in (("dispatcher", 160), ("reason", 500)):
         _bounded_text(event.get(field), f"event {field}", maximum=maximum)
-    approvers = event.get("approvers")
-    if not isinstance(approvers, list) or not approvers:
-        raise LoopMemoryError("authority event needs an approving reviewer")
-    normalized = [_bounded_text(value, "event approver") for value in approvers]
-    if len(set(normalized)) != len(normalized):
-        raise LoopMemoryError("authority event approvers must be unique")
-    if event["dispatcher"] in normalized:
-        raise LoopMemoryError("authority event reviewer must differ from dispatcher")
+    if "approvers" in event:
+        approvers = event["approvers"]
+        if not isinstance(approvers, list) or not approvers:
+            raise LoopMemoryError("authority event needs an approving reviewer")
+        normalized = [_bounded_text(value, "event approver") for value in approvers]
+        if len(set(normalized)) != len(normalized):
+            raise LoopMemoryError("authority event approvers must be unique")
+        if event["dispatcher"] in normalized:
+            raise LoopMemoryError("authority event reviewer must differ from dispatcher")
+    else:
+        authorization = event["authorization"]
+        if event_type != "start" or authorization != {
+            "schema_version": 1,
+            "type": "github_workflow_dispatch",
+            "actor": event["dispatcher"],
+        }:
+            raise LoopMemoryError("dispatcher authorization is invalid")
     _validate_sha(event.get("main_sha"))
     _validate_sha(event.get("prior_state_tip"))
     for field in ("initiative_id", "chunk_id"):
@@ -842,11 +858,11 @@ def collect_authority_event(
     dispatcher: str,
     main_sha: str,
     prior_state_tip: str,
+    start_authorities: frozenset[str],
 ) -> dict[str, Any]:
-    """Collect immutable run and approval evidence for a start/cancel event."""
+    """Collect immutable GitHub authority evidence for a start/cancel event."""
     _validate_repository_and_sha(repository, main_sha)
     run = client.get_json(f"/repos/{repository}/actions/runs/{run_id}")
-    approvals = client.get_json(f"/repos/{repository}/actions/runs/{run_id}/approvals")
     if not isinstance(run, dict) or run.get("id") != run_id:
         raise LoopMemoryError("workflow run evidence does not match run_id")
     if run.get("run_attempt") != 1 or run.get("event") != "workflow_dispatch":
@@ -855,34 +871,74 @@ def collect_authority_event(
         raise LoopMemoryError("authority event is not bound to expected main")
     if run.get("actor", {}).get("login") != dispatcher:
         raise LoopMemoryError("workflow dispatcher evidence does not match")
-    if not isinstance(approvals, list):
-        raise LoopMemoryError("workflow approval history is invalid")
-    approved = [item for item in approvals if isinstance(item, dict) and item.get("state") == "approved"]
-    if not approved or any(
-        not isinstance(item.get("environments"), list)
-        or len(item["environments"]) != 1
-        or item["environments"][0].get("name") != "loop-memory-start"
-        for item in approved
-    ):
-        raise LoopMemoryError("approval history is not bound to loop-memory-start")
-    reviewers = sorted(
-        {item.get("user", {}).get("login") for item in approved if item.get("user", {}).get("login")}
-    )
+    if action == "start" and dispatcher.casefold() not in start_authorities:
+        raise LoopMemoryError("workflow dispatcher is not an authorized starter")
     event = {
         "type": action,
         "event_id": f"github-actions:{run_id}:{action}",
         "run_id": run_id,
         "created_at": run.get("created_at"),
         "dispatcher": dispatcher,
-        "approvers": reviewers,
         "reason": reason,
         "main_sha": main_sha,
         "prior_state_tip": prior_state_tip,
         "initiative_id": initiative_id,
         "chunk_id": chunk_id,
     }
+    if action == "start":
+        event["authorization"] = {
+            "schema_version": 1,
+            "type": "github_workflow_dispatch",
+            "actor": dispatcher,
+        }
+    else:
+        approvals = client.get_json(
+            f"/repos/{repository}/actions/runs/{run_id}/approvals"
+        )
+        if not isinstance(approvals, list):
+            raise LoopMemoryError("workflow approval history is invalid")
+        approved = [
+            item
+            for item in approvals
+            if isinstance(item, dict) and item.get("state") == "approved"
+        ]
+        if not approved or any(
+            not isinstance(item.get("environments"), list)
+            or len(item["environments"]) != 1
+            or item["environments"][0].get("name") != "loop-memory-start"
+            for item in approved
+        ):
+            raise LoopMemoryError(
+                "approval history is not bound to loop-memory-start"
+            )
+        event["approvers"] = sorted(
+            {
+                item.get("user", {}).get("login")
+                for item in approved
+                if item.get("user", {}).get("login")
+            }
+        )
     _validate_event(event)
     return event
+
+
+def load_start_authorities(repository_root: Path) -> frozenset[str]:
+    """Load the closed start-authority allowlist from trusted repository code."""
+    policy = _load_json(repository_root / START_AUTHORITIES_PATH)
+    if not isinstance(policy, dict) or set(policy) != {"schema_version", "actors"}:
+        raise LoopMemoryError("start-authority policy has an invalid schema")
+    actors = policy.get("actors")
+    if policy.get("schema_version") != 1 or not isinstance(actors, list) or not actors:
+        raise LoopMemoryError("start-authority policy has no valid actors")
+    normalized = []
+    for actor in actors:
+        value = _bounded_text(actor, "start-authority actor", maximum=39)
+        if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", value):
+            raise LoopMemoryError("start-authority actor is invalid")
+        normalized.append(value.casefold())
+    if len(set(normalized)) != len(normalized):
+        raise LoopMemoryError("start-authority actors must be unique")
+    return frozenset(normalized)
 
 
 def _latest_merge_record(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1487,7 +1543,7 @@ def apply_authority_event(
     repository_root: Path,
     branch_root: Path | None = None,
 ) -> bool:
-    """Apply one protected start/cancel event to authenticated canonical state."""
+    """Apply one authenticated start/cancel event to canonical state."""
     event_type = _validate_event(event)
     state = _load_json(state_root / STATE_PATH)
     if state is None:
@@ -2216,6 +2272,11 @@ def main(argv: list[str] | None = None) -> int:
                 dispatcher=args.dispatcher,
                 main_sha=args.main_sha,
                 prior_state_tip=args.prior_state_tip,
+                start_authorities=(
+                    load_start_authorities(args.repository_root)
+                    if args.action == "start"
+                    else frozenset()
+                ),
             )
             changed = apply_authority_event(
                 args.state_root,

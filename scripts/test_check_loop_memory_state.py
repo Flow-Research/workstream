@@ -28,6 +28,16 @@ def test_checker_accepts_signed_start_projection(tmp_path: Path) -> None:
     assert checker.generated_state_failures(state_root) == []
 
 
+def test_checker_accepts_dispatcher_authorized_start_projection(tmp_path: Path) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    fixtures._contract(repository_root)
+    loop.apply_merge_record(state_root, fixtures._record())
+    loop.apply_authority_event(
+        state_root, fixtures._dispatcher_start(), repository_root=repository_root
+    )
+    assert checker.generated_state_failures(state_root) == []
+
+
 def test_checker_rejects_authority_projection_drift(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     fixtures._contract(repository_root)
@@ -100,10 +110,15 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
         "group": "workstream-loop-memory",
         "cancel-in-progress": "false",
     }
-    assert set(workflow["jobs"]) == {"explicit-event"}
+    assert set(workflow["jobs"]) == {"cancel-approval", "explicit-event"}
+    cancel_job = workflow["jobs"]["cancel-approval"]
+    assert cancel_job["if"] == "inputs.action == 'cancel'"
+    assert cancel_job["environment"] == "loop-memory-start"
     job = workflow["jobs"]["explicit-event"]
-    assert job["if"] == "github.ref == 'refs/heads/main' && github.run_attempt == 1"
-    assert job["environment"] == "loop-memory-start"
+    assert job["needs"] == "cancel-approval"
+    assert "inputs.action == 'start'" in job["if"]
+    assert "needs.cancel-approval.result == 'success'" in job["if"]
+    assert "environment" not in job
     checkout = job["steps"][0]
     assert checkout["with"] == {
         "persist-credentials": "false",
@@ -122,7 +137,7 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
         "checkout",
         "Resolve trusted protected-main target",
         "Prepare authenticated state and reconcile main",
-        "Apply protected authority event",
+        "Apply authenticated authority event",
         "Sign, validate, and publish exact generated tree",
     ]
     assert all("${{ inputs." not in step.get("run", "") for step in job["steps"])

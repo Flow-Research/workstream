@@ -34,9 +34,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  explicit-event:
-    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+  cancel-approval:
+    if: inputs.action == 'cancel'
     environment: loop-memory-start
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authorize cancellation
+        run: ":"
+
+  explicit-event:
+    needs: cancel-approval
+    if: >-
+      always() && github.ref == 'refs/heads/main' && github.run_attempt == 1 &&
+      (inputs.action == 'start' || needs.cancel-approval.result == 'success')
     runs-on: ubuntu-latest
     env:
       STATE_BRANCH: automation/loop-memory
@@ -95,7 +105,7 @@ jobs:
           echo "output_dir=${output_dir}" >> "${GITHUB_OUTPUT}"
           echo "prior_tip=$(git -C "${branch_dir}" rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
 
-      - name: Apply protected authority event
+      - name: Apply authenticated authority event
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}

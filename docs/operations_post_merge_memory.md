@@ -136,20 +136,25 @@ and PR cycle.
 `Loop Memory Explicit Event` is the only authority for starting a reviewed
 successor or cancelling its active state. Dispatch it from `main` with the exact
 current-main SHA, initiative ID, chunk ID, action, and a bounded single-line
-reason. A reviewer other than the dispatcher must approve the
-`loop-memory-start` environment deployment.
+reason. For `start`, the dispatcher must be listed in
+`.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main`; the
+authenticated dispatch is the single approval checkpoint. For `cancel`, a
+reviewer other than the dispatcher must approve the `loop-memory-start`
+environment deployment.
 
 Configure that environment with required reviewers, self-review disabled,
 administrator bypass disabled, and deployment restricted to protected `main`.
 The job reuses the existing repository-managed `LOOP_MEMORY_SIGNING_KEY` used
 by trusted merge memory. Do not create, transfer, or paste a second private key.
-The protected environment authorizes the start/cancel job; it does not redefine
+The protected environment authorizes cancellation only; it does not redefine
 the existing key's repository scope.
 
-Every signed event records the dispatcher, approving reviewers, immutable run
-ID and creation time, current-main SHA, prior state-branch tip, reason,
-initiative, and chunk. The workflow catches signed state up through main before
-applying the event and rechecks main immediately before signing and publication.
+Every signed event records the dispatcher, immutable run ID and creation time,
+current-main SHA, prior state-branch tip, reason, initiative, and chunk. Starts
+record the versioned dispatcher authorization; cancellations record the
+protected-environment approvers. The workflow catches signed state up through
+main before applying the event and rechecks main immediately before signing and
+publication.
 
 Dispatch and audit with:
 
@@ -160,6 +165,7 @@ gh workflow run loop-memory-start.yml --ref main \
   -f chunk_id=WS-ENG-001-04B -f reason='Approved implementation' \
   -f expected_main_sha="${main_sha}"
 gh run view <run-id> --log
+# Cancellation audit only:
 gh api repos/Flow-Research/workstream/actions/runs/<run-id>/approvals
 ```
 
@@ -176,8 +182,9 @@ Recover branch corruption with authenticated replay, never force-push or hand
 edits.
 
 Failure handling is closed: stale main/tip, wrong successor, missing or
-same-dispatcher approval, rerun, collision, active conflict, and moved branch
-all require inspection followed by a fresh dispatch. Invalid signature/tree or
+non-allowlisted start dispatcher, missing or same-dispatcher cancellation
+approval, rerun, collision, active conflict, and moved branch all require
+inspection followed by a fresh dispatch. Invalid signature/tree or
 branch corruption requires disabling writes and authenticated recovery. A push
 race publishes nothing and also requires inspection before redispatch.
 
