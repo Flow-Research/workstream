@@ -685,6 +685,30 @@ teardown commit it, or commit AUTH evidence separately from feature state. The
 existing `AuthorityClaimHandle` is a separate idempotency-reservation contract,
 not this prepared authorization handle.
 
+PREP currently supports actor-self profile update and the eight active
+AdminRoleGrant-backed administrative mutations only; it cuts over no production
+feature command. Callers begin and own one root transaction, call `prepare`,
+lock their participant rows, compose final typed facts, call `consume` with the
+independently expected ActionId and the same strict request/idempotency input,
+flush participant work, and commit once. AUTH never commits in dependency
+teardown. Roll back the caller transaction on denial, evidence/SQL failure,
+participant failure, timeout, or cancellation; cancellation must propagate
+unchanged. The handle remains consumed after every exact attempt, including a
+rolled-back or cancelled attempt, and dependency teardown invalidates all
+outstanding handles.
+
+Do not restage a prepared denial after rollback. Its staged decision belongs to
+the failed caller transaction and rolls back with participant state. Planned
+fixed-service preparation returns bounded `action_unavailable` without evidence
+because it issues no handle and has no final resource context.
+
+Operationally, actor-self preparation locks profile then exact link. An
+administrative preparation locks `AuthorityControl(id=1)`, request profile,
+exact request link, and deterministic matched AdminRoleGrant before participant
+locks. Do not add a feature lock ahead of that order. Current fixed-service
+actions remain planned and can produce no handle. ProjectRoleGrant preparation
+is unsupported until AUTH-10 supplies and proves its canonical lock path.
+
 Downgrade is allowed only while every action ID remains null and no permission
 outside migration `0018`'s historical 49-value set exists in the decision,
 target-reference, or invalidation-reference fields. The migration takes an

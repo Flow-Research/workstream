@@ -130,3 +130,87 @@ Implementation, specification, generator, workflow, policy, and hand-edited
 memory changes retain all normal review requirements. Only deterministic output
 committed by `Loop Memory` to `automation/loop-memory` skips the second review
 and PR cycle.
+
+## Explicit Start And Cancel Operations
+
+`Loop Memory Explicit Event` is the only authority for starting a reviewed
+successor or cancelling its active state. Dispatch it from `main` with the exact
+current-main SHA, initiative ID, chunk ID, action, and a bounded single-line
+reason. For `start`, the dispatcher must be listed in
+`.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main`; the
+authenticated dispatch is the single approval checkpoint. For `cancel`, a
+reviewer other than the dispatcher must approve the `loop-memory-start`
+environment deployment.
+
+Configure that environment with required reviewers, self-review disabled,
+administrator bypass disabled, and deployment restricted to protected `main`.
+The job reuses the existing repository-managed `LOOP_MEMORY_SIGNING_KEY` used
+by trusted merge memory. Do not create, transfer, or paste a second private key.
+The protected environment authorizes cancellation only; it does not redefine
+the existing key's repository scope.
+
+Every signed event records the dispatcher, immutable run ID and creation time,
+current-main SHA, prior state-branch tip, reason, initiative, and chunk. Starts
+record the versioned dispatcher authorization; cancellations record the
+protected-environment approvers. The workflow catches signed state up through
+main before applying the event and rechecks main immediately before signing and
+publication.
+
+Dispatch and audit with:
+
+```bash
+main_sha=$(git rev-parse origin/main)
+gh workflow run loop-memory-start.yml --ref main \
+  -f action=start -f initiative_id=WS-ENG-001 \
+  -f chunk_id=WS-ENG-001-04B -f reason='Approved implementation' \
+  -f expected_main_sha="${main_sha}"
+gh run view <run-id> --log
+# Cancellation audit only:
+gh api repos/Flow-Research/workstream/actions/runs/<run-id>/approvals
+```
+
+Verify deployment configuration before enabling it:
+
+```bash
+gh api repos/Flow-Research/workstream/environments/loop-memory-start
+```
+
+Do not rerun a failed job. Inspect the signed automation branch first. If no
+event was published, dispatch a fresh run; if it was published, its event ID and
+active projection are authoritative. A push race leaves the branch unchanged.
+Recover branch corruption with authenticated replay, never force-push or hand
+edits.
+
+Failure handling is closed: stale main/tip, wrong successor, missing or
+non-allowlisted start dispatcher, missing or same-dispatcher cancellation
+approval, rerun, collision, active conflict, and moved branch all require
+inspection followed by a fresh dispatch. Invalid signature/tree or
+branch corruption requires disabling writes and authenticated recovery. A push
+race publishes nothing and also requires inspection before redispatch.
+
+The cutover inventory is fixed in
+`.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry
+can close once without a signed start and is then consumed. No new exemption may
+be added after merge. Signing-key rotation is not supported by this chunk:
+start/cancel evidence cannot be reconstructed from main, so replacing the key
+would break audit continuity. Suspected compromise is a blocking incident:
+disable both workflows, preserve the branch and audit logs, and require a new
+reviewed key-continuity design before any rotation or replay.
+
+## WS-ENG-003 One-Use Recovery
+
+PR #166 introduced single-checkpoint starts but necessarily began before that
+mechanism existed, so its merge had no predecessor signed start. The reviewed
+WS-ENG-003 recovery certificate binds exact merge
+`6445ce6276a85c4ddef29d0f5e93cdbffe5d45bc` (PR #166) and activates only when
+the resolved protected-main target is the `WS-ENG-003-01` recovery merge.
+
+Before reducing any missing merge, the workflow requires the plan to contain
+exactly PR #166 followed by the recovery target, derives the recovery PR number
+from GitHub's unique merge evidence, and rejects collisions with signed state.
+Each reducer receives only its matching authorization out of band; recovery
+entries are never written to canonical state or ledger history. Both exact
+exemptions must be consumed before signing or publication, while unrelated
+legacy exemptions remain intact. A successful replay has an empty plan and does
+not recreate recovery entries. This is not a general operator bypass and must
+not be extended to later chunks.

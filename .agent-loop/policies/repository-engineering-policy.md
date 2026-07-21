@@ -37,6 +37,7 @@ pytest -q
 | Persistence | `backend/app/db`, module models/repositories | Use async SQLAlchemy repositories and Alembic migrations. |
 | CI/review gates | `.github/workflows`, `scripts/`, `.agent-loop/` | Gates may be strengthened; weakening requires explicit human approval. |
 | Generated merge memory | `automation/loop-memory` | Trusted `main` automation owns a closed signed tree containing canonical state, ledger, manifest, loop/queue views, and compact initiative projections. Humans and agents do not edit it manually or trust isolated files without manifest/signature verification. Merge projections remain stopped/next-only until signed start events exist. |
+| Explicit engineering starts | `.github/workflows/loop-memory-start.yml` | An authenticated repository writer named by `.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main` may dispatch a signed start for the exact recorded successor; the orchestrator may dispatch after an explicit user instruction, but conversation is not canonical evidence. Cancellation retains a protected-environment reviewer distinct from the dispatcher. No automatic start is valid. |
 
 ## Dependency Policy
 
@@ -50,3 +51,6 @@ pytest -q
 - Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
 - Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
 - Review and approve an implementation PR once. After merge, rely on the canonical automation branch; do not create a second PR or repeat reviewer fanout solely to restate merge metadata.
+- After the 04B cutover, a merge without an active signed start fails unless its
+  exact initiative, chunk, and PR number appears in the signed one-use legacy
+  exemption inventory.

@@ -111,15 +111,35 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
     assert violations == []
 
 
-def test_artifact_domain_has_no_provider_execution_during_admission_foundation() -> None:
-    """Keep 02C1 free of all provider write and acknowledgement execution."""
+def test_only_artifact_orchestrator_owns_provider_execution() -> None:
+    """Fence every raw store call to the artifact service owner."""
     violations: list[str] = []
     for path in _python_files(APP_ROOT / "modules" / "artifacts"):
-        for node in ast.walk(_tree(path)):
+        tree = _tree(path)
+        orchestrator = next(
+            (
+                node
+                for node in tree.body
+                if isinstance(node, ast.ClassDef)
+                and node.name == "ArtifactStorageOrchestrator"
+            ),
+            None,
+        )
+        for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
-                and node.func.attr in {"put", "observe_put_result"}
+                and node.func.attr in PROVIDER_METHODS
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_store"
+                and (
+                    orchestrator is None
+                    or not (
+                        orchestrator.lineno
+                        <= node.lineno
+                        <= (orchestrator.end_lineno or orchestrator.lineno)
+                    )
+                )
             ):
                 violations.append(
                     f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}"

@@ -190,6 +190,112 @@ def _metadata_failures(metadata: object, label: str) -> list[str]:
 
 def _record_failures(record: object, label: str) -> list[str]:
     """Independently validate one complete schema-v2 state record."""
+    if (
+        isinstance(record, dict)
+        and isinstance(record.get("event"), dict)
+        and record["event"].get("type") == "cutover"
+    ):
+        event = record["event"]
+        base = json.loads(json.dumps(record))
+        base.pop("event")
+        failures = _record_failures(base, label)
+        if set(event) != {"type", "main_sha", "legacy_exemptions"}:
+            failures.append(f"{label}: invalid cutover event schema")
+        elif (
+            event.get("main_sha") != record.get("source", {}).get("main_sha")
+            or event.get("legacy_exemptions") != record.get("legacy_exemptions")
+        ):
+            failures.append(f"{label}: cutover event does not match signed state")
+        return failures
+    if isinstance(record, dict) and "event" in record:
+        event = record.get("event")
+        if not isinstance(event, dict) or event.get("type") not in {"start", "cancel"}:
+            return [f"{label}: invalid authority event"]
+        base = json.loads(json.dumps(record))
+        base.pop("event")
+        authority = base.pop("authority_state", None)
+        metadata = base.get("completed_chunk", {})
+        source = base.get("source", {})
+        base["updated_at"] = source.get("merged_at")
+        failures = _record_failures(base, label)
+        if not isinstance(authority, dict) or set(authority) != {
+            "source", "completed_chunk", "active", "gate"
+        }:
+            failures.append(f"{label}: invalid authority lifecycle state")
+            return failures
+        metadata = authority["completed_chunk"]
+        lifecycle = json.loads(json.dumps(base))
+        lifecycle.update(authority)
+        lifecycle_source = lifecycle.get("source", {})
+        lifecycle["updated_at"] = lifecycle_source.get("merged_at")
+        lifecycle_metadata = lifecycle.get("completed_chunk", {})
+        lifecycle["active"] = {"planning_chunk": None, "implementation_chunk": None}
+        lifecycle["gate"] = {
+            "status": "stopped_after_merge",
+            "next_chunk_id": lifecycle_metadata.get("next_chunk_id"),
+            "next_chunk_title": lifecycle_metadata.get("next_chunk_title"),
+            "next_requires_explicit_start": lifecycle_metadata.get(
+                "next_requires_explicit_start"
+            ),
+        }
+        failures.extend(_record_failures(lifecycle, f"{label} authority basis"))
+        historical_event_keys = {
+            "type", "event_id", "run_id", "created_at", "dispatcher",
+            "approvers", "reason", "main_sha", "prior_state_tip",
+            "initiative_id", "chunk_id",
+        }
+        dispatcher_event_keys = historical_event_keys - {"approvers"} | {
+            "authorization"
+        }
+        if set(event) not in (historical_event_keys, dispatcher_event_keys):
+            failures.append(f"{label}: invalid authority event schema")
+            return failures
+        run_id = event.get("run_id")
+        event_type = event["type"]
+        if type(run_id) is not int or run_id <= 0 or event.get("event_id") != f"github-actions:{run_id}:{event_type}":
+            failures.append(f"{label}: invalid authority event identity")
+        for field, maximum in (("dispatcher", 160), ("reason", 500)):
+            if not _is_bounded_single_line(event.get(field), maximum):
+                failures.append(f"{label}: invalid event {field}")
+        if "approvers" in event:
+            approvers = event["approvers"]
+            if not isinstance(approvers, list) or not approvers or any(
+                not _is_bounded_single_line(value, 160) for value in approvers
+            ) or event.get("dispatcher") in approvers or len(set(approvers)) != len(approvers):
+                failures.append(f"{label}: invalid event approvers")
+        elif event.get("type") != "start" or event.get("authorization") != {
+            "schema_version": 1,
+            "type": "github_workflow_dispatch",
+            "actor": event.get("dispatcher"),
+        }:
+            failures.append(f"{label}: invalid dispatcher authorization")
+        for field in ("main_sha", "prior_state_tip"):
+            value = event.get(field)
+            if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
+                failures.append(f"{label}: invalid event {field}")
+        if record.get("updated_at") != event.get("created_at"):
+            failures.append(f"{label}: event time does not match state")
+        if event.get("main_sha") != source.get("main_sha"):
+            failures.append(f"{label}: event main does not match global state")
+        if metadata.get("initiative_id") != event.get("initiative_id"):
+            failures.append(f"{label}: event initiative does not match authority state")
+        if metadata.get("next_chunk_id") != event.get("chunk_id"):
+            failures.append(f"{label}: event chunk does not match reviewed successor")
+        expected_active = {
+            "planning_chunk": None,
+            "implementation_chunk": event.get("chunk_id") if event_type == "start" else None,
+        }
+        if authority.get("active") != expected_active:
+            failures.append(f"{label}: authority active state is inconsistent")
+        expected_gate = {
+            "status": "active" if event_type == "start" else "stopped_after_cancel",
+            "next_chunk_id": event.get("chunk_id"),
+            "next_chunk_title": metadata.get("next_chunk_title"),
+            "next_requires_explicit_start": True,
+        }
+        if authority.get("gate") != expected_gate:
+            failures.append(f"{label}: authority gate is inconsistent")
+        return failures
     expected = {
         "schema_version",
         "repository",
@@ -201,9 +307,35 @@ def _record_failures(record: object, label: str) -> list[str]:
         "gate",
         "checks",
     }
-    if not isinstance(record, dict) or set(record) != expected:
+    if not isinstance(record, dict) or frozenset(record) not in {
+        frozenset(expected),
+        frozenset(expected | {"legacy_exemptions"}),
+    }:
         return [f"{label}: invalid record schema"]
     failures: list[str] = []
+    exemptions = record.get("legacy_exemptions")
+    if exemptions is not None:
+        identities = set()
+        if not isinstance(exemptions, list):
+            failures.append(f"{label}: legacy exemptions are not a list")
+        else:
+            for exemption in exemptions:
+                if not isinstance(exemption, dict) or set(exemption) != {
+                    "initiative_id", "chunk_id", "pr_number"
+                }:
+                    failures.append(f"{label}: invalid legacy exemption schema")
+                    continue
+                identity = (exemption.get("initiative_id"), exemption.get("chunk_id"))
+                if (
+                    not _is_valid_lifecycle_id(identity[0])
+                    or not _is_valid_lifecycle_id(identity[1])
+                    or not identity[1].startswith(f"{identity[0]}-")
+                    or type(exemption.get("pr_number")) is not int
+                    or exemption["pr_number"] <= 0
+                    or identity in identities
+                ):
+                    failures.append(f"{label}: invalid or duplicate legacy exemption")
+                identities.add(identity)
     if not _is_current_schema_version(record.get("schema_version")):
         failures.append(f"{label}: unsupported schema version")
     if record.get("state_branch") != STATE_BRANCH:
@@ -327,12 +459,23 @@ def _markdown_text(value: str) -> str:
     )
 
 
-def _render_state(state: dict) -> str:
+def _is_merge_record(record: dict) -> bool:
+    return "event" not in record or record.get("event", {}).get("type") in {
+        "merge", "cutover"
+    }
+
+
+def _latest_merge_record(records: list[dict]) -> dict:
+    return next(record for record in reversed(records) if _is_merge_record(record))
+
+
+def _render_state(state: dict, records: list[dict] | None = None) -> str:
     """Independently render the expected human-readable state."""
-    source = state["source"]
-    completed = state["completed_chunk"]
+    global_record = _latest_merge_record(records) if records is not None else state
+    source = global_record["source"]
+    completed = global_record["completed_chunk"]
     gate = state["gate"]
-    checks = state["checks"]
+    checks = global_record["checks"]
     next_line = "- Next chunk: none recorded."
     if gate["next_chunk_id"]:
         start = (
@@ -349,6 +492,28 @@ def _render_state(state: dict) -> str:
         for name in REQUIRED_CHECKS
     ]
     integrity = "passed" if checks["all_required_passed"] else "attention required"
+    active_chunks = []
+    if records is None:
+        active = state["active"]["implementation_chunk"]
+        active_chunks = [active] if active else []
+    else:
+        active_chunks = sorted(
+            record["active"]["implementation_chunk"]
+            for record in _latest_by_initiative(records).values()
+            if record["active"]["implementation_chunk"]
+        )
+    active_line = "- Active implementation chunks: " + (
+        ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
+    )
+    authority_lines = []
+    if isinstance(state.get("event"), dict) and state["event"].get("type") in {
+        "start", "cancel"
+    }:
+        event = state["event"]
+        authority_lines = [
+            f"- Latest authority event: `{event['type']}` for `{event['chunk_id']}`",
+            f"- Authority initiative: `{event['initiative_id']}`",
+        ]
     return "\n".join(
         [
             "# Generated Workstream Loop State",
@@ -365,8 +530,9 @@ def _render_state(state: dict) -> str:
             f"`{source['intent_blob_sha']}`",
             f"- Completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
-            "- Active planning chunk: none",
-            "- Active implementation chunk: none",
+            "- Active planning chunks: none",
+            active_line,
+            *authority_lines,
             f"- Current gate: `{gate['status']}`",
             next_line,
             f"- Required check evidence: {integrity}",
@@ -383,7 +549,11 @@ def _latest_by_initiative(records: list[dict]) -> dict[str, dict]:
     """Return latest independently validated records by initiative."""
     latest = {}
     for record in records:
-        latest[record["completed_chunk"]["initiative_id"]] = record
+        projected = record
+        if isinstance(record.get("authority_state"), dict):
+            projected = json.loads(json.dumps(record))
+            projected.update(projected["authority_state"])
+        latest[projected["completed_chunk"]["initiative_id"]] = projected
     return latest
 
 
@@ -404,9 +574,8 @@ def _render_work_queue(records: list[dict]) -> str:
             f"`{gate['status']}` | `{gate['next_chunk_id'] or 'none'}` | "
             f"{'yes' if gate['next_requires_explicit_start'] else 'no'} |"
         )
-    lines.extend(
-        ["", f"Latest global merge: `{records[-1]['source']['main_sha']}`", ""]
-    )
+    latest_merge = _latest_merge_record(records)
+    lines.extend(["", f"Latest global merge: `{latest_merge['source']['main_sha']}`", ""])
     return "\n".join(lines)
 
 
@@ -426,6 +595,7 @@ def _render_initiative_state(record: dict) -> str:
             f"- Initiative: `{completed['initiative_id']}`",
             f"- Latest completed chunk: `{completed['chunk_id']}` - {_markdown_text(completed['chunk_title'])}",
             f"- Gate: `{gate['status']}`",
+            f"- Active implementation chunk: `{record['active']['implementation_chunk'] or 'none'}`",
             f"- Next chunk: `{gate['next_chunk_id'] or 'none'}`",
             f"- Separate explicit start required: `{str(gate['next_requires_explicit_start']).lower()}`",
             f"- Source PR: [#{source['pr_number']}]({source['pr_url']})",
@@ -434,6 +604,33 @@ def _render_initiative_state(record: dict) -> str:
             "",
         ]
     )
+
+
+def _authority_transition_failures(
+    record: dict, prior_records: list[dict], label: str
+) -> list[str]:
+    event = record.get("event")
+    if not isinstance(event, dict) or event.get("type") not in {"start", "cancel"}:
+        return []
+    authority = record.get("authority_state", {})
+    if authority.get("completed_chunk", {}).get("initiative_id") != event.get("initiative_id"):
+        return [f"{label}: authority initiative does not match event"]
+    basis = _latest_by_initiative(prior_records).get(event["initiative_id"])
+    if basis is None:
+        return [f"{label}: authority event has no preceding basis"]
+    failures = []
+    if authority.get("source") != basis.get("source") or authority.get(
+        "completed_chunk"
+    ) != basis.get("completed_chunk"):
+        failures.append(f"{label}: authority lifecycle does not copy signed basis")
+    if event["type"] == "start":
+        if basis["active"]["implementation_chunk"] is not None:
+            failures.append(f"{label}: authority start basis is already active")
+        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+            failures.append(f"{label}: authority start is not basis successor")
+    elif basis["active"]["implementation_chunk"] != event["chunk_id"]:
+        failures.append(f"{label}: authority cancel does not match active basis")
+    return failures
 
 
 def generated_state_failures(root: Path) -> list[str]:
@@ -483,6 +680,7 @@ def generated_state_failures(root: Path) -> list[str]:
             failures.append(f"{label}: entry record is not an object")
             break
         failures.extend(_record_failures(record, label))
+        failures.extend(_authority_transition_failures(record, ledger_records, label))
         payload = (
             f"{previous_hash or ''}\n"
             f"{json.dumps(record, sort_keys=True, separators=(',', ':'), ensure_ascii=True)}"
@@ -495,20 +693,27 @@ def generated_state_failures(root: Path) -> list[str]:
             failures.append(f"{label}: hash chain is invalid")
             break
         source = record.get("source", {})
+        is_merge = "event" not in record or record.get("event", {}).get("type") in {
+            "merge", "cutover"
+        }
         if (
+            is_merge
+            and
             previous_main_sha is not None
             and source.get("first_parent_sha") != previous_main_sha
         ):
             failures.append(f"{label}: first-parent chain is invalid")
             break
         previous_hash = expected_hash
-        previous_main_sha = source.get("main_sha")
+        previous_main_sha = (
+            record["event"]["main_sha"] if not is_merge else source.get("main_sha")
+        )
         ledger_records.append(record)
     if not ledger_records or ledger_records[-1] != state:
         failures.append(
             ".agent-loop/MERGE_LOG.jsonl: ledger tail does not match live state"
         )
-    if not failures and rendered != _render_state(state):
+    if not failures and rendered != _render_state(state, ledger_records):
         failures.append(
             ".agent-loop/LOOP_STATE.md: rendered state does not match canonical JSON"
         )

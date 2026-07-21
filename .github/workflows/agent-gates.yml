@@ -51,6 +51,26 @@ jobs:
       - name: Agent gate regression tests
         run: python scripts/test_agent_gates.py
 
+      - name: Loop-memory updater branch coverage
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python3 -m pytest -p pytest_cov.plugin -q
+          --cov=scripts.update_post_merge_memory --cov-branch
+          --cov-report=term-missing --cov-fail-under=90
+          scripts/test_agent_gates.py scripts/test_update_post_merge_memory.py
+          scripts/test_check_loop_memory_state.py
+
+      - name: Loop-memory checker branch coverage
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python3 -m pytest -p pytest_cov.plugin -q
+          --cov=scripts.check_loop_memory_state --cov-branch
+          --cov-report=term-missing --cov-fail-under=90
+          scripts/test_agent_gates.py scripts/test_update_post_merge_memory.py
+          scripts/test_check_loop_memory_state.py
+
       - name: Internal review evidence gate
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}

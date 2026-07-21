@@ -191,6 +191,15 @@ class Settings(BaseSettings):
         le=86_400,
     )
 
+    artifact_pending_work_scan_interval_seconds: int = Field(default=60, gt=0, le=3600)
+    artifact_pending_work_scan_page_size: int = Field(default=100, gt=0, le=1000)
+    artifact_execution_lease_seconds: float = Field(default=900.0, gt=0.0, le=7200.0)
+    artifact_complete_read_deadline_seconds: float = Field(default=600.0, gt=0.0, le=7200.0)
+    artifact_terminal_persistence_margin_seconds: float = Field(
+        default=120.0, gt=0.0, le=1800.0
+    )
+    artifact_provider_observation_maximum_attempts: int = Field(default=5, ge=1, le=100)
+
     model_config = SettingsConfigDict(
         env_prefix="WORKSTREAM_",
         env_file=".env",
@@ -424,6 +433,14 @@ class Settings(BaseSettings):
             >= self.artifact_scratch_reservation_ttl_seconds
         ):
             raise ValueError("artifact preparation deadline must expire before scratch TTL")
+        if (
+            self.artifact_complete_read_deadline_seconds
+            + self.artifact_terminal_persistence_margin_seconds
+            >= self.artifact_execution_lease_seconds
+        ):
+            raise ValueError(
+                "artifact complete-read deadline and persistence margin must fit within lease"
+            )
         if self.artifact_scratch_root is not None and self.artifact_local_root is not None:
             scratch_root = self.artifact_scratch_root.resolve(strict=False)
             local_root = self.artifact_local_root.resolve(strict=False)

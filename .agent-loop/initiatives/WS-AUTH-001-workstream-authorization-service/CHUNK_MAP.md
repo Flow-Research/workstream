@@ -36,10 +36,10 @@ stopped.
 | `WS-AUTH-001-09D-A` | Profile Lifecycle And Evidence Repair | L1 | Merged through PR #148 as `99ae4c9`; signed memory `cf8a3e8` passed |
 | `WS-AUTH-001-09D-B` | Identity-Link Lifecycle And Race Closure | L1 | Merged through PR #152 as `93dd392`; signed memory `912a6254` passed |
 | `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15b`; signed memory `66ab58d` passed and stopped |
-| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain |
-| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
-| `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Inactive until 09E merge/memory and explicit start |
-| `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Inactive until 09E merge/memory and explicit start |
+| `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Merged through PR #157 as `42a89b2d` on 2026-07-20 |
+| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; all 25 ART actions remain planned |
+| `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
+| `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
 | `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Proposed |
 | `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
@@ -205,6 +205,10 @@ merged 09D-A as `99ae4c9`; signed memory `cf8a3e8` stopped and named 09D-B. The
 user explicitly started 09D-B; exact contract `9ec6390b` passed required L1
 review. PR #152 merged it as `93dd392`; signed memory `912a6254` passed and
 stopped. The user explicitly started the contributor foundation. Its first L1
-review rejected the underspecified contract before runtime edits; exact repair
-and rereview are current. AUTH-09E and POL-002-04 remain inactive pending their
-own gates and explicit starts.
+review rejected the underspecified contract before runtime edits; PR #153 later
+merged its repaired implementation as `8d5eb15`. PR #157 merged AUTH-09E as
+`42a89b2d`, and PR #158 merged the availability-neutral ART custody transfer as
+`be2a79a2`, PR #160 merged the availability-neutral REV custody transfer as
+`fe0e4492`, and PR #162 merged AUTH-PREP as `c559d556`; all 25 ART and 19 REV
+actions remain planned and inactive, and PREP adds no feature consumer.
+POL-002-04 remains inactive pending its own gate and explicit start.
