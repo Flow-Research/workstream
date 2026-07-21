@@ -37,6 +37,7 @@ backend/app/modules/authorization/models.py
 backend/app/modules/authorization/schemas.py
 backend/app/modules/authorization/repository.py
 backend/app/modules/authorization/catalogue.py
+backend/app/modules/authorization/service.py
 backend/app/modules/audit/**
 backend/app/db/models.py
 backend/alembic/versions/0031_project_role_grants.py
@@ -114,6 +115,11 @@ transition may mutate lifecycle fields.
   `ProjectRoleGrantReplaced`, `authority_replacement`, replacement fields, and
   `both` are absent. Audit tests convert former replacement positives into
   negative rejection cases while preserving complete event-enum coverage.
+- The existing dormant `AuthorityMutationService` is changed only to remove
+  replacement-event selection and `replaced_grant_id` matching: a project-role
+  issue can validate only `ProjectRoleGrantIssued`, with no matched prior grant.
+  This is availability-neutral evidence cleanup, not an issue/revoke product
+  service or callable behavior; no route invokes it until 10C.
 - 10A adds the five `ActionId` enum members and closed `ActionDefinition` rows
   below with `ActionAvailability.PLANNED`; it adds exact `ActionOwner.AUTH_10B`
   and `ActionOwner.AUTH_10C` enum values and assigns each row to its named
