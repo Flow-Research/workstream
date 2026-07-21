@@ -97,6 +97,227 @@ def _contract(root: Path) -> None:
     path.write_text("# Chunk Contract: WS-ENG-001-04B\n", encoding="utf-8")
 
 
+def _selected_start_fixture(tmp_path: Path) -> tuple[Path, Path, dict, dict]:
+    repository_root = tmp_path / "repo"
+    contract = repository_root / (
+        ".agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/"
+        "WS-CI-001-02-safe-routing-cache-timing.md"
+    )
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        "# Chunk Contract: WS-CI-001-02 — Safe Routing, Cache, and Timing Refinement\n"
+        "\n## Start phase\n\n`planning`\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q", str(repository_root)], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "fixture"], check=True)
+    main_sha = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    record = _record()
+    record["source"].update(
+        main_sha=main_sha,
+        intent_path=".agent-loop/merge-intents/WS-CI-001-01R1.json",
+    )
+    record["completed_chunk"].update(
+        initiative_id="WS-CI-001", chunk_id="WS-CI-001-01R1",
+        chunk_title="Timeout Cleanup", next_chunk_id=None, next_chunk_title=None,
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    selection = loop.resolve_start_selection(
+        repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+        phase="planning", main_sha=main_sha, declared_successor=False,
+    )
+    event = _dispatcher_start()
+    event.update(
+        main_sha=main_sha, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+        selection=selection,
+    )
+    event["authorization"] = {
+        "schema_version": 2,
+        "type": "github_repository_permission",
+        "actor": "dispatcher",
+        "permission": "write",
+    }
+    return tmp_path / "state", repository_root, record, event
+
+
+def test_writer_directed_planning_start_cancel_and_restart(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = _selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    assert loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    assert state["authority_state"]["active"] == {
+        "planning_chunk": "WS-CI-001-02", "implementation_chunk": None,
+    }
+    assert state["event"]["selection"]["mode"] == "writer_directed"
+    cancel = _event("cancel", 42)
+    cancel.update(
+        main_sha=event["main_sha"], initiative_id="WS-CI-001",
+        chunk_id="WS-CI-001-02", selection=event["selection"],
+    )
+    assert loop.apply_authority_event(state_root, cancel, repository_root=repository_root)
+    restart = json.loads(json.dumps(event))
+    restart.update(
+        run_id=43, event_id="github-actions:43:start",
+        created_at="2026-07-20T13:00:00Z",
+    )
+    restart["selection"] = loop.resolve_start_selection(
+        repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+        phase="planning", main_sha=event["main_sha"], declared_successor=True,
+    )
+    assert loop.apply_authority_event(state_root, restart, repository_root=repository_root)
+    loop.validate_generated_state(state_root)
+
+
+def test_writer_directed_selection_rejects_symlink_contract(tmp_path: Path) -> None:
+    _, repository_root, _record_value, event = _selected_start_fixture(tmp_path)
+    selected = repository_root / event["selection"]["contract_path"]
+    target = selected.with_name("real.md")
+    selected.rename(target)
+    selected.symlink_to(target.name)
+    subprocess.run(["git", "-C", str(repository_root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "symlink"], check=True)
+    symlink_sha = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    with pytest.raises(loop.LoopMemoryError, match="regular file"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+            phase="planning", main_sha=symlink_sha, declared_successor=False,
+        )
+
+
+def test_writer_directed_selection_enforces_reviewed_phase(tmp_path: Path) -> None:
+    _, repository_root, _record_value, event = _selected_start_fixture(tmp_path)
+    with pytest.raises(loop.LoopMemoryError, match="phase does not match"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+            phase="implementation", main_sha=event["main_sha"], declared_successor=False,
+        )
+
+
+def test_writer_directed_selection_rejects_missing_malformed_and_foreign(
+    tmp_path: Path,
+) -> None:
+    _, repository_root, _record_value, event = _selected_start_fixture(tmp_path)
+    with pytest.raises(loop.LoopMemoryError, match="regular file"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-99",
+            phase="planning", main_sha=event["main_sha"], declared_successor=False,
+        )
+
+
+def test_writer_directed_selection_rejects_same_initiative_ambiguity(
+    tmp_path: Path,
+) -> None:
+    _, repository_root, _record_value, event = _selected_start_fixture(tmp_path)
+    duplicate = repository_root / event["selection"]["contract_path"]
+    duplicate = duplicate.with_name("WS-CI-001-02-duplicate.md")
+    duplicate.write_text(
+        "# Chunk Contract: WS-CI-001-02 - Duplicate\n\n## Start phase\n\n`planning`\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "duplicate"], check=True)
+    duplicate_sha = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    with pytest.raises(loop.LoopMemoryError, match="one regular file"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+            phase="planning", main_sha=duplicate_sha, declared_successor=False,
+        )
+    subprocess.run(
+        ["git", "-C", str(repository_root), "rm", "-q", str(duplicate.relative_to(repository_root))],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "remove duplicate"], check=True)
+    foreign = repository_root / (
+        ".agent-loop/initiatives/WS-ART-001-foreign/chunks/"
+        "WS-CI-001-02-duplicate.md"
+    )
+    foreign.parent.mkdir(parents=True)
+    foreign.write_text(
+        "# Chunk Contract: WS-CI-001-02 - Foreign\n\n## Start phase\n\n`planning`\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "foreign"], check=True)
+    foreign_sha = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    with pytest.raises(loop.LoopMemoryError, match="crosses initiative"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+            phase="planning", main_sha=foreign_sha, declared_successor=False,
+        )
+    subprocess.run(["git", "-C", str(repository_root), "rm", "-q", str(foreign.relative_to(repository_root))], check=True)
+    contract = repository_root / event["selection"]["contract_path"]
+    contract.write_text("# malformed\n\n## Start phase\n\n`planning`\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repository_root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repository_root), "commit", "-qm", "malformed"], check=True)
+    malformed_sha = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    with pytest.raises(loop.LoopMemoryError, match="canonical heading"):
+        loop.resolve_start_selection(
+            repository_root, initiative_id="WS-CI-001", chunk_id="WS-CI-001-02",
+            phase="planning", main_sha=malformed_sha, declared_successor=False,
+        )
+
+
+def test_writer_directed_start_rejects_completed_identity(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = _selected_start_fixture(tmp_path)
+    record["source"]["intent_path"] = ".agent-loop/merge-intents/WS-CI-001-02.json"
+    record["completed_chunk"].update(
+        chunk_id="WS-CI-001-02",
+        chunk_title="Safe Routing, Cache, and Timing Refinement",
+    )
+    loop.apply_merge_record(state_root, record)
+    with pytest.raises(loop.LoopMemoryError, match="already-completed"):
+        loop.apply_authority_event(state_root, event, repository_root=repository_root)
+
+
+def test_writer_directed_start_rejects_blob_and_title_drift(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = _selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    wrong_blob = json.loads(json.dumps(event))
+    wrong_blob["event_id"] = "github-actions:45:start"
+    wrong_blob["run_id"] = 45
+    wrong_blob["selection"]["contract_blob_sha"] = "f" * 40
+    with pytest.raises(loop.LoopMemoryError, match="does not match current main"):
+        loop.apply_authority_event(state_root, wrong_blob, repository_root=repository_root)
+    wrong_title = json.loads(json.dumps(event))
+    wrong_title["event_id"] = "github-actions:46:start"
+    wrong_title["run_id"] = 46
+    wrong_title["selection"]["contract_title"] = "Forged title"
+    with pytest.raises(loop.LoopMemoryError, match="does not match current main"):
+        loop.apply_authority_event(state_root, wrong_title, repository_root=repository_root)
+
+
+def test_ledger_transition_rejects_start_after_globally_active_work(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = _selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    active = json.loads((state_root / loop.STATE_PATH).read_text())
+    forged = json.loads(json.dumps(active))
+    forged["event"].update(
+        run_id=98, event_id="github-actions:98:start",
+        created_at="2026-07-20T18:00:00Z",
+    )
+    with pytest.raises(loop.LoopMemoryError, match="globally active"):
+        loop._validate_authority_transition(forged, [record, active])
+
+
 def test_start_cancel_retry_and_replay_are_monotonic(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)
@@ -265,6 +486,58 @@ def test_recovery_policy_schema_fails_closed(mutation, message: str) -> None:
     mutation(policy)
     with pytest.raises(loop.LoopMemoryError, match=message):
         loop._validate_recovery_policy(policy)
+
+
+def test_exact_single_target_recovery_binds_signed_first_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    target = _merge_record("WS-ENG-004", "WS-ENG-004-01", 169, "f" * 40, "a" * 40)
+    policy = {
+        "schema_version": 2,
+        "mode": "exact_single_target",
+        "activation": {"initiative_id": "WS-ENG-004", "chunk_id": "WS-ENG-004-01"},
+    }
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args: target)
+    exemptions = loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="f" * 40, planned_shas=["f" * 40],
+    )
+    assert exemptions == [
+        {"initiative_id": "WS-ENG-004", "chunk_id": "WS-ENG-004-01", "pr_number": 169}
+    ]
+    target["source"]["first_parent_sha"] = "b" * 40
+    with pytest.raises(loop.LoopMemoryError, match="signed first parent"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="f" * 40, planned_shas=["f" * 40],
+        )
+    target["source"]["first_parent_sha"] = "a" * 40
+    with pytest.raises(loop.LoopMemoryError, match="not exact"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="f" * 40,
+            planned_shas=["e" * 40, "f" * 40],
+        )
+    loop.apply_merge_record(state_root, target, recovery_exemptions=exemptions)
+    loop.assert_recovery_consumed(state_root, "f" * 40, exemptions)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    assert exemptions[0] not in state.get("legacy_exemptions", [])
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="f" * 40, planned_shas=[],
+    ) == []
+    for relative in (
+        loop.RENDERED_PATH,
+        loop.WORK_QUEUE_PATH,
+        loop.MANIFEST_PATH,
+        Path(".agent-loop/INITIATIVE_STATE/WS-ENG-004.md"),
+    ):
+        projection = (state_root / relative).read_text(encoding="utf-8")
+        assert "legacy_exemptions" not in projection
+        assert '"pr_number"' not in projection
 
 
 def test_load_recovery_policy_from_exact_commit(tmp_path: Path) -> None:
@@ -544,8 +817,11 @@ def test_recovery_cli_round_trip_consumes_inventory(
 class _Client:
     run: object
     approvals: object
+    permission: object = None
 
     def get_json(self, path: str):
+        if "/collaborators/" in path and path.endswith("/permission"):
+            return self.permission or {"permission": "write"}
         return self.approvals if path.endswith("/approvals") else self.run
 
 
@@ -580,12 +856,13 @@ def test_collect_start_event_binds_dispatcher_authority_without_approval() -> No
         dispatcher="dispatcher",
         main_sha="a" * 40,
         prior_state_tip="e" * 40,
-        start_authorities=frozenset({"dispatcher"}),
+        start_permissions=frozenset({"write", "maintain", "admin"}),
     )
     assert event["authorization"] == {
-        "schema_version": 1,
-        "type": "github_workflow_dispatch",
+        "schema_version": 2,
+        "type": "github_repository_permission",
         "actor": "dispatcher",
+        "permission": "write",
     }
     assert "approvers" not in event
 
@@ -612,7 +889,7 @@ def test_collect_cancel_event_retains_protected_approval() -> None:
         initiative_id="WS-ENG-001", chunk_id="WS-ENG-001-04B",
         reason="Cancel", run_id=42, dispatcher="dispatcher",
         main_sha="a" * 40, prior_state_tip="e" * 40,
-        start_authorities=frozenset({"dispatcher"}),
+        start_permissions=frozenset({"write", "maintain", "admin"}),
     )
     assert event["approvers"] == ["reviewer"]
     assert "authorization" not in event
@@ -654,7 +931,7 @@ def test_collect_authority_event_rejects_untrusted_run(
             dispatcher="dispatcher",
             main_sha="a" * 40,
             prior_state_tip="e" * 40,
-            start_authorities=frozenset({"dispatcher"}),
+            start_permissions=frozenset({"write", "maintain", "admin"}),
         )
 
 
@@ -738,8 +1015,15 @@ def test_apply_event_cli_routes_authenticated_inputs(
     monkeypatch.setenv("GITHUB_TOKEN", "token")
     monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
     monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    basis = _record()
+    monkeypatch.setattr(loop, "_load_json", lambda _path: basis)
+    monkeypatch.setattr(loop, "_load_ledger", lambda _path: [])
+    monkeypatch.setattr(loop, "_validate_ledger_entries", lambda _rows: [basis])
     monkeypatch.setattr(
-        loop, "load_start_authorities", lambda _root: frozenset({"dispatcher"})
+        loop, "resolve_start_selection", lambda *_args, **_kwargs: {"selection": True}
+    )
+    monkeypatch.setattr(
+        loop, "load_start_permissions", lambda _root: frozenset({"write", "maintain", "admin"})
     )
 
     def collect(_client, _repository, **kwargs):
@@ -782,9 +1066,18 @@ def test_cancel_cli_does_not_load_start_authority_policy(
     monkeypatch.setenv("GITHUB_TOKEN", "token")
     monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
     monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    active = _record()
+    active["active"]["implementation_chunk"] = "WS-ENG-001-04B"
+    active["event"] = _event("start")
+    monkeypatch.setattr(loop, "_load_json", lambda _path: active)
+    monkeypatch.setattr(loop, "_load_ledger", lambda _path: [])
+    monkeypatch.setattr(loop, "_validate_ledger_entries", lambda _rows: [active])
+    monkeypatch.setattr(
+        loop, "_latest_by_initiative", lambda _rows: {"WS-ENG-001": active}
+    )
     monkeypatch.setattr(
         loop,
-        "load_start_authorities",
+        "load_start_permissions",
         lambda _root: (_ for _ in ()).throw(AssertionError("must not load")),
     )
     monkeypatch.setattr(
@@ -985,11 +1278,11 @@ def test_collect_authority_event_rejects_invalid_approval_shape() -> None:
             chunk_id="WS-ENG-001-04B", reason="Approved", run_id=41,
             dispatcher="dispatcher", main_sha="a" * 40,
             prior_state_tip="e" * 40,
-            start_authorities=frozenset({"dispatcher"}),
+            start_permissions=frozenset({"write", "maintain", "admin"}),
         )
 
 
-def test_collect_start_rejects_writer_outside_trusted_allowlist() -> None:
+def test_collect_start_rejects_dispatcher_without_current_write_access() -> None:
     run = {
         "id": 41,
         "run_attempt": 1,
@@ -999,44 +1292,42 @@ def test_collect_start_rejects_writer_outside_trusted_allowlist() -> None:
         "actor": {"login": "dispatcher"},
         "created_at": "2026-07-20T11:00:00Z",
     }
-    with pytest.raises(loop.LoopMemoryError, match="not an authorized starter"):
+    with pytest.raises(loop.LoopMemoryError, match="no permitted repository write access"):
         loop.collect_authority_event(
-            _Client(run, []), "Flow-Research/workstream", action="start",
+            _Client(run, [], {"permission": "read"}), "Flow-Research/workstream", action="start",
             initiative_id="WS-ENG-001", chunk_id="WS-ENG-001-04B",
             reason="Approved", run_id=41, dispatcher="dispatcher",
             main_sha="a" * 40, prior_state_tip="e" * 40,
-            start_authorities=frozenset({"another-writer"}),
+            start_permissions=frozenset({"write", "maintain", "admin"}),
         )
 
 
-def test_load_start_authorities_is_closed_and_case_insensitive(tmp_path: Path) -> None:
+def test_load_start_permissions_is_closed(tmp_path: Path) -> None:
     policy = tmp_path / loop.START_AUTHORITIES_PATH
     policy.parent.mkdir(parents=True)
     policy.write_text(
-        json.dumps({"schema_version": 1, "actors": ["Abiorh001"]}),
+        json.dumps({"schema_version": 2, "permissions": ["admin", "maintain", "push", "write"]}),
         encoding="utf-8",
     )
-    assert loop.load_start_authorities(tmp_path) == frozenset({"abiorh001"})
+    assert loop.load_start_permissions(tmp_path) == frozenset({"admin", "maintain", "push", "write"})
 
 
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
-        ({"schema_version": 1, "actors": ["ok"], "extra": True}, "schema"),
-        ({"schema_version": 2, "actors": ["ok"]}, "valid actors"),
-        ({"schema_version": 1, "actors": []}, "valid actors"),
-        ({"schema_version": 1, "actors": ["bad_name"]}, "actor is invalid"),
-        ({"schema_version": 1, "actors": ["Abiorh001", "abiorh001"]}, "unique"),
+        ({"schema_version": 2, "permissions": ["write"], "extra": True}, "schema"),
+        ({"schema_version": 1, "permissions": ["admin", "maintain", "push", "write"]}, "permissions"),
+        ({"schema_version": 2, "permissions": ["write"]}, "permissions"),
     ],
 )
-def test_load_start_authorities_rejects_malformed_policy(
+def test_load_start_permissions_rejects_malformed_policy(
     tmp_path: Path, payload: dict, message: str
 ) -> None:
     policy = tmp_path / loop.START_AUTHORITIES_PATH
     policy.parent.mkdir(parents=True)
     policy.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(loop.LoopMemoryError, match=message):
-        loop.load_start_authorities(tmp_path)
+        loop.load_start_permissions(tmp_path)
 
 
 def test_well_formed_stale_state_tip_is_rejected(tmp_path: Path) -> None:
@@ -1073,7 +1364,7 @@ def test_cancel_rejects_inactive_chunk(tmp_path: Path) -> None:
         )
 
 
-def test_cross_initiative_start_preserves_latest_global_merge(tmp_path: Path) -> None:
+def test_cross_initiative_start_rejects_parallel_active_work(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)
     loop.apply_merge_record(state_root, _record())
@@ -1104,17 +1395,10 @@ def test_cross_initiative_start_preserves_latest_global_merge(tmp_path: Path) ->
         initiative_id="WS-ART-001",
         chunk_id="WS-ART-001-03",
     )
-    loop.apply_authority_event(
-        state_root, art_event, repository_root=repository_root
-    )
-    rendered = (state_root / loop.RENDERED_PATH).read_text()
-    queue = (state_root / loop.WORK_QUEUE_PATH).read_text()
-    assert "`c" + "c" * 39 + "`" in rendered
-    assert "`WS-ENG-001-04B`, `WS-ART-001-03`" not in rendered
-    assert "`WS-ART-001-03`, `WS-ENG-001-04B`" in rendered
-    assert "Completed chunk: `WS-ART-001-02`" in rendered
-    assert "Next chunk: `WS-ART-001-03`" in rendered
-    assert f"Latest global merge: `{'c' * 40}`" in queue
+    with pytest.raises(loop.LoopMemoryError, match="globally active"):
+        loop.apply_authority_event(
+            state_root, art_event, repository_root=repository_root
+        )
 
 
 def test_exact_active_merge_closes_and_consumes_exemption(tmp_path: Path) -> None:

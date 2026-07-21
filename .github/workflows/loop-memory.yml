@@ -156,7 +156,7 @@ jobs:
             --public-key .agent-loop/keys/loop-memory-signing-public.pem \
             --expected-main-sha "${TARGET_SHA}"
           python3 scripts/check_loop_memory_state.py \
-            --state-root "${state_dir}"
+            --state-root "${state_dir}" --repository-root .
 
       - name: Commit generated state branch
         shell: bash

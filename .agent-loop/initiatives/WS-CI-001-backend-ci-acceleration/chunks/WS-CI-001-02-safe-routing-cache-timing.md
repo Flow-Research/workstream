@@ -28,6 +28,10 @@ L1
 
 P2
 
+## Start phase
+
+`planning`
+
 ## Allowed files
 
 To be fixed only after 01 hosted evidence and separate discovery.

@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -141,6 +142,90 @@ def _is_current_schema_version(value: object) -> bool:
     return type(value) is int and value == SCHEMA_VERSION
 
 
+def _selection_failures(selection: object, event: dict, label: str) -> list[str]:
+    """Independently validate one signed start-selection envelope."""
+    required = {
+        "schema_version", "mode", "phase", "contract_path",
+        "contract_title", "contract_blob_sha",
+    }
+    if not isinstance(selection, dict) or set(selection) != required:
+        return [f"{label}: invalid start selection schema"]
+    failures = []
+    if selection.get("schema_version") != 1 or selection.get("mode") not in {
+        "declared_successor", "writer_directed"
+    } or selection.get("phase") not in {"planning", "implementation"}:
+        failures.append(f"{label}: unsupported start selection")
+    path = selection.get("contract_path")
+    initiative = event.get("initiative_id")
+    chunk = event.get("chunk_id")
+    parts = path.split("/") if isinstance(path, str) else []
+    if (
+        not isinstance(path, str)
+        or len(parts) != 5
+        or parts[:2] != [".agent-loop", "initiatives"]
+        or not (parts[2] == initiative or parts[2].startswith(f"{initiative}-"))
+        or parts[3] != "chunks"
+        or not (
+            parts[4] == f"{chunk}.md"
+            or (parts[4].startswith(f"{chunk}-") and parts[4].endswith(".md"))
+        )
+    ):
+        failures.append(f"{label}: invalid selected contract path")
+    if not _is_bounded_single_line(selection.get("contract_title"), 160):
+        failures.append(f"{label}: invalid selected contract title")
+    blob = selection.get("contract_blob_sha")
+    if not isinstance(blob, str) or not SHA_PATTERN.fullmatch(blob):
+        failures.append(f"{label}: invalid selected contract blob")
+    return failures
+
+
+def _selection_tree_failures(event: dict, repository_root: Path, label: str) -> list[str]:
+    """Independently bind signed selection evidence to its exact Git tree."""
+    selection = event.get("selection")
+    if not isinstance(selection, dict):
+        return []
+    main_sha = event.get("main_sha")
+    path = selection.get("contract_path")
+    if not isinstance(main_sha, str) or not isinstance(path, str):
+        return [f"{label}: selected contract has no exact Git identity"]
+    tree = subprocess.run(
+        ["git", "-C", str(repository_root), "ls-tree", main_sha, "--", path],
+        check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    expected = f"100644 blob {selection.get('contract_blob_sha')}\t{path}"
+    if tree.returncode != 0 or tree.stdout.strip() != expected:
+        return [f"{label}: selected contract does not match exact main tree"]
+    blob = subprocess.run(
+        ["git", "-C", str(repository_root), "cat-file", "blob", selection["contract_blob_sha"]],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        text = blob.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return [f"{label}: selected contract blob is not UTF-8"]
+    chunk = event.get("chunk_id")
+    heading = text.splitlines()[0] if text.splitlines() else ""
+    titles = [
+        heading.removeprefix(prefix).strip()
+        for prefix in (f"# Chunk Contract: {chunk} - ", f"# Chunk Contract: {chunk} — ")
+        if heading.startswith(prefix)
+    ]
+    if blob.returncode != 0 or titles != [selection.get("contract_title")]:
+        return [f"{label}: selected contract title does not match exact blob"]
+    phase_headings = re.findall(r"(?m)^## Start phase\s*$", text)
+    phase_matches = re.findall(
+        r"(?m)^## Start phase\s*\n\s*`?(planning|implementation)`?\s*$", text
+    )
+    if len(phase_headings) > 1 or len(phase_matches) > 1:
+        return [f"{label}: selected contract phase is ambiguous"]
+    declared_phase = phase_matches[0] if phase_matches else None
+    if declared_phase and declared_phase != selection.get("phase"):
+        return [f"{label}: selected contract phase does not match exact blob"]
+    if selection.get("mode") == "writer_directed" and declared_phase is None:
+        return [f"{label}: writer-directed contract has no exact phase declaration"]
+    return []
+
+
 def _metadata_failures(metadata: object, label: str) -> list[str]:
     """Independently validate one completed-chunk metadata object."""
     expected = {
@@ -247,7 +332,12 @@ def _record_failures(record: object, label: str) -> list[str]:
         dispatcher_event_keys = historical_event_keys - {"approvers"} | {
             "authorization"
         }
-        if set(event) not in (historical_event_keys, dispatcher_event_keys):
+        selected_start_keys = dispatcher_event_keys | {"selection"}
+        selected_cancel_keys = historical_event_keys | {"selection"}
+        if set(event) not in (
+            historical_event_keys, dispatcher_event_keys,
+            selected_start_keys, selected_cancel_keys,
+        ):
             failures.append(f"{label}: invalid authority event schema")
             return failures
         run_id = event.get("run_id")
@@ -263,12 +353,34 @@ def _record_failures(record: object, label: str) -> list[str]:
                 not _is_bounded_single_line(value, 160) for value in approvers
             ) or event.get("dispatcher") in approvers or len(set(approvers)) != len(approvers):
                 failures.append(f"{label}: invalid event approvers")
-        elif event.get("type") != "start" or event.get("authorization") != {
-            "schema_version": 1,
-            "type": "github_workflow_dispatch",
-            "actor": event.get("dispatcher"),
-        }:
-            failures.append(f"{label}: invalid dispatcher authorization")
+        else:
+            authorization = event.get("authorization")
+            legacy = {
+                "schema_version": 1,
+                "type": "github_workflow_dispatch",
+                "actor": event.get("dispatcher"),
+            }
+            repository_permission = {
+                "schema_version": 2,
+                "type": "github_repository_permission",
+                "actor": event.get("dispatcher"),
+                "permission": (
+                    authorization.get("permission")
+                    if isinstance(authorization, dict) else None
+                ),
+            }
+            if (
+                event.get("type") != "start"
+                or authorization not in (legacy, repository_permission)
+                or (
+                    authorization == repository_permission
+                    and authorization["permission"] not in {"write", "push", "maintain", "admin"}
+                )
+            ):
+                failures.append(f"{label}: invalid dispatcher authorization")
+        selection = event.get("selection")
+        if selection is not None:
+            failures.extend(_selection_failures(selection, event, label))
         for field in ("main_sha", "prior_state_tip"):
             value = event.get(field)
             if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
@@ -279,18 +391,24 @@ def _record_failures(record: object, label: str) -> list[str]:
             failures.append(f"{label}: event main does not match global state")
         if metadata.get("initiative_id") != event.get("initiative_id"):
             failures.append(f"{label}: event initiative does not match authority state")
-        if metadata.get("next_chunk_id") != event.get("chunk_id"):
+        if selection is None and metadata.get("next_chunk_id") != event.get("chunk_id"):
             failures.append(f"{label}: event chunk does not match reviewed successor")
+        selected_phase = selection.get("phase") if isinstance(selection, dict) else "implementation"
+        selected_title = (
+            selection.get("contract_title")
+            if isinstance(selection, dict)
+            else metadata.get("next_chunk_title")
+        )
         expected_active = {
-            "planning_chunk": None,
-            "implementation_chunk": event.get("chunk_id") if event_type == "start" else None,
+            "planning_chunk": event.get("chunk_id") if event_type == "start" and selected_phase == "planning" else None,
+            "implementation_chunk": event.get("chunk_id") if event_type == "start" and selected_phase == "implementation" else None,
         }
         if authority.get("active") != expected_active:
             failures.append(f"{label}: authority active state is inconsistent")
         expected_gate = {
             "status": "active" if event_type == "start" else "stopped_after_cancel",
             "next_chunk_id": event.get("chunk_id"),
-            "next_chunk_title": metadata.get("next_chunk_title"),
+            "next_chunk_title": selected_title,
             "next_requires_explicit_start": True,
         }
         if authority.get("gate") != expected_gate:
@@ -493,17 +611,28 @@ def _render_state(state: dict, records: list[dict] | None = None) -> str:
     ]
     integrity = "passed" if checks["all_required_passed"] else "attention required"
     active_chunks = []
+    planning_chunks = []
     if records is None:
         active = state["active"]["implementation_chunk"]
         active_chunks = [active] if active else []
+        planning = state["active"]["planning_chunk"]
+        planning_chunks = [planning] if planning else []
     else:
         active_chunks = sorted(
             record["active"]["implementation_chunk"]
             for record in _latest_by_initiative(records).values()
             if record["active"]["implementation_chunk"]
         )
+        planning_chunks = sorted(
+            record["active"]["planning_chunk"]
+            for record in _latest_by_initiative(records).values()
+            if record["active"]["planning_chunk"]
+        )
     active_line = "- Active implementation chunks: " + (
         ", ".join(f"`{chunk}`" for chunk in active_chunks) if active_chunks else "none"
+    )
+    planning_line = "- Active planning chunks: " + (
+        ", ".join(f"`{chunk}`" for chunk in planning_chunks) if planning_chunks else "none"
     )
     authority_lines = []
     if isinstance(state.get("event"), dict) and state["event"].get("type") in {
@@ -530,7 +659,7 @@ def _render_state(state: dict, records: list[dict] | None = None) -> str:
             f"`{source['intent_blob_sha']}`",
             f"- Completed chunk: `{completed['chunk_id']}` - "
             f"{_markdown_text(completed['chunk_title'])}",
-            "- Active planning chunks: none",
+            planning_line,
             active_line,
             *authority_lines,
             f"- Current gate: `{gate['status']}`",
@@ -595,6 +724,7 @@ def _render_initiative_state(record: dict) -> str:
             f"- Initiative: `{completed['initiative_id']}`",
             f"- Latest completed chunk: `{completed['chunk_id']}` - {_markdown_text(completed['chunk_title'])}",
             f"- Gate: `{gate['status']}`",
+            f"- Active planning chunk: `{record['active']['planning_chunk'] or 'none'}`",
             f"- Active implementation chunk: `{record['active']['implementation_chunk'] or 'none'}`",
             f"- Next chunk: `{gate['next_chunk_id'] or 'none'}`",
             f"- Separate explicit start required: `{str(gate['next_requires_explicit_start']).lower()}`",
@@ -624,16 +754,36 @@ def _authority_transition_failures(
     ) != basis.get("completed_chunk"):
         failures.append(f"{label}: authority lifecycle does not copy signed basis")
     if event["type"] == "start":
-        if basis["active"]["implementation_chunk"] is not None:
+        latest = _latest_by_initiative(prior_records)
+        if any(
+            _is_merge_record(item)
+            and item["completed_chunk"]["initiative_id"] == event["initiative_id"]
+            and item["completed_chunk"]["chunk_id"] == event["chunk_id"]
+            for item in prior_records
+        ):
+            failures.append(f"{label}: authority start selects completed work")
+        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
+            failures.append(f"{label}: authority start follows globally active work")
+        if any(value is not None for value in basis["active"].values()):
             failures.append(f"{label}: authority start basis is already active")
-        if basis["gate"]["next_chunk_id"] != event["chunk_id"]:
+        selection = event.get("selection")
+        if selection is None and basis["gate"]["next_chunk_id"] != event["chunk_id"]:
             failures.append(f"{label}: authority start is not basis successor")
-    elif basis["active"]["implementation_chunk"] != event["chunk_id"]:
-        failures.append(f"{label}: authority cancel does not match active basis")
+        if isinstance(selection, dict):
+            mode = "declared_successor" if basis["gate"]["next_chunk_id"] == event["chunk_id"] else "writer_directed"
+            if selection.get("mode") != mode:
+                failures.append(f"{label}: start selection mode does not match basis")
+    else:
+        if event["chunk_id"] not in basis["active"].values():
+            failures.append(f"{label}: authority cancel does not match active basis")
+        if event.get("selection") != basis.get("event", {}).get("selection"):
+            failures.append(f"{label}: authority cancel selection does not match start")
     return failures
 
 
-def generated_state_failures(root: Path) -> list[str]:
+def generated_state_failures(
+    root: Path, repository_root: Path | None = None
+) -> list[str]:
     """Return consistency failures for generated automation-branch state."""
     paths = [root / path for path in GENERATED_FILES]
     missing = [path for path in paths if not path.is_file()]
@@ -681,6 +831,8 @@ def generated_state_failures(root: Path) -> list[str]:
             break
         failures.extend(_record_failures(record, label))
         failures.extend(_authority_transition_failures(record, ledger_records, label))
+        if repository_root is not None and isinstance(record.get("event"), dict):
+            failures.extend(_selection_tree_failures(record["event"], repository_root, label))
         payload = (
             f"{previous_hash or ''}\n"
             f"{json.dumps(record, sort_keys=True, separators=(',', ':'), ensure_ascii=True)}"
@@ -788,6 +940,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the loop-memory validator parser."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-root", type=Path)
+    parser.add_argument("--repository-root", type=Path)
     return parser
 
 
@@ -795,7 +948,7 @@ def main(argv: list[str] | None = None) -> int:
     """Validate generated automation state or authored main-branch memory."""
     args = build_parser().parse_args([] if argv is None else argv)
     if args.state_root:
-        failures = generated_state_failures(args.state_root)
+        failures = generated_state_failures(args.state_root, args.repository_root)
         if failures:
             print("Generated loop memory state is invalid:", file=sys.stderr)
             for failure in failures:
