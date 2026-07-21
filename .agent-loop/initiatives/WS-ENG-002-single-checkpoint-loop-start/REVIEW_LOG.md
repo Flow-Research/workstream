@@ -12,3 +12,11 @@
 - Docs: PASS after removing stale two-person start wording.
 - Reuse/dedup: PASS.
 - Test delta: PASS.
+
+## External review and main integration
+
+- PR #166 initially passed agent gates and preflight before `main` advanced.
+- Current `main`/ART was merged without content conflicts; exact integrated head `20ae90a3` retained only the intended 21-file WS-ENG-002 delta.
+- All nine internal tracks revalidated the integrated head with no behavioral or architecture drift.
+- The failed hosted runs were evidence-SHA failures caused by the changed head; backend jobs were skipped rather than failing product tests.
+- CodeRabbit's review stopped only because the head changed during review; it reported no code finding.
