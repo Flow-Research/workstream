@@ -64,8 +64,9 @@ and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 ## Gate
 
 The candidate integrates trusted main `c559d556`, the sharded Backend workflow,
-and merged AUTH-PREP without activating ART. Exact-SHA internal evidence and
-hosted checks must be refreshed on the reconciled head. The current gate is
-external CI/review followed by explicit human merge approval.
+and merged AUTH-PREP without activating ART. Exact-SHA internal evidence is
+complete for reviewed code `59fbab56`; hosted checks must rerun on the published
+evidence head. The current gate is external CI/review followed by explicit human
+merge approval.
 Production activation and recovery remain in later owning chunks. No later
 artifact chunk starts automatically, and only the user may approve merge.
