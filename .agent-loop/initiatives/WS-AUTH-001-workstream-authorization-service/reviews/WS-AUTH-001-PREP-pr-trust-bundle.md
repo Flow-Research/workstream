@@ -45,7 +45,7 @@ consumer, performs no product mutation, and adds no migration. Ordinary
 - Ruff passed for the backend application/tests and for all final changed
   modules.
 - 18 focused non-database PREP cases pass locally.
-- PostgreSQL tests cover successful atomic mutation, rollback and commit
+- 13 focused PostgreSQL cases pass locally and cover successful atomic mutation, rollback and commit
   failures, authorization denial, evidence failure, timeout, cancellation,
   double consumption, supported lifecycle/admin races in both lock orders, and
   database enforcement of the sole eligible grant invariant.
@@ -70,16 +70,22 @@ published SHA/run without changing runtime or CI behavior.
 
 ## External Review And Remaining Risks
 
-For published head `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, Agent Gates
+For prior published head `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, Agent Gates
 run `29784118660` passed. CodeRabbit run
 `d64c773b-4f76-491e-ae6e-cab19d25dc4b` completed with one minor provenance
 comment, addressed by explicitly binding these statuses here. The trusted-main
-sharded Backend run `29784025021` remains pending and is the required
-full-suite proof for this candidate. Earlier single-job Backend runs exposed
+sharded Backend run `29784025021` failed in shard 2 and exposed additional
+PREP PostgreSQL fixture defects: invalid duplicate bootstrap provenance, stale
+audit column/event expectations, incomplete bootstrap-control teardown, and an
+over-specific mutation-first denial expectation. Those cases now establish and
+restore a valid bootstrap state and assert the kernel's privacy-safe
+`permission_not_granted` result; all 13 focused PostgreSQL PREP/race cases pass
+locally. Earlier single-job Backend runs exposed
 invalid PostgreSQL fixture setup/teardown: bootstrap-only provenance and
 immutable-history triggers rejected synthetic test data cleanup, then leaked
 evidence caused cascading migration errors. The fixture-only repair bypasses
-user triggers while retaining database indexes and constraints. Product
+user triggers while retaining database indexes and constraints. A refreshed
+GitHub Backend run remains the authoritative full-suite/coverage proof. Product
 integration risk is intentionally deferred because this chunk has no consumer.
 
 ## Follow-Up And Human Review Focus

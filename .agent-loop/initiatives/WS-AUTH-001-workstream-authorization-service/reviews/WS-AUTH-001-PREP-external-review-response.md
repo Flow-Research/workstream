@@ -20,6 +20,15 @@
   `8a705e5bb104fb77d3a589f37b1eb45987b2515d`, passing Agent Gates run
   `29784118660`, the CodeRabbit run, and pending sharded Backend run
   `29784025021` separately.
+- Sharded Backend run `29784025021` completed with shard 2 failing in the eight
+  PREP/real-lifecycle race cases. Focused PostgreSQL reproduction identified
+  fixture-only defects: two synthetic grants were marked as bootstrap grants,
+  audit assertions used legacy column/event names, teardown did not restore the
+  bootstrap control singleton, and mutation-first assertions expected detailed
+  lifecycle disclosure instead of the kernel's fail-closed
+  `permission_not_granted` result. The fixture now establishes one valid
+  bootstrap administrator, attributes the target grant to it, restores control
+  state during teardown, and asserts the canonical privacy-safe audit contract.
 
 ## Comments Deferred
 
@@ -35,12 +44,15 @@ pass.
 - `python -m ruff check tests/test_authorization.py`
 - `python -m pytest -q tests/test_authorization.py -k 'prepared_ and not
   postgresql and not crossed_mutations and not crosses_real'` (`18 passed`)
+- isolated PostgreSQL `pytest -q tests/test_authorization.py -k
+  'prepared_postgresql or prepared_actor_authority_crossed_mutations or
+  prepared_crosses_real_lifecycle_service_transactions'` (`13 passed`)
 
-The PostgreSQL/full-suite repair proof remains assigned to GitHub Backend rather
-than the slow local machine.
+The full-suite coverage proof remains assigned to GitHub Backend rather than
+the slow local machine.
 
 ## Remaining Risks
 
-The repaired PostgreSQL cases and full repository coverage must pass in sharded
-Backend run `29784025021`. This documentation repair creates a descendant SHA,
-so its refreshed external checks must also complete before merge readiness.
+Full repository coverage must pass on the refreshed published SHA. This repair
+creates a descendant SHA, so CodeRabbit and all required GitHub checks must also
+complete before merge readiness.

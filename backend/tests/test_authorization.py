@@ -2828,6 +2828,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
     now = datetime.now(UTC)
     async with authorization_factory() as seed:
         await seed.execute(text("alter table admin_role_grants disable trigger user"))
+        await seed.execute(text("alter table authority_control disable trigger user"))
         target_profile = ActorProfile(
             id=str(target_profile_id),
             actor_kind="human",
@@ -2862,38 +2863,45 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             linked_by=str(mutator_profile_id),
             last_verified_at=now,
         )
-        seed.add_all(
-            [
-                target_profile,
-                target_link,
-                mutator_profile,
-                mutator_link,
-                AdminRoleGrant(
-                    id=target_grant_id,
-                    target_actor_profile_id=str(target_profile_id),
-                    role=AdminRole.ACCESS_ADMINISTRATOR.value,
-                    scope_type=AdminScope.SYSTEM.value,
-                    status="active",
-                    version=1,
-                    granted_by_system_principal="workstream:system:bootstrap",
-                    grant_reason="prepared race fixture",
-                    granted_at=now,
-                ),
-                AdminRoleGrant(
-                    id=mutator_grant_id,
-                    target_actor_profile_id=str(mutator_profile_id),
-                    role=AdminRole.ACCESS_ADMINISTRATOR.value,
-                    scope_type=AdminScope.SYSTEM.value,
-                    status="active",
-                    version=1,
-                    granted_by_system_principal="workstream:system:bootstrap",
-                    grant_reason="prepared race fixture",
-                    granted_at=now,
-                ),
-            ]
+        seed.add_all([target_profile, target_link, mutator_profile, mutator_link])
+        seed.add(
+            AdminRoleGrant(
+                id=mutator_grant_id,
+                target_actor_profile_id=str(mutator_profile_id),
+                role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                scope_type=AdminScope.SYSTEM.value,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="prepared race fixture bootstrap",
+                granted_at=now,
+            )
         )
         await seed.flush()
+        seed.add(
+            AdminRoleGrant(
+                id=target_grant_id,
+                target_actor_profile_id=str(target_profile_id),
+                role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                scope_type=AdminScope.SYSTEM.value,
+                status="active",
+                version=1,
+                granted_by_actor_profile_id=str(mutator_profile_id),
+                granted_by_admin_role_grant_id=mutator_grant_id,
+                grant_reason="prepared race fixture",
+                granted_at=now,
+            )
+        )
+        await seed.flush()
+        await seed.execute(
+            text(
+                "update authority_control set bootstrap_completed=true, version=1, "
+                "bootstrap_grant_id=:grant_id, updated_at=clock_timestamp() where id=1"
+            ),
+            {"grant_id": mutator_grant_id},
+        )
         await seed.execute(text("alter table admin_role_grants enable trigger user"))
+        await seed.execute(text("alter table authority_control enable trigger user"))
         await seed.commit()
 
     target_context = HumanAuthorizationContext(
@@ -3034,20 +3042,10 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             await asyncio.wait_for(mutation_task, timeout=5)
             with pytest.raises(PreparedAuthorizationUnsupported) as denied:
                 await asyncio.wait_for(prepare_task, timeout=5)
-            expected = (
-                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
-                if mutation_kind == "link_revoke"
-                else (
-                    AuthorizationDenialCode.ACTOR_SUSPENDED
-                    if mutation_kind == "suspend"
-                    else (
-                        AuthorizationDenialCode.ACTOR_DEACTIVATED
-                        if mutation_kind == "deactivate"
-                        else AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-                    )
-                )
+            assert (
+                denied.value.denial_code
+                is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             )
-            assert denied.value.denial_code is expected
             await prepared_session.rollback()
 
     async with authorization_factory() as verify:
@@ -3090,7 +3088,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
         prepared_allowed = await verify.scalar(
             text(
                 "select count(*) from audit_events where action_id=:action "
-                "and actor_ref=:actor and event_type='sensitive_authorization_allowed'"
+                "and actor_id=:actor and event_type='SensitiveAuthorizationAllowed'"
             ),
             {
                 "action": ActionId.ACTOR_SERVICE_PROVISION.value,
@@ -3105,7 +3103,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
         await cleanup.execute(text("alter table audit_events disable trigger user"))
         await cleanup.execute(
             text(
-                "delete from audit_events where actor_ref in (:target, :mutator) "
+                "delete from audit_events where actor_id in (:target, :mutator) "
                 "or target_actor_ref in (:target, :mutator)"
             ),
             {"target": actor_ids[0], "mutator": actor_ids[1]},
@@ -3125,11 +3123,19 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             text("alter table authority_idempotency_records enable trigger user")
         )
         await cleanup.execute(text("alter table admin_role_grants disable trigger user"))
+        await cleanup.execute(text("alter table authority_control disable trigger user"))
+        await cleanup.execute(
+            text(
+                "update authority_control set bootstrap_completed=false, version=0, "
+                "bootstrap_grant_id=null, updated_at=clock_timestamp() where id=1"
+            )
+        )
         await cleanup.execute(
             text("delete from admin_role_grants where id in (:target, :mutator)"),
             {"target": target_grant_id, "mutator": mutator_grant_id},
         )
         await cleanup.execute(text("alter table admin_role_grants enable trigger user"))
+        await cleanup.execute(text("alter table authority_control enable trigger user"))
         await cleanup.execute(
             text("alter table actor_identity_links disable trigger user")
         )
