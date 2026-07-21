@@ -38,6 +38,88 @@ def test_checker_accepts_dispatcher_authorized_start_projection(tmp_path: Path) 
     assert checker.generated_state_failures(state_root) == []
 
 
+def test_checker_accepts_writer_directed_planning_projection(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    assert checker.generated_state_failures(state_root, repository_root) == []
+
+
+def test_checker_rejects_forged_writer_selection_mode(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    state = json.loads((state_root / loop.STATE_PATH).read_text())
+    state["event"]["selection"]["mode"] = "declared_successor"
+    assert checker._authority_transition_failures(state, [record], "fixture")
+
+
+def test_checker_binds_selection_to_exact_main_blob(tmp_path: Path) -> None:
+    _state_root, repository_root, _record, event = fixtures._selected_start_fixture(tmp_path)
+    assert checker._selection_tree_failures(event, repository_root, "fixture") == []
+    event["selection"]["contract_blob_sha"] = "f" * 40
+    assert checker._selection_tree_failures(event, repository_root, "fixture")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda selection: selection.update(extra="field"), "schema"),
+        (lambda selection: selection.update(schema_version=2), "unsupported"),
+        (lambda selection: selection.update(mode="untrusted"), "unsupported"),
+        (lambda selection: selection.update(phase="delivery"), "unsupported"),
+        (lambda selection: selection.update(contract_path="README.md"), "path"),
+        (lambda selection: selection.update(contract_title=""), "title"),
+        (lambda selection: selection.update(contract_blob_sha="bad"), "blob"),
+    ],
+)
+def test_checker_rejects_malformed_start_selection(
+    tmp_path: Path, mutation, message: str
+) -> None:
+    _state_root, _repository_root, _record, event = fixtures._selected_start_fixture(
+        tmp_path
+    )
+    mutation(event["selection"])
+    failures = checker._selection_failures(event["selection"], event, "fixture")
+    assert any(message in failure for failure in failures)
+
+
+def test_checker_ignores_tree_binding_without_selection(tmp_path: Path) -> None:
+    assert checker._selection_tree_failures({}, tmp_path, "fixture") == []
+
+
+@pytest.mark.parametrize("field", ["main_sha", "contract_path"])
+def test_checker_requires_exact_selection_git_identity(
+    tmp_path: Path, field: str
+) -> None:
+    _state_root, repository_root, _record, event = fixtures._selected_start_fixture(
+        tmp_path
+    )
+    if field == "main_sha":
+        event[field] = None
+    else:
+        event["selection"][field] = None
+    assert "no exact Git identity" in checker._selection_tree_failures(
+        event, repository_root, "fixture"
+    )[0]
+
+
+def test_checker_rejects_start_transition_after_globally_active_work(tmp_path: Path) -> None:
+    state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
+    loop.apply_merge_record(state_root, record)
+    loop.apply_authority_event(state_root, event, repository_root=repository_root)
+    active = json.loads((state_root / loop.STATE_PATH).read_text())
+    forged = json.loads(json.dumps(active))
+    forged["event"].update(
+        run_id=99, event_id="github-actions:99:start",
+        created_at="2026-07-20T19:00:00Z",
+    )
+    failures = checker._authority_transition_failures(
+        forged, [record, active], "fixture"
+    )
+    assert any("globally active" in failure for failure in failures)
+
+
 def test_checker_rejects_authority_projection_drift(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     fixtures._contract(repository_root)
@@ -103,7 +185,7 @@ def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     assert set(workflow["on"]) == {"workflow_dispatch"}
     inputs = workflow["on"]["workflow_dispatch"]["inputs"]
     assert set(inputs) == {
-        "action", "initiative_id", "chunk_id", "reason", "expected_main_sha"
+        "action", "initiative_id", "chunk_id", "phase", "reason", "expected_main_sha"
     }
     assert workflow["permissions"] == {"actions": "read", "contents": "write"}
     assert workflow["concurrency"] == {

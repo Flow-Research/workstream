@@ -13,9 +13,15 @@ on:
         required: true
         type: string
       chunk_id:
-        description: Exact reviewed successor or active chunk ID
+        description: Exact reviewed contract or active chunk ID
         required: true
         type: string
+      phase:
+        description: Planning or implementation lifecycle slot
+        required: true
+        type: choice
+        default: implementation
+        options: [planning, implementation]
       reason:
         description: Bounded audit reason
         required: true
@@ -113,6 +119,7 @@ jobs:
           INITIATIVE_ID: ${{ inputs.initiative_id }}
           CHUNK_ID: ${{ inputs.chunk_id }}
           EVENT_REASON: ${{ inputs.reason }}
+          EVENT_PHASE: ${{ inputs.phase }}
         run: |
           set -euo pipefail
           python3 scripts/update_post_merge_memory.py apply-event \
@@ -121,6 +128,7 @@ jobs:
             --branch-root "${{ steps.state.outputs.branch_dir }}" \
             --action "${EVENT_ACTION}" --initiative-id "${INITIATIVE_ID}" \
             --chunk-id "${CHUNK_ID}" --reason "${EVENT_REASON}" \
+            --phase "${EVENT_PHASE}" \
             --run-id "${GITHUB_RUN_ID}" --dispatcher "${GITHUB_ACTOR}" \
             --main-sha "${TARGET_SHA}" \
             --prior-state-tip "${{ steps.state.outputs.prior_tip }}"
@@ -148,7 +156,8 @@ jobs:
             --state-root "${output_dir}" \
             --public-key .agent-loop/keys/loop-memory-signing-public.pem \
             --expected-main-sha "${TARGET_SHA}"
-          python3 scripts/check_loop_memory_state.py --state-root "${output_dir}"
+          python3 scripts/check_loop_memory_state.py \
+            --state-root "${output_dir}" --repository-root .
           git -C "${branch_dir}" config user.name "workstream-loop-memory[bot]"
           git -C "${branch_dir}" config user.email \
             "workstream-loop-memory[bot]@users.noreply.github.com"

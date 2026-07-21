@@ -133,12 +133,17 @@ and PR cycle.
 
 ## Explicit Start And Cancel Operations
 
-`Loop Memory Explicit Event` is the only authority for starting a reviewed
-successor or cancelling its active state. Dispatch it from `main` with the exact
-current-main SHA, initiative ID, chunk ID, action, and a bounded single-line
-reason. For `start`, the dispatcher must be listed in
-`.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main`; the
-authenticated dispatch is the single approval checkpoint. For `cancel`, a
+`Loop Memory Explicit Event` is the only authority for starting reviewed work
+or cancelling its active state. A start may select the declared successor or a
+unique reviewed contract in a stopped initiative when all signed initiatives
+are idle and that chunk identity has never been completed in signed history.
+Dispatch it from `main` with the exact current-main SHA, initiative
+ID, chunk ID, planning or implementation phase, action, and a bounded
+single-line reason. For `start`, GitHub must report that the dispatcher
+currently has `write`/`push`, `maintain`, or `admin` repository permission, matching
+the closed permission policy in
+`.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main`.
+That authenticated dispatch is the single approval checkpoint. For `cancel`, a
 reviewer other than the dispatcher must approve the `loop-memory-start`
 environment deployment.
 
@@ -151,7 +156,10 @@ the existing key's repository scope.
 
 Every signed event records the dispatcher, immutable run ID and creation time,
 current-main SHA, prior state-branch tip, reason, initiative, and chunk. Starts
-record the versioned dispatcher authorization; cancellations record the
+also bind the current GitHub repository permission, selection mode, lifecycle
+phase, canonical contract path and
+heading title, and exact trusted-main Git blob. They record the versioned
+dispatcher authorization; cancellations record the
 protected-environment approvers. The workflow catches signed state up through
 main before applying the event and rechecks main immediately before signing and
 publication.
@@ -162,6 +170,7 @@ Dispatch and audit with:
 main_sha=$(git rev-parse origin/main)
 gh workflow run loop-memory-start.yml --ref main \
   -f action=start -f initiative_id=WS-ENG-001 \
+  -f phase=implementation \
   -f chunk_id=WS-ENG-001-04B -f reason='Approved implementation' \
   -f expected_main_sha="${main_sha}"
 gh run view <run-id> --log
@@ -181,8 +190,16 @@ active projection are authoritative. A push race leaves the branch unchanged.
 Recover branch corruption with authenticated replay, never force-push or hand
 edits.
 
-Failure handling is closed: stale main/tip, wrong successor, missing or
-non-allowlisted start dispatcher, missing or same-dispatcher cancellation
+Planning placeholders must start with `phase=planning`; their signed output is a
+reviewed executable amendment, not implementation. Writer-directed contracts
+declare this phase in `## Start phase`; automation derives the trusted phase and
+rejects a mismatched dispatcher input. A new authenticated writer
+dispatch may restart or reprioritize after a completed cancellation, but it
+does not alter the cancellation record or approval evidence.
+
+Failure handling is closed: stale main/tip, missing, ambiguous, symlinked,
+foreign, malformed, or blob-mismatched contract; globally active work; missing or
+dispatcher without an allowed repository permission, missing or same-dispatcher cancellation
 approval, rerun, collision, active conflict, and moved branch all require
 inspection followed by a fresh dispatch. Invalid signature/tree or
 branch corruption requires disabling writes and authenticated recovery. A push
@@ -214,3 +231,19 @@ exemptions must be consumed before signing or publication, while unrelated
 legacy exemptions remain intact. A successful replay has an empty plan and does
 not recreate recovery entries. This is not a general operator bypass and must
 not be extended to later chunks.
+
+## WS-ENG-004 Exact Bootstrap
+
+The successor-only start rule could not authorize the repair that makes a
+stopped, null-successor initiative resumable. The version-two recovery
+certificate therefore activates only when the reconciliation plan is exactly
+the merged `WS-ENG-004-01` target and that target's first parent is the signed
+current-main SHA. Its initiative, chunk, and PR identity come from trusted
+GitHub merge evidence.
+
+The one target exemption exists only in ephemeral runner input, is consumed
+before its merge record is appended, and is forbidden from final state, ledger,
+projections, or manifest. An empty replay is inert; extra, missing, reordered,
+later, or unrelated targets fail closed. This bridge does not authorize any
+ordinary start. After reconciliation, writer-directed starts use only the
+signed explicit-event path described above.
