@@ -1142,19 +1142,23 @@ The transaction MUST:
 2. run PREP by locking `AuthorityControl(id=1)`, then locking distinct caller
    and target ActorProfiles in lexical ID order, each followed by its exact
    active identity link, and finally locking the caller's deterministic covered
-   Project Manager grant;
-3. authorize `project.role_grant.manage` for the exact project;
-4. lock the canonical project;
-5. take the transaction advisory key for
+   Project Manager grant; preparation validates candidate authority for the
+   normalized requested project scope but does not make the final decision;
+3. lock and load the canonical project;
+4. take the transaction advisory key for
    `(actor_profile_id, project_id, requested_role)` to serialize absence;
-6. reload the target, scope, and active exact-role selector under those locks;
-7. require an active human target and prohibit self-grant;
-8. reject an existing active grant for the same exact role;
-9. create the immutable qualification snapshot and new manual ProjectRoleGrant
+5. reload the target, caller scope, and active exact-role selector under those
+   locks, require an active human target, prohibit self-grant, and reject an
+   existing active grant for the same exact role;
+6. consume the exact transaction-bound PREP handle, recompose the final locked
+   authority and canonical-project facts, and evaluate
+   `project.role_grant.manage` exactly once; no product, evidence, or
+   idempotency response mutation is staged before successful consumption;
+7. create the immutable qualification snapshot and new manual ProjectRoleGrant
    without changing another role;
-10. append snapshot and grant-issued audit evidence and commit the idempotency
+8. append snapshot and grant-issued audit evidence and commit the idempotency
     response reference;
-11. commit once at the route boundary.
+9. commit once at the route boundary.
 
 ---
 
