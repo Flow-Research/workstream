@@ -8,16 +8,26 @@ PR #120 as `4408256`, the external-service adapter foundation merged through
 PR #127 as `f64a8e5`, committed-source preparation merged through PR #129 as
 `9a04434`, the ArtifactStore v2 Local clean cut merged through PR #141 as
 `a10d901`, and S3-compatible MinIO/AWS preparation merged through PR #151 as
-`1b5422fc` on 2026-07-19. The user explicitly started `WS-ART-001-02C1` on
-2026-07-19.
+`1b5422fc` on 2026-07-19. ART admission and the put-attempt foundation then
+merged through PR #154 as `44f2467c`, and the user explicitly started
+`WS-ART-001-02C2` on 2026-07-19.
 
 The planning-only cross-initiative boundary reconciliation merged through
 PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
 `d541521`. ART now consumes AUTH's canonical activation-custody and prepared
 mutation contracts without editing or activating AUTH runtime behavior.
 AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
-#152 as `93dd392`, and the contributor foundation merged through PR #153 as
-`8d5eb15b`; all are integrated into the ART candidate. AUTH-09E remains
+#152 as `93dd392`, the contributor foundation merged through PR #153 as
+`8d5eb15b`, AUTH-09E merged through PR #157 as `42a89b2d`, and the
+availability-neutral ART custody transfer merged through PR #158 as
+`be2a79a2`, and the unrelated availability-neutral REV custody transfer merged
+through PR #160 as `fe0e4492`. Backend CI sharding and timeout repair merged
+through PRs #163 and #164 as `b0f9ad64` and `61bc0390`; signed-start loop-memory
+planning merged through PR #165 as `58d0514a`; and AUTH-PREP merged through PR
+#162 as `c559d556`. All are integrated into the ART candidate. AUTH-PREP adds no
+ART consumer or activation. The three ART internal feature actions remain
+assigned to future
+`WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
 inactive.
 
 The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks
@@ -37,32 +47,26 @@ approval or reusable evidence. Its source remains on branch
 
 ## Current Work
 
-`WS-ART-001-02C1` is active. It adds the PostgreSQL durable-byte admission
-ledger, closed internal guide/contributor/checker-output requests, and one
-`prepared` `ArtifactPutAttempt` created atomically before provider I/O. Scope
-limits are explicit configuration; callers cannot supply scope collections;
-exact content is charged once per task, producer, project, and deployment
-scope. Provider execution, verification, publication, recovery, routes, and
-product cutover remain inactive. Native AWS remains runtime-ineligible. R2 and
-Flow Node remain deferred.
-
-Final implementation SHA `535069cfb1a7312d731bb14a6023ceb0894402e9`
-passed 371 focused tests with 94.02 percent scoped coverage and all nine
-required internal reviewer tracks. The current gate is publication of that
-reviewed candidate to existing PR #154 followed by fresh GitHub and CodeRabbit
-evidence.
+`WS-ART-001-02C2` is active after the user's explicit start on 2026-07-19. It
+adds caller-only committed put execution, read-only ambiguous-put resolution,
+durable verification jobs and typed receipts, PostgreSQL executor/generation
+fencing, bounded publication scanning, and complete-read deadlines. Production
+composition remains deny-only: the three internal artifact actions stay
+planned, no 02C2 Beat schedule is active, and AUTH retains sole activation
+custody. Recovery attempts, Operator routes, product cutovers, deletion, and
+background write replay remain out of scope.
 
 ## Next Proposed Chunk
 
-`02C2` may add fenced put resolution and verification publication only after
-`02C1` merges and receives a separate explicit start. Neither R2 nor Flow Node
-has a v0.1 chunk.
+`02C3` may add the recovery-attempt and idempotency chain only after 02C2 merges
+and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 
 ## Gate
 
-The current gate is deterministic 02C1 proof followed by all nine exact-SHA
-internal reviewer tracks; that gate is complete. GitHub Actions, CodeRabbit,
-and explicit human review remain pending on the published final candidate.
-Provider execution, verification publication, and recovery remain in later
-owning chunks. No later artifact chunk starts automatically, and only the user
-may approve merge.
+The candidate integrates trusted main `c559d556`, the sharded Backend workflow,
+and merged AUTH-PREP without activating ART. Exact-SHA internal evidence is
+complete for reviewed code `59fbab56`; hosted checks must rerun on the published
+evidence head. The current gate is external CI/review followed by explicit human
+merge approval.
+Production activation and recovery remain in later owning chunks. No later
+artifact chunk starts automatically, and only the user may approve merge.

@@ -133,7 +133,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0029_shared_transactional_outbox",
+                "revision": "0030_artifact_verification",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -193,7 +193,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0029_shared_transactional_outbox"
+                "0030_artifact_verification"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")

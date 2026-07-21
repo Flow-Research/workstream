@@ -4,19 +4,24 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import and_, case, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.artifacts.models import (
     ArtifactAdmissionCharge,
     ArtifactAdmissionScope,
+    ArtifactBinding,
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactPutAttempt,
     ArtifactPutAttemptCharge,
+    ArtifactPutObservationReceipt,
+    ArtifactVerificationJob,
+    ArtifactVerificationReceipt,
     ArtifactReplica,
     ArtifactStorageNamespace,
     ArtifactUploadItem,
@@ -79,9 +84,7 @@ class ArtifactRepository:
     async def lock_upload_item(self, item_id: str) -> ArtifactUploadItem | None:
         """Load one upload item with a row lock."""
         result = await self._session.execute(
-            select(ArtifactUploadItem)
-            .where(ArtifactUploadItem.id == item_id)
-            .with_for_update()
+            select(ArtifactUploadItem).where(ArtifactUploadItem.id == item_id).with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -112,9 +115,7 @@ class ArtifactRepository:
                     GuideSourceSnapshot.id == GuideSourceSnapshotItem.source_snapshot_id,
                 )
                 .where(GuideSourceSnapshotItem.id == guide_source_item_id)
-                .with_for_update(
-                    of=(GuideSourceSnapshotItem, GuideSourceSnapshot)
-                )
+                .with_for_update(of=(GuideSourceSnapshotItem, GuideSourceSnapshot))
             )
         ).one_or_none()
         if row is None:
@@ -154,9 +155,7 @@ class ArtifactRepository:
                     & (WorkstreamTask.project_id == ArtifactUploadSession.project_id),
                 )
                 .where(ArtifactUploadItem.id == upload_item_id)
-                .with_for_update(
-                    of=(ArtifactUploadSession, ArtifactUploadItem, WorkstreamTask)
-                )
+                .with_for_update(of=(ArtifactUploadSession, ArtifactUploadItem, WorkstreamTask))
             )
         ).one_or_none()
         if row is None:
@@ -274,6 +273,198 @@ class ArtifactRepository:
             )
         )
 
+    async def lock_put_attempt(self, attempt_id: str) -> ArtifactPutAttempt | None:
+        """Lock one exact attempt and refresh its current fence."""
+        return await self._session.scalar(
+            select(ArtifactPutAttempt)
+            .where(ArtifactPutAttempt.id == attempt_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def claim_put_attempt(
+        self,
+        *,
+        attempt_id: UUID,
+        executor_id: UUID,
+        lease_seconds: float,
+        mode: str,
+        expected_generation: int,
+    ) -> ArtifactPutAttempt | None:
+        """Claim caller put or read-only observation using PostgreSQL time."""
+        if mode == "caller_put":
+            eligible = ArtifactPutAttempt.status.in_(("prepared", "absent_replay_required"))
+        elif mode == "observation":
+            eligible = or_(
+                ArtifactPutAttempt.status.in_(("prepared", "acknowledgement_unknown")),
+                and_(
+                    ArtifactPutAttempt.status == "put_in_flight",
+                    ArtifactPutAttempt.lease_expires_at < func.clock_timestamp(),
+                ),
+            )
+        else:
+            raise ValueError("artifact put execution mode is invalid")
+        statement = (
+            update(ArtifactPutAttempt)
+            .where(
+                ArtifactPutAttempt.id == str(attempt_id),
+                ArtifactPutAttempt.execution_generation == expected_generation,
+                eligible,
+            )
+            .values(
+                status="put_in_flight",
+                executor_id=str(executor_id),
+                lease_expires_at=func.clock_timestamp() + timedelta(seconds=lease_seconds),
+                execution_generation=ArtifactPutAttempt.execution_generation + 1,
+                execution_mode=mode,
+                observation_count=ArtifactPutAttempt.observation_count
+                + (1 if mode == "observation" else 0),
+                next_run_at=None,
+                cas_version=ArtifactPutAttempt.cas_version + 1,
+            )
+            .returning(ArtifactPutAttempt)
+        )
+        return (await self._session.execute(statement)).scalar_one_or_none()
+
+    async def list_due_put_attempt_ids(self, *, cutoff: datetime, limit: int) -> tuple[str, ...]:
+        """List one stable bounded scanner page without claiming work."""
+        result = await self._session.execute(
+            select(ArtifactPutAttempt.id)
+            .where(
+                or_(
+                    ArtifactPutAttempt.status == "prepared",
+                    and_(
+                        ArtifactPutAttempt.status == "acknowledgement_unknown",
+                        ArtifactPutAttempt.next_run_at <= cutoff,
+                    ),
+                    and_(
+                        ArtifactPutAttempt.status == "put_in_flight",
+                        ArtifactPutAttempt.lease_expires_at <= cutoff,
+                    ),
+                )
+            )
+            .order_by(
+                case(
+                    (
+                        ArtifactPutAttempt.status == "acknowledgement_unknown",
+                        ArtifactPutAttempt.next_run_at,
+                    ),
+                    (
+                        ArtifactPutAttempt.status == "put_in_flight",
+                        ArtifactPutAttempt.lease_expires_at,
+                    ),
+                    else_=ArtifactPutAttempt.prepared_at,
+                ),
+                ArtifactPutAttempt.id,
+            )
+            .limit(limit)
+        )
+        return tuple(result.scalars().all())
+
+    async def add_put_observation_receipt(
+        self, receipt: ArtifactPutObservationReceipt
+    ) -> ArtifactPutObservationReceipt:
+        self._session.add(receipt)
+        await self._session.flush()
+        return receipt
+
+    async def add_verification_job(self, job: ArtifactVerificationJob) -> ArtifactVerificationJob:
+        self._session.add(job)
+        await self._session.flush()
+        return job
+
+    async def lock_verification_job(self, job_id: str) -> ArtifactVerificationJob | None:
+        return await self._session.scalar(
+            select(ArtifactVerificationJob)
+            .where(ArtifactVerificationJob.id == job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def claim_verification_job(
+        self,
+        *,
+        job_id: UUID,
+        executor_id: UUID,
+        lease_seconds: float,
+        expected_generation: int,
+    ) -> ArtifactVerificationJob | None:
+        eligible = or_(
+            ArtifactVerificationJob.status == "pending",
+            and_(
+                ArtifactVerificationJob.status == "provider_unavailable",
+                ArtifactVerificationJob.next_run_at <= func.clock_timestamp(),
+                ArtifactVerificationJob.terminal_at.is_(None),
+            ),
+            and_(
+                ArtifactVerificationJob.status == "running",
+                ArtifactVerificationJob.lease_expires_at < func.clock_timestamp(),
+            ),
+        )
+        statement = (
+            update(ArtifactVerificationJob)
+            .where(
+                ArtifactVerificationJob.id == str(job_id),
+                ArtifactVerificationJob.execution_generation == expected_generation,
+                eligible,
+            )
+            .values(
+                status="running",
+                executor_id=str(executor_id),
+                lease_expires_at=func.clock_timestamp() + timedelta(seconds=lease_seconds),
+                execution_generation=ArtifactVerificationJob.execution_generation + 1,
+                attempt_count=ArtifactVerificationJob.attempt_count + 1,
+                next_run_at=None,
+                cas_version=ArtifactVerificationJob.cas_version + 1,
+            )
+            .returning(ArtifactVerificationJob)
+        )
+        return (await self._session.execute(statement)).scalar_one_or_none()
+
+    async def list_due_verification_job_ids(
+        self, *, cutoff: datetime, limit: int
+    ) -> tuple[str, ...]:
+        result = await self._session.execute(
+            select(ArtifactVerificationJob.id)
+            .where(
+                or_(
+                    ArtifactVerificationJob.status == "pending",
+                    and_(
+                        ArtifactVerificationJob.status == "provider_unavailable",
+                        ArtifactVerificationJob.next_run_at <= cutoff,
+                        ArtifactVerificationJob.terminal_at.is_(None),
+                    ),
+                    and_(
+                        ArtifactVerificationJob.status == "running",
+                        ArtifactVerificationJob.lease_expires_at <= cutoff,
+                    ),
+                )
+            )
+            .order_by(
+                case(
+                    (
+                        ArtifactVerificationJob.status == "provider_unavailable",
+                        ArtifactVerificationJob.next_run_at,
+                    ),
+                    (
+                        ArtifactVerificationJob.status == "running",
+                        ArtifactVerificationJob.lease_expires_at,
+                    ),
+                    else_=ArtifactVerificationJob.created_at,
+                ),
+                ArtifactVerificationJob.id,
+            )
+            .limit(limit)
+        )
+        return tuple(result.scalars().all())
+
+    async def add_verification_receipt(
+        self, receipt: ArtifactVerificationReceipt
+    ) -> ArtifactVerificationReceipt:
+        self._session.add(receipt)
+        await self._session.flush()
+        return receipt
+
     async def add_put_attempt(
         self,
         attempt: ArtifactPutAttempt,
@@ -297,6 +488,61 @@ class ArtifactRepository:
             .order_by(ArtifactPutAttemptCharge.charge_id)
         )
         return tuple(result.scalars().all())
+
+    async def lock_attempt_charges(self, attempt_id: str) -> tuple[ArtifactAdmissionCharge, ...]:
+        """Lock linked charges in canonical scope order."""
+        result = await self._session.execute(
+            select(ArtifactAdmissionCharge)
+            .join(
+                ArtifactPutAttemptCharge,
+                ArtifactPutAttemptCharge.charge_id == ArtifactAdmissionCharge.id,
+            )
+            .where(ArtifactPutAttemptCharge.attempt_id == attempt_id)
+            .order_by(ArtifactAdmissionCharge.scope_type, ArtifactAdmissionCharge.scope_id)
+            .with_for_update(of=ArtifactAdmissionCharge)
+        )
+        return tuple(result.scalars().all())
+
+    async def lock_charge_scopes(
+        self, charges: Sequence[ArtifactAdmissionCharge]
+    ) -> tuple[ArtifactAdmissionScope, ...]:
+        keys = sorted({(charge.scope_type, charge.scope_id) for charge in charges})
+        result = await self._session.execute(
+            select(ArtifactAdmissionScope)
+            .where(
+                tuple_(ArtifactAdmissionScope.scope_type, ArtifactAdmissionScope.scope_id).in_(keys)
+            )
+            .order_by(ArtifactAdmissionScope.scope_type, ArtifactAdmissionScope.scope_id)
+            .with_for_update()
+        )
+        return tuple(result.scalars().all())
+
+    async def lock_replica(self, replica_id: str) -> ArtifactReplica | None:
+        return await self._session.scalar(
+            select(ArtifactReplica)
+            .where(ArtifactReplica.id == replica_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def lock_content(self, content_id: str) -> ArtifactContent | None:
+        """Serialize binding creation and unbound lifecycle transitions."""
+        return await self._session.scalar(
+            select(ArtifactContent)
+            .where(ArtifactContent.id == content_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def lock_binding_for_content(self, content_id: str) -> ArtifactBinding | None:
+        """Lock one binding proving that content has entered an immutable lifecycle."""
+        return await self._session.scalar(
+            select(ArtifactBinding)
+            .where(ArtifactBinding.content_id == content_id)
+            .order_by(ArtifactBinding.id)
+            .limit(1)
+            .with_for_update()
+        )
 
     async def get_or_create_content(self, content: ArtifactContent) -> ArtifactContent:
         """Return the immutable content fact for one digest and size."""
@@ -351,14 +597,16 @@ class ArtifactRepository:
         await self._session.flush()
         return receipt
 
-    async def get_receipt_for_item(
-        self, upload_item_id: str
-    ) -> ArtifactOperationReceipt | None:
+    async def get_receipt_for_item(self, upload_item_id: str) -> ArtifactOperationReceipt | None:
         """Load the Workstream put receipt for one upload item."""
         result = await self._session.execute(
-            select(ArtifactOperationReceipt).where(
-                ArtifactOperationReceipt.upload_item_id == upload_item_id,
+            select(ArtifactOperationReceipt)
+            .where(ArtifactOperationReceipt.upload_item_id == upload_item_id)
+            .order_by(
+                ArtifactOperationReceipt.created_at.desc(),
+                ArtifactOperationReceipt.id,
             )
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -379,8 +627,6 @@ class ArtifactRepository:
             .on_conflict_do_nothing(index_elements=[ArtifactStorageNamespace.id])
         )
         result = await self._session.execute(
-            select(ArtifactStorageNamespace).where(
-                ArtifactStorageNamespace.id == namespace.id
-            )
+            select(ArtifactStorageNamespace).where(ArtifactStorageNamespace.id == namespace.id)
         )
         return result.scalar_one()
