@@ -42,7 +42,8 @@ forward-compatible repair rather than restoring the old replay invariant.
 - Three initiatives remain active with mixed planning/implementation phases.
 - Successful merge and cancellation in both orders preserve unrelated work.
 - Real signed AUTH-10A state accepts exact ART-02C3 in a temporary drill.
-- All nine internal review tracks pass exact SHA `49afb7db`.
+- All nine internal review tracks pass exact integrated SHA `12ef8576` against
+  AUTH-10A merge base `d9d44711`.
 
 ## Bootstrap
 

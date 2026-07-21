@@ -1,10 +1,10 @@
 # WS-ENG-005-01 Internal Review Evidence
 
-Reviewed code SHA: `49afb7db1822091b4aa12b82d73fc22b4d95d428`
+Reviewed code SHA: `12ef8576af3d77f06b99b82107491464b67f212f`
 
-Reviewed against trusted main: `dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a`
+Reviewed against trusted main: `d9d447119ec8afebc658afadca622061265bca68`
 
-Reviewed at: `2026-07-21T15:19:52Z`
+Reviewed at: `2026-07-21T15:43:43Z`
 
 Reviewer run IDs: `parallel_senior_arch_docs`, `parallel_qa_ci_tests`,
 `parallel_security_ops_reuse`
@@ -25,6 +25,8 @@ cancel, merge, ledger, projection, and review controls.
 - Real signed-state drill — AUTH-10A remained active while exact ART-02C3
   started in a temporary rebuilt state; independent checker passed.
 - Merge intent, stale wording, Markdown links, and diff integrity — pass.
+- AUTH PR #170 main integration — clean merge; 209 tests and 89 agent gates
+  passed; all nine tracks re-reviewed the combined exact head.
 
 ## Reviewer results
 
