@@ -6,8 +6,10 @@
 
 ## Status and prerequisite
 
-Proposed and inactive. Start only after planning parent AUTH-10 merges, signed
-memory names 10A, and a fresh explicit start event activates this exact child.
+Active. Planning parent AUTH-10 merged through PR #168 as
+`70f9c7bcdb63680e545f661a956929379df138e4`; signed memory named 10A, and
+explicit start workflow run `29828847015` activated this exact child on
+2026-07-21.
 
 ## Goal
 
@@ -40,6 +42,7 @@ backend/app/db/models.py
 backend/alembic/versions/0031_project_role_grants.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
+backend/tests/test_audit.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
@@ -99,9 +102,18 @@ transition may mutate lifecycle fields.
 - Partial uniqueness permits one active actor/project/exact-role row while all
   three distinct roles may coexist.
 - Regrant after revocation creates a new row; issuance provenance is immutable.
-- Typed and PostgreSQL audit/idempotency validators accept only the three exact
-  roles and issued/revoked success events. Replacement fields/events/reasons
-  and `both` are absent.
+- Typed and PostgreSQL audit validators retain exactly
+  `ProjectRoleQualificationSnapshotCaptured`, `ProjectRoleGrantIssued`, and
+  `ProjectRoleGrantRevoked` for project-role success, plus the existing generic
+  linked `AuthorityInvalidationRequested` event. Snapshot capture has a null
+  `idempotency_reference` and is transaction-correlated to issuance by the same
+  actor, target actor, project, request ID, and correlation ID; the grant-issued
+  event carries the pending issue idempotency reference. Grant revocation and
+  its linked invalidation carry the pending revoke idempotency reference.
+  Typed/PostgreSQL validators accept only the three exact roles.
+  `ProjectRoleGrantReplaced`, `authority_replacement`, replacement fields, and
+  `both` are absent. Audit tests convert former replacement positives into
+  negative rejection cases while preserving complete event-enum coverage.
 - 10A adds the five `ActionId` enum members and closed `ActionDefinition` rows
   below with `ActionAvailability.PLANNED`; it adds exact `ActionOwner.AUTH_10B`
   and `ActionOwner.AUTH_10C` enum values and assigns each row to its named
@@ -137,9 +149,19 @@ transition may mutate lifecycle fields.
   independent-role request safely. No other replacement/supersession key or
   fuzzy reason search is implied.
 - Downgrade refuses before DDL when either new table contains any row or an
-  authority audit row has `before_facts->>'role'='adjudicator'` or
-  `after_facts->>'role'='adjudicator'`. Each individual predicate and their
-  combined form have transaction-level no-mutation proof.
+  `audit_events` row with `event_domain='authority'` has
+  `before_facts->>'role'='adjudicator'`,
+  `after_facts->>'role'='adjudicator'`, `action_id` equal to any of the five
+  10A-registered action IDs, or `denial_code` equal to
+  `project_role_grant_already_revoked` or
+  `project_role_grant_replay_state_changed`. Each individual predicate and
+  their combined form have transaction-level no-mutation proof before any table
+  or validator DDL is changed.
+- PostgreSQL checks/triggers, not only Pydantic, enforce availability-object
+  grammar and cardinality, available/unavailable cross-field rules, reference
+  bounds, Python-strip-equivalent reason byte bounds and control exclusion,
+  composite snapshot ownership, status/version coupling, snapshot and issuance
+  immutability, and the sole active-v1 to revoked-v2 lifecycle transition.
 - Fresh install, prior-head upgrade, downgrade/refusal, replay, constraints,
   immutability, and preserved unrelated history are proven on PostgreSQL.
 - No migration, model, schema, or fixture accepts automated creation.
@@ -147,8 +169,8 @@ transition may mutate lifecycle fields.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/audit tests/test_authorization.py tests/test_alembic.py)
-(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_authorization.py -k 'project_role or qualification')
+(cd backend && .venv/bin/python -m ruff check app/modules/authorization app/modules/audit tests/test_authorization.py tests/test_alembic.py tests/test_audit.py)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_authorization.py tests/test_audit.py -k 'project_role or qualification')
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
