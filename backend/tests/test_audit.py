@@ -405,15 +405,6 @@ def _authority_event_matrix() -> list[dict]:
             project_id=project_id,
         ),
         row(
-            AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED,
-            "project_role_grant",
-            "authority_replacement",
-            project_active,
-            project_active | {"role": "reviewer"},
-            project_active | {"scope_id": str(uuid4()), "role": "reviewer"},
-            project_id=project_id,
-        ),
-        row(
             AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
             "project_role_grant",
             "authority_revocation",
@@ -732,7 +723,7 @@ def test_authority_input_enforces_grant_scope_matrix() -> None:
             AuthorityAuditEventInput.model_validate(source | patch)
 
     replacement = source | {
-        "event_type": AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED,
+        "event_type": "ProjectRoleGrantReplaced",
         "entity_type": "project_role_grant",
         "reason": "authority_replacement",
         "before_facts": {
@@ -750,7 +741,7 @@ def test_authority_input_enforces_grant_scope_matrix() -> None:
             "effective": True,
         },
     }
-    with pytest.raises(ValidationError, match="scope"):
+    with pytest.raises(TypeError, match="invalid authority audit input"):
         AuthorityAuditEventInput.model_validate(replacement)
     with pytest.raises(ValidationError, match="project resource"):
         AuthorityAuditEventInput.model_validate(
@@ -789,7 +780,6 @@ async def test_authority_event_matrix_preserves_shapes_and_requires_idempotency_
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUED,
         AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED,
         AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
-        AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED,
         AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
         AuthorityEventType.ACTOR_PROFILE_SUSPENDED,
         AuthorityEventType.ACTOR_PROFILE_REACTIVATED,

@@ -115,6 +115,31 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
 
     with migration_lock():
         command.downgrade(config, "base")
+
+
+def test_project_role_migration_constraints_and_immutable_history(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0031 exact-role coexistence, evidence bounds, and lifecycle custody."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
+            assert result == {
+                "revision": "0031_project_role_grants",
+                "role_count": 3,
+                "invalid_availability": "23514",
+                "duplicate_role": "23505",
+                "snapshot_update": "55000",
+                "issuance_update": "23514",
+                "valid_revoke": ("revoked", 2),
+                "second_revoke": "23514",
+            }
+        finally:
+            command.downgrade(config, "base")
         command.upgrade(config, "head")
         command.downgrade(config, "base")
 
@@ -133,7 +158,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0030_artifact_verification",
+                "revision": "0031_project_role_grants",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -193,7 +218,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0030_artifact_verification"
+                "0031_project_role_grants"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
@@ -7237,5 +7262,137 @@ async def _insert_authorization_action_event_for(
         async with engine.begin() as connection:
             await connection.execute(_ACTION_EVIDENCE_INSERT, values)
         return str(values["id"])
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_project_role_migration(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    actor_id = actor_id_from_external_identity("https://identity.test", "auth10a-actor")
+    project_id, admin_grant_id = str(uuid4()), str(uuid4())
+    snapshot_ids = [str(uuid4()) for _ in range(3)]
+    grant_ids = [str(uuid4()) for _ in range(3)]
+    results: dict[str, object] = {}
+
+    async def rejected(connection, statement: str, values: dict[str, object]) -> str | None:
+        try:
+            async with connection.begin_nested():
+                await connection.execute(text(statement), values)
+        except DBAPIError as error:
+            return _database_error_sqlstate(error)
+        return None
+
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await _insert_canonical_actor(connection, actor_id, "auth10a-actor", "human")
+                await connection.execute(
+                    text("insert into projects(id,name,slug,status) values (:id,'AUTH 10A',:slug,'active')"),
+                    {"id": project_id, "slug": f"auth-10a-{project_id}"},
+                )
+                await connection.execute(
+                    text(
+                        "insert into admin_role_grants "
+                        "(id,target_actor_profile_id,role,scope_type,status,version,"
+                        "granted_by_system_principal,grant_reason) values "
+                        "(:id,:actor,'access_administrator','system','active',1,"
+                        "'workstream:system:bootstrap','AUTH 10A migration proof')"
+                    ),
+                    {"id": admin_grant_id, "actor": actor_id},
+                )
+                await connection.execute(
+                    text(
+                        "update authority_control set bootstrap_completed=true,"
+                        "bootstrap_grant_id=:grant,version=1 where id=1"
+                    ),
+                    {"grant": admin_grant_id},
+                )
+                snapshot_insert = text(
+                    "insert into project_role_qualification_snapshots "
+                    "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
+                    "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
+                    "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
+                    "(:id,:project,:actor,:role,cast(:skills as jsonb),cast(:reputation as jsonb),"
+                    "cast(:prior as jsonb),cast(:external as jsonb),:actor,:admin)"
+                )
+                available = json.dumps(
+                    {"availability": "available", "reference_ids": ["opaque:1"], "unavailable_reason": None}
+                )
+                unavailable = json.dumps(
+                    {"availability": "unavailable", "reference_ids": [], "unavailable_reason": "no_record"}
+                )
+                for role, snapshot_id in zip(
+                    ("submitter", "reviewer", "adjudicator"), snapshot_ids, strict=True
+                ):
+                    await connection.execute(
+                        snapshot_insert,
+                        {"id": snapshot_id, "project": project_id, "actor": actor_id, "role": role,
+                         "skills": available, "reputation": unavailable, "prior": "[]", "external": "[]",
+                         "admin": admin_grant_id},
+                    )
+                results["invalid_availability"] = await rejected(
+                    connection,
+                    str(snapshot_insert),
+                    {"id": str(uuid4()), "project": project_id, "actor": actor_id, "role": "submitter",
+                     "skills": json.dumps({"availability": "available", "reference_ids": [], "unavailable_reason": None}),
+                     "reputation": unavailable, "prior": "[]", "external": "[]", "admin": admin_grant_id},
+                )
+                grant_insert = text(
+                    "insert into project_role_grants "
+                    "(id,project_id,actor_profile_id,role,qualification_snapshot_id,"
+                    "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason) "
+                    "values (:id,:project,:actor,:role,:snapshot,:actor,:admin,'Qualified manually')"
+                )
+                for role, snapshot_id, grant_id in zip(
+                    ("submitter", "reviewer", "adjudicator"), snapshot_ids, grant_ids, strict=True
+                ):
+                    await connection.execute(
+                        grant_insert,
+                        {"id": grant_id, "project": project_id, "actor": actor_id, "role": role,
+                         "snapshot": snapshot_id, "admin": admin_grant_id},
+                    )
+                results["revision"] = await connection.scalar(text("select version_num from alembic_version"))
+                results["role_count"] = await connection.scalar(
+                    text("select count(*) from project_role_grants where project_id=:project"),
+                    {"project": project_id},
+                )
+                results["duplicate_role"] = await rejected(
+                    connection, str(grant_insert),
+                    {"id": str(uuid4()), "project": project_id, "actor": actor_id, "role": "submitter",
+                     "snapshot": snapshot_ids[0], "admin": admin_grant_id},
+                )
+                results["snapshot_update"] = await rejected(
+                    connection,
+                    "update project_role_qualification_snapshots set external_expertise_refs='[]'::jsonb where id=:id",
+                    {"id": snapshot_ids[0]},
+                )
+                results["issuance_update"] = await rejected(
+                    connection,
+                    "update project_role_grants set grant_reason='Changed' where id=:id",
+                    {"id": grant_ids[0]},
+                )
+                await connection.execute(
+                    text(
+                        "update project_role_grants set status='revoked',version=2,"
+                        "revoked_by_actor_profile_id=:actor,revoked_by_admin_role_grant_id=:admin,"
+                        "revoked_reason='No longer assigned',revoked_at=clock_timestamp() where id=:id"
+                    ),
+                    {"id": grant_ids[0], "actor": actor_id, "admin": admin_grant_id},
+                )
+                results["valid_revoke"] = tuple(
+                    (await connection.execute(
+                        text("select status,version from project_role_grants where id=:id"),
+                        {"id": grant_ids[0]},
+                    )).one()
+                )
+                results["second_revoke"] = await rejected(
+                    connection,
+                    "update project_role_grants set revoked_reason='Again' where id=:id",
+                    {"id": grant_ids[0]},
+                )
+            finally:
+                await transaction.rollback()
+        return results
     finally:
         await engine.dispose()

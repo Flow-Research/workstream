@@ -119,7 +119,7 @@ The active model has no `both`, replacement field, replacement event, or
 replacement reason. Qualification evidence is bound to the same actor, project,
 and exact requested role. One active row is permitted per
 actor/project/role. Issue idempotency includes the requested role; revoke derives
-the role from the locked grant. Migration `0027` refuses upgrade when obsolete
+the role from the locked grant. Migration `0031` refuses upgrade when obsolete
 combined or replacement evidence exists and never converts or deletes those
 rows. It replaces current typed and PostgreSQL validators without changing
 historical migrations.
@@ -238,8 +238,9 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 65 rows after AUTH-09D-B: 17 active actions
-and 48 planned rows. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 70 rows after AUTH-10A: 17 active actions
+and 53 planned rows. AUTH-10A adds five planned project-role read/manage rows,
+owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only

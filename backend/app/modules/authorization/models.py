@@ -11,6 +11,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     SmallInteger,
     String,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from app.db.base import Base
@@ -196,6 +198,123 @@ class AdminRoleGrant(Base):
     granted_by_system_principal: Mapped[str | None] = mapped_column(String(100))
     granted_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("admin_role_grants.id")
+    )
+    grant_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    revoked_by_actor_profile_id: Mapped[str | None] = mapped_column(ForeignKey("actor_profiles.id"))
+    revoked_by_admin_role_grant_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("admin_role_grants.id")
+    )
+    revoked_reason: Mapped[str | None] = mapped_column(Text)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ProjectRoleQualificationSnapshot(Base):
+    """Immutable, privacy-bounded evidence captured for one exact project role."""
+
+    __tablename__ = "project_role_qualification_snapshots"
+    __table_args__ = (
+        CheckConstraint("requested_role in ('submitter','reviewer','adjudicator')", name="role"),
+        UniqueConstraint(
+            "id",
+            "actor_profile_id",
+            "project_id",
+            "requested_role",
+            name="grant_reference",
+        ),
+        Index(
+            "ix_project_role_qualification_snapshots_history",
+            "project_id",
+            "actor_profile_id",
+            "requested_role",
+            "captured_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"), nullable=False)
+    requested_role: Mapped[str] = mapped_column(String(24), nullable=False)
+    skills_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    reputation_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    prior_project_work_refs: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    external_expertise_refs: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    captured_by_actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id"), nullable=False
+    )
+    captured_by_admin_role_grant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("admin_role_grants.id"), nullable=False
+    )
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ProjectRoleGrant(Base):
+    """Immutable issuance history for one independent exact-project role."""
+
+    __tablename__ = "project_role_grants"
+    __table_args__ = (
+        CheckConstraint("role in ('submitter','reviewer','adjudicator')", name="role"),
+        CheckConstraint("grant_method='manual'", name="grant_method"),
+        CheckConstraint("octet_length(grant_reason) between 1 and 500", name="grant_reason"),
+        CheckConstraint(
+            "(status='active' and version=1 and revoked_by_actor_profile_id is null "
+            "and revoked_by_admin_role_grant_id is null and revoked_reason is null "
+            "and revoked_at is null) or (status='revoked' and version=2 and "
+            "revoked_by_actor_profile_id is not null and "
+            "revoked_by_admin_role_grant_id is not null and revoked_reason is not null "
+            "and octet_length(revoked_reason) between 1 and 500 and revoked_at is not null)",
+            name="lifecycle",
+        ),
+        ForeignKeyConstraint(
+            ["qualification_snapshot_id", "actor_profile_id", "project_id", "role"],
+            [
+                "project_role_qualification_snapshots.id",
+                "project_role_qualification_snapshots.actor_profile_id",
+                "project_role_qualification_snapshots.project_id",
+                "project_role_qualification_snapshots.requested_role",
+            ],
+            name="qualification_ownership",
+        ),
+        Index(
+            "uq_project_role_grants_active_exact_role",
+            "project_id",
+            "actor_profile_id",
+            "role",
+            unique=True,
+            postgresql_where=text("status='active'"),
+        ),
+        Index(
+            "ix_project_role_grants_project_actor_role_status",
+            "project_id",
+            "actor_profile_id",
+            "role",
+            "status",
+        ),
+        Index(
+            "ix_project_role_grants_actor_role_status",
+            "actor_profile_id",
+            "role",
+            "status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(24), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    grant_method: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    qualification_snapshot_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    granted_by_actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id"), nullable=False
+    )
+    granted_by_admin_role_grant_id: Mapped[UUID] = mapped_column(
+        ForeignKey("admin_role_grants.id"), nullable=False
     )
     grant_reason: Mapped[str] = mapped_column(Text, nullable=False)
     granted_at: Mapped[datetime] = mapped_column(

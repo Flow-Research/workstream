@@ -607,11 +607,11 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 74 PermissionIds and 65 ActionIds after
-AUTH-09D-B. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+The catalogue contains exactly 74 PermissionIds and 70 ActionIds after
+AUTH-10A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
-identity-link lifecycle actions are active; the other 48 entries remain planned
+identity-link lifecycle actions are active; the other 53 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
@@ -636,8 +636,9 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals remain 74 PermissionIds, 65 ActionIds, 17 active actions, and
-48 planned actions. Four later
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 17 active actions, and
+53 planned actions after AUTH-10A registers five unavailable project-role rows.
+Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
 action, in either order. Neither addition is operational until its complete
@@ -724,7 +725,7 @@ exact-project grants and canonical project composition.
 AUTH-10 is a clean cut to independent `submitter`, `reviewer`, and
 `adjudicator` grants. Before rollout, scan current typed schemas, audit facts,
 idempotency records, and PostgreSQL validators for `both`, replacement fields,
-replacement events, and replacement reasons. Migration `0027` must stop on any
+replacement events, and replacement reasons. Migration `0031` must stop on any
 incompatible evidence; operators must remediate through a separately approved
 data decision, never an automatic conversion. A safe downgrade also refuses
 rather than deleting adjudicator or new exact-role evidence.
