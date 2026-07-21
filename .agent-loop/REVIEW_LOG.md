@@ -1,5 +1,20 @@
 # Review Log
 
+## 2026-07-21 - WS-AUTH-001-10B Internal Plan Review
+
+The inherited AUTH-10B contract failed required L1 review before runtime edits:
+the repository had no read-rate scope to reuse, and existing 403/404 translation
+could not conceal sensitive project/grant existence without preserving denial
+evidence. The user approved D33 and the sequential 10B1/10B2 repair.
+
+Exact planning SHA `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044` passes senior
+engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+docs, reuse/dedup, and test-delta review. 10B1 owns only durable
+`authorization_read` control and migration `0032`; 10B2 owns exactly three
+rate-controlled reads, audited concealment, strict schemas, and signed cursors.
+Markdown links, stale scans, merge-intent validation, and diff integrity pass.
+GitHub, CodeRabbit, and explicit human review remain.
+
 ## 2026-07-21 - WS-ENG-005 Parallel Initiative Execution Plan
 
 The user approved maximum safe concurrent work across distinct initiatives.

@@ -43,6 +43,16 @@ privacy-shape, lifecycle, reference-spec, and local-versus-hosted proof gaps.
 The user approved the resulting 10A durable-truth, 10B read, and 10C mutation
 split on 2026-07-21. D32 records the exact boundaries and successor order.
 
+Required AUTH-10B preimplementation review then proved that the promised
+existing read-rate control did not exist. The durable counter accepts only
+`first_access` and `admin_mutation` in typed code and its PostgreSQL constraint.
+Reusing either would couple unrelated traffic; adding `authorization_read`
+requires a forward migration. Review also found that current authorization HTTP
+translation exposes 403 permission/scope denials separately from 404 missing
+resources, while route-local interception would bypass denial-evidence
+restaging. The user approved D33: 10B1 owns durable read control, and 10B2 owns
+the three reads plus action-aware audited concealment.
+
 ## AUTH-09 delta discovery - 2026-07-16
 
 Merged AUTH-08 provides `AuthorityControl`, immutable AdminRoleGrants, seven
