@@ -295,6 +295,7 @@ class ProjectRoleGrant(Base):
                 "project_role_qualification_snapshots.requested_role",
             ],
             name="qualification_ownership",
+            ondelete="RESTRICT",
         ),
         Index(
             "uq_project_role_grants_active_exact_role",
@@ -320,12 +321,18 @@ class ProjectRoleGrant(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
-    actor_profile_id: Mapped[str] = mapped_column(ForeignKey("actor_profiles.id"), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("projects.id"), nullable=False
+    )
+    actor_profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("actor_profiles.id"), nullable=False
+    )
     role: Mapped[str] = mapped_column(String(24), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
-    version: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
-    grant_method: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="active")
+    version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default="1")
+    grant_method: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="manual"
+    )
     qualification_snapshot_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
     granted_by_actor_profile_id: Mapped[str] = mapped_column(
         ForeignKey("actor_profiles.id"), nullable=False
