@@ -4,37 +4,37 @@
     "planning_chunk": null
   },
   "checks": {
-    "all_required_passed": false,
+    "all_required_passed": true,
     "required": {
       "CodeRabbit": {
-        "conclusion": "failure",
+        "conclusion": "success",
         "kind": "status",
         "url": null
       },
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29837255686/job/88656674108"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29843098908/job/88676678421"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29837255684/job/88660285000"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29839874961/job/88669981666"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-004-01R1",
-    "chunk_title": "Renderer-Safe Recovery Bootstrap",
-    "initiative_id": "WS-ENG-004",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "chunk_id": "WS-AUTH-001-10A",
+    "chunk_title": "Project Role Grant Data And Evidence Foundation",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-10B",
+    "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-10B",
+    "next_chunk_title": "Project Role Grant Read And Candidate Surfaces",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -48,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "dda60ed0cb97d9de4a375df4147f31172cb3839b",
-    "head_ref": "codex/ws-eng-004-post-merge-recovery",
-    "head_sha": "f94b10add96ac2d51f20fdeb6f1a36b00a4c241a",
-    "intent_blob_sha": "d562a0989dcce0634c042308883ed934267d052b",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-004-01R1.json",
-    "main_sha": "dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a",
-    "merged_at": "2026-07-21T14:20:05Z",
+    "first_parent_sha": "dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a",
+    "head_ref": "codex/ws-auth-001-10a-project-role-grant-data-evidence",
+    "head_sha": "7d3031f53181e82da41a703cfb3ef3aed9193aba",
+    "intent_blob_sha": "4c6f1044eb1bfb24d5d2fd7711ab944d36ac56be",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10A.json",
+    "main_sha": "d9d447119ec8afebc658afadca622061265bca68",
+    "merged_at": "2026-07-21T15:36:49Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 171,
-    "pr_title": "fix(loop): rebuild signed renderer projections",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/171"
+    "pr_number": 170,
+    "pr_title": "AUTH-10A: add project role grant data and evidence foundation",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/170"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T14:20:05Z"
+  "updated_at": "2026-07-21T15:36:49Z"
 }
