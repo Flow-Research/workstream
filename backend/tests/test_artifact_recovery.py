@@ -18,18 +18,28 @@ from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootst
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import ArtifactRecoveryRequest
-from app.interfaces.artifacts import ArtifactStoreNamespaceClaim, ArtifactStoreUnavailableError
+from app.interfaces.artifacts import (
+    ArtifactObjectMissingError,
+    ArtifactStoreError,
+    ArtifactStoreNamespaceClaim,
+    ArtifactStoreUnavailableError,
+)
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.models import (
+    ArtifactPutAttempt,
     ArtifactRecoveryAttempt,
     ArtifactUploadItem,
     ArtifactUploadSession,
     ArtifactVerificationJob,
 )
 from app.modules.artifacts.schemas import (
+    ArtifactRecoveryAuthorizationEvidence,
     ArtifactRecoveryConflictError,
     ArtifactRecoveryIneligibleError,
+    ArtifactAuthorityDeniedError,
+    DenyArtifactRecoveryAuthority,
     ContributorArtifactAdmissionRequest,
+    GuideArtifactAdmissionRequest,
 )
 from app.modules.artifacts.service import (
     ArtifactAdmissionService,
@@ -43,7 +53,13 @@ from app.modules.authorization.runtime import (
     HumanAuthorizationContext,
     IdentityLinkStatus,
 )
-from app.modules.projects.models import Project
+from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.projects.models import (
+    GuideSourceSnapshot,
+    GuideSourceSnapshotItem,
+    Project,
+    ProjectGuide,
+)
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
 from tests.artifact_store_helpers import artifact_admission_limit_settings, minted_source
 
@@ -52,6 +68,20 @@ class _AllowArtifactAuthority:
     async def preflight(self, **_values: object) -> None: ...
 
     async def revalidate_terminal(self, **_values: object) -> None: ...
+
+
+class _DenyTerminalArtifactAuthority(_AllowArtifactAuthority):
+    async def revalidate_terminal(self, **_values: object) -> None:
+        raise ArtifactAuthorityDeniedError("terminal authority changed")
+
+
+class _AllowRecoveryAuthority:
+    async def authorize(self, **_values: object) -> ArtifactRecoveryAuthorizationEvidence:
+        return ArtifactRecoveryAuthorizationEvidence(
+            action_id=ActionId.ARTIFACT_VERIFICATION_JOB_RETRY,
+            permission_id=PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value,
+            decision_id=uuid4(),
+        )
 
 
 def _alembic_config() -> Config:
@@ -232,11 +262,108 @@ async def _exhausted_job(session, settings, tmp_path, context):
     return project_id, task_id, job, orchestrator, bootstrap
 
 
-def _request(context, project_id: str, task_id: str, job, **changes):
+async def _exhausted_guide_job(session, settings, tmp_path, context):
+    namespace = artifact_storage_namespace_spec(
+        settings,
+        LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root)),
+    )
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+    source_cm = minted_source(tmp_path / "guide-source", b"recover guide")
+    source = await source_cm.__aenter__()
+    await _seed_contributor(session, context, source.commitment.sha256, source.commitment.byte_count)
+    project = await session.scalar(select(Project))
+    assert project is not None
+    project_id = project.id
+    guide_id, snapshot_id, item_id = (str(uuid4()) for _ in range(3))
+    session.add(
+        ProjectGuide(
+            id=guide_id,
+            project_id=project_id,
+            version="v1",
+            status="draft",
+            content_markdown="# Guide",
+            created_by="test",
+        )
+    )
+    await session.flush()
+    session.add(
+        GuideSourceSnapshot(
+            id=snapshot_id,
+            project_id=project_id,
+            guide_id=guide_id,
+            guide_version="v1",
+            manifest_schema_version="v1",
+            manifest_json={"items": [item_id]},
+            bundle_hash=canonical_json_hash({"items": [item_id]}),
+            captured_by=str(context.actor_profile_id),
+        )
+    )
+    await session.flush()
+    session.add(
+        GuideSourceSnapshotItem(
+            id=item_id,
+            source_snapshot_id=snapshot_id,
+            item_order=0,
+            source_kind="inline",
+            durable_ref="guide.md",
+            ingestion_adapter="inline",
+            content_hash=source.commitment.sha256,
+            media_type=source.commitment.media_type,
+        )
+    )
+    await session.commit()
+    admission = await ArtifactAdmissionService(session, settings, namespace).admit(
+        GuideArtifactAdmissionRequest(
+            authorization_context=context,
+            guide_source_item_id=UUID(item_id),
+            source=source,
+        )
+    )
+    orchestrator = ArtifactStorageOrchestrator(
+        session, store, namespace, settings, _AllowArtifactAuthority()
+    )
+    await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+    job = await session.scalar(
+        select(ArtifactVerificationJob).where(
+            ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id)
+        )
+    )
+    if job is None:
+        attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
+        assert attempt is not None and attempt.replica_id is not None
+        job = ArtifactVerificationJob(
+            id=str(uuid4()),
+            originating_put_attempt_id=attempt.id,
+            replica_id=attempt.replica_id,
+            status="pending",
+            maximum_attempts=1,
+        )
+        session.add(job)
+        await session.commit()
+    job_id = job.id
+    await session.rollback()
+    orchestrator._read_complete = AsyncMock(side_effect=ArtifactStoreUnavailableError("down"))
+    await orchestrator.verify_object(UUID(job_id))
+    job = await session.get(ArtifactVerificationJob, job_id)
+    assert job is not None
+    await session.refresh(job)
+    await session.commit()
+    await source_cm.__aexit__(None, None, None)
+    return project_id, job, bootstrap
+
+
+def _request(context, project_id: str, task_id: str | None, job, **changes):
     values = dict(
         authorization_context=context,
         project_id=UUID(project_id),
-        task_id=UUID(task_id),
+        task_id=UUID(task_id) if task_id is not None else None,
         submission_id=None,
         source_verification_job_id=UUID(job.id),
         reason="provider remained unavailable",
@@ -260,7 +387,7 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
             project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
-            service = ArtifactRecoveryService(session, settings)
+            service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
             request = _request(context, project_id, task_id, source)
             first = await service.create(request)
             replay = await service.create(request)
@@ -279,6 +406,40 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
 
 
 @pytest.mark.asyncio
+async def test_taskless_recovery_and_deny_only_authority_boundary(
+    recovery_database_env: str, tmp_path: Path
+) -> None:
+    engine = create_async_engine(recovery_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            context = _context()
+            settings = _settings(tmp_path)
+            project_id, source, bootstrap = await _exhausted_guide_job(
+                session, settings, tmp_path, context
+            )
+            request = _request(context, project_id, None, source)
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await ArtifactRecoveryService(
+                    session, settings, DenyArtifactRecoveryAuthority()
+                ).create(request)
+            assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
+            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 1
+            await session.rollback()
+            created = await ArtifactRecoveryService(
+                session, settings, _AllowRecoveryAuthority()
+            ).create(request)
+            replay = await ArtifactRecoveryService(
+                session, settings, _AllowRecoveryAuthority()
+            ).create(request)
+            assert replay.replayed is True
+            assert created.retry_verification_job_id == replay.retry_verification_job_id
+            bootstrap.close()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_changed_or_ineligible_recovery_has_no_side_effects(
     recovery_database_env: str, tmp_path: Path
 ) -> None:
@@ -291,7 +452,7 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
             project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
-            service = ArtifactRecoveryService(session, settings)
+            service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
             created = await service.create(_request(context, project_id, task_id, source))
             with pytest.raises(ArtifactRecoveryConflictError):
                 await service.create(
@@ -350,7 +511,9 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
             project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
-            created = await ArtifactRecoveryService(session, settings).create(
+            created = await ArtifactRecoveryService(
+                session, settings, _AllowRecoveryAuthority()
+            ).create(
                 _request(context, project_id, task_id, source)
             )
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
@@ -380,6 +543,102 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
 
 
 @pytest.mark.asyncio
+async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
+    recovery_database_env: str, tmp_path: Path
+) -> None:
+    engine = create_async_engine(recovery_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            context = _context()
+            settings = _settings(tmp_path)
+            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
+                session, settings, tmp_path, context
+            )
+            created = await ArtifactRecoveryService(
+                session, settings, _AllowRecoveryAuthority()
+            ).create(_request(context, project_id, task_id, source))
+            orchestrator._authority = _DenyTerminalArtifactAuthority()
+            orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
+                orchestrator
+            )
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await orchestrator.verify_object(created.retry_verification_job_id)
+            recovery = await session.get(
+                ArtifactRecoveryAttempt, str(created.recovery_attempt_id)
+            )
+            retry = await session.get(
+                ArtifactVerificationJob, str(created.retry_verification_job_id)
+            )
+            assert recovery is not None and retry is not None
+            assert recovery.status == "requested"
+            assert recovery.terminal_at is None
+            assert retry.status == "running"
+            assert retry.terminal_at is None
+            assert await session.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.event_type == "ArtifactRecoveryCompleted"
+                )
+            ) == 0
+            bootstrap.close()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("provider_result", "expected_outcome"),
+    [
+        (ArtifactObjectMissingError("missing"), "missing"),
+        (("sha256:" + "0" * 64, 1), "integrity_mismatch"),
+        (ArtifactStoreError("provider conflict"), "conflict"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_every_failed_retry_outcome_terminalizes_recovery_once(
+    recovery_database_env: str,
+    tmp_path: Path,
+    provider_result: object,
+    expected_outcome: str,
+) -> None:
+    engine = create_async_engine(recovery_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            context = _context()
+            settings = _settings(tmp_path)
+            project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
+                session, settings, tmp_path, context
+            )
+            created = await ArtifactRecoveryService(
+                session, settings, _AllowRecoveryAuthority()
+            ).create(_request(context, project_id, task_id, source))
+            if isinstance(provider_result, Exception):
+                orchestrator._read_complete = AsyncMock(side_effect=provider_result)
+            else:
+                orchestrator._read_complete = AsyncMock(return_value=provider_result)
+            assert (
+                await orchestrator.verify_object(created.retry_verification_job_id)
+                == expected_outcome
+            )
+            recovery = await session.get(
+                ArtifactRecoveryAttempt, str(created.recovery_attempt_id)
+            )
+            assert recovery is not None
+            assert (recovery.status, recovery.terminal_result_code) == (
+                "failed",
+                expected_outcome,
+            )
+            assert await session.scalar(
+                select(func.count(AuditEvent.id)).where(
+                    AuditEvent.event_type == "ArtifactRecoveryCompleted"
+                )
+            ) == 1
+            bootstrap.close()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
     recovery_database_env: str, tmp_path: Path
 ) -> None:
@@ -396,8 +655,12 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
             request = _request(context, project_id, task_id, source)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
-                ArtifactRecoveryService(first_session, settings).create(request),
-                ArtifactRecoveryService(second_session, settings).create(request),
+                ArtifactRecoveryService(
+                    first_session, settings, _AllowRecoveryAuthority()
+                ).create(request),
+                ArtifactRecoveryService(
+                    second_session, settings, _AllowRecoveryAuthority()
+                ).create(request),
             )
             assert {first.replayed, second.replayed} == {False, True}
             assert first.retry_verification_job_id == second.retry_verification_job_id
@@ -423,7 +686,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
             project_id, task_id, source, orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
-            service = ArtifactRecoveryService(session, settings)
+            service = ArtifactRecoveryService(session, settings, _AllowRecoveryAuthority())
             first = await service.create(_request(context, project_id, task_id, source))
             orchestrator._read_complete = AsyncMock(
                 side_effect=ArtifactStoreUnavailableError("still unavailable")

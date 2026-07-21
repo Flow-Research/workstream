@@ -59,7 +59,7 @@ def upgrade() -> None:
         sa.Column("authorization_request_id", sa.String(36), nullable=False),
         sa.Column("authorization_correlation_id", sa.String(36), nullable=False),
         sa.Column("project_id", sa.String(36), nullable=False),
-        sa.Column("task_id", sa.String(36), nullable=False),
+        sa.Column("task_id", sa.String(36), nullable=True),
         sa.Column("submission_id", sa.String(36), nullable=True),
         sa.Column("source_verification_job_id", sa.String(36), nullable=False),
         sa.Column("retry_verification_job_id", sa.String(36), nullable=False),

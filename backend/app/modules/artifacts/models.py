@@ -746,8 +746,8 @@ class ArtifactRecoveryAttempt(Base):
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    task_id: Mapped[str] = mapped_column(
-        ForeignKey("workstream_tasks.id", ondelete="RESTRICT"), nullable=False, index=True
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workstream_tasks.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     submission_id: Mapped[str | None] = mapped_column(
         ForeignKey("submissions.id", ondelete="RESTRICT"), index=True

@@ -184,3 +184,49 @@ class ArtifactRecoveryConflictError(ArtifactRecoveryError):
 
 class ArtifactRecoveryIneligibleError(ArtifactRecoveryError):
     """Raised when the source job is not exhausted provider-unavailable work."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryAuthorityFacts:
+    """Canonical facts bound to one exact Operator retry decision."""
+
+    project_id: UUID
+    task_id: UUID | None
+    submission_id: UUID | None
+    source_verification_job_id: UUID
+    expected_source_job_cas_version: int
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryAuthorizationEvidence:
+    """Privacy-bounded evidence returned by the AUTH-owned recovery seam."""
+
+    action_id: ActionId
+    permission_id: str
+    decision_id: UUID
+
+
+class ArtifactRecoveryAuthority(Protocol):
+    """Fresh exact Operator authority seam owned by the later activation chunk."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactRecoveryAuthorityFacts,
+    ) -> ArtifactRecoveryAuthorizationEvidence: ...
+
+
+class DenyArtifactRecoveryAuthority:
+    """Production-safe recovery authority until AUTH activates the Operator action."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactRecoveryAuthorityFacts,
+    ) -> ArtifactRecoveryAuthorizationEvidence:
+        del authorization_context, facts
+        raise ArtifactAuthorityDeniedError("artifact recovery action is unavailable")

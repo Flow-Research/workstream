@@ -54,6 +54,8 @@ from app.modules.artifacts.schemas import (
     ArtifactPendingWorkAuthorityFacts,
     ArtifactVerificationAuthorityFacts,
     ArtifactRecoveryResult,
+    ArtifactRecoveryAuthority,
+    ArtifactRecoveryAuthorityFacts,
     ArtifactRecoveryConflictError,
     ArtifactRecoveryIneligibleError,
     DenyArtifactInternalAuthority,
@@ -70,7 +72,7 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     ServiceAuthorizationContext,
 )
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.models import AuditEvent
 
@@ -1059,6 +1061,8 @@ class ArtifactStorageOrchestrator:
                     "source_verification_job_id": recovery.source_verification_job_id,
                     "retry_verification_job_id": job.id,
                     "terminal_result_code": outcome,
+                    "execution_actor_kind": "service_identity",
+                    "execution_service_identity": ServiceIdentity.ARTIFACT_VERIFIER.value,
                 },
             )
         )
@@ -1162,9 +1166,15 @@ class ArtifactRecoveryService:
 
     _RECOVERY_CLASS = "provider_observation"
 
-    def __init__(self, session: AsyncSession, settings: Settings) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        settings: Settings,
+        authority: ArtifactRecoveryAuthority,
+    ) -> None:
         self._session = session
         self._settings = settings
+        self._authority = authority
         self._repo = ArtifactRepository(session)
         self._actors = ActorService(session)
         self._audit = AuditRepository(session)
@@ -1216,7 +1226,8 @@ class ArtifactRecoveryService:
         if (
             put_attempt is None
             or put_attempt.project_id != str(request.project_id)
-            or put_attempt.task_id != str(request.task_id)
+            or put_attempt.task_id
+            != (str(request.task_id) if request.task_id is not None else None)
             or canonical_submission_id
             != (str(request.submission_id) if request.submission_id is not None else None)
         ):
@@ -1238,6 +1249,24 @@ class ArtifactRecoveryService:
             or actor.identity_link_status != "active"
         ):
             raise ArtifactRecoveryConflictError("artifact recovery requester is unavailable")
+        authorization = await self._authority.authorize(
+            authorization_context=context,
+            facts=ArtifactRecoveryAuthorityFacts(
+                project_id=request.project_id,
+                task_id=request.task_id,
+                submission_id=request.submission_id,
+                source_verification_job_id=request.source_verification_job_id,
+                expected_source_job_cas_version=request.expected_source_job_cas_version,
+            ),
+        )
+        if (
+            authorization.action_id is not ActionId.ARTIFACT_VERIFICATION_JOB_RETRY
+            or authorization.permission_id
+            != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
+        ):
+            raise ArtifactRecoveryConflictError(
+                "artifact recovery authorization evidence is invalid"
+            )
         parent = await self._repo.lock_recovery_by_retry(source_id)
         retry_id = str(uuid4())
         recovery_id = str(uuid4())
@@ -1263,6 +1292,11 @@ class ArtifactRecoveryService:
                     "retry_verification_job_id": retry_id,
                     "recovery_class": self._RECOVERY_CLASS,
                     "request_digest": digest,
+                    "authorization_action_id": authorization.action_id.value,
+                    "authorization_permission_id": authorization.permission_id,
+                    "authorization_decision_id": str(authorization.decision_id),
+                    "authorization_request_id": str(context.request_id),
+                    "authorization_correlation_id": str(context.correlation_id),
                 },
             )
         )
@@ -1273,7 +1307,7 @@ class ArtifactRecoveryService:
             authorization_request_id=str(context.request_id),
             authorization_correlation_id=str(context.correlation_id),
             project_id=str(request.project_id),
-            task_id=str(request.task_id),
+            task_id=str(request.task_id) if request.task_id is not None else None,
             submission_id=(
                 str(request.submission_id) if request.submission_id is not None else None
             ),
@@ -1315,7 +1349,7 @@ class ArtifactRecoveryService:
                 "requester_actor_profile_id": str(context.actor_profile_id),
                 "requester_identity_link_id": str(context.identity_link_id),
                 "project_id": str(request.project_id),
-                "task_id": str(request.task_id),
+                "task_id": str(request.task_id) if request.task_id is not None else None,
                 "submission_id": (
                     str(request.submission_id) if request.submission_id is not None else None
                 ),
