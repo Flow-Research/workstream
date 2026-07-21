@@ -4,7 +4,7 @@
 
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
-| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete; exact-SHA evidence, hosted reruns, and explicit human merge approval remain |
+| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete; all nine exact-SHA internal tracks complete; hosted reruns, and explicit human merge approval remain |
 
 Live post-merge state remains read from signed `automation/loop-memory`
 output. This authored queue records the separately approved parallel chunks.
