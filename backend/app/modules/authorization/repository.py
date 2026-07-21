@@ -75,6 +75,14 @@ class AdminAuthorizationRepository:
             return None
         return link, profile
 
+    async def lock_actor_self(
+        self,
+        actor_profile_id: UUID,
+        identity_link_id: UUID,
+    ) -> tuple[ActorIdentityLink, ActorProfile] | None:
+        """Lock the exact actor-self profile and then its exact identity link."""
+        return await self.lock_request_actor(identity_link_id, actor_profile_id)
+
     async def find_effective_grant(
         self,
         actor_profile_id: UUID,

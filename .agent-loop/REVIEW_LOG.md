@@ -2661,6 +2661,50 @@ states the completed owner-only transfer. Sixty-three focused cases and all
 deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
 finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.
 
+## 2026-07-20 - WS-AUTH-001-PREP Internal Review
+
+Prepared mutation authorization now uses a kernel-issued opaque single-use
+handle, exact service/session/root-transaction binding, and canonical authority
+locks and facts. Exact consume attempts tombstone before evaluation;
+pre-consume cancellation or rollback invalidates the issuance through
+transaction binding and cleanup. Real PostgreSQL proof covers both supported mutation
+race orders and confirms that active system-role uniqueness makes a second
+eligible same-role administrative grant structurally impossible.
+
+Implementation candidate `38acb8f9` passes senior engineering, QA/test,
+security/auth, product/ops, architecture, CI integrity, docs, reuse/dedup, and
+test-delta review with no open finding. No migration or product consumer is
+included. GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
+
+The first hosted Backend run then found invalid setup/teardown in the new real
+PostgreSQL proof. Synthetic bootstrap-provenance grants and immutable actor
+history cleanup were rejected by user triggers; the cleanup rollback leaked
+evidence and produced cascading migration errors. The fixture-only repair
+disables and restores the relevant user triggers while leaving unique indexes
+and constraints active. Focused PREP tests and Ruff pass; exact-SHA internal
+repair review and the hosted Backend rerun remain.
+
+After trusted-main CI acceleration sync, candidate `9e926d04` passed all nine
+internal tracks and evidence descendant `8a705e5b` passed Agent Gates. CodeRabbit
+reported one minor external-status provenance ambiguity: the trust bundle did
+not identify which SHA and runs its results described. The response now binds
+Agent Gates `29784118660` and CodeRabbit
+`d64c773b-4f76-491e-ae6e-cab19d25dc4b` to published head `8a705e5b` and keeps
+sharded Backend `29784025021` explicitly pending.
+
+That sharded Backend run later completed with shard 2 failing in the eight
+PREP/real-lifecycle race cases. Focused PostgreSQL reproduction found fixture
+state and assertion drift rather than a runtime PREP defect: duplicate
+bootstrap provenance, legacy audit names, incomplete bootstrap-control cleanup,
+and over-specific mutation-first denial expectations. Repair candidate
+`349ac313` establishes one valid bootstrap administrator, restores the control
+singleton during teardown, uses canonical audit fields/tokens, and asserts the
+kernel's privacy-safe `permission_not_granted` result. Thirteen focused
+PostgreSQL PREP/race cases pass locally. Senior engineering, architecture,
+reuse/dedup, QA/test, security/auth, test-delta, product/ops, and CI-integrity
+reviews pass; docs requested the chronology corrections recorded in this
+paragraph and the external-review response before exact-SHA re-review.
+
 ## 2026-07-20 - WS-ENG-001-04B External Review Repair
 
 Pre-repair PR #165 head `e8ade1f8` passed Agent Gates, backend preflight, API
