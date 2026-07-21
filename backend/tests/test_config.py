@@ -54,6 +54,8 @@ def test_default_settings_are_fail_closed(monkeypatch: pytest.MonkeyPatch) -> No
     assert settings.api_first_access_rate_window_seconds == 60
     assert settings.api_admin_mutation_rate_limit == 30
     assert settings.api_admin_mutation_rate_window_seconds == 60
+    assert settings.api_authorization_read_rate_limit == 120
+    assert settings.api_authorization_read_rate_window_seconds == 60
 
 
 def test_rate_limit_secret_is_canonical_and_redacted() -> None:
@@ -359,6 +361,10 @@ def test_rate_limit_secret_rejects_invalid_values_without_echo(value: str) -> No
         ("api_first_access_rate_window_seconds", 3_601),
         ("api_admin_mutation_rate_window_seconds", 0),
         ("api_admin_mutation_rate_window_seconds", 3_601),
+        ("api_authorization_read_rate_limit", 0),
+        ("api_authorization_read_rate_limit", 10_001),
+        ("api_authorization_read_rate_window_seconds", 0),
+        ("api_authorization_read_rate_window_seconds", 3_601),
     ],
 )
 def test_rate_limit_numeric_bounds_are_enforced(field_name: str, value: int) -> None:

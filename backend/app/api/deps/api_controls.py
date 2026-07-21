@@ -10,6 +10,7 @@ from app.api.deps.auth import get_auth_verification_result
 from app.api.deps.rate_controls import enforce_rate_control, get_rate_control_service
 from app.modules.api_controls.service import (
     ADMIN_MUTATION_SCOPE,
+    AUTHORIZATION_READ_SCOPE,
     FIRST_ACCESS_SCOPE,
     RateControlService,
 )
@@ -47,4 +48,21 @@ async def enforce_admin_mutation_rate_limit(
         control_scope=ADMIN_MUTATION_SCOPE,
         limit=settings.api_admin_mutation_rate_limit,
         window_seconds=settings.api_admin_mutation_rate_window_seconds,
+    )
+
+
+async def enforce_authorization_read_rate_limit(
+    request: Request,
+    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
+    service: Annotated[RateControlService, Depends(get_rate_control_service)],
+) -> None:
+    """Consume one sensitive authorization-read allowance."""
+    settings = request.app.state.settings
+    await enforce_rate_control(
+        request=request,
+        result=result,
+        service=service,
+        control_scope=AUTHORIZATION_READ_SCOPE,
+        limit=settings.api_authorization_read_rate_limit,
+        window_seconds=settings.api_authorization_read_rate_window_seconds,
     )

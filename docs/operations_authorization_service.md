@@ -304,6 +304,42 @@ Missing secret or database access fails first access closed with retryable HTTP
 `Retry-After`. Existing exact identity links do not consume first-access
 capacity.
 
+AUTH-10B1 adds the closed `authorization_read` scope without attaching it to a
+route or activating an action. Configure every replica consistently:
+
+```text
+WORKSTREAM_API_AUTHORIZATION_READ_RATE_LIMIT=120
+WORKSTREAM_API_AUTHORIZATION_READ_RATE_WINDOW_SECONDS=60
+```
+
+The limit accepts 1 through 10,000 and the window accepts 1 through 3,600
+seconds. This scope uses the existing API rate-control HMAC key; it never uses
+an authentication or pagination-cursor key. Missing key or database access
+returns the same retryable 503 when a later route attaches the dependency.
+Exhaustion returns 429 with `Retry-After`.
+
+Before upgrading to `0032_authorization_read_rate`, confirm migration
+`0031_project_role_grants` is current and that no unreviewed constraint changes
+exist. Upgrade takes an access-exclusive lock on
+`api_rate_control_counters`, replaces only its closed scope constraint, and
+preserves every existing counter. The dependency remains deliberately
+unattached after this migration.
+
+Downgrade also takes the table lock before preflight and refuses while any live
+or expired `authorization_read` row exists:
+
+```sql
+SELECT count(*) AS authorization_read_rows
+FROM api_rate_control_counters
+WHERE control_scope = 'authorization_read';
+```
+
+Do not delete an unexpired row merely to force rollback. Prefer forward
+recovery. If rollback is required before AUTH-10B2 attaches the dependency,
+verify the count is zero, quiesce deployments that could run the new scope,
+then downgrade. After 10B2, wait for the largest configured window to expire,
+quiesce every reader, delete only expired rows using PostgreSQL time, and retry.
+
 Generate the secret outside the repository and store it in the deployment
 secret manager:
 

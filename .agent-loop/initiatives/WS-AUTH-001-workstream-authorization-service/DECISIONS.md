@@ -726,7 +726,7 @@ AUTH-10B becomes a planning-only parent and splits into two sequential
 same-initiative children. AUTH-10B1 extends the existing durable PostgreSQL
 API-rate-control system with the closed `authorization_read` scope, dedicated
 limit/window configuration, and an unattached FastAPI dependency. It owns
-forward migration `0032_authorization_read_rate_control`; it adds or activates
+forward migration `0032_authorization_read_rate`; it adds or activates
 no authorization read route. Historical migration `0017` remains immutable,
 and existing first-access and administrative-mutation behavior is unchanged.
 

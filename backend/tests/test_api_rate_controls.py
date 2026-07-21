@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.api.deps.api_controls import (
     enforce_admin_mutation_rate_limit,
+    enforce_authorization_read_rate_limit,
     enforce_first_access_rate_limit,
     get_rate_control_service,
 )
@@ -27,7 +28,9 @@ from app.modules.api_controls.models import ApiRateControlCounter
 from app.modules.api_controls.repository import ApiRateControlRepository, ConsumedCounter
 from app.modules.api_controls.service import (
     ADMIN_MUTATION_SCOPE,
+    AUTHORIZATION_READ_SCOPE,
     FIRST_ACCESS_SCOPE,
+    RATE_SCOPES,
     RateControlDecision,
     RateControlService,
     RateControlUnavailableError,
@@ -66,6 +69,19 @@ def test_rate_control_orm_model_matches_the_migration_contract() -> None:
     assert {index.name for index in table.indexes} == {
         "ix_api_rate_control_counters_window_expires_at"
     }
+    assert RATE_SCOPES == {
+        FIRST_ACCESS_SCOPE,
+        ADMIN_MUTATION_SCOPE,
+        AUTHORIZATION_READ_SCOPE,
+    }
+    scope_constraint = next(
+        constraint
+        for constraint in table.constraints
+        if constraint.name == "ck_api_rate_control_counters_scope_token"
+    )
+    assert str(scope_constraint.sqltext) == (
+        "control_scope in ('first_access', 'admin_mutation', 'authorization_read')"
+    )
 
 
 @pytest.fixture
@@ -674,6 +690,7 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
         [
             RateControlDecision(True, 1, 60),
             RateControlDecision(False, 31, 17),
+            RateControlDecision(True, 1, 60),
         ]
     )
     app = create_app(
@@ -696,14 +713,23 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
     async def admin_mutation() -> dict[str, bool]:
         return {"allowed": True}
 
+    @app.get(
+        "/_test/authorization-read-rate",
+        dependencies=[Depends(enforce_authorization_read_rate_limit)],
+    )
+    async def authorization_read() -> dict[str, bool]:
+        return {"allowed": True}
+
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         allowed = await client.post("/_test/first-access-rate")
         denied = await client.post("/_test/admin-mutation-rate")
+        read_allowed = await client.get("/_test/authorization-read-rate")
 
     assert allowed.status_code == 200
     assert denied.status_code == 429
+    assert read_allowed.status_code == 200
     assert denied.headers["retry-after"] == "17"
     assert denied.json() == {
         "detail": "Rate limit exceeded",
@@ -718,7 +744,10 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
     assert [call["control_scope"] for call in service.calls] == [
         FIRST_ACCESS_SCOPE,
         ADMIN_MUTATION_SCOPE,
+        AUTHORIZATION_READ_SCOPE,
     ]
+    assert service.calls[2]["limit"] == 120
+    assert service.calls[2]["window_seconds"] == 60
     assert all(call["issuer"] == RATE_ISSUER for call in service.calls)
     assert all(call["subject"] == RATE_SUBJECT for call in service.calls)
 
@@ -775,6 +804,7 @@ def test_rate_dependencies_are_not_attached_to_production_routes() -> None:
     forbidden = {
         enforce_first_access_rate_limit,
         enforce_admin_mutation_rate_limit,
+        enforce_authorization_read_rate_limit,
     }
 
     def dependency_calls(dependant) -> set:
