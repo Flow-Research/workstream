@@ -34,6 +34,7 @@ P1
 backend/app/modules/authorization/models.py
 backend/app/modules/authorization/schemas.py
 backend/app/modules/authorization/repository.py
+backend/app/modules/authorization/catalogue.py
 backend/app/modules/audit/**
 backend/app/db/models.py
 backend/alembic/versions/0031_project_role_grants.py
@@ -89,7 +90,8 @@ to revoked version 2 may mutate lifecycle fields.
 
 ## Acceptance criteria
 
-- Migration `0031` creates both authorization-owned tables and no route/action.
+- Migration `0031` creates both authorization-owned tables; 10A adds no route,
+  active action, or callable behavior.
 - Composite key `(snapshot_id, actor_profile_id, project_id, requested_role)`
   is referenced by the matching grant facts.
 - Partial uniqueness permits one active actor/project/exact-role row while all
