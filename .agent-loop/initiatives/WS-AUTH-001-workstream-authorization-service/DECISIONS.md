@@ -684,3 +684,33 @@ The foundation allocates only the then-current next migration from trusted
 `main`. This decision supersedes only the future fixed-number reservation
 clauses in D29, D30, and earlier decisions; their other boundaries remain in
 force. Merged migration ownership through AUTH-09D-A `0026` is unchanged.
+## D32: Split project-role truth, reads, and mutations
+
+Status: accepted by the user on 2026-07-21 after required AUTH-10 L1 plan
+review rejected the combined runtime boundary.
+
+AUTH-10 is a planning-only parent and splits into exactly three sequential
+same-initiative children. AUTH-10A owns migration
+`0031_project_role_grants`, the immutable qualification/grant aggregates, and
+the typed/PostgreSQL three-role evidence clean cut; it activates no action or
+route. AUTH-10B owns exactly the candidate, grant-list, and grant-detail read
+actions and privacy-safe pagination. AUTH-10C owns exactly issue and revoke,
+multi-principal PREP ordering, idempotency, audit, invalidation, and mutation
+concurrency. Each child requires a separate signed start and stop.
+
+The project roles are independent `submitter`, `reviewer`, and `adjudicator`
+rows. `both`, replacement, automated issuance, conversion, and one-active-role-
+total semantics are removed from current contracts. Discovery and issuance are
+allowed only for draft, active, and paused projects. Historical grant reads and
+revocation remain possible for every existing project state so evidence cannot
+be hidden and authority cannot become irremovable.
+
+The current trusted-main Alembic head is `0030`; this decision assigns `0031`
+only to AUTH-10A and supersedes every older inactive AUTH-10 migration-number
+reservation in D21, D27, D28, D29, and D30. Historical migration ownership is
+unchanged.
+
+`GET /api/v1/actors/me/authorization-context` moves to AUTH-11. AUTH-10B does
+not expose a context that advertises still-inactive project/task/review actions;
+AUTH-11 must enumerate that surface with its exact ActionId, target, guards,
+and disclosure contract before implementation.

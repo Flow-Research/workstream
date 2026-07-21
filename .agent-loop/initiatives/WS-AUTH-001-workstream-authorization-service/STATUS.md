@@ -113,7 +113,8 @@ or consumer feature action is active.
 
 `WS-AUTH-001-10`. Signed start event
 `github-actions:29815937933:start` activated the exact recorded successor on
-2026-07-21. D27 contract repair and required L1 plan review are in progress.
+2026-07-21. Required L1 plan review rejected the combined runtime scope; the
+user approved the planning-only 10A/10B/10C split, now under exact review.
 
 ## Active implementation chunk
 
@@ -157,7 +158,10 @@ contract passes required L1 plan review.
 | `WS-AUTH-001-ART-CUSTODY` | Merged | `codex/ws-auth-001-art-custody` | #158 | Merged as `be2a79a2` on 2026-07-20; all 25 ART actions remain planned. |
 | `WS-AUTH-001-REV-CUSTODY` | Merged | `codex/ws-auth-001-rev-custody` | #160 | Merged as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned. |
 | `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
-| `WS-AUTH-001-10` | Active planning | `codex/ws-auth-001-10-project-role-grants` | - | Signed start passed; exact D27 inventory is under required L1 review before runtime edits. |
+| `WS-AUTH-001-10` | Active planning split | `codex/ws-auth-001-10-project-role-grants` | - | Planning-only parent; user approved 10A/10B/10C after combined L1 review failed. |
+| `WS-AUTH-001-10A` | Proposed | - | - | Migration `0031`, data/evidence foundation, no active surface. |
+| `WS-AUTH-001-10B` | Proposed | - | - | Candidate/list/detail read surfaces after 10A. |
+| `WS-AUTH-001-10C` | Proposed | - | - | PREP-bound issue/revoke mutations after 10B. |
 | `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |

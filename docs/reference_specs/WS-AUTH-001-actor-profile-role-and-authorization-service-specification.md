@@ -77,7 +77,8 @@ The coding agent is not permitted to reinterpret the following decisions.
 8. Every active human ActorProfile belongs to the Contributor domain by default.
 9. Contributor-domain membership is not task, submission, or review authority.
 10. Project work requires an active `ProjectRoleGrant` for that exact project.
-11. Project contributor roles are `submitter`, `reviewer`, or `both`.
+11. Project contributor roles are independent `submitter`, `reviewer`, or
+    `adjudicator` grants; there is no combined role.
 12. Project roles are explicitly granted by an authorized Project Manager in v0.1.
 13. Skills and reputation may inform a ProjectRoleGrant but do not automatically create one.
 14. Administrative authority is represented by separate `AdminRoleGrant` records.
@@ -116,7 +117,7 @@ ActorProfile (one local Workstream actor)
         |       |
         |       +-- ProjectRoleGrant(project A, submitter)
         |       +-- ProjectRoleGrant(project B, reviewer)
-        |       +-- ProjectRoleGrant(project C, both)
+        |       +-- ProjectRoleGrant(project C, adjudicator)
         |
         +-- Zero or more AdminRoleGrants
                 +-- access_administrator
@@ -305,11 +306,10 @@ ProjectRoleGrant:
   id: uuid
   project_id: uuid
   contributor_id: uuid
-  role: enum [submitter, reviewer, both]
+  role: enum [submitter, reviewer, adjudicator]
   status: enum [active, revoked]
 
-  grant_method: enum [manual, automated]
-  automation_policy_ref: uuid | null
+  grant_method: literal [manual]
   qualification_snapshot_ref: uuid
 
   granted_by: actor_id
@@ -328,14 +328,15 @@ ProjectRoleGrant:
 - The grant is valid for one project only.
 - A Project Manager whose effective scope covers the project may issue or revoke it.
 - The issuing Project Manager cannot grant a ProjectRoleGrant to themselves.
-- `grant_method = manual` is the only creation path enabled in v0.1.
-- `grant_method = automated` is schema-reserved and MUST NOT be emitted by v0.1 code.
-- `automation_policy_ref` is null for a manual grant.
+- `grant_method = manual` is the only accepted creation value in v0.1.
 - `qualification_snapshot_ref` is mandatory and must match the same project and contributor.
-- At most one active ProjectRoleGrant exists for a contributor in a project.
-- Changing `submitter`, `reviewer`, or `both` requires revoking the active grant and creating a new grant in one transaction.
-- A submitter action requires `role IN (submitter, both)`.
-- A reviewer action requires `role IN (reviewer, both)`.
+- At most one active ProjectRoleGrant exists for a contributor, project, and
+  exact role. All three distinct roles may be active concurrently.
+- Revoking or regranting one role never changes another role.
+- A submitter action requires an active exact `submitter` grant.
+- A reviewer action requires an active exact `reviewer` grant.
+- An `adjudicator` grant creates no adjudication capability until WS-REV defines
+  that lifecycle and AUTH activates its exact actions.
 - AdminRoleGrant does not satisfy either requirement.
 - Revocation does not delete or invalidate historical work completed while the grant was active.
 
@@ -791,7 +792,7 @@ It may not claim tasks, create submissions, read reviewer queues, or review work
 
 ### 13.2 Submitter grant
 
-An active `ProjectRoleGrant(submitter|both)` supplies candidate permissions for the same project:
+An active exact `ProjectRoleGrant(submitter)` supplies candidate permissions for the same project:
 
 ```text
 project.read
@@ -806,7 +807,7 @@ TaskAssignment state, task ban, task availability, policy state, and other submi
 
 ### 13.3 Reviewer grant
 
-An active `ProjectRoleGrant(reviewer|both)` supplies candidate permissions for the same project:
+An active exact `ProjectRoleGrant(reviewer)` supplies candidate permissions for the same project:
 
 ```text
 project.read
@@ -821,9 +822,11 @@ review.chain.read
 
 Self-review, active-lease capacity, preferred-reviewer routing, lease state, and decision-state guards still apply.
 
-### 13.4 Both grant
+### 13.4 Adjudicator grant
 
-`both` is the union of submitter and reviewer project permissions. It does not bypass self-review or any other resource guard.
+An `adjudicator` grant is independently persisted authority evidence. It grants
+no adjudication action until the separately approved WS-REV lifecycle and exact
+AUTH activation exist.
 
 ---
 
@@ -1118,24 +1121,30 @@ The transaction MUST:
 3. require an active human target;
 4. prohibit self-grant;
 5. create the immutable qualification snapshot;
-6. revoke an existing active grant only when the request explicitly replaces it;
-7. create the new manual ProjectRoleGrant;
-8. append audit and invalidation events where replacement occurred;
-9. commit.
+6. reject an existing active grant for the same exact role;
+7. create the new manual ProjectRoleGrant without changing another role;
+8. append snapshot and grant-issued audit evidence;
+9. commit once.
 
 ---
 
 ## 21. API Contract
 
-All endpoints use the independent `/v1` API namespace. This does not change the product release from Workstream v0.1.
+Repository implementation uses the canonical `/api/v1` namespace. Any older
+`/v1` example in this imported reference is superseded by that repository
+decision.
 
 ### 21.1 Current actor
 
 ```http
-GET   /v1/actors/me
-PATCH /v1/actors/me
-GET   /v1/actors/me/authorization-context?project_id={project_id}
+GET   /api/v1/actors/me
+PATCH /api/v1/actors/me
+GET   /api/v1/actors/me/authorization-context?project_id={project_id}
 ```
+
+The authorization-context surface is assigned to AUTH-11, not AUTH-10. It
+ships only with the first complete project-read cutover and must not advertise
+inactive task or review actions.
 
 PATCH request:
 
@@ -1221,10 +1230,11 @@ Create request:
 ### 21.6 Project-role grants
 
 ```http
-POST /v1/projects/{project_id}/role-grants
-GET  /v1/projects/{project_id}/role-grants
-GET  /v1/projects/{project_id}/role-grants/{grant_id}
-POST /v1/projects/{project_id}/role-grants/{grant_id}/revoke
+GET  /api/v1/projects/{project_id}/contributor-candidates
+POST /api/v1/projects/{project_id}/role-grants
+GET  /api/v1/projects/{project_id}/role-grants
+GET  /api/v1/projects/{project_id}/role-grants/{grant_id}
+POST /api/v1/projects/{project_id}/role-grants/{grant_id}/revoke
 ```
 
 Create request:
@@ -1241,7 +1251,7 @@ Create request:
     "prior_project_work_refs": [],
     "external_expertise_refs": []
   },
-  "replace_active_grant": false
+  "role": "submitter"
 }
 ```
 
@@ -1286,7 +1296,7 @@ Errors MUST use the Workstream structured error envelope.
 | 409 | `actor_deactivated_terminal` | Transition attempted from deactivated state |
 | 409 | `last_access_administrator` | Operation would remove final Access Administrator |
 | 409 | `admin_role_grant_exists` | Identical effective grant already active |
-| 409 | `project_role_grant_exists` | Active project grant exists and replacement not requested |
+| 409 | `project_role_grant_exists` | Active exact-role project grant exists |
 | 409 | `identity_link_conflict` | Issuer subject already maps to another ActorProfile |
 | 409 | `resource_project_mismatch` | Related resources belong to different projects |
 | 409 | `idempotency_mismatch` | Idempotency key reused with different request |
@@ -1346,7 +1356,7 @@ AdminRoleGrant:
   access_administrator/operator => system scope
 
 ProjectRoleGrant:
-  role IN ('submitter', 'reviewer', 'both')
+  role IN ('submitter', 'reviewer', 'adjudicator')
   status IN ('active', 'revoked')
   manual => automation_policy_ref IS NULL
 ```
@@ -1384,7 +1394,9 @@ Two concurrent identical grant requests result in one active grant. An exact ide
 
 ### 24.3 Duplicate ProjectRoleGrant race
 
-Two concurrent project-grant requests for one contributor/project result in one active grant. Replacement requires locking the active grant selector and an explicit replacement request.
+Two concurrent same-role project-grant requests for one contributor/project
+result in one active exact-role grant. Concurrent distinct-role requests may
+each succeed and never replace one another.
 
 ### 24.4 Last Access Administrator race
 
@@ -1448,7 +1460,6 @@ All events are append-only.
 
 - `ProjectRoleQualificationSnapshotCaptured`
 - `ProjectRoleGrantIssued`
-- `ProjectRoleGrantReplaced`
 - `ProjectRoleGrantRevoked`
 
 ### Authorization
@@ -1831,7 +1842,7 @@ Exit: actor-state and service-actor tests pass.
 - qualification snapshot;
 - project grant schema/constraints;
 - Project Manager authority;
-- create/replace/revoke APIs;
+- independent create/read/revoke APIs;
 - project permission candidates.
 
 Exit: project-grant and concurrency tests pass.

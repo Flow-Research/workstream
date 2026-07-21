@@ -37,10 +37,11 @@ refusing unsafe upgrade/downgrade rather than converting evidence.
 
 The inherited contract combined schema, five active routes, candidate privacy,
 PREP extension, idempotency, audit/invalidation, concurrency, and migration
-round-trip proof without the D27 surface inventory. The repaired contract now
-freezes those boundaries for required L1 plan review; reviewers must still
-decide whether this remains one reviewable implementation chunk or requires a
-same-initiative split before runtime edits.
+round-trip proof without the D27 surface inventory. Required L1 review rejected
+that combined boundary and identified crossed-manager lock ordering, replay,
+privacy-shape, lifecycle, reference-spec, and local-versus-hosted proof gaps.
+The user approved the resulting 10A durable-truth, 10B read, and 10C mutation
+split on 2026-07-21. D32 records the exact boundaries and successor order.
 
 ## AUTH-09 delta discovery - 2026-07-16
 

@@ -1,0 +1,112 @@
+# Chunk Contract: WS-AUTH-001-10B - Project Role Grant Read And Candidate Surfaces
+
+## Parent initiative
+
+`WS-AUTH-001` — Workstream Authorization Service
+
+## Goal
+
+Expose privacy-safe contributor candidates and project-role grant history
+through three exact read actions after 10A establishes durable truth.
+
+## Why this chunk exists
+
+Read disclosure, candidate eligibility, filtering-before-count, and cursor
+binding can be reviewed independently from mutation locking.
+
+## Risk class
+
+L1 authorization, privacy, and API disclosure.
+
+## SLA
+
+P1
+
+## Allowed files
+
+```text
+backend/app/modules/actors/repository.py
+backend/app/modules/authorization/**
+backend/app/modules/projects/repository.py
+backend/app/api/router.py
+backend/tests/test_actors.py
+backend/tests/test_authorization.py
+backend/tests/test_projects.py
+backend/scripts/api_contract_e2e.py
+docs/operations_authorization_service.md
+docs/spec_authorization_service.md
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
+.agent-loop/merge-intents/WS-AUTH-001-10B.json
+.agent-loop/REVIEW_LOG.md
+```
+
+## Not allowed changes
+
+```text
+migration or durable schema changes
+issue/revoke routes or mutation behavior
+PREP extension
+task/review/project product cutover
+identity-link, contact, skills, reputation, or cross-project activity disclosure
+```
+
+## Exact surface inventory
+
+| ActionId | PermissionId | Authority | Canonical target | Surface |
+|---|---|---|---|---|
+| `project.contributor_candidate.list` | `project.role_grant.manage` | covered Project Manager only | canonical project | `GET /api/v1/projects/{project_id}/contributor-candidates` |
+| `project_role_grant.list` | `project.role_grant.read` | covered Project Manager or Audit Authority | canonical project | `GET /api/v1/projects/{project_id}/role-grants` |
+| `project_role_grant.read` | `project.role_grant.read` | covered Project Manager or Audit Authority | grant joined to canonical project | `GET /api/v1/projects/{project_id}/role-grants/{grant_id}` |
+
+All are human-only, owned by `WS-AUTH-001-10B`, active with their route, and
+use non-locking canonical project reads. System-scoped candidates cover every
+project only for the retained permission; project scope must equal the loaded
+project. Services, agents, and Space principals deny before lookup.
+
+## Acceptance criteria
+
+- Candidate SQL filters active human profile, active link, and caller exclusion
+  before total/cursor calculation and returns only ID plus nullable display name.
+- Candidate discovery allows draft, active, and paused projects and conceals
+  terminal/archived, nonexistent, and unauthorized projects equivalently.
+- Grant list/detail remain readable for every existing project state so
+  immutable history is inspectable; unauthorized/nonexistent/path-mismatch
+  cases are indistinguishable before disclosure.
+- List/detail expose bounded grant/snapshot provenance but no external identity
+  or contact metadata.
+- Existing cursor convention is reused and binds project, status, exact optional
+  role, limit, and boundary. Malformed/tampered/cross-project/cross-filter
+  cursors reveal neither count nor rows.
+- Existing read rate control is reused. Every surface has exactly one active
+  OpenAPI declaration and manifest-delta proof.
+- `/actors/me/authorization-context` remains absent and planned for AUTH-11.
+- No write, PREP, idempotency, invalidation, or migration behavior changes.
+
+## Verification commands
+
+```bash
+(cd backend && .venv/bin/python -m ruff check app/modules/actors app/modules/authorization app/modules/projects tests/test_actors.py tests/test_authorization.py tests/test_projects.py)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_projects.py -k 'project_role or contributor_candidate')
+(cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_markdown_links.py
+git diff --check
+```
+
+GitHub owns the full sharded suite, aggregate and subsystem coverage, API E2E,
+and Agent Gates before PR readiness.
+
+## Required reviewers
+
+Senior engineering, QA/test, security/auth, product/ops, architecture, CI
+integrity, docs, reuse/dedup, and test delta.
+
+## Human review focus
+
+Review scope coverage, filter-before-count, lifecycle concealment, minimal
+candidate fields, cursor binding, and absence of mutation behavior.
+
+## Stop conditions
+
+Stop on client-supplied project truth, post-query authorization, count leakage,
+new persistence, or any contributor capability implied by a read.

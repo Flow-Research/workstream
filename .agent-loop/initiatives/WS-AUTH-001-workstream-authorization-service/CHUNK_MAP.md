@@ -40,7 +40,10 @@ stopped.
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; all 25 ART actions remain planned |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
-| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active contract repair; runtime blocked on required L1 plan review |
+| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active planning-only parent; split approved after failed L1 combined review |
+| `WS-AUTH-001-10A` | Project Role Grant Data And Evidence Foundation | L1 | Proposed successor; migration `0031`, no active surface |
+| `WS-AUTH-001-10B` | Project Role Grant Read And Candidate Surfaces | L1 | Proposed after 10A |
+| `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B |
 | `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
@@ -103,6 +106,9 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-ART-CUSTODY and WS-AUTH-001-REV-CUSTODY
 -> WS-AUTH-001-PREP
 -> WS-AUTH-001-10
+-> WS-AUTH-001-10A
+-> WS-AUTH-001-10B
+-> WS-AUTH-001-10C
 -> WS-AUTH-001-11
 -> WS-AUTH-001-12
 -> WS-AUTH-001-13
