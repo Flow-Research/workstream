@@ -343,7 +343,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0031_project_role_grants",
+                    "0032_authorization_read_rate",
                     True,
                     True,
                 )
@@ -370,7 +370,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0031_project_role_grants",
+                    "0032_authorization_read_rate",
                     True,
                     True,
                 )
