@@ -14,27 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29809839790/job/88568185683"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29813071406/job/88578138901"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29808967743/job/88567985220"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29813071442/job/88581650962"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ART-001-02C2",
-    "chunk_title": "Verification Publication And Fencing",
-    "initiative_id": "WS-ART-001",
-    "next_chunk_id": "WS-ART-001-02C3",
-    "next_chunk_title": "Recovery Attempt And Idempotency Chain",
+    "chunk_id": "WS-ENG-003-01",
+    "chunk_title": "Exact Loop Memory Recovery",
+    "initiative_id": "WS-ENG-003",
+    "next_chunk_id": null,
+    "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ART-001-02C3",
-    "next_chunk_title": "Recovery Attempt And Idempotency Chain",
+    "next_chunk_id": null,
+    "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -48,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
-    "head_ref": "codex/ws-art-001-02c2-verification-publication-fencing",
-    "head_sha": "1bdb3d7bdc25423b115a80b16fe524dc0a731fe2",
-    "intent_blob_sha": "33033a0ea403ab4887a2410cddfd9a5c1d6f4808",
-    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02C2.json",
-    "main_sha": "bc5e6a42cc84bff3ec80978970dc0018fe060b35",
-    "merged_at": "2026-07-21T07:17:20Z",
+    "first_parent_sha": "6445ce6276a85c4ddef29d0f5e93cdbffe5d45bc",
+    "head_ref": "codex/ws-eng-003-01-loop-recovery",
+    "head_sha": "cf9420e42897a2a09c5001c95485e9aaacad9696",
+    "intent_blob_sha": "444221641ec91b289bbcf9fff9e8e3df7be1cef1",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-003-01.json",
+    "main_sha": "5a8a924d9b3b347d4cc74b4682865518539c837e",
+    "merged_at": "2026-07-21T08:25:47Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 159,
-    "pr_title": "WS-ART-001-02C2: verification publication and fencing",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/159"
+    "pr_number": 167,
+    "pr_title": "WS-ENG-003-01: Recover loop memory after start cutover",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/167"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T07:17:20Z"
+  "updated_at": "2026-07-21T08:25:47Z"
 }

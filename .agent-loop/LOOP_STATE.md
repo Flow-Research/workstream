@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#159](https://github.com/Flow-Research/workstream/pull/159) - WS-ART-001-02C2: verification publication and fencing
-- Merge commit: `bc5e6a42cc84bff3ec80978970dc0018fe060b35`
-- Final PR head: `1bdb3d7bdc25423b115a80b16fe524dc0a731fe2`
-- Merged at: `2026-07-21T07:17:20Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ART-001-02C2.json` at blob `33033a0ea403ab4887a2410cddfd9a5c1d6f4808`
-- Completed chunk: `WS-ART-001-02C2` - Verification Publication And Fencing
+- Last merged PR: [#167](https://github.com/Flow-Research/workstream/pull/167) - WS-ENG-003-01: Recover loop memory after start cutover
+- Merge commit: `5a8a924d9b3b347d4cc74b4682865518539c837e`
+- Final PR head: `cf9420e42897a2a09c5001c95485e9aaacad9696`
+- Merged at: `2026-07-21T08:25:47Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-003-01.json` at blob `444221641ec91b289bbcf9fff9e8e3df7be1cef1`
+- Completed chunk: `WS-ENG-003-01` - Exact Loop Memory Recovery
 - Active planning chunks: none
 - Active implementation chunks: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-ART-001-02C3` - Recovery Attempt And Idempotency Chain; requires a separate explicit start.
+- Next chunk: none recorded.
 - Required check evidence: attention required
   - `agent-gates`: `success`
   - `test`: `success`
