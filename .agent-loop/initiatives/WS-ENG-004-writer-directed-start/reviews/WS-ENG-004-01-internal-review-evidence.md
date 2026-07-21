@@ -1,13 +1,15 @@
 # WS-ENG-004-01 Internal Review Evidence
 
-Reviewed code SHA: `76f359adeffc058f3bf864d86fbd2867194417c0`
+Reviewed code SHA: `710b97d0c6220aafc0007a2282457f6d3e1e55e7`
 
 Reviewed against trusted main: `70f9c7bcdb63680e545f661a956929379df138e4`
 
-Reviewed at: `2026-07-21T13:07:13Z`
+Reviewed at: `2026-07-21T13:22:50Z`
 
 Reviewer run IDs: `writer_start_senior_arch_docs`,
 `writer_start_qa_ci_tests`, `writer_start_security_ops_reuse`
+
+CI-repair reviewer run ID: `writer_start_ci_security_ops_reuse`
 
 ## Scope
 
@@ -18,10 +20,11 @@ exact-tree checking, cancellation preservation, and exact one-target bootstrap.
 ## Deterministic evidence
 
 - `ruff check scripts/update_post_merge_memory.py scripts/check_loop_memory_state.py scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py` — pass.
-- `PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py` — 105 passed.
+- GitHub-equivalent checker coverage command — 206 passed; 90.18 percent
+  branch coverage; unchanged 90 percent floor passed.
 - `python3 scripts/test_agent_gates.py` — 88 passed.
 - `python3 scripts/check_stale_workstream_wording.py` — pass.
-- `python3 scripts/check_markdown_links.py` — pass for 17 changed Markdown files at the evidence-bearing reviewed SHA.
+- `python3 scripts/check_markdown_links.py` — pass for 18 changed Markdown files at the CI-repair reviewed SHA.
 - `git diff --check` — pass.
 
 ## Reviewer results at the reviewed code SHA
@@ -30,7 +33,7 @@ Reviewer runs: plan=`writer_start_plan_review`; senior/architecture/docs=`writer
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---|---|---|
-| Senior engineering | PASS WITH LOW RISKS | None | Completed-work replay and worktree/symlink trust findings repaired. |
+| Senior engineering | PASS | None | CI repair remained test/evidence-only and the prior runtime findings remain repaired. |
 | QA/test | PASS | None | Added hostile selection, exact evidence, lifecycle, cancellation, and recovery proofs. |
 | Security/auth | PASS | None | Trusted Git supplies phase; current write permission is signed; cancel/recovery remain closed. |
 | Product/ops | PASS | None | Exact-SHA re-review confirmed that the committed evidence and trust bundle resolve the local-only evidence finding. |
@@ -57,3 +60,7 @@ The evidence-publication finding was addressed by committing this file and the
 PR trust bundle, then re-reviewing their exact immutable SHA. External GitHub
 checks, CodeRabbit, and explicit human approval of the specific PR remain before
 merge.
+
+The later CI repair was reviewed at exact SHA `710b97d0c6220aafc0007a2282457f6d3e1e55e7`.
+All nine tracks passed with no blocker; the repair adds meaningful fail-closed
+branch tests and does not change runtime authority or weaken the coverage gate.

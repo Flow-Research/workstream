@@ -28,3 +28,9 @@ Explicit approval is still required before PR #169 may merge.
 Fresh GitHub checks and CodeRabbit must evaluate the repaired PR head. The PR
 must remain the direct next merge into `main` for its exact one-target bootstrap
 certificate to remain valid.
+
+## Internal repair review
+
+Exact SHA `710b97d0c6220aafc0007a2282457f6d3e1e55e7` passed senior engineering,
+QA/test, security/auth, product/ops, architecture, CI integrity, docs,
+reuse/dedup, and test-delta review with no blocker.
