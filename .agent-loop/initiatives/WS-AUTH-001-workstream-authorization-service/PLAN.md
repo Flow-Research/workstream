@@ -191,12 +191,14 @@ proving the same issuer role metadata alone no longer authorizes.
 11. Transfer all current ART/REV owner labels to exact AUTH custodians without
     changing availability, then add the prepared mutation authorization
     protocol.
-12. Close planning parent AUTH-10, then deliver project-role authority in three
-    separately started children: 10A establishes migration `0031`, immutable
+12. Close planning parent AUTH-10, then deliver project-role authority through
+    separately started children. 10A establishes migration `0031`, immutable
     snapshots/grants, the typed/PostgreSQL three-role clean cut, and all five
-    planned action rows with exact 10B/10C owners but no active surface; 10B
-    activates candidate/list/detail reads; 10C activates PREP-bound
-    issue/revoke mutations and concurrency proof.
+    planned action rows with exact 10B/10C custody but no active surface. The
+    planning-only 10B parent splits into 10B1 migration `0032` and a dedicated
+    durable authorization-read rate-control scope, followed by 10B2 activation
+    of candidate/list/detail reads with audited concealment and signed cursors.
+    10C activates PREP-bound issue/revoke mutations and concurrency proof.
 13. Cut project identity, guide, source, and visibility queries over to local
    permissions.
 14. Cut project policy mutations, approvals, activation, and setup operations

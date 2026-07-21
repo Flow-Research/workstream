@@ -716,3 +716,30 @@ unchanged.
 not expose a context that advertises still-inactive project/task/review actions;
 AUTH-11 must enumerate that surface with its exact ActionId, target, guards,
 and disclosure contract before implementation.
+
+## D33: Split AUTH-10B rate control from privacy-safe disclosure
+
+Status: accepted by the user on 2026-07-21 after required AUTH-10B L1 plan
+review rejected the inherited read-control and concealment boundary.
+
+AUTH-10B becomes a planning-only parent and splits into two sequential
+same-initiative children. AUTH-10B1 extends the existing durable PostgreSQL
+API-rate-control system with the closed `authorization_read` scope, dedicated
+limit/window configuration, and an unattached FastAPI dependency. It owns
+forward migration `0032_authorization_read_rate_control`; it adds or activates
+no authorization read route. Historical migration `0017` remains immutable,
+and existing first-access and administrative-mutation behavior is unchanged.
+
+AUTH-10B2 then activates exactly the candidate, project-role-grant list, and
+project-role-grant detail actions and attaches the shared authorization-read
+control exactly once to each route. It owns the distinct required pagination
+cursor secret and signed keyset cursor. It also adds action-aware centralized
+public concealment for these three actions while preserving the existing
+rollback, denial-evidence restaging, and commit path. Other actions retain
+their existing public error mapping.
+
+Unauthorized or nonexistent projects, terminal or archived candidate projects,
+and missing or cross-project grants have one identical public response. No
+route catches and discards `AuthorizationDenied`, no response exposes a total,
+and no candidate or grant row is queried before canonical resolution and
+authorization succeed. AUTH-10C follows only after 10B2.
