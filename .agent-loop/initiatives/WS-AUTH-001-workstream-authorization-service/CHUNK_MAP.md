@@ -42,8 +42,10 @@ stopped.
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
 | `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active planning-only parent; split approved after failed L1 combined review |
 | `WS-AUTH-001-10A` | Project Role Grant Data And Evidence Foundation | L1 | Proposed successor; migration `0031`, no active surface |
-| `WS-AUTH-001-10B` | Project Role Grant Read And Candidate Surfaces | L1 | Proposed after 10A |
-| `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B |
+| `WS-AUTH-001-10B` | Project Role Grant Read Planning Parent | L1 | Active start split before runtime implementation |
+| `WS-AUTH-001-10B1` | Durable Authorization Read Rate Control | L1 | Proposed successor after 10B planning merge/memory |
+| `WS-AUTH-001-10B2` | Privacy-Safe Project Role Grant Reads | L1 | Proposed after 10B1 |
+| `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B2 |
 | `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
@@ -108,6 +110,8 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-10
 -> WS-AUTH-001-10A
 -> WS-AUTH-001-10B
+-> WS-AUTH-001-10B1
+-> WS-AUTH-001-10B2
 -> WS-AUTH-001-10C
 -> WS-AUTH-001-11
 -> WS-AUTH-001-12

@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-10B",
+  "chunk_title": "Project Role Grant Read Planning Parent",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-10B1",
+  "next_chunk_title": "Durable Authorization Read Rate Control",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}
