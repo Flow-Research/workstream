@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-003-01.json` at blob `444221641ec91b289bbcf9fff9e8e3df7be1cef1`
 - Completed chunk: `WS-ENG-003-01` - Exact Loop Memory Recovery
 - Active planning chunks: none
-- Active implementation chunks: none
+- Active implementation chunks: `WS-AUTH-001-10`
+- Latest authority event: `start` for `WS-AUTH-001-10`
+- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: none recorded.
 - Required check evidence: attention required

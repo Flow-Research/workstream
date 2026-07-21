@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-AUTH-001-10",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-AUTH-001-PREP",
+      "chunk_title": "Prepared Mutation Authorization Protocol",
+      "initiative_id": "WS-AUTH-001",
+      "next_chunk_id": "WS-AUTH-001-10",
+      "next_chunk_title": "Project Qualification And Contributor Role Grants",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-AUTH-001-10",
+      "next_chunk_title": "Project Qualification And Contributor Role Grants",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "58d0514aa5f6751a310d750f8dab8a946ca08fa5",
+      "head_ref": "codex/ws-auth-001-prep",
+      "head_sha": "917e9205f6098038316f3eaedc9988a5602074b7",
+      "intent_blob_sha": "03a41d4790104e74b4faa39443748689862a56ad",
+      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-PREP.json",
+      "main_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
+      "merged_at": "2026-07-21T06:27:01Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 162,
+      "pr_title": "WS-AUTH-001-PREP: add prepared mutation authorization protocol",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/162"
+    }
+  },
   "checks": {
     "all_required_passed": false,
     "required": {
@@ -31,6 +65,23 @@
     "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "schema_version": 1,
+      "type": "github_workflow_dispatch"
+    },
+    "chunk_id": "WS-AUTH-001-10",
+    "created_at": "2026-07-21T08:51:58Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:29815937933:start",
+    "initiative_id": "WS-AUTH-001",
+    "main_sha": "5a8a924d9b3b347d4cc74b4682865518539c837e",
+    "prior_state_tip": "69c0af209382b273a8f3c841b790a89208fee76c",
+    "reason": "User explicitly instructed the orchestrator to start the recorded AUTH successor.",
+    "run_id": 29815937933,
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": null,
@@ -61,5 +112,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/167"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T08:25:47Z"
+  "updated_at": "2026-07-21T08:51:58Z"
 }

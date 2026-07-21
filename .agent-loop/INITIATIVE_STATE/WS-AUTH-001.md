@@ -4,8 +4,8 @@
 
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-PREP` - Prepared Mutation Authorization Protocol
-- Gate: `stopped_after_merge`
-- Active implementation chunk: `none`
+- Gate: `active`
+- Active implementation chunk: `WS-AUTH-001-10`
 - Next chunk: `WS-AUTH-001-10`
 - Separate explicit start required: `true`
 - Source PR: [#162](https://github.com/Flow-Research/workstream/pull/162)
