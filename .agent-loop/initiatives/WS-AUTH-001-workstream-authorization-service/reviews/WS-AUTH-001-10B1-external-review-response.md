@@ -35,3 +35,16 @@ downgrade-to-`0031` expectation remains unchanged.
 
 CodeRabbit reported no comments on the initial run; its status was pass with a
 rate-limit note.
+
+## CodeRabbit final review
+
+CodeRabbit asked for explicit PostgreSQL-version validation because the
+migration intentionally compares PostgreSQL-rendered `pg_get_expr` text. The
+operations runbook now requires PostgreSQL major version 16, matching CI, and
+provides an executable `server_version_num` preflight. Operators must stop and
+use a reviewed forward migration change for another major version; they must
+not bypass the fail-closed drift check.
+
+Its generated docstring warning reported 33.33 percent, but GitHub preflight's
+repository-owned Docstring Coverage gate passed on the exact PR head. No
+unrelated docstrings were added to satisfy a contradictory advisory metric.

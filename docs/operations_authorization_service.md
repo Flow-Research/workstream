@@ -320,7 +320,18 @@ Exhaustion returns 429 with `Retry-After`.
 
 Before upgrading to `0032_authorization_read_rate`, confirm migration
 `0031_project_role_grants` is current and that no unreviewed constraint changes
-exist. Inspect the exact database-owned expression before either direction:
+exist. This migration requires PostgreSQL major version 16, matching the
+CI-pinned database used to freeze the exact `pg_get_expr` rendering. Confirm
+the target before either direction:
+
+```sql
+SELECT current_setting('server_version_num')::integer / 10000
+  AS postgres_major_version;
+```
+
+Stop if the result is not `16`; validate a different major version through a
+reviewed forward migration change rather than bypassing the drift check.
+Inspect the exact database-owned expression before either direction:
 
 ```sql
 SELECT pg_get_expr(conbin, conrelid) AS scope_constraint
