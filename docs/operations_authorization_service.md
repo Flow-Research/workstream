@@ -747,6 +747,8 @@ Before downgrading from `0031`, both new tables must be empty and this count
 must be zero:
 
 ```sql
+select count(*) from project_role_grants;
+select count(*) from project_role_qualification_snapshots;
 select count(*) from audit_events where event_domain='authority' and (
   before_facts->>'role'='adjudicator' or after_facts->>'role'='adjudicator' or
   action_id in ('project.contributor_candidate.list','project_role_grant.list',

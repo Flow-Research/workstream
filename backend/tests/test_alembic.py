@@ -141,7 +141,7 @@ def test_project_role_migration_constraints_and_immutable_history(
                 "duplicate_role": "23505",
                 "snapshot_update": "55000",
                 "snapshot_delete": "55000",
-                "snapshot_truncate": "0A000",
+                "snapshot_truncate": "55000",
                 "issuance_update": "23514",
                 "grant_delete": "55000",
                 "grant_truncate": "55000",
@@ -210,6 +210,7 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
                 event_id, constraints = asyncio.run(
                     _install_legacy_project_role_blocker(isolated_database_env, patch)
                 )
+                before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
                 with pytest.raises(
                     RuntimeError,
                     match="cannot safely upgrade replacement-era project-role evidence",
@@ -221,25 +222,81 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
                     False,
                     1,
                 )
+                assert (
+                    asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                    == before_event
+                )
                 asyncio.run(
                     _remove_legacy_project_role_blocker(
                         isolated_database_env, event_id, constraints
                     )
                 )
 
-            record_id = asyncio.run(_insert_project_role_idempotency_blocker(isolated_database_env))
+            for operation in ("project_role_grant.issue", "project_role_grant.revoke"):
+                record_id = asyncio.run(
+                    _insert_project_role_idempotency_blocker(isolated_database_env, operation)
+                )
+                before_record = asyncio.run(
+                    _project_role_idempotency_row(isolated_database_env, record_id)
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot safely upgrade replacement-era project-role evidence",
+                ):
+                    command.upgrade(config, "head")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
+                    "0030_artifact_verification",
+                    False,
+                    False,
+                )
+                assert (
+                    asyncio.run(_project_role_idempotency_row(isolated_database_env, record_id))
+                    == before_record
+                )
+                asyncio.run(
+                    _remove_project_role_idempotency_blocker(isolated_database_env, record_id)
+                )
+
+            event_id, constraints = asyncio.run(
+                _install_legacy_project_role_blocker(
+                    isolated_database_env, {"after_facts": {"role": "both"}}
+                )
+            )
+            record_id = asyncio.run(
+                _insert_project_role_idempotency_blocker(
+                    isolated_database_env, "project_role_grant.revoke"
+                )
+            )
+            before_record = asyncio.run(
+                _project_role_idempotency_row(isolated_database_env, record_id)
+            )
             with pytest.raises(
                 RuntimeError,
                 match="cannot safely upgrade replacement-era project-role evidence",
             ):
                 command.upgrade(config, "head")
-            assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                "0030_artifact_verification",
-                False,
-                False,
+            assert (
+                asyncio.run(_project_role_idempotency_row(isolated_database_env, record_id))
+                == before_record
             )
             asyncio.run(_remove_project_role_idempotency_blocker(isolated_database_env, record_id))
+            asyncio.run(
+                _remove_legacy_project_role_blocker(isolated_database_env, event_id, constraints)
+            )
+            unrelated_event_id = asyncio.run(
+                _insert_authorization_action_event(isolated_database_env)
+            )
+            unrelated_before = asyncio.run(
+                _project_role_audit_row(isolated_database_env, unrelated_event_id)
+            )
             command.upgrade(config, "head")
+            assert (
+                asyncio.run(_project_role_audit_row(isolated_database_env, unrelated_event_id))
+                == unrelated_before
+            )
+            asyncio.run(
+                _remove_authorization_action_events(isolated_database_env, [unrelated_event_id])
+            )
         finally:
             command.downgrade(config, "base")
 
@@ -280,6 +337,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 event_id, constraints = asyncio.run(
                     _install_legacy_project_role_blocker(isolated_database_env, patch)
                 )
+                before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
                 with pytest.raises(
                     RuntimeError, match="cannot downgrade project-role grant evidence"
                 ):
@@ -289,20 +347,38 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                     True,
                     True,
                 )
+                assert (
+                    asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                    == before_event
+                )
                 asyncio.run(
                     _remove_legacy_project_role_blocker(
                         isolated_database_env, event_id, constraints
                     )
                 )
-            table_ids = asyncio.run(_install_project_role_table_blockers(isolated_database_env))
-            with pytest.raises(RuntimeError, match="cannot downgrade project-role grant evidence"):
-                command.downgrade(config, "0030_artifact_verification")
-            assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                "0031_project_role_grants",
-                True,
-                True,
-            )
-            asyncio.run(_remove_project_role_table_blockers(isolated_database_env, table_ids))
+            for include_grant in (False, True):
+                table_ids = asyncio.run(
+                    _install_project_role_table_blockers(
+                        isolated_database_env, include_grant=include_grant
+                    )
+                )
+                before_tables = asyncio.run(
+                    _project_role_table_rows(isolated_database_env, table_ids)
+                )
+                with pytest.raises(
+                    RuntimeError, match="cannot downgrade project-role grant evidence"
+                ):
+                    command.downgrade(config, "0030_artifact_verification")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
+                    "0031_project_role_grants",
+                    True,
+                    True,
+                )
+                assert (
+                    asyncio.run(_project_role_table_rows(isolated_database_env, table_ids))
+                    == before_tables
+                )
+                asyncio.run(_remove_project_role_table_blockers(isolated_database_env, table_ids))
             command.downgrade(config, "0030_artifact_verification")
         finally:
             command.downgrade(config, "base")
@@ -7561,6 +7637,11 @@ async def _exercise_project_role_migration(database_url: str) -> dict[str, objec
                     },
                 )
                 results["snapshot_constraint_rejections"] = snapshot_rejections
+                results["snapshot_truncate"] = await rejected(
+                    connection,
+                    "truncate project_role_qualification_snapshots, project_role_grants",
+                    {},
+                )
                 raw_grant_insert = (
                     "insert into project_role_grants "
                     "(id,project_id,actor_profile_id,role,status,version,grant_method,"
@@ -7585,7 +7666,7 @@ async def _exercise_project_role_migration(database_url: str) -> dict[str, objec
                     "leading_space_reason": {"reason": " Qualified"},
                     "control_reason": {"reason": "bad\u200bcontrol"},
                     "oversize_reason": {"reason": "é" * 251},
-                    "snapshot_mismatch": {"snapshot": str(uuid4())},
+                    "snapshot_mismatch": {"snapshot": snapshot_ids[1]},
                     "invalid_active_version": {"version": 2},
                 }
                 results["grant_constraint_rejections"] = {
@@ -7645,9 +7726,6 @@ async def _exercise_project_role_migration(database_url: str) -> dict[str, objec
                     connection,
                     "delete from project_role_qualification_snapshots where id=:id",
                     {"id": snapshot_ids[0]},
-                )
-                results["snapshot_truncate"] = await rejected(
-                    connection, "truncate project_role_qualification_snapshots", {}
                 )
                 results["issuance_update"] = await rejected(
                     connection,
@@ -7797,7 +7875,26 @@ async def _project_role_refusal_state(database_url: str) -> tuple[str, bool, boo
         await engine.dispose()
 
 
-async def _insert_project_role_idempotency_blocker(database_url: str) -> str:
+async def _project_role_audit_row(database_url: str, event_id: str) -> tuple:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,event_type,reason,action_id,denial_code,before_facts,"
+                            "after_facts from audit_events where id=:id"
+                        ),
+                        {"id": event_id},
+                    )
+                ).one()
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _insert_project_role_idempotency_blocker(database_url: str, operation: str) -> str:
     record_id = str(uuid4())
     engine = create_async_engine(database_url)
     try:
@@ -7810,15 +7907,35 @@ async def _insert_project_role_idempotency_blocker(database_url: str) -> str:
                     "insert into authority_idempotency_records "
                     "(id,idempotency_key,actor_ref_kind,actor_ref,operation,request_digest,status) "
                     "values (:id,:key,'system_principal','workstream:system:bootstrap',"
-                    "'project_role_grant.issue',:digest,'pending')"
+                    ":operation,:digest,'pending')"
                 ),
                 {
                     "id": record_id,
                     "key": str(uuid4()),
+                    "operation": operation,
                     "digest": "sha256:" + "0" * 64,
                 },
             )
         return record_id
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_idempotency_row(database_url: str, record_id: str) -> tuple:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,idempotency_key,actor_ref_kind,actor_ref,operation,"
+                            "request_digest,status from authority_idempotency_records where id=:id"
+                        ),
+                        {"id": record_id},
+                    )
+                ).one()
+            )
     finally:
         await engine.dispose()
 
@@ -7862,7 +7979,9 @@ async def _assert_project_role_denial_sql(database_url: str) -> None:
         await engine.dispose()
 
 
-async def _install_project_role_table_blockers(database_url: str) -> dict[str, str]:
+async def _install_project_role_table_blockers(
+    database_url: str, *, include_grant: bool
+) -> dict[str, str]:
     ids = {
         "actor": actor_id_from_external_identity("https://identity.test", "auth10a-blocker"),
         "project": str(uuid4()),
@@ -7922,16 +8041,53 @@ async def _install_project_role_table_blockers(database_url: str) -> dict[str, s
                 ),
                 ids | {"available": availability, "unavailable": unavailable},
             )
-            await connection.execute(
-                text(
-                    "insert into project_role_grants "
-                    "(id,project_id,actor_profile_id,role,qualification_snapshot_id,"
-                    "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason) "
-                    "values (:grant,:project,:actor,'submitter',:snapshot,:actor,:admin,'Qualified')"
-                ),
-                ids,
-            )
+            if include_grant:
+                await connection.execute(
+                    text(
+                        "insert into project_role_grants "
+                        "(id,project_id,actor_profile_id,role,qualification_snapshot_id,"
+                        "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason) "
+                        "values (:grant,:project,:actor,'submitter',:snapshot,:actor,:admin,'Qualified')"
+                    ),
+                    ids,
+                )
         return ids
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_table_rows(
+    database_url: str, ids: dict[str, str]
+) -> tuple[tuple | None, tuple | None]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            snapshot = (
+                await connection.execute(
+                    text(
+                        "select id,project_id,actor_profile_id,requested_role,skills_snapshot,"
+                        "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
+                        "captured_by_actor_profile_id,captured_by_admin_role_grant_id,captured_at "
+                        "from project_role_qualification_snapshots where id=:snapshot"
+                    ),
+                    ids,
+                )
+            ).one_or_none()
+            grant = (
+                await connection.execute(
+                    text(
+                        "select id,project_id,actor_profile_id,role,status,version,grant_method,"
+                        "qualification_snapshot_id,granted_by_actor_profile_id,"
+                        "granted_by_admin_role_grant_id,grant_reason,granted_at from "
+                        "project_role_grants where id=:grant"
+                    ),
+                    ids,
+                )
+            ).one_or_none()
+            return (
+                tuple(snapshot) if snapshot is not None else None,
+                tuple(grant) if grant is not None else None,
+            )
     finally:
         await engine.dispose()
 
