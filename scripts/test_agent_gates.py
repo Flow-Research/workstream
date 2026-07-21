@@ -3382,17 +3382,31 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "trap 'rm -f \"${private_key}\"' EXIT" in workflow
     assert "prepare-state" in workflow
     assert "prepare-output" in workflow
-    assert "validate-tree" in workflow
-    assert "read-tree --empty" in workflow
-    assert 'commit_args=(commit-tree "${generated_tree}")' in workflow
-    assert 'commit_args+=(-p "${parent_sha}")' in workflow
+    assert "update_post_merge_memory.py publish" in workflow
+    assert "validate-tree" not in workflow
+    assert "read-tree --empty" not in workflow
+    assert "commit-tree" not in workflow
     assert "rev-parse --verify HEAD" in workflow
-    assert '"${generated_commit}:refs/heads/${STATE_BRANCH}"' in workflow
+    assert "git push" not in workflow
     assert "--expected-main-sha" in workflow
     assert "HEAD:refs/heads/${STATE_BRANCH}" not in workflow
     assert "HEAD:refs/heads/main" not in workflow
     assert "gh pr create" not in workflow
     assert "plan-commits" in workflow
+    update_command = workflow.split(
+        "python3 scripts/update_post_merge_memory.py update", 1
+    )[1].split("          done", 1)[0]
+    update_lines = [line.strip() for line in update_command.splitlines()]
+    repository_root_lines = [
+        line for line in update_lines if line.startswith("--repository-root")
+    ]
+    cutover_lines = [
+        line for line in update_lines if line.startswith("--cutover-chunk-id")
+    ]
+    assert repository_root_lines == ["--repository-root . \\"]
+    assert cutover_lines == ["--cutover-chunk-id WS-ENG-001-04B"]
+    assert all("$" not in line for line in repository_root_lines + cutover_lines)
+    assert workflow.count("--cutover-chunk-id") == 1
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
     assert "TARGET_SHA" in workflow
@@ -5192,10 +5206,13 @@ def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
     requirements = (ROOT / "scripts/agent-gate-requirements.txt").read_text(
         encoding="utf-8"
     )
-    assert requirements == (
-        "PyYAML==6.0.3 "
-        "--hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc\n"
-    )
+    requirement_lines = requirements.splitlines()
+    assert {line.split("==", 1)[0].lower() for line in requirement_lines} == {
+        "coverage", "iniconfig", "packaging", "pluggy", "pygments", "pytest",
+        "pytest-cov", "pyyaml",
+    }
+    assert all(" --hash=sha256:" in line for line in requirement_lines)
+    assert all(len(line.rsplit("sha256:", 1)[1]) == 64 for line in requirement_lines)
 
 
 def test_local_minio_compose_is_regression_protected() -> None:
