@@ -83,9 +83,9 @@ No tests were removed, skipped, or weakened.
 - test delta: PASS;
 - docs: PASS.
 
-External review and hosted CI are pending publication of the PR.
+PR #174 is published. External review and final hosted CI remain open gates.
 
-The first complete hosted run passed agent gates, preflight, API E2E, and
+The first hosted shard attempt passed agent gates, preflight, API E2E, and
 shards 3-4. Shards 1-2 found an over-broad lineage trigger and an incomplete
 integrity-mismatch item transition; both were repaired and their three exact
 failing tests pass locally. A full hosted rerun remains required.
