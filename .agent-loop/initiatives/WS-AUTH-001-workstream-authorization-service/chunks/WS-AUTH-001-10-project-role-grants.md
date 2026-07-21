@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposed and inactive. Before implementation review, this contract must add the
-exact ActionId/target/guard inventory required by D27. AUTH-PREP is a hard
-runtime prerequisite.
+Active contract repair after signed start event
+`github-actions:29815937933:start`. Runtime implementation remains blocked
+until the exact repaired contract passes required L1 plan review. AUTH-PREP is
+merged through PR #162 and is the hard runtime prerequisite.
 
 ## Parent initiative
 
@@ -35,6 +36,79 @@ L1
 
 P1
 
+## Trusted-main baseline and migration custody
+
+- Reviewed baseline: protected `main` at
+  `5a8a924d9b3b347d4cc74b4682865518539c837e`.
+- Current Alembic head: `0030_artifact_verification_fencing`.
+- AUTH-10 owns only the next forward migration,
+  `0031_project_role_grants`. It does not reserve a later number and does not
+  edit any historical migration.
+
+## Exact action, target, guard, surface, and revalidation inventory
+
+All five actions are human-only, owned by `WS-AUTH-001-10`, active in the same
+commit that exposes their route, and use only the retained permissions shown
+below. A service principal is rejected before grant lookup. Every route has
+exactly one OpenAPI `x-workstream-action-id` declaration.
+
+| ActionId | PermissionId | Canonical target and facts | Candidate authority | Required guards and revalidation | Exact surface |
+|---|---|---|---|---|---|
+| `project.contributor_candidate.list` | `project.role_grant.manage` | locked/read canonical `Project(id, status)`; page cursor is not authority | active `AdminRoleGrant(project_manager)` whose system scope or exact `scope_project_id` covers the loaded project | active human caller and link; re-resolve caller grant and exact project scope before querying; return only active human profiles with active links; exclude caller before page count/cursor construction | `GET /api/v1/projects/{project_id}/contributor-candidates` |
+| `project_role_grant.list` | `project.role_grant.read` | canonical `Project`; filters are status and one exact role only | covered Project Manager or covered Audit Authority permission candidate | active human caller/link; canonical project scope; authorization precedes count, cursor, and row query; response contains grant/snapshot identifiers and role history but no identity-link or contact fields | `GET /api/v1/projects/{project_id}/role-grants` |
+| `project_role_grant.read` | `project.role_grant.read` | loaded `ProjectRoleGrant` joined to its canonical project; path project must equal row project | covered Project Manager or covered Audit Authority permission candidate | active human caller/link; exact-project scope; mismatch/not-found remains concealed before disclosure; replay is not applicable to this read | `GET /api/v1/projects/{project_id}/role-grants/{grant_id}` |
+| `project_role_grant.issue` | `project.role_grant.manage` | canonical project plus locked target `ActorProfile`/exact link, exact requested role, and newly staged composite-owned qualification snapshot | active covered `AdminRoleGrant(project_manager)` only | PREP locks caller profile/link/matched manager grant first; feature then locks project, target profile/link, and active exact-role selector; target is a different active human with active link; role is one of `submitter`, `reviewer`, `adjudicator`; no active same-role row; consume recomposes all final facts before snapshot/grant/evidence flush | `POST /api/v1/projects/{project_id}/role-grants` |
+| `project_role_grant.revoke` | `project.role_grant.manage` | loaded and locked grant, its canonical project, actor, exact role, status, and snapshot reference | active covered `AdminRoleGrant(project_manager)` only | PREP locks caller authority first; feature then locks project and grant; path project must match; active grant only; caller may not revoke a grant whose contributor is caller; consume revalidates exact role/status/project and stages role-specific invalidation | `POST /api/v1/projects/{project_id}/role-grants/{grant_id}/revoke` |
+
+`project_role_grant.issue` and `.revoke` extend PREP with an exact-project
+scope and a locked `ProjectRoleGrant` candidate path. Preparation never locks a
+feature row, and feature code never chooses or supplies its authorizing grant.
+The route owns the root transaction and commits once. Reads continue through
+`AuthorizationService.require()`.
+
+## Exact qualification snapshot and grant contract
+
+`ProjectRoleQualificationSnapshot` is authorization-owned and contains:
+
+```text
+id, project_id, actor_profile_id, requested_role,
+skills_snapshot, reputation_snapshot,
+prior_project_work_refs, external_expertise_refs,
+captured_by_actor_profile_id, captured_by_admin_role_grant_id, captured_at
+```
+
+`skills_snapshot` and `reputation_snapshot` are closed privacy-bounded objects
+with `availability = available | unavailable`; unavailable records a bounded
+reason token and no inferred score. References are caller-supplied UUID/string
+evidence identifiers only after validation, are never dereferenced as
+authority, and exclude contact data, issuer subjects, raw claims, secrets, and
+free-form personal profiles. The composite key
+`(id, actor_profile_id, project_id, requested_role)` is the ownership target of
+the grant foreign key.
+
+`ProjectRoleGrant` contains one immutable issuance row with exact role,
+`status = active | revoked`, `grant_method = manual`, the composite snapshot
+reference, granting manager/profile and matched manager-grant provenance,
+database timestamps, bounded issue reason, and terminal revocation provenance.
+Only lifecycle fields may change once, from active version 1 to revoked version
+2. No update changes project, actor, role, snapshot, or issuance provenance.
+
+## Exact route and pagination disclosure contract
+
+- Candidate items expose only `actor_profile_id` and nullable `display_name`.
+  They never expose `contact_email`, issuer, subject, identity-link ID/status,
+  last-seen timestamps, skills, reputation, or activity in another project.
+- Candidate filtering for active human/profile/link and caller exclusion occurs
+  in SQL before `total` and keyset cursor calculation.
+- Grant list/detail responses expose durable grant provenance and the bounded
+  snapshot captured for that grant, but never external identity metadata or
+  contact fields.
+- Cursors are opaque, signed/canonical query digests bound to project, status,
+  role filter, page boundary, and limit. Cross-filter or cross-project reuse is
+  rejected as `invalid_request` without counts.
+- Candidate/list/detail routes use the existing read-rate control; issue and
+  revoke use the existing administrative mutation rate control.
+
 ## Allowed files
 
 ```text
@@ -48,6 +122,7 @@ backend/app/modules/audit/**
 backend/alembic/versions/<then-current-next>_*.py
 backend/tests/test_actors.py
 backend/tests/test_projects.py
+backend/tests/test_authorization.py
 backend/tests/test_auth.py
 backend/tests/test_alembic.py
 backend/scripts/api_contract_e2e.py
@@ -72,6 +147,9 @@ project/task/checker authorization cutover
 `both`, compatibility alias, replacement event/reason, `replaced_grant_id`, or
 silent conversion of combined/replacement evidence
 editing migrations `0018`, `0019`, or `0022`
+adding project-role routes without one exact active ActionId declaration
+using Audit Authority or any system role to issue or revoke contributor grants
+committing inside PREP, the authorization kernel, or a repository
 ```
 
 ## Acceptance criteria
@@ -114,6 +192,10 @@ editing migrations `0018`, `0019`, or `0022`
   role from the locked grant and replay reloads/re-authorizes before disclosure.
 - State, idempotency result, audit event, and invalidation event commit in one
   transaction.
+- Issuance stages exactly two success events in the same transaction:
+  `ProjectRoleQualificationSnapshotCaptured` and `ProjectRoleGrantIssued`.
+  Revocation stages `ProjectRoleGrantRevoked` and one linked
+  `AuthorityInvalidationRequested`; there is no replacement event.
 - Only manual creation is enabled; automated schema value cannot be emitted.
 - Revocation is visible on the next authorization context build.
 - Revocation evidence and invalidation identify the exact revoked role;

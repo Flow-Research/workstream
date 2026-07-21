@@ -3,6 +3,45 @@
 Discovery is read-only. No application code was changed while producing this
 artifact.
 
+## AUTH-10 delta discovery - 2026-07-21
+
+Trusted `main` is `5a8a924d`; Alembic head is
+`0030_artifact_verification_fencing`, making `0031` the only current migration
+candidate. PREP is merged and supports actor-self plus active administrative
+mutations, but deliberately rejects ProjectRoleGrant preparation because no
+project grant table, resource context, or evaluator branch exists.
+
+The permission catalogue already contains `project.role_grant.read` and
+`project.role_grant.manage`. Project Manager has both permissions and may be
+system- or exact-project-scoped; Audit Authority has read only. No matching
+ProjectRoleGrant ActionIds or owner exist. Five surfaces therefore require five
+new action declarations: candidate list, grant list, grant detail, issue, and
+revoke. The existing authorization router is mounted directly under
+`/api/v1`, and AdminRoleGrant routes provide the closest route/idempotency/audit
+convention, but AUTH-10 mutations must use PREP rather than copying their older
+single-phase `require()` flow.
+
+`ActorProfile` already contains the only candidate fields AUTH-10 may expose:
+canonical ID and nullable display name. It also contains contact and lifecycle
+metadata that candidate responses must not disclose. `ActorIdentityLink` is
+one-to-one and supplies the active-link eligibility predicate without exposing
+issuer, subject, or link metadata. `ProjectRepository.get_project(...,
+for_update=...)` is the canonical project loader; AUTH must not add a duplicate
+project repository.
+
+Typed audit/idempotency foundations already reserve project issue/revoke
+operations, but still admit superseded `both`, `ProjectRoleGrantReplaced`, and
+replacement evidence. AUTH-10 must replace those current validators in typed
+code and migration `0031`, while leaving historical migrations immutable and
+refusing unsafe upgrade/downgrade rather than converting evidence.
+
+The inherited contract combined schema, five active routes, candidate privacy,
+PREP extension, idempotency, audit/invalidation, concurrency, and migration
+round-trip proof without the D27 surface inventory. The repaired contract now
+freezes those boundaries for required L1 plan review; reviewers must still
+decide whether this remains one reviewable implementation chunk or requires a
+same-initiative split before runtime edits.
+
 ## AUTH-09 delta discovery - 2026-07-16
 
 Merged AUTH-08 provides `AuthorityControl`, immutable AdminRoleGrants, seven

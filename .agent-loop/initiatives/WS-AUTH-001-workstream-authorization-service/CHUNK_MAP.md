@@ -40,7 +40,7 @@ stopped.
 | `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; all 25 ART actions remain planned |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
-| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Proposed |
+| `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active contract repair; runtime blocked on required L1 plan review |
 | `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
