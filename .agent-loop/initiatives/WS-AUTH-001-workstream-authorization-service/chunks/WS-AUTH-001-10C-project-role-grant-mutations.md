@@ -103,11 +103,16 @@ schemas reject undeclared fields, including identity-link and contact data.
 Stable errors are HTTP 400 `invalid_request`, HTTP 403
 `self_grant_forbidden` or `self_role_revoke_forbidden`, concealed HTTP 404
 `resource_not_found`, HTTP 409 `idempotency_mismatch` or
-`project_role_grant_exists` or `project_role_grant_already_revoked`, HTTP 422
+`project_role_grant_exists`, `project_role_grant_already_revoked`, or
+`project_role_grant_replay_state_changed`, HTTP 422
 `qualification_snapshot_invalid`, and fail-closed HTTP 503
-`service_unavailable`. A same-key/same-body revoke replay reauthorizes and
-returns the prior canonical HTTP 200 revoked response; a new-key revoke of an
-already-revoked grant returns HTTP 409 `project_role_grant_already_revoked`.
+`service_unavailable`. A same-key/same-body issue replay reauthorizes and
+returns the prior canonical HTTP 201 response while the grant remains active;
+after that grant is revoked it returns HTTP 409
+`project_role_grant_replay_state_changed` without the stale response. A
+same-key/same-body revoke replay reauthorizes and returns the prior canonical
+HTTP 200 revoked response; a new-key revoke of an already-revoked grant returns
+HTTP 409 `project_role_grant_already_revoked`.
 
 ## Acceptance criteria
 
@@ -143,7 +148,10 @@ already-revoked grant returns HTTP 409 `project_role_grant_already_revoked`.
   same-key/same-body revoke replay returns the prior HTTP 200 response after
   reauthorization while a new-key second revoke returns HTTP 409
   `project_role_grant_already_revoked`; an old issue replay after revocation is
-  reauthorized and denied without stale disclosure or direct database edits.
+  reauthorized and returns HTTP 409 `project_role_grant_replay_state_changed`
+  without stale disclosure or direct database edits. Unit and PostgreSQL tests
+  assert the same-key active issue replay remains HTTP 201 and the post-revoke
+  issue replay changes to that exact closed conflict.
   Contributor-capability denial remains explicitly deferred to AUTH-11/13 where
   a real consumer action exists.
 
