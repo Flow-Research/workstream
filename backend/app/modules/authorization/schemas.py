@@ -65,7 +65,71 @@ class ProjectRole(StrEnum):
 
     SUBMITTER = "submitter"
     REVIEWER = "reviewer"
-    BOTH = "both"
+    ADJUDICATOR = "adjudicator"
+
+
+class QualificationAvailability(StrEnum):
+    """Whether one qualification source produced bounded references."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE = "unavailable"
+
+
+class QualificationUnavailableReason(StrEnum):
+    """Closed reasons why qualification references could not be captured."""
+
+    NOT_COLLECTED = "not_collected"
+    SOURCE_UNAVAILABLE = "source_unavailable"
+    NO_RECORD = "no_record"
+
+
+ReferenceToken = Annotated[
+    str,
+    Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"),
+]
+
+
+class QualificationAvailabilitySnapshot(BaseModel):
+    """Privacy-bounded availability and opaque-reference evidence."""
+
+    model_config = _MODEL_CONFIG
+
+    availability: QualificationAvailability
+    reference_ids: Annotated[list[ReferenceToken], Field(max_length=20)]
+    unavailable_reason: QualificationUnavailableReason | None
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> Self:
+        """Enforce the exact available/unavailable cross-field contract."""
+        if any("://" in reference for reference in self.reference_ids):
+            raise ValueError("invalid qualification availability snapshot")
+        if self.availability is QualificationAvailability.AVAILABLE:
+            if not self.reference_ids or self.unavailable_reason is not None:
+                raise ValueError("invalid qualification availability snapshot")
+        elif self.reference_ids or self.unavailable_reason is None:
+            raise ValueError("invalid qualification availability snapshot")
+        return self
+
+
+class ProjectRoleQualificationSnapshotInput(BaseModel):
+    """Typed immutable facts persisted for one exact project-role qualification."""
+
+    model_config = _MODEL_CONFIG
+
+    project_id: UUID
+    actor_profile_id: UUID
+    requested_role: ProjectRole
+    skills_snapshot: QualificationAvailabilitySnapshot
+    reputation_snapshot: QualificationAvailabilitySnapshot
+    prior_project_work_refs: Annotated[list[UUID], Field(max_length=20)]
+    external_expertise_refs: Annotated[list[ReferenceToken], Field(max_length=20)]
+
+    @model_validator(mode="after")
+    def reject_url_references(self) -> Self:
+        """Keep external references opaque and credential-free."""
+        if any("://" in reference for reference in self.external_expertise_refs):
+            raise ValueError("invalid qualification reference")
+        return self
 
 
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -153,13 +217,12 @@ class AdminRoleGrantRevokeRequest(CanonicalAuthorityRequest):
 
 
 class ProjectRoleGrantIssueRequest(CanonicalAuthorityRequest):
-    """Canonical request facts for issuing or replacing one project role grant."""
+    """Canonical request facts for issuing one independent project role grant."""
 
     operation: Literal[AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE]
     project_id: UUID
     target_actor_id: UUID
     role: ProjectRole
-    replaced_grant_id: UUID | None = None
     reason_digest: Digest
 
 

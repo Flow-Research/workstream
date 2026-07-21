@@ -607,11 +607,11 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 74 PermissionIds and 65 ActionIds after
-AUTH-09D-B. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+The catalogue contains exactly 74 PermissionIds and 70 ActionIds after
+AUTH-10A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
-identity-link lifecycle actions are active; the other 48 entries remain planned
+identity-link lifecycle actions are active; the other 53 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
@@ -636,8 +636,9 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals remain 74 PermissionIds, 65 ActionIds, 17 active actions, and
-48 planned actions. Four later
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 17 active actions, and
+53 planned actions after AUTH-10A registers five unavailable project-role rows.
+Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
 action, in either order. Neither addition is operational until its complete
@@ -724,10 +725,44 @@ exact-project grants and canonical project composition.
 AUTH-10 is a clean cut to independent `submitter`, `reviewer`, and
 `adjudicator` grants. Before rollout, scan current typed schemas, audit facts,
 idempotency records, and PostgreSQL validators for `both`, replacement fields,
-replacement events, and replacement reasons. Migration `0027` must stop on any
+replacement events, and replacement reasons. Migration `0031` must stop on any
 incompatible evidence; operators must remediate through a separately approved
 data decision, never an automatic conversion. A safe downgrade also refuses
 rather than deleting adjudicator or new exact-role evidence.
+
+Before upgrading to `0031`, run the following read-only preflight against the
+same database. Both counts must be zero:
+
+```sql
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='both' or after_facts->>'role'='both' or
+  before_facts::jsonb ? 'replaced_grant_id' or
+  after_facts::jsonb ? 'replaced_grant_id' or
+  event_type='ProjectRoleGrantReplaced' or reason='authority_replacement');
+select count(*) from authority_idempotency_records where operation in
+  ('project_role_grant.issue','project_role_grant.revoke');
+```
+
+Before downgrading from `0031`, both new tables must be empty and this count
+must be zero:
+
+```sql
+select count(*) from project_role_grants;
+select count(*) from project_role_qualification_snapshots;
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='adjudicator' or after_facts->>'role'='adjudicator' or
+  action_id in ('project.contributor_candidate.list','project_role_grant.list',
+    'project_role_grant.read','project_role_grant.issue','project_role_grant.revoke') or
+  denial_code in ('project_role_grant_already_revoked',
+    'project_role_grant_replay_state_changed'));
+```
+
+The migration repeats these checks while holding `ACCESS EXCLUSIVE` locks on
+the affected authority tables, so schedule a maintenance window that prevents
+authority writes. A refusal occurs before schema mutation. Keep the database at
+its current revision, investigate the exact nonzero predicate, and recover
+forward through a separately reviewed data decision; never delete or convert
+authority evidence merely to make the migration proceed.
 
 Project-role revocation is routed by exact role. Submitter invalidation may
 reach task assignment; reviewer invalidation reaches only REV; adjudicator

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 import json
 import os
 from pathlib import Path
@@ -60,12 +61,12 @@ def _alembic_config() -> Config:
 
 def test_service_identity_migration_contract_is_frozen_from_application_modules() -> None:
     backend_root = Path(__file__).resolve().parents[1]
-    revision_source = (
-        backend_root / "alembic/versions/0023_service_actor_identity.py"
-    ).read_text(encoding="utf-8")
-    contract_source = (
-        backend_root / "migration_contracts/service_identity_0023.py"
-    ).read_text(encoding="utf-8")
+    revision_source = (backend_root / "alembic/versions/0023_service_actor_identity.py").read_text(
+        encoding="utf-8"
+    )
+    contract_source = (backend_root / "migration_contracts/service_identity_0023.py").read_text(
+        encoding="utf-8"
+    )
     assert "from migration_contracts.service_identity_0023 import" in revision_source
     assert "app.modules" not in revision_source
     assert "app.modules" not in contract_source
@@ -101,11 +102,14 @@ def test_frozen_mapping_path_custody_is_independent_of_install_location(
     private_root = tmp_path / "private"
     deployment_root.mkdir()
     private_root.mkdir()
-    assert validate_frozen_mapping_path(
-        private_root / "private-envelope.json",
-        repository_root=deployment_root,
-        output=True,
-    ) == private_root / "private-envelope.json"
+    assert (
+        validate_frozen_mapping_path(
+            private_root / "private-envelope.json",
+            repository_root=deployment_root,
+            output=True,
+        )
+        == private_root / "private-envelope.json"
+    )
 
 
 def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_lock) -> None:
@@ -117,6 +121,267 @@ def test_alembic_upgrade_and_downgrade(isolated_database_env: str, migration_loc
         command.downgrade(config, "base")
         command.upgrade(config, "head")
         command.downgrade(config, "base")
+
+
+def test_project_role_migration_constraints_and_immutable_history(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0031 exact-role coexistence, evidence bounds, and lifecycle custody."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
+            assert result == {
+                "revision": "0031_project_role_grants",
+                "role_count": 3,
+                "invalid_availability": "23514",
+                "duplicate_role": "23505",
+                "snapshot_update": "55000",
+                "snapshot_delete": "55000",
+                "snapshot_truncate": "55000",
+                "issuance_update": "23514",
+                "grant_delete": "55000",
+                "grant_truncate": "55000",
+                "database_timestamps": True,
+                "snapshot_constraint_rejections": {
+                    "extra_key": "23514",
+                    "available_empty": "23514",
+                    "unavailable_with_reference": "23514",
+                    "url_reference": "23514",
+                    "too_many_references": "23514",
+                    "invalid_prior_uuid": "23514",
+                },
+                "grant_constraint_rejections": {
+                    "automated_method": "23514",
+                    "combined_role": "23514",
+                    "leading_space_reason": "23514",
+                    "control_reason": "23514",
+                    "oversize_reason": "23514",
+                    "snapshot_mismatch": "23503",
+                    "invalid_active_version": "23514",
+                },
+                "valid_revoke": ("revoked", 2),
+                "second_revoke": "23514",
+            }
+            project_definitions = tuple(
+                definition
+                for definition in ACTION_DEFINITIONS
+                if definition.owner in {ActionOwner.AUTH_10B, ActionOwner.AUTH_10C}
+            )
+            assert len(project_definitions) == 5
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=project_definitions
+                )
+            )
+            asyncio.run(_assert_project_role_denial_sql(isolated_database_env))
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Every obsolete storage predicate leaves 0030 and its schema untouched."""
+    config = _alembic_config()
+    cases = (
+        {"before_facts": {"role": "both"}},
+        {"after_facts": {"role": "both"}},
+        {"before_facts": {"replaced_grant_id": str(uuid4())}},
+        {"after_facts": {"replaced_grant_id": str(uuid4())}},
+        {"event_type": "ProjectRoleGrantReplaced"},
+        {"reason": "authority_replacement"},
+        {
+            "before_facts": {"role": "both", "replaced_grant_id": str(uuid4())},
+            "after_facts": {"role": "both", "replaced_grant_id": str(uuid4())},
+            "event_type": "ProjectRoleGrantReplaced",
+            "reason": "authority_replacement",
+        },
+    )
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0030_artifact_verification")
+            for patch in cases:
+                event_id, constraints = asyncio.run(
+                    _install_legacy_project_role_blocker(isolated_database_env, patch)
+                )
+                before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot safely upgrade replacement-era project-role evidence",
+                ):
+                    command.upgrade(config, "head")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env)) == (
+                    "0030_artifact_verification",
+                    False,
+                    False,
+                    1,
+                )
+                assert (
+                    asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                    == before_event
+                )
+                asyncio.run(
+                    _remove_legacy_project_role_blocker(
+                        isolated_database_env, event_id, constraints
+                    )
+                )
+
+            for operation in ("project_role_grant.issue", "project_role_grant.revoke"):
+                record_id = asyncio.run(
+                    _insert_project_role_idempotency_blocker(isolated_database_env, operation)
+                )
+                before_record = asyncio.run(
+                    _project_role_idempotency_row(isolated_database_env, record_id)
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot safely upgrade replacement-era project-role evidence",
+                ):
+                    command.upgrade(config, "head")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
+                    "0030_artifact_verification",
+                    False,
+                    False,
+                )
+                assert (
+                    asyncio.run(_project_role_idempotency_row(isolated_database_env, record_id))
+                    == before_record
+                )
+                asyncio.run(
+                    _remove_project_role_idempotency_blocker(isolated_database_env, record_id)
+                )
+
+            event_id, constraints = asyncio.run(
+                _install_legacy_project_role_blocker(
+                    isolated_database_env, {"after_facts": {"role": "both"}}
+                )
+            )
+            record_id = asyncio.run(
+                _insert_project_role_idempotency_blocker(
+                    isolated_database_env, "project_role_grant.revoke"
+                )
+            )
+            before_record = asyncio.run(
+                _project_role_idempotency_row(isolated_database_env, record_id)
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot safely upgrade replacement-era project-role evidence",
+            ):
+                command.upgrade(config, "head")
+            assert (
+                asyncio.run(_project_role_idempotency_row(isolated_database_env, record_id))
+                == before_record
+            )
+            asyncio.run(_remove_project_role_idempotency_blocker(isolated_database_env, record_id))
+            asyncio.run(
+                _remove_legacy_project_role_blocker(isolated_database_env, event_id, constraints)
+            )
+            unrelated_event_id = asyncio.run(
+                _insert_authorization_action_event(isolated_database_env)
+            )
+            unrelated_before = asyncio.run(
+                _project_role_audit_row(isolated_database_env, unrelated_event_id)
+            )
+            command.upgrade(config, "head")
+            assert (
+                asyncio.run(_project_role_audit_row(isolated_database_env, unrelated_event_id))
+                == unrelated_before
+            )
+            asyncio.run(
+                _remove_authorization_action_events(isolated_database_env, [unrelated_event_id])
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Every 10A audit predicate leaves the head schema and row untouched."""
+    config = _alembic_config()
+    cases = (
+        {"before_facts": {"role": "adjudicator"}},
+        {"after_facts": {"role": "adjudicator"}},
+        *(
+            {"action_id": action}
+            for action in (
+                "project.contributor_candidate.list",
+                "project_role_grant.list",
+                "project_role_grant.read",
+                "project_role_grant.issue",
+                "project_role_grant.revoke",
+            )
+        ),
+        {"denial_code": "project_role_grant_already_revoked"},
+        {"denial_code": "project_role_grant_replay_state_changed"},
+        {
+            "before_facts": {"role": "adjudicator"},
+            "after_facts": {"role": "adjudicator"},
+            "action_id": "project_role_grant.issue",
+            "denial_code": "project_role_grant_replay_state_changed",
+        },
+    )
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            for patch in cases:
+                event_id, constraints = asyncio.run(
+                    _install_legacy_project_role_blocker(isolated_database_env, patch)
+                )
+                before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                with pytest.raises(
+                    RuntimeError, match="cannot downgrade project-role grant evidence"
+                ):
+                    command.downgrade(config, "0030_artifact_verification")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
+                    "0031_project_role_grants",
+                    True,
+                    True,
+                )
+                assert (
+                    asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
+                    == before_event
+                )
+                asyncio.run(
+                    _remove_legacy_project_role_blocker(
+                        isolated_database_env, event_id, constraints
+                    )
+                )
+            for include_grant in (False, True):
+                table_ids = asyncio.run(
+                    _install_project_role_table_blockers(
+                        isolated_database_env, include_grant=include_grant
+                    )
+                )
+                before_tables = asyncio.run(
+                    _project_role_table_rows(isolated_database_env, table_ids)
+                )
+                with pytest.raises(
+                    RuntimeError, match="cannot downgrade project-role grant evidence"
+                ):
+                    command.downgrade(config, "0030_artifact_verification")
+                assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
+                    "0031_project_role_grants",
+                    True,
+                    True,
+                )
+                assert (
+                    asyncio.run(_project_role_table_rows(isolated_database_env, table_ids))
+                    == before_tables
+                )
+                asyncio.run(_remove_project_role_table_blockers(isolated_database_env, table_ids))
+            command.downgrade(config, "0030_artifact_verification")
+        finally:
+            command.downgrade(config, "base")
 
 
 def test_outbox_migration_schema_and_downgrade_writer_guard(
@@ -133,7 +398,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0030_artifact_verification",
+                "revision": "0031_project_role_grants",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -193,7 +458,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0030_artifact_verification"
+                "0031_project_role_grants"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
@@ -643,6 +908,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_09C,
                             ActionOwner.AUTH_09D_A,
                             ActionOwner.AUTH_09D_B,
+                            ActionOwner.AUTH_10B,
+                            ActionOwner.AUTH_10C,
                         }
                     ),
                 )
@@ -797,6 +1064,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_09C,
                             ActionOwner.AUTH_09D_A,
                             ActionOwner.AUTH_09D_B,
+                            ActionOwner.AUTH_10B,
+                            ActionOwner.AUTH_10C,
                         }
                     ),
                 )
@@ -845,9 +1114,7 @@ def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
 ) -> None:
     """Prove exact legacy mapping, static action parity, and destructive rollback guards."""
     config = _alembic_config()
-    service_id = actor_id_from_external_identity(
-        "https://identity.test", "auth09-legacy-service"
-    )
+    service_id = actor_id_from_external_identity("https://identity.test", "auth09-legacy-service")
     envelope_path = tmp_path / "service-identity-envelope.json"
     with migration_lock():
         try:
@@ -919,9 +1186,7 @@ def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
                 "unknown_identity_rejected": True,
                 "duplicate_identity_rejected": True,
             }
-            assert asyncio.run(
-                _service_identity_evidence_guards(isolated_database_env)
-            ) == {
+            assert asyncio.run(_service_identity_evidence_guards(isolated_database_env)) == {
                 "update_rejected": True,
                 "delete_rejected": True,
                 "truncate_rejected": True,
@@ -965,9 +1230,7 @@ def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
                     match="^cannot downgrade fixed service identity authority$",
                 ):
                     command.downgrade(config, "0022_bootstrap_admin_grants")
-                asyncio.run(
-                    _remove_authorization_action_events(isolated_database_env, [event_id])
-                )
+                asyncio.run(_remove_authorization_action_events(isolated_database_env, [event_id]))
             command.downgrade(config, "0022_bootstrap_admin_grants")
             command.upgrade(config, "0023_service_actor_identity")
         finally:
@@ -1027,8 +1290,7 @@ def test_service_link_verification_timestamp_schema_and_guarded_downgrade(
                 )
                 human_verified = await connection.scalar(
                     text(
-                        "select last_verified_at is not null from actor_identity_links "
-                        "where id=:id"
+                        "select last_verified_at is not null from actor_identity_links where id=:id"
                     ),
                     {"id": human_link_id},
                 )
@@ -1122,8 +1384,7 @@ def test_service_link_verification_timestamp_schema_and_guarded_downgrade(
                 )
                 await connection.execute(
                     text(
-                        "delete from actor_profiles where id in "
-                        "(:human,:rejected_human,:service)"
+                        "delete from actor_profiles where id in (:human,:rejected_human,:service)"
                     ),
                     {
                         "human": human_id,
@@ -1360,9 +1621,7 @@ def test_artifact_store_v2_refuses_populated_v2_downgrade_before_ddl(
                 command.downgrade(config, "0023_service_actor_identity")
             refused_revision = asyncio.run(_current_revision(isolated_database_env))
             refused_columns = asyncio.run(_fetch_columns(isolated_database_env))
-            refused_namespace_count = asyncio.run(
-                _artifact_namespace_count(isolated_database_env)
-            )
+            refused_namespace_count = asyncio.run(_artifact_namespace_count(isolated_database_env))
             asyncio.run(_truncate_v2_artifact_namespace(isolated_database_env))
             command.downgrade(config, "0023_service_actor_identity")
         finally:
@@ -1663,9 +1922,7 @@ def test_actor_profile_lifecycle_constraint_and_trigger_parity(
                 12288,
             )
             assert python_strip_code_points == tuple(
-                code_point
-                for code_point in range(0x110000)
-                if chr(code_point).isspace()
+                code_point for code_point in range(0x110000) if chr(code_point).isspace()
             )
             for code_point in python_strip_code_points:
                 with pytest.raises(DBAPIError):
@@ -1728,10 +1985,8 @@ def test_actor_profile_lifecycle_upgrade_refuses_dirty_rows(
         (
             str(uuid4()),
             "partial-link-reactivation",
-            "update actor_identity_links set reactivated_by=:actor "
-            "where actor_profile_id=:actor",
-            "update actor_identity_links set reactivated_by=null "
-            "where actor_profile_id=:actor",
+            "update actor_identity_links set reactivated_by=:actor where actor_profile_id=:actor",
+            "update actor_identity_links set reactivated_by=null where actor_profile_id=:actor",
         ),
         (
             str(uuid4()),
@@ -1912,7 +2167,10 @@ def test_actor_profile_lifecycle_safe_downgrade_and_reupgrade(
             command.downgrade(config, "0025_artifact_store_v2")
             assert asyncio.run(_current_revision(isolated_database_env)) == "0025_artifact_store_v2"
             command.upgrade(config, "0026_actor_profile_lifecycle")
-            assert asyncio.run(_current_revision(isolated_database_env)) == "0026_actor_profile_lifecycle"
+            assert (
+                asyncio.run(_current_revision(isolated_database_env))
+                == "0026_actor_profile_lifecycle"
+            )
         finally:
             command.downgrade(config, "base")
 
@@ -1938,7 +2196,9 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
         try:
             async with engine.begin() as connection:
                 if clear:
-                    await connection.execute(text("alter table actor_profiles disable trigger user"))
+                    await connection.execute(
+                        text("alter table actor_profiles disable trigger user")
+                    )
                     await connection.execute(
                         text(
                             "update actor_profiles set reactivated_by=null,reactivated_at=null,"
@@ -1972,9 +2232,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
         try:
             async with engine.begin() as connection:
                 link_id = await connection.scalar(
-                    text(
-                        "select id from actor_identity_links where actor_profile_id=:actor"
-                    ),
+                    text("select id from actor_identity_links where actor_profile_id=:actor"),
                     {"actor": actor_id},
                 )
                 if blocker in {"ActorProfileReactivated", "ActorIdentityLinkReactivated"}:
@@ -1986,8 +2244,12 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
                         if is_profile
                         else "actor.identity_link.reactivate"
                     )
-                    reason = "administrative_correction" if is_profile else "identity_lifecycle_change"
-                    before_facts = '{"status":"suspended"}' if is_profile else '{"status":"revoked"}'
+                    reason = (
+                        "administrative_correction" if is_profile else "identity_lifecycle_change"
+                    )
+                    before_facts = (
+                        '{"status":"suspended"}' if is_profile else '{"status":"revoked"}'
+                    )
                     await connection.execute(
                         text(
                             "alter table audit_events disable trigger "
@@ -2008,7 +2270,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
                             "'actor_profile',:request_id,:correlation_id,'actor_profile',:actor,"
                             ":permission_id,:resource_type,:resource_id,"
                             ":resource_type,:resource_id,:reason,cast(:before_facts as json),"
-                            "'{\"status\":\"active\"}'::json)"
+                            '\'{"status":"active"}\'::json)'
                         ),
                         {
                             "id": event_id,
@@ -2067,8 +2329,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
             async with engine.begin() as connection:
                 await connection.execute(
                     text(
-                        "alter table audit_events disable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events disable trigger audit_events_reject_update_delete"
                     )
                 )
                 await connection.execute(
@@ -2076,8 +2337,7 @@ def test_actor_profile_lifecycle_downgrade_refuses_forward_evidence(
                 )
                 await connection.execute(
                     text(
-                        "alter table audit_events enable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events enable trigger audit_events_reject_update_delete"
                     )
                 )
         finally:
@@ -2208,9 +2468,7 @@ def test_contributor_foundation_upgrade_guards_and_reversible_preservation(
                 "unrelated_update_preserved": True,
             }
             assert asyncio.run(
-                _exercise_contributor_lineage_function_contract(
-                    isolated_database_env
-                )
+                _exercise_contributor_lineage_function_contract(isolated_database_env)
             ) == {
                 "zero_arguments": "55000",
                 "extra_arguments": "55000",
@@ -2252,12 +2510,9 @@ def test_contributor_foundation_preflight_refuses_all_unsafe_classes_atomically(
     """Classify both source tables without guessing or partially changing schema."""
     config = _alembic_config()
     missing_ids = (str(uuid4()), str(uuid4()))
-    assignment_malformed = tuple(
-        f"private.person.{index}@example.test" for index in range(22)
-    )
+    assignment_malformed = tuple(f"private.person.{index}@example.test" for index in range(22))
     submission_malformed = tuple(
-        f"eyJhbGciOiJSUzI1NiJ9.secret-token-material-{index}"
-        for index in range(22)
+        f"eyJhbGciOiJSUzI1NiJ9.secret-token-material-{index}" for index in range(22)
     )
 
     with migration_lock():
@@ -2267,10 +2522,8 @@ def test_contributor_foundation_preflight_refuses_all_unsafe_classes_atomically(
             fixture = asyncio.run(
                 _seed_contributor_prior_head(
                     isolated_database_env,
-                    assignment_values=assignment_malformed
-                    + (missing_ids[0], "service"),
-                    submission_values=submission_malformed
-                    + (missing_ids[1], "service"),
+                    assignment_values=assignment_malformed + (missing_ids[0], "service"),
+                    submission_values=submission_malformed + (missing_ids[1], "service"),
                 )
             )
             service_id = str(fixture["service_id"])
@@ -2293,19 +2546,14 @@ def test_contributor_foundation_preflight_refuses_all_unsafe_classes_atomically(
                 assert [row[0] for row in malformed["rows"]] == sorted(
                     row[0] for row in malformed["rows"]
                 )
-                assert all(
-                    row[1] == "<redacted-malformed>"
-                    for row in malformed["rows"]
-                )
+                assert all(row[1] == "<redacted-malformed>" for row in malformed["rows"])
             assert all(
-                value not in message
-                for value in assignment_malformed + submission_malformed
+                value not in message for value in assignment_malformed + submission_malformed
             )
             assert all(
                 row_id in message
                 for row_id in (
-                    tuple(fixture["assignment_ids"])[-2:]
-                    + tuple(fixture["submission_ids"])[-2:]
+                    tuple(fixture["assignment_ids"])[-2:] + tuple(fixture["submission_ids"])[-2:]
                 )
             )
             assert "issuer" not in message
@@ -2671,9 +2919,7 @@ async def _outbox_schema(database_url: str) -> dict[str, object]:
                     await connection.scalar(text("select version_num from alembic_version"))
                 ),
                 "columns": {row.column_name for row in column_rows},
-                "nullable": {
-                    row.column_name for row in column_rows if row.is_nullable == "YES"
-                },
+                "nullable": {row.column_name for row in column_rows if row.is_nullable == "YES"},
                 "indexes": indexes,
                 "triggers": triggers,
             }
@@ -2729,7 +2975,9 @@ async def _outbox_downgrade_writer_race(
             assert not downgrade.done()
             if commit_writer:
                 await transaction.commit()
-                with pytest.raises(RuntimeError, match="cannot downgrade with shared outbox events"):
+                with pytest.raises(
+                    RuntimeError, match="cannot downgrade with shared outbox events"
+                ):
                     await asyncio.wait_for(downgrade, timeout=5)
                 return "refused_after_commit"
             await transaction.rollback()
@@ -3069,9 +3317,7 @@ async def _reset_canonical_actor_guard_state(
         try:
             async with engine.begin() as connection:
                 await connection.execute(
-                    text(
-                        "alter table actor_profiles disable trigger actor_profile_history_guard"
-                    )
+                    text("alter table actor_profiles disable trigger actor_profile_history_guard")
                 )
                 await connection.execute(
                     text(
@@ -4312,9 +4558,7 @@ async def _truncate_v2_artifact_namespace(database_url: str) -> None:
                 text("select to_regclass('public.artifact_storage_namespaces') is not null")
             )
             if exists:
-                await connection.execute(
-                    text("truncate table artifact_storage_namespaces cascade")
-                )
+                await connection.execute(text("truncate table artifact_storage_namespaces cascade"))
     finally:
         await engine.dispose()
 
@@ -4351,9 +4595,7 @@ async def _artifact_v2_refusal_state(database_url: str) -> dict[str, object]:
             namespace_table = await connection.scalar(
                 text("select to_regclass('public.artifact_storage_namespaces') is not null")
             )
-            content_count = await connection.scalar(
-                text("select count(*) from artifact_contents")
-            )
+            content_count = await connection.scalar(text("select count(*) from artifact_contents"))
             return {
                 "revision": revision,
                 "namespace_table_exists": namespace_table,
@@ -5975,7 +6217,9 @@ async def _insert_orphan_admin_evidence(database_url: str, event_type: str) -> N
                     "target": target_id,
                     "request": str(uuid4()),
                     "correlation": str(uuid4()),
-                    "reason": "authorization_policy_denial" if denied else "initial_access_bootstrap",
+                    "reason": "authorization_policy_denial"
+                    if denied
+                    else "initial_access_bootstrap",
                     "denial_code": "permission_not_granted" if denied else None,
                     "facts": None
                     if denied
@@ -6275,9 +6519,7 @@ async def _exercise_admin_authority_guards(database_url: str) -> dict[str, objec
             immutable_before = tuple(
                 (
                     await connection.execute(
-                        text(
-                            f"select {immutable_columns} from admin_role_grants where id=:id"
-                        ),
+                        text(f"select {immutable_columns} from admin_role_grants where id=:id"),
                         {"id": grant_id},
                     )
                 ).one()
@@ -6345,9 +6587,7 @@ async def _exercise_admin_authority_guards(database_url: str) -> dict[str, objec
         try:
             async with engine.begin() as connection:
                 await connection.execute(
-                    text(
-                        "update admin_role_grants set status='revoked',version=2 where id=:id"
-                    ),
+                    text("update admin_role_grants set status='revoked',version=2 where id=:id"),
                     {"id": grant_id},
                 )
         except DBAPIError:
@@ -6514,8 +6754,7 @@ async def _service_identity_schema(database_url: str) -> dict[str, object]:
             }
             service_identity = await connection.scalar(
                 text(
-                    "select service_identity from actor_profiles "
-                    "where actor_kind='service' limit 1"
+                    "select service_identity from actor_profiles where actor_kind='service' limit 1"
                 )
             )
             if service_identity is not None:
@@ -6628,9 +6867,7 @@ async def _service_identity_evidence_guards(database_url: str) -> dict[str, bool
             try:
                 async with engine.begin() as connection:
                     await connection.execute(
-                        text(
-                            "alter table actor_profile_migration_state disable trigger user"
-                        )
+                        text("alter table actor_profile_migration_state disable trigger user")
                     )
                     await connection.execute(text(statement))
             except DBAPIError:
@@ -6746,8 +6983,7 @@ async def _seed_contributor_prior_head(
                 },
             )
             resolved_assignment_values = tuple(
-                service_id if value == "service" else value
-                for value in assignment_values
+                service_id if value == "service" else value for value in assignment_values
             )
             for index, value in enumerate(assignment_values):
                 await connection.execute(
@@ -6829,16 +7065,12 @@ async def _clear_contributor_migration_fixtures(database_url: str) -> None:
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
-            await connection.execute(
-                text("alter table actor_identity_links disable trigger user")
-            )
+            await connection.execute(text("alter table actor_identity_links disable trigger user"))
             await connection.execute(text("alter table actor_profiles disable trigger user"))
             await connection.execute(text("delete from actor_identity_links"))
             await connection.execute(text("delete from actor_profiles"))
             await connection.execute(text("alter table actor_profiles enable trigger user"))
-            await connection.execute(
-                text("alter table actor_identity_links enable trigger user")
-            )
+            await connection.execute(text("alter table actor_identity_links enable trigger user"))
     finally:
         await engine.dispose()
 
@@ -6847,6 +7079,7 @@ async def _contributor_foundation_shape(database_url: str) -> dict[str, object]:
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
+
             async def column(table: str) -> tuple[str, int]:
                 row = (
                     await connection.execute(
@@ -7189,8 +7422,7 @@ async def _exercise_contributor_lineage_function_contract(
                 text("insert into lineage_nullable (contributor_id) values (null)")
             )
             results["nullable_field_accepted"] = (
-                await connection.scalar(text("select count(*) from lineage_nullable"))
-                == 1
+                await connection.scalar(text("select count(*) from lineage_nullable")) == 1
             )
         return results
     finally:
@@ -7217,10 +7449,7 @@ async def _drop_contributor_function_dependency(database_url: str) -> None:
     try:
         async with engine.begin() as connection:
             await connection.execute(
-                text(
-                    "drop trigger task_assignments_contributor_dependency "
-                    "on task_assignments"
-                )
+                text("drop trigger task_assignments_contributor_dependency on task_assignments")
             )
     finally:
         await engine.dispose()
@@ -7237,5 +7466,676 @@ async def _insert_authorization_action_event_for(
         async with engine.begin() as connection:
             await connection.execute(_ACTION_EVIDENCE_INSERT, values)
         return str(values["id"])
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_project_role_migration(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    actor_id = actor_id_from_external_identity("https://identity.test", "auth10a-actor")
+    project_id, admin_grant_id = str(uuid4()), str(uuid4())
+    snapshot_ids = [str(uuid4()) for _ in range(3)]
+    grant_ids = [str(uuid4()) for _ in range(3)]
+    results: dict[str, object] = {}
+    supplied_at = datetime(2000, 1, 1, tzinfo=UTC)
+
+    async def rejected(connection, statement: str, values: dict[str, object]) -> str | None:
+        try:
+            async with connection.begin_nested():
+                await connection.execute(text(statement), values)
+        except DBAPIError as error:
+            return _database_error_sqlstate(error)
+        return None
+
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await _insert_canonical_actor(connection, actor_id, "auth10a-actor", "human")
+                await connection.execute(
+                    text(
+                        "insert into projects(id,name,slug,status) values (:id,'AUTH 10A',:slug,'active')"
+                    ),
+                    {"id": project_id, "slug": f"auth-10a-{project_id}"},
+                )
+                await connection.execute(
+                    text(
+                        "insert into admin_role_grants "
+                        "(id,target_actor_profile_id,role,scope_type,status,version,"
+                        "granted_by_system_principal,grant_reason) values "
+                        "(:id,:actor,'access_administrator','system','active',1,"
+                        "'workstream:system:bootstrap','AUTH 10A migration proof')"
+                    ),
+                    {"id": admin_grant_id, "actor": actor_id},
+                )
+                await connection.execute(
+                    text(
+                        "update authority_control set bootstrap_completed=true,"
+                        "bootstrap_grant_id=:grant,version=1 where id=1"
+                    ),
+                    {"grant": admin_grant_id},
+                )
+                snapshot_insert = text(
+                    "insert into project_role_qualification_snapshots "
+                    "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
+                    "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
+                    "captured_by_actor_profile_id,captured_by_admin_role_grant_id,captured_at) values "
+                    "(:id,:project,:actor,:role,cast(:skills as jsonb),cast(:reputation as jsonb),"
+                    "cast(:prior as jsonb),cast(:external as jsonb),:actor,:admin,"
+                    "cast(:supplied_at as timestamptz))"
+                )
+                available = json.dumps(
+                    {
+                        "availability": "available",
+                        "reference_ids": ["opaque:1"],
+                        "unavailable_reason": None,
+                    }
+                )
+                unavailable = json.dumps(
+                    {
+                        "availability": "unavailable",
+                        "reference_ids": [],
+                        "unavailable_reason": "no_record",
+                    }
+                )
+                for role, snapshot_id in zip(
+                    ("submitter", "reviewer", "adjudicator"), snapshot_ids, strict=True
+                ):
+                    await connection.execute(
+                        snapshot_insert,
+                        {
+                            "id": snapshot_id,
+                            "project": project_id,
+                            "actor": actor_id,
+                            "role": role,
+                            "skills": available,
+                            "reputation": unavailable,
+                            "prior": "[]",
+                            "external": "[]",
+                            "admin": admin_grant_id,
+                            "supplied_at": supplied_at,
+                        },
+                    )
+                results["invalid_availability"] = await rejected(
+                    connection,
+                    str(snapshot_insert),
+                    {
+                        "id": str(uuid4()),
+                        "project": project_id,
+                        "actor": actor_id,
+                        "role": "submitter",
+                        "skills": json.dumps(
+                            {
+                                "availability": "available",
+                                "reference_ids": [],
+                                "unavailable_reason": None,
+                            }
+                        ),
+                        "reputation": unavailable,
+                        "prior": "[]",
+                        "external": "[]",
+                        "admin": admin_grant_id,
+                        "supplied_at": supplied_at,
+                    },
+                )
+                snapshot_rejections: dict[str, str | None] = {}
+                snapshot_variants = {
+                    "extra_key": {
+                        "availability": "available",
+                        "reference_ids": ["opaque:1"],
+                        "unavailable_reason": None,
+                        "extra": True,
+                    },
+                    "available_empty": {
+                        "availability": "available",
+                        "reference_ids": [],
+                        "unavailable_reason": None,
+                    },
+                    "unavailable_with_reference": {
+                        "availability": "unavailable",
+                        "reference_ids": ["opaque:1"],
+                        "unavailable_reason": "no_record",
+                    },
+                    "url_reference": {
+                        "availability": "available",
+                        "reference_ids": ["https://unsafe.example"],
+                        "unavailable_reason": None,
+                    },
+                    "too_many_references": {
+                        "availability": "available",
+                        "reference_ids": [f"opaque:{index}" for index in range(21)],
+                        "unavailable_reason": None,
+                    },
+                }
+                for name, skills in snapshot_variants.items():
+                    snapshot_rejections[name] = await rejected(
+                        connection,
+                        str(snapshot_insert),
+                        {
+                            "id": str(uuid4()),
+                            "project": project_id,
+                            "actor": actor_id,
+                            "role": "submitter",
+                            "skills": json.dumps(skills),
+                            "reputation": unavailable,
+                            "prior": "[]",
+                            "external": "[]",
+                            "admin": admin_grant_id,
+                            "supplied_at": supplied_at,
+                        },
+                    )
+                snapshot_rejections["invalid_prior_uuid"] = await rejected(
+                    connection,
+                    str(snapshot_insert),
+                    {
+                        "id": str(uuid4()),
+                        "project": project_id,
+                        "actor": actor_id,
+                        "role": "submitter",
+                        "skills": available,
+                        "reputation": unavailable,
+                        "prior": json.dumps(["not-a-uuid"]),
+                        "external": "[]",
+                        "admin": admin_grant_id,
+                        "supplied_at": supplied_at,
+                    },
+                )
+                results["snapshot_constraint_rejections"] = snapshot_rejections
+                results["snapshot_truncate"] = await rejected(
+                    connection,
+                    "truncate project_role_qualification_snapshots, project_role_grants",
+                    {},
+                )
+                raw_grant_insert = (
+                    "insert into project_role_grants "
+                    "(id,project_id,actor_profile_id,role,status,version,grant_method,"
+                    "qualification_snapshot_id,granted_by_actor_profile_id,"
+                    "granted_by_admin_role_grant_id,grant_reason) values "
+                    "(:id,:project,:actor,:role,:status,:version,:method,:snapshot,:actor,:admin,:reason)"
+                )
+                base_grant = {
+                    "project": project_id,
+                    "actor": actor_id,
+                    "role": "submitter",
+                    "status": "active",
+                    "version": 1,
+                    "method": "manual",
+                    "snapshot": snapshot_ids[0],
+                    "admin": admin_grant_id,
+                    "reason": "Qualified",
+                }
+                grant_variants = {
+                    "automated_method": {"method": "automated"},
+                    "combined_role": {"role": "both"},
+                    "leading_space_reason": {"reason": " Qualified"},
+                    "control_reason": {"reason": "bad\u200bcontrol"},
+                    "oversize_reason": {"reason": "é" * 251},
+                    "snapshot_mismatch": {"snapshot": snapshot_ids[1]},
+                    "invalid_active_version": {"version": 2},
+                }
+                results["grant_constraint_rejections"] = {
+                    name: await rejected(
+                        connection, raw_grant_insert, base_grant | patch | {"id": str(uuid4())}
+                    )
+                    for name, patch in grant_variants.items()
+                }
+                grant_insert = text(
+                    "insert into project_role_grants "
+                    "(id,project_id,actor_profile_id,role,qualification_snapshot_id,"
+                    "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason,granted_at) "
+                    "values (:id,:project,:actor,:role,:snapshot,:actor,:admin,"
+                    "'Qualified manually',cast(:supplied_at as timestamptz))"
+                )
+                for role, snapshot_id, grant_id in zip(
+                    ("submitter", "reviewer", "adjudicator"), snapshot_ids, grant_ids, strict=True
+                ):
+                    await connection.execute(
+                        grant_insert,
+                        {
+                            "id": grant_id,
+                            "project": project_id,
+                            "actor": actor_id,
+                            "role": role,
+                            "snapshot": snapshot_id,
+                            "admin": admin_grant_id,
+                            "supplied_at": supplied_at,
+                        },
+                    )
+                results["revision"] = await connection.scalar(
+                    text("select version_num from alembic_version")
+                )
+                results["role_count"] = await connection.scalar(
+                    text("select count(*) from project_role_grants where project_id=:project"),
+                    {"project": project_id},
+                )
+                results["duplicate_role"] = await rejected(
+                    connection,
+                    str(grant_insert),
+                    {
+                        "id": str(uuid4()),
+                        "project": project_id,
+                        "actor": actor_id,
+                        "role": "submitter",
+                        "snapshot": snapshot_ids[0],
+                        "admin": admin_grant_id,
+                        "supplied_at": supplied_at,
+                    },
+                )
+                results["snapshot_update"] = await rejected(
+                    connection,
+                    "update project_role_qualification_snapshots set external_expertise_refs='[]'::jsonb where id=:id",
+                    {"id": snapshot_ids[0]},
+                )
+                results["snapshot_delete"] = await rejected(
+                    connection,
+                    "delete from project_role_qualification_snapshots where id=:id",
+                    {"id": snapshot_ids[0]},
+                )
+                results["issuance_update"] = await rejected(
+                    connection,
+                    "update project_role_grants set grant_reason='Changed' where id=:id",
+                    {"id": grant_ids[0]},
+                )
+                results["grant_delete"] = await rejected(
+                    connection, "delete from project_role_grants where id=:id", {"id": grant_ids[0]}
+                )
+                results["grant_truncate"] = await rejected(
+                    connection, "truncate project_role_grants", {}
+                )
+                await connection.execute(
+                    text(
+                        "update project_role_grants set status='revoked',version=2,"
+                        "revoked_by_actor_profile_id=:actor,revoked_by_admin_role_grant_id=:admin,"
+                        "revoked_reason='No longer assigned',revoked_at='2000-01-01T00:00:00+00:00' where id=:id"
+                    ),
+                    {"id": grant_ids[0], "actor": actor_id, "admin": admin_grant_id},
+                )
+                results["valid_revoke"] = tuple(
+                    (
+                        await connection.execute(
+                            text("select status,version from project_role_grants where id=:id"),
+                            {"id": grant_ids[0]},
+                        )
+                    ).one()
+                )
+                results["database_timestamps"] = bool(
+                    await connection.scalar(
+                        text(
+                            "select captured_at > '2026-01-01'::timestamptz from "
+                            "project_role_qualification_snapshots where id=:id"
+                        ),
+                        {"id": snapshot_ids[0]},
+                    )
+                ) and bool(
+                    await connection.scalar(
+                        text(
+                            "select granted_at > '2026-01-01'::timestamptz and "
+                            "revoked_at > '2026-01-01'::timestamptz from project_role_grants where id=:id"
+                        ),
+                        {"id": grant_ids[0]},
+                    )
+                )
+                results["second_revoke"] = await rejected(
+                    connection,
+                    "update project_role_grants set revoked_reason='Again' where id=:id",
+                    {"id": grant_ids[0]},
+                )
+            finally:
+                await transaction.rollback()
+        return results
+    finally:
+        await engine.dispose()
+
+
+async def _install_legacy_project_role_blocker(
+    database_url: str, patch: dict[str, object]
+) -> tuple[str, list[tuple[str, str]]]:
+    event_id = await _insert_authorization_action_event(database_url)
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            constraints = [
+                tuple(row)
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select conname,pg_get_constraintdef(oid) from pg_constraint "
+                            "where conrelid='audit_events'::regclass and contype='c' order by conname"
+                        )
+                    )
+                ).all()
+            ]
+            await connection.execute(text("alter table audit_events disable trigger user"))
+            for name, _definition in constraints:
+                await connection.execute(text(f'alter table audit_events drop constraint "{name}"'))
+            assignments = []
+            values: dict[str, object] = {"id": event_id}
+            for key, value in patch.items():
+                if key in {"before_facts", "after_facts"}:
+                    assignments.append(f"{key}=cast(:{key} as json)")
+                    values[key] = json.dumps(value)
+                else:
+                    assignments.append(f"{key}=:{key}")
+                    values[key] = value
+            await connection.execute(
+                text(f"update audit_events set {','.join(assignments)} where id=:id"), values
+            )
+        return event_id, constraints
+    finally:
+        await engine.dispose()
+
+
+async def _remove_legacy_project_role_blocker(
+    database_url: str,
+    event_id: str,
+    constraints: list[tuple[str, str]],
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("delete from audit_events where id=:id"), {"id": event_id}
+            )
+            for name, definition in constraints:
+                await connection.execute(
+                    text(f'alter table audit_events add constraint "{name}" {definition}')
+                )
+            await connection.execute(text("alter table audit_events enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_refusal_state(database_url: str) -> tuple[str, bool, bool, int]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return (
+                str(await connection.scalar(text("select version_num from alembic_version"))),
+                bool(
+                    await connection.scalar(
+                        text("select to_regclass('project_role_grants') is not null")
+                    )
+                ),
+                bool(
+                    await connection.scalar(
+                        text(
+                            "select to_regclass('project_role_qualification_snapshots') is not null"
+                        )
+                    )
+                ),
+                int(
+                    await connection.scalar(
+                        text(
+                            "select count(*) from audit_events where event_domain='authority' and "
+                            "(before_facts->>'role'='both' or after_facts->>'role'='both' or "
+                            "before_facts::jsonb ? 'replaced_grant_id' or "
+                            "after_facts::jsonb ? 'replaced_grant_id' or "
+                            "event_type='ProjectRoleGrantReplaced' or reason='authority_replacement')"
+                        )
+                    )
+                ),
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_audit_row(database_url: str, event_id: str) -> tuple:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,event_type,reason,action_id,denial_code,before_facts,"
+                            "after_facts from audit_events where id=:id"
+                        ),
+                        {"id": event_id},
+                    )
+                ).one()
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _insert_project_role_idempotency_blocker(database_url: str, operation: str) -> str:
+    record_id = str(uuid4())
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("alter table authority_idempotency_records disable trigger user")
+            )
+            await connection.execute(
+                text(
+                    "insert into authority_idempotency_records "
+                    "(id,idempotency_key,actor_ref_kind,actor_ref,operation,request_digest,status) "
+                    "values (:id,:key,'system_principal','workstream:system:bootstrap',"
+                    ":operation,:digest,'pending')"
+                ),
+                {
+                    "id": record_id,
+                    "key": str(uuid4()),
+                    "operation": operation,
+                    "digest": "sha256:" + "0" * 64,
+                },
+            )
+        return record_id
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_idempotency_row(database_url: str, record_id: str) -> tuple:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            return tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select id,idempotency_key,actor_ref_kind,actor_ref,operation,"
+                            "request_digest,status from authority_idempotency_records where id=:id"
+                        ),
+                        {"id": record_id},
+                    )
+                ).one()
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _remove_project_role_idempotency_blocker(database_url: str, record_id: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("delete from authority_idempotency_records where id=:id"), {"id": record_id}
+            )
+            await connection.execute(
+                text("alter table authority_idempotency_records enable trigger user")
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _assert_project_role_denial_sql(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    insert = text(str(_ACTION_EVIDENCE_INSERT).replace("'permission_not_granted'", ":denial_code"))
+    try:
+        for denial_code in (
+            "project_role_grant_already_revoked",
+            "project_role_grant_replay_state_changed",
+        ):
+            values = _action_evidence_values("project_role_grant.read", "project.role_grant.read")
+            values["denial_code"] = denial_code
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                await connection.execute(insert, values)
+                await transaction.rollback()
+        invalid = _action_evidence_values("project_role_grant.read", "project.role_grant.read")
+        invalid["denial_code"] = "project_role_grant_neighboring_unknown"
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            with pytest.raises(IntegrityError):
+                await connection.execute(insert, invalid)
+            await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+async def _install_project_role_table_blockers(
+    database_url: str, *, include_grant: bool
+) -> dict[str, str]:
+    ids = {
+        "actor": actor_id_from_external_identity("https://identity.test", "auth10a-blocker"),
+        "project": str(uuid4()),
+        "admin": str(uuid4()),
+        "snapshot": str(uuid4()),
+        "grant": str(uuid4()),
+    }
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await _insert_canonical_actor(connection, ids["actor"], "auth10a-blocker", "human")
+            await connection.execute(
+                text(
+                    "insert into projects(id,name,slug,status) values (:id,'AUTH 10A blocker',:slug,'active')"
+                ),
+                {"id": ids["project"], "slug": f"auth-10a-blocker-{ids['project']}"},
+            )
+            await connection.execute(
+                text(
+                    "insert into admin_role_grants "
+                    "(id,target_actor_profile_id,role,scope_type,status,version,"
+                    "granted_by_system_principal,grant_reason) values "
+                    "(:admin,:actor,'access_administrator','system','active',1,"
+                    "'workstream:system:bootstrap','AUTH 10A downgrade blocker')"
+                ),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "update authority_control set bootstrap_completed=true,"
+                    "bootstrap_grant_id=:admin,version=1 where id=1"
+                ),
+                ids,
+            )
+            availability = json.dumps(
+                {
+                    "availability": "available",
+                    "reference_ids": ["opaque:1"],
+                    "unavailable_reason": None,
+                }
+            )
+            unavailable = json.dumps(
+                {
+                    "availability": "unavailable",
+                    "reference_ids": [],
+                    "unavailable_reason": "no_record",
+                }
+            )
+            await connection.execute(
+                text(
+                    "insert into project_role_qualification_snapshots "
+                    "(id,project_id,actor_profile_id,requested_role,skills_snapshot,"
+                    "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
+                    "captured_by_actor_profile_id,captured_by_admin_role_grant_id) values "
+                    "(:snapshot,:project,:actor,'submitter',cast(:available as jsonb),"
+                    "cast(:unavailable as jsonb),'[]'::jsonb,'[]'::jsonb,:actor,:admin)"
+                ),
+                ids | {"available": availability, "unavailable": unavailable},
+            )
+            if include_grant:
+                await connection.execute(
+                    text(
+                        "insert into project_role_grants "
+                        "(id,project_id,actor_profile_id,role,qualification_snapshot_id,"
+                        "granted_by_actor_profile_id,granted_by_admin_role_grant_id,grant_reason) "
+                        "values (:grant,:project,:actor,'submitter',:snapshot,:actor,:admin,'Qualified')"
+                    ),
+                    ids,
+                )
+        return ids
+    finally:
+        await engine.dispose()
+
+
+async def _project_role_table_rows(
+    database_url: str, ids: dict[str, str]
+) -> tuple[tuple | None, tuple | None]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            snapshot = (
+                await connection.execute(
+                    text(
+                        "select id,project_id,actor_profile_id,requested_role,skills_snapshot,"
+                        "reputation_snapshot,prior_project_work_refs,external_expertise_refs,"
+                        "captured_by_actor_profile_id,captured_by_admin_role_grant_id,captured_at "
+                        "from project_role_qualification_snapshots where id=:snapshot"
+                    ),
+                    ids,
+                )
+            ).one_or_none()
+            grant = (
+                await connection.execute(
+                    text(
+                        "select id,project_id,actor_profile_id,role,status,version,grant_method,"
+                        "qualification_snapshot_id,granted_by_actor_profile_id,"
+                        "granted_by_admin_role_grant_id,grant_reason,granted_at from "
+                        "project_role_grants where id=:grant"
+                    ),
+                    ids,
+                )
+            ).one_or_none()
+            return (
+                tuple(snapshot) if snapshot is not None else None,
+                tuple(grant) if grant is not None else None,
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _remove_project_role_table_blockers(database_url: str, ids: dict[str, str]) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            for table in (
+                "project_role_grants",
+                "project_role_qualification_snapshots",
+                "admin_role_grants",
+                "authority_control",
+                "actor_identity_links",
+                "actor_profiles",
+            ):
+                await connection.execute(text(f"alter table {table} disable trigger user"))
+            await connection.execute(text("delete from project_role_grants where id=:grant"), ids)
+            await connection.execute(
+                text("delete from project_role_qualification_snapshots where id=:snapshot"),
+                ids,
+            )
+            await connection.execute(
+                text(
+                    "update authority_control set bootstrap_completed=false,"
+                    "bootstrap_grant_id=null,version=0 where id=1"
+                )
+            )
+            await connection.execute(text("delete from admin_role_grants where id=:admin"), ids)
+            await connection.execute(
+                text("delete from actor_identity_links where actor_profile_id=:actor"), ids
+            )
+            await connection.execute(text("delete from actor_profiles where id=:actor"), ids)
+            await connection.execute(text("delete from projects where id=:project"), ids)
+            for table in reversed(
+                (
+                    "project_role_grants",
+                    "project_role_qualification_snapshots",
+                    "admin_role_grants",
+                    "authority_control",
+                    "actor_identity_links",
+                    "actor_profiles",
+                )
+            ):
+                await connection.execute(text(f"alter table {table} enable trigger user"))
     finally:
         await engine.dispose()
