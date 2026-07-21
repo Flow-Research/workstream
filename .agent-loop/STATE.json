@@ -4,58 +4,37 @@
     "planning_chunk": null
   },
   "checks": {
-    "all_required_passed": false,
+    "all_required_passed": true,
     "required": {
       "CodeRabbit": {
-        "conclusion": "failure",
+        "conclusion": "success",
         "kind": "status",
         "url": null
       },
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29791310273/job/88513514427"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29806293606/job/88557427124"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29791310220/job/88515430997"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29806225054/job/88559243106"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-001-04B",
-    "chunk_title": "Signed Explicit Start Events",
-    "initiative_id": "WS-ENG-001",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "chunk_id": "WS-AUTH-001-PREP",
+    "chunk_title": "Prepared Mutation Authorization Protocol",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-10",
+    "next_chunk_title": "Project Qualification And Contributor Role Grants",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
-  "event": {
-    "legacy_exemptions": [
-      {
-        "chunk_id": "WS-ART-001-02C2",
-        "initiative_id": "WS-ART-001",
-        "pr_number": 159
-      },
-      {
-        "chunk_id": "WS-AUTH-001-PREP",
-        "initiative_id": "WS-AUTH-001",
-        "pr_number": 162
-      },
-      {
-        "chunk_id": "WS-MCP-001-01",
-        "initiative_id": "WS-MCP-001",
-        "pr_number": 149
-      }
-    ],
-    "main_sha": "58d0514aa5f6751a310d750f8dab8a946ca08fa5",
-    "type": "cutover"
-  },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-10",
+    "next_chunk_title": "Project Qualification And Contributor Role Grants",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -66,11 +45,6 @@
       "pr_number": 159
     },
     {
-      "chunk_id": "WS-AUTH-001-PREP",
-      "initiative_id": "WS-AUTH-001",
-      "pr_number": 162
-    },
-    {
       "chunk_id": "WS-MCP-001-01",
       "initiative_id": "WS-MCP-001",
       "pr_number": 149
@@ -79,18 +53,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "61bc0390947ad397a0b9bdd088c5111bd5477da1",
-    "head_ref": "codex/ws-eng-001-04b-plan",
-    "head_sha": "16f913a5dd03663c20c87adc4224cdc8f15a78da",
-    "intent_blob_sha": "1189ffc150a857f43069d09a0ca02f67e2538368",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-001-04B.json",
-    "main_sha": "58d0514aa5f6751a310d750f8dab8a946ca08fa5",
-    "merged_at": "2026-07-21T05:25:30Z",
+    "first_parent_sha": "58d0514aa5f6751a310d750f8dab8a946ca08fa5",
+    "head_ref": "codex/ws-auth-001-prep",
+    "head_sha": "917e9205f6098038316f3eaedc9988a5602074b7",
+    "intent_blob_sha": "03a41d4790104e74b4faa39443748689862a56ad",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-PREP.json",
+    "main_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
+    "merged_at": "2026-07-21T06:27:01Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 165,
-    "pr_title": "WS-ENG-001-04B: add signed explicit loop start events",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/165"
+    "pr_number": 162,
+    "pr_title": "WS-AUTH-001-PREP: add prepared mutation authorization protocol",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/162"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T05:25:30Z"
+  "updated_at": "2026-07-21T06:27:01Z"
 }
