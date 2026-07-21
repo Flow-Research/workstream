@@ -56,17 +56,20 @@ consumer, performs no product mutation, and adds no migration. Ordinary
 
 ## Internal Review And CI Integrity
 
-Final reviewed merge candidate `9e926d04511e04122beeb1f88110f80b88c34907`,
+Final reviewed merge candidate `8d9436f2f76c81a37b0b5f17271789099da714b2`,
 containing implementation `38acb8f91d3ddd2edd4cc26fb1e36b67fa130fd9` and
 fixture repair `eaa7073d45fa4a8382f2b44401b93cae7df34744`, against trusted main
-`61bc0390947ad397a0b9bdd088c5111bd5477da1` passes senior engineering,
+`58d0514aa5f6751a310d750f8dab8a946ca08fa5` passes senior engineering,
 QA/test, security/auth, product/ops, architecture, CI integrity, docs,
 reuse/dedup, and test-delta review after safety, fixture, and trusted-main
 CI-acceleration sync review. The sharded Backend is trusted-main behavior and
 is unchanged by PREP; no coverage threshold, dependency, or migration changed.
 External-status response `11a64da9406d0be5fb35ab32ce3ff742d105c648` also
 passes all nine internal tracks and binds each external result to its exact
-published SHA/run without changing runtime or CI behavior.
+published SHA/run without changing runtime or CI behavior. PostgreSQL shard
+repair `349ac3130c61c76ccfec1bdb723d5ca614d44fe2` and trusted-main ENG sync
+`57ee7a30586ad69c02d23d4e6069bcd129e0ec01` are included in the final exact-SHA
+review.
 
 ## External Review And Remaining Risks
 
