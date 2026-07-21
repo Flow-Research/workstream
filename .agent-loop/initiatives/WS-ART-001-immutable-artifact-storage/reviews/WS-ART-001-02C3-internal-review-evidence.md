@@ -1,5 +1,32 @@
 # WS-ART-001-02C3 Internal Review Evidence
 
+Reviewed code SHA: `dd1aa0d91ed0b0a3f67638f719e8332865c128eb`
+
+Reviewed at: `2026-07-21T17:43:00Z`
+
+Reviewer run IDs: `ci_repair_senior_arch`, `ci_repair_qa_security`,
+`ci_repair_ops_ci_docs`
+
+## CI repair review addendum
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---|---|---|
+| senior engineering | PASS WITH LOW RISKS | none | Recovery-only lineage custody and failed-item state shape are maintainable. |
+| QA/test | PASS WITH LOW RISKS | none | The three exact hosted failures pass after bounded repairs. |
+| security/auth | PASS | none | Recovery participants remain immutable and stale content ownership references are cleared. |
+| product/ops | PASS | none | No route, review decision, or product lifecycle behavior changed. |
+| architecture | PASS WITH LOW RISKS | none | Trigger coupling is intentionally limited to recovery participation. |
+| CI integrity | PASS | none | No workflow, test, threshold, or bypass change was made. |
+| docs | PASS | none | External response and trust status accurately describe PR #174 and the hosted rerun gate. |
+| reuse/dedup | PASS | none | The bounded state transition and custody predicate need no new helper. |
+| test delta | PASS | none | Existing tests exposed both failures; no test was changed or weakened. |
+
+Valid findings addressed: yes
+
+Open sub-agent sessions: none
+
+---
+
 Reviewed code SHA: `f302838146f39e78a15080df7231ef3904a052ed`
 
 Reviewed against trusted main: `1473f7a0cab6d879c7b7c049a9b94f557ad712c2`
