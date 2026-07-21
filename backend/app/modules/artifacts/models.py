@@ -28,7 +28,6 @@ UUID_CHECK = (
     "[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$'"
 )
 
-
 class ArtifactUploadSession(Base):
     """Mutable staging authority for one bounded artifact set."""
 
@@ -382,8 +381,26 @@ class ArtifactPutAttempt(Base):
             name="executor_lease_pair",
         ),
         CheckConstraint(
+            "(status = 'put_in_flight') = (executor_id is not null)",
+            name="inflight_fence",
+        ),
+        CheckConstraint(
             "execution_generation >= 0 and cas_version >= 0",
             name="versions_nonnegative",
+        ),
+        CheckConstraint(
+            "observation_count >= 0 and maximum_observations > 0",
+            name="observation_counts",
+        ),
+        CheckConstraint(
+            "execution_mode is null or execution_mode in ('caller_put', 'observation')",
+            name="execution_mode",
+        ),
+        CheckConstraint(
+            "status != 'provider_unavailable' or "
+            "(observation_count >= maximum_observations and next_run_at is null "
+            "and terminal_at is not null)",
+            name="unavailable_exhausted",
         ),
         CheckConstraint(
             "status != 'prepared' or (next_run_at is null and executor_id is null "
@@ -439,6 +456,9 @@ class ArtifactPutAttempt(Base):
     executor_id: Mapped[str | None] = mapped_column(String(36))
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     execution_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    execution_mode: Mapped[str | None] = mapped_column(String(20))
+    observation_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    maximum_observations: Mapped[int] = mapped_column(BigInteger, nullable=False, default=5)
     terminal_result_code: Mapped[str | None] = mapped_column(String(100))
     replica_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), index=True
@@ -524,19 +544,38 @@ class ArtifactOperationReceipt(Base):
 
     __tablename__ = "artifact_operation_receipts"
     __table_args__ = (
-        UniqueConstraint("upload_item_id", name="uq_artifact_receipt_upload_item"),
+        UniqueConstraint("put_attempt_id", name="uq_artifact_receipt_put_attempt"),
         CheckConstraint(SHA256_CHECK.format(column="request_digest"), name="request_digest_shape"),
         CheckConstraint("operation = 'put'", name="operation"),
         CheckConstraint("outcome = 'stored_pending_verification'", name="outcome"),
         CheckConstraint("attempt_number > 0", name="attempt_positive"),
+        CheckConstraint(
+            "(contract_version = 1 and put_attempt_id is null and upload_item_id is not null "
+            "and guide_source_item_id is null and checker_run_id is null) or "
+            "(contract_version = 2 and put_attempt_id is not null and "
+            "((upload_item_id is not null)::int + "
+            "(guide_source_item_id is not null)::int + "
+            "(checker_run_id is not null)::int) = 1)",
+            name="contract_producer_reference",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    upload_item_id: Mapped[str] = mapped_column(
+    contract_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    put_attempt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), index=True
+    )
+    upload_item_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_upload_items.id", ondelete="RESTRICT"),
-        nullable=False,
         index=True,
     )
+    guide_source_item_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_source_snapshot_items.id", ondelete="RESTRICT"), index=True
+    )
+    checker_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("checker_runs.id", ondelete="RESTRICT"), index=True
+    )
+    logical_role: Mapped[str | None] = mapped_column(String(100))
     replica_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_replicas.id", ondelete="RESTRICT"),
         nullable=False,
@@ -551,6 +590,131 @@ class ArtifactOperationReceipt(Base):
     attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     correlation_id: Mapped[str] = mapped_column(String(100), nullable=False)
     details: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArtifactPutObservationReceipt(Base):
+    """Append-only typed evidence for one read-only put observation."""
+
+    __tablename__ = "artifact_put_observation_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "put_attempt_id", "execution_generation", name="uq_artifact_put_observation_fence"
+        ),
+        CheckConstraint(
+            "outcome in ('observed_confirmed', 'observed_missing', "
+            "'observed_integrity_mismatch', 'conflict')",
+            name="outcome",
+        ),
+        CheckConstraint(SHA256_CHECK.format(column="expected_sha256"), name="expected_sha256"),
+        CheckConstraint(
+            "observed_sha256 is null or " + SHA256_CHECK.format(column="observed_sha256"),
+            name="observed_sha256",
+        ),
+        CheckConstraint("expected_byte_count >= 0", name="expected_size"),
+        CheckConstraint(
+            "observed_byte_count is null or observed_byte_count >= 0", name="observed_size"
+        ),
+        CheckConstraint(
+            "(outcome in ('observed_confirmed', 'observed_integrity_mismatch')) = "
+            "(observed_sha256 is not null and observed_byte_count is not null)",
+            name="observed_facts",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    put_attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    execution_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    expected_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    expected_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    observed_sha256: Mapped[str | None] = mapped_column(String(71))
+    observed_byte_count: Mapped[int | None] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArtifactVerificationJob(Base):
+    """Durable complete-object observation with lease and generation fencing."""
+
+    __tablename__ = "artifact_verification_jobs"
+    __table_args__ = (
+        UniqueConstraint("originating_put_attempt_id", name="uq_artifact_verification_origin"),
+        CheckConstraint(
+            "status in ('pending', 'running', 'verified', 'missing', "
+            "'integrity_mismatch', 'provider_unavailable', 'conflict')",
+            name="status",
+        ),
+        CheckConstraint("attempt_count >= 0 and maximum_attempts > 0", name="attempts"),
+        CheckConstraint("execution_generation >= 0 and cas_version >= 0", name="versions"),
+        CheckConstraint("(executor_id is null) = (lease_expires_at is null)", name="fence_pair"),
+        CheckConstraint("(status = 'running') = (executor_id is not null)", name="running_fence"),
+        CheckConstraint(
+            "status != 'provider_unavailable' or "
+            "((next_run_at is not null and terminal_at is null and attempt_count < maximum_attempts) "
+            "or (next_run_at is null and terminal_at is not null and attempt_count >= maximum_attempts))",
+            name="unavailable_retryability",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    originating_put_attempt_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    replica_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="pending", index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    maximum_attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    executor_id: Mapped[str | None] = mapped_column(String(36))
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_generation: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    cas_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    terminal_result_code: Mapped[str | None] = mapped_column(String(100))
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ArtifactVerificationReceipt(Base):
+    """Append-only result of one fenced complete-object observation."""
+
+    __tablename__ = "artifact_verification_receipts"
+    __table_args__ = (
+        UniqueConstraint(
+            "verification_job_id", "execution_generation", name="uq_artifact_verification_fence"
+        ),
+        CheckConstraint(
+            "outcome in ('verified', 'missing', 'integrity_mismatch', 'conflict')",
+            name="outcome",
+        ),
+        CheckConstraint(
+            "observed_sha256 is null or " + SHA256_CHECK.format(column="observed_sha256"),
+            name="observed_sha256",
+        ),
+        CheckConstraint(
+            "observed_byte_count is null or observed_byte_count >= 0", name="observed_size"
+        ),
+        CheckConstraint(
+            "(outcome in ('verified', 'integrity_mismatch')) = "
+            "(observed_sha256 is not null and observed_byte_count is not null)",
+            name="observed_facts",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    verification_job_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_verification_jobs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    execution_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(40), nullable=False)
+    observed_sha256: Mapped[str | None] = mapped_column(String(71))
+    observed_byte_count: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

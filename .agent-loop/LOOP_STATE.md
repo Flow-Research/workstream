@@ -19,8 +19,12 @@
 - AUTH-09C merged through PR #146 as `0ffdabf`; signed schema-v2 memory at
   `eeb3dc2` recorded its two administrative reads and stopped.
 - PR #141 merged `WS-ART-001-02A3` into `main` as `a10d901` on 2026-07-18.
-  PR #151 then merged `WS-ART-001-02B1` as `1b5422f`, and PR #154 merged
-  `WS-ART-001-02C1` as `44f2467c` on 2026-07-19 with ART-owned migration
+  PR #151 then merged `WS-ART-001-02B1` as `1b5422f` on 2026-07-19;
+  PR #154 then merged `WS-ART-001-02C1` as `44f2467` on 2026-07-19;
+  the user then explicitly started ART-02C2.
+- Active ART implementation chunk: `WS-ART-001-02C2` on
+  `codex/ws-art-001-02c2-verification-publication-fencing`.
+- ART-02C1 owns durable admission, prepared put-attempt state, and migration
   `0028_artifact_admission`.
 - The ART worktree consumes merged AUTH, REV, and CON contracts without
   editing or activating their independently owned runtime behavior.
@@ -29,21 +33,32 @@
 - AUTH-09D-B merged through PR #152 as `93dd392`; signed schema-v2 memory at
   `912a6254` stopped and named the contributor foundation as its exact
   successor.
-- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`; ART-02C1
-  now integrates that trusted `main` state without activating AUTH-09E.
+- PR #153 merged `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` as `8d5eb15`, PR #157
+  merged AUTH-09E as `42a89b2d`, and PR #158 merged the availability-neutral
+  ART custody transfer as `be2a79a2`; ART-02C2 integrates that trusted `main`
+  state without activating the three ART internal feature actions.
+- PR #160 merged the separately owned availability-neutral REV custody transfer
+  as `fe0e4492`; all 19 REV actions remain planned and the merge changes no ART
+  behavior or migration ownership.
+- PRs #163 and #164 merged sharded Backend CI plus timeout cleanup as `b0f9ad64`
+  and `61bc0390`; PR #165 merged signed-start loop-memory planning as `58d0514a`;
+  PR #162 then merged AUTH-PREP as `c559d556`. ART-02C2 consumes the faster CI
+  and generic prepared-authority foundation without adding an ART consumer,
+  activation, schema change, or migration.
 - PR #119 merged `WS-AUTH-001-05B` as `ad71c7e`.
 - PR #120 merged `WS-ART-001-OBJECT-STORAGE-AMENDMENT` as `4408256`.
 - PR #122 merged the first automated post-merge memory implementation as
   `fc89fb6`; its schema-v1 cross-initiative next pointer is superseded by the
   schema-v2 initiative-local clean cut.
-- PR-gate chunk: `WS-AUTH-001-09E`, explicitly started by the
-  user on 2026-07-19 from trusted `main` at `8d5eb15b` after contributor
-  foundation PR #153 and signed memory `66ab58d`. Its refreshed contract passed
-  all nine required L1 preimplementation tracks after resolving context,
-  feature-boundary, transaction, verification, coverage, docs, and reuse
-  findings. Runtime implementation, focused evidence, and all nine internal
-  reviewer tracks pass after repair; hosted Backend CI and human review are the
-  current gates. No feature action or call site becomes active in this chunk.
+- Current ART gate: latest-main integration, sharded-CI reconciliation, and the
+  bounded outbox-retention repair are complete. Refreshed exact-SHA evidence,
+  hosted checks, and explicit human merge approval remain. Production composition remains deny-only for
+  feature actions after merged AUTH-09E runtime admission.
+  No feature action or service call site becomes active in ART-02C2.
+  No later ART chunk starts automatically.
+- PR #157 merged `WS-AUTH-001-09E` as `42a89b2d` on 2026-07-20; fixed-service
+  runtime admission is available, while feature actions and call sites remain
+  planned and inactive.
 - Scope checkpoint: AWS S3 is the only v0.1 production provider; MinIO is
   local/CI S3 protocol proof; LocalStorage is focused development/test; R2 and
   Flow Node are deferred. Product modules receive narrow artifact capabilities,
@@ -61,12 +76,13 @@
   admission, prepared mutation authority, and exact AUTH-only activation chunks;
   neither reconciliation PR activates feature behavior.
 - Parallel artifact checkpoint: ART-02A1 through ART-02C1 merged through PRs
-  #127, #129, #141, #151, and #154. ART-02C1 owns durable admission, prepared
-  put-attempt state, and migration `0028_artifact_admission`.
-- Authorization checkpoint: AUTH-07B through AUTH-09D-B merged through PRs
-  #130, #131, #132, #143, #146, #148, and #152. Contributor foundation PR #153
-  merged as `8d5eb15b`; AUTH-09E is now the sole active AUTH implementation
-  chunk.
+  #127, #129, #141, #151, and #154. ART-02C2 is active and
+  adds hidden fenced put resolution and independent verification mechanics.
+- Authorization checkpoint: AUTH-07B through AUTH-09D-B, the contributor
+  foundation, AUTH-09E, the ART and REV custody transfers, and AUTH-PREP merged
+  through PRs #130, #131, #132, #143, #146, #148, #152, #153, #157, #158,
+  #160, and #162. The 25 transferred ART and 19 transferred REV actions remain
+  planned; PREP adds no feature consumer or activation.
 - Parallel coverage work: `WS-QUAL-001-01B2` remains paused. Its last official
   whole-app result is `6466/8159` statements (`79.249908%`); no replacement
   evidence exists.

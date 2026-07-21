@@ -84,7 +84,7 @@ class OutboxService:
         except OutboxInputError:
             pass
         if validated is None:
-            del value
+            del self, value
             _raise_input_error()
         digest: str | None = None
         try:
@@ -92,7 +92,7 @@ class OutboxService:
         except (TypeError, ValueError):
             pass
         if digest is None:
-            del value, validated
+            del self, value, validated
             _raise_input_error()
         reservation = None
         try:
@@ -100,12 +100,12 @@ class OutboxService:
         except SQLAlchemyError:
             pass
         if reservation is None:
-            del value, validated
+            del self, value, validated
             _raise_persistence_error()
         if len(reservation.records) != 1 or not _matches(
             reservation.records[0], validated, digest
         ):
-            del value, validated, reservation
+            del self, value, validated, reservation
             _raise_idempotency_conflict()
         record = reservation.records[0]
         return OutboxAppendResult(
