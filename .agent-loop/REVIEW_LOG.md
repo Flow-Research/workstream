@@ -2670,5 +2670,8 @@ cutover depended on mutable working-tree policy. The repair scopes replay
 correctly, makes cutover explicit, loads the exemption inventory from the
 immutable cutover merge, fails closed on missing or invalid historical data, and
 pins exact non-interpolated production arguments. All nine internal tracks pass
-exact SHA `da9b2291`; fresh hosted checks, CodeRabbit incremental re-review, and
+exact SHA `acc15aa5`; fresh hosted checks, CodeRabbit incremental re-review, and
 any branch-policy-required renewed approval remain after publication.
+The later documentation-only audit reconciliation is reviewed independently and
+bound by the chunk's internal-review evidence; it does not replace `acc15aa5` as
+the canonical implementation and closeout evidence head.
