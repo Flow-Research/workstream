@@ -175,9 +175,9 @@ Inspector/client capture remain follow-up evidence.
 
 ## Internal Reviewer Results
 
-Reviewed code SHA: 098285b32c07dbccf1f00447af1f70e06df91306
+Reviewed code SHA: f5b519c44d5990be5764b4a52574e90397b1305b
 
-Reviewed at: 2026-07-20T22:01:23Z
+Reviewed at: 2026-07-21T08:41:19Z
 
 Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-87703eb97476, 019f7cca-71c0-7301-8f89-f54e37ae8f96, 019f7cca-72d3-7da0-9447-f01a0a08b2f8, 019f7cca-73d2-74e0-ada5-91b8f8c75fc3, 019f7cca-758c-7871-9c3f-8a5a1d28fa83, 019f7ccc-9823-7552-9941-0e5747ba8640, 019f7ccc-98e7-7021-9da3-a5cb3d343db8, 019f7ccc-998c-7420-bed8-92bee8378219
 
@@ -188,7 +188,7 @@ Reviewer run IDs: 019f7cca-7065-7fc3-a102-100773738da9, 019f7cca-7137-7471-a6c9-
 | Security/auth | PASS WITH LOW RISKS | none | Existing Auth verification, exact bearer-equivalent redaction, actor isolation, and retryable Auth outage handling are covered. |
 | Product/ops | PASS AFTER FIXES | none | Revision context and requeue are complete in the fixture; unavailable production outcomes remain truthful. |
 | Architecture | PASS WITH LOW RISKS | none | No backend, persistence, or session ownership moved into MCP. |
-| CI integrity | PASS WITH LOW RISKS | none | Dedicated MCP CI preserves least privilege and the two-decimal 90 percent coverage gate while current `main` at `61bc039` retains its protected backend job topology. |
+| CI integrity | PASS WITH LOW RISKS | none | Dedicated MCP CI preserves least privilege and the two-decimal 90 percent coverage gate while current `main` at `5a8a924` retains its protected backend job topology. |
 | Docs | PASS WITH LOW RISKS | none | Initiative and operator docs are accurate; composed task reads await an authoritative aggregate API for snapshot consistency. |
 | Reuse/dedup | PASS | none | Boundary validation, mapping, replay, and observability remain centralized. |
 | Test delta | PASS WITH LOW RISKS | none | The remediation set is covered; direct 429/5xx verifier branch cases remain a low test risk. |
@@ -201,8 +201,8 @@ External review response file:
 
 | Source | Status | Notes |
 |---|---:|---|
-| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reconciled head `098285b`. |
-| CodeRabbit | Findings addressed locally; re-review pending | The composed-client reuse nitpick and all earlier findings remain addressed through `098285b`; rerun after push. |
+| Maintainer | Findings addressed locally; confirmation pending | Complete agent-facing tool contracts are implemented and protocol-tested through reconciled head `f5b519c`. |
+| CodeRabbit | Review completed; integration refresh pending | The composed-client reuse nitpick and all earlier findings are addressed; the new head only integrates upstream changes. |
 | GitHub checks | Pending | Checks must run against the final branch head after push. |
 
 ## CI And Gate Integrity

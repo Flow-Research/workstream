@@ -3,7 +3,7 @@
 ## Current status
 
 `WS-MCP-001-01` addressed all current maintainer and CodeRabbit MCP-scope
-findings and received final review results through reconciled head `098285b`.
+findings and received final review results through reconciled head `f5b519c`.
 It is open as
 [PR #149](https://github.com/Flow-Research/workstream/pull/149)
 from branch
@@ -24,7 +24,7 @@ WS-MCP-001 Sections 18 and 20 conformance and acceptance gates are complete.
 
 | Chunk | Status | Branch | PR | Notes |
 |---|---|---|---:|---|
-| `WS-MCP-001-01` | Final review ready to push | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Current `main` at `61bc039` is integrated as `098285b`; MCP CI now runs independently from the protected backend shard topology; 113 MCP tests pass at 95.27 percent coverage. External re-review and checks remain pending after push. |
+| `WS-MCP-001-01` | Final review ready to push | `oxvictor/ws-mcp-001-01-contributor-mcp-foundation` | [#149](https://github.com/Flow-Research/workstream/pull/149) | Current `main` at `5a8a924` is integrated as `f5b519c` without MCP-file changes; 113 MCP tests pass at 95.27 percent coverage. GitHub checks remain pending after push. |
 | `WS-MCP-001-02` | Proposed | - | - | Replace every temporary method with authoritative APIs and close the remaining Sections 18 and 20 evidence. |
 
 ## Blockers

@@ -10,8 +10,8 @@
 initial CodeRabbit review with nine inline findings and one summary nitpick,
 followed by ASGI buffering and direct test-dependency findings. The maintainer
 also requested complete agent-facing tool contracts. All current findings are
-addressed through reconciled head `098285b`, with current `main` at `61bc039`
-integrated and MCP CI isolated from the protected backend job topology.
+addressed through reconciled head `f5b519c`, with current `main` at `5a8a924`
+integrated without changing MCP package or workflow files.
 CodeRabbit and GitHub checks must rerun after the final evidence commit is
 pushed.
 
@@ -75,6 +75,6 @@ require maintainer approval.
 
 ## Notes
 
-Do not resolve the review as complete until reconciled head `098285b` and its
+Do not resolve the review as complete until reconciled head `f5b519c` and its
 evidence commit are pushed and CodeRabbit/GitHub checks report against that head.
 Do not merge without explicit human approval.
