@@ -239,12 +239,15 @@ def _record_failures(record: object, label: str) -> list[str]:
             ),
         }
         failures.extend(_record_failures(lifecycle, f"{label} authority basis"))
-        expected_event_keys = {
+        historical_event_keys = {
             "type", "event_id", "run_id", "created_at", "dispatcher",
             "approvers", "reason", "main_sha", "prior_state_tip",
             "initiative_id", "chunk_id",
         }
-        if set(event) != expected_event_keys:
+        dispatcher_event_keys = historical_event_keys - {"approvers"} | {
+            "authorization"
+        }
+        if set(event) not in (historical_event_keys, dispatcher_event_keys):
             failures.append(f"{label}: invalid authority event schema")
             return failures
         run_id = event.get("run_id")
@@ -254,11 +257,18 @@ def _record_failures(record: object, label: str) -> list[str]:
         for field, maximum in (("dispatcher", 160), ("reason", 500)):
             if not _is_bounded_single_line(event.get(field), maximum):
                 failures.append(f"{label}: invalid event {field}")
-        approvers = event.get("approvers")
-        if not isinstance(approvers, list) or not approvers or any(
-            not _is_bounded_single_line(value, 160) for value in approvers
-        ) or event.get("dispatcher") in approvers or len(set(approvers)) != len(approvers):
-            failures.append(f"{label}: invalid event approvers")
+        if "approvers" in event:
+            approvers = event["approvers"]
+            if not isinstance(approvers, list) or not approvers or any(
+                not _is_bounded_single_line(value, 160) for value in approvers
+            ) or event.get("dispatcher") in approvers or len(set(approvers)) != len(approvers):
+                failures.append(f"{label}: invalid event approvers")
+        elif event.get("type") != "start" or event.get("authorization") != {
+            "schema_version": 1,
+            "type": "github_workflow_dispatch",
+            "actor": event.get("dispatcher"),
+        }:
+            failures.append(f"{label}: invalid dispatcher authorization")
         for field in ("main_sha", "prior_state_tip"):
             value = event.get(field)
             if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
