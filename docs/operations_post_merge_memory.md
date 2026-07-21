@@ -198,12 +198,21 @@ dispatch may restart or reprioritize after a completed cancellation, but it
 does not alter the cancellation record or approval evidence.
 
 Failure handling is closed: stale main/tip, missing, ambiguous, symlinked,
-foreign, malformed, or blob-mismatched contract; globally active work; missing or
+foreign, malformed, or blob-mismatched contract; active work in the requested
+initiative; missing or
 dispatcher without an allowed repository permission, missing or same-dispatcher cancellation
 approval, rerun, collision, active conflict, and moved branch all require
 inspection followed by a fresh dispatch. Invalid signature/tree or
 branch corruption requires disabling writes and authenticated recovery. A push
 race publishes nothing and also requires inspection before redispatch.
+
+Distinct initiatives may hold active chunks concurrently, with at most one
+planning or implementation chunk per initiative. Use separate worktrees and
+isolated test resources operationally, but never treat local worktree state as
+signed authority. When `main` advances, rebase and rerun proof before merge;
+that rebase does not replace the immutable selected contract or authorize scope
+drift. The generated queue and initiative projections are the canonical view of
+all concurrent activity.
 
 The cutover inventory is fixed in
 `.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry

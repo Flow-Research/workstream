@@ -762,8 +762,6 @@ def _authority_transition_failures(
             for item in prior_records
         ):
             failures.append(f"{label}: authority start selects completed work")
-        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
-            failures.append(f"{label}: authority start follows globally active work")
         if any(value is not None for value in basis["active"].values()):
             failures.append(f"{label}: authority start basis is already active")
         selection = event.get("selection")

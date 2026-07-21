@@ -104,7 +104,7 @@ def test_checker_requires_exact_selection_git_identity(
     )[0]
 
 
-def test_checker_rejects_start_transition_after_globally_active_work(tmp_path: Path) -> None:
+def test_checker_rejects_second_start_in_same_initiative(tmp_path: Path) -> None:
     state_root, repository_root, record, event = fixtures._selected_start_fixture(tmp_path)
     loop.apply_merge_record(state_root, record)
     loop.apply_authority_event(state_root, event, repository_root=repository_root)
@@ -117,7 +117,7 @@ def test_checker_rejects_start_transition_after_globally_active_work(tmp_path: P
     failures = checker._authority_transition_failures(
         forged, [record, active], "fixture"
     )
-    assert any("globally active" in failure for failure in failures)
+    assert any("basis is already active" in failure for failure in failures)
 
 
 def test_checker_rejects_authority_projection_drift(tmp_path: Path) -> None:

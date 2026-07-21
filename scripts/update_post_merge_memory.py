@@ -1887,7 +1887,6 @@ def _validate_authority_transition(
     if authority["source"] != basis["source"] or authority["completed_chunk"] != basis["completed_chunk"]:
         raise LoopMemoryError("authority lifecycle does not copy its signed basis")
     if event_type == "start":
-        latest = _latest_by_initiative(prior_records)
         if any(
             _event_type(item) in {"merge", "cutover"}
             and item["completed_chunk"]["initiative_id"] == event["initiative_id"]
@@ -1895,8 +1894,6 @@ def _validate_authority_transition(
             for item in prior_records
         ):
             raise LoopMemoryError("authority start selects an already-completed chunk")
-        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
-            raise LoopMemoryError("authority start follows globally active work")
         selection = event.get("selection")
         if basis["active"]["implementation_chunk"] is not None or basis["active"]["planning_chunk"] is not None:
             raise LoopMemoryError("authority start follows an already-active basis")
@@ -1972,8 +1969,6 @@ def apply_authority_event(
             for item in records
         ):
             raise LoopMemoryError("cannot start an already-completed chunk")
-        if any(any(value is not None for value in item["active"].values()) for item in latest.values()):
-            raise LoopMemoryError("cannot start while signed work is globally active")
         if basis["active"]["implementation_chunk"] is not None or basis["active"]["planning_chunk"] is not None:
             raise LoopMemoryError("initiative already has an active chunk")
         selection = event.get("selection")
