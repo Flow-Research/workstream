@@ -66,8 +66,9 @@ starting AUTH-10A before this parent merges and signed memory stops
 - Every child has a complete contract with allowed files, exclusions,
   acceptance criteria, verification, reviewers, human focus, and stop rules.
 - Migration `0031` belongs only to 10A; 10B and 10C add no migration.
-- 10A activates no action or route; 10B owns exactly three read actions; 10C
-  owns exactly two mutation actions.
+- 10A registers all five actions as planned with exact 10B/10C owner values and
+  activates no action or route; 10B owns activation of exactly three read
+  actions; 10C owns activation of exactly two mutation actions.
 - Project lifecycle behavior is frozen: discovery and issuance allow draft,
   active, and paused projects; list/detail and revocation remain available for
   every existing project state so evidence is inspectable and authority can

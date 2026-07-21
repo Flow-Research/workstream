@@ -692,9 +692,11 @@ review rejected the combined runtime boundary.
 AUTH-10 is a planning-only parent and splits into exactly three sequential
 same-initiative children. AUTH-10A owns migration
 `0031_project_role_grants`, the immutable qualification/grant aggregates, and
-the typed/PostgreSQL three-role evidence clean cut; it activates no action or
-route. AUTH-10B owns exactly the candidate, grant-list, and grant-detail read
-actions and privacy-safe pagination. AUTH-10C owns exactly issue and revoke,
+the typed/PostgreSQL three-role evidence clean cut. It registers all five
+project-role actions as planned with exact AUTH-10B/AUTH-10C owners but activates
+no action or route. AUTH-10B owns activation of exactly the candidate,
+grant-list, and grant-detail read actions and privacy-safe pagination. AUTH-10C
+owns activation of exactly issue and revoke,
 multi-principal PREP ordering, idempotency, audit, invalidation, and mutation
 concurrency. Each child requires a separate signed start and stop.
 
