@@ -745,7 +745,8 @@ def _authority_transition_failures(
     authority = record.get("authority_state", {})
     if authority.get("completed_chunk", {}).get("initiative_id") != event.get("initiative_id"):
         return [f"{label}: authority initiative does not match event"]
-    basis = _latest_by_initiative(prior_records).get(event["initiative_id"])
+    latest = _latest_by_initiative(prior_records)
+    basis = latest.get(event["initiative_id"])
     if basis is None:
         return [f"{label}: authority event has no preceding basis"]
     failures = []
@@ -754,7 +755,6 @@ def _authority_transition_failures(
     ) != basis.get("completed_chunk"):
         failures.append(f"{label}: authority lifecycle does not copy signed basis")
     if event["type"] == "start":
-        latest = _latest_by_initiative(prior_records)
         if any(
             _is_merge_record(item)
             and item["completed_chunk"]["initiative_id"] == event["initiative_id"]
