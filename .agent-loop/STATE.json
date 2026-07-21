@@ -3,98 +3,38 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
-  "authority_state": {
-    "active": {
-      "implementation_chunk": "WS-ART-001-02C3",
-      "planning_chunk": null
-    },
-    "completed_chunk": {
-      "chunk_id": "WS-ART-001-02C2",
-      "chunk_title": "Verification Publication And Fencing",
-      "initiative_id": "WS-ART-001",
-      "next_chunk_id": "WS-ART-001-02C3",
-      "next_chunk_title": "Recovery Attempt And Idempotency Chain",
-      "next_requires_explicit_start": true,
-      "schema_version": 2
-    },
-    "gate": {
-      "next_chunk_id": "WS-ART-001-02C3",
-      "next_chunk_title": "Recovery Attempt And Idempotency Chain",
-      "next_requires_explicit_start": true,
-      "status": "active"
-    },
-    "source": {
-      "first_parent_sha": "c559d556225761d4f5ab5842ea09d8b70df9be58",
-      "head_ref": "codex/ws-art-001-02c2-verification-publication-fencing",
-      "head_sha": "1bdb3d7bdc25423b115a80b16fe524dc0a731fe2",
-      "intent_blob_sha": "33033a0ea403ab4887a2410cddfd9a5c1d6f4808",
-      "intent_path": ".agent-loop/merge-intents/WS-ART-001-02C2.json",
-      "main_sha": "bc5e6a42cc84bff3ec80978970dc0018fe060b35",
-      "merged_at": "2026-07-21T07:17:20Z",
-      "merged_by": "abiorh-claw",
-      "pr_number": 159,
-      "pr_title": "WS-ART-001-02C2: verification publication and fencing",
-      "pr_url": "https://github.com/Flow-Research/workstream/pull/159"
-    }
-  },
   "checks": {
-    "all_required_passed": false,
+    "all_required_passed": true,
     "required": {
       "CodeRabbit": {
-        "conclusion": "failure",
+        "conclusion": "success",
         "kind": "status",
         "url": null
       },
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29845392634/job/88684577158"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29848785478/job/88696057284"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29845392620/job/88688497518"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29848662224/job/88699520539"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-005-01",
-    "chunk_title": "Initiative-Local Concurrency",
-    "initiative_id": "WS-ENG-005",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "chunk_id": "WS-AUTH-001-10B",
+    "chunk_title": "Project Role Grant Read Planning Parent",
+    "initiative_id": "WS-AUTH-001",
+    "next_chunk_id": "WS-AUTH-001-10B1",
+    "next_chunk_title": "Durable Authorization Read Rate Control",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
-  "event": {
-    "authorization": {
-      "actor": "Abiorh001",
-      "permission": "admin",
-      "schema_version": 2,
-      "type": "github_repository_permission"
-    },
-    "chunk_id": "WS-ART-001-02C3",
-    "created_at": "2026-07-21T16:02:46Z",
-    "dispatcher": "Abiorh001",
-    "event_id": "github-actions:29846809983:start",
-    "initiative_id": "WS-ART-001",
-    "main_sha": "f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734",
-    "prior_state_tip": "5e32a70ad94fc611155da672e477c613b95d5df8",
-    "reason": "User-approved ART-02C3 start after initiative-local concurrency activation",
-    "run_id": 29846809983,
-    "selection": {
-      "contract_blob_sha": "edf88426f108750c90d9e1ab56457231b516797c",
-      "contract_path": ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/WS-ART-001-02C3-recovery-attempt-idempotency.md",
-      "contract_title": "Recovery Attempt And Idempotency Chain",
-      "mode": "declared_successor",
-      "phase": "implementation",
-      "schema_version": 1
-    },
-    "type": "start"
-  },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-AUTH-001-10B1",
+    "next_chunk_title": "Durable Authorization Read Rate Control",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -108,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "d9d447119ec8afebc658afadca622061265bca68",
-    "head_ref": "codex/ws-eng-005-parallel-initiative-starts",
-    "head_sha": "06c0438963288b85b71fd8e388bdfa5bb41809d9",
-    "intent_blob_sha": "34cb0eefbbc7a62aae609e4a389ab3e514e070c0",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-005-01.json",
-    "main_sha": "f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734",
-    "merged_at": "2026-07-21T16:00:42Z",
+    "first_parent_sha": "f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734",
+    "head_ref": "codex/ws-auth-001-10b-project-role-grant-reads",
+    "head_sha": "a1953b754befedbd5c3ca5ce32daddbae57b5135",
+    "intent_blob_sha": "b1816c1ef9fc105962bf911b15b75169ee9214e3",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10B.json",
+    "main_sha": "1473f7a0cab6d879c7b7c049a9b94f557ad712c2",
+    "merged_at": "2026-07-21T16:44:34Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 172,
-    "pr_title": "fix(loop): allow parallel initiative starts",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/172"
+    "pr_number": 173,
+    "pr_title": "docs(auth): split project-role reads into rate control and disclosure",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/173"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-21T16:02:46Z"
+  "updated_at": "2026-07-21T16:44:34Z"
 }
