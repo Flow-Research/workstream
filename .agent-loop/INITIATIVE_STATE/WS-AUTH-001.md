@@ -5,6 +5,7 @@
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-10` - Project Qualification And Contributor Role Grants
 - Gate: `active`
+- Active planning chunk: `none`
 - Active implementation chunk: `WS-AUTH-001-10A`
 - Next chunk: `WS-AUTH-001-10A`
 - Separate explicit start required: `true`

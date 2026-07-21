@@ -5,6 +5,7 @@
 - Initiative: `WS-CON-001`
 - Latest completed chunk: `WS-CON-001-02A` - Shared Transactional Outbox Persistence
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `WS-CON-001-02B`
 - Separate explicit start required: `true`

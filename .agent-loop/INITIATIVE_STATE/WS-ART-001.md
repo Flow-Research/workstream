@@ -5,6 +5,7 @@
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02C2` - Verification Publication And Fencing
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `WS-ART-001-02C3`
 - Separate explicit start required: `true`

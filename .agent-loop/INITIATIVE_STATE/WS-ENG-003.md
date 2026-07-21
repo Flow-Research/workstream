@@ -5,6 +5,7 @@
 - Initiative: `WS-ENG-003`
 - Latest completed chunk: `WS-ENG-003-01` - Exact Loop Memory Recovery
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`

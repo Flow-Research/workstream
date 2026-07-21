@@ -5,6 +5,7 @@
 - Initiative: `WS-XINT-001`
 - Latest completed chunk: `WS-XINT-001-PLAN` - Lifecycle Boundary Reconciliation
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`

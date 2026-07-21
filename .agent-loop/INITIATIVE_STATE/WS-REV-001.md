@@ -5,6 +5,7 @@
 - Initiative: `WS-REV-001`
 - Latest completed chunk: `WS-REV-001-02A` - Guide Chronology And Task Locking Split
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `WS-REV-001-02A1`
 - Separate explicit start required: `true`

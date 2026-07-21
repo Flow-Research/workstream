@@ -5,6 +5,7 @@
 - Initiative: `WS-ENG-002`
 - Latest completed chunk: `WS-ENG-002-01` - Single-Checkpoint Loop Start
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`

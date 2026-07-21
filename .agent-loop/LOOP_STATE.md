@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#168](https://github.com/Flow-Research/workstream/pull/168) - docs(auth): split project role grant delivery
-- Merge commit: `70f9c7bcdb63680e545f661a956929379df138e4`
-- Final PR head: `d3101a613ad5c59f13b02a311c913525a7cb446b`
-- Merged at: `2026-07-21T12:03:47Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-10.json` at blob `81a7d138fbae36d5e71ab32f0f0a43bda1d45bde`
-- Completed chunk: `WS-AUTH-001-10` - Project Qualification And Contributor Role Grants
+- Last merged PR: [#171](https://github.com/Flow-Research/workstream/pull/171) - fix(loop): rebuild signed renderer projections
+- Merge commit: `dd4a454b9ab8735a3c4aa8e85e7e64b1e7222b0a`
+- Final PR head: `f94b10add96ac2d51f20fdeb6f1a36b00a4c241a`
+- Merged at: `2026-07-21T14:20:05Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-004-01R1.json` at blob `d562a0989dcce0634c042308883ed934267d052b`
+- Completed chunk: `WS-ENG-004-01R1` - Renderer-Safe Recovery Bootstrap
 - Active planning chunks: none
 - Active implementation chunks: `WS-AUTH-001-10A`
-- Latest authority event: `start` for `WS-AUTH-001-10A`
-- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-AUTH-001-10A` - Project Role Grant Data And Evidence Foundation; requires a separate explicit start.
+- Next chunk: none recorded.
 - Required check evidence: attention required
   - `agent-gates`: `success`
   - `test`: `success`

@@ -5,6 +5,7 @@
 - Initiative: `WS-CI-001`
 - Latest completed chunk: `WS-CI-001-01R1` - Timeout Cleanup Repair
 - Gate: `stopped_after_merge`
+- Active planning chunk: `none`
 - Active implementation chunk: `none`
 - Next chunk: `none`
 - Separate explicit start required: `true`
