@@ -1,10 +1,12 @@
 # WS-AUTH-001-10B Internal Review Evidence
 
-Reviewed code SHA: `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044`
+Reviewed code SHA: `dd8afb790ddbe0e04581ee717e5fc03952e6b23e`
+
+Reviewed planning SHA: `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044`
 
 Reviewed against trusted main: `f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734`
 
-Reviewed at: `2026-07-21T16:22:47Z`
+Reviewed at: `2026-07-21T16:26:06Z`
 
 Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
 `auth10_plan_ops_ci_docs`
