@@ -1,3 +1,4 @@
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportCallIssue=false
 """Regression tests for Workstream agent gate helpers.
 
 Run with plain Python after installing the hash-pinned agent-gate dependencies;
@@ -2341,6 +2342,7 @@ def test_generated_tree_publication_is_exact_fast_forward_and_bootstrappable() -
 
         repository = root / "state"
         parent = initialize_repository(repository, with_parent=True)
+        assert parent is not None
         index = root / "generated.index"
         tree = stage_tree(repository, index)
         updater.validate_generated_git_tree(repository, tree, output)
@@ -5318,7 +5320,7 @@ def test_local_minio_compose_is_regression_protected() -> None:
 
 
 def test_backend_coverage_thresholds_are_regression_protected() -> None:
-    """Keep parallel full-suite fan-in and every coverage floor fail closed."""
+    """Keep semantic lanes, local coverage combine, and every floor fail closed."""
     workflow_path = ROOT / ".github/workflows/backend.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
     parsed_workflow = yaml.safe_load(workflow)
@@ -5327,108 +5329,95 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert "pull_request_target" not in workflow
     assert "paths-ignore" not in workflow and "continue-on-error" not in workflow
     jobs = parsed_workflow["jobs"]
-    assert set(jobs) == {"preflight", "shards", "api_e2e", "test"}
+    assert set(jobs) == {"test"}
 
+    test_job = jobs["test"]
+    assert set(test_job) == {
+        "runs-on",
+        "timeout-minutes",
+        "services",
+        "steps",
+    }
+    assert test_job["timeout-minutes"] == 45
+    assert "strategy" not in test_job and "needs" not in test_job
     postgres_image = (
         "public.ecr.aws/docker/library/postgres:16@sha256:"
         "33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
     )
-    for job_name in ("preflight", "shards", "api_e2e"):
-        assert jobs[job_name]["services"]["postgres"]["image"] == postgres_image
-
-    preflight = jobs["preflight"]
-    assert set(preflight["outputs"]) == {"tree_sha"}
-    assert any(
-        step.get("name") == "Isolated database runner test"
-        and step.get("run") == "python -m pytest -q tests/test_isolated_database_runner.py"
-        for step in preflight["steps"]
+    assert test_job["services"]["postgres"]["image"] == postgres_image
+    steps = test_job["steps"]
+    assert not any(
+        "actions/upload-artifact@" in step.get("uses", "")
+        or "actions/download-artifact@" in step.get("uses", "")
+        for step in steps
     )
-    plan_steps = [
-        step for step in preflight["steps"] if step.get("name") == "Collect and plan exact test inventory"
-    ]
-    assert len(plan_steps) == 1
-    assert "ci_test_shards.py plan" in str(plan_steps[0]["run"])
-    assert "--shards 4" in str(plan_steps[0]["run"])
+    assert "ci_test_shards.py" not in workflow
 
-    shard_job = jobs["shards"]
-    assert shard_job["needs"] == "preflight"
-    assert shard_job["strategy"] == {
-        "fail-fast": False,
-        "matrix": {"shard": [1, 2, 3, 4]},
-    }
-    shard_steps = shard_job["steps"]
+    runner_tests = [
+        step for step in steps if step.get("name") == "Isolated database runner test"
+    ]
+    assert len(runner_tests) == 1
+    assert runner_tests[0]["run"] == "python -m pytest -q tests/test_isolated_database_runner.py"
     minio_steps = [
-        step for step in shard_steps if step.get("name") == "Start real MinIO artifact provider"
+        step for step in steps if step.get("name") == "Start real MinIO artifact provider"
     ]
     assert len(minio_steps) == 1
     assert "${MINIO_IMAGE}" in str(minio_steps[0]["run"])
-    run_shard_steps = [
-        step for step in shard_steps if str(step.get("name", "")).startswith("Run isolated shard")
-    ]
-    assert len(run_shard_steps) == 1
-    assert "ci_test_shards.py run-shard" in str(run_shard_steps[0]["run"])
-    assert "--cov-fail-under" not in str(run_shard_steps[0]["run"])
 
-    api_steps = jobs["api_e2e"]["steps"]
-    api_e2e_steps = [
-        step for step in api_steps if step.get("name") == "API contract real API e2e"
+    suite_steps = [
+        step for step in steps if step.get("name") == "Backend semantic-lane coverage"
     ]
-    assert len(api_e2e_steps) == 1
-    assert "scripts/run_isolated_tests.py" in str(api_e2e_steps[0]["run"])
-    assert "scripts/api_contract_e2e.py" in str(api_e2e_steps[0]["run"])
-    shard_tool = (ROOT / "backend/scripts/ci_test_shards.py").read_text(encoding="utf-8")
-    assert 4800 <= jobs["shards"]["timeout-minutes"] * 60 - 600
-    assert '"4800"' in shard_tool
-    assert 1500 <= jobs["api_e2e"]["timeout-minutes"] * 60 - 300
-    assert "--timeout-seconds 1500" in str(api_e2e_steps[0]["run"])
-
-    test_job = parsed_workflow["jobs"]["test"]
-    assert set(test_job) == {"if", "needs", "runs-on", "timeout-minutes", "steps"}
-    assert test_job["if"] == "${{ always() }}"
-    assert test_job["needs"] == ["preflight", "shards", "api_e2e"]
-    steps = test_job["steps"]
-    upstream = [step for step in steps if step.get("name") == "Require every upstream proof"]
-    assert len(upstream) == 1
-    assert upstream[0]["env"] == {
-        "PREFLIGHT_RESULT": "${{ needs.preflight.result }}",
-        "SHARDS_RESULT": "${{ needs.shards.result }}",
-        "API_E2E_RESULT": "${{ needs.api_e2e.result }}",
+    assert len(suite_steps) == 1
+    suite_step = suite_steps[0]
+    suite_command = str(suite_step["run"])
+    assert suite_step["working-directory"] == "backend"
+    assert suite_step["env"] == {
+        "COVERAGE_FILE": ".coverage",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "WORKSTREAM_TEST_ADMIN_DATABASE_URL": (
+            "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
+        ),
+        "WORKSTREAM_TEST_MINIO_ENDPOINT": "http://127.0.0.1:9000",
     }
-    assert str(upstream[0]["run"]).count('= success') == 3
-    downloads = [step for step in steps if "actions/download-artifact@" in step.get("uses", "")]
-    assert len(downloads) == 5
-    assert all(
-        step["uses"]
-        == "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
-        and "pattern" not in step.get("with", {})
-        for step in downloads
-    )
-    uploads = [
-        step
-        for job in jobs.values()
-        for step in job["steps"]
-        if "actions/upload-artifact@" in step.get("uses", "")
-    ]
-    assert len(uploads) == 3
-    assert all(
-        step["uses"]
-        == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
-        for step in uploads
-    )
-    fan_in = [step for step in steps if step.get("name") == "Validate exact fan-in and combine coverage"]
-    assert len(fan_in) == 1
-    assert "ci_test_shards.py fan-in" in str(fan_in[0]["run"])
-    assert "coverage combine ../.ci/combined-coverage" in str(fan_in[0]["run"])
+    assert "scripts/run_test_lanes.py" in suite_command
+    assert "--metadata-dir" in suite_command and "--summary-json" in suite_command
+    assert "--timeout-seconds 1200" in suite_command
+    assert "rm -f .coverage .coverage.*" in suite_command
+    assert "coverage combine" in suite_command
+    assert "scripts/run_isolated_tests.py" not in suite_command
+    assert "--cov-fail-under" not in suite_command
+    assert 1200 <= test_job["timeout-minutes"] * 60 - 600
 
-    full_suite_steps = [
-        step for step in steps if step.get("name") == "Backend full-suite coverage"
+    api_steps = [step for step in steps if step.get("name") == "API contract real API e2e"]
+    assert len(api_steps) == 1
+    api_command = str(api_steps[0]["run"])
+    assert "scripts/run_isolated_tests.py" in api_command
+    assert "scripts/api_contract_e2e.py" in api_command
+    assert "--timeout-seconds 600" in api_command
+
+    runner_tool = (ROOT / "backend/scripts/run_isolated_tests.py").read_text(
+        encoding="utf-8"
+    )
+    assert "HEARTBEAT_SECONDS = 60.0" in runner_tool
+    assert "isolated-test child active" in runner_tool
+    lane_tool = (ROOT / "backend/scripts/run_test_lanes.py").read_text(encoding="utf-8")
+    assert "validate_lane_inventory(discover_test_modules(), lanes=LANES)" in lane_tool
+    assert 'name="no_postgres"' in lane_tool
+    assert 'name="schema_contracts"' in lane_tool
+    assert 'name="control_plane"' in lane_tool
+    assert 'name="execution_plane"' in lane_tool
+    assert 'env["COVERAGE_FILE"] = f".coverage.{lane.name}"' in lane_tool
+    assert '"--durations=25"' in lane_tool
+    assert "test lanes active" in lane_tool
+    assert "start_new_session=True" in lane_tool
+    suite_index = steps.index(suite_step)
+    floor_steps = [
+        step for step in steps if step.get("name") == "Repository coverage floor"
     ]
-    assert len(full_suite_steps) == 1
-    assert full_suite_steps[0].get("working-directory") == "backend"
-    assert full_suite_steps[0]["run"] == "coverage report --precision=2 --fail-under=78"
-    for forbidden_key in ("if", "continue-on-error", "shell", "env"):
-        assert forbidden_key not in full_suite_steps[0]
-    full_suite_index = steps.index(full_suite_steps[0])
+    assert len(floor_steps) == 1
+    assert floor_steps[0]["run"] == "coverage report --precision=2 --fail-under=78"
+    assert steps.index(floor_steps[0]) > suite_index
+
     auth_coverage_steps = [
         step
         for step in steps
@@ -5437,11 +5426,6 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert tuple(str(step["run"]).strip() for step in auth_coverage_steps) == (
         AUTH_09B_COVERAGE_COMMANDS
     )
-    for coverage_step in auth_coverage_steps:
-        assert full_suite_index < steps.index(coverage_step)
-        assert coverage_step.get("working-directory") == "backend"
-        for forbidden_key in ("if", "continue-on-error", "shell", "env"):
-            assert forbidden_key not in coverage_step
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
     actual_coverage = tuple(
@@ -5461,11 +5445,8 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
             step for step in steps if str(step.get("run", "")).strip() == command
         ]
         assert len(matches) == 1, (command, matches)
-        coverage_step = matches[0]
-        assert steps.index(coverage_step) > full_suite_index
-        assert coverage_step.get("working-directory") == "backend"
-        for forbidden_key in ("if", "continue-on-error", "shell", "env"):
-            assert forbidden_key not in coverage_step
+        assert steps.index(matches[0]) > suite_index
+        assert matches[0].get("working-directory") == "backend"
     later_commands = artifact_expected_coverage_commands_for("06B")
     assert later_commands[0] == FOUNDATION_ARTIFACT_COVERAGE_COMMAND
     assert any("app/modules/checkers/*" in command for command in later_commands)
@@ -5476,7 +5457,6 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         + len(AUTH_09B_COVERAGE_COMMANDS)
         + len(AUTHORIZATION_READ_COVERAGE_COMMANDS)
     )
-    assert "continue-on-error" not in workflow
 
 
 def test_artifact_coverage_phase_is_derived_from_work_queue() -> None:

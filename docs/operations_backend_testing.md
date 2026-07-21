@@ -1,115 +1,125 @@
 # Backend Testing Operations
-Workstream's application tests run against a new local Postgres database per
-invocation. Provisioning and cleanup use the admin database; the application
-phase receives only a strict `workstream_test_<12 lowercase hex>` database and an ephemeral login without elevated authority.
+
+Workstream groups backend tests into four dependency-based processes. The
+no-PostgreSQL lane runs without database credentials. Three PostgreSQL lanes
+share one server but each owns a temporary database and role. Every database is
+migrated once; fixtures then restore an empty baseline with `TRUNCATE`.
 
 ## Local full suite
-Keep the admin URL in the environment with `postgresql+asyncpg` and a loopback host.
-Never put real or shared credentials in arguments, logs, evidence, or configuration.
+
+Keep the administrator URL in the environment with `postgresql+asyncpg` and a
+loopback host. Never place real or shared credentials in arguments, logs,
+evidence, or configuration.
 
 ```bash
 cd backend
 tmp_dir=$(mktemp -d)
 trap 'rm -rf "$tmp_dir"' EXIT
 export WORKSTREAM_TEST_ADMIN_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/postgres'
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 .venv/bin/python -m pytest -q tests/test_isolated_database_runner.py
-.venv/bin/python scripts/run_isolated_tests.py --metadata-json "$tmp_dir/database.json" -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py
+rm -f .coverage .coverage.*
+.venv/bin/python scripts/run_test_lanes.py \
+  --metadata-dir "$tmp_dir/lanes" \
+  --summary-json "$tmp_dir/summary.json" \
+  --timeout-seconds 1200
+.venv/bin/coverage combine
 unset WORKSTREAM_TEST_ADMIN_DATABASE_URL
 ```
 
-Run both phases. The second can exceed three hours locally; CI gives the child 210 minutes and the job 240 minutes so cleanup retains a bounded window.
+`run_test_lanes.py` validates that every `test_*.py` module is assigned exactly
+once or is the dedicated runner test. It starts the no-PostgreSQL, schema,
+control-plane, and execution-plane processes concurrently. Each process writes a
+private coverage file; coverage is combined locally after every lane passes.
 
-The runner removes the admin URL before child launch, overwrites both child database URLs,
-removes the nonlocal override, redacts complete URLs, and writes only credential-free metadata.
-It attempts to drop the owned database and ephemeral login after success,
-failure, timeout, or interruption. Host termination or a database error can
-prevent cleanup; recover manually with the database provisioning credential, targeting only the exact strict database and role names reported by local catalog inspection.
+Database lanes invoke `run_isolated_tests.py`, which removes the administrator
+URL before pytest, overwrites child database URLs, and redacts complete URLs.
+Both runners emit secret-free 60-second heartbeats. The isolated runner drops
+each owned database and role after success, failure, timeout, or interruption.
 
-## Candidate coverage floor
+## Database reset model
 
-`coverage_policy.py --compute-floor` is a read-only preparation command. Point
-`--coverage-json` at temporary complete-app coverage JSON; the command validates
-the application-file inventory and prints the exact statement percentage
-truncated to six places. It does not configure or enforce a floor, write
-evidence, connect to Postgres, or act as the CI coverage policy. Keep coverage
-JSON temporary and non-secret; 01B2 owns baseline publication and enforcement.
+`tests/conftest.py` owns the reset seam. Before each database-backed test it:
+
+1. disposes pooled application connections;
+2. truncates every mutable public table in one transaction;
+3. preserves `alembic_version` and immutable actor migration evidence;
+4. restores the single `authority_control` baseline row; and
+5. re-enables the five explicit truncate guards.
+
+Do not add module-local migration fixtures. Migration behavior belongs in
+`tests/test_alembic.py`; ordinary route and service tests must consume the
+central clean-database fixture.
+
+PGlite is not the default Python test adapter. The full schema migrates on
+PGlite, but the current PGlite Socket multiplexer does not complete
+`asyncpg.Connection.close()` reliably and does not guarantee normal PostgreSQL
+concurrency behavior. Lock, trigger, migration, and concurrent transaction
+proofs therefore remain on real PostgreSQL.
 
 ## Focused checks
-The API-guard tests are statically DB-free:
+
+The API-guard tests are statically database-free:
 
 ```bash
 .venv/bin/python -m pytest -q tests/test_api_contract_e2e.py
 ```
 
-Runner lifecycle tests require the same admin environment variable:
+Runner lifecycle tests require the administrator environment variable:
 
 ```bash
 .venv/bin/python -m pytest -q tests/test_isolated_database_runner.py
 ```
 
-Run the destructive API drill only against `workstream_test`, `test_workstream`, or a runner-derived local name:
+Run the destructive API drill only through the isolated runner or against a
+strict local test database name:
 
 ```bash
-WORKSTREAM_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/workstream_test' .venv/bin/python scripts/api_contract_e2e.py
+WORKSTREAM_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/workstream_test' \
+  .venv/bin/python scripts/api_contract_e2e.py
 ```
 
 Do not use `WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE` for ordinary proof.
 
-If provisioning fails, confirm the local PostgreSQL provisioning credential can create/drop databases and roles, terminate owned sessions, and reach the named admin database. Diagnostics omit credentials.
+## Latest local proof
 
-## Hosted parallel full-suite proof
+The semantic lanes executed all 1,826 tests exactly once in 314.40 seconds;
+including process startup and local coverage combine, wall time was 330.70
+seconds. The previous single process required 919.48 test seconds and 975.62 wall
+seconds. Global coverage is 87.58 percent; protected reports are
+90.90–100.00 percent. The real API contract drill also passed.
 
-The required GitHub check remains `Backend / test`. It is the final fan-in for:
+An AST audit found no exact duplicate test bodies. Six literal-only similarity
+clusters are candidates for parametrization, but parametrization would preserve
+the same executions and would not materially reduce runtime. No behavior test
+was removed; only Outbox's repeated Alembic-head setup was deleted.
 
-1. `preflight`: evidence gate, lint, docstrings, isolated-runner test, exact test
-   collection, and deterministic four-shard plan;
-2. `shards`: four independent jobs, each with its own digest-pinned PostgreSQL
-   service, runner-owned migrated database, real digest-pinned MinIO, and
-   coverage file;
-3. `api_e2e`: the real API contract proof in a separate isolated database; and
-4. `test`: exact artifact validation, coverage combination, the 78 percent
-   repository floor, and all protected 90 percent subsystem floors.
+These values prove the local test topology, not hosted runner timing. Use the
+exact checked-out commit's `Backend / test` result for release evidence.
 
-Matrix job state is the live progress view. The isolated runner continues to
-buffer and redact pytest output, so a running shard does not stream individual
-test names. The final check reports shard duration and balance metadata after
-all evidence is authenticated.
+## Hosted proof
 
-### Evidence bundles
+The required GitHub check remains `Backend / test`. It uses one job, one
+PostgreSQL service, and one MinIO service. Its order is:
 
-The preflight plan and four fixed shard bundles are retained for seven days.
-Their names include the actual checked-out tree SHA. Each shard bundle contains
-only `coverage.data` and allowlisted `result.json`; the result binds the tree,
-manifest, shard, modules, collected and completed pytest node IDs, duration, and
-SHA-256 of the exact coverage bytes. Repository-owned pytest hooks record the
-final selected inventory and lifecycle completions in the same process; fan-in
-requires exact equality and matches stable test-base cardinalities to preflight.
-Bundles never contain database URLs or passwords, MinIO
-credentials, environment dumps, or runner database metadata.
+1. internal evidence, lint, docstrings, and isolated-runner checks;
+2. four dependency-based test processes with isolated mutable state;
+3. local coverage combine followed by the destructive API contract drill; and
+4. the 78 percent repository floor plus every protected 90 percent floor.
 
-The fan-in accepts exactly four expected regular-file bundles. It rejects stale
-tree or manifest bindings, missing/extra/duplicate nodes or modules, altered
-coverage, symlinks, path traversal, unexpected files, failed/cancelled/skipped
-upstream jobs, and missing artifacts before `coverage combine` runs.
+There is no GitHub matrix, arbitrary weighted shard, cross-job artifact fan-in,
+or shared mutable database. Every lane has a 20-minute bound, the API drill has
+a 10-minute bound, and the GitHub job has a 45-minute hard bound.
 
-### Failure diagnosis and reruns
+### Failure diagnosis
 
-- `preflight` failure: inspect evidence/lint/runner/collection output. No shard
-  evidence is valid until preflight succeeds.
-- one `shards` matrix failure: inspect that shard's database, MinIO, collection,
-  or test failure. The final required check must fail even if other shards pass.
-- `api_e2e` failure: inspect the independent API contract job; coverage cannot
-  compensate for it.
-- `test` failure: inspect dependency-result validation, exact bundle fan-in, then
-  the named global or subsystem coverage report.
+- **Runner test:** inspect provisioning, redaction, signal, or cleanup behavior.
+- **Semantic lanes:** inspect the named lane result and 60-second active-lane
+  heartbeat; every process is force-bounded at 20 minutes.
+- **API drill:** inspect the named contract assertion after the full suite.
+- **Coverage:** inspect the named global or protected subsystem report. Coverage
+  cannot compensate for a failed test or API drill.
 
-A complete workflow rerun creates evidence for the same checked-out tree and is
-the clearest recovery. GitHub may rerun failed jobs, but the fan-in still rejects
-missing or stale artifacts; never upload or edit bundles manually. A new commit
-always requires a complete new run because its tree SHA differs.
-
-Four shards reduce wall-clock latency by using more concurrent runner minutes.
-Review shard durations and total Actions consumption after deployment before
-changing the shard count. If parallel execution is unstable or does not justify
-its cost, revert the single implementation PR to restore the prior sequential
-workflow; do not lower coverage, skip a shard, or add a silent fallback.
+Rerun the complete `Backend / test` job for the same checked-out commit. Never
+lower coverage, skip tests, or restore parallel databases to hide fixture
+regressions.

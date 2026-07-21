@@ -13,11 +13,13 @@ import re
 import secrets
 import signal
 import subprocess
+from subprocess import TimeoutExpired
 import sys
+import time
 from urllib.parse import quote, urlsplit, urlunsplit
 
-import asyncpg
-from alembic.config import Config
+import asyncpg  # type: ignore[import-not-found]
+from alembic.config import Config  # type: ignore[import-not-found]
 from alembic.script import ScriptDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +30,7 @@ ADMIN_ENV = "WORKSTREAM_TEST_ADMIN_DATABASE_URL"
 OVERRIDE_ENV = "WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE"
 INTERRUPTED = False
 TERMINATION_GRACE_SECONDS = 2.0
+HEARTBEAT_SECONDS = 60.0
 
 
 class RunnerError(RuntimeError):
@@ -40,10 +43,12 @@ def _urls(admin_url: str) -> tuple[str, str, str, str]:
         raise RunnerError("unsafe_admin_database")
     if not parsed.path.strip("/") or parsed.query or parsed.fragment:
         raise RunnerError("unsafe_admin_database")
-    suffix = hashlib.sha256(
-        f"{ROOT.resolve()}:{secrets.token_hex(16)}".encode()
-    ).hexdigest()[:12]
-    name, role, password = f"workstream_test_{suffix}", f"workstream_role_{suffix}", secrets.token_hex(24)
+    suffix = hashlib.sha256(f"{ROOT.resolve()}:{secrets.token_hex(16)}".encode()).hexdigest()[:12]
+    name, role, password = (
+        f"workstream_test_{suffix}",
+        f"workstream_role_{suffix}",
+        secrets.token_hex(24),
+    )
     _identifiers(name, role)
     try:
         host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
@@ -124,11 +129,14 @@ async def _drop(admin_url: str, name: str, role: str) -> None:
         await connection.fetch(
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
             "WHERE (datname = $1 OR usename = $2) AND pid <> pg_backend_pid()",
-            name, role,
+            name,
+            role,
         )
         if owner:
             await connection.execute(f'DROP DATABASE "{name}"')
-        if await connection.fetchval("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role):
+        if await connection.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)", role
+        ):
             await connection.execute(f'DROP ROLE "{role}"')
     finally:
         await connection.close()
@@ -173,18 +181,31 @@ def _run(
         stderr=subprocess.PIPE,
         start_new_session=True,
     )
+    started_at = time.monotonic()
     try:
-        stdout, stderr = process.communicate(timeout=timeout)
-        return process.returncode, stdout, stderr
-    except subprocess.TimeoutExpired:
-        _signal_group(process, signal.SIGKILL)
-        stdout, stderr = process.communicate()
-        return 124, stdout, stderr
+        while True:
+            elapsed = time.monotonic() - started_at
+            if timeout is not None and elapsed >= timeout:
+                _signal_group(process, signal.SIGKILL)
+                stdout, stderr = process.communicate()
+                return 124, stdout, stderr
+            wait_seconds = HEARTBEAT_SECONDS
+            if timeout is not None:
+                wait_seconds = min(wait_seconds, timeout - elapsed)
+            try:
+                stdout, stderr = process.communicate(timeout=wait_seconds)
+                return process.returncode, stdout, stderr
+            except TimeoutExpired:
+                print(
+                    "isolated-test child active: "
+                    f"elapsed_seconds={time.monotonic() - started_at:.0f}",
+                    flush=True,
+                )
     except KeyboardInterrupt:
         _signal_group(process, signal.SIGTERM)
         try:
             stdout, stderr = process.communicate(timeout=TERMINATION_GRACE_SECONDS)
-        except subprocess.TimeoutExpired:
+        except TimeoutExpired:
             _signal_group(process, signal.SIGKILL)
             stdout, stderr = process.communicate()
         return 130, stdout, stderr
@@ -220,6 +241,8 @@ def main() -> int:
     INTERRUPTED = False
     admin_url = os.environ.pop(ADMIN_ENV, "")
     owned = False
+    name = ""
+    role = ""
     result = 2
     previous_sigint = signal.signal(signal.SIGINT, _defer_interrupt)
     previous_sigterm = signal.signal(signal.SIGTERM, _defer_interrupt)

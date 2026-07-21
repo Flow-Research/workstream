@@ -1,20 +1,22 @@
+# pyright: reportOptionalSubscript=false
 from __future__ import annotations
 
 from collections import UserDict
 from collections.abc import Mapping
 import json
-from pathlib import Path
 from types import MappingProxyType
+from typing import cast
 from uuid import UUID, uuid4
 import warnings
 
-from alembic import command
-from alembic.config import Config
 from pydantic import ValidationError
 import pytest
 from sqlalchemy import delete, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.modules.audit.repository import AuditRepository
 from app.modules.audit.schemas import (
@@ -34,14 +36,9 @@ from tests.assertion_helpers import assert_secret_not_retained
 
 
 @pytest.fixture
-def audit_database_env(postgres_database_url: str, migration_lock) -> str:
-    """Ensure audit tests do not inherit another migration test's schema state."""
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
-    with migration_lock():
-        command.upgrade(config, "head")
-    return postgres_database_url
+def audit_database_env(clean_postgres_database: str) -> str:
+    """Use the clean migrated database for audit tests."""
+    return clean_postgres_database
 
 
 @pytest.fixture
@@ -199,8 +196,8 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
             actor_ref="workstream:system:bootstrap",
             request_id=uuid4(),
             correlation_id=uuid4(),
-            permission_id="actor.profile.read_self",
-            action_id="actor.profile.read_self",
+            permission_id=PermissionId.ACTOR_PROFILE_READ_SELF,
+            action_id=ActionId.ACTOR_PROFILE_READ_SELF,
             reason="authorization_policy_denial",
             denial_code="permission_not_granted",
         )
@@ -530,9 +527,7 @@ def test_authority_input_rejects_unbounded_or_inconsistent_evidence() -> None:
     safe = _authority_input(AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED).model_dump(
         mode="json"
     )
-    safe_python = _authority_input(
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED
-    ).model_dump()
+    safe_python = _authority_input(AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED).model_dump()
 
     class ChangingMapping(Mapping):
         def __init__(self):
@@ -543,11 +538,7 @@ def test_authority_input_rejects_unbounded_or_inconsistent_evidence() -> None:
 
         def __iter__(self):
             self.iterations += 1
-            keys = (
-                safe_python
-                if self.iterations == 1
-                else safe_python | {"raw_token": secret}
-            )
+            keys = safe_python if self.iterations == 1 else safe_python | {"raw_token": secret}
             return iter(keys)
 
         def __len__(self):
@@ -860,10 +851,10 @@ async def test_authority_service_readmits_mutated_inputs_without_retention(audit
     ]
     values[0].actor_ref = secret
     values[1].after_facts["allowed"] = secret
-    values[2].after_facts = HostileFacts()
+    values[2].after_facts = cast(dict[str, str | bool], HostileFacts())
     valid_hostile_repr = _authority_input(AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED)
     changing_facts = ChangingFacts()
-    valid_hostile_repr.after_facts = changing_facts
+    valid_hostile_repr.after_facts = cast(dict[str, str | bool], changing_facts)
 
     async with audit_factory() as session:
         for value in values:
@@ -941,7 +932,7 @@ async def test_authority_writer_persists_typed_privacy_neutral_events(audit_fact
         assert event["claim_snapshot"] == {}
         assert event["event_payload"] == {}
         assert event["auth_source"] == "local_authority"
-        assert event["is_dev_auth"] is False
+        assert not event["is_dev_auth"]
     assert stored_values[0]["idempotency_reference"] is None
     assert future_idempotency is not None
 
@@ -1088,10 +1079,13 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
                 {"authority_id": str(value.event_id), "legacy_id": legacy_id},
             )
         ).all()
-        assert {(row.id, row.reason, row.event_domain) for row in rows} == {
-            (str(value.event_id), "authorization_evaluation", "authority"),
-            (legacy_id, None, "legacy_lifecycle"),
-        }
+        observed_rows = {row.id: [row.reason, row.event_domain] for row in rows}
+        assert observed_rows[str(value.event_id)] == [
+            "authorization_evaluation",
+            "authority",
+        ]
+        assert observed_rows[legacy_id] == [None, "legacy_lifecycle"]
+        assert len(observed_rows) == 2
 
         with pytest.raises(IntegrityError):
             await session.execute(

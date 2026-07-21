@@ -1,19 +1,56 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
+import asyncio
 import fcntl
+from functools import partial
 import hashlib
 import os
 from pathlib import Path
 
-import asyncpg
-import pytest
+from alembic import command  # type: ignore[import-not-found,attr-defined]
+from alembic.config import Config  # type: ignore[import-not-found]
+import asyncpg  # type: ignore[import-not-found]
+import pytest  # type: ignore[import-not-found]
 
 from app.core.config import get_settings
+from app.db import session as db_session
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
+TRUNCATE_GUARDED_TABLES = (
+    "admin_role_grants",
+    "audit_events",
+    "authority_control",
+    "authority_idempotency_records",
+    "outbox_events",
+    "project_role_grants",
+    "project_role_qualification_snapshots",
+)
 TestDatabaseReset = Callable[..., Awaitable[None]]
+DatabaseLock = Callable[[], AbstractContextManager[None]]
+
+
+def _alembic_config() -> Config:
+    root = Path(__file__).resolve().parents[1]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "alembic"))
+    return config
+
+
+async def _drop_test_database_schema(database_url: str) -> None:
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+    try:
+        await connection.execute("drop schema if exists public cascade")
+        await connection.execute("create schema public")
+    finally:
+        await connection.close()
+
+
+def _rebuild_test_database_schema(database_url: str) -> None:
+    with postgres_ddl_lock(database_url):
+        asyncio.run(_drop_test_database_schema(database_url))
+        command.upgrade(_alembic_config(), "head")
 
 
 async def _reset_test_database_state(
@@ -21,78 +58,32 @@ async def _reset_test_database_state(
     *,
     include_canonical_actors: bool = False,
 ) -> None:
-    """Reset test-owned append-only state under explicit privileged custody."""
+    """Restore the already-migrated isolated database to its empty baseline."""
+    del include_canonical_actors
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         async with connection.transaction():
-            await connection.execute(
-                "alter table audit_events disable trigger audit_events_reject_update_delete"
+            rows = await connection.fetch(
+                "select tablename, quote_ident(tablename) as identifier "
+                "from pg_tables where schemaname = 'public' "
+                "and tablename not in ('alembic_version', 'actor_profile_migration_state') "
+                "order by tablename"
             )
+            tables = {row["tablename"]: row["identifier"] for row in rows}
+            if not tables or not set(TRUNCATE_GUARDED_TABLES).issubset(tables):
+                raise RuntimeError("test database is not migrated to the expected schema")
+            for name in TRUNCATE_GUARDED_TABLES:
+                await connection.execute(f"alter table {tables[name]} disable trigger user")
             await connection.execute(
-                "alter table audit_events disable trigger audit_events_reject_truncate"
-            )
-            await connection.execute(
-                "alter table authority_idempotency_records disable trigger user"
-            )
-            await connection.execute(
-                "alter table project_role_grants disable trigger user"
-            )
-            await connection.execute(
-                "alter table project_role_qualification_snapshots disable trigger user"
-            )
-            await connection.execute("alter table admin_role_grants disable trigger user")
-            await connection.execute("alter table authority_control disable trigger user")
-            if include_canonical_actors:
-                await connection.execute(
-                    "alter table actor_profiles disable trigger actor_profile_history_guard"
-                )
-                await connection.execute(
-                    "alter table actor_identity_links disable trigger "
-                    "actor_identity_link_history_guard"
-                )
-            await connection.execute("truncate table audit_events cascade")
-            await connection.execute("truncate table authority_idempotency_records cascade")
-            await connection.execute(
-                "truncate table project_role_grants, "
-                "project_role_qualification_snapshots"
-            )
-            await connection.execute(
-                "truncate table authority_control, admin_role_grants cascade"
+                f"truncate table {', '.join(tables.values())} restart identity cascade"
             )
             await connection.execute(
                 "insert into authority_control"
                 "(id, bootstrap_completed, bootstrap_grant_id, version) "
                 "values (1, false, null, 0)"
             )
-            await connection.execute("truncate table api_rate_control_counters")
-            if include_canonical_actors:
-                await connection.execute(
-                    "truncate table actor_identity_links, actor_profiles cascade"
-                )
-                await connection.execute(
-                    "alter table actor_identity_links enable trigger "
-                    "actor_identity_link_history_guard"
-                )
-                await connection.execute(
-                    "alter table actor_profiles enable trigger actor_profile_history_guard"
-                )
-            await connection.execute(
-                "alter table audit_events enable trigger audit_events_reject_truncate"
-            )
-            await connection.execute("alter table authority_control enable trigger user")
-            await connection.execute("alter table admin_role_grants enable trigger user")
-            await connection.execute(
-                "alter table authority_idempotency_records enable trigger user"
-            )
-            await connection.execute(
-                "alter table project_role_qualification_snapshots enable trigger user"
-            )
-            await connection.execute(
-                "alter table project_role_grants enable trigger user"
-            )
-            await connection.execute(
-                "alter table audit_events enable trigger audit_events_reject_update_delete"
-            )
+            for name in TRUNCATE_GUARDED_TABLES:
+                await connection.execute(f"alter table {tables[name]} enable trigger user")
     finally:
         await connection.close()
 
@@ -112,16 +103,9 @@ def postgres_ddl_lock(database_url: str) -> Iterator[None]:
 
 
 @pytest.fixture
-def migration_lock(postgres_database_url: str):
+def migration_lock(postgres_database_url: str) -> DatabaseLock:
     """Return a database-scoped PostgreSQL DDL lock context manager."""
-
-    @contextmanager
-    def lock() -> Iterator[None]:
-        """Acquire the lock for this fixture's exact test database."""
-        with postgres_ddl_lock(postgres_database_url):
-            yield
-
-    return lock
+    return partial(postgres_ddl_lock, postgres_database_url)
 
 
 @pytest.fixture
@@ -131,16 +115,41 @@ def reset_test_database_state() -> TestDatabaseReset:
 
 
 @pytest.fixture
+def clean_postgres_database(
+    postgres_database_url: str,
+    request: pytest.FixtureRequest,
+) -> Iterator[str]:
+    """Provide an isolated migrated database baseline per test."""
+    owns_schema = request.node.get_closest_marker("postgres_schema_contract") is not None
+    get_settings.cache_clear()
+    asyncio.run(db_session.dispose_engine())
+    if owns_schema:
+        _rebuild_test_database_schema(postgres_database_url)
+    else:
+        asyncio.run(_reset_test_database_state(postgres_database_url))
+    try:
+        yield postgres_database_url
+    finally:
+        asyncio.run(db_session.dispose_engine())
+        if owns_schema:
+            with postgres_ddl_lock(postgres_database_url):
+                command.upgrade(_alembic_config(), "head")
+        get_settings.cache_clear()
+
+
+@pytest.fixture
 def postgres_database_url() -> str:
     value = os.environ.get("WORKSTREAM_TEST_DATABASE_URL")
     if not value:
-        pytest.fail("WORKSTREAM_TEST_DATABASE_URL is required for database-backed tests")
+        raise RuntimeError("WORKSTREAM_TEST_DATABASE_URL is required for database-backed tests")
     return value
 
 
 @pytest.fixture
-def isolated_database_env(monkeypatch: pytest.MonkeyPatch, postgres_database_url: str) -> str:
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+def isolated_database_env(
+    monkeypatch: pytest.MonkeyPatch, clean_postgres_database: str
+) -> Iterator[str]:
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     get_settings.cache_clear()
-    yield postgres_database_url
+    yield clean_postgres_database
     get_settings.cache_clear()
