@@ -45,14 +45,15 @@ _DENIAL_CODES = frozenset(
     scope_not_authorized self_grant_forbidden self_role_revoke_forbidden resource_guard_denied
     actor_not_found grant_not_found resource_not_found actor_already_suspended actor_not_suspended
     actor_deactivated_terminal last_access_administrator admin_role_grant_exists
-    project_role_grant_exists identity_link_conflict identity_link_already_revoked
+    project_role_grant_exists project_role_grant_already_revoked
+    project_role_grant_replay_state_changed identity_link_conflict identity_link_already_revoked
     identity_link_not_revoked resource_project_mismatch idempotency_mismatch
     invalid_role_scope invalid_project_role qualification_snapshot_invalid""".split()
 )
 _ADMIN_ROLES = frozenset(
     {"access_administrator", "operator", "project_manager", "finance_authority", "audit_authority"}
 )
-_PROJECT_ROLES = frozenset({"submitter", "reviewer", "both"})
+_PROJECT_ROLES = frozenset({"submitter", "reviewer", "adjudicator"})
 _FACT_VALUES: dict[str, frozenset[str]] = {
     "status": frozenset({"active", "suspended", "deactivated", "revoked", "captured"}),
     "subject_kind": frozenset({"human", "service"}),
@@ -80,7 +81,6 @@ class AuthorityEventType(StrEnum):
     LAST_ACCESS_ADMIN_OPERATION_DENIED = "LastAccessAdministratorOperationDenied"
     PROJECT_ROLE_QUALIFICATION_CAPTURED = "ProjectRoleQualificationSnapshotCaptured"
     PROJECT_ROLE_GRANT_ISSUED = "ProjectRoleGrantIssued"
-    PROJECT_ROLE_GRANT_REPLACED = "ProjectRoleGrantReplaced"
     PROJECT_ROLE_GRANT_REVOKED = "ProjectRoleGrantRevoked"
     SENSITIVE_AUTHORIZATION_ALLOWED = "SensitiveAuthorizationAllowed"
     SENSITIVE_AUTHORIZATION_DENIED = "SensitiveAuthorizationDenied"
@@ -116,7 +116,6 @@ _REASONS = {
     AuthorityEventType.LAST_ACCESS_ADMIN_OPERATION_DENIED: {"authorization_policy_denial"},
     AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED: {"qualification_evidence_captured"},
     AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED: {"authority_assignment"},
-    AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED: {"authority_replacement"},
     AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED: {"authority_revocation"},
     AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED: {"authorization_evaluation"},
     AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED: {"authorization_evaluation"},
@@ -216,7 +215,6 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUED: (_ADMIN_ROLES, "issued"),
         AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED: (_ADMIN_ROLES, "revoked"),
         AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED: (_PROJECT_ROLES, "issued"),
-        AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED: (_PROJECT_ROLES, "replaced"),
         AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED: (_PROJECT_ROLES, "revoked"),
     }[event]
     if action == "issued":

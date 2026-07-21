@@ -34,6 +34,12 @@ async def _reset_test_database_state(
             await connection.execute(
                 "alter table authority_idempotency_records disable trigger user"
             )
+            await connection.execute(
+                "alter table project_role_grants disable trigger user"
+            )
+            await connection.execute(
+                "alter table project_role_qualification_snapshots disable trigger user"
+            )
             await connection.execute("alter table admin_role_grants disable trigger user")
             await connection.execute("alter table authority_control disable trigger user")
             if include_canonical_actors:
@@ -46,6 +52,10 @@ async def _reset_test_database_state(
                 )
             await connection.execute("truncate table audit_events cascade")
             await connection.execute("truncate table authority_idempotency_records cascade")
+            await connection.execute(
+                "truncate table project_role_grants, "
+                "project_role_qualification_snapshots"
+            )
             await connection.execute(
                 "truncate table authority_control, admin_role_grants cascade"
             )
@@ -73,6 +83,12 @@ async def _reset_test_database_state(
             await connection.execute("alter table admin_role_grants enable trigger user")
             await connection.execute(
                 "alter table authority_idempotency_records enable trigger user"
+            )
+            await connection.execute(
+                "alter table project_role_qualification_snapshots enable trigger user"
+            )
+            await connection.execute(
+                "alter table project_role_grants enable trigger user"
             )
             await connection.execute(
                 "alter table audit_events enable trigger audit_events_reject_update_delete"

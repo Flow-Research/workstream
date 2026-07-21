@@ -94,8 +94,12 @@ from app.modules.authorization.schemas import (
     MismatchedReservation,
     PendingAuthorityReservationError,
     ProjectRole,
+    ProjectRoleQualificationSnapshotInput,
     ProjectRoleGrantIssueRequest,
     ProjectRoleGrantRevokeRequest,
+    QualificationAvailabilitySnapshot,
+    QualificationAvailability,
+    QualificationUnavailableReason,
     ReplayedReservation,
     ServiceActorCreateRequest,
     derive_reason_digest,
@@ -441,11 +445,19 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             "WS-AUTH-001-09D-B",
         ),
         "actor.service.provision": ("actor.service.provision", "WS-AUTH-001-09B"),
+        "project.contributor_candidate.list": (
+            "project.role_grant.manage",
+            "WS-AUTH-001-10B",
+        ),
+        "project_role_grant.list": ("project.role_grant.read", "WS-AUTH-001-10B"),
+        "project_role_grant.read": ("project.role_grant.read", "WS-AUTH-001-10B"),
+        "project_role_grant.issue": ("project.role_grant.manage", "WS-AUTH-001-10C"),
+        "project_role_grant.revoke": ("project.role_grant.manage", "WS-AUTH-001-10C"),
     }
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 65
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 70
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -551,7 +563,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert sum(
         definition.availability is ActionAvailability.PLANNED
         for definition in ACTION_DEFINITIONS
-    ) == 48
+    ) == 53
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
     )
@@ -678,7 +690,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "The ART transfer adds no migration" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
-    assert "74 PermissionIds, 65 ActionIds, 17 active actions, and\n48 planned actions" in operations
+    assert "74 PermissionIds, 70 ActionIds, 17 active actions, and\n53 planned actions" in operations
 
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -6147,13 +6159,9 @@ def _operation_success(
             "authority_revocation",
         ),
         AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE: (
-            AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED
-            if getattr(request, "replaced_grant_id", None)
-            else AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
+            AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
             "project.role_grant.manage",
-            "authority_replacement"
-            if getattr(request, "replaced_grant_id", None)
-            else "authority_assignment",
+            "authority_assignment",
         ),
         AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE: (
             AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
@@ -6228,7 +6236,6 @@ def _operation_success(
     elif isinstance(request, ProjectRoleGrantIssueRequest):
         project_id = request.project_id
         target_actor = request.target_actor_id
-        matched_grant = request.replaced_grant_id
         after_facts = {
             "status": "active",
             "role": request.role.value,
@@ -6236,8 +6243,6 @@ def _operation_success(
             "scope_id": str(project_id),
             "effective": True,
         }
-        if matched_grant:
-            before_facts = after_facts | {"role": "reviewer"}
     elif isinstance(request, ProjectRoleGrantRevokeRequest):
         project_id = request.project_id
         before_facts = {
@@ -7047,8 +7052,7 @@ def test_every_operation_has_one_strict_canonical_request_variant() -> None:
             operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
             project_id=project,
             target_actor_id=actor,
-            role=ProjectRole.BOTH,
-            replaced_grant_id=resource,
+            role=ProjectRole.ADJUDICATOR,
             reason_digest=DIGEST,
         ),
         ProjectRoleGrantRevokeRequest(
@@ -7088,6 +7092,58 @@ def test_every_operation_has_one_strict_canonical_request_variant() -> None:
     )
 
 
+def test_project_role_contract_rejects_replacement_and_bounds_qualification_references() -> None:
+    project_id, actor_id = uuid4(), uuid4()
+    base = {
+        "operation": "project_role_grant.issue",
+        "project_id": project_id,
+        "target_actor_id": actor_id,
+        "role": "submitter",
+        "reason_digest": DIGEST,
+    }
+    for invalid in (
+        base | {"role": "both"},
+        base | {"replaced_grant_id": uuid4()},
+    ):
+        with pytest.raises(TypeError, match="invalid authority mutation request"):
+            parse_authority_request(invalid)
+
+    available = {
+        "availability": QualificationAvailability.AVAILABLE,
+        "reference_ids": ["work:opaque-1"],
+        "unavailable_reason": None,
+    }
+    unavailable = {
+        "availability": QualificationAvailability.UNAVAILABLE,
+        "reference_ids": [],
+        "unavailable_reason": QualificationUnavailableReason.NO_RECORD,
+    }
+    snapshot = ProjectRoleQualificationSnapshotInput.model_validate(
+        {
+            "project_id": project_id,
+            "actor_profile_id": actor_id,
+            "requested_role": ProjectRole.ADJUDICATOR,
+            "skills_snapshot": available,
+            "reputation_snapshot": unavailable,
+            "prior_project_work_refs": [uuid4()],
+            "external_expertise_refs": ["expertise:opaque-1"],
+        }
+    )
+    assert snapshot.requested_role is ProjectRole.ADJUDICATOR
+    assert QualificationAvailabilitySnapshot.model_validate(available).reference_ids == [
+        "work:opaque-1"
+    ]
+    for invalid in (
+        available | {"reference_ids": []},
+        available | {"unavailable_reason": "no_record"},
+        unavailable | {"reference_ids": ["unexpected"]},
+        available | {"reference_ids": ["https://credential.example/secret"]},
+        available | {"reference_ids": ["x"] * 21},
+    ):
+        with pytest.raises(ValidationError):
+            QualificationAvailabilitySnapshot.model_validate(invalid)
+
+
 def test_actor_profile_lifecycle_public_schemas_are_strict_bounded_and_typed() -> None:
     target = uuid4()
     assert ActorLifecycleBody(reason="  approved correction  ").reason == "approved correction"
@@ -7124,7 +7180,7 @@ def test_actor_profile_lifecycle_public_schemas_are_strict_bounded_and_typed() -
 
 
 @pytest.mark.asyncio
-async def test_all_operation_and_replacement_mappings_commit_one_linked_pair(
+async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
     authorization_factory,
 ) -> None:
     project, actor, resource, admin_revoke_target = uuid4(), uuid4(), uuid4(), uuid4()
@@ -7157,14 +7213,6 @@ async def test_all_operation_and_replacement_mappings_commit_one_linked_pair(
             project_id=project,
             target_actor_id=actor,
             role=ProjectRole.SUBMITTER,
-            reason_digest=DIGEST,
-        ),
-        ProjectRoleGrantIssueRequest(
-            operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
-            project_id=project,
-            target_actor_id=actor,
-            role=ProjectRole.SUBMITTER,
-            replaced_grant_id=resource,
             reason_digest=DIGEST,
         ),
         ProjectRoleGrantRevokeRequest(

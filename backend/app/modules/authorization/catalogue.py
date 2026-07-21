@@ -110,6 +110,11 @@ class ActionId(StrEnum):
     ACTOR_IDENTITY_LINK_REVOKE = "actor.identity_link.revoke"
     ACTOR_IDENTITY_LINK_REACTIVATE = "actor.identity_link.reactivate"
     ACTOR_SERVICE_PROVISION = "actor.service.provision"
+    PROJECT_CONTRIBUTOR_CANDIDATE_LIST = "project.contributor_candidate.list"
+    PROJECT_ROLE_GRANT_LIST = "project_role_grant.list"
+    PROJECT_ROLE_GRANT_READ = "project_role_grant.read"
+    PROJECT_ROLE_GRANT_ISSUE = "project_role_grant.issue"
+    PROJECT_ROLE_GRANT_REVOKE = "project_role_grant.revoke"
     OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
@@ -172,6 +177,8 @@ class ActionOwner(StrEnum):
     AUTH_09C = "WS-AUTH-001-09C"
     AUTH_09D_A = "WS-AUTH-001-09D-A"
     AUTH_09D_B = "WS-AUTH-001-09D-B"
+    AUTH_10B = "WS-AUTH-001-10B"
+    AUTH_10C = "WS-AUTH-001-10C"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     AUTH_REV_05 = "WS-AUTH-001-REV-05"
@@ -308,6 +315,31 @@ ACTION_DEFINITIONS = (
         ActionId.ACTOR_SERVICE_PROVISION,
         PermissionId.ACTOR_SERVICE_PROVISION,
         ActionOwner.AUTH_09B,
+    ),
+    _planned(
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+        ActionOwner.AUTH_10B,
+    ),
+    _planned(
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        PermissionId.PROJECT_ROLE_GRANT_READ,
+        ActionOwner.AUTH_10B,
+    ),
+    _planned(
+        ActionId.PROJECT_ROLE_GRANT_READ,
+        PermissionId.PROJECT_ROLE_GRANT_READ,
+        ActionOwner.AUTH_10B,
+    ),
+    _planned(
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+        ActionOwner.AUTH_10C,
+    ),
+    _planned(
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+        ActionOwner.AUTH_10C,
     ),
     _planned(
         ActionId.OPERATIONS_TASK_START_OVERRIDE,
@@ -574,7 +606,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 74 or len(ACTION_IDS) != 65:
+    if len(PERMISSION_IDS) != 74 or len(ACTION_IDS) != 70:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
