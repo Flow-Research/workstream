@@ -2719,3 +2719,18 @@ any branch-policy-required renewed approval remain after publication.
 The later documentation-only audit reconciliation is reviewed independently and
 bound by the chunk's internal-review evidence; it does not replace `acc15aa5` as
 the canonical implementation and closeout evidence head.
+## 2026-07-21 - WS-AUTH-001-10 Internal Plan Review
+
+The inherited combined AUTH-10 runtime contract failed L1 plan review because
+it mixed migration/evidence, privacy-sensitive reads, and PREP-bound mutations.
+The user approved a sequential 10A/10B/10C design. The repaired plan freezes
+independent submitter/reviewer/adjudicator grants, exact API and privacy shapes,
+deterministic lock/replay behavior, migration refusal predicates, and planned
+catalogue/evidence custody without activating a route or changing runtime.
+
+Planning candidate `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2` passes
+senior engineering, QA/test, security/auth, product/ops, architecture, CI
+integrity, docs, reuse/dedup, and test-delta review with no open finding. Stale
+authorization wording, Markdown links, merge-intent validation, and diff
+integrity pass. GitHub Agent Gates, CodeRabbit, and human review remain; 10A
+requires a separate signed start after this planning parent merges.
