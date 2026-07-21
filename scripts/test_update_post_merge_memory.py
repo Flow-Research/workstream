@@ -706,6 +706,26 @@ def test_load_start_authorities_is_closed_and_case_insensitive(tmp_path: Path) -
     assert loop.load_start_authorities(tmp_path) == frozenset({"abiorh001"})
 
 
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"schema_version": 1, "actors": ["ok"], "extra": True}, "schema"),
+        ({"schema_version": 2, "actors": ["ok"]}, "valid actors"),
+        ({"schema_version": 1, "actors": []}, "valid actors"),
+        ({"schema_version": 1, "actors": ["bad_name"]}, "actor is invalid"),
+        ({"schema_version": 1, "actors": ["Abiorh001", "abiorh001"]}, "unique"),
+    ],
+)
+def test_load_start_authorities_rejects_malformed_policy(
+    tmp_path: Path, payload: dict, message: str
+) -> None:
+    policy = tmp_path / loop.START_AUTHORITIES_PATH
+    policy.parent.mkdir(parents=True)
+    policy.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop.load_start_authorities(tmp_path)
+
+
 def test_well_formed_stale_state_tip_is_rejected(tmp_path: Path) -> None:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)
