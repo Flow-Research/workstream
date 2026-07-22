@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#174](https://github.com/Flow-Research/workstream/pull/174) - WS-ART-001-02C3: add artifact recovery attempt chain
-- Merge commit: `92b8a7aa813c5914d8191547b62eb3823a37a140`
-- Final PR head: `7f8bb4fc351b16c00b3a574c0a5f68d42773d43b`
-- Merged at: `2026-07-22T02:07:13Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ART-001-02C3.json` at blob `a5ad589f904b8460edc14e834fc1b66b8c95cbb3`
-- Completed chunk: `WS-ART-001-02C3` - Recovery Attempt And Idempotency Chain
+- Last merged PR: [#175](https://github.com/Flow-Research/workstream/pull/175) - feat(auth): add durable authorization read rate control
+- Merge commit: `14fa4316f7d984f2176657bfafd2a2dae56f944e`
+- Final PR head: `4194a43aa1153ca07a349b11a5096f7a3c8b9535`
+- Merged at: `2026-07-22T03:17:32Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-10B1.json` at blob `a8f3a76ef5ea3aaad37195b71db79f19e8541770`
+- Completed chunk: `WS-AUTH-001-10B1` - Durable Authorization Read Rate Control
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B1`
-- Latest authority event: `start` for `WS-ART-001-02D`
-- Authority initiative: `WS-ART-001`
+- Active implementation chunks: `WS-ART-001-02D`
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-ART-001-02D` - Operator Artifact Operations; requires a separate explicit start.
+- Next chunk: `WS-AUTH-001-10B2` - Privacy-Safe Project Role Grant Reads; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
