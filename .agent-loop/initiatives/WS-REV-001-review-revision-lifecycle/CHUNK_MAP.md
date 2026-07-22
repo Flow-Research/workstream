@@ -16,14 +16,17 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-01` | Canonical Contract Adoption And Dependency Conformance | L1 | PLAN | Merged PR #145 |
 | `WS-REV-001-02` | Locked Review Policy And Task Lifecycle Alignment | L1 | 01 | Merged PR #147; non-executable split record |
 | `WS-REV-001-PLAN2` | REV-02A Runtime Readiness Plan Refresh | L1 | 02; planning-only human start | Merged PR #150 |
-| `WS-REV-001-02A` | Guide Chronology And Task Locking Split | L1 | PLAN2; exact merged AUTH contributor foundation; separate human start | Active planning-only split record after preimplementation FAIL; no runtime |
-| `WS-REV-001-02A1` | Project And Setup Publication Fence | L1 | 02A; current writer inventory; separate human start | Proposed executable child |
-| `WS-REV-001-02A3` | Guide Activation Chronology | L1 | 02A1; current AUTH foundation/head; separate human start | Proposed executable child |
-| `WS-REV-001-02A4` | Task Guide Triplet And Screening | L1 | 02A3; current migration head; separate human start | Proposed executable child |
-| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | 02A4; approved duration defaults; separate start | Proposed |
-| `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | 02B; merged AUTH canonical contributor constraints; separate start | Proposed |
-| `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | 02C | Non-executable split record |
-| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | 02C; merged `WS-CON-001-03B`; contract review | Proposed; no contract yet |
+| `WS-REV-001-02A` | Guide Chronology And Task Locking Split | L1 | Historical | Superseded boundary-crossing plan; never executable by REV |
+| `WS-REV-001-02A1` | Project And Setup Publication Fence | L1 | Historical | Retired from REV; upstream owner concern |
+| `WS-REV-001-02A3` | Guide Activation Chronology | L1 | Historical | Retired from REV; upstream owner concern |
+| `WS-REV-001-02A4` | Task Guide Triplet And Screening | L1 | Historical | Retired from REV; upstream owner concern |
+| `WS-REV-001-02A2` | Prepared Superseded Guide Reactivation | L1 | Historical | Retired from REV; upstream owner concern |
+| `WS-REV-001-02B` | Locked Review Policy And Dormant Task Lifecycle Compatibility | L1 | Historical | Superseded; any upstream gap is reported to its owner |
+| `WS-REV-001-02C` | Submission Attribution, Context, And Immutable Lineage | L1 | Historical | Superseded as an ownership chunk; REV consumes owner-supplied Submission lineage |
+| `WS-REV-001-PLAN3` | Allow-Review Boundary Reset | L1 | Signed start required on exact current main | Proposed planning correction; not canonically active |
+| `WS-REV-001-03P` | Review And Revision Policy Persistence | L1 | PLAN3; signed separate start | Recommended first REV runtime chunk; proposed contract, not started |
+| `WS-REV-001-03` | Review Queue And Lease Persistence | L1 | PLAN3 | Non-executable split record |
+| `WS-REV-001-03A` | Queue And Lease Base Persistence | L1 | 03P; exact merged `allow_review`, Submission/artifact, and actor handoffs; signed separate start | Proposed contract, not started |
 | `WS-REV-001-03B` | Normalized Review Packet Manifest Persistence | L1 | 03A; exact ART packet-membership owner chunk merged | Proposed; owner chunk unscheduled |
 | `WS-REV-001-04` | Review Chain Persistence | L1 | 03B | Non-executable split record |
 | `WS-REV-001-04A` | Immutable Review Chain And Decision Request Persistence | L1 | 03B; current actor constraints | Proposed; no contract yet |
@@ -39,12 +42,11 @@ typed symbol/manifest, and tests.
 | `WS-REV-001-07A` | Lease-Bounded Packet And Review Chain Context | L1 | 06C; exact ART packet-read owner chunk | Proposed; owner chunk unscheduled |
 | `WS-REV-001-07B` | Reviewer Finding Evidence Candidate And Finalize | L1 | 07A; exact ART review-evidence owner chunk and AUTH binding contracts | Proposed; owner chunk unscheduled |
 | `WS-REV-001-08` | Pure Decision, Final Acceptance, And Task-Effect Contract | L1 | 07B; typed participant contracts | Proposed; executable contract after repair, no canonical write |
-| `WS-REV-001-02A2` | Prepared Superseded Guide Reactivation | L1 | 08 and 02A4; merged AUTH-PREP/custody; AUTH-12 contract amendment; `project.guide.activate` remains unavailable | Proposed hidden behavior; manifest gates AUTH-12 evaluator/cutover/activation |
 | `WS-REV-001-09A` | Revision Context Preparation And Resubmission | L1 | 08 | Non-executable split record |
-| `WS-REV-001-09A1` | Review-Rooted Revision Preparation Persistence | L1 | 02A2; approved human round/deadline semantics; migration/head refresh | Proposed; no contract yet |
+| `WS-REV-001-09A1` | Review-Rooted Revision Preparation Persistence | L1 | 08; exact owner-supplied guide/task facts; approved human round/deadline semantics; migration/head refresh | Proposed; no contract yet |
 | `WS-REV-001-09A2` | Revision Preparation Participant, Resolver, And Task Context | L1 | 09A1 | Proposed; task-owned flush-only participant, no transaction composition |
 | `WS-REV-001-09A3` | Human Revision Response Evidence Finalize | L1 | 09A2; ART evidence port and exact AUTH action | Proposed; owner chunk unscheduled |
-| `WS-REV-001-09A4` | Hidden Human Prepared N+1 And Checker Source Compatibility | L1 | 09A3; merged AUTH-14 contract amendment only; ART digest contract | Proposed; adds preparation binding/source XOR while retaining 02C checker source; AUTH-14 owns public request acknowledgement, authorization cutover, and activation |
+| `WS-REV-001-09A4` | Hidden Human Prepared N+1 And Checker Source Compatibility | L1 | 09A3; merged AUTH-14 contract amendment only; ART digest contract | Proposed; adds preparation binding/source XOR while consuming owner-supplied checker source; AUTH-14 owns public request acknowledgement, authorization cutover, and activation |
 | `WS-REV-001-09A5` | Hidden Replacement Assignment Preparation Transfer | L1 | 09A4; merged AUTH-13 contract amendment only | Proposed; AUTH-13 later owns public command/cutover/activation |
 | `WS-REV-001-09B` | Finding Replay, Resolution, And Preferred Return Routing | L1 | 09A5 | Proposed |
 | `WS-REV-001-10` | Canonical Review, Final Acceptance, And CON Atomic Integration | L1 | 09B; merged `WS-CON-001-03C` and `07`; stabilized digest owner chunk | Proposed; first canonical decision commit |
@@ -70,14 +72,14 @@ typed symbol/manifest, and tests.
 ## Same-initiative order
 
 ```text
-PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(parent split)
--> 02A1 -> 02A3 -> 02A4 -> 02B -> 02C
+PLAN -> 01 -> 02(parent) -> PLAN2 -> 02A(historical, superseded)
+-> PLAN3(boundary reset) -> 03P
 -> 03(parent) -> 03A -> 03B
 -> 04(parent) -> 04A -> 04B
 -> 05(parent) -> 05A -> 05B
 -> 06(parent) -> 06A -> 06B -> 06C
 -> 07(parent) -> 07A -> 07B
--> 08 -> 02A2
+-> 08
 -> 09A(parent) -> 09A1 -> 09A2 -> 09A3 -> 09A4 -> 09A5 -> 09B
 -> 10
 -> 11(parent) -> 11A -> 11B -> 11C -> 11D
@@ -108,9 +110,9 @@ REV neither invents those IDs nor edits owner plans.
 
 ## Parent split records
 
-After this planning-only split merges, parent 02A joins the existing parent
-contract files for 03, 04, 05, 06, 07, 09A, 11, 12, former 12A release control,
-and 13 as a non-executable historical planning record.
+Parent 02A and all of its children are retired historical planning records.
+Existing parent contract files for 03, 04, 05, 06, 07, 09A, 11, 12, former 12A
+release control, and 13 remain non-executable split records.
 They must not be used as implementation authorization. New child contracts are
 authored only from the then-current main when each child receives a human start.
 
@@ -123,6 +125,6 @@ configuration, or coverage changes add CI integrity.
 
 ## Stop condition
 
-Complete and merge only the planning-only parent split `WS-REV-001-02A`, then
-stop. Its schema-v2 merge intent names `WS-REV-001-02A1` and requires a separate
-explicit start. Do not begin 02A1, 02A3, 02A4, 02A2, or 02B from this PR.
+Complete only the proposed `WS-REV-001-PLAN3`, then stop. Never resume 02A, 02A1, 02A2,
+02A3, 02A4, 02B, or 02C as REV implementation. The next eligible runtime chunk
+is 03P, only after merge and a signed explicit start on exact current main.
