@@ -1925,7 +1925,8 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
         subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
         subprocess.run(["git", "-C", str(repository), "commit", "-m", "advance"], check=True, stdout=subprocess.PIPE)
         first_parent = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
-        subprocess.run(["git", "-C", str(repository), "merge", "--no-ff", head_sha, "-m", "merge plan"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository), "merge", "--squash", head_sha], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository), "commit", "-m", "squash plan"], check=True, stdout=subprocess.PIPE)
         merge_sha = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
         base_tree, base_entries = checker._git_tree(repository, base_sha)
         head_tree, head_entries = checker._git_tree(repository, head_sha)
@@ -1941,6 +1942,10 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
             merge_tree_sha=merge_tree,
             delta_sha256=hashlib.sha256(json.dumps(delta, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest(),
         )
+        subprocess.run(["git", "-C", str(repository), "branch", "-D", "base"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository), "reflog", "expire", "--expire=now", "--all"], check=True)
+        subprocess.run(["git", "-C", str(repository), "gc", "--prune=now"], check=True, stdout=subprocess.PIPE)
+        assert subprocess.run(["git", "-C", str(repository), "cat-file", "-e", head_sha], check=False).returncode != 0
         assert checker._record_failures(record, "record", repository) == []
         mutations = (
             lambda item: item["planning_intake"].update(delta_sha256="0" * 64),
@@ -1962,6 +1967,44 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
         root = Path(tmpdir) / "state"
         updater.apply_merge_record(root, record)
         assert checker.generated_state_failures(root, repository) == []
+
+        rebase_repository = Path(tmpdir) / "rebase-repository"
+        subprocess.run(["git", "init", "--initial-branch", "topic", str(rebase_repository)], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(rebase_repository), "config", "user.email", "test@example.test"], check=True)
+        subprocess.run(["git", "-C", str(rebase_repository), "config", "user.name", "Test"], check=True)
+        (rebase_repository / "base.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(rebase_repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(rebase_repository), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+        rebase_base = subprocess.run(["git", "-C", str(rebase_repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        for path in record["planning_intake"]["changed_paths"]:
+            target = rebase_repository / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"{path}\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(rebase_repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(rebase_repository), "commit", "-m", "original plan"], check=True, stdout=subprocess.PIPE)
+        original_head = subprocess.run(["git", "-C", str(rebase_repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        subprocess.run(["git", "-C", str(rebase_repository), "checkout", "-b", "main", rebase_base], check=True, stdout=subprocess.PIPE)
+        (rebase_repository / "main.txt").write_text("advanced\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(rebase_repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(rebase_repository), "commit", "-m", "advance"], check=True, stdout=subprocess.PIPE)
+        rebase_first_parent = subprocess.run(["git", "-C", str(rebase_repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        subprocess.run(["git", "-C", str(rebase_repository), "cherry-pick", original_head], check=True, stdout=subprocess.PIPE)
+        rebase_merge = subprocess.run(["git", "-C", str(rebase_repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        before_tree, before_entries = checker._git_tree(rebase_repository, rebase_first_parent)
+        after_tree, after_entries = checker._git_tree(rebase_repository, rebase_merge)
+        rebase_delta = {path: after_entries.get(path) for path in sorted(set(before_entries) | set(after_entries)) if before_entries.get(path) != after_entries.get(path)}
+        rebased_record = json.loads(json.dumps(record))
+        rebased_record["source"].update(main_sha=rebase_merge, first_parent_sha=rebase_first_parent, head_sha=original_head)
+        rebased_record["planning_intake"].update(
+            first_parent_tree_sha=before_tree,
+            merge_tree_sha=after_tree,
+            delta_sha256=hashlib.sha256(json.dumps(rebase_delta, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest(),
+        )
+        subprocess.run(["git", "-C", str(rebase_repository), "branch", "-D", "topic"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(rebase_repository), "reflog", "expire", "--expire=now", "--all"], check=True)
+        subprocess.run(["git", "-C", str(rebase_repository), "gc", "--prune=now"], check=True, stdout=subprocess.PIPE)
+        assert subprocess.run(["git", "-C", str(rebase_repository), "cat-file", "-e", original_head], check=False).returncode != 0
+        assert checker._record_failures(rebased_record, "rebase record", rebase_repository) == []
 
 
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:

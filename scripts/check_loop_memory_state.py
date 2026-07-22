@@ -390,51 +390,33 @@ def _git_tree(
 def _planning_tree_failures(
     intake: dict, source: dict, repository_root: Path, label: str
 ) -> list[str]:
-    """Independently recompute and bind the exact planning merge delta."""
-    pairs = (
-        ("base_tree_sha", source.get("head_sha"), "head_tree_sha"),
-        ("first_parent_tree_sha", source.get("main_sha"), "merge_tree_sha"),
+    """Recompute intake proof from objects durably reachable from trusted main."""
+    first_parent = source.get("first_parent_sha")
+    merge = source.get("main_sha")
+    before = (
+        _git_tree(repository_root, first_parent)
+        if isinstance(first_parent, str)
+        else None
     )
-    resolved: list[
-        tuple[
-            dict[str, tuple[str, str, str]],
-            dict[str, tuple[str, str, str]],
-        ]
-    ] = []
-    for before_field, after_commit, after_field in pairs:
-        before_commit = (
-            source.get("first_parent_sha")
-            if before_field == "first_parent_tree_sha"
-            else None
-        )
-        if before_field == "base_tree_sha":
-            # The reviewed base commit is represented by its tree SHA; resolve it directly.
-            before_commit = intake.get(before_field)
-        before = _git_tree(repository_root, before_commit) if isinstance(before_commit, str) else None
-        after = _git_tree(repository_root, after_commit) if isinstance(after_commit, str) else None
-        if before is None or after is None:
-            return [f"{label}: planning intake Git trees are unavailable"]
-        if before[0] != intake.get(before_field) or after[0] != intake.get(after_field):
-            return [f"{label}: planning intake tree identity is invalid"]
-        resolved.append((before[1], after[1]))
-    deltas = []
-    for before, after in resolved:
-        deltas.append(
-            {
-                path: after.get(path)
-                for path in sorted(set(before) | set(after))
-                if before.get(path) != after.get(path)
-            }
-        )
-    if deltas[0] != deltas[1]:
-        return [f"{label}: planning intake reviewed and merged deltas differ"]
-    delta = deltas[0]
+    after = _git_tree(repository_root, merge) if isinstance(merge, str) else None
+    if before is None or after is None:
+        return [f"{label}: planning intake Git trees are unavailable"]
+    if (
+        before[0] != intake.get("first_parent_tree_sha")
+        or after[0] != intake.get("merge_tree_sha")
+    ):
+        return [f"{label}: planning intake tree identity is invalid"]
+    delta = {
+        path: after[1].get(path)
+        for path in sorted(set(before[1]) | set(after[1]))
+        if before[1].get(path) != after[1].get(path)
+    }
     if sorted(delta) != intake.get("changed_paths"):
         return [f"{label}: planning intake changed paths do not match Git"]
     if any(
         entry is None
         or entry[:2] != ("100644", "blob")
-        or path in resolved[0][0]
+        or path in before[1]
         for path, entry in delta.items()
     ):
         return [f"{label}: planning intake Git delta is not additive plain files"]

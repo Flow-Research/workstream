@@ -70,6 +70,12 @@ reusable or identity-ambiguous self-bootstrap authorization
       directory `.agent-loop/initiatives/<initiative>-<slug>/`. Squash, merge,
       and rebase merge shapes are accepted only when GitHub's unique merged PR,
       reviewed head, merge tree, and first parent prove that equality.
+- [ ] Independent generated-state validation does not require the reviewed head
+      commit to remain reachable after branch deletion. It reconstructs the
+      exact additive delta from the signed merge and first parent on trusted
+      `main`, then matches its paths, modes, blob identities, tree identities,
+      and digest to the signed intake evidence. Pruned-head squash and rebase
+      fixtures prove clean replay remains possible.
 - [ ] The initiative root adds exactly `INTENT.md`, `DISCOVERY.md`, `PLAN.md`,
       `CHUNK_MAP.md`, `STATUS.md`, `RISKS.md`, `DECISIONS.md`, and optionally
       `REVIEW_LOG.md`; `chunks/` contains one or more mode-100644 Markdown
