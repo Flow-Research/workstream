@@ -42,11 +42,11 @@ backend coverage remains a GitHub Actions requirement for future runtime work.
 
 ## Reviewer results and external review
 
-Reviewed code SHA: d4b75e24a62eabdfdba43e0561fedfe32faf6046
+Reviewed code SHA: d97c8c806278a06ee0d328f7629024c1937a7578
 
-Reviewed at: 2026-07-22T03:55:22Z
+Reviewed at: 2026-07-22T03:58:26Z
 
-Reviewer run IDs: /root/plan_arch_review@d4b75e24; /root/qa_product_review@d4b75e24; /root/security_docs_ci_review@d4b75e24
+Reviewer run IDs: /root/plan_arch_review@d97c8c80; /root/qa_product_review@d97c8c80; /root/security_docs_ci_review@d97c8c80
 
 Open sub-agent sessions: none
 
@@ -64,7 +64,7 @@ Valid findings addressed: yes
 | reuse/dedup | PASS | None | No duplicate abstraction. |
 | test delta | PASS | None | No test changed or weakened. |
 
-These results bind candidate `d4b75e24` against trusted main `14fa4316`.
+These results bind candidate `d97c8c80` against trusted main `14fa4316`.
 Fresh GitHub and CodeRabbit review remains required after push.
 
 ## Remaining risks and follow-up

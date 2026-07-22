@@ -3,7 +3,7 @@
 ## Candidate
 
 - Trusted base: `14fa4316f7d984f2176657bfafd2a2dae56f944e`
-- Reviewed candidate: `d4b75e24a62eabdfdba43e0561fedfe32faf6046`
+- Reviewed candidate: `d97c8c806278a06ee0d328f7629024c1937a7578`
 - Scope: REV planning/memory documents and one schema-v2 merge intent only
 - Runtime status: prohibited; no application, migration, test, workflow, or CI
   file changed
@@ -14,11 +14,11 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: d4b75e24a62eabdfdba43e0561fedfe32faf6046
+Reviewed code SHA: d97c8c806278a06ee0d328f7629024c1937a7578
 
-Reviewed at: 2026-07-22T03:55:22Z
+Reviewed at: 2026-07-22T03:58:26Z
 
-Reviewer run IDs: /root/plan_arch_review@d4b75e24; /root/qa_product_review@d4b75e24; /root/security_docs_ci_review@d4b75e24
+Reviewer run IDs: /root/plan_arch_review@d97c8c80; /root/qa_product_review@d97c8c80; /root/security_docs_ci_review@d97c8c80
 
 ## Deterministic evidence
 
