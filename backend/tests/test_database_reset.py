@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 from collections.abc import Awaitable, Callable
 import os
@@ -18,6 +19,39 @@ from conftest import (
     TRUNCATE_GUARDED_TABLES,
     _assert_owned_test_database,
 )
+
+
+def test_alembic_schema_mutators_declare_schema_ownership() -> None:
+    """Every test that moves Alembic revisions must own schema setup and cleanup."""
+    unmarked: list[str] = []
+    for test_path in sorted(Path(__file__).parent.glob("test_*.py")):
+        tree = ast.parse(test_path.read_text(encoding="utf-8"))
+        module_marked = any(
+            isinstance(node, (ast.Assign, ast.AnnAssign))
+            and "pytestmark" in ast.unparse(node)
+            and "postgres_schema_contract" in ast.unparse(node)
+            for node in tree.body
+        )
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) or not node.name.startswith(
+                "test_"
+            ):
+                continue
+            moves_revision = any(
+                isinstance(child, ast.Attribute)
+                and isinstance(child.value, ast.Name)
+                and child.value.id == "command"
+                and child.attr in {"downgrade", "stamp", "upgrade"}
+                for child in ast.walk(node)
+            )
+            function_marked = any(
+                "postgres_schema_contract" in ast.unparse(decorator)
+                for decorator in node.decorator_list
+            )
+            if moves_revision and not (module_marked or function_marked):
+                unmarked.append(f"{test_path.name}::{node.name}")
+
+    assert unmarked == []
 
 
 async def _protected_state(connection: asyncpg.Connection) -> tuple[str, str | None]:

@@ -2587,6 +2587,7 @@ async def test_verification_unavailable_retries_then_exhausts(
         await engine.dispose()
 
 
+@pytest.mark.postgres_schema_contract
 async def test_0030_populated_contributor_receipt_upgrade_and_guarded_downgrade(
     admission_database_env: str,
     tmp_path: Path,
@@ -3886,6 +3887,7 @@ async def test_invalid_checker_role_precedes_namespace_drift(
         await engine.dispose()
 
 
+@pytest.mark.postgres_schema_contract
 def test_artifact_admission_migration_preserves_prior_rows_and_round_trips_empty(
     isolated_database_env: str,
     migration_lock,
@@ -3948,6 +3950,7 @@ def test_artifact_admission_migration_preserves_prior_rows_and_round_trips_empty
             command.upgrade(config, "head")
 
 
+@pytest.mark.postgres_schema_contract
 def test_artifact_admission_migration_refuses_populated_downgrade(
     isolated_database_env: str,
     migration_lock,

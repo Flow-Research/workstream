@@ -18,6 +18,10 @@ GitHub Backend run `29924806229` on PR #186.
 - Setup and teardown for explicitly marked `postgres_schema_contract` tests now
   perform the same database-custody-checked drop, recreate, and migrate-to-head
   sequence under the database-specific DDL lock.
+- A second hosted rerun exposed four migration-mutating tests outside
+  `test_alembic.py`. The three artifact-admission migration tests and one task
+  downgrade test are now individually marked as schema-contract owners, so
+  they receive the same full rebuild without slowing their entire modules.
 - Ordinary resets retain the exact table inventory and full fingerprint gate.
 - Removed the trust bundle's extra blank line at EOF.
 - Removed CodeRabbit's valid obsolete `include_canonical_actors` reset argument;

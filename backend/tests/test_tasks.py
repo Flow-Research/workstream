@@ -1902,6 +1902,7 @@ async def test_chunk4_migration_creates_expected_tables(task_database_env: str) 
     }.issubset(table_names)
 
 
+@pytest.mark.postgres_schema_contract
 def test_chunk4_migration_downgrade_removes_task_tables(task_database_env: str) -> None:
     config = alembic_config()
     asyncio.run(db_session.dispose_engine())
