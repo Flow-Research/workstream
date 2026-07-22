@@ -40,6 +40,9 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+  "postgres_schema_contract: test owns whole-schema Alembic transitions and requires a rebuilt PostgreSQL baseline",
+]
 pythonpath = ["."]
 testpaths = ["tests"]
 

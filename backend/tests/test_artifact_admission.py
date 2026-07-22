@@ -1,8 +1,10 @@
 """PostgreSQL proofs for atomic durable-byte admission before provider I/O."""
 
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,7 +17,10 @@ from alembic.config import Config
 import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings
@@ -145,27 +150,18 @@ def _alembic_config() -> Config:
 
 
 @pytest.fixture
-def admission_database_env(
-    isolated_database_env: str,
-    migration_lock,
-) -> str:
-    """Provide the exact head schema and remove all test evidence afterward."""
-    config = _alembic_config()
-    with migration_lock():
-        asyncio.run(_reset_admission_test_schema(isolated_database_env))
-        command.upgrade(config, "head")
-        try:
-            yield isolated_database_env
-        finally:
-            asyncio.run(_reset_admission_test_schema(isolated_database_env))
+def admission_database_env(isolated_database_env: str) -> Iterator[str]:
+    """Provide the clean migrated database for artifact admission tests."""
+    yield isolated_database_env
 
 
 async def _reset_admission_test_schema(database_url: str) -> None:
+    """Reset the schema only for tests that explicitly exercise migrations."""
     engine = create_async_engine(database_url)
     try:
-        async with engine.begin() as connection:
-            await connection.execute(text("drop schema if exists public cascade"))
-            await connection.execute(text("create schema public"))
+        async with engine.begin() as conn:
+            await conn.execute(text("drop schema if exists public cascade"), {})
+            await conn.execute(text("create schema public"), {})
     finally:
         await engine.dispose()
 
@@ -755,11 +751,11 @@ async def test_committed_put_and_independent_verification_are_fenced(
                 assert job.execution_generation == 1
                 replica = await session.get(ArtifactReplica, job.replica_id)
                 assert replica is not None
-                assert (
+                assert [
                     replica.verification_state,
                     replica.availability_state,
                     replica.integrity_state,
-                ) == ("verified", "available", "valid")
+                ] == ["verified", "available", "valid"]
                 assert await _count(session, ArtifactOperationReceipt) == 1
                 assert await _count(session, ArtifactVerificationReceipt) == 1
                 await session.rollback()
@@ -948,9 +944,7 @@ async def test_put_paths_recheck_authorized_facts_before_provider_io(
                     session, provider, namespace, settings, DriftPutFactsAuthority()
                 )
                 result = (
-                    await orchestrator.execute_committed_put(
-                        attempt_id=attempt_id, source=source
-                    )
+                    await orchestrator.execute_committed_put(attempt_id=attempt_id, source=source)
                     if mode == "caller_put"
                     else await orchestrator.resolve_put_attempt(attempt_id)
                 )
@@ -979,7 +973,9 @@ async def test_put_paths_recheck_authorized_facts_after_provider_io(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            async with minted_source(tmp_path / f"post-io-put-drift-{mode}", b"authorized") as source:
+            async with minted_source(
+                tmp_path / f"post-io-put-drift-{mode}", b"authorized"
+            ) as source:
                 admission = await _admit_guide_source(
                     session, settings, namespace, _context(), source
                 )
@@ -1015,9 +1011,7 @@ async def test_put_paths_recheck_authorized_facts_after_provider_io(
                     session, provider, namespace, settings, _AllowArtifactAuthority()
                 )
                 result = (
-                    await orchestrator.execute_committed_put(
-                        attempt_id=attempt_id, source=source
-                    )
+                    await orchestrator.execute_committed_put(attempt_id=attempt_id, source=source)
                     if mode == "caller_put"
                     else await orchestrator.resolve_put_attempt(attempt_id)
                 )
@@ -1102,11 +1096,11 @@ async def test_preacknowledgement_mismatch_fails_contributor_item_and_keeps_char
                 assert attempt.replica_id is not None
                 replica = await session.get(ArtifactReplica, attempt.replica_id)
                 assert replica is not None
-                assert (
+                assert [
                     replica.verification_state,
                     replica.availability_state,
                     replica.integrity_state,
-                ) == ("integrity_mismatch", "available", "invalid")
+                ] == ["integrity_mismatch", "available", "invalid"]
                 charges = (await session.execute(select(ArtifactAdmissionCharge))).scalars().all()
                 assert charges and {charge.state for charge in charges} == {"completed"}
                 item = await session.get(ArtifactUploadItem, item_ids[0])
@@ -1326,8 +1320,7 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
                 stale_session, object(), namespace, settings, _AllowArtifactAuthority()
             )
             assert (
-                await stale._record_put_absence(first_claim, first_executor, first_facts)
-                == "stale"
+                await stale._record_put_absence(first_claim, first_executor, first_facts) == "stale"
             )
             attempt = await stale_session.get(ArtifactPutAttempt, str(admission.attempt_id))
             assert attempt is not None
@@ -2687,10 +2680,10 @@ async def test_0030_populated_contributor_receipt_upgrade_and_guarded_downgrade(
     await asyncio.to_thread(command.upgrade, config, "0030_artifact_verification")
     engine = create_async_engine(admission_database_env)
     try:
-        async with engine.begin() as connection:
+        async with engine.begin() as session:
             migrated = (
                 (
-                    await connection.execute(
+                    await session.execute(
                         text(
                             "select contract_version, put_attempt_id, upload_item_id "
                             "from artifact_operation_receipts where id = :id"
@@ -2706,7 +2699,7 @@ async def test_0030_populated_contributor_receipt_upgrade_and_guarded_downgrade(
                 "put_attempt_id": str(admission.attempt_id),
                 "upload_item_id": item_ids[0],
             }
-            await connection.execute(
+            await session.execute(
                 text(
                     "insert into artifact_put_observation_receipts "
                     "(id, put_attempt_id, execution_generation, outcome, expected_sha256, "
@@ -2986,13 +2979,14 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
                     ),
                 )
                 for statement, parameters in mutations:
-                    async with factory() as mutation_session:
+                    async with factory() as session:
                         with pytest.raises(DBAPIError, match="lock timeout"):
-                            async with mutation_session.begin():
-                                await mutation_session.execute(
-                                    text("set local lock_timeout = '200ms'")
+                            async with session.begin():
+                                await session.execute(
+                                    text("set local lock_timeout = '200ms'"),
+                                    {},
                                 )
-                                await mutation_session.execute(
+                                await session.execute(
                                     text(statement),
                                     parameters,
                                 )
@@ -3090,7 +3084,7 @@ async def test_exact_replay_returns_one_attempt_and_one_charge_set(
                     namespace,
                 ).admit(request)
 
-            assert replay.replayed is True
+            assert replay.replayed
             assert replay.attempt_id == first.attempt_id
             assert replay.charge_ids == first.charge_ids
             assert await _count(session, ArtifactPutAttempt) == 1
@@ -3209,7 +3203,7 @@ async def test_exact_replay_reacquires_released_charges_under_capacity(
                         first_request
                     )
 
-            assert replay.replayed is True
+            assert replay.replayed
             assert replay.attempt_id == first.attempt_id
             refreshed_first_charges = (
                 (
@@ -3369,7 +3363,7 @@ async def test_same_content_distinct_operations_deduplicate_scope_bytes(
             )
 
         async with factory() as session:
-            assert all(result.replayed is False for result in results)
+            assert all(not result.replayed for result in results)
             counters = (await session.execute(select(ArtifactAdmissionScope))).scalars().all()
             assert {counter.counted_bytes for counter in counters} == {4}
             assert await _count(session, ArtifactAdmissionCharge) == 7
@@ -3943,14 +3937,15 @@ def test_artifact_admission_migration_preserves_prior_rows_and_round_trips_empty
             command.upgrade(config, "0026_actor_profile_lifecycle")
             asyncio.run(seed_prior_namespace())
             command.upgrade(config, "0028_artifact_admission")
-            assert asyncio.run(state()) == (1, True)
+            assert list(asyncio.run(state())) == [1, True]
             command.downgrade(config, "0026_actor_profile_lifecycle")
-            assert asyncio.run(state()) == (1, False)
+            assert list(asyncio.run(state())) == [1, False]
             command.upgrade(config, "0028_artifact_admission")
-            assert asyncio.run(state()) == (1, True)
+            assert list(asyncio.run(state())) == [1, True]
             asyncio.run(cleanup())
         finally:
             asyncio.run(_reset_admission_test_schema(isolated_database_env))
+            command.upgrade(config, "head")
 
 
 def test_artifact_admission_migration_refuses_populated_downgrade(
@@ -4038,3 +4033,4 @@ def test_artifact_admission_migration_refuses_populated_downgrade(
             command.downgrade(config, "0026_actor_profile_lifecycle")
         finally:
             asyncio.run(_reset_admission_test_schema(isolated_database_env))
+            command.upgrade(config, "head")

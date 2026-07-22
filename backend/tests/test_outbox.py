@@ -8,13 +8,15 @@ import traceback
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-import pytest
-from alembic import command
-from alembic.config import Config
+import pytest  # type: ignore[import-not-found]
 from pydantic import TypeAdapter
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.modules.outbox.schemas import (
     OutboxAppendDisposition,
@@ -25,24 +27,13 @@ from app.modules.outbox.schemas import (
 )
 from app.modules.outbox.repository import OutboxRepository
 from app.modules.outbox.service import OutboxService
+from app.modules.projects.models import Project
 from tests.assertion_helpers import assert_secret_not_retained
 
 
-def _alembic_config() -> Config:
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
-    return config
-
-
 @pytest.fixture
-def outbox_database_env(
-    isolated_database_env: str,
-    migration_lock,
-) -> str:
-    """Upgrade the isolated database to the exact shared-outbox head."""
-    with migration_lock():
-        command.upgrade(_alembic_config(), "head")
+def outbox_database_env(isolated_database_env: str) -> str:
+    """Use the runner-migrated database and shared per-test reset."""
     return isolated_database_env
 
 
@@ -56,11 +47,13 @@ async def outbox_factory(
     project_id = uuid4()
     async with engine.begin() as connection:
         await connection.execute(
-            text(
-                "insert into projects(id, name, slug, status) "
-                "values (:id, 'Outbox test', :slug, 'active')"
-            ),
-            {"id": str(project_id), "slug": f"outbox-{project_id}"},
+            insert(Project),
+            {
+                "id": str(project_id),
+                "name": "Outbox test",
+                "slug": f"outbox-{project_id}",
+                "status": "active",
+            },
         )
     try:
         yield factory, project_id
@@ -312,26 +305,22 @@ def test_outbox_validation_entry_points_preserve_valid_modes() -> None:
     expected = _event(uuid4(), payload={"marker": "safe"})
     adapter = TypeAdapter(OutboxAppendInput)
     python_value = OutboxAppendInput.model_validate(expected.model_dump())
-    json_value = OutboxAppendInput.model_validate_json(
-        json.dumps(expected.model_dump(mode="json"))
-    )
+    json_value = OutboxAppendInput.model_validate_json(json.dumps(expected.model_dump(mode="json")))
     strings = expected.model_dump(mode="json")
     strings["event_version"] = str(strings["event_version"])
     string_value = OutboxAppendInput.model_validate_strings(strings)
     adapter_python = adapter.validate_python(expected.model_dump())
     adapter_json = adapter.validate_json(json.dumps(expected.model_dump(mode="json")))
     adapter_strings = adapter.validate_strings(strings)
-    assert all(
-        value == expected
-        for value in (
-            python_value,
-            json_value,
-            string_value,
-            adapter_python,
-            adapter_json,
-            adapter_strings,
-        )
+    validated = (
+        python_value,
+        json_value,
+        string_value,
+        adapter_python,
+        adapter_json,
+        adapter_strings,
     )
+    assert all(value == expected for value in validated)
 
 
 @pytest.mark.asyncio
@@ -351,9 +340,7 @@ async def test_outbox_payload_depth_nodes_members_and_budget_are_bounded() -> No
     )
     for payload in cases:
         with pytest.raises(OutboxInputError, match="^outbox_invalid_input$"):
-            await OutboxService(cast(AsyncSession, None)).append(
-                _unsafe_event(project_id, payload)
-            )
+            await OutboxService(cast(AsyncSession, None)).append(_unsafe_event(project_id, payload))
 
 
 @pytest.mark.asyncio
@@ -432,18 +419,16 @@ async def test_outbox_insert_trigger_rejects_preforged_operational_state(
             assert row.occurred_at.year >= 2026
             assert row.delivery_state == "pending"
             assert row.attempt_count == row.claim_generation == 0
-            assert all(
-                value is None
-                for value in (
-                    row.claim_owner,
-                    row.claimed_at,
-                    row.claim_expires_at,
-                    row.last_attempt_at,
-                    row.last_error_code,
-                    row.finalized_at,
-                    row.archived_at,
-                )
+            terminal_fields = (
+                row.claim_owner,
+                row.claimed_at,
+                row.claim_expires_at,
+                row.last_attempt_at,
+                row.last_error_code,
+                row.finalized_at,
+                row.archived_at,
             )
+            assert all(value is None for value in terminal_fields)
 
 
 @pytest.mark.asyncio
@@ -455,16 +440,22 @@ async def test_outbox_caller_rollback_removes_flushed_event(
     async with factory() as session:
         transaction = await session.begin()
         await OutboxService(session).append(value)
-        assert await session.scalar(
-            text("select count(*) from outbox_events where event_id=:id"),
-            {"id": value.event_id},
-        ) == 1
+        assert (
+            await session.scalar(
+                text("select count(*) from outbox_events where event_id=:id"),
+                {"id": value.event_id},
+            )
+            == 1
+        )
         await transaction.rollback()
     async with factory() as observer:
-        assert await observer.scalar(
-            text("select count(*) from outbox_events where event_id=:id"),
-            {"id": value.event_id},
-        ) == 0
+        assert (
+            await observer.scalar(
+                text("select count(*) from outbox_events where event_id=:id"),
+                {"id": value.event_id},
+            )
+            == 0
+        )
 
 
 @pytest.mark.asyncio
@@ -492,10 +483,13 @@ async def test_outbox_post_reservation_failure_rolls_back_caller_transaction(
             await OutboxService(session).append(value)
         await transaction.rollback()
     async with factory() as observer:
-        assert await observer.scalar(
-            text("select count(*) from outbox_events where event_id=:id"),
-            {"id": value.event_id},
-        ) == 0
+        assert (
+            await observer.scalar(
+                text("select count(*) from outbox_events where event_id=:id"),
+                {"id": value.event_id},
+            )
+            == 0
+        )
 
 
 @pytest.mark.asyncio
@@ -556,8 +550,7 @@ async def test_outbox_snapshots_nested_payload_before_first_await(
             row = (
                 await session.execute(
                     text(
-                        "select payload, payload_digest from outbox_events "
-                        "where event_id=:event_id"
+                        "select payload, payload_digest from outbox_events where event_id=:event_id"
                     ),
                     {"event_id": value.event_id},
                 )
@@ -647,9 +640,7 @@ async def test_outbox_conflict_does_not_retain_stored_payload(
     async with factory() as session:
         async with session.begin():
             await OutboxService(session).append(value)
-    drift = OutboxAppendInput(
-        **{**value.model_dump(), "payload": {"detail": "changed"}}
-    )
+    drift = OutboxAppendInput(**{**value.model_dump(), "payload": {"detail": "changed"}})
     async with factory() as session:
         async with session.begin():
             with pytest.raises(

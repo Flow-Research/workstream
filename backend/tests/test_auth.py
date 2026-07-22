@@ -7,22 +7,29 @@ import hashlib
 import hmac
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import jwt
-import httpx
-import pytest
-from alembic import command
-from alembic.config import Config
+import httpx  # type: ignore[import-not-found]
+import pytest  # type: ignore[import-not-found]
 from cryptography.hazmat.primitives.asymmetric import rsa
-from httpx import ASGITransport, AsyncClient, MockTransport, Request, Response
+from httpx import (  # type: ignore[import-not-found]
+    ASGITransport,
+    AsyncClient,
+    MockTransport,
+    Request,
+    Response,
+)
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    AsyncSession,
+    create_async_engine,
+)
 from fastapi import HTTPException
 
 from app.adapters.auth.dev import DevelopmentAuthVerifier
@@ -151,8 +158,16 @@ def test_legacy_submitter_eligibility_adapter_has_a_shrinking_static_allowlist()
     ]
 
 
+def current_task_name() -> str:
+    """Return the current asyncio task name with an explicit test invariant."""
+    task = asyncio.current_task()
+    if task is None:
+        raise AssertionError("an asyncio task is required")
+    return task.get_name()
+
+
 @pytest.fixture(autouse=True)
-def clear_settings_cache() -> None:
+def clear_settings_cache() -> Iterator[None]:
     get_settings.cache_clear()
     clear_auth_verifier_cache()
     yield
@@ -163,46 +178,19 @@ def clear_settings_cache() -> None:
 @pytest.fixture
 def auth_database_env(
     monkeypatch: pytest.MonkeyPatch,
-    postgres_database_url: str,
-    migration_lock,
-    reset_test_database_state,
+    clean_postgres_database: str,
 ) -> Iterator[str]:
-    """Run auth route persistence tests against a migrated Postgres schema."""
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    """Run auth route persistence tests against a clean migrated schema."""
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     monkeypatch.setenv(
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
         "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
     )
     get_settings.cache_clear()
-    asyncio.run(db_session.dispose_engine())
-
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
     try:
-        with migration_lock():
-            command.downgrade(config, "base")
-            try:
-                command.upgrade(config, "head")
-                yield postgres_database_url
-            finally:
-                try:
-                    asyncio.run(
-                        reset_test_database_state(
-                            postgres_database_url,
-                            include_canonical_actors=True,
-                        )
-                    )
-                finally:
-                    try:
-                        asyncio.run(db_session.dispose_engine())
-                    finally:
-                        command.downgrade(config, "base")
+        yield clean_postgres_database
     finally:
-        try:
-            asyncio.run(db_session.dispose_engine())
-        finally:
-            get_settings.cache_clear()
+        get_settings.cache_clear()
 
 
 def _base64url_int(value: int) -> str:
@@ -968,7 +956,7 @@ async def test_service_and_agent_tokens_receive_no_legacy_authority(
     app = create_app(production_verifier_settings())
     app.state.auth_verifier = verifier
 
-    async def no_database_session():
+    async def no_database_session() -> AsyncIterator[None]:
         yield None
 
     app.dependency_overrides[get_db_session] = no_database_session
@@ -2254,9 +2242,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
         } == {("Actor not found", "actor_not_found", "Actor not found", False)}
         async with db_session.get_session_factory()() as session:
             await session.execute(text("alter table actor_profiles disable trigger user"))
-            await session.execute(
-                text("alter table actor_identity_links disable trigger user")
-            )
+            await session.execute(text("alter table actor_identity_links disable trigger user"))
             await session.execute(
                 text(
                     "update actor_profiles set status='active',suspended_by=null,"
@@ -2410,9 +2396,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
         assert audit_mutation.json()["error"]["code"] == "permission_not_granted"
         assert audit_history_visible.status_code == 200
         assert audit_history_visible.json()["total"] == 1
-        assert audit_history_visible.json()["items"][0]["target_actor_profile_id"] == str(
-            target_id
-        )
+        assert audit_history_visible.json()["items"][0]["target_actor_profile_id"] == str(target_id)
 
         system_audit_grant = await client.post(
             "/api/v1/admin-role-grants",
@@ -2874,7 +2858,7 @@ async def test_admin_bootstrap_replay_and_cross_revoke_are_concurrency_safe(
         newer_committed_timestamps: tuple[datetime, datetime] | None = None
 
         async def barrier_touch_verified_actor(self, profile, link):
-            if asyncio.current_task().get_name() == "auth08-older-timestamp-read":
+            if current_task_name() == "auth08-older-timestamp-read":
                 older_touch_ready.set()
                 await newer_committed.wait()
             return await original_touch_verified_actor(self, profile, link)
@@ -2882,7 +2866,7 @@ async def test_admin_bootstrap_replay_and_cross_revoke_are_concurrency_safe(
         async def ordered_commit(session: AsyncSession) -> None:
             nonlocal newer_committed_timestamps
             await original_commit(session)
-            if asyncio.current_task().get_name() == "auth08-newer-timestamp-read":
+            if current_task_name() == "auth08-newer-timestamp-read":
                 newer_committed_timestamps = await read_winner_timestamps()
                 newer_committed.set()
 
@@ -3099,7 +3083,7 @@ async def test_admin_bootstrap_replay_and_cross_revoke_are_concurrency_safe(
             first_locked = asyncio.Event()
 
             async def ordered_lock_control(self):
-                if asyncio.current_task().get_name() == first:
+                if current_task_name() == first:
                     control = await original_lock_control(self)
                     first_locked.set()
                     return control
@@ -3246,10 +3230,7 @@ async def test_admin_bootstrap_replay_and_cross_revoke_are_concurrency_safe(
                     )
                     | (
                         (AuditEvent.event_type == "AuthorityInvalidationRequested")
-                        & (
-                            AuditEvent.invalidation_target_ref
-                            == str(profiles["pm-target-two"])
-                        )
+                        & (AuditEvent.invalidation_target_ref == str(profiles["pm-target-two"]))
                     )
                 )
             )
@@ -3372,7 +3353,9 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                     "deactivated_at=clock_timestamp(),deactivation_reason='race proof' "
                     "where id=:actor"
                 )
-            await session.execute(text(statement), {"actor": str(actor_id), "by": str(custodian_id)})
+            await session.execute(
+                text(statement), {"actor": str(actor_id), "by": str(custodian_id)}
+            )
             await session.commit()
 
     async def reset_profile(actor_id: UUID) -> None:
@@ -3405,9 +3388,7 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
 
     async def reset_link(actor_id: UUID) -> None:
         async with db_session.get_session_factory()() as session:
-            await session.execute(
-                text("alter table actor_identity_links disable trigger user")
-            )
+            await session.execute(text("alter table actor_identity_links disable trigger user"))
             await session.execute(
                 text(
                     "update actor_identity_links set status='active',revoked_by=null,"
@@ -3417,9 +3398,7 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                 ),
                 {"actor": str(actor_id)},
             )
-            await session.execute(
-                text("alter table actor_identity_links enable trigger user")
-            )
+            await session.execute(text("alter table actor_identity_links enable trigger user"))
             await session.commit()
 
     async def wait_for_transition_lock(
@@ -3431,9 +3410,7 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                 raise AssertionError("disabling transition bypassed the read lock")
             async with db_session.get_session_factory()() as session:
                 waiting = await session.scalar(
-                    text(
-                        "select coalesce(cardinality(pg_blocking_pids(:pid)),0)>0"
-                    ),
+                    text("select coalesce(cardinality(pg_blocking_pids(:pid)),0)>0"),
                     {"pid": transition_backend_pid},
                 )
             if waiting:
@@ -3713,10 +3690,7 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             json=payload,
         )
         assert unprovisioned_service.status_code == 403
-        assert (
-            unprovisioned_service.json()["error"]["code"]
-            == "service_actor_not_provisioned"
-        )
+        assert unprovisioned_service.json()["error"]["code"] == "service_actor_not_provisioned"
         assert await service_state(ServiceIdentity.ARTIFACT_VERIFIER) is None
         key = str(uuid4())
         created = await client.post(
@@ -3832,8 +3806,7 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
         subject_conflict = await client.post(
             "/api/v1/service-actors",
             headers={**admin_headers, "Idempotency-Key": str(uuid4())},
-            json=payload
-            | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
+            json=payload | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
         )
         assert subject_conflict.status_code == 409
         assert subject_conflict.json()["error"]["code"] == "identity_subject_already_linked"
@@ -3850,8 +3823,7 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             unsupported = await client.post(
                 "/api/v1/service-actors",
                 headers={**headers, "Idempotency-Key": str(uuid4())},
-                json=payload
-                | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
+                json=payload | {"service_identity": ServiceIdentity.ARTIFACT_PUT_RESOLVER.value},
             )
             assert unsupported.status_code == 403
             assert unsupported.json()["error"]["code"] == "unsupported_subject_kind", kind
@@ -4073,38 +4045,41 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
         assert unavailable.json()["error"]["code"] == "identity_verification_unavailable"
 
     sensitive_values = {
-        admin_token,
-        ordinary_token,
-        service_token,
-        *(
-            headers["Authorization"].removeprefix("Bearer ")
-            for headers in nonhuman_headers.values()
-        ),
-        settings.token_issuer,
-        "private-admin@example.test",
-        "auth09b-admin",
-        "auth09b-admin-token",
-        "auth09b-ordinary",
-        "auth09b-ordinary-token",
-        service_subject,
-        "auth09b-service-token",
-        *(f"auth09b-{kind}" for kind in nonhuman_headers),
-        *(f"auth09b-{kind}-token" for kind in nonhuman_headers),
-        reason,
-        "A different bounded reason",
-        "another-subject",
-        rejected_subject,
-        rejected_reason,
-        invalid_identity,
-        invalid_key,
-        scheduler_payload["subject"],
-        materializer_payload["subject"],
-        "auth09b-materializer-b",
-        output_payload["subject"],
-        "auth09b-output-b",
-        shared_subject,
-        failure_payload["subject"],
-        commit_payload["subject"],
+        str(value)
+        for value in {
+            admin_token,
+            ordinary_token,
+            service_token,
+            *(
+                headers["Authorization"].removeprefix("Bearer ")
+                for headers in nonhuman_headers.values()
+            ),
+            settings.token_issuer,
+            "private-admin@example.test",
+            "auth09b-admin",
+            "auth09b-admin-token",
+            "auth09b-ordinary",
+            "auth09b-ordinary-token",
+            service_subject,
+            "auth09b-service-token",
+            *(f"auth09b-{kind}" for kind in nonhuman_headers),
+            *(f"auth09b-{kind}-token" for kind in nonhuman_headers),
+            reason,
+            "A different bounded reason",
+            "another-subject",
+            rejected_subject,
+            rejected_reason,
+            invalid_identity,
+            invalid_key,
+            scheduler_payload["subject"],
+            materializer_payload["subject"],
+            "auth09b-materializer-b",
+            output_payload["subject"],
+            "auth09b-output-b",
+            shared_subject,
+            failure_payload["subject"],
+            commit_payload["subject"],
+        }
     }
     assert all(value not in body for value in sensitive_values for body in observed_response_bodies)
     assert all(value not in caplog.text for value in sensitive_values)
@@ -4631,6 +4606,8 @@ async def test_actor_id_uses_subject_and_issuer_not_email() -> None:
 
     first_verifier = DevelopmentAuthVerifier(first)
     second_verifier = DevelopmentAuthVerifier(second)
+    assert first.dev_auth_token is not None
+    assert second.dev_auth_token is not None
     first_result = await first_verifier.verify(first.dev_auth_token)
     second_result = await second_verifier.verify(second.dev_auth_token)
     first_actor = first_result.legacy_actor()
@@ -4684,7 +4661,7 @@ def test_dev_auth_requires_explicit_identity_fields(
     field_name: str,
     error_message: str,
 ) -> None:
-    values = {
+    values: dict[str, str | None] = {
         "environment": "local",
         "auth_provider": "dev",
         "dev_auth_token": "local-token",
@@ -4857,9 +4834,7 @@ async def test_actor_profile_lifecycle_real_postgres_matrix(
         )
         for name in ("admin", "target", "ordinary", "replay_target", "failure_target")
     }
-    headers = {
-        name: {"Authorization": f"Bearer {token}"} for name, token in tokens.items()
-    }
+    headers = {name: {"Authorization": f"Bearer {token}"} for name, token in tokens.items()}
 
     async def profile_state(actor_id: UUID) -> tuple:
         async with db_session.get_session_factory()() as session:
@@ -5260,10 +5235,10 @@ async def test_actor_profile_lifecycle_real_postgres_matrix(
     async with db_session.get_session_factory()() as session:
         lifecycle_records = (
             await session.execute(
-                    text(
-                        "select operation,status,count(*) from authority_idempotency_records "
-                        "where response_resource_id=:target "
-                        "group by operation,status order by operation,status"
+                text(
+                    "select operation,status,count(*) from authority_idempotency_records "
+                    "where response_resource_id=:target "
+                    "group by operation,status order by operation,status"
                 ),
                 {"target": str(profiles["target"])},
             )
@@ -5346,9 +5321,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_matrix(
         )
         for name in names
     }
-    headers = {
-        name: {"Authorization": f"Bearer {token}"} for name, token in tokens.items()
-    }
+    headers = {name: {"Authorization": f"Bearer {token}"} for name, token in tokens.items()}
 
     async def actor_link_state(actor_id: UUID) -> tuple:
         async with db_session.get_session_factory()() as session:
@@ -5403,17 +5376,12 @@ async def test_actor_identity_link_lifecycle_real_postgres_matrix(
                     await actor_link_state(profiles["admin"]),
                     tuple(
                         await session.scalars(
-                            text(
-                                "select to_jsonb(g)::text from admin_role_grants g "
-                                "order by g.id"
-                            )
+                            text("select to_jsonb(g)::text from admin_role_grants g order by g.id")
                         )
                     ),
                     tuple(
                         await session.scalars(
-                            text(
-                                "select to_jsonb(e)::text from audit_events e order by e.id"
-                            )
+                            text("select to_jsonb(e)::text from audit_events e order by e.id")
                         )
                     ),
                     tuple(
@@ -5450,9 +5418,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_matrix(
         failure_link = links["failure"]
         original_reserve = AuthorityIdempotencyRepository.reserve
         original_add_event = AuditService.add_authority_event
-        original_target_lookup = (
-            AdminAuthorizationRepository.lock_identity_link_lifecycle_target
-        )
+        original_target_lookup = AdminAuthorizationRepository.lock_identity_link_lifecycle_target
         original_flush = AsyncSession.flush
         original_touch = ActorService.touch_after_authorization
         original_complete = AuthorityIdempotencyRepository.complete
@@ -5508,7 +5474,12 @@ async def test_actor_identity_link_lifecycle_real_postgres_matrix(
 
             stages = (
                 (AuthorityIdempotencyRepository, "reserve", original_reserve, fail_reservation),
-                (AuditService, "add_authority_event", original_add_event, fail_authorization_evidence),
+                (
+                    AuditService,
+                    "add_authority_event",
+                    original_add_event,
+                    fail_authorization_evidence,
+                ),
                 (
                     AdminAuthorizationRepository,
                     "lock_identity_link_lifecycle_target",
@@ -5825,14 +5796,18 @@ async def test_actor_identity_link_lifecycle_real_postgres_matrix(
             or 0
         ) == 0
         link_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.event_type.in_(
-                        ["ActorIdentityLinkRevoked", "ActorIdentityLinkReactivated"]
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.event_type.in_(
+                            ["ActorIdentityLinkRevoked", "ActorIdentityLinkReactivated"]
+                        )
                     )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert link_events
         assert all(event.target_actor_ref for event in link_events)
         evidence = json.dumps(
@@ -6034,7 +6009,7 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
             waiter_name = f"auth09d-{uuid4().hex}"
 
             async def ordered_lock_control(self):
-                if asyncio.current_task().get_name() == first_name:
+                if current_task_name() == first_name:
                     control = await original_lock_control(self)
                     first_locked.set()
                     await asyncio.wait_for(
@@ -6157,9 +6132,7 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
         )
         assert [result.status_code for _, result in reactivate_first] == [200, 200]
 
-        suspended_deactivate_first_id, _ = await create_race_actor(
-            "suspended-deactivate-first"
-        )
+        suspended_deactivate_first_id, _ = await create_race_actor("suspended-deactivate-first")
         prepared_deactivate_first = await client.post(
             f"/api/v1/actors/{suspended_deactivate_first_id}/suspend",
             headers={**admin_headers, "Idempotency-Key": str(uuid4())},
@@ -6183,8 +6156,7 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
         )
         assert [result.status_code for _, result in suspended_deactivate_first] == [200, 409]
         assert (
-            suspended_deactivate_first[1][1].json()["error"]["code"]
-            == "actor_deactivated_terminal"
+            suspended_deactivate_first[1][1].json()["error"]["code"] == "actor_deactivated_terminal"
         )
         reusable_keys.append(suspended_deactivate_first[1][0])
 
@@ -6233,12 +6205,8 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
         assert profile_grant_race[1][1].json()["error"]["code"] == "actor_suspended"
         reusable_keys.append(grant_race_key)
 
-        reciprocal_one_id, reciprocal_one_headers = await create_race_actor(
-            "reciprocal-one"
-        )
-        reciprocal_two_id, reciprocal_two_headers = await create_race_actor(
-            "reciprocal-two"
-        )
+        reciprocal_one_id, reciprocal_one_headers = await create_race_actor("reciprocal-one")
+        reciprocal_two_id, reciprocal_two_headers = await create_race_actor("reciprocal-two")
         await grant_access_administrator(reciprocal_one_id, "Reciprocal administrator one")
         await grant_access_administrator(reciprocal_two_id, "Reciprocal administrator two")
         disable_bootstrap = await client.post(
@@ -6335,9 +6303,9 @@ async def test_actor_profile_lifecycle_real_postgres_concurrency(
             str(reciprocal_one_id): "active",
             str(reciprocal_two_id): "suspended",
         }
-        assert await AdminAuthorizationRepository(
-            session
-        ).count_effective_access_administrators() == 1
+        assert (
+            await AdminAuthorizationRepository(session).count_effective_access_administrators() == 1
+        )
         assert (
             await session.scalar(
                 select(func.count())
@@ -6569,7 +6537,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
             same_key = keys[0] == keys[1]
 
             async def observed_reserve(self, **kwargs):
-                task_name = asyncio.current_task().get_name()
+                task_name = current_task_name()
                 if not same_key:
                     return await original_reserve(self, **kwargs)
                 if task_name == "concurrent-link-first":
@@ -6586,7 +6554,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
                 return await original_reserve(self, **kwargs)
 
             async def observed_lock_control(self):
-                task_name = asyncio.current_task().get_name()
+                task_name = current_task_name()
                 if same_key:
                     return await original_lock_control(self)
                 if task_name == "concurrent-link-first":
@@ -6735,7 +6703,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
             waiter_name = f"auth09db-{uuid4().hex}"
 
             async def ordered_lock_control(self):
-                if asyncio.current_task().get_name() == first_name:
+                if current_task_name() == first_name:
                     control = await original_lock_control(self)
                     first_locked.set()
                     await asyncio.wait_for(
@@ -6836,9 +6804,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
                 before,
                 {
                     "ActorIdentityLinkRevoked": int(error is None or second == "revoke"),
-                    "ActorIdentityLinkReactivated": int(
-                        error is None or second == "reactivate"
-                    ),
+                    "ActorIdentityLinkReactivated": int(error is None or second == "reactivate"),
                     "AuthorityInvalidationRequested": expected_invalidation,
                     "SensitiveAuthorizationDenied": expected_denials,
                 },
@@ -6993,16 +6959,14 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
         third_name = f"auth09db-three-third-{uuid4().hex}"
 
         async def three_way_lock_control(self):
-            task_name = asyncio.current_task().get_name()
+            task_name = current_task_name()
             if task_name == "three-profile-first":
                 control = await original_lock_control(self)
                 first_locked.set()
                 await release_first.wait()
                 return control
             await first_locked.wait()
-            application_name = (
-                second_name if task_name == "three-grant-second" else third_name
-            )
+            application_name = second_name if task_name == "three-grant-second" else third_name
             await self._session.execute(
                 text("select set_config('application_name', :name, true)"),
                 {"name": application_name},
@@ -7106,9 +7070,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
             self_lock_owner = ActorService
             self_lock_attribute = "lock_actor_self_for_authorization"
             original_self_lock = getattr(self_lock_owner, self_lock_attribute)
-            original_link_lock = (
-                AdminAuthorizationRepository.lock_identity_link_lifecycle_target
-            )
+            original_link_lock = AdminAuthorizationRepository.lock_identity_link_lifecycle_target
             first_locked = asyncio.Event()
             release_first = asyncio.Event()
             waiter_entered = asyncio.Event()
@@ -7166,6 +7128,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
             self_task: asyncio.Task[Response] | None = None
             lifecycle_task: asyncio.Task[Response] | None = None
             try:
+
                 async def self_request() -> Response:
                     return await client.request(
                         method,
@@ -7200,8 +7163,7 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
                     if task in done:
                         early = task.result()
                         raise AssertionError(
-                            f"blocker returned before target lock: "
-                            f"{early.status_code} {early.text}"
+                            f"blocker returned before target lock: {early.status_code} {early.text}"
                         )
                     raise AssertionError("blocker did not reach the target lock")
 
@@ -7227,17 +7189,13 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
                     )
 
                 if lifecycle_first:
-                    lifecycle_task = asyncio.create_task(
-                        lifecycle_request(), name=lifecycle_name
-                    )
+                    lifecycle_task = asyncio.create_task(lifecycle_request(), name=lifecycle_name)
                     await require_first_lock(lifecycle_task)
                     self_task = asyncio.create_task(self_request(), name=self_name)
                 else:
                     self_task = asyncio.create_task(self_request(), name=self_name)
                     await require_first_lock(self_task)
-                    lifecycle_task = asyncio.create_task(
-                        lifecycle_request(), name=lifecycle_name
-                    )
+                    lifecycle_task = asyncio.create_task(lifecycle_request(), name=lifecycle_name)
                 waiter = self_task if lifecycle_first else lifecycle_task
                 assert waiter is not None
                 await require_waiter(waiter)
@@ -7306,9 +7264,9 @@ async def test_actor_identity_link_lifecycle_real_postgres_concurrency(
                 await actor_self_race(method, lifecycle_first, index)
 
     async with db_session.get_session_factory()() as session:
-        assert await AdminAuthorizationRepository(
-            session
-        ).count_effective_access_administrators() == 1
+        assert (
+            await AdminAuthorizationRepository(session).count_effective_access_administrators() == 1
+        )
         assert (
             await session.scalar(
                 select(func.count())

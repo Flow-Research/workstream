@@ -8,12 +8,10 @@ import sys
 import types
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
-from pathlib import Path
+from typing import Any, cast
 from uuid import uuid4
 
-import pytest
-from alembic import command
-from alembic.config import Config
+import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.dialects import postgresql
@@ -85,11 +83,9 @@ from app.modules.projects.post_submit_policy import (
 @pytest.fixture
 def project_database_env(
     monkeypatch: pytest.MonkeyPatch,
-    postgres_database_url: str,
-    migration_lock,
-    reset_test_database_state,
+    clean_postgres_database: str,
 ) -> Iterator[str]:
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     monkeypatch.setenv(
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
         "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
@@ -103,30 +99,10 @@ def project_database_env(
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "false")
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", "memory://")
     get_settings.cache_clear()
-    asyncio.run(db_session.dispose_engine())
-
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
     try:
-        with migration_lock():
-            command.downgrade(config, "base")
-            try:
-                command.upgrade(config, "head")
-                yield postgres_database_url
-            finally:
-                try:
-                    asyncio.run(reset_test_database_state(postgres_database_url))
-                finally:
-                    try:
-                        asyncio.run(db_session.dispose_engine())
-                    finally:
-                        command.downgrade(config, "base")
+        yield clean_postgres_database
     finally:
-        try:
-            asyncio.run(db_session.dispose_engine())
-        finally:
-            get_settings.cache_clear()
+        get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -406,9 +382,7 @@ def test_policy_models_bind_to_denormalized_policy_hashes() -> None:
         ),
     ]
 
-    for model, constraint_name, local_columns, target_table, target_columns in (
-        expected_constraints
-    ):
+    for model, constraint_name, local_columns, target_table, target_columns in expected_constraints:
         constraint = next(
             constraint
             for constraint in model.__table__.foreign_key_constraints
@@ -421,6 +395,7 @@ def test_policy_models_bind_to_denormalized_policy_hashes() -> None:
             target_table,
         ]
         assert [element.column.name for element in constraint.elements] == target_columns
+
 
 def test_policy_hash_pairs_are_unique_fk_targets() -> None:
     expected_constraints = {
@@ -563,9 +538,7 @@ async def test_project_route_registers_project_manager_actor_without_auth_me(
 
     async with db_session.get_session_factory()() as session:
         identity_link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.subject == "project-manager-subject"
-            )
+            select(ActorIdentityLink).where(ActorIdentityLink.subject == "project-manager-subject")
         )
         assert identity_link is not None
         profile = await session.get(ActorProfile, identity_link.actor_profile_id)
@@ -667,7 +640,9 @@ async def test_create_guide_autostart_enqueues_without_inline_agent_execution(
         ).all()
         policies = (
             await session.scalars(
-                select(SubmissionArtifactPolicy).where(SubmissionArtifactPolicy.guide_id == guide["id"])
+                select(SubmissionArtifactPolicy).where(
+                    SubmissionArtifactPolicy.guide_id == guide["id"]
+                )
             )
         ).all()
         setup_runs = (
@@ -701,7 +676,10 @@ def test_project_setup_queue_syncs_all_setup_task_settings(
     )
     from app.workers.task_settings import sync_task_settings
 
-    tasks = (run_pre_submit_setup_pipeline, run_post_submit_setup_continuation)
+    tasks = tuple(
+        cast(Any, task)
+        for task in (run_pre_submit_setup_pipeline, run_post_submit_setup_continuation)
+    )
     original_config = {
         task: {
             "broker_url": task.app.conf.broker_url,
@@ -1280,9 +1258,7 @@ async def create_generated_post_submit_setup_output(
             effective_policy_id=pre_submit_checker_policy["effective_policy_id"],
             effective_policy_hash=pre_submit_checker_policy["effective_policy_hash"],
             pre_submit_checker_policy_id=pre_submit_checker_policy["id"],
-            pre_submit_checker_bundle_hash=pre_submit_checker_policy[
-                "compiled_bundle_hash"
-            ],
+            pre_submit_checker_bundle_hash=pre_submit_checker_policy["compiled_bundle_hash"],
             required_checkers=compiled.required_checkers,
             warning_checkers=compiled.warning_checkers,
             blocking_severities=compiled.blocking_severities,
@@ -1347,8 +1323,7 @@ def test_project_setup_run_status_constraint_metadata() -> None:
     status_constraint = next(
         constraint
         for constraint in ProjectSetupRun.__table__.constraints
-        if constraint.name is not None
-        and constraint.name.endswith("ck_project_setup_runs_status")
+        if constraint.name is not None and constraint.name.endswith("ck_project_setup_runs_status")
     )
 
     constraint_sql = str(status_constraint.sqltext)
@@ -1523,8 +1498,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         },
     )
     second_setup_response = await project_client.get(
-        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
-        "setup-runs/latest",
+        f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/setup-runs/latest",
         headers=auth_headers(),
     )
     assert second_setup_response.status_code == 200, second_setup_response.text
@@ -1607,18 +1581,18 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         "setup-runs/latest",
         headers=auth_headers(),
     )
-    assert (
-        same_project_other_setup_response.status_code == 200
-    ), same_project_other_setup_response.text
+    assert same_project_other_setup_response.status_code == 200, (
+        same_project_other_setup_response.text
+    )
     same_project_other_setup_run = same_project_other_setup_response.json()
     same_project_other_policies_response = await project_client.get(
         f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
         "submission-artifact-policies",
         headers=auth_headers(),
     )
-    assert (
-        same_project_other_policies_response.status_code == 200
-    ), same_project_other_policies_response.text
+    assert same_project_other_policies_response.status_code == 200, (
+        same_project_other_policies_response.text
+    )
     same_project_other_policy = same_project_other_policies_response.json()[0]
     same_project_other_effective = await approve_submission_artifact_policy(
         project_client,
@@ -1630,9 +1604,9 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/setup-runs/latest",
         headers=auth_headers(),
     )
-    assert (
-        first_setup_after_same_project_response.status_code == 200
-    ), first_setup_after_same_project_response.text
+    assert first_setup_after_same_project_response.status_code == 200, (
+        first_setup_after_same_project_response.text
+    )
     assert first_setup_after_same_project_response.json()["id"] == setup_run["id"]
     wrong_same_project_report_response = await project_client.get(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/sufficiency-reports/"
@@ -1651,18 +1625,18 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         "effective-submission-artifact-policy",
         headers=auth_headers(),
     )
-    assert (
-        same_project_other_effective_response.status_code == 200
-    ), same_project_other_effective_response.text
+    assert same_project_other_effective_response.status_code == 200, (
+        same_project_other_effective_response.text
+    )
     assert same_project_other_effective_response.json()["id"] == same_project_other_effective["id"]
     same_project_other_checker_response = await project_client.get(
         f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
         "pre-submit-checker-policy",
         headers=auth_headers(),
     )
-    assert (
-        same_project_other_checker_response.status_code == 200
-    ), same_project_other_checker_response.text
+    assert same_project_other_checker_response.status_code == 200, (
+        same_project_other_checker_response.text
+    )
     assert (
         same_project_other_checker_response.json()["effective_policy_id"]
         == same_project_other_effective["id"]
@@ -1766,9 +1740,7 @@ async def test_policy_approval_resumes_post_submit_setup_continuation(
     )
     assert resumed["post_submit_derivation_summary"]["setup_note_count"] == 1
     assert "setup_notes" not in resumed["post_submit_derivation_summary"]
-    assert "spoofed_runtime_agent" not in json.dumps(
-        resumed["post_submit_derivation_summary"]
-    )
+    assert "spoofed_runtime_agent" not in json.dumps(resumed["post_submit_derivation_summary"])
     assert "sha256:" not in json.dumps(resumed["post_submit_derivation_summary"])
     async with db_session.get_session_factory()() as session:
         post_submit_policy = await session.get(
@@ -1871,9 +1843,10 @@ async def test_post_submit_continuation_is_idempotent_after_compile(
             headers=auth_headers(),
         )
     ).json()
-    assert rerun["output_post_submit_checker_policy_id"] == compiled[
-        "output_post_submit_checker_policy_id"
-    ]
+    assert (
+        rerun["output_post_submit_checker_policy_id"]
+        == compiled["output_post_submit_checker_policy_id"]
+    )
 
 
 async def test_post_submit_continuation_running_worker_redelivery_resumes_setup(
@@ -1956,9 +1929,7 @@ async def test_post_submit_continuation_running_worker_redelivery_resumes_setup(
         )
     ).json()
     assert latest["status"] == "post_submit_policy_compiled"
-    assert latest["output_post_submit_checker_policy_id"] == result[
-        "post_submit_checker_policy_id"
-    ]
+    assert latest["output_post_submit_checker_policy_id"] == result["post_submit_checker_policy_id"]
 
 
 async def test_corrected_submission_artifact_policy_resumes_post_submit_setup(
@@ -2069,9 +2040,10 @@ async def test_corrected_submission_artifact_policy_resumes_post_submit_setup(
     ).json()
     assert after_stale["status"] == "post_submit_policy_compiled"
     assert after_stale["output_submission_artifact_policy_id"] == manual_policy["id"]
-    assert after_stale["output_post_submit_checker_policy_id"] == resumed[
-        "output_post_submit_checker_policy_id"
-    ]
+    assert (
+        after_stale["output_post_submit_checker_policy_id"]
+        == resumed["output_post_submit_checker_policy_id"]
+    )
     async with db_session.get_session_factory()() as session:
         stale_policy = await session.get(PostSubmitCheckerPolicy, first_post_submit_policy_id)
         replacement_policy = await session.get(
@@ -2087,8 +2059,7 @@ async def test_corrected_submission_artifact_policy_resumes_post_submit_setup(
     assert replacement_policy is not None
     assert replacement_policy.supersedes_policy_id is None
     setup_visibility = await project_client.get(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/setup",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
         headers=auth_headers(),
     )
     assert setup_visibility.status_code == 200
@@ -2261,14 +2232,13 @@ async def test_compiled_post_submit_setup_run_does_not_regress_from_duplicate_wo
             error_code="PolicySetupBlocked",
             error_summary="duplicate worker reported an older failure",
             continuation_effective_policy_id=bundle["effective_policy"]["id"],
-            continuation_pre_submit_checker_policy_id=bundle["pre_submit_checker_policy"][
-                "id"
-            ],
+            continuation_pre_submit_checker_policy_id=bundle["pre_submit_checker_policy"]["id"],
         )
         assert response.status == "post_submit_policy_compiled"
-        assert response.output_post_submit_checker_policy_id == setup_run[
-            "output_post_submit_checker_policy_id"
-        ]
+        assert (
+            response.output_post_submit_checker_policy_id
+            == setup_run["output_post_submit_checker_policy_id"]
+        )
         latest = await session.get(ProjectSetupRun, setup_run["id"])
         assert latest is not None
         assert latest.status == "post_submit_policy_compiled"
@@ -3097,8 +3067,7 @@ async def test_project_setup_run_rejects_cross_context_worker_updates(
                     {
                         **source_snapshot_payload()["items"][0],
                         "durable_ref": "inline:/guides/second/v1",
-                        "content_hash": "sha256:"
-                        + hashlib.sha256(b"second-guide").hexdigest(),
+                        "content_hash": "sha256:" + hashlib.sha256(b"second-guide").hexdigest(),
                     }
                 ],
             },
@@ -3173,8 +3142,7 @@ async def test_project_setup_visibility_apis_require_project_setup_role(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
         "effective-submission-artifact-policy",
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/setup",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
     ]
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "admin")
     get_settings.cache_clear()
@@ -3390,10 +3358,7 @@ async def test_source_snapshot_hash_is_server_computed_and_canonical(
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
 
     snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    guide_material = {
-        field: guide[field]
-        for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)
-    }
+    guide_material = {field: guide[field] for field in sorted(GUIDE_SOURCE_MATERIAL_FIELDS)}
     expected_manifest = {
         "schema_version": "guide_source_snapshot.v1",
         "items": sorted(
@@ -4053,7 +4018,9 @@ async def test_agent_material_includes_representative_task_context(
     assert representative_task.content_excerpt == (
         "Representative task: solve a STEM prompt and submit a reasoned answer."
     )
-    assert any(item.durable_ref == representative_task.durable_ref for item in material.source_items)
+    assert any(
+        item.durable_ref == representative_task.durable_ref for item in material.source_items
+    )
 
 
 async def test_source_snapshot_integrity_accepts_v1_manifest_without_content_excerpt(
@@ -4127,7 +4094,9 @@ def test_policy_derivation_prompt_prohibits_self_conflicting_policies() -> None:
     assert "one exact safe relative file path" in instructions
     assert "must not be directories" in instructions
     assert "must not contain globs" in instructions
-    assert "Forbidden artifact patterns may use globs; required artifact paths may not" in instructions
+    assert (
+        "Forbidden artifact patterns may use globs; required artifact paths may not" in instructions
+    )
 
 
 def test_post_submit_policy_derivation_prompt_preserves_runtime_boundary() -> None:
@@ -4561,7 +4530,9 @@ async def test_derivation_agent_allows_warning_report_without_acknowledgement_an
         project_client.post(endpoint, headers=auth_headers()),
     )
 
-    assert inspect.iscoroutinefunction(ProjectService.run_submission_artifact_policy_derivation_agent)
+    assert inspect.iscoroutinefunction(
+        ProjectService.run_submission_artifact_policy_derivation_agent
+    )
     assert {first.status_code, second.status_code} == {200, 201}
     assert first.json()["id"] == second.json()["id"]
     assert first.json()["source_snapshot_id"] == snapshot["id"]
@@ -5059,8 +5030,9 @@ async def test_submission_artifact_policy_approval_persists_effective_policy_has
     assert pre_submit_checker_policy.effective_policy_hash == effective["effective_policy_hash"]
     assert pre_submit_checker_policy.compiler_version == "workstream-pre-submit-compiler-v0.1"
     assert pre_submit_checker_policy.compiled_bundle_hash is not None
-    assert pre_submit_checker_policy.compiled_bundle["effective_policy_hash"] == (
-        effective["effective_policy_hash"]
+    assert (
+        pre_submit_checker_policy.compiled_bundle["effective_policy_hash"]
+        == (effective["effective_policy_hash"])
     )
     assert "require_file" in pre_submit_checker_policy.checker_configs
 
@@ -5258,7 +5230,9 @@ async def test_approved_submission_artifact_policy_is_immutable(
         guide["id"],
         snapshot["id"],
     )
-    await approve_submission_artifact_policy(project_client, project["id"], guide["id"], policy["id"])
+    await approve_submission_artifact_policy(
+        project_client, project["id"], guide["id"], policy["id"]
+    )
 
     response = await project_client.patch(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
@@ -5302,9 +5276,7 @@ async def test_draft_submission_artifact_policy_can_be_updated(
     assert updated["id"] == policy["id"]
     assert updated["lifecycle_status"] == "draft"
     assert updated["policy_hash"] != policy["policy_hash"]
-    assert updated["policy_body"]["required_artifacts"][0]["path"] == (
-        "outputs/final-answer.md"
-    )
+    assert updated["policy_body"]["required_artifacts"][0]["path"] == ("outputs/final-answer.md")
     assert updated["change_summary"] == "Use final answer artifact path."
 
 
@@ -5397,9 +5369,9 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
     assert second_persisted.supersedes_policy_id == first_persisted.id
     assert first_effective_persisted.lifecycle_status == "superseded"
     assert first_effective_persisted.superseded_at is not None
-    assert first_effective_persisted.effective_policy_hash == first_effective[
-        "effective_policy_hash"
-    ]
+    assert (
+        first_effective_persisted.effective_policy_hash == first_effective["effective_policy_hash"]
+    )
     assert second_effective_persisted.lifecycle_status == "approved"
     assert second_effective_persisted.supersedes_effective_policy_id == (
         first_effective_persisted.id
@@ -5413,9 +5385,7 @@ async def test_approving_replacement_policy_supersedes_prior_rows(
     )
     assert old_pre_submit.superseded_at is not None
     assert current_pre_submit.effective_policy_id == second_effective_persisted.id
-    assert current_pre_submit.supersedes_pre_submit_checker_policy_id == (
-        old_pre_submit.id
-    )
+    assert current_pre_submit.supersedes_pre_submit_checker_policy_id == (old_pre_submit.id)
     assert current_policy.id == second_persisted.id
     assert current_effective.id == second_effective_persisted.id
 
@@ -5510,8 +5480,9 @@ async def test_replacement_policy_requires_complete_prior_effective_context(
     )
 
     assert response.status_code == 409
-    assert "effective project submission artifact policy chain is incomplete" in (
-        response.json()["detail"]
+    assert (
+        "effective project submission artifact policy chain is incomplete"
+        in (response.json()["detail"])
     )
 
 
@@ -5606,21 +5577,30 @@ async def test_concurrent_policy_approvals_do_not_fork_current_chain(
         "compiled",
         "superseded",
     }
-    assert len({policy.supersedes_policy_id for policy in policies if policy.supersedes_policy_id}) == 1
-    assert len(
-        {
-            policy.supersedes_effective_policy_id
-            for policy in effective_policies
-            if policy.supersedes_effective_policy_id
-        }
-    ) == 1
-    assert len(
-        {
-            policy.supersedes_pre_submit_checker_policy_id
-            for policy in pre_submit_policies
-            if policy.supersedes_pre_submit_checker_policy_id
-        }
-    ) == 1
+    assert (
+        len({policy.supersedes_policy_id for policy in policies if policy.supersedes_policy_id})
+        == 1
+    )
+    assert (
+        len(
+            {
+                policy.supersedes_effective_policy_id
+                for policy in effective_policies
+                if policy.supersedes_effective_policy_id
+            }
+        )
+        == 1
+    )
+    assert (
+        len(
+            {
+                policy.supersedes_pre_submit_checker_policy_id
+                for policy in pre_submit_policies
+                if policy.supersedes_pre_submit_checker_policy_id
+            }
+        )
+        == 1
+    )
 
 
 async def test_material_guide_edit_after_source_snapshot_is_blocked(
@@ -5664,7 +5644,9 @@ async def test_activation_rejects_policy_bound_to_stale_source_snapshot(
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     first_snapshot = await create_source_snapshot(project_client, project["id"], guide["id"])
-    await create_sufficiency_report(project_client, project["id"], guide["id"], first_snapshot["id"])
+    await create_sufficiency_report(
+        project_client, project["id"], guide["id"], first_snapshot["id"]
+    )
     policy = await create_submission_artifact_policy(
         project_client,
         project["id"],
@@ -5677,9 +5659,7 @@ async def test_activation_rejects_policy_bound_to_stale_source_snapshot(
         guide["id"],
         policy["id"],
     )
-    newer_payload = source_snapshot_payload(
-        durable_ref="https://docs.flow.test/stem/guide-v2.md"
-    )
+    newer_payload = source_snapshot_payload(durable_ref="https://docs.flow.test/stem/guide-v2.md")
     newer_response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
         headers=auth_headers(),
@@ -6088,51 +6068,35 @@ async def test_submission_artifact_policy_rejects_forbidden_required_artifacts(
             "attestation terms",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="outputs/%2E%2E/secret.txt"
-            ),
+            project_submission_artifact_policy_body(artifact_path="outputs/%2E%2E/secret.txt"),
             "percent-encoded",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="outputs/100%complete.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="outputs/100%complete.md"),
             "percent-encoded",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="outputs/final\nanswer.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="outputs/final\nanswer.md"),
             "control characters",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="C:/Users/alice/output.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="C:/Users/alice/output.md"),
             "safe relative paths",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="C:\\Users\\alice\\output.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="C:\\Users\\alice\\output.md"),
             "safe relative paths",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="outputs\\final-answer.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="outputs\\final-answer.md"),
             "local path separators",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="s3:bucket/key.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="s3:bucket/key.md"),
             "storage refs or URLs",
         ),
         (
-            project_submission_artifact_policy_body(
-                artifact_path="file:output.md"
-            ),
+            project_submission_artifact_policy_body(artifact_path="file:output.md"),
             "storage refs or URLs",
         ),
         (
@@ -6529,8 +6493,7 @@ async def test_post_submit_setup_visibility_redacts_source_hash_and_policy_body(
     )
 
     response = await project_client.get(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/setup",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
         headers=auth_headers(),
     )
 
@@ -6585,8 +6548,7 @@ async def test_post_submit_checker_policy_approval_uses_server_provenance(
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "admin")
     get_settings.cache_clear()
     retry = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/approve",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/approve",
         headers=auth_headers(),
         json={},
     )
@@ -6653,10 +6615,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
         "post-submit-checker-policy/request-correction",
         headers=auth_headers(),
         json={
-            "correction_reason": (
-                "Regenerate without sk-"
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-            )
+            "correction_reason": ("Regenerate without sk-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
         },
     )
 
@@ -6668,12 +6627,14 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
     correction_summary = body["setup_run"]["post_submit_derivation_summary"]
     assert correction_summary["status"] == "correction_requested"
     assert correction_summary["reason"] == "redacted"
-    assert correction_summary["post_submit_checker_policy_id"] == (
-        bundle["post_submit_checker_policy"]["id"]
+    assert (
+        correction_summary["post_submit_checker_policy_id"]
+        == (bundle["post_submit_checker_policy"]["id"])
     )
     assert correction_summary["correction_requested_by_role"] == "project_manager"
-    assert correction_summary["correction_requested_by_actor"] == (
-        bundle["submission_artifact_policy"]["created_by"]
+    assert (
+        correction_summary["correction_requested_by_actor"]
+        == (bundle["submission_artifact_policy"]["created_by"])
     )
     assert correction_summary["correction_requested_at"]
     assert body["post_submit_checker_policy"] is None
@@ -6681,16 +6642,18 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
     correction_history = body["correction_history"][0]
     assert correction_history["policy_id"] == bundle["post_submit_checker_policy"]["id"]
     assert correction_history["policy_hash"] == bundle["post_submit_checker_policy"]["policy_hash"]
-    assert correction_history["required_checkers"] == bundle["post_submit_checker_policy"][
-        "required_checkers"
-    ]
+    assert (
+        correction_history["required_checkers"]
+        == bundle["post_submit_checker_policy"]["required_checkers"]
+    )
     assert correction_history["warning_checkers"] == []
     assert correction_history["blocking_severities"] == ["critical", "high"]
     assert correction_history["correction_reason"] == "redacted"
     assert correction_history["correction_requested_by_role"] == "project_manager"
-    assert correction_history["correction_requested_by_actor"] == bundle[
-        "submission_artifact_policy"
-    ]["created_by"]
+    assert (
+        correction_history["correction_requested_by_actor"]
+        == bundle["submission_artifact_policy"]["created_by"]
+    )
     assert correction_history["correction_requested_at"]
     assert enqueued == [
         {
@@ -6753,9 +6716,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
                         PostSubmitCheckerPolicyReason(
                             checker_name="check_acceptance_criteria_present",
                             rationale="Correction requires explicit acceptance criteria checks.",
-                            evidence_refs=[
-                                PostSubmitCheckerPolicyEvidenceRef(ref="project_guide")
-                            ],
+                            evidence_refs=[PostSubmitCheckerPolicyEvidenceRef(ref="project_guide")],
                         )
                     ],
                     unsupported_required_checks=[],
@@ -6823,16 +6784,18 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
         session.add(new_setup_run)
         await session.commit()
         new_context_service = ProjectService(session, agent_runtime=NewContextRuntime())
-        new_context_policy, created, _ = (
-            await new_context_service.run_post_submit_checker_policy_derivation_agent(
-                project_setup_pipeline_actor(),
-                project["id"],
-                guide["id"],
-                bundle["source_snapshot"]["id"],
-                next_effective_policy["id"],
-                next_pre_submit_policy["id"],
-                new_setup_run.id,
-            )
+        (
+            new_context_policy,
+            created,
+            _,
+        ) = await new_context_service.run_post_submit_checker_policy_derivation_agent(
+            project_setup_pipeline_actor(),
+            project["id"],
+            guide["id"],
+            bundle["source_snapshot"]["id"],
+            next_effective_policy["id"],
+            next_pre_submit_policy["id"],
+            new_setup_run.id,
         )
         assert created is True
         persisted_new_context_policy = await session.get(
@@ -6843,8 +6806,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
         assert persisted_new_context_policy.supersedes_policy_id is None
 
     setup_visibility = await project_client.get(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "post-submit-checker-policy/setup",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
         headers=auth_headers(),
     )
     assert setup_visibility.status_code == 200
@@ -6939,7 +6901,9 @@ async def test_database_rejects_post_submit_checker_approved_by_non_setup_role(
         guide["id"],
     )
     async with db_session.get_session_factory()() as session:
-        policy = await session.get(PostSubmitCheckerPolicy, bundle["post_submit_checker_policy"]["id"])
+        policy = await session.get(
+            PostSubmitCheckerPolicy, bundle["post_submit_checker_policy"]["id"]
+        )
         assert policy is not None
         policy.approved_by_role = "worker"
         with pytest.raises(IntegrityError):
@@ -7258,8 +7222,9 @@ async def test_active_guide_read_rejects_mismatched_effective_policy_body_hash(
     )
 
     assert response.status_code == 422
-    assert "effective project submission artifact policy body hash mismatch" in (
-        response.json()["detail"]
+    assert (
+        "effective project submission artifact policy body hash mismatch"
+        in (response.json()["detail"])
     )
 
 
@@ -7319,27 +7284,33 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.json()["post_submit_checker_policy"]["required_checkers"] == [
         "check_policy_context_present"
     ]
-    assert active.json()["guide_source_snapshot"]["bundle_hash"] == (
-        bundle["source_snapshot"]["bundle_hash"]
+    assert (
+        active.json()["guide_source_snapshot"]["bundle_hash"]
+        == (bundle["source_snapshot"]["bundle_hash"])
     )
     assert active.json()["guide_sufficiency_report"]["status"] == "passed"
     assert active.json()["submission_artifact_policy"]["lifecycle_status"] == "approved"
-    assert active.json()["effective_submission_artifact_policy"]["effective_policy_hash"] == (
-        bundle["effective_policy"]["effective_policy_hash"]
+    assert (
+        active.json()["effective_submission_artifact_policy"]["effective_policy_hash"]
+        == (bundle["effective_policy"]["effective_policy_hash"])
     )
     assert active.json()["pre_submit_checker_policy"]["lifecycle_status"] == "compiled"
-    assert active.json()["pre_submit_checker_policy"]["effective_policy_id"] == (
-        bundle["effective_policy"]["id"]
+    assert (
+        active.json()["pre_submit_checker_policy"]["effective_policy_id"]
+        == (bundle["effective_policy"]["id"])
     )
-    assert active.json()["pre_submit_checker_policy"]["compiled_bundle_hash"] == (
-        bundle["pre_submit_checker_policy"]["compiled_bundle_hash"]
+    assert (
+        active.json()["pre_submit_checker_policy"]["compiled_bundle_hash"]
+        == (bundle["pre_submit_checker_policy"]["compiled_bundle_hash"])
     )
     assert "compiled_bundle" not in active.json()["pre_submit_checker_policy"]
-    assert active.json()["pre_submit_checker_policy"]["checker_names"] == (
-        bundle["pre_submit_checker_policy"]["checker_names"]
+    assert (
+        active.json()["pre_submit_checker_policy"]["checker_names"]
+        == (bundle["pre_submit_checker_policy"]["checker_names"])
     )
-    assert active.json()["pre_submit_checker_policy"]["checker_configs"] == (
-        bundle["pre_submit_checker_policy"]["checker_configs"]
+    assert (
+        active.json()["pre_submit_checker_policy"]["checker_configs"]
+        == (bundle["pre_submit_checker_policy"]["checker_configs"])
     )
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
