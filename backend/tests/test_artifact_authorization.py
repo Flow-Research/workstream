@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from app.modules.artifacts.operator import (
     ArtifactOperatorEvidenceError,
+    ArtifactOperatorNotFound,
     ArtifactOperatorService,
     artifact_provider_readiness,
 )
@@ -356,3 +357,24 @@ async def test_binding_discovery_projects_canonical_authorized_page() -> None:
         f"task:{resource_id}",
         (project_id,),
     )
+
+
+async def test_binding_discovery_conceals_missing_canonical_resource() -> None:
+    service = ArtifactOperatorService(
+        object(), _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+    service._binding_resource_project = AsyncMock(return_value=None)
+    service._authorize = AsyncMock()
+    service._page = AsyncMock()
+
+    with pytest.raises(ArtifactOperatorNotFound):
+        await service.list_bindings(
+            authorization_context=_context(),
+            resource_type="task",
+            resource_id=uuid4(),
+            cursor=None,
+            limit=1,
+        )
+
+    service._authorize.assert_not_awaited()
+    service._page.assert_not_awaited()
