@@ -135,8 +135,8 @@ and PR cycle.
 
 `Loop Memory Explicit Event` is the only authority for starting reviewed work
 or cancelling its active state. A start may select the declared successor or a
-unique reviewed contract in a stopped initiative when all signed initiatives
-are idle and that chunk identity has never been completed in signed history.
+unique reviewed contract in a stopped initiative when that target initiative is
+idle and that chunk identity has never been completed in signed history.
 Dispatch it from `main` with the exact current-main SHA, initiative
 ID, chunk ID, planning or implementation phase, action, and a bounded
 single-line reason. For `start`, GitHub must report that the dispatcher
@@ -213,6 +213,45 @@ signed authority. When `main` advances, rebase and rerun proof before merge;
 that rebase does not replace the immutable selected contract or authorize scope
 drift. The generated queue and initiative projections are the canonical view of
 all concurrent activity.
+
+## First-New-Initiative Planning Intake
+
+An initiative absent from signed history cannot select an unmerged contract
+from exact `main`. Its first PR may therefore be classified as planning intake,
+not implementation. The reviewed head must add exactly one canonical initiative
+planning directory and one `<initiative>-PLAN` merge intent. Only regular,
+non-executable planning files are accepted; existing or foreign paths, deletes,
+renames, links, submodules, code, configuration, scripts, workflows, policies,
+and generated state fail closed.
+
+The intent names one exact same-initiative implementation contract and requires
+explicit start. Protected Actions checks bind to the exact reviewed head and
+GitHub Actions app; CodeRabbit remains supplementary external evidence, not
+authority. After human merge, automation signs the merge with both active slots
+null and gate `stopped_after_merge`. Planning intake never authorizes
+implementation. A repository writer starts the successor through `Loop Memory
+Explicit Event` after explicit user instruction, without a second approval.
+
+Replay evaluates initiative absence at the historical ledger point and must
+reconstruct the same stopped projection. An existing initiative, repeated PLAN,
+unexpected path, ambiguous evidence, or implementation claim fails closed.
+
+## WS-ENG-006 Exact Root Repair
+
+`WS-ENG-006-00` uses the closed two-merge recovery certificate to reconcile
+the already-merged PR #176 (`WS-REV-001-PLAN3`) followed only by initiative
+`WS-ENG-006` and chunk `WS-ENG-006-00`. Recovery requires that exact ordered
+plan from signed current `main`. GitHub supplies each unique merged PR,
+reviewed head, base, and check evidence. The temporary authorization is consumed
+before signing or publication, never persists as the permanent intake rule, and
+is inert on replay. Extra, stale, reordered, unrelated, or reused targets fail
+closed.
+
+The activation target must have unique successful `agent-gates` and `test`
+runs from the pinned GitHub Actions app on its reviewed head. Historical
+PR #176 is pinned by merge SHA, PR number, initiative, and chunk and must retain
+successful aggregate required-check evidence; its historical duplicate
+successful `agent-gates` reruns are not reinterpreted as target authority.
 
 The cutover inventory is fixed in
 `.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry

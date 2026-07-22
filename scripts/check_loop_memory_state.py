@@ -109,7 +109,17 @@ STATE_BRANCH = "automation/loop-memory"
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+PLANNING_ROOT_FILES = {
+    "INTENT.md",
+    "DISCOVERY.md",
+    "PLAN.md",
+    "CHUNK_MAP.md",
+    "STATUS.md",
+    "RISKS.md",
+    "DECISIONS.md",
+}
 
 
 def checked_paths() -> list[Path]:
@@ -273,7 +283,156 @@ def _metadata_failures(metadata: object, label: str) -> list[str]:
     return failures
 
 
-def _record_failures(record: object, label: str) -> list[str]:
+def _planning_path_failures(
+    intake: dict, metadata: dict, label: str
+) -> list[str]:
+    """Independently enforce the closed planning-intake path grammar."""
+    failures: list[str] = []
+    initiative_id = metadata.get("initiative_id")
+    successor = metadata.get("next_chunk_id")
+    directory = intake.get("initiative_directory")
+    paths = intake.get("changed_paths")
+    if not all(
+        isinstance(value, str) for value in (initiative_id, successor, directory)
+    ):
+        return [f"{label}: planning intake lifecycle identity is invalid"]
+    directory_pattern = re.compile(
+        rf"^{re.escape(initiative_id)}-[a-z0-9]+(?:-[a-z0-9]+)*$"
+    )
+    if not directory_pattern.fullmatch(directory) or not isinstance(paths, list):
+        return [f"{label}: planning intake path grammar is invalid"]
+    root = f".agent-loop/initiatives/{directory}/"
+    intent = f".agent-loop/merge-intents/{initiative_id}-PLAN.json"
+    root_files: set[str] = set()
+    chunks: list[str] = []
+    reviews: set[str] = set()
+    chunk_pattern = re.compile(
+        rf"^{re.escape(initiative_id)}-[A-Z0-9]+(?:-[A-Z0-9]+)*"
+        r"(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$"
+    )
+    for path in paths:
+        if path == intent:
+            continue
+        if not path.startswith(root):
+            failures.append(f"{label}: planning intake contains a foreign path")
+            continue
+        relative = path.removeprefix(root)
+        parts = relative.split("/")
+        if any(part.startswith(".") for part in parts) or any(
+            part.casefold() == "agents.md" for part in parts
+        ):
+            failures.append(f"{label}: planning intake path grammar is invalid")
+        elif "/" not in relative:
+            root_files.add(relative)
+        elif (
+            relative.startswith("chunks/")
+            and relative.count("/") == 1
+            and chunk_pattern.fullmatch(parts[-1])
+        ):
+            chunks.append(parts[-1])
+        elif relative.startswith("reviews/") and relative.count("/") == 1:
+            reviews.add(parts[-1])
+        else:
+            failures.append(f"{label}: planning intake path grammar is invalid")
+    if intent not in paths:
+        failures.append(f"{label}: planning intake intent path is missing")
+    allowed_root_sets = {
+        frozenset(PLANNING_ROOT_FILES),
+        frozenset(PLANNING_ROOT_FILES | {"REVIEW_LOG.md"}),
+    }
+    if root_files not in allowed_root_sets:
+        failures.append(f"{label}: planning intake root file set is invalid")
+    expected_reviews = {
+        f"{initiative_id}-PLAN-internal-review-evidence.md",
+        f"{initiative_id}-PLAN-pr-trust-bundle.md",
+    }
+    if reviews != expected_reviews or not chunks:
+        failures.append(f"{label}: planning intake review or contract set is invalid")
+    successor_pattern = re.compile(
+        rf"^{re.escape(successor)}(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$"
+    )
+    if sum(bool(successor_pattern.fullmatch(name)) for name in chunks) != 1:
+        failures.append(f"{label}: planning intake successor contract is not exact")
+    return failures
+
+
+def _git_tree(
+    repository_root: Path, commit: str
+) -> tuple[str, dict[str, tuple[str, str, str]]] | None:
+    """Read one complete Git tree without trusting generated evidence."""
+    tree = subprocess.run(
+        ["git", "-C", str(repository_root), "rev-parse", f"{commit}^{{tree}}"],
+        check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    listing = subprocess.run(
+        ["git", "-C", str(repository_root), "ls-tree", "-r", "-z", commit],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    tree_sha = tree.stdout.strip()
+    if tree.returncode or listing.returncode or not SHA_PATTERN.fullmatch(tree_sha):
+        return None
+    entries: dict[str, tuple[str, str, str]] = {}
+    try:
+        for raw in listing.stdout.split(b"\0"):
+            if not raw:
+                continue
+            identity, raw_path = raw.split(b"\t", 1)
+            mode, kind, sha = identity.decode("ascii").split(" ")
+            path = raw_path.decode("utf-8")
+            if path in entries:
+                return None
+            entries[path] = (mode, kind, sha)
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return tree_sha, entries
+
+
+def _planning_tree_failures(
+    intake: dict, source: dict, repository_root: Path, label: str
+) -> list[str]:
+    """Recompute intake proof from objects durably reachable from trusted main."""
+    first_parent = source.get("first_parent_sha")
+    merge = source.get("main_sha")
+    before = (
+        _git_tree(repository_root, first_parent)
+        if isinstance(first_parent, str)
+        else None
+    )
+    after = _git_tree(repository_root, merge) if isinstance(merge, str) else None
+    if before is None or after is None:
+        return [f"{label}: planning intake Git trees are unavailable"]
+    if (
+        before[0] != intake.get("first_parent_tree_sha")
+        or after[0] != intake.get("merge_tree_sha")
+    ):
+        return [f"{label}: planning intake tree identity is invalid"]
+    delta = {
+        path: after[1].get(path)
+        for path in sorted(set(before[1]) | set(after[1]))
+        if before[1].get(path) != after[1].get(path)
+    }
+    if sorted(delta) != intake.get("changed_paths"):
+        return [f"{label}: planning intake changed paths do not match Git"]
+    if any(
+        entry is None
+        or entry[:2] != ("100644", "blob")
+        or path in before[1]
+        for path, entry in delta.items()
+    ):
+        return [f"{label}: planning intake Git delta is not additive plain files"]
+    digest = hashlib.sha256(
+        json.dumps(
+            delta, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        ).encode("utf-8")
+    ).hexdigest()
+    if digest != intake.get("delta_sha256"):
+        return [f"{label}: planning intake delta digest does not match Git"]
+    return []
+
+
+def _record_failures(
+    record: object, label: str, repository_root: Path | None = None
+) -> list[str]:
     """Independently validate one complete schema-v2 state record."""
     if (
         isinstance(record, dict)
@@ -283,7 +442,7 @@ def _record_failures(record: object, label: str) -> list[str]:
         event = record["event"]
         base = json.loads(json.dumps(record))
         base.pop("event")
-        failures = _record_failures(base, label)
+        failures = _record_failures(base, label, repository_root)
         if set(event) != {"type", "main_sha", "legacy_exemptions"}:
             failures.append(f"{label}: invalid cutover event schema")
         elif (
@@ -302,7 +461,7 @@ def _record_failures(record: object, label: str) -> list[str]:
         metadata = base.get("completed_chunk", {})
         source = base.get("source", {})
         base["updated_at"] = source.get("merged_at")
-        failures = _record_failures(base, label)
+        failures = _record_failures(base, label, repository_root)
         if not isinstance(authority, dict) or set(authority) != {
             "source", "completed_chunk", "active", "gate"
         }:
@@ -323,7 +482,9 @@ def _record_failures(record: object, label: str) -> list[str]:
                 "next_requires_explicit_start"
             ),
         }
-        failures.extend(_record_failures(lifecycle, f"{label} authority basis"))
+        failures.extend(
+            _record_failures(lifecycle, f"{label} authority basis", repository_root)
+        )
         historical_event_keys = {
             "type", "event_id", "run_id", "created_at", "dispatcher",
             "approvers", "reason", "main_sha", "prior_state_tip",
@@ -428,6 +589,8 @@ def _record_failures(record: object, label: str) -> list[str]:
     if not isinstance(record, dict) or frozenset(record) not in {
         frozenset(expected),
         frozenset(expected | {"legacy_exemptions"}),
+        frozenset(expected | {"planning_intake"}),
+        frozenset(expected | {"planning_intake", "legacy_exemptions"}),
     }:
         return [f"{label}: invalid record schema"]
     failures: list[str] = []
@@ -454,6 +617,42 @@ def _record_failures(record: object, label: str) -> list[str]:
                 ):
                     failures.append(f"{label}: invalid or duplicate legacy exemption")
                 identities.add(identity)
+    planning_intake = record.get("planning_intake")
+    if planning_intake is not None:
+        intake_keys = {
+            "schema_version",
+            "initiative_directory",
+            "base_tree_sha",
+            "head_tree_sha",
+            "first_parent_tree_sha",
+            "merge_tree_sha",
+            "delta_sha256",
+            "changed_paths",
+        }
+        if not isinstance(planning_intake, dict) or set(planning_intake) != intake_keys:
+            failures.append(f"{label}: invalid planning intake schema")
+            planning_intake = {}
+        if planning_intake.get("schema_version") != 1:
+            failures.append(f"{label}: invalid planning intake version")
+        directory = planning_intake.get("initiative_directory")
+        paths = planning_intake.get("changed_paths")
+        if (
+            not isinstance(directory, str)
+            or not isinstance(paths, list)
+            or not paths
+            or not all(isinstance(path, str) for path in paths)
+            or paths != sorted(set(paths))
+        ):
+            failures.append(f"{label}: invalid planning intake paths")
+        for field in (
+            "base_tree_sha", "head_tree_sha", "first_parent_tree_sha", "merge_tree_sha"
+        ):
+            value = planning_intake.get(field)
+            if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
+                failures.append(f"{label}: invalid planning intake {field}")
+        digest = planning_intake.get("delta_sha256")
+        if not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
+            failures.append(f"{label}: invalid planning intake delta digest")
     if not _is_current_schema_version(record.get("schema_version")):
         failures.append(f"{label}: unsupported schema version")
     if record.get("state_branch") != STATE_BRANCH:
@@ -522,6 +721,35 @@ def _record_failures(record: object, label: str) -> list[str]:
         }
         if record.get("gate") != expected_gate:
             failures.append(f"{label}: next gate does not match completed chunk")
+        if planning_intake is not None:
+            initiative_id = metadata.get("initiative_id")
+            directory = planning_intake.get("initiative_directory")
+            paths = planning_intake.get("changed_paths")
+            intent_path = f".agent-loop/merge-intents/{initiative_id}-PLAN.json"
+            prefix = f".agent-loop/initiatives/{directory}/"
+            if (
+                metadata.get("chunk_id") != f"{initiative_id}-PLAN"
+                or not metadata.get("next_chunk_id")
+                or metadata.get("next_requires_explicit_start") is not True
+                or not isinstance(directory, str)
+                or not directory.startswith(f"{initiative_id}-")
+                or not isinstance(paths, list)
+                or intent_path not in paths
+                or any(path != intent_path and not path.startswith(prefix) for path in paths)
+            ):
+                failures.append(f"{label}: planning intake lifecycle identity is invalid")
+            if isinstance(planning_intake, dict):
+                failures.extend(
+                    _planning_path_failures(planning_intake, metadata, label)
+                )
+                if repository_root is None:
+                    failures.append(f"{label}: planning intake has no repository proof context")
+                else:
+                    failures.extend(
+                        _planning_tree_failures(
+                            planning_intake, source, repository_root, label
+                        )
+                    )
     if record.get("active") != {
         "planning_chunk": None,
         "implementation_chunk": None,
@@ -562,6 +790,8 @@ def _record_failures(record: object, label: str) -> list[str]:
             )
             if checks.get("all_required_passed") is not calculated:
                 failures.append(f"{label}: inconsistent aggregate check evidence")
+            if planning_intake is not None and calculated is not True:
+                failures.append(f"{label}: planning intake required checks did not pass")
     return failures
 
 
@@ -804,7 +1034,7 @@ def generated_state_failures(
         return [f"generated loop memory is unreadable: {exc.__class__.__name__}"]
     if not isinstance(state, dict):
         return [".agent-loop/STATE.json: expected a JSON object"]
-    failures = _record_failures(state, ".agent-loop/STATE.json")
+    failures = _record_failures(state, ".agent-loop/STATE.json", repository_root)
     previous_hash = None
     previous_main_sha = None
     ledger_records = []
@@ -827,7 +1057,7 @@ def generated_state_failures(
         if not isinstance(record, dict):
             failures.append(f"{label}: entry record is not an object")
             break
-        failures.extend(_record_failures(record, label))
+        failures.extend(_record_failures(record, label, repository_root))
         failures.extend(_authority_transition_failures(record, ledger_records, label))
         if repository_root is not None and isinstance(record.get("event"), dict):
             failures.extend(_selection_tree_failures(record["event"], repository_root, label))

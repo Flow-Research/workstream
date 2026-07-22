@@ -1,3 +1,5 @@
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false
+# pyright: reportOptionalMemberAccess=false, reportOptionalOperand=false
 from __future__ import annotations
 
 import asyncio
@@ -5,10 +7,10 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 import hashlib
 from pathlib import Path
+import time
 from typing import cast
 from uuid import UUID, uuid4
 
-from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
@@ -297,7 +299,10 @@ async def test_actor_admin_reads_are_bounded_and_reuse_exact_repository_lookups(
 
     assert profile_response is not None
     assert link_response is not None
-    assert repository.calls == [("profile", str(actor_id)), ("link", str(actor_id))]
+    assert [list(call) for call in repository.calls] == [
+        ["profile", str(actor_id)],
+        ["link", str(actor_id)],
+    ]
     assert set(profile_response.model_dump()) == {
         "actor_profile_id",
         "actor_kind",
@@ -307,10 +312,10 @@ async def test_actor_admin_reads_are_bounded_and_reuse_exact_repository_lookups(
         "display_name",
         "created_at",
         "updated_at",
-            "last_seen_at",
-            "suspended_at",
-            "reactivated_at",
-            "deactivated_at",
+        "last_seen_at",
+        "suspended_at",
+        "reactivated_at",
+        "deactivated_at",
     }
     assert set(link_response.model_dump()) == {
         "identity_link_id",
@@ -350,41 +355,17 @@ def test_service_identity_lock_has_a_distinct_domain_without_changing_external_k
 @pytest.fixture
 def actor_database_env(
     monkeypatch: pytest.MonkeyPatch,
-    postgres_database_url: str,
-    migration_lock,
-    reset_test_database_state,
+    clean_postgres_database: str,
 ) -> Iterator[str]:
     """Run canonical actor tests against an isolated current schema."""
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     monkeypatch.setenv("WORKSTREAM_API_RATE_LIMIT_KEY_SECRET", RATE_SECRET)
     set_dev_actor(monkeypatch, roles="worker", subject="actor-registry-contributor")
     get_settings.cache_clear()
-    asyncio.run(db_session.dispose_engine())
-    config = alembic_config()
     try:
-        with migration_lock():
-            command.downgrade(config, "base")
-            try:
-                command.upgrade(config, "head")
-                yield postgres_database_url
-            finally:
-                try:
-                    asyncio.run(
-                        reset_test_database_state(
-                            postgres_database_url,
-                            include_canonical_actors=True,
-                        )
-                    )
-                finally:
-                    try:
-                        asyncio.run(db_session.dispose_engine())
-                    finally:
-                        command.downgrade(config, "base")
+        yield clean_postgres_database
     finally:
-        try:
-            asyncio.run(db_session.dispose_engine())
-        finally:
-            get_settings.cache_clear()
+        get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -425,7 +406,7 @@ def auth_headers(token: str = "actor-token") -> dict[str, str]:
 
 
 def verified_token(subject: str, *, kind: str = "human") -> VerifiedIssuerToken:
-    now = int(datetime.now(UTC).timestamp())
+    now = time.time_ns() // 1_000_000_000
     return VerifiedIssuerToken(
         issuer=ISSUER,
         subject=subject,
@@ -597,9 +578,9 @@ async def test_active_human_write_actor_revalidates_exact_profile_then_link() ->
     service._repo = repository  # type: ignore[assignment]
 
     assert await service.require_active_human_write_actor(actor) is None
-    assert repository.calls == [
-        ("profile", actor.actor_id, ""),
-        ("link", actor.external_issuer, actor.external_subject),
+    assert [list(call) for call in repository.calls] == [
+        ["profile", actor.actor_id, ""],
+        ["link", actor.external_issuer, actor.external_subject],
     ]
 
     unavailable_cases = (
@@ -642,9 +623,7 @@ async def test_active_human_write_actor_revalidates_exact_profile_then_link() ->
                 if actor_kind == "service"
                 else "automatic_first_access"
             ),
-            service_identity=(
-                "workstream.artifact.verifier" if actor_kind == "service" else None
-            ),
+            service_identity=("workstream.artifact.verifier" if actor_kind == "service" else None),
             created_by=profile.id,
         )
         repository.locked_link = ActorIdentityLink(
@@ -666,7 +645,11 @@ async def test_active_human_write_actor_revalidates_exact_profile_then_link() ->
             match="active contributor identity required",
         ):
             await service.require_active_human_write_actor(actor)
-        expected_calls = ["profile"] if actor_kind == "service" or profile_status != "active" else ["profile", "link"]
+        expected_calls = (
+            ["profile"]
+            if actor_kind == "service" or profile_status != "active"
+            else ["profile", "link"]
+        )
         assert [call[0] for call in repository.calls] == expected_calls
 
 
@@ -767,10 +750,10 @@ async def test_concurrent_first_access_leaves_one_profile_link_and_event_pair(
         assert await session.scalar(select(func.count()).select_from(ActorIdentityLink)) == 1
         assert (
             await session.scalar(
-                select(func.count()).select_from(AuditEvent).where(
-                    AuditEvent.event_type.in_(
-                        ["ActorProfileProvisioned", "ActorIdentityLinked"]
-                    )
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
+                    AuditEvent.event_type.in_(["ActorProfileProvisioned", "ActorIdentityLinked"])
                 )
             )
             == 2
@@ -1261,7 +1244,7 @@ def test_verified_identity_rejects_values_above_persisted_provenance_bound() -> 
     with pytest.raises(ValidationError):
         verified_token("s" * 201)
     with pytest.raises(ValidationError):
-        now = int(datetime.now(UTC).timestamp())
+        now = time.time_ns() // 1_000_000_000
         VerifiedIssuerToken(
             issuer="i" * 201,
             subject="subject",
@@ -1396,15 +1379,17 @@ async def test_repeated_legacy_activation_updates_one_row_and_audits_only_change
     async with db_session.get_session_factory()() as session:
         assert (
             await session.scalar(
-                select(func.count()).select_from(LegacyWorkflowEligibility).where(
-                    LegacyWorkflowEligibility.actor_id == actor.actor_id
-                )
+                select(func.count())
+                .select_from(LegacyWorkflowEligibility)
+                .where(LegacyWorkflowEligibility.actor_id == actor.actor_id)
             )
             == 1
         )
         assert (
             await session.scalar(
-                select(func.count()).select_from(AuditEvent).where(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
                     AuditEvent.entity_type == "legacy_workflow_eligibility",
                     AuditEvent.actor_id == actor.actor_id,
                 )
@@ -1474,7 +1459,9 @@ async def test_concurrent_legacy_activation_serializes_payloads_and_actual_audit
         assert eligibility.skill_tags == ["second"]
         assert (
             await session.scalar(
-                select(func.count()).select_from(AuditEvent).where(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(
                     AuditEvent.entity_type == "legacy_workflow_eligibility",
                     AuditEvent.actor_id == actor.actor_id,
                 )

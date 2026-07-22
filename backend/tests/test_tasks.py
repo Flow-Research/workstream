@@ -7,17 +7,22 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-import pytest
-from alembic import command
+import pytest  # type: ignore[import-not-found]
+from alembic import command  # type: ignore[attr-defined]
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, inspect, select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError, OperationalError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    AsyncConnection,
+    AsyncSession,
+    create_async_engine,
+)
 from sqlalchemy.schema import CreateIndex
 
 from app.adapters.auth.dev import actor_id_from_external_identity
@@ -91,9 +96,7 @@ async def test_task_repository_delegates_audit_persistence() -> None:
     assert await repository.add_audit_event(event) is persisted
     assert await repository.list_audit_events("task", "task-1") is listed
     repository._audit_repository.add_audit_event.assert_awaited_once_with(event)
-    repository._audit_repository.list_audit_events.assert_awaited_once_with(
-        "task", "task-1"
-    )
+    repository._audit_repository.list_audit_events.assert_awaited_once_with("task", "task-1")
 
 
 async def test_task_contributor_revalidation_maps_failures_and_rolls_back() -> None:
@@ -132,9 +135,7 @@ async def test_task_contributor_revalidation_maps_failures_and_rolls_back() -> N
         ),
     )
     for source_error, expected_error, code in cases:
-        service._actors.require_active_human_write_actor = AsyncMock(
-            side_effect=source_error
-        )
+        service._actors.require_active_human_write_actor = AsyncMock(side_effect=source_error)
         with pytest.raises(expected_error) as failure:
             await service._require_active_contributor(actor)
         assert failure.value.code == code
@@ -170,6 +171,7 @@ async def test_task_service_create_persists_canonical_attribution_and_audit() ->
 
     result = await service.create_task(actor, "project-1", payload)
 
+    assert service._repo.add_task.await_args is not None
     task = service._repo.add_task.await_args.args[0]
     assert result is response
     assert isinstance(task, WorkstreamTask)
@@ -212,17 +214,12 @@ async def test_task_service_read_contexts_preserve_visibility_and_operator_scope
     )
     service._task_response = MagicMock(return_value=task_response)
     service._work_context_response = MagicMock(return_value=work_response)
-    service._submission_requirements_response = MagicMock(
-        return_value=requirements_response
-    )
+    service._submission_requirements_response = MagicMock(return_value=requirements_response)
     service._locked_context_response = MagicMock(return_value=locked_response)
 
     assert await service.get_task(actor, task.id) is task_response
     assert await service.get_task_work_context(actor, task.id) is work_response
-    assert (
-        await service.get_task_submission_requirements(actor, task.id)
-        is requirements_response
-    )
+    assert await service.get_task_submission_requirements(actor, task.id) is requirements_response
     assert await service.get_task_locked_context(actor, task.id) is locked_response
 
     assert service._get_task.await_count == 4
@@ -352,9 +349,7 @@ async def test_task_service_finalize_requeues_locked_latest_submission(
     repair_snapshot = {"status": "failed", "repairable": True}
     requester_provenance = {"request_id": "request-1", "correlation_id": "correlation-1"}
     checker_service = MagicMock()
-    checker_service.pre_review_gate_repair_snapshot = AsyncMock(
-        return_value=repair_snapshot
-    )
+    checker_service.pre_review_gate_repair_snapshot = AsyncMock(return_value=repair_snapshot)
     monkeypatch.setattr(
         "app.modules.tasks.service.CheckerService",
         MagicMock(return_value=checker_service),
@@ -477,8 +472,7 @@ async def test_task_service_finalization_provenance_fails_closed_without_lock_au
     )
 
     assert (
-        await service._submission_finalization_requester_provenance(task, submission)
-        == provenance
+        await service._submission_finalization_requester_provenance(task, submission) == provenance
     )
     with pytest.raises(
         TaskTransitionBlocked,
@@ -580,20 +574,14 @@ async def delete_audit_fixture_as_owner(session: AsyncSession, event_id: str) ->
     """Construct missing-evidence corruption under explicit test-owner custody."""
     await session.execute(text("lock table audit_events in access exclusive mode"))
     await session.execute(
-        text(
-            "alter table audit_events disable trigger "
-            "audit_events_reject_update_delete"
-        )
+        text("alter table audit_events disable trigger audit_events_reject_update_delete")
     )
     await session.execute(
         text("delete from audit_events where id = :event_id"),
         {"event_id": event_id},
     )
     await session.execute(
-        text(
-            "alter table audit_events enable trigger "
-            "audit_events_reject_update_delete"
-        )
+        text("alter table audit_events enable trigger audit_events_reject_update_delete")
     )
     await session.commit()
 
@@ -601,11 +589,9 @@ async def delete_audit_fixture_as_owner(session: AsyncSession, event_id: str) ->
 @pytest.fixture
 def task_database_env(
     monkeypatch: pytest.MonkeyPatch,
-    postgres_database_url: str,
-    migration_lock,
-    reset_test_database_state,
+    clean_postgres_database: str,
 ) -> Iterator[str]:
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     monkeypatch.setenv(
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
@@ -613,28 +599,10 @@ def task_database_env(
     )
     set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
     get_settings.cache_clear()
-    asyncio.run(db_session.dispose_engine())
-
-    config = alembic_config()
     try:
-        with migration_lock():
-            command.downgrade(config, "base")
-            try:
-                command.upgrade(config, "head")
-                yield postgres_database_url
-            finally:
-                try:
-                    asyncio.run(reset_test_database_state(postgres_database_url))
-                finally:
-                    try:
-                        asyncio.run(db_session.dispose_engine())
-                    finally:
-                        command.downgrade(config, "base")
+        yield clean_postgres_database
     finally:
-        try:
-            asyncio.run(db_session.dispose_engine())
-        finally:
-            get_settings.cache_clear()
+        get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -885,8 +853,7 @@ async def delete_generated_post_submit_output_for_pre_submit(
     """Remove generated post-submit output before test-only pre-submit corruption."""
     post_submit_policy = await session.scalar(
         select(PostSubmitCheckerPolicy).where(
-            PostSubmitCheckerPolicy.pre_submit_checker_policy_id
-            == pre_submit_checker_policy_id
+            PostSubmitCheckerPolicy.pre_submit_checker_policy_id == pre_submit_checker_policy_id
         )
     )
     if post_submit_policy is None:
@@ -1140,7 +1107,9 @@ async def create_active_project(client: AsyncClient) -> dict:
     return project
 
 
-async def create_draft_task(client: AsyncClient, project_id: str, payload: dict | None = None) -> dict:
+async def create_draft_task(
+    client: AsyncClient, project_id: str, payload: dict | None = None
+) -> dict:
     response = await client.post(
         f"/api/v1/projects/{project_id}/tasks",
         headers=auth_headers(),
@@ -1293,10 +1262,7 @@ async def _task_contributor_race_snapshot(
     """Capture every task-owned write surface relevant to contributor races."""
     task = (
         await connection.execute(
-            text(
-                "select status, assigned_to from workstream_tasks "
-                "where id = :task_id"
-            ),
+            text("select status, assigned_to from workstream_tasks where id = :task_id"),
             {"task_id": task_id},
         )
     ).one()
@@ -1508,10 +1474,7 @@ async def _restore_contributor_after_lifecycle_race(
             reset = await connection.begin()
             try:
                 await connection.execute(
-                    text(
-                        "alter table actor_profiles disable trigger "
-                        "actor_profile_history_guard"
-                    )
+                    text("alter table actor_profiles disable trigger actor_profile_history_guard")
                 )
                 await connection.execute(
                     text(
@@ -1554,8 +1517,7 @@ async def _restore_contributor_after_lifecycle_race(
                     )
                     await connection.execute(
                         text(
-                            "alter table actor_profiles enable trigger "
-                            "actor_profile_history_guard"
+                            "alter table actor_profiles enable trigger actor_profile_history_guard"
                         )
                     )
                     await enable.commit()
@@ -1648,9 +1610,7 @@ async def test_contributor_task_writes_serialize_with_lifecycle_changes(
 
     async with db_session.get_session_factory()() as session:
         identity_link_id = await session.scalar(
-            select(ActorIdentityLink.id).where(
-                ActorIdentityLink.actor_profile_id == contributor_id
-            )
+            select(ActorIdentityLink.id).where(ActorIdentityLink.actor_profile_id == contributor_id)
         )
     assert identity_link_id is not None
     contributor_lifecycle_race_cleanup.append((contributor_id, identity_link_id))
@@ -1667,9 +1627,7 @@ async def test_contributor_task_writes_serialize_with_lifecycle_changes(
     task_id = task["id"]
     before = await _read_task_contributor_race_snapshot(task_database_env, task_id)
     task_application_name = f"ws-race-{operation}-{transition}-{ordering}-task"
-    lifecycle_application_name = (
-        f"ws-race-{operation}-{transition}-{ordering}-lifecycle"
-    )
+    lifecycle_application_name = f"ws-race-{operation}-{transition}-{ordering}-lifecycle"
 
     if ordering == "lifecycle_first":
         lifecycle_entered = asyncio.Event()
@@ -1724,10 +1682,13 @@ async def test_contributor_task_writes_serialize_with_lifecycle_changes(
         assert lifecycle_result is None
         assert isinstance(task_result, ActiveContributorRequired)
         assert task_result.code == "active_contributor_required"
-        assert await _read_task_contributor_race_snapshot(
-            task_database_env,
-            task_id,
-        ) == before
+        assert (
+            await _read_task_contributor_race_snapshot(
+                task_database_env,
+                task_id,
+            )
+            == before
+        )
         if operation == "submission":
             assert checker_calls == []
             assert enqueue_calls == []
@@ -1941,6 +1902,7 @@ async def test_chunk4_migration_creates_expected_tables(task_database_env: str) 
     }.issubset(table_names)
 
 
+@pytest.mark.postgres_schema_contract
 def test_chunk4_migration_downgrade_removes_task_tables(task_database_env: str) -> None:
     config = alembic_config()
     asyncio.run(db_session.dispose_engine())
@@ -1996,9 +1958,7 @@ def test_submission_create_openapi_documents_domain_error() -> None:
 
 def test_task_context_openapi_documents_locked_context_domain_error() -> None:
     schema = create_app().openapi()
-    responses = schema["paths"]["/api/v1/tasks/{task_id}/work-context"]["get"][
-        "responses"
-    ]
+    responses = schema["paths"]["/api/v1/tasks/{task_id}/work-context"]["get"]["responses"]
     response_422 = responses["422"]["content"]["application/json"]["schema"]
 
     assert {"$ref": "#/components/schemas/HTTPValidationError"} in response_422["oneOf"]
@@ -2143,9 +2103,7 @@ async def test_task_router_service_errors_use_canonical_request_context(
         assert response.status_code == 400
         assert response.json()["detail"] == "bounded task failure"
         assert response.json()["error"]["code"] == "invalid_request"
-        assert response.json()["error"]["correlation_id"] == response.headers[
-            "x-correlation-id"
-        ]
+        assert response.json()["error"]["correlation_id"] == response.headers["x-correlation-id"]
 
     async def fail_with_permission_error(*_args, **_kwargs):
         raise PermissionDenied("bounded permission failure")
@@ -2219,13 +2177,17 @@ async def test_legacy_eligibility_service_updates_existing_submitter_row(
 
     async with db_session.get_session_factory()() as session:
         worker_rows = (
-            await session.execute(
-                select(LegacyWorkflowEligibility).where(
-                    LegacyWorkflowEligibility.actor_id == worker_actor.actor_id,
-                    LegacyWorkflowEligibility.profile_type == "worker",
+            (
+                await session.execute(
+                    select(LegacyWorkflowEligibility).where(
+                        LegacyWorkflowEligibility.actor_id == worker_actor.actor_id,
+                        LegacyWorkflowEligibility.profile_type == "worker",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert updated_worker.id == first_worker.id
     assert updated_worker.skill_tags == ["stem", "analysis"]
@@ -2574,7 +2536,9 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     payload = complete_task_payload()
     payload["import_batch_id"] = "private-import-batch"
     payload["external_task_id"] = "private-external-task"
-    started_task = await create_started_task(task_client, project["id"], monkeypatch, payload=payload)
+    started_task = await create_started_task(
+        task_client, project["id"], monkeypatch, payload=payload
+    )
 
     work_context = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/work-context",
@@ -2666,14 +2630,14 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     locked_body = locked_context.json()
     assert locked_body["locked_guide_version"] == "v1"
     assert locked_body["locked_guide_source_snapshot_hash"].startswith("sha256:")
-    assert locked_body[
-        "locked_effective_project_submission_artifact_policy_hash"
-    ].startswith("sha256:")
+    assert locked_body["locked_effective_project_submission_artifact_policy_hash"].startswith(
+        "sha256:"
+    )
     assert locked_body["locked_pre_submit_checker_bundle_hash"].startswith("sha256:")
     assert locked_body["locked_post_submit_checker_policy_hash"].startswith("sha256:")
-    assert locked_body["locked_post_submit_checker_policy_body_summary"][
-        "required_checkers"
-    ] == ["check_policy_context_present"]
+    assert locked_body["locked_post_submit_checker_policy_body_summary"]["required_checkers"] == [
+        "check_policy_context_present"
+    ]
 
 
 async def test_ready_worker_work_context_omits_private_task_source_fields(
@@ -2989,9 +2953,7 @@ async def test_task_context_apis_use_v1_locked_requirements_after_v2_activation(
     assert requirements.status_code == 200, requirements.text
     assert work_context.json()["guide"]["version"] == "v1"
     assert requirements.json()["guide_version"] == "v1"
-    assert requirements.json()["required_artifacts"] == v1_requirements.json()[
-        "required_artifacts"
-    ]
+    assert requirements.json()["required_artifacts"] == v1_requirements.json()["required_artifacts"]
     assert requirements.json()["required_artifacts"][0]["path"] == "answer.md"
 
 
@@ -3049,9 +3011,7 @@ async def test_submission_runtime_uses_locked_project_policy_not_task_required_f
         "worker-two",
         complete_task_payload(),
     )
-    non_contract_artifact_payload = complete_submission_payload(
-        "sha256:non-contract-package"
-    )
+    non_contract_artifact_payload = complete_submission_payload("sha256:non-contract-package")
     non_contract_artifact_payload["artifact_hash_manifest"] = [
         {
             "artifact": "non-contract-only.md",
@@ -3304,9 +3264,7 @@ async def test_disabled_legacy_eligibility_after_claim_blocks_assigned_submitter
     )
     assert start.status_code == 403
     assert "active legacy submitter eligibility" in start.json()["detail"]
-    read = await task_client.get(
-        f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers()
-    )
+    read = await task_client.get(f"/api/v1/tasks/{ready_task['id']}", headers=auth_headers())
     assert read.status_code == 200
     assert read.json()["status"] == "claimed"
     context = await task_client.get(
@@ -3354,16 +3312,14 @@ async def test_disabled_eligibility_suppresses_submit_lifecycle_affordances(
     async with db_session.get_session_factory()() as session:
         before = {
             "submissions": await session.scalar(
-                select(func.count()).select_from(Submission).where(
-                    Submission.task_id == started_task["id"]
-                )
+                select(func.count())
+                .select_from(Submission)
+                .where(Submission.task_id == started_task["id"])
             ),
             "checker_runs": await session.scalar(
                 select(func.count()).select_from(db_models.CheckerRun)
             ),
-            "audit_events": await session.scalar(
-                select(func.count()).select_from(AuditEvent)
-            ),
+            "audit_events": await session.scalar(select(func.count()).select_from(AuditEvent)),
         }
     submission = await task_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
@@ -3375,16 +3331,14 @@ async def test_disabled_eligibility_suppresses_submit_lifecycle_affordances(
     async with db_session.get_session_factory()() as session:
         after = {
             "submissions": await session.scalar(
-                select(func.count()).select_from(Submission).where(
-                    Submission.task_id == started_task["id"]
-                )
+                select(func.count())
+                .select_from(Submission)
+                .where(Submission.task_id == started_task["id"])
             ),
             "checker_runs": await session.scalar(
                 select(func.count()).select_from(db_models.CheckerRun)
             ),
-            "audit_events": await session.scalar(
-                select(func.count()).select_from(AuditEvent)
-            ),
+            "audit_events": await session.scalar(select(func.count()).select_from(AuditEvent)),
         }
     assert after == before
 
@@ -3636,7 +3590,9 @@ async def test_worker_profile_requires_worker_role(
     assert "actor lacks required role" in response.json()["detail"]
 
 
-async def test_second_claim_is_rejected(task_client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_second_claim_is_rejected(
+    task_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     project = await create_active_project(task_client)
     ready_task = await create_ready_task(task_client, project["id"])
     await seed_worker_profile("worker-one")
@@ -3826,8 +3782,9 @@ async def test_assigned_worker_submit_auto_enters_pre_review_gate(
     assert "artifact_hash_manifest" not in submission_event["event_payload"]
     assert "locked_guide_source_snapshot_id" not in submission_event["event_payload"]
     assert "locked_guide_source_snapshot_hash" not in submission_event["event_payload"]
-    assert "locked_effective_project_submission_artifact_policy_hash" not in (
-        submission_event["event_payload"]
+    assert (
+        "locked_effective_project_submission_artifact_policy_hash"
+        not in (submission_event["event_payload"])
     )
     assert "locked_pre_submit_checker_bundle_hash" not in submission_event["event_payload"]
     assert "locked_post_submit_checker_policy_hash" not in submission_event["event_payload"]
@@ -3990,16 +3947,26 @@ async def test_pre_submit_failure_writes_audit_event_without_submission(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
-        audit_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_type == "task",
-                    AuditEvent.entity_id == started_task["id"],
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
+        audit_events = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_type == "task",
+                        AuditEvent.entity_id == started_task["id"],
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
         task = await session.get(WorkstreamTask, started_task["id"])
     assert submissions == []
@@ -4009,10 +3976,7 @@ async def test_pre_submit_failure_writes_audit_event_without_submission(
     assert new_audit_events[0].from_status == "in_progress"
     assert new_audit_events[0].to_status == "in_progress"
     assert new_audit_events[0].event_payload["pre_submit_check"]["status"] == "failed"
-    assert (
-        new_audit_events[0].event_payload["pre_submit_check"]["eligible_to_submit"]
-        is False
-    )
+    assert new_audit_events[0].event_payload["pre_submit_check"]["eligible_to_submit"] is False
     assert checker_runs == []
     assert task is not None
     assert task.status == "in_progress"
@@ -4069,8 +4033,14 @@ async def test_submission_pre_submit_requires_specific_evidence_key(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert submissions == []
 
 
@@ -4107,8 +4077,14 @@ async def test_submission_pre_submit_requires_project_attestation_terms(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert submissions == []
 
 
@@ -4147,8 +4123,14 @@ async def test_submission_pre_submit_rejects_mutated_effective_policy_body(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
     assert checker_runs == []
@@ -4243,8 +4225,10 @@ async def test_submission_pre_submit_rejects_hash_consistent_malformed_effective
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == task["id"]))
-        ).scalars().all()
+            (await session.execute(select(Submission).where(Submission.task_id == task["id"])))
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
     assert checker_runs == []
@@ -4339,8 +4323,10 @@ async def test_submission_pre_submit_rejects_hash_consistent_malformed_packaging
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == task["id"]))
-        ).scalars().all()
+            (await session.execute(select(Submission).where(Submission.task_id == task["id"])))
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
     assert checker_runs == []
@@ -4378,8 +4364,14 @@ async def test_submission_pre_submit_rejects_mutated_compiled_checker_bundle(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
     assert checker_runs == []
@@ -4449,8 +4441,10 @@ async def test_submission_pre_submit_rejects_hash_consistent_incomplete_checker_
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == task["id"]))
-        ).scalars().all()
+            (await session.execute(select(Submission).where(Submission.task_id == task["id"])))
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert submissions == []
     assert checker_runs == []
@@ -4485,8 +4479,14 @@ async def test_submission_pre_submit_checker_setup_error_is_controlled(
 
     async with db_session.get_session_factory()() as session:
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
     assert submissions == []
 
 
@@ -4522,8 +4522,14 @@ async def test_submission_uses_locked_post_submit_policy_body_after_setup_mutati
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert task is not None
     assert task.status == "review_pending"
@@ -4556,8 +4562,14 @@ async def test_database_rejects_null_post_submit_context_on_non_draft_task(
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         submissions = (
-            await session.execute(select(Submission).where(Submission.task_id == started_task["id"]))
-        ).scalars().all()
+            (
+                await session.execute(
+                    select(Submission).where(Submission.task_id == started_task["id"])
+                )
+            )
+            .scalars()
+            .all()
+        )
         checker_runs = (await session.execute(select(db_models.CheckerRun))).scalars().all()
     assert task is not None
     assert task.status == "in_progress"
@@ -5379,21 +5391,29 @@ async def test_finalize_repairs_locked_submission_with_missing_pre_review_gate(
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun).where(
-                    db_models.CheckerRun.submission_id == submission_id
+            (
+                await session.execute(
+                    select(db_models.CheckerRun).where(
+                        db_models.CheckerRun.submission_id == submission_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         task = await session.get(WorkstreamTask, started_task["id"])
         dispatch_failed_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type == "pre_review_gate_dispatch_failed",
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type == "pre_review_gate_dispatch_failed",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert len(checker_runs) == 1
     failed_claim = checker_runs[0]
     assert failed_claim.status == "failed"
@@ -5461,13 +5481,17 @@ async def test_finalize_repairs_locked_submission_with_missing_pre_review_gate(
     assert len(repeated_checker_runs.json()) == 1
     async with db_session.get_session_factory()() as session:
         repair_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type == "pre_review_gate_repair_requested",
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type == "pre_review_gate_repair_requested",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert len(repair_events) == 1
 
 
@@ -5501,9 +5525,7 @@ async def test_failed_pre_review_gate_repair_is_idempotent_while_queued(
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
     assert failed_run is not None
     assert failed_run.status == "failed"
@@ -5530,20 +5552,28 @@ async def test_failed_pre_review_gate_repair_is_idempotent_while_queued(
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun).where(
-                    db_models.CheckerRun.submission_id == submission_id
+            (
+                await session.execute(
+                    select(db_models.CheckerRun).where(
+                        db_models.CheckerRun.submission_id == submission_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         repair_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type == "pre_review_gate_repair_requested",
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type == "pre_review_gate_repair_requested",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert repair_enqueue_calls == [failed_run.id]
     assert len(checker_runs) == 1
@@ -5590,19 +5620,21 @@ async def test_enqueue_failure_without_current_claim_skips_dispatch_failed_audit
 
     async with db_session.get_session_factory()() as session:
         moved_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         dispatch_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_type == "task",
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type == "pre_review_gate_dispatch_failed",
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_type == "task",
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type == "pre_review_gate_dispatch_failed",
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert moved_run is not None
     assert moved_run.status == "queued"
@@ -5633,9 +5665,7 @@ async def test_unknown_checker_gate_failure_is_repairable(
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         assert failed_run is not None
         failed_run.status = "failed"
@@ -5698,9 +5728,7 @@ async def test_nonrepairable_failed_gate_does_not_return_success(
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         assert failed_run is not None
         failed_run.status = "failed"
@@ -5754,9 +5782,7 @@ async def test_eager_pre_review_gate_failure_after_submission_is_repairable(
 
     async with db_session.get_session_factory()() as session:
         failed_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         task = await session.get(WorkstreamTask, started_task["id"])
         dispatch_failed_event = await session.scalar(
@@ -5833,9 +5859,7 @@ async def test_finalize_repairs_stale_running_pre_review_gate(
     stale_started_at = datetime.now(UTC) - timedelta(hours=1)
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         assert queued_run is not None
         queued_run.status = "running"
@@ -5916,9 +5940,7 @@ async def test_stale_running_pre_review_gate_repair_is_idempotent_while_queued(
     stale_started_at = datetime.now(UTC) - timedelta(hours=1)
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         assert queued_run is not None
         queued_run.status = "running"
@@ -5946,20 +5968,28 @@ async def test_stale_running_pre_review_gate_repair_is_idempotent_while_queued(
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun)
-                .where(db_models.CheckerRun.submission_id == submission_id)
-                .order_by(db_models.CheckerRun.attempt_number.asc())
-            )
-        ).scalars().all()
-        repair_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type == "pre_review_gate_repair_requested",
+            (
+                await session.execute(
+                    select(db_models.CheckerRun)
+                    .where(db_models.CheckerRun.submission_id == submission_id)
+                    .order_by(db_models.CheckerRun.attempt_number.asc())
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
+        repair_events = (
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type == "pre_review_gate_repair_requested",
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
 
     assert len(checker_runs) == 2
     stale_run, replacement_run = checker_runs
@@ -6029,17 +6059,25 @@ async def test_finalize_redispatches_queued_pre_review_gate_without_duplicate_ru
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun).where(
-                    db_models.CheckerRun.submission_id == submission_id
+            (
+                await session.execute(
+                    select(db_models.CheckerRun).where(
+                        db_models.CheckerRun.submission_id == submission_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         audit_events = (
-            await session.execute(
-                select(AuditEvent).where(AuditEvent.entity_id == started_task["id"])
+            (
+                await session.execute(
+                    select(AuditEvent).where(AuditEvent.entity_id == started_task["id"])
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert len(checker_runs) == 1
     assert checker_runs[0].id == enqueue_calls[0]["checker_run_id"]
@@ -6082,12 +6120,16 @@ async def test_manual_checker_run_cannot_replace_queued_automatic_gate(
     assert "automatic pre-review gate must be repaired" in manual_run.json()["detail"]
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun).where(
-                    db_models.CheckerRun.submission_id == created.json()["id"]
+            (
+                await session.execute(
+                    select(db_models.CheckerRun).where(
+                        db_models.CheckerRun.submission_id == created.json()["id"]
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert len(checker_runs) == 1
     assert checker_runs[0].status == "queued"
     assert checker_runs[0].attempt_number == 1
@@ -6119,9 +6161,7 @@ async def test_manual_checker_run_cannot_bypass_failed_automatic_gate(
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         lock_audit = await session.scalar(
             select(AuditEvent).where(
@@ -6134,7 +6174,7 @@ async def test_manual_checker_run_cannot_bypass_failed_automatic_gate(
         await delete_audit_fixture_as_owner(session, lock_audit.id)
 
     with pytest.raises(CheckerExecutionBlocked):
-        run_pre_review_gate.run(
+        cast(Any, run_pre_review_gate).run(
             queued_run.id,
             expected_worker_requester_provenance(),
         )
@@ -6150,12 +6190,16 @@ async def test_manual_checker_run_cannot_bypass_failed_automatic_gate(
 
     async with db_session.get_session_factory()() as session:
         checker_runs = (
-            await session.execute(
-                select(db_models.CheckerRun).where(
-                    db_models.CheckerRun.submission_id == submission_id
+            (
+                await session.execute(
+                    select(db_models.CheckerRun).where(
+                        db_models.CheckerRun.submission_id == submission_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert len(checker_runs) == 1
     assert checker_runs[0].id == queued_run.id
     assert checker_runs[0].status == "failed"
@@ -6191,9 +6235,7 @@ async def test_queued_gate_policy_error_is_failed_and_repairable(
         submission = await session.get(Submission, submission_id)
         task = await session.get(WorkstreamTask, started_task["id"])
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         assert submission is not None
         assert task is not None
@@ -6210,7 +6252,7 @@ async def test_queued_gate_policy_error_is_failed_and_repairable(
         await session.commit()
 
     with pytest.raises(CheckerPolicyInvalid):
-        run_pre_review_gate.run(
+        cast(Any, run_pre_review_gate).run(
             queued_run.id,
             expected_worker_requester_provenance(),
         )
@@ -6285,14 +6327,12 @@ async def test_queued_gate_rejects_tampered_requester_provenance(
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
     assert queued_run is not None
 
     with pytest.raises(CheckerExecutionBlocked):
-        run_pre_review_gate.run(
+        cast(Any, run_pre_review_gate).run(
             queued_run.id,
             {
                 "requester_actor_id": actor_id("attacker"),
@@ -6306,14 +6346,18 @@ async def test_queued_gate_rejects_tampered_requester_provenance(
         failed_run = await session.get(db_models.CheckerRun, queued_run.id)
         task = await session.get(WorkstreamTask, started_task["id"])
         gate_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_type == "task",
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type.like("pre_review_gate_%"),
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_type == "task",
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type.like("pre_review_gate_%"),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
     assert failed_run is not None
     assert failed_run.status == "failed"
     assert failed_run.failure_code == "requester_provenance_mismatch"
@@ -6372,9 +6416,7 @@ async def test_queued_gate_fails_closed_when_lock_audit_is_missing(
 
     async with db_session.get_session_factory()() as session:
         queued_run = await session.scalar(
-            select(db_models.CheckerRun).where(
-                db_models.CheckerRun.submission_id == submission_id
-            )
+            select(db_models.CheckerRun).where(db_models.CheckerRun.submission_id == submission_id)
         )
         lock_audit = await session.scalar(
             select(AuditEvent).where(
@@ -6387,7 +6429,7 @@ async def test_queued_gate_fails_closed_when_lock_audit_is_missing(
         await delete_audit_fixture_as_owner(session, lock_audit.id)
 
     with pytest.raises(CheckerExecutionBlocked):
-        run_pre_review_gate.run(
+        cast(Any, run_pre_review_gate).run(
             queued_run.id,
             expected_worker_requester_provenance(),
         )
@@ -6450,7 +6492,7 @@ async def test_stale_queued_pre_review_gate_skips_before_task_status_check(
     )
     assert v2.status_code == 201, v2.text
 
-    result = run_pre_review_gate.run(
+    result = cast(Any, run_pre_review_gate).run(
         v1_run.id,
         {
             **expected_worker_requester_provenance(),
@@ -6468,14 +6510,18 @@ async def test_stale_queued_pre_review_gate_skips_before_task_status_check(
             )
         )
         audit_events = (
-            await session.execute(
-                select(AuditEvent).where(
-                    AuditEvent.entity_type == "task",
-                    AuditEvent.entity_id == started_task["id"],
-                    AuditEvent.event_type.like("pre_review_gate_%"),
+            (
+                await session.execute(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_type == "task",
+                        AuditEvent.entity_id == started_task["id"],
+                        AuditEvent.event_type.like("pre_review_gate_%"),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     assert stale_run is not None
     assert stale_run.status == "failed"

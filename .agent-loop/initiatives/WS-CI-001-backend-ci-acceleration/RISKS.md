@@ -16,3 +16,7 @@
 | R12 | Plan scope expands into path-based skipping | High | Defer routing to separately approved 02 contract |
 | R13 | Mutable PostgreSQL tag changes CI behavior | High | Replace `postgres:16` with a reviewed digest pin in 01 |
 | R14 | Parameter display values change across pytest processes | Critical | Execute whole modules; compare exact collection/completion within one process and bind only stable test-base cardinalities across processes |
+| R15 | Semantic lanes prove files but silently lose test nodes | Critical | Record canonical collection and completed-node custody per lane; reject missing, duplicate, foreign, deselected, zero-collection, and unexpected skip evidence |
+| R16 | Fast reset leaves a guarded trigger disabled | Critical | Use one canonical seven-table guard inventory and prove every trigger is enabled after success and rollback |
+| R17 | Mechanical test edits weaken behavioral contracts | Critical | Restore strict Boolean identity assertions and require test-delta review against current main |
+| R18 | Contributor implementation is retroactively authorized | Critical | Preserve PR #180 as discovery evidence; merge planning 02 first, then signed-start prospective 02A before adoption |
