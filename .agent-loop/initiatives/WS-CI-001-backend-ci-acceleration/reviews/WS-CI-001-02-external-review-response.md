@@ -45,5 +45,5 @@ git diff --check origin/main...HEAD
 
 ## Remaining risks
 
-The contract edits require internal exact-head re-review and fresh hosted checks
-before merge readiness can be reported.
+The contract edits passed internal exact-head re-review. Fresh hosted checks are
+still required on the pushed repair commit before merge readiness is reported.

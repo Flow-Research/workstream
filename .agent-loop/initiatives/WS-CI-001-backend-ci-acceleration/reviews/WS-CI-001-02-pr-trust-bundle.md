@@ -92,9 +92,9 @@ deselected, or weakened tests and require exact collection/completion proof.
 
 ## Reviewer results
 
-Reviewed code SHA: c10f084a712660db413cd286340d7dede05c8ead
+Reviewed code SHA: 060b0f37e2c6880ecd3c1d88d28d089d47133076
 
-Reviewed at: 2026-07-22T11:12:00Z
+Reviewed at: 2026-07-22T11:57:27Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 

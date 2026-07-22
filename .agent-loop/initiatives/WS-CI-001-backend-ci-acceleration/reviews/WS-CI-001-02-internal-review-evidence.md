@@ -15,13 +15,13 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: c10f084a712660db413cd286340d7dede05c8ead
+Reviewed code SHA: 060b0f37e2c6880ecd3c1d88d28d089d47133076
 
-Reviewed at: 2026-07-22T11:12:00Z
+Reviewed at: 2026-07-22T11:57:27Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
-After the reviewed SHA, only evidence and status files changed.
+After the reviewed SHA, only review evidence files changed.
 
 ## Reviewer Results
 
@@ -53,6 +53,9 @@ After the reviewed SHA, only evidence and status files changed.
 - Explicitly deferred routing/cache/timing implementation to future planning 03
   and aligned the merge-intent title with the signed 02 contract.
 - Removed the stale cross-initiative status claim.
+- Addressed CodeRabbit's exact-governance-scope, immutable-later-commit, and
+  custody-wording findings; retained the canonical signed chunk title after
+  exact-head reviewers confirmed that renaming would create scope drift.
 
 ## Commands Run
 
