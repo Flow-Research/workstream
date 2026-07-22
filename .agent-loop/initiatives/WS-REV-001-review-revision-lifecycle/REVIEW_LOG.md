@@ -1,5 +1,14 @@
 # Internal Plan Review Log: WS-REV-001
 
+## WS-REV-001-PLAN3 External Review Repair - 2026-07-22
+
+CodeRabbit and CI identified four valid documentation/evidence issues: retired
+contracts did not explicitly void every remaining section, one historical 02C
+statement still sounded active, PLAN2 facts had a current-looking heading, and
+the PLAN3 evidence omitted required provenance/per-track rows. The minimal
+repair addresses all four without runtime or ownership changes. Fresh
+deterministic gates and exact-SHA internal review are required before push.
+
 ## WS-REV-001-PLAN3 Boundary Audit And Runtime Revert - 2026-07-22
 
 A complete end-to-end reread of both canonical review-lifecycle source forms

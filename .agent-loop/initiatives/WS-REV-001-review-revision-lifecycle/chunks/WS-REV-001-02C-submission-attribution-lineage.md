@@ -2,7 +2,8 @@
 
 > **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3. REV consumes the
 > Submission owner's proven immutable lineage rather than creating it upstream.
-> Every remaining Status, Goal, and Stop statement below is archival and void.
+> Every remaining section below is archival, void, and non-authorizing. No
+> operational, schema, acceptance, verification, merge, or successor guidance may run.
 
 ## Parent initiative
 

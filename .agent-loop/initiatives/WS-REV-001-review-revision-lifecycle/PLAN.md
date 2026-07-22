@@ -34,7 +34,7 @@ with 03P; only the post-merge signed projection may then authorize a 03P start.
 They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
 schema head, typed contract, and tests exist on trusted main.
 
-Current merged facts are:
+Historical PLAN2 merged facts were:
 
 - the PLAN2 snapshot Alembic head was `0028_artifact_admission`;
 - TaskAssignment and Submission attribution use canonical `contributor_id`

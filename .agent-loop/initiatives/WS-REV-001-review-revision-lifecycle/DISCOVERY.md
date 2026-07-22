@@ -134,13 +134,14 @@ changes.
 ## Product findings
 
 - All reviewer decisions/findings/resolutions are append-only.
-- Checker-caused remediation is supported but accepted ADRs scope controlled
+- The historical PLAN2 proposal observed that checker-caused remediation is
+  supported but accepted ADRs scope controlled
   guide rebase/preparation to human Review revision. The plan must preserve a
   distinct CheckerRun-rooted N+1 path rather than treating it as legacy or
   silently applying human RevisionPolicy/D6 behavior. Current Submission storage
-  lacks immutable causal CheckerRun lineage, so 02C must add and backfill
-  `remediation_source_checker_run_id` before human prepared cutover adds the
-  source XOR.
+  lacked immutable causal CheckerRun lineage. It incorrectly assigned 02C to add
+  and backfill `remediation_source_checker_run_id`; under PLAN3, any still-needed
+  lineage is an external Checker/Submission owner requirement that REV consumes.
 - Human revision context is task-owned. REV supplies exact human decision/
   finding facts through a typed task participant. Checker remediation retains
   its existing task/checker path and locked context.

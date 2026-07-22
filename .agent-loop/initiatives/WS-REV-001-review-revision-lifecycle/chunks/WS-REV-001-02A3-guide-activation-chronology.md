@@ -2,7 +2,8 @@
 
 > **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
 > belongs to upstream owners, not the REV lifecycle.
-> Every remaining Status, Goal, and Stop statement below is archival and void.
+> Every remaining section below is archival, void, and non-authorizing. No
+> operational, database, acceptance, verification, merge, or successor guidance may run.
 
 ## Goal
 

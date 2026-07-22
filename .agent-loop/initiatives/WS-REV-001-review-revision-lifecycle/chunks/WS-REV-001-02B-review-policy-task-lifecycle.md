@@ -2,8 +2,9 @@
 
 > **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3. Any missing
 > upstream policy or Task lifecycle capability must be implemented by its owner.
-> Every remaining Status, Goal, and Stop statement below is archival and void;
-> REV-owned policy work is re-scoped to 03P.
+> Every remaining section below—including schema, migration, acceptance,
+> verification, merge, and successor text—is archival, void, and
+> non-authorizing. REV-owned policy work is re-scoped to 03P.
 
 ## Parent initiative
 

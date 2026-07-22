@@ -42,9 +42,30 @@ backend coverage remains a GitHub Actions requirement for future runtime work.
 
 ## Reviewer results and external review
 
-Plan/architecture/senior/reuse, QA/product/test-delta, and security/docs/CI all
-pass on candidate `d4b75e24` against trusted main `14fa4316`. Fresh GitHub and
-CodeRabbit review remains required after push.
+Reviewed code SHA: d4b75e24a62eabdfdba43e0561fedfe32faf6046
+
+Reviewed at: 2026-07-22T03:55:22Z
+
+Reviewer run IDs: /root/plan_arch_review@d4b75e24; /root/qa_product_review@d4b75e24; /root/security_docs_ci_review@d4b75e24
+
+Open sub-agent sessions: none
+
+Valid findings addressed: yes
+
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| senior engineering | PASS AFTER FIXES | None | Boundary and sequence are maintainable. |
+| QA/test | PASS AFTER FIXES | None | Lifecycle and cardinality are correct. |
+| security/auth | PASS AFTER FIXES | None | Owner/start gates fail closed. |
+| product/ops | PASS AFTER FIXES | None | Review/revision operations are traceable. |
+| architecture | PASS AFTER FIXES | None | Upstream ownership remains external. |
+| CI integrity | PASS | None | No CI control changed. |
+| docs | PASS AFTER FIXES | None | Current and archival facts are distinct. |
+| reuse/dedup | PASS | None | No duplicate abstraction. |
+| test delta | PASS | None | No test changed or weakened. |
+
+These results bind candidate `d4b75e24` against trusted main `14fa4316`.
+Fresh GitHub and CodeRabbit review remains required after push.
 
 ## Remaining risks and follow-up
 
