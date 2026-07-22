@@ -1,10 +1,10 @@
 # WS-ART-001-02D Internal Review Evidence
 
-Reviewed code SHA: `584a0626028da2a2dc2a93793dfe4ffef9b09163`
+Reviewed code SHA: `9554a496f8fb5d7e65ec7e4f0eba201cdfb7c869`
 
 Reviewed against trusted main: `14fa4316`
 
-Reviewed at: `2026-07-22T03:43:00Z`
+Reviewed at: `2026-07-22T03:56:00Z`
 
 Reviewer run IDs: `art_02d_plan_review`, `ci_repair_qa_security`,
 `ci_repair_ops_ci_docs`
@@ -64,6 +64,9 @@ deferred review lookup, and terminal retry decision/rollback proof.
 Valid findings addressed: yes
 
 Open sub-agent sessions: none
+
+The reviewed metadata repair canonicalizes the declared successor contract
+heading for `WS-ART-001-03`; its explicit-start gate remains unchanged.
 
 ## Remaining gate
 
