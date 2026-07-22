@@ -879,7 +879,17 @@ def _planning_intake_directory(path: str, initiative_id: str) -> str | None:
         return None
     relative = path[len(CHUNK_CONTRACT_ROOT) :]
     directory = relative.split("/", 1)[0]
-    return directory if directory != initiative_id and "/" in relative else None
+    pattern = re.compile(rf"^{re.escape(initiative_id)}-[a-z0-9]+(?:-[a-z0-9]+)*$")
+    return directory if pattern.fullmatch(directory) and "/" in relative else None
+
+
+def _planning_chunk_name_matches(filename: str, initiative_id: str) -> bool:
+    """Return whether a planning intake chunk uses one canonical contract name."""
+    pattern = re.compile(
+        rf"^{re.escape(initiative_id)}-[A-Z0-9]+(?:-[A-Z0-9]+)*"
+        r"(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?\.md$"
+    )
+    return bool(pattern.fullmatch(filename))
 
 
 def _collect_planning_intake(
@@ -934,9 +944,18 @@ def _collect_planning_intake(
         if path == intent_path:
             continue
         relative = path.removeprefix(root)
+        parts = relative.split("/")
+        if any(part.startswith(".") for part in parts) or any(
+            part.casefold() == "agents.md" for part in parts
+        ):
+            raise LoopMemoryError("planning intake path grammar is invalid")
         if "/" not in relative:
             root_files.add(relative)
-        elif relative.startswith("chunks/") and relative.count("/") == 1 and relative.endswith(".md"):
+        elif (
+            relative.startswith("chunks/")
+            and relative.count("/") == 1
+            and _planning_chunk_name_matches(parts[-1], metadata.initiative_id)
+        ):
             chunks.append(path)
         elif relative.startswith("reviews/") and relative.count("/") == 1:
             reviews.add(relative.removeprefix("reviews/"))

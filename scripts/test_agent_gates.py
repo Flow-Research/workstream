@@ -1900,30 +1900,68 @@ def test_planning_intake_record_schema_fails_closed() -> None:
 
 
 def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None:
-    """Independent generated-state validation has planning-intake schema parity."""
+    """Independent validation recomputes planning paths, trees, and digest."""
     updater = load_module("planning_checker_updater", "scripts/update_post_merge_memory.py")
     checker = load_module("planning_checker", "scripts/check_loop_memory_state.py")
-    record = planning_intake_record(updater)
-    assert checker._record_failures(record, "record") == []
-    mutations = (
-        lambda item: item["planning_intake"].update(delta_sha256="bad"),
-        lambda item: item["planning_intake"].update(changed_paths=[]),
-        lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01"),
-        lambda item: item["completed_chunk"].update(next_requires_explicit_start=False),
-        lambda item: item.update(active={"planning_chunk": "WS-NEW-001-PLAN", "implementation_chunk": None}),
-        lambda item: item["checks"].update(all_required_passed=False),
-    )
-    for mutate in mutations:
-        changed = json.loads(json.dumps(record))
-        mutate(changed)
-        assert checker._record_failures(changed, "record")
     with tempfile.TemporaryDirectory() as tmpdir:
-        root = Path(tmpdir)
-        base = loop_record(updater)
-        base["legacy_exemptions"] = []
-        updater.apply_merge_record(root, base)
+        repository = Path(tmpdir) / "repository"
+        subprocess.run(["git", "init", "--initial-branch", "base", str(repository)], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.test"], check=True)
+        subprocess.run(["git", "-C", str(repository), "config", "user.name", "Test"], check=True)
+        (repository / "base.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+        base_sha = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        record = planning_intake_record(updater)
+        for path in record["planning_intake"]["changed_paths"]:
+            target = repository / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(f"{path}\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository), "commit", "-m", "plan"], check=True, stdout=subprocess.PIPE)
+        head_sha = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        subprocess.run(["git", "-C", str(repository), "checkout", "-b", "main", base_sha], check=True, stdout=subprocess.PIPE)
+        (repository / "main.txt").write_text("advanced\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository), "commit", "-m", "advance"], check=True, stdout=subprocess.PIPE)
+        first_parent = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        subprocess.run(["git", "-C", str(repository), "merge", "--no-ff", head_sha, "-m", "merge plan"], check=True, stdout=subprocess.PIPE)
+        merge_sha = subprocess.run(["git", "-C", str(repository), "rev-parse", "HEAD"], check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+        base_tree, base_entries = checker._git_tree(repository, base_sha)
+        head_tree, head_entries = checker._git_tree(repository, head_sha)
+        first_parent_tree, first_parent_entries = checker._git_tree(repository, first_parent)
+        merge_tree, merge_entries = checker._git_tree(repository, merge_sha)
+        delta = {path: head_entries.get(path) for path in sorted(set(base_entries) | set(head_entries)) if base_entries.get(path) != head_entries.get(path)}
+        assert delta == {path: merge_entries.get(path) for path in sorted(set(first_parent_entries) | set(merge_entries)) if first_parent_entries.get(path) != merge_entries.get(path)}
+        record["source"].update(main_sha=merge_sha, first_parent_sha=first_parent, head_sha=head_sha)
+        record["planning_intake"].update(
+            base_tree_sha=base_tree,
+            head_tree_sha=head_tree,
+            first_parent_tree_sha=first_parent_tree,
+            merge_tree_sha=merge_tree,
+            delta_sha256=hashlib.sha256(json.dumps(delta, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()).hexdigest(),
+        )
+        assert checker._record_failures(record, "record", repository) == []
+        mutations = (
+            lambda item: item["planning_intake"].update(delta_sha256="0" * 64),
+            lambda item: item["planning_intake"].update(changed_paths=[]),
+            lambda item: item["planning_intake"]["changed_paths"].append("backend/app/unsafe.py"),
+            lambda item: item["planning_intake"]["changed_paths"].append(".agent-loop/initiatives/WS-NEW-001-example/chunks/.hidden.md"),
+            lambda item: item["planning_intake"]["changed_paths"].append(".agent-loop/initiatives/WS-NEW-001-example/chunks/AGENTS.md"),
+            lambda item: item["planning_intake"]["changed_paths"].remove(".agent-loop/initiatives/WS-NEW-001-example/PLAN.md"),
+            lambda item: item["planning_intake"].update(merge_tree_sha="0" * 40),
+            lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01"),
+            lambda item: item["completed_chunk"].update(next_requires_explicit_start=False),
+            lambda item: item.update(active={"planning_chunk": "WS-NEW-001-PLAN", "implementation_chunk": None}),
+            lambda item: item["checks"].update(all_required_passed=False),
+        )
+        for mutate in mutations:
+            changed = json.loads(json.dumps(record))
+            mutate(changed)
+            assert checker._record_failures(changed, "record", repository)
+        root = Path(tmpdir) / "state"
         updater.apply_merge_record(root, record)
-        assert checker.generated_state_failures(root, ROOT) == []
+        assert checker.generated_state_failures(root, repository) == []
 
 
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
@@ -2096,6 +2134,30 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
         (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
         (lambda: setattr(client, "extra_path", "backend/app/unsafe.py"), "foreign path"),
+        (
+            lambda: setattr(
+                client,
+                "extra_path",
+                f"{root}/chunks/.hidden.md",
+            ),
+            "path grammar",
+        ),
+        (
+            lambda: setattr(
+                client,
+                "extra_path",
+                f"{root}/chunks/AGENTS.md",
+            ),
+            "path grammar",
+        ),
+        (
+            lambda: setattr(
+                client,
+                "extra_path",
+                ".agent-loop/initiatives/WS-NEW-001-.hidden/PLAN.md",
+            ),
+            "foreign path",
+        ),
         (lambda: setattr(client, "truncated_tree", merge_tree), "tree is incomplete"),
     )
     for mutate, expected in cases:
