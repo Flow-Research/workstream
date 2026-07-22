@@ -300,3 +300,59 @@ async def test_audit_resource_resolver_conceals_missing_lineage() -> None:
     assert await service._audit_projects("artifact_binding", str(uuid4())) == ()
     assert await service._audit_projects("artifact_verification_job", str(uuid4())) == ()
     service._replica_projects.assert_not_awaited()
+
+
+async def test_binding_discovery_projects_canonical_authorized_page() -> None:
+    project_id = uuid4()
+    resource_id = uuid4()
+    first_id, second_id = str(uuid4()), str(uuid4())
+    row = SimpleNamespace(
+        id=first_id,
+        content_id=str(uuid4()),
+        project_id=str(project_id),
+        resource_type="task",
+        resource_id=str(resource_id),
+        logical_role="submission",
+        scope_version=1,
+        supersedes_binding_id=None,
+        created_at=datetime.now(UTC),
+    )
+    service = ArtifactOperatorService(
+        object(), _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+    service._binding_resource_project = AsyncMock(return_value=str(project_id))
+    service._authorize = AsyncMock()
+    service._page = AsyncMock(
+        return_value=(row, SimpleNamespace(**{**vars(row), "id": second_id}))
+    )
+
+    result = await service.list_bindings(
+        authorization_context=_context(),
+        resource_type="task",
+        resource_id=resource_id,
+        cursor=None,
+        limit=1,
+    )
+
+    assert result.next_cursor == first_id
+    assert result.items == (
+        {
+            "id": first_id,
+            "content_id": row.content_id,
+            "project_id": str(project_id),
+            "resource_type": "task",
+            "resource_id": str(resource_id),
+            "logical_role": "submission",
+            "scope_version": 1,
+            "supersedes_binding_id": None,
+            "created_at": row.created_at,
+        },
+    )
+    service._authorize.assert_awaited_once()
+    authority_args = service._authorize.await_args.args
+    assert authority_args[1:] == (
+        ActionId.ARTIFACT_BINDING_READ,
+        ArtifactOperatorResourceType.BINDING_SCOPE,
+        f"task:{resource_id}",
+        (project_id,),
+    )
