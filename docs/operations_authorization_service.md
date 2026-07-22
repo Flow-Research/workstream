@@ -318,8 +318,8 @@ an authentication or pagination-cursor key. Missing key or database access
 returns the same retryable 503 when a later route attaches the dependency.
 Exhaustion returns 429 with `Retry-After`.
 
-Before upgrading to `0032_authorization_read_rate`, confirm migration
-`0031_project_role_grants` is current and that no unreviewed constraint changes
+Before upgrading to `0033_authorization_read_rate`, confirm migration
+`0032_artifact_recovery` is current and that no unreviewed constraint changes
 exist. This migration requires PostgreSQL major version 16, matching the
 CI-pinned database used to freeze the exact `pg_get_expr` rendering. Confirm
 the target before either direction:

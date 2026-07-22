@@ -66,11 +66,12 @@ GitHub shard 3 initially failed because three pre-existing migration tests
 still treated `0031_project_role_grants` as current `head`. The first stale
 assertion aborted before test-owned cleanup and caused the remaining downgrade
 failures. Repair `a8a0daef` changed those three current-head expectations to
-`0032_authorization_read_rate`. Run `29875491247` then exposed two multi-step
-refusal-state expectations: refusal inside `0031` rolls back the preceding
-`0032` downgrade transaction and retains `0032_authorization_read_rate`.
-Repair `8ceb4e16` changes only those two expectations. The successful direct
-`0032` to `0031` assertion remains `0031`. A fresh isolated three-test sequence
+`0033_authorization_read_rate` after rebasing onto ART-owned migration `0032`.
+Run `29875491247` exposed two multi-step refusal-state expectations: refusal
+inside `0031` rolls back the preceding migration transaction and retains the
+current head. Repair `8ceb4e16` changes only those two expectations. The
+successful direct authorization-read downgrade assertion remains at its direct
+predecessor. A fresh isolated three-test sequence
 passed, and all nine tracks re-reviewed exact repair SHA `8ceb4e16` and passed.
 
 Valid findings addressed: yes

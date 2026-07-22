@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-02D Operator Artifact Operations
+# Chunk Contract: WS-ART-001-02D - Operator Artifact Operations
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02C3, AUTH-09E, and `WS-AUTH-001-ART-CUSTODY`
 

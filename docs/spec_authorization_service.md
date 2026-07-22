@@ -878,7 +878,7 @@ where existence itself is sensitive.
 
 First access and administrative mutations are rate-controlled through
 Postgres-backed fail-closed controls before their public APIs become available.
-Migration `0032_authorization_read_rate` extends that same durable
+Migration `0033_authorization_read_rate` extends that same durable
 counter with the closed `authorization_read` scope. Its dependency remains
 unattached and activates no action until AUTH-10B2. The dedicated default is
 120 requests per 60 seconds per verified issuer/subject digest, independently

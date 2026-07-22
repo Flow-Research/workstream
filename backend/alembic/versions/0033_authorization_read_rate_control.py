@@ -1,7 +1,7 @@
 """add durable authorization-read rate-control scope
 
-Revision ID: 0032_authorization_read_rate
-Revises: 0031_project_role_grants
+Revision ID: 0033_authorization_read_rate
+Revises: 0032_artifact_recovery
 Create Date: 2026-07-21
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0032_authorization_read_rate"
-down_revision = "0031_project_role_grants"
+revision = "0033_authorization_read_rate"
+down_revision = "0032_artifact_recovery"
 branch_labels = depends_on = None
 
 _TABLE = "api_rate_control_counters"

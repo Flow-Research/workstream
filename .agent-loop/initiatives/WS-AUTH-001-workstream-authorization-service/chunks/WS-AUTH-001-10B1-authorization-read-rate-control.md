@@ -33,7 +33,7 @@ P1
 ## Allowed files
 
 ```text
-backend/alembic/versions/0032_authorization_read_rate_control.py
+backend/alembic/versions/0033_authorization_read_rate_control.py
 backend/app/modules/api_controls/**
 backend/app/api/deps/api_controls.py
 backend/app/core/config.py
@@ -97,7 +97,7 @@ lowering, replacing, or broadening exclusions in any coverage threshold
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/api_controls app/api/deps/api_controls.py app/core/config.py tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py alembic/versions/0032_authorization_read_rate_control.py)
+(cd backend && .venv/bin/python -m ruff check app/modules/api_controls app/api/deps/api_controls.py app/core/config.py tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py alembic/versions/0033_authorization_read_rate_control.py)
 (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py -k 'authorization_read or api_rate_control')
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py

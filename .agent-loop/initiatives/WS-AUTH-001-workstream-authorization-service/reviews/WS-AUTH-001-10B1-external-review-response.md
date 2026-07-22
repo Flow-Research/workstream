@@ -9,7 +9,7 @@ assertion stopped before test-owned cleanup, so later migration tests correctly
 refused to downgrade the leaked immutable project-role evidence.
 
 Repair `a8a0daef60c1374f103e26c092b59600f5465480` updates exactly three
-current-head expectations to `0032_authorization_read_rate`: project-role
+current-head expectations, now rebased to `0033_authorization_read_rate`: project-role
 schema, outbox schema, and the outbox downgrade transaction that rolls back to
 its pre-attempt head.
 
@@ -17,7 +17,7 @@ its pre-attempt head.
 
 The next refusal matrix proved that the requested `0032` to `0030` migration
 is one transactional Alembic downgrade: refusal in `0031` rolls back the
-preceding `0032` to `0031` step and retains `0032_authorization_read_rate`.
+preceding steps and retains the current authorization-read head.
 Repair `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e` changes only those two
 multi-step refusal-state expectations. The separate successful direct
 downgrade-to-`0031` expectation remains unchanged.

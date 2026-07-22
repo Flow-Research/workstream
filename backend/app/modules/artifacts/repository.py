@@ -23,6 +23,7 @@ from app.modules.artifacts.models import (
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
     ArtifactReplica,
+    ArtifactRecoveryAttempt,
     ArtifactStorageNamespace,
     ArtifactUploadItem,
     ArtifactUploadSession,
@@ -87,6 +88,12 @@ class ArtifactRepository:
             select(ArtifactUploadItem).where(ArtifactUploadItem.id == item_id).with_for_update()
         )
         return result.scalar_one_or_none()
+
+    async def lock_checker_run(self, checker_run_id: str) -> CheckerRun | None:
+        """Lock one checker run for canonical recovery resource derivation."""
+        return await self._session.scalar(
+            select(CheckerRun).where(CheckerRun.id == checker_run_id).with_for_update()
+        )
 
     async def lock_upload_session(self, session_id: str) -> ArtifactUploadSession | None:
         """Load one upload session with a row lock."""
@@ -372,6 +379,36 @@ class ArtifactRepository:
         self._session.add(job)
         await self._session.flush()
         return job
+
+    async def add_recovery_attempt(
+        self, attempt: ArtifactRecoveryAttempt
+    ) -> ArtifactRecoveryAttempt:
+        """Persist one recovery envelope inside the caller-owned transaction."""
+        self._session.add(attempt)
+        await self._session.flush()
+        return attempt
+
+    async def lock_recovery_by_source(
+        self, source_job_id: str
+    ) -> ArtifactRecoveryAttempt | None:
+        """Lock the lifetime recovery owner for one source verification job."""
+        return await self._session.scalar(
+            select(ArtifactRecoveryAttempt)
+            .where(ArtifactRecoveryAttempt.source_verification_job_id == source_job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+
+    async def lock_recovery_by_retry(
+        self, retry_job_id: str
+    ) -> ArtifactRecoveryAttempt | None:
+        """Lock the envelope finalized by one retry verification job."""
+        return await self._session.scalar(
+            select(ArtifactRecoveryAttempt)
+            .where(ArtifactRecoveryAttempt.retry_verification_job_id == retry_job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
 
     async def lock_verification_job(self, job_id: str) -> ArtifactVerificationJob | None:
         return await self._session.scalar(

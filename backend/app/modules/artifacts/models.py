@@ -640,7 +640,7 @@ class ArtifactVerificationJob(Base):
 
     __tablename__ = "artifact_verification_jobs"
     __table_args__ = (
-        UniqueConstraint("originating_put_attempt_id", name="uq_artifact_verification_origin"),
+        UniqueConstraint("parent_verification_job_id", name="uq_artifact_verification_parent"),
         CheckConstraint(
             "status in ('pending', 'running', 'verified', 'missing', "
             "'integrity_mismatch', 'provider_unavailable', 'conflict')",
@@ -662,6 +662,9 @@ class ArtifactVerificationJob(Base):
     originating_put_attempt_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    parent_verification_job_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_verification_jobs.id", ondelete="RESTRICT"), index=True
+    )
     replica_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), nullable=False, index=True
     )
@@ -676,6 +679,103 @@ class ArtifactVerificationJob(Base):
     terminal_result_code: Mapped[str | None] = mapped_column(String(100))
     terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+Index(
+    "uq_artifact_verification_initial_origin",
+    ArtifactVerificationJob.originating_put_attempt_id,
+    unique=True,
+    postgresql_where=ArtifactVerificationJob.parent_verification_job_id.is_(None),
+)
+
+
+class ArtifactRecoveryAttempt(Base):
+    """Reason-bound idempotent envelope around one verification retry job."""
+
+    __tablename__ = "artifact_recovery_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "requester_actor_profile_id",
+            "source_verification_job_id",
+            "recovery_class",
+            "client_idempotency_key",
+            name="uq_artifact_recovery_idempotency",
+        ),
+        UniqueConstraint(
+            "source_verification_job_id", name="uq_artifact_recovery_source_job"
+        ),
+        UniqueConstraint(
+            "retry_verification_job_id", name="uq_artifact_recovery_retry_job"
+        ),
+        CheckConstraint(
+            "source_verification_job_id <> retry_verification_job_id",
+            name="distinct_jobs",
+        ),
+        CheckConstraint("recovery_class = 'provider_observation'", name="recovery_class"),
+        CheckConstraint("status in ('requested', 'succeeded', 'failed')", name="status"),
+        CheckConstraint(SHA256_CHECK.format(column="request_digest"), name="request_digest"),
+        CheckConstraint("cas_version >= 0", name="cas_nonnegative"),
+        CheckConstraint(
+            "(status = 'requested' and terminal_result_code is null and terminal_at is null "
+            "and terminal_audit_event_id is null) or "
+            "(status in ('succeeded', 'failed') and terminal_result_code is not null "
+            "and terminal_at is not null and terminal_audit_event_id is not null)",
+            name="terminal_shape",
+        ),
+        CheckConstraint(
+            "(status = 'succeeded' and terminal_result_code = 'verified') or "
+            "(status = 'failed' and terminal_result_code in "
+            "('provider_unavailable', 'missing', 'integrity_mismatch', 'conflict')) or "
+            "status = 'requested'",
+            name="terminal_result",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requester_actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    requester_identity_link_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_identity_links.id", ondelete="RESTRICT"), nullable=False
+    )
+    authorization_request_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    authorization_correlation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    task_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workstream_tasks.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    submission_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submissions.id", ondelete="RESTRICT"), index=True
+    )
+    source_verification_job_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_verification_jobs.id", ondelete="RESTRICT"), nullable=False
+    )
+    retry_verification_job_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_verification_jobs.id", ondelete="RESTRICT"), nullable=False
+    )
+    parent_recovery_attempt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_recovery_attempts.id", ondelete="RESTRICT"), index=True
+    )
+    recovery_class: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str] = mapped_column(String(1000), nullable=False)
+    client_idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="requested")
+    terminal_result_code: Mapped[str | None] = mapped_column(String(40))
+    initiation_audit_event_id: Mapped[str] = mapped_column(
+        ForeignKey("audit_events.id", ondelete="RESTRICT"), nullable=False
+    )
+    terminal_audit_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audit_events.id", ondelete="RESTRICT")
+    )
+    cas_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

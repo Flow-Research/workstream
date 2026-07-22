@@ -14,7 +14,7 @@ route attachment, disclosure, concealment, cursors, and action activation.
 
 ## What changed
 
-- Migration `0032_authorization_read_rate` safely adds one closed counter scope.
+- Migration `0033_authorization_read_rate` safely adds one closed counter scope.
 - Existing privacy-safe HMAC framing, PostgreSQL time, repository, and committed
   independent session remain the only rate-control implementation.
 - Dedicated bounded limit/window settings and one unattached FastAPI dependency
