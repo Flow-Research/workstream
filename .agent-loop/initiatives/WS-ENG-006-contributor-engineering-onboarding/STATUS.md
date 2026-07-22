@@ -5,6 +5,6 @@
 - Active implementation chunk: none
 - Proposed root-repair chunk: `WS-ENG-006-00`
 - Proposed onboarding chunk: `WS-ENG-006-01`
-- Current gate: revised 00 plan review, bounded implementation, evidence,
-  internal review, exact self-bootstrap binding, PR, and human checkpoint
+- Current gate: `WS-ENG-006-00` internal review passed; PR publication,
+  external checks, and the human merge checkpoint remain
 - Successor after `WS-ENG-006-01`: none
