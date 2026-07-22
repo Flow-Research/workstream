@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-10B1.json` at blob `a8f3a76ef5ea3aaad37195b71db79f19e8541770`
 - Completed chunk: `WS-AUTH-001-10B1` - Durable Authorization Read Rate Control
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-02D`
+- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B2`
+- Latest authority event: `start` for `WS-AUTH-001-10B2`
+- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-AUTH-001-10B2` - Privacy-Safe Project Role Grant Reads; requires a separate explicit start.
 - Required check evidence: passed
