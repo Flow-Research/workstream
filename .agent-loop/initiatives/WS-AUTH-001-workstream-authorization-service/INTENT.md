@@ -167,7 +167,8 @@ Resolved:
   privacy-safe reads second, and PREP-bound mutations third. D33 further splits
   10B into 10B1 durable authorization-read rate control and 10B2 privacy-safe
   disclosure after review proved no reusable read scope existed. Migration
-  `0031` belongs to 10A, `0032` belongs to 10B1, and actor authorization-context
+  `0031` belongs to 10A, ART owns `0032_artifact_recovery`, and
+  `0033_authorization_read_rate` belongs to 10B1. Actor authorization-context
   disclosure remains deferred to AUTH-11.
 
 External deployment details such as issuer URL, JWKS URL, approved algorithms,

@@ -63,7 +63,8 @@ lowering, replacing, or broadening exclusions in any coverage threshold
 
 ## Acceptance criteria
 
-- Migration `0032` changes only the current counter scope constraint from exact
+- Migration `0033_authorization_read_rate`, directly after
+  `0032_artifact_recovery`, changes only the current counter scope constraint from exact
   `first_access|admin_mutation` to exact
   `first_access|admin_mutation|authorization_read`. Historical migrations stay
   immutable; upgrade preserves rows; downgrade refuses while new-scope rows
@@ -89,7 +90,7 @@ lowering, replacing, or broadening exclusions in any coverage threshold
   `app/modules/api_controls/*` and `app/api/deps/api_controls.py`; existing
   reports and thresholds remain byte-for-byte unchanged. Zero action/OpenAPI
   delta is asserted.
-- Operations/spec docs cover `0032` upgrade and downgrade preflight, refusal
+- Operations/spec docs cover `0033_authorization_read_rate` upgrade and downgrade preflight, refusal
   with live read counters, forward recovery, limit/window settings, shared
   privacy HMAC key and secret separation, 429/Retry-After, retryable 503, and
   the intentionally unattached/no-action rollout state.

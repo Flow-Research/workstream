@@ -195,8 +195,10 @@ proving the same issuer role metadata alone no longer authorizes.
     separately started children. 10A establishes migration `0031`, immutable
     snapshots/grants, the typed/PostgreSQL three-role clean cut, and all five
     planned action rows with exact 10B/10C custody but no active surface. The
-    planning-only 10B parent splits into 10B1 migration `0032` and a dedicated
-    durable authorization-read rate-control scope, followed by 10B2 activation
+    planning-only 10B parent splits into 10B1 migration
+    `0033_authorization_read_rate`, directly after ART-owned
+    `0032_artifact_recovery`, and a dedicated durable authorization-read
+    rate-control scope, followed by 10B2 activation
     of candidate/list/detail reads with audited concealment and signed cursors.
     10C activates PREP-bound issue/revoke mutations and concurrency proof.
 13. Cut project identity, guide, source, and visibility queries over to local

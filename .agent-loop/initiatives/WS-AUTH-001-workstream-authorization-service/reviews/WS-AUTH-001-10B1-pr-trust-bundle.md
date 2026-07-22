@@ -33,14 +33,15 @@ Focused PostgreSQL, dependency, migration, concurrency, Ruff, Agent Gates,
 stale-doc, Markdown-link, and diff-integrity checks pass. Full sharded tests and
 coverage run in GitHub Actions because the local full suite takes hours.
 
-The first GitHub run exposed three stale tests that still named `0031` as
-current head. The first repair updated those expectations to `0032`. Run
-`29875491247` then proved a multi-step refusal in `0031` rolls back the
-preceding `0032` step too and retains `0032`; the second repair updates only
-those two refusal-state expectations. The successful direct downgrade to
-`0031` remains asserted. A fresh isolated three-test sequence passed and all
-nine tracks re-reviewed exact code SHA `8ceb4e16`. A new hosted rerun remains
-required.
+Before the ART merge, the first GitHub run exposed three stale tests that still
+named `0031` as current head, and the first repair updated those pre-rebase
+expectations to AUTH-owned `0032`. Run `29875491247` then proved a multi-step
+refusal rolls back the full migration transaction and retains its starting
+head. After ART claimed `0032_artifact_recovery`, AUTH rebased linearly to
+`0033_authorization_read_rate`; current-head and refusal-state assertions now
+retain `0033`, while successful AUTH downgrade stops at direct predecessor
+`0032_artifact_recovery`. The combined lineage/migration suite passes 3/3 on a
+fresh isolated database. A new hosted run remains required for the merged tree.
 
 ## Risks and controls
 
