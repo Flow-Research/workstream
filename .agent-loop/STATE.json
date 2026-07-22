@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": null,
+      "planning_chunk": "WS-CI-001-02"
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-CI-001-01R1",
+      "chunk_title": "Timeout Cleanup Repair",
+      "initiative_id": "WS-CI-001",
+      "next_chunk_id": null,
+      "next_chunk_title": null,
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-CI-001-02",
+      "next_chunk_title": "Safe Routing, Cache, and Timing Refinement",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "b0f9ad6476bb836a99c0adac7073705eb5206f4c",
+      "head_ref": "codex/ws-ci-001-01r1-timeout-cleanup",
+      "head_sha": "aa73e1078406e7d6eaee32f83a04d39e20890da2",
+      "intent_blob_sha": "3d7bcb5d9dc1c466d41b473c496b5695571b8b91",
+      "intent_path": ".agent-loop/merge-intents/WS-CI-001-01R1.json",
+      "main_sha": "61bc0390947ad397a0b9bdd088c5111bd5477da1",
+      "merged_at": "2026-07-20T18:46:43Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 164,
+      "pr_title": "fix(ci): preserve isolated runner cleanup time",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/164"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": "Canonical Human And Agent Contribution Entry",
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-CI-001-02",
+    "created_at": "2026-07-22T10:48:46Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:29913333909:start",
+    "initiative_id": "WS-CI-001",
+    "main_sha": "d7dfd73b640456bf500b8c4c969a20df1197fe6c",
+    "prior_state_tip": "bfdd5c3e0d6476a4e53db58e5ff1e4b3905ddfbd",
+    "reason": "User directed planning recovery and bounded adoption of Konan semantic-lane CI work",
+    "run_id": 29913333909,
+    "selection": {
+      "contract_blob_sha": "9035407560985ffb613f34703a249376c7316bf4",
+      "contract_path": ".agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02-safe-routing-cache-timing.md",
+      "contract_title": "Safe Routing, Cache, and Timing Refinement",
+      "mode": "writer_directed",
+      "phase": "planning",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": "WS-ENG-006-01",
@@ -61,5 +121,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/179"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-22T10:47:47Z"
+  "updated_at": "2026-07-22T10:48:46Z"
 }
