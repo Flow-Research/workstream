@@ -3084,7 +3084,7 @@ async def test_exact_replay_returns_one_attempt_and_one_charge_set(
                     namespace,
                 ).admit(request)
 
-            assert replay.replayed
+            assert replay.replayed is True
             assert replay.attempt_id == first.attempt_id
             assert replay.charge_ids == first.charge_ids
             assert await _count(session, ArtifactPutAttempt) == 1
@@ -3203,7 +3203,7 @@ async def test_exact_replay_reacquires_released_charges_under_capacity(
                         first_request
                     )
 
-            assert replay.replayed
+            assert replay.replayed is True
             assert replay.attempt_id == first.attempt_id
             refreshed_first_charges = (
                 (
@@ -3363,7 +3363,7 @@ async def test_same_content_distinct_operations_deduplicate_scope_bytes(
             )
 
         async with factory() as session:
-            assert all(not result.replayed for result in results)
+            assert all(result.replayed is False for result in results)
             counters = (await session.execute(select(ArtifactAdmissionScope))).scalars().all()
             assert {counter.counted_bytes for counter in counters} == {4}
             assert await _count(session, ArtifactAdmissionCharge) == 7

@@ -376,7 +376,7 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
             first = await service.create(request)
             replay = await service.create(request)
             assert first.retry_verification_job_id == replay.retry_verification_job_id
-            assert replay.replayed
+            assert replay.replayed is True
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
             assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
             assert await session.scalar(
@@ -428,7 +428,7 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
             replay = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
             ).create(request)
-            assert replay.replayed
+            assert replay.replayed is True
             assert created.retry_verification_job_id == replay.retry_verification_job_id
             bootstrap.close()
     finally:

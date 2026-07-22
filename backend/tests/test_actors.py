@@ -392,12 +392,12 @@ async def test_actor_authorization_lock_rejects_disappearance_and_identity_drift
         calls: list[str] = []
 
         async def get_actor_profile(self, _actor_profile_id, *, for_update=False):
-            assert for_update
+            assert for_update is True
             self.calls.append("profile")
             return self.locked_profile
 
         async def get_identity_link_by_id(self, _identity_link_id, *, for_update=False):
-            assert for_update
+            assert for_update is True
             self.calls.append("link")
             return self.locked_link
 
@@ -459,12 +459,12 @@ async def test_active_human_write_actor_revalidates_exact_profile_then_link() ->
         calls: list[tuple[str, str, str]] = []
 
         async def get_actor_profile(self, actor_profile_id, *, for_update=False):
-            assert for_update
+            assert for_update is True
             self.calls.append(("profile", actor_profile_id, ""))
             return self.locked_profile
 
         async def get_identity_link(self, issuer, subject, *, for_update=False):
-            assert for_update
+            assert for_update is True
             self.calls.append(("link", issuer, subject))
             return self.locked_link
 
@@ -569,7 +569,7 @@ async def test_actor_timestamp_touch_fails_closed_before_writes_on_missing_rows(
     repository = ActorRepository(object())  # type: ignore[arg-type]
 
     async def missing_profile(_actor_profile_id, *, for_update=False):
-        assert for_update
+        assert for_update is True
         return None
 
     repository.get_actor_profile = missing_profile  # type: ignore[method-assign]
@@ -577,11 +577,11 @@ async def test_actor_timestamp_touch_fails_closed_before_writes_on_missing_rows(
         await repository.touch_verified_actor(profile, link)
 
     async def locked_profile(_actor_profile_id, *, for_update=False):
-        assert for_update
+        assert for_update is True
         return profile
 
     async def missing_link(_identity_link_id, *, for_update=False):
-        assert for_update
+        assert for_update is True
         return None
 
     repository.get_actor_profile = locked_profile  # type: ignore[method-assign]
@@ -840,7 +840,7 @@ async def test_patch_actors_me_maps_database_failure_to_retryable_unavailable(
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "service_unavailable"
-    assert response.json()["error"]["retryable"]
+    assert response.json()["error"]["retryable"] is True
     async with db_session.get_session_factory()() as session:
         update_evidence = await session.scalar(
             select(func.count())
@@ -888,7 +888,7 @@ async def test_actor_self_evidence_failure_is_retryable_and_rolls_back_touch(
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "service_unavailable"
-    assert response.json()["error"]["retryable"]
+    assert response.json()["error"]["retryable"] is True
     async with db_session.get_session_factory()() as session:
         timestamps_after = (
             await session.execute(

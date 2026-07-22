@@ -932,7 +932,7 @@ async def test_authority_writer_persists_typed_privacy_neutral_events(audit_fact
         assert event["claim_snapshot"] == {}
         assert event["event_payload"] == {}
         assert event["auth_source"] == "local_authority"
-        assert not event["is_dev_auth"]
+        assert event["is_dev_auth"] is False
     assert stored_values[0]["idempotency_reference"] is None
     assert future_idempotency is not None
 

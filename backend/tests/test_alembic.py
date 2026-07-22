@@ -693,7 +693,7 @@ def test_post_submit_policy_upgrade_blocks_pre_provenance_runtime_rows(
         finally:
             command.downgrade(config, "base")
 
-    assert not columns_exist
+    assert columns_exist is False
 
 
 def test_canonical_actor_registry_separates_authority_from_legacy_workflow_metadata(
@@ -1078,7 +1078,7 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
     assert historical_before == expected_historical
     assert historical_upgraded == expected_historical
     assert historical_downgraded == expected_historical
-    assert lock_observed
+    assert lock_observed is True
 
 
 def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
@@ -1243,7 +1243,7 @@ def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
                 digest = mapped[digest_key]
                 assert isinstance(digest, str)
                 assert len(digest) == 64
-            assert not mapped["private_evidence_columns"]
+            assert mapped["private_evidence_columns"] is False
             assert asyncio.run(_service_identity_guards(isolated_database_env, service_id)) == {
                 "identity_update_rejected": True,
                 "kind_update_rejected": True,
@@ -1473,7 +1473,7 @@ def test_service_link_verification_timestamp_schema_and_guarded_downgrade(
             state = asyncio.run(schema_state())
             assert state["nullable"] == "YES"
             assert state["default"] is None
-            assert state["human_verified"]
+            assert state["human_verified"] is True
             assert "subject_kind" in str(state["constraint"])
             assert "last_verified_at IS NOT NULL" in str(state["constraint"])
             asyncio.run(insert_service_and_reject_null_human())
@@ -1729,7 +1729,7 @@ def test_artifact_store_v2_waits_for_concurrent_v1_writer_and_refuses(
                 upgrade_future = pool.submit(guarded_upgrade)
                 assert upgrade_started.wait(timeout=5)
                 time.sleep(0.2)
-                assert not upgrade_future.done()
+                assert upgrade_future.done() is False
                 release_insert.set()
                 insert_future.result(timeout=5)
                 with pytest.raises(
@@ -2693,7 +2693,7 @@ def test_api_rate_control_schema_preserves_domain_and_guards_downgrade(
                 downgrade_future = pool.submit(guarded_downgrade)
                 assert downgrade_started.wait(timeout=5)
                 time.sleep(0.2)
-                assert not downgrade_future.done()
+                assert downgrade_future.done() is False
                 release_insert.set()
                 insert_future.result(timeout=5)
                 with pytest.raises(RuntimeError, match="non-empty API rate controls"):
@@ -3154,7 +3154,7 @@ def test_authority_idempotency_schema_preserves_audit_and_guards_downgrade(
         "truncate": True,
         "database_timestamps": True,
     }
-    assert downgrade_lock_observed
+    assert downgrade_lock_observed is True
     assert refused == {"revision": "0019_authority_idempotency", "records": 1, "orphan": 1}
     assert preserved == {"revision": "0018_authority_audit_evidence", "records": None, "orphan": 1}
 

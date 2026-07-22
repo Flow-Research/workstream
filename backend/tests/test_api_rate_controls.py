@@ -411,7 +411,7 @@ async def test_rate_control_concurrency_has_no_lost_or_rolled_back_consumption(
             ),
             {"scope": FIRST_ACCESS_SCOPE, "digest": probe_digest},
         )
-    assert independent.allowed
+    assert independent.allowed is True
     assert probe_count == 0
     assert (
         await _stored_rate_row(rate_control_factory, FIRST_ACCESS_SCOPE, independent_digest)
@@ -460,7 +460,7 @@ async def test_rate_control_saturates_bigint_and_prunes_only_bounded_other_rows(
             )
         )
     assert decision.request_count == 9_223_372_036_854_775_807
-    assert not decision.allowed
+    assert decision.allowed is False
     assert expired == 25
 
 
@@ -571,7 +571,7 @@ async def test_rate_control_maps_only_database_failures_and_rolls_back(
             window_seconds=60,
             secret=RATE_SECRET,
         )
-    assert session.rolled_back
+    assert session.rolled_back is True
 
     async def successful_consume(*_args, **_kwargs):
         return ConsumedCounter(now, now, now + timedelta(seconds=60), 1)
@@ -594,7 +594,7 @@ async def test_rate_control_maps_only_database_failures_and_rolls_back(
             window_seconds=60,
             secret=RATE_SECRET,
         )
-    assert prune_session.rolled_back
+    assert prune_session.rolled_back is True
 
     commit_session = _FakeSession(commit_error=True)
     monkeypatch.setattr(ApiRateControlRepository, "consume", successful_consume)
@@ -608,7 +608,7 @@ async def test_rate_control_maps_only_database_failures_and_rolls_back(
             window_seconds=60,
             secret=RATE_SECRET,
         )
-    assert commit_session.rolled_back
+    assert commit_session.rolled_back is True
 
 
 async def test_retry_after_uses_only_returned_database_clock(

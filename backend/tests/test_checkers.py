@@ -1134,9 +1134,9 @@ async def test_pre_submit_check_returns_feedback_without_durable_run(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert not body["authoritative"]
+    assert body["authoritative"] is False
     assert body["status"] == "failed"
-    assert not body["eligible_to_submit"]
+    assert body["eligible_to_submit"] is False
     result_names = {result["checker_name"] for result in body["results"]}
     assert {
         "check_submission_packet",
@@ -1174,12 +1174,12 @@ async def test_pre_submit_chunk8_matrix_flags_missing_evidence_and_warning(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert not body["authoritative"]
+    assert body["authoritative"] is False
     assert body["status"] == "failed"
-    assert not body["eligible_to_submit"]
+    assert body["eligible_to_submit"] is False
     result_by_name = {result["checker_name"]: result for result in body["results"]}
     assert result_by_name["check_evidence_present"]["status"] == "failed"
-    assert result_by_name["check_evidence_present"]["would_block_if_submitted"]
+    assert result_by_name["check_evidence_present"]["would_block_if_submitted"] is True
     assert result_by_name["check_required_files"]["status"] == "passed"
     assert result_by_name["check_forbidden_files"]["status"] == "passed"
     assert result_by_name["check_confidentiality_attestation"]["status"] == "passed"
@@ -1681,8 +1681,8 @@ async def test_checker_run_retry_supersedes_previous_current_run(
     )
     assert listed.status_code == 200, listed.text
     assert [item["attempt_number"] for item in listed.json()] == [1, 2]
-    assert not listed.json()[0]["is_current_for_submission"]
-    assert listed.json()[1]["is_current_for_submission"]
+    assert listed.json()[0]["is_current_for_submission"] is False
+    assert listed.json()[1]["is_current_for_submission"] is True
 
 
 async def test_duplicate_artifact_fails_before_submission_row(
@@ -1714,7 +1714,7 @@ async def test_duplicate_artifact_fails_before_submission_row(
         if result["checker_name"] == "check_evidence_integrity"
     )
     assert duplicate_result["status"] == "failed"
-    assert duplicate_result["would_block_if_submitted"]
+    assert duplicate_result["would_block_if_submitted"] is True
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         submissions = (
@@ -1762,7 +1762,7 @@ async def test_chunk8_missing_required_file_fails_pre_submit_without_submission(
         if result["checker_name"] == "check_required_files"
     )
     assert required_files["status"] == "failed"
-    assert required_files["would_block_if_submitted"]
+    assert required_files["would_block_if_submitted"] is True
     assert "missing required artifact files" in required_files["worker_message"]
 
 
@@ -1823,7 +1823,7 @@ async def test_chunk8_default_blocking_checker_survives_omitted_blocking_severit
         if result["checker_name"] == "check_required_files"
     )
     assert required_files["status"] == "failed"
-    assert required_files["would_block_if_submitted"]
+    assert required_files["would_block_if_submitted"] is True
 
 
 async def test_chunk8_forbidden_file_blocks_without_worker_path_leakage(
@@ -1855,7 +1855,7 @@ async def test_chunk8_forbidden_file_blocks_without_worker_path_leakage(
         if result["checker_name"] == "check_forbidden_files"
     )
     assert forbidden["status"] == "failed"
-    assert forbidden["would_block_if_submitted"]
+    assert forbidden["would_block_if_submitted"] is True
     assert ".env" not in forbidden["worker_message"]
     assert "secrets/" not in forbidden["worker_message"]
     assert "local://" not in forbidden["worker_message"]
@@ -1883,7 +1883,7 @@ async def test_chunk8_confidentiality_attestation_blocks_generic_text(
         if result["checker_name"] == "check_confidentiality_attestation"
     )
     assert attestation["status"] == "failed"
-    assert attestation["would_block_if_submitted"]
+    assert attestation["would_block_if_submitted"] is True
     assert "confidentiality attestation" in attestation["worker_message"]
 
 
@@ -1915,7 +1915,7 @@ async def test_chunk8_low_quality_generated_artifacts_warns_without_blocking(
         if result["checker_name"] == "check_low_quality_generated_artifacts"
     )
     assert low_quality["status"] == "warning"
-    assert not low_quality["blocks_review"]
+    assert low_quality["blocks_review"] is False
 
 
 async def test_checker_caused_revision_resubmits_fixed_version_through_api(
@@ -1936,7 +1936,7 @@ async def test_checker_caused_revision_resubmits_fixed_version_through_api(
         json={"submission": v1_payload},
     )
     assert precheck_v1.status_code == 200, precheck_v1.text
-    assert precheck_v1.json()["eligible_to_submit"]
+    assert precheck_v1.json()["eligible_to_submit"] is True
 
     v1 = await checker_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
@@ -1954,7 +1954,7 @@ async def test_checker_caused_revision_resubmits_fixed_version_through_api(
         if result["checker_name"] == "check_low_quality_generated_artifacts"
     )
     assert low_quality["status"] == "failed"
-    assert low_quality["blocks_review"]
+    assert low_quality["blocks_review"] is True
     assert low_quality["worker_message"]
     assert low_quality["worker_suggested_fix"]
 
@@ -2083,7 +2083,7 @@ async def test_checker_caused_revision_resubmits_fixed_version_through_api(
         json={"submission": v2_payload},
     )
     assert precheck_v2.status_code == 200, precheck_v2.text
-    assert precheck_v2.json()["eligible_to_submit"]
+    assert precheck_v2.json()["eligible_to_submit"] is True
     v2 = await checker_client.post(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
@@ -2197,8 +2197,8 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
         if result["checker_name"] == "check_acceptance_criteria_present"
     )
     assert setup_result["status"] == "failed"
-    assert setup_result["blocks_review"]
-    assert not setup_result["worker_visible"]
+    assert setup_result["blocks_review"] is True
+    assert setup_result["worker_visible"] is False
     assert "worker_message" not in setup_result
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
@@ -2469,7 +2469,7 @@ async def test_chunk10_checker_trial_runs_sample_submissions_through_real_api(
         if result["checker_name"] == "check_acceptance_criteria_present"
     )
     assert setup_result["status"] == "failed"
-    assert not setup_result["worker_visible"]
+    assert setup_result["worker_visible"] is False
 
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
@@ -2565,7 +2565,7 @@ async def test_worker_can_read_only_worker_visible_checker_result_fields(
     assert body["results"]
     assert all("message" not in result for result in body["results"])
     assert all(result["metadata"] == {} for result in body["results"])
-    assert all(result["worker_visible"] for result in body["results"])
+    assert all(result["worker_visible"] is True for result in body["results"])
 
     listed = await checker_client.get(
         f"/api/v1/submissions/{created.json()['id']}/checker-runs",
