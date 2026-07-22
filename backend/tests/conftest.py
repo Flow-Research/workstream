@@ -21,7 +21,7 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
 EXPECTED_PUBLIC_SCHEMA_SHA256 = (
-    "b208984d0143b7b113714cb2f138d0ef0efbb4ad099e6440cad45da0e0297050"
+    "57c0f4b00709fb1c865277d9cac07ea2bc34d22ef26f36f93a7214986cb1388b"
 )
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
@@ -153,7 +153,13 @@ async def _assert_canonical_test_schema(
             f"unexpected test database schema: missing={missing}; unexpected={unexpected}"
         )
     object_rows = await connection.fetch(
-        "with parts(kind,name) as ("
+        "with namespace_objects(kind,name) as ("
+        "select 'namespace-object',concat_ws('|',x.type,x.schema,x.name,x.identity) "
+        "from (select (pg_identify_object(d.classid,d.objid,d.objsubid)).* "
+        "from pg_depend d join pg_namespace n on n.oid=d.refobjid "
+        "where d.refclassid='pg_namespace'::regclass and n.nspname='public' "
+        "and d.deptype='n') x), parts(kind,name) as ("
+        "select kind,name from namespace_objects union all "
         "select 'relation',c.relname||'|'||concat_ws('|',c.relkind::text,"
         "c.relpersistence::text,c.relreplident::text,c.relrowsecurity::text,"
         "c.relforcerowsecurity::text,coalesce(c.reloptions::text,''),"

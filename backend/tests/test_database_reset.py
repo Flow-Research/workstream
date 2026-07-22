@@ -228,6 +228,13 @@ def test_database_reset_rejects_unexpected_non_table_object(
             "drop type if exists unexpected_reset_composite",
         ),
         (
+            'create collation unexpected_reset_collation from "C"',
+            "select exists (select 1 from pg_collation c join pg_namespace n "
+            "on n.oid = c.collnamespace where n.nspname = 'public' "
+            "and c.collname = 'unexpected_reset_collation')",
+            "drop collation if exists unexpected_reset_collation",
+        ),
+        (
             "alter table api_rate_control_counters "
             "add column unexpected_reset_column integer",
             "select exists (select 1 from information_schema.columns "
@@ -255,7 +262,7 @@ def test_database_reset_rejects_structural_schema_drift(
     exists_sql: str,
     drop_sql: str,
 ) -> None:
-    """Types, columns, and triggers outside the reviewed schema block reset."""
+    """Types, collations, columns, and triggers outside the schema block reset."""
 
     async def exercise() -> None:
         url = postgres_database_url.replace("+asyncpg", "")
