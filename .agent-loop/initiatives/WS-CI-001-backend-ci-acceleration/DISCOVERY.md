@@ -33,6 +33,19 @@ PR #161 Backend run `29752233451`, job `88385435082`:
 Recent successful Backend workflows have ranged from roughly 24 to 52 minutes.
 The full-suite process is therefore the dominant wall-clock cost.
 
+Contributor PR #180 subsequently supplied local migrate-once measurements:
+
+- project-client tests improved from 706–729 seconds to 179.53 seconds;
+- task-client tests improved from 535–798 seconds to 145.89 seconds;
+- the complete unsharded suite reported 1,815 passed in 919.48 seconds;
+- global coverage remained 87.58 percent and protected modules remained
+  between 90.90 and 100 percent.
+
+Those numbers are discovery inputs, not exact-head hosted acceptance evidence.
+The PR was opened before a prospective signed implementation start, so its code
+cannot be treated as authorized implementation or merged as-is. Its author,
+Konan, must retain implementation attribution if the work is later adopted.
+
 ## Repository inventory
 
 - `backend/pyproject.toml` declares pytest, pytest-asyncio, pytest-cov, coverage,
@@ -80,6 +93,14 @@ The full-suite process is therefore the dominant wall-clock cost.
 - No live per-shard timing evidence exists.
 - No current workflow test proves a failed/cancelled shard makes the final
   required job fail.
+- PR #180's semantic-lane inventory proves file assignment but does not yet
+  prove that every collected node completed exactly once.
+- Its reset regression test covers five of the seven canonical trigger-guarded
+  tables, leaving incomplete restoration proof.
+- Several exact Boolean identity assertions were changed to truthiness checks,
+  weakening test contracts without a product reason.
+- The contributor diff and original retrospective scope do not match exactly;
+  the successor contract must authorize the complete file set prospectively.
 
 ## Risks discovered
 
@@ -103,6 +124,9 @@ The full-suite process is therefore the dominant wall-clock cost.
 - Whether all shards require MinIO or only the artifact shard.
 - Practical concurrency available to the repository/account.
 - Aggregate Actions-minute increase for four shards.
+- Exact hosted wall time of migrate-once semantic lanes at the reviewed head.
+- Whether four dependency lanes remain balanced after exact node custody and
+  all required real-service contracts are restored.
 
 ## Conventions to preserve
 

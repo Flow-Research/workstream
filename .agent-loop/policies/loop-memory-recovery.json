@@ -1,8 +1,13 @@
 {
   "activation": {
-    "chunk_id": "WS-ENG-005-01",
-    "initiative_id": "WS-ENG-005"
+    "chunk_id": "WS-ENG-006-00",
+    "initiative_id": "WS-ENG-006"
   },
-  "mode": "exact_single_target",
-  "schema_version": 2
+  "recovered_merge": {
+    "chunk_id": "WS-REV-001-PLAN3",
+    "initiative_id": "WS-REV-001",
+    "merge_sha": "afde967d56914cdc6a941aa17b3ff0e98b2e9c64",
+    "pr_number": 176
+  },
+  "schema_version": 1
 }

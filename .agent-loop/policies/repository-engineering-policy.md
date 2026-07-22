@@ -43,6 +43,14 @@ Explicit starts are initiative-local: each initiative may have at most one
 active planning or implementation chunk, while distinct initiatives may be
 active concurrently. Local worktrees are execution isolation, not authority.
 
+The sole first-contract admission is a planning-intake merge for an initiative
+absent from signed history. It is a closed additive planning tree with canonical
+`<initiative>-PLAN` identity, required review/check evidence, one reviewed
+same-initiative implementation successor, and explicit-start true. It records a
+trusted signed merge but no active chunk. It cannot change product, code,
+workflows, scripts, policy, existing initiatives, or generated memory. It is not
+an implementation-start substitute.
+
 ## Dependency Policy
 
 - New production dependencies require explicit human approval.
@@ -55,6 +63,7 @@ active concurrently. Local worktrees are execution isolation, not authority.
 - Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
 - Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
 - Review and approve an implementation PR once. After merge, rely on the canonical automation branch; do not create a second PR or repeat reviewer fanout solely to restate merge metadata.
-- After the 04B cutover, a merge without an active signed start fails unless its
-  exact initiative, chunk, and PR number appears in the signed one-use legacy
-  exemption inventory.
+- After the 04B cutover, an implementation merge without an active signed start
+  fails unless its exact identity is covered by a reviewed one-use root recovery.
+  The only permanent no-predecessor admission is the closed first-planning merge
+  above, which always remains stopped.

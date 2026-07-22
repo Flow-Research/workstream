@@ -51,6 +51,8 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
+pytestmark = pytest.mark.postgres_schema_contract
+
 
 def _alembic_config() -> Config:
     project_root = Path(__file__).resolve().parents[1]
@@ -1068,16 +1070,14 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
         "action_column": False,
         "action_constraint": False,
     }
-    assert (
-        historical_before
-        == historical_upgraded
-        == historical_downgraded
-        == {
-            "event_type": "SensitiveAuthorizationAllowed",
-            "permission_id": "actor.profile.read_any",
-            "action_id": None,
-        }
-    )
+    expected_historical = {
+        "event_type": "SensitiveAuthorizationAllowed",
+        "permission_id": "actor.profile.read_any",
+        "action_id": None,
+    }
+    assert historical_before == expected_historical
+    assert historical_upgraded == expected_historical
+    assert historical_downgraded == expected_historical
     assert lock_observed is True
 
 
@@ -1239,9 +1239,10 @@ def test_fixed_service_identity_schema_mapping_and_guarded_downgrade(
             assert mapped["revision"] == "0023_service_actor_identity"
             assert mapped["service_identity"] == "workstream.artifact.verifier"
             assert mapped["mapped_count"] == 1
-            assert len(mapped["source_digest"]) == 64
-            assert len(mapped["manifest_digest"]) == 64
-            assert len(mapped["envelope_digest"]) == 64
+            for digest_key in ("source_digest", "manifest_digest", "envelope_digest"):
+                digest = mapped[digest_key]
+                assert isinstance(digest, str)
+                assert len(digest) == 64
             assert mapped["private_evidence_columns"] is False
             assert asyncio.run(_service_identity_guards(isolated_database_env, service_id)) == {
                 "identity_update_rejected": True,
@@ -1789,13 +1790,15 @@ def test_actor_profile_lifecycle_fresh_and_prior_head_upgrade(
         try:
             command.downgrade(config, "base")
             command.upgrade(config, "0025_artifact_store_v2")
-            assert asyncio.run(shape()) == ("0025_artifact_store_v2", False, False)
+            prior_shape = ("0025_artifact_store_v2", False, False)
+            lifecycle_shape = ("0026_actor_profile_lifecycle", True, True)
+            assert asyncio.run(shape()) == prior_shape
             command.upgrade(config, "0026_actor_profile_lifecycle")
-            assert asyncio.run(shape()) == ("0026_actor_profile_lifecycle", True, True)
+            assert asyncio.run(shape()) == lifecycle_shape
             command.downgrade(config, "0025_artifact_store_v2")
-            assert asyncio.run(shape()) == ("0025_artifact_store_v2", False, False)
+            assert asyncio.run(shape()) == prior_shape
             command.upgrade(config, "0026_actor_profile_lifecycle")
-            assert asyncio.run(shape()) == ("0026_actor_profile_lifecycle", True, True)
+            assert asyncio.run(shape()) == lifecycle_shape
         finally:
             command.downgrade(config, "base")
 
@@ -2487,16 +2490,18 @@ def test_contributor_foundation_upgrade_guards_and_reversible_preservation(
                 )
             )
             before = asyncio.run(_contributor_foundation_shape(isolated_database_env))
+            worker_column = ("worker_id", 100)
+            contributor_column = ("contributor_id", 36)
             assert before["revision"] == "0026_actor_profile_lifecycle"
-            assert before["assignment_column"] == ("worker_id", 100)
-            assert before["submission_column"] == ("worker_id", 100)
+            assert before["assignment_column"] == worker_column
+            assert before["submission_column"] == worker_column
 
             command.upgrade(config, "0027_contributor_foundation")
             upgraded = asyncio.run(_contributor_foundation_shape(isolated_database_env))
-            assert upgraded == {
+            expected_upgraded = {
                 "revision": "0027_contributor_foundation",
-                "assignment_column": ("contributor_id", 36),
-                "submission_column": ("contributor_id", 36),
+                "assignment_column": contributor_column,
+                "submission_column": contributor_column,
                 "assignment_index": "ix_task_assignments_contributor_id",
                 "submission_index": "ix_submissions_contributor_id",
                 "foreign_keys": (
@@ -2511,6 +2516,7 @@ def test_contributor_foundation_upgrade_guards_and_reversible_preservation(
                 "assignment_values": (human_id,),
                 "submission_values": (human_id,),
             }
+            assert upgraded == expected_upgraded
             direct_sql = asyncio.run(
                 _exercise_contributor_lineage_guards(
                     isolated_database_env,
@@ -2550,12 +2556,15 @@ def test_contributor_foundation_upgrade_guards_and_reversible_preservation(
             command.downgrade(config, "0026_actor_profile_lifecycle")
             restored = asyncio.run(_contributor_foundation_shape(isolated_database_env))
             assert restored["revision"] == "0026_actor_profile_lifecycle"
-            assert restored["assignment_column"] == ("worker_id", 100)
-            assert restored["submission_column"] == ("worker_id", 100)
+            assert restored["assignment_column"] == worker_column
+            assert restored["submission_column"] == worker_column
             assert restored["assignment_index"] == "ix_task_assignments_worker_id"
             assert restored["submission_index"] == "ix_submissions_worker_id"
-            assert human_id in restored["assignment_values"]
-            assert restored["submission_values"] == (human_id,)
+            assignment_values = restored["assignment_values"]
+            assert isinstance(assignment_values, tuple)
+            assert human_id in assignment_values
+            expected_submission_values = (human_id,)
+            assert restored["submission_values"] == expected_submission_values
 
             command.upgrade(config, "0027_contributor_foundation")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
@@ -6264,11 +6273,13 @@ async def _assert_authorization_action_sql_pairs(
 async def _insert_authorization_action_event(database_url: str) -> str:
     """Commit one valid planned-action denial fixture."""
     values = _action_evidence_values("artifact.binding.read", "artifact.binding.read")
+    event_id = values["id"]
+    assert event_id is not None
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
             await connection.execute(_ACTION_EVIDENCE_INSERT, values)
-        return values["id"]
+        return event_id
     finally:
         await engine.dispose()
 
@@ -6430,6 +6441,8 @@ def _action_downgrade_waits_for_insert(config: Config, database_url: str) -> tup
     writer_ready = threading.Event()
     release_writer = threading.Event()
     values = _action_evidence_values("artifact.binding.read", "artifact.binding.read")
+    event_id = values["id"]
+    assert event_id is not None
 
     async def hold_uncommitted_insert() -> None:
         engine = create_async_engine(database_url)
@@ -6468,7 +6481,7 @@ def _action_downgrade_waits_for_insert(config: Config, database_url: str) -> tup
         if not writer_ready.wait(timeout=5):
             release_writer.set()
             writer.result(timeout=5)
-            return False, values["id"]
+            return False, event_id
         downgrade = executor.submit(command.downgrade, config, "0020_canonical_actor_profile")
         try:
             observed = asyncio.run(observe_downgrade_lock())
@@ -6480,7 +6493,7 @@ def _action_downgrade_waits_for_insert(config: Config, database_url: str) -> tup
             match="^cannot downgrade non-empty authorization action evidence$",
         ):
             downgrade.result(timeout=10)
-        return observed, values["id"]
+        return observed, event_id
 
 
 async def _insert_orphan_admin_evidence(database_url: str, event_type: str) -> None:
@@ -6949,15 +6962,6 @@ async def _clear_admin_authority_guard_fixtures(database_url: str) -> None:
             await connection.execute(text("delete from admin_role_grants"))
             await connection.execute(text("alter table admin_role_grants enable trigger user"))
             await connection.execute(text("alter table authority_control enable trigger user"))
-    finally:
-        await engine.dispose()
-
-
-async def _current_revision(database_url: str) -> str:
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.connect() as connection:
-            return str(await connection.scalar(text("select version_num from alembic_version")))
     finally:
         await engine.dispose()
 

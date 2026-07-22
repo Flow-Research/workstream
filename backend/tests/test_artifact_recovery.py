@@ -8,11 +8,12 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
-from alembic import command
-from alembic.config import Config
-import pytest
-from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+import pytest  # type: ignore[import-not-found]
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings
@@ -95,33 +96,10 @@ class _AllowThenDenyRecoveryAuthority(_AllowRecoveryAuthority):
         return await super().authorize(**values)
 
 
-def _alembic_config() -> Config:
-    root = Path(__file__).resolve().parents[1]
-    config = Config(str(root / "alembic.ini"))
-    config.set_main_option("script_location", str(root / "alembic"))
-    return config
-
-
 @pytest.fixture
-def recovery_database_env(isolated_database_env: str, migration_lock) -> str:
-    config = _alembic_config()
-    with migration_lock():
-        asyncio.run(_reset_schema(isolated_database_env))
-        command.upgrade(config, "head")
-        try:
-            yield isolated_database_env
-        finally:
-            asyncio.run(_reset_schema(isolated_database_env))
-
-
-async def _reset_schema(database_url: str) -> None:
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(text("drop schema if exists public cascade"))
-            await connection.execute(text("create schema public"))
-    finally:
-        await engine.dispose()
+def recovery_database_env(isolated_database_env: str) -> str:
+    """Use the runner-migrated schema and central transactional reset."""
+    return isolated_database_env
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -372,19 +350,25 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
     return project_id, job, bootstrap
 
 
-def _request(context, project_id: str, task_id: str | None, job, **changes):
-    values = dict(
+def _request(
+    context: HumanAuthorizationContext,
+    project_id: str,
+    task_id: str | None,
+    job: ArtifactVerificationJob,
+    *,
+    reason: str = "provider remained unavailable",
+    client_idempotency_key: str = "recovery-1",
+) -> ArtifactRecoveryRequest:
+    return ArtifactRecoveryRequest(
         authorization_context=context,
         project_id=UUID(project_id),
         task_id=UUID(task_id) if task_id is not None else None,
         submission_id=None,
         source_verification_job_id=UUID(job.id),
-        reason="provider remained unavailable",
-        client_idempotency_key="recovery-1",
+        reason=reason,
+        client_idempotency_key=client_idempotency_key,
         expected_source_job_cas_version=job.cas_version,
     )
-    values.update(changes)
-    return ArtifactRecoveryRequest(**values)
 
 
 @pytest.mark.asyncio
@@ -585,10 +569,8 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
             assert await orchestrator.verify_object(created.retry_verification_job_id) == "verified"
             recovery = await session.get(ArtifactRecoveryAttempt, str(created.recovery_attempt_id))
             assert recovery is not None
-            assert (recovery.status, recovery.terminal_result_code) == (
-                "succeeded",
-                "verified",
-            )
+            assert recovery.status == "succeeded"
+            assert recovery.terminal_result_code == "verified"
             assert recovery.terminal_audit_event_id is not None
             assert (
                 await session.scalar(
@@ -763,10 +745,8 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 ArtifactRecoveryAttempt, str(first.recovery_attempt_id)
             )
             assert retry is not None and first_attempt is not None
-            assert (first_attempt.status, first_attempt.terminal_result_code) == (
-                "failed",
-                "provider_unavailable",
-            )
+            assert first_attempt.status == "failed"
+            assert first_attempt.terminal_result_code == "provider_unavailable"
             second_request = _request(
                 context,
                 project_id,

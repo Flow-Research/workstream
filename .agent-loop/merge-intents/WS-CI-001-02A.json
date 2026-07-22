@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-CI-001-02A",
+  "chunk_title": "Safe Migrate-Once Database Reset",
+  "initiative_id": "WS-CI-001",
+  "next_chunk_id": "WS-CI-001-02B",
+  "next_chunk_title": "Exact-Custody Semantic Test Lanes",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}
