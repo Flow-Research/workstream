@@ -2,16 +2,39 @@
 
 ## Current status
 
-Trusted main is `44f2467cedc266d2efe261119cfff436ac6b7715`, which additionally
+On 2026-07-22 a complete reread of the canonical Markdown and PDF specification
+identified that the 02A family crossed the REV ownership boundary. REV begins
+only when the current finalized checker result is `allow_review`; it consumes
+the existing Submission and the same submitted/verified artifact set. Project
+Guide setup, activation, Task intake, and upstream publication fencing belong to
+their owning subsystems. REV reports gaps in those handoffs and does not repair
+them. The attempted 02A1 runtime candidate was reverted in full.
+
+`WS-REV-001-PLAN3` is proposed planning-only work, not canonically active. It retires
+02A/02A1/02A2/02A3/02A4/02B/02C as REV implementation authorization. The first
+future REV chunk is 03P: REV-owned ReviewPolicy/RevisionPolicy persistence.
+Canonical start requires the signed `Loop Memory Explicit Event` workflow on
+exact current main; chat and local work are not start evidence.
+
+The historical text below records the superseded PLAN2/02A state and is not
+current implementation authority. Trusted main at that time was `44f2467c`, which additionally
 includes ART admission foundation PR #154 after REV PLAN2 PR #150, AUTH-09D-B
 PR #152, and `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` PR #153. The user explicitly
 started parent 02A on 2026-07-19. L1 preimplementation review returned FAIL
 before runtime edits because the contract combined three separately reviewable
-database/concurrency boundaries. Parent 02A is therefore the active planning-
-only split repair; no backend, migration, workflow, route, or test edit is
-authorized in this PR.
+database/concurrency boundaries. That attempted split is now retired.
 
-## Trusted dependency truth
+## Historical dependency snapshot
+
+Current trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`
+with sole Alembic head `0033_authorization_read_rate_control`. The bullets below describe the
+older PLAN2 snapshot and are not current runtime proof.
+
+Canonical signed loop memory currently remains stopped after merged 02A and
+names retired 02A1 as next. That projection is accurate historical automation
+state but no longer a valid REV scope choice. PLAN3 is proposed—not active—and
+its reviewed merge intent changes the same-initiative successor to 03P. No
+runtime work may begin before that merge and a later signed 03P start.
 
 - Single Alembic head: `0028_artifact_admission`.
 - TaskAssignment and Submission expose canonical `contributor_id` with
@@ -37,7 +60,10 @@ authorized in this PR.
 - Sibling AUTH/ART/CON status files contain stale post-merge wording. REV records
   actual merge facts but does not edit owner initiative memory.
 
-## Plan-refresh results
+## Superseded PLAN2/02A record
+
+This section is retained solely as historical evidence. Every ownership or
+start statement in it is void under D28 and PLAN3.
 
 - Parent 02A is a non-runtime split record. 02A1 owns the complete shared
   Project/setup writer fence, 02A3 owns guide chronology/canonical approval, and
@@ -82,10 +108,9 @@ authorized in this PR.
 
 ## Human-owned gates
 
-- Separate 02A1, 02A3, and 02A4 starts after each predecessor merges. The AUTH
-  contributor foundation gate is satisfied.
-- Exact positive `review_preference_window_seconds` and
-  `review_lease_duration_seconds` before 02B. Neither derives from `sla_hours`.
+- Start 03P only through the signed workflow after this reviewed plan merges.
+- Start 03A only after 03P and after its current-main refresh proves every exact
+  `allow_review`, Submission, artifact, and reviewer owner handoff.
 - Exact human Review revision-round counting, deadline anchor, and boundary
   before 09A1; checker retries are excluded unless a separate product/ADR
   amendment is explicitly approved.
@@ -96,6 +121,6 @@ authorized in this PR.
 
 ## Stop condition
 
-Publish only the parent 02A planning split, let automated memory name 02A1 with
-an explicit-start gate, and stop. Do not implement or start 02A1, 02A3, 02A4,
-02A2, or 02B from this PR.
+Complete the PLAN3 boundary correction and stop. Do not implement runtime code.
+Do not resume any 02A-family, 02B, or 02C chunk. After PLAN3 merges, await a
+signed explicit start on exact current main before implementing 03P.

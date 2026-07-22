@@ -1,5 +1,10 @@
 # Chunk Contract: WS-REV-001-02A3 - Guide Activation Chronology
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
+> belongs to upstream owners, not the REV lifecycle.
+> Every remaining section below is archival, void, and non-authorizing. No
+> operational, database, acceptance, verification, merge, or successor guidance may run.
+
 ## Goal
 
 Add immutable per-project Project Guide activation chronology and canonical
