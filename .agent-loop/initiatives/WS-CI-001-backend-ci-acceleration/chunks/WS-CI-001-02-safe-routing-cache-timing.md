@@ -6,8 +6,9 @@
 
 ## Goal
 
-Use measured 01 evidence to consider fail-closed path routing, dependency cache,
-and durable shard weights without weakening full-suite requirements.
+Use measured evidence to decide whether fail-closed path routing, dependency
+cache, or durable timing weights should be implemented now, and prospectively
+contract the safer optimization that addresses the observed bottleneck.
 
 ## Why this chunk exists
 
@@ -43,13 +44,18 @@ approval; any coverage/test weakening; backend product changes; 04B activation.
 
 ## Acceptance criteria
 
-- [ ] A separate reviewed amendment defines exact files and fail-closed routing.
-- [ ] Cache and timing provenance cannot cross dependency or commit boundaries.
-- [ ] Full-suite-required change classes default closed on ambiguity.
-- [ ] Prospective `WS-CI-001-02A` and `WS-CI-001-02B` contracts split the
+- [x] Routing is not implemented: current evidence does not justify suppression
+      risk, and every change class continues to run the full required suite.
+- [x] Dependency cache and durable timing weights are not implemented: their
+      provenance/invalidation boundaries remain unresolved and cannot cross
+      dependency or commit boundaries.
+- [x] Future reassessment is identified as planning chunk `WS-CI-001-03`; it
+      requires evidence after 02B, its own signed planning start, and fail-closed
+      defaults. It is not this PR's successor.
+- [x] Prospective `WS-CI-001-02A` and `WS-CI-001-02B` contracts split the
       migrate-once reset from semantic-lane orchestration without treating PR
       #180 as authorized implementation evidence.
-- [ ] The contracts require destructive-reset ownership, exact node custody,
+- [x] The contracts require destructive-reset ownership, exact node custody,
       strict test assertions, all guarded-trigger restoration, unchanged
       coverage floors, isolated services, and exact hosted proof.
 
@@ -86,5 +92,5 @@ telemetry complexity is justified by measured results.
 
 ## Stop conditions
 
-Stop if 01 is not merged and stable, if scope is not explicit, or if the user has
-not separately approved this chunk.
+Stop if the plan attempts routing/cache/timing implementation, if successor
+scope is not explicit, or if implementation begins before its signed start.

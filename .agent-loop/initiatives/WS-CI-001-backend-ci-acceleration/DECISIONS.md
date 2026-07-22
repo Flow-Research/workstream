@@ -48,3 +48,13 @@ state, and fixture equivalence under the existing CI topology. Only later chunk
 02B may replace that topology, with independent exact-node validation and
 isolated PostgreSQL and MinIO custody. This limits rollback and review scope
 while preserving Konan's authorship.
+
+## 2026-07-22 - Defer routing, dependency cache, and durable timing weights
+
+Measured evidence shows repeated migrations and service-heavy execution are the
+current bottleneck. Path routing, dependency caching, sampling, and durable
+timing weights add invalidation and silent-suppression risk without addressing
+that cause. Chunk 02 therefore makes a reviewed no-implementation decision for
+those original options. They may be reassessed only in future planning chunk
+`WS-CI-001-03`, after 02B exact-head evidence exists; 03 is not a successor of
+this PR and has no start authority.

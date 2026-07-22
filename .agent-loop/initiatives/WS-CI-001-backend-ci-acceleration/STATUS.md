@@ -8,4 +8,5 @@
 - Human direction: preserve Konan's authorship and measured work from PR #180,
   but adopt it only under prospective zero-trust scope and evidence
 - Current gate: planning review, planning-only PR, and user-owned PR decision
-- `WS-ENG-001-04B`: remains inactive
+- Deferred option: routing/cache/timing reassessment is future `WS-CI-001-03`,
+  with no start or successor declaration

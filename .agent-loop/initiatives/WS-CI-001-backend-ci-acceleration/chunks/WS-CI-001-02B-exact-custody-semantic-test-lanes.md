@@ -74,12 +74,15 @@ and provisioning paths outside `run_isolated_tests.py`.
 
 ```bash
 cd backend
+ci_verify_dir="$(mktemp -d)"
+trap 'rm -rf -- "$ci_verify_dir"' EXIT
+test -n "${WORKSTREAM_TEST_ADMIN_DATABASE_URL:-}"
 ruff check app tests scripts
 python -m pytest -q tests/test_ci_test_lanes.py tests/test_isolated_database_runner.py
-python scripts/run_test_lanes.py --collect-only --metadata-dir /tmp/workstream-lanes-collect
-python scripts/validate_test_lane_evidence.py --metadata-dir /tmp/workstream-lanes-collect
-python scripts/run_test_lanes.py --metadata-dir /tmp/workstream-lanes --summary-json /tmp/workstream-lanes.json --timeout-seconds 1200
-python scripts/validate_test_lane_evidence.py --metadata-dir /tmp/workstream-lanes
+python scripts/run_test_lanes.py --collect-only --metadata-dir "$ci_verify_dir/collect" --summary-json "$ci_verify_dir/collect.json"
+python scripts/validate_test_lane_evidence.py --metadata-dir "$ci_verify_dir/collect" --summary-json "$ci_verify_dir/collect.json"
+python scripts/run_test_lanes.py --metadata-dir "$ci_verify_dir/run" --summary-json "$ci_verify_dir/run.json" --timeout-seconds 1200
+python scripts/validate_test_lane_evidence.py --metadata-dir "$ci_verify_dir/run" --summary-json "$ci_verify_dir/run.json"
 coverage combine
 coverage report --precision=2 --fail-under=78
 coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90

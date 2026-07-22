@@ -84,10 +84,14 @@ P1
 
 ```bash
 cd backend
+ci_verify_dir="$(mktemp -d)"
+trap 'rm -rf -- "$ci_verify_dir"' EXIT
+test -n "${WORKSTREAM_TEST_ADMIN_DATABASE_URL:-}"
 ruff check app tests scripts
-python -m pytest -q tests/test_database_reset.py tests/test_isolated_database_runner.py
-python scripts/run_isolated_tests.py --metadata-json /tmp/ws-ci-02a-collect.json --timeout-seconds 12600 -- python -m pytest --collect-only -q
-python scripts/run_isolated_tests.py --metadata-json /tmp/ws-ci-02a-suite.json --timeout-seconds 12600 -- coverage run -m pytest
+python -m pytest -q tests/test_isolated_database_runner.py
+python scripts/run_isolated_tests.py --metadata-json "$ci_verify_dir/reset.json" --timeout-seconds 1200 -- python -m pytest -q tests/test_database_reset.py
+python scripts/run_isolated_tests.py --metadata-json "$ci_verify_dir/collect.json" --timeout-seconds 12600 -- python -m pytest --collect-only -q
+python scripts/run_isolated_tests.py --metadata-json "$ci_verify_dir/suite.json" --timeout-seconds 12600 -- coverage run -m pytest
 coverage report --precision=2 --fail-under=78
 coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
 coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90
