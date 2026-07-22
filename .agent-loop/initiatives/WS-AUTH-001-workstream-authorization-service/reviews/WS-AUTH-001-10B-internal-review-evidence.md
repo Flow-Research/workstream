@@ -1,15 +1,16 @@
 # WS-AUTH-001-10B Internal Review Evidence
 
-Reviewed code SHA: `dd8afb790ddbe0e04581ee717e5fc03952e6b23e`
+Reviewed code SHA: `746e577adca41d81cc0fbc9ee12dfbab12aac464`
 
 Reviewed planning SHA: `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044`
 
-Reviewed against trusted main: `f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734`
+Reviewed against trusted main: `92b8a7aa813c5914d8191547b62eb3823a37a140`
 
-Reviewed at: `2026-07-21T16:26:06Z`
+Reviewed at: `2026-07-22T00:30:00Z`
 
-Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
-`auth10_plan_ops_ci_docs`
+Reviewer run IDs: original `auth10_plan_core`, `auth10_plan_security_qa`, and
+`auth10_plan_ops_ci_docs`; integration `auth10b1_final_core`,
+`auth10b1_final_security_qa`, and `auth10b1_final_ops_docs_ci`
 
 Reviewer tracks: senior engineering, QA/test, security/auth, product/ops,
 architecture, CI integrity, docs, reuse/dedup, and test delta
@@ -50,8 +51,10 @@ public documentation, route, action availability, or authored live status.
 
 Initial review failed because no reusable read-rate scope existed and current
 403/404 translation could not conceal sensitive resources without preserving
-denial evidence. The repaired plan adds 10B1 migration `0032` for one durable
-`authorization_read` scope and makes 10B2 depend on it. Further review froze
+denial evidence. The repaired plan originally allocated migration `0032` to
+10B1 for one durable `authorization_read` scope and made 10B2 depend on it.
+After ART merged its own `0032_artifact_recovery`, the unchanged AUTH migration
+was rebased linearly to `0033_authorization_read_rate`. Further review froze
 downgrade locking, exact capacity bounds, hosted 90 percent API-controls
 coverage, action-aware concealment, nonhuman prelookup behavior, unique
 candidate SQL, repository ownership, strict response fields, exact keyset

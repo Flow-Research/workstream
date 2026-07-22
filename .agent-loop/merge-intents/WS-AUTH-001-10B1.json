@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-10B1",
+  "chunk_title": "Durable Authorization Read Rate Control",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-10B2",
+  "next_chunk_title": "Privacy-Safe Project Role Grant Reads",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

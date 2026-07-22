@@ -853,7 +853,9 @@ The implementation order is fixed by the WS-AUTH-001 chunk map:
 16. `WS-AUTH-001-ART-CUSTODY` and `WS-AUTH-001-REV-CUSTODY`:
     availability-neutral transfer to exact AUTH activation owners;
 17. `WS-AUTH-001-PREP`: prepared mutation authorization protocol;
-18. `WS-AUTH-001-10`: independent project contributor grants;
+18. `WS-AUTH-001-10`: independent project contributor grants, with 10B1
+    establishing durable authorization-read rate control before 10B2 exposes
+    candidate and grant-history reads;
 19. `WS-AUTH-001-11` through `WS-AUTH-001-14`: complete resource-family
     cutovers;
 20. `WS-AUTH-001-15`: obsolete authority removal and scanner enforcement;
@@ -876,6 +878,11 @@ where existence itself is sensitive.
 
 First access and administrative mutations are rate-controlled through
 Postgres-backed fail-closed controls before their public APIs become available.
+Migration `0033_authorization_read_rate` extends that same durable
+counter with the closed `authorization_read` scope. Its dependency remains
+unattached and activates no action until AUTH-10B2. The dedicated default is
+120 requests per 60 seconds per verified issuer/subject digest, independently
+configurable within the existing bounded limit and window ranges.
 
 ## Conformance Requirements
 

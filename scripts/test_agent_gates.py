@@ -150,6 +150,11 @@ AUTH_09B_COVERAGE_COMMANDS = (
     "--include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/dev.py,"
     "app/adapters/auth/flow.py' --precision=2 --fail-under=90",
 )
+AUTHORIZATION_READ_COVERAGE_COMMANDS = (
+    "coverage report "
+    "--include='app/modules/api_controls/*,app/api/deps/api_controls.py' "
+    "--precision=2 --fail-under=90",
+)
 
 
 def artifact_contract_phase_for(coverage_phase: str) -> str:
@@ -5445,7 +5450,12 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         if str(step.get("run", "")).strip().startswith("coverage report ")
         and "--fail-under=90" in str(step.get("run", ""))
     )
-    assert actual_coverage == (*expected_coverage, *AUTH_09B_COVERAGE_COMMANDS)
+    assert actual_coverage == (
+        *expected_coverage,
+        *AUTH_09B_COVERAGE_COMMANDS[:2],
+        *AUTHORIZATION_READ_COVERAGE_COMMANDS,
+        *AUTH_09B_COVERAGE_COMMANDS[2:],
+    )
     for command in expected_coverage:
         matches = [
             step for step in steps if str(step.get("run", "")).strip() == command
@@ -5461,8 +5471,10 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert any("app/modules/checkers/*" in command for command in later_commands)
     assert workflow.count("--fail-under=78") == 1
     assert "--cov-fail-under" not in workflow
-    assert workflow.count("--fail-under=90") == len(expected_coverage) + len(
-        AUTH_09B_COVERAGE_COMMANDS
+    assert workflow.count("--fail-under=90") == (
+        len(expected_coverage)
+        + len(AUTH_09B_COVERAGE_COMMANDS)
+        + len(AUTHORIZATION_READ_COVERAGE_COMMANDS)
     )
     assert "continue-on-error" not in workflow
 

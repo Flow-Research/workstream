@@ -16,7 +16,7 @@ class ApiRateControlCounter(Base):
     __tablename__ = "api_rate_control_counters"
     __table_args__ = (
         CheckConstraint(
-            "control_scope in ('first_access', 'admin_mutation')",
+            "control_scope in ('first_access', 'admin_mutation', 'authorization_read')",
             name="scope_token",
         ),
         CheckConstraint("octet_length(key_digest) = 32", name="digest_length"),
