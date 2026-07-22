@@ -29,6 +29,12 @@
   admission, reconciles configured limits under locked CAS guards, activates
   the exact API-router CI gate, and expands HTTP replay/race/concealment and
   pagination proof.
+- Final internal review cleared every blocker. The first hosted PR #177 run
+  passed Agent Gates, preflight, API E2E, and shards 1, 2, and 4. Shard 3 found
+  one stale exact OpenAPI inventory assertion after the nine intended protected
+  Operator routes were composed. Commit `536213ff` updates the exact total and
+  protected counts/hashes; its single regression passes and all reviewer tracks
+  reapproved the repair. A hosted rerun remains required.
 
 ## WS-ART-001-02C3
 

@@ -65,7 +65,13 @@ passed with a single-boundary size exception. Senior, architecture, QA,
 security, product/ops, reuse, and test-delta retained only documented low
 risks; CI integrity and docs passed without findings.
 
-External review is not yet evidence and remains required after publication.
+PR #177 is published. CodeRabbit reports success but was rate-limited and
+produced no review findings. The first hosted run passed Agent Gates, preflight,
+API E2E, and shards 1, 2, and 4; shard 3 found one stale exact OpenAPI inventory
+assertion. The inventory remains exact-count and full-hash bound after updating
+it for the nine intended protected Operator routes. The exact regression passes
+locally, all internal tracks reapproved the repair, and a hosted rerun remains
+required.
 
 ## Remaining Risks And Follow-Up
 
