@@ -15,9 +15,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 9ad6292e31a9a4bb6a03ff779cc7a8f2989ec1a1
+Reviewed code SHA: fabe30414a12b4368d9db5e4e74c8a0ca1c6a6c3
 
-Reviewed at: 2026-07-22T10:02:00Z
+Reviewed at: 2026-07-22T10:10:00Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
@@ -59,6 +59,7 @@ After the reviewed SHA, only evidence and status files changed.
 ```bash
 python3 scripts/update_post_merge_memory.py validate-merge-intent --repository-root . --base-ref origin/main
 python3 scripts/test_agent_gates.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p pytest_cov.plugin -q --cov=scripts.update_post_merge_memory --cov-branch --cov-report=term-missing --cov-fail-under=90 scripts/test_agent_gates.py scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
 python3 scripts/check_loop_memory_state.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
