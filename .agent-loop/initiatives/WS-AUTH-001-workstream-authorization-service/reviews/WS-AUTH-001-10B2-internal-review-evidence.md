@@ -5,8 +5,8 @@
 `WS-AUTH-001-10B2` — Privacy-Safe Project Role Grant Reads. Risk: L1
 authorization/privacy. Trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`.
 
-Reviewed code SHA: `d9efa8c5921aa4d8f94299495769cbe9f1c0c44d`
-Reviewed at: 2026-07-22T04:45:41Z
+Reviewed code SHA: `95c3ecf77afed2746a66f314d05eb547cfa15f3c`
+Reviewed at: 2026-07-22T04:55:55Z
 Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /root/auth10b1_final_ops_docs_ci
 
 ## Implemented Contract
@@ -66,3 +66,15 @@ Two repair cycles closed every valid finding. Open reviewer sessions: none.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes
+
+## GitHub Proof Repair
+
+The first hosted run correctly returned 404 because the bootstrap Access
+Administrator was not a project-scoped Project Manager. The repair provisions a
+separate canonical human reader and uses the existing authenticated AUTH-08 API
+to issue that different actor one project-scoped Project Manager grant, avoiding
+self-grant and proving the real scope path. Shard 1 also found its closed audit
+active-set fixture omitted the three newly active actions; the exact equality set
+now adds only those three. Ruff and the focused audit test pass. All nine tracks
+pass repair SHA `95c3ecf77afed2746a66f314d05eb547cfa15f3c` with no open finding;
+fresh hosted/full GitHub checks remain required.

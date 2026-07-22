@@ -40,11 +40,15 @@ E2E provisions a cursor key and checks all routes, strict nonempty nested shapes
 stable concealment, exact actions, and 10C/context absence.
 
 No test or CI threshold was weakened. All nine internal tracks pass exact SHA
-`d9efa8c5921aa4d8f94299495769cbe9f1c0c44d` with no open finding.
+`95c3ecf77afed2746a66f314d05eb547cfa15f3c` with no open finding.
 
 ## External Review, Risk, And Human Focus
 
 GitHub full shards/API E2E/coverage, Agent Gates, and CodeRabbit remain required.
+The first hosted run exposed missing project-scoped reader authority and one
+stale exact audit action set. Repair SHA `95c3ecf7` provisions a distinct reader
+through the public project-scoped AdminRoleGrant API and adds only the three
+activated actions to audit parity; all internal tracks pass the repair.
 Human review should focus on ordering, PM/Audit scope and lifecycle boundaries,
 cursor binding, response minimization, identical concealment, and the exact
 three-action activation. The user retains merge ownership; do not merge without
