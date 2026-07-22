@@ -52,4 +52,3 @@ accepted only from the rerun GitHub Backend workflow.
   subsequent ordinary tests.
 - Combined global 78 percent and every protected 90 percent coverage gate must
   pass unchanged.
-
