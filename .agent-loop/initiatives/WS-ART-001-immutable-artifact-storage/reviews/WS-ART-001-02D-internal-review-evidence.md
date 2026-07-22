@@ -1,10 +1,10 @@
 # WS-ART-001-02D Internal Review Evidence
 
-Reviewed code SHA: `038033595eb94886e2b440048d90937be7ae2871`
+Reviewed code SHA: `4e53bf6453d1a1235d23d6427bce3486ef34cda5`
 
 Reviewed against trusted main: `14fa4316`
 
-Reviewed at: `2026-07-22T05:18:00Z`
+Reviewed at: `2026-07-22T05:41:00Z`
 
 Reviewer run IDs: `art_02d_plan_review`, `ci_repair_qa_security`,
 `ci_repair_ops_ci_docs`
