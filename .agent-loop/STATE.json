@@ -3,40 +3,6 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
-  "authority_state": {
-    "active": {
-      "implementation_chunk": "WS-AUTH-001-10B2",
-      "planning_chunk": null
-    },
-    "completed_chunk": {
-      "chunk_id": "WS-AUTH-001-10B1",
-      "chunk_title": "Durable Authorization Read Rate Control",
-      "initiative_id": "WS-AUTH-001",
-      "next_chunk_id": "WS-AUTH-001-10B2",
-      "next_chunk_title": "Privacy-Safe Project Role Grant Reads",
-      "next_requires_explicit_start": true,
-      "schema_version": 2
-    },
-    "gate": {
-      "next_chunk_id": "WS-AUTH-001-10B2",
-      "next_chunk_title": "Privacy-Safe Project Role Grant Reads",
-      "next_requires_explicit_start": true,
-      "status": "active"
-    },
-    "source": {
-      "first_parent_sha": "92b8a7aa813c5914d8191547b62eb3823a37a140",
-      "head_ref": "codex/ws-auth-001-10b1-authorization-read-rate-control",
-      "head_sha": "4194a43aa1153ca07a349b11a5096f7a3c8b9535",
-      "intent_blob_sha": "a8f3a76ef5ea3aaad37195b71db79f19e8541770",
-      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10B1.json",
-      "main_sha": "14fa4316f7d984f2176657bfafd2a2dae56f944e",
-      "merged_at": "2026-07-22T03:17:32Z",
-      "merged_by": "abiorh-claw",
-      "pr_number": 175,
-      "pr_title": "feat(auth): add durable authorization read rate control",
-      "pr_url": "https://github.com/Flow-Research/workstream/pull/175"
-    }
-  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -48,53 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29887025088/job/88819548869"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29911739580/job/88896035779"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29887025225/job/88821639525"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29911739802/job/88898866194"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-10B1",
-    "chunk_title": "Durable Authorization Read Rate Control",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-10B2",
-    "next_chunk_title": "Privacy-Safe Project Role Grant Reads",
+    "chunk_id": "WS-ENG-006-00",
+    "chunk_title": "First-New-Initiative Planning Intake",
+    "initiative_id": "WS-ENG-006",
+    "next_chunk_id": "WS-ENG-006-01",
+    "next_chunk_title": "Canonical Human And Agent Contribution Entry",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
-  "event": {
-    "authorization": {
-      "actor": "Abiorh001",
-      "permission": "admin",
-      "schema_version": 2,
-      "type": "github_repository_permission"
-    },
-    "chunk_id": "WS-AUTH-001-10B2",
-    "created_at": "2026-07-22T03:34:05Z",
-    "dispatcher": "Abiorh001",
-    "event_id": "github-actions:29888780022:start",
-    "initiative_id": "WS-AUTH-001",
-    "main_sha": "14fa4316f7d984f2176657bfafd2a2dae56f944e",
-    "prior_state_tip": "d362d661184f27aea5af53fb4655612dbb3b4055",
-    "reason": "Explicit user instruction to start the declared AUTH-10B2 successor",
-    "run_id": 29888780022,
-    "selection": {
-      "contract_blob_sha": "4e9c1c5641a5c5c063ad43584f6efaee089e3d14",
-      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-10B2-project-role-grant-reads.md",
-      "contract_title": "Privacy-Safe Project Role Grant Reads",
-      "mode": "declared_successor",
-      "phase": "implementation",
-      "schema_version": 1
-    },
-    "type": "start"
-  },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-10B2",
-    "next_chunk_title": "Privacy-Safe Project Role Grant Reads",
+    "next_chunk_id": "WS-ENG-006-01",
+    "next_chunk_title": "Canonical Human And Agent Contribution Entry",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -108,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "92b8a7aa813c5914d8191547b62eb3823a37a140",
-    "head_ref": "codex/ws-auth-001-10b1-authorization-read-rate-control",
-    "head_sha": "4194a43aa1153ca07a349b11a5096f7a3c8b9535",
-    "intent_blob_sha": "a8f3a76ef5ea3aaad37195b71db79f19e8541770",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10B1.json",
-    "main_sha": "14fa4316f7d984f2176657bfafd2a2dae56f944e",
-    "merged_at": "2026-07-22T03:17:32Z",
+    "first_parent_sha": "afde967d56914cdc6a941aa17b3ff0e98b2e9c64",
+    "head_ref": "codex/ws-eng-006-contributor-onboarding",
+    "head_sha": "3960a152e1ddc16bd9c0266ec0f28dd07caa1c47",
+    "intent_blob_sha": "38c3184ddd5905d7fdc6a28e3c7880bd2ac900ef",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-006-00.json",
+    "main_sha": "d7dfd73b640456bf500b8c4c969a20df1197fe6c",
+    "merged_at": "2026-07-22T10:47:47Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 175,
-    "pr_title": "feat(auth): add durable authorization read rate control",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/175"
+    "pr_number": 179,
+    "pr_title": "feat(loop): admit first initiative planning safely",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/179"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-22T03:34:05Z"
+  "updated_at": "2026-07-22T10:47:47Z"
 }
