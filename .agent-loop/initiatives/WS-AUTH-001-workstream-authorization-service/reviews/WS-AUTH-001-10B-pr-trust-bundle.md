@@ -49,7 +49,8 @@ CodeRabbit review, and human merge approval.
 
 ## Human review focus and merge ownership
 
-Review the 10B1/10B2 boundary, migration `0032` ownership, action-aware
+Review the 10B1/10B2 boundary, ART-owned `0032_artifact_recovery` followed by
+AUTH-owned `0033_authorization_read_rate`, action-aware
 concealment, cursor threat model, hosted coverage requirements, and exact
 successor order. The user retains final approval authority for this specific PR
 and merge.

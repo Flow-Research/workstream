@@ -50,8 +50,10 @@ public documentation, route, action availability, or authored live status.
 
 Initial review failed because no reusable read-rate scope existed and current
 403/404 translation could not conceal sensitive resources without preserving
-denial evidence. The repaired plan adds 10B1 migration `0032` for one durable
-`authorization_read` scope and makes 10B2 depend on it. Further review froze
+denial evidence. The repaired plan originally allocated migration `0032` to
+10B1 for one durable `authorization_read` scope and made 10B2 depend on it.
+After ART merged its own `0032_artifact_recovery`, the unchanged AUTH migration
+was rebased linearly to `0033_authorization_read_rate`. Further review froze
 downgrade locking, exact capacity bounds, hosted 90 percent API-controls
 coverage, action-aware concealment, nonhuman prelookup behavior, unique
 candidate SQL, repository ownership, strict response fields, exact keyset
