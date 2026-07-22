@@ -1,5 +1,11 @@
 # Test Design: WS-REV-001 Runtime Foundation And Revision Cutover
 
+> **Superseded on 2026-07-22:** the 02A/02B/02C test plan below is retained as
+> historical planning evidence only. It is not REV implementation authority.
+> REV starts at the durable `allow_review` handoff and consumes owner-supplied
+> Submission/artifact/actor facts; upstream gaps must be reported to their
+> owning subsystem.
+
 ## Status
 
 Planning-only. No backend test/fixture/migration is implemented until the exact

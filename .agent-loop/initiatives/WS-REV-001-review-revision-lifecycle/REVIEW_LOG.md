@@ -1,5 +1,55 @@
 # Internal Plan Review Log: WS-REV-001
 
+## WS-REV-001-PLAN3 External Review Repair - 2026-07-22
+
+CodeRabbit and CI identified four valid documentation/evidence issues: retired
+contracts did not explicitly void every remaining section, one historical 02C
+statement still sounded active, PLAN2 facts had a current-looking heading, and
+the PLAN3 evidence omitted required provenance/per-track rows. The minimal
+repair addresses all four without runtime or ownership changes. Fresh
+deterministic gates and exact-SHA internal review are required before push.
+
+## WS-REV-001-PLAN3 Boundary Audit And Runtime Revert - 2026-07-22
+
+A complete end-to-end reread of both canonical review-lifecycle source forms
+and the repository specification established that REV starts at the durable
+final checker `allow_review` outcome. REV consumes the existing Submission and
+its submitted/verified artifact set; it does not own Project Guide setup,
+activation, Task intake, or publication fencing. The 02A plan family and the
+02A1 runtime candidate therefore crossed initiative boundaries.
+
+The 02A1 runtime candidate was reverted in full. D28 supersedes the invalid
+ownership assignments while preserving their records as historical evidence.
+PLAN3 now records the correct review flow: immutable and traversable Submission
+versions and Review predecessors, append-only findings and decisions, one
+reviewer contribution per completed Review, and FinalAcceptance plus exactly
+one submitter accepted-task contribution only on `accept`. Future adjudication
+consumes this history but remains out of scope.
+
+All earlier 02A reviewer results are historical and cannot authorize runtime.
+Fresh internal review is required for this exact PLAN3 candidate.
+
+The first exact-candidate review failed closed on residual executable wording,
+an over-broad 03A that mixed persistence with 05A admission, omission of
+REV-owned policy after retiring mixed 02B, stale trusted-main facts, and an
+unsigned claim that PLAN3 was active. Repairs archive every retired contract,
+restore policy as bounded 03P, keep 03A persistence-only, reserve admission for
+05A, update main/head facts, and require signed loop-memory starts.
+The repaired-candidate re-review passed QA/product/test-delta and found one
+remaining live 03A phrase that treated chat approval as start authority. That
+phrase now requires the same signed exact-current-main workflow as 03P.
+
+Main reconciliation then merged AUTH PR #175 at trusted main
+`14fa4316f7d984f2176657bfafd2a2dae56f944e` without conflict and advanced the
+sole Alembic head to `0033_authorization_read_rate_control`. It changes no REV
+ownership or handoff semantics. Deterministic gates and internal reviews must
+be rebound to the refreshed exact candidate.
+
+The first refreshed QA/product review failed closed because the lower PLAN2
+discovery inventory still looked current and assigned retired 02A/02C work.
+The repair now states current owner handoffs from main and marks the entire old
+snapshot archival and void.
+
 ## WS-REV-001-02A Post-Rebase Conformance Repair - 2026-07-19
 
 CodeRabbit's review of rebased PR #156 found that the conformance matrix's

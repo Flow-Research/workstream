@@ -1,9 +1,14 @@
 # Chunk Contract: WS-REV-001-02A2 - Prepared Superseded Guide Reactivation
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
+> belongs to upstream owners, not the REV lifecycle.
+> Every remaining section below—including Goal, Preconditions, Acceptance
+> boundary, verification, merge, and successor text—is archival, void, and
+> non-authorizing.
+
 ## Status
 
-Proposed. Do not implement until every precondition merges and the user gives a
-separate explicit start.
+Retired. This archival contract cannot be started or implemented by REV.
 
 ## Goal
 
