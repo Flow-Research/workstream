@@ -114,7 +114,7 @@ class ArtifactRecoveryRequest:
 
     authorization_context: AuthorizationContext
     project_id: UUID
-    task_id: UUID
+    task_id: UUID | None
     submission_id: UUID | None
     source_verification_job_id: UUID
     reason: str

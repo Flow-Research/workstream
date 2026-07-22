@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ENG-001-04A",
+  "chunk_title": "Complete Loop Memory Projections",
+  "initiative_id": "WS-ENG-001",
+  "next_chunk_id": "WS-ENG-001-04B",
+  "next_chunk_title": "Signed Explicit Start Events",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

@@ -56,3 +56,60 @@ WORKSTREAM_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@localhost:5433/works
 Do not use `WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE` for ordinary proof.
 
 If provisioning fails, confirm the local PostgreSQL provisioning credential can create/drop databases and roles, terminate owned sessions, and reach the named admin database. Diagnostics omit credentials.
+
+## Hosted parallel full-suite proof
+
+The required GitHub check remains `Backend / test`. It is the final fan-in for:
+
+1. `preflight`: evidence gate, lint, docstrings, isolated-runner test, exact test
+   collection, and deterministic four-shard plan;
+2. `shards`: four independent jobs, each with its own digest-pinned PostgreSQL
+   service, runner-owned migrated database, real digest-pinned MinIO, and
+   coverage file;
+3. `api_e2e`: the real API contract proof in a separate isolated database; and
+4. `test`: exact artifact validation, coverage combination, the 78 percent
+   repository floor, and all protected 90 percent subsystem floors.
+
+Matrix job state is the live progress view. The isolated runner continues to
+buffer and redact pytest output, so a running shard does not stream individual
+test names. The final check reports shard duration and balance metadata after
+all evidence is authenticated.
+
+### Evidence bundles
+
+The preflight plan and four fixed shard bundles are retained for seven days.
+Their names include the actual checked-out tree SHA. Each shard bundle contains
+only `coverage.data` and allowlisted `result.json`; the result binds the tree,
+manifest, shard, modules, collected and completed pytest node IDs, duration, and
+SHA-256 of the exact coverage bytes. Repository-owned pytest hooks record the
+final selected inventory and lifecycle completions in the same process; fan-in
+requires exact equality and matches stable test-base cardinalities to preflight.
+Bundles never contain database URLs or passwords, MinIO
+credentials, environment dumps, or runner database metadata.
+
+The fan-in accepts exactly four expected regular-file bundles. It rejects stale
+tree or manifest bindings, missing/extra/duplicate nodes or modules, altered
+coverage, symlinks, path traversal, unexpected files, failed/cancelled/skipped
+upstream jobs, and missing artifacts before `coverage combine` runs.
+
+### Failure diagnosis and reruns
+
+- `preflight` failure: inspect evidence/lint/runner/collection output. No shard
+  evidence is valid until preflight succeeds.
+- one `shards` matrix failure: inspect that shard's database, MinIO, collection,
+  or test failure. The final required check must fail even if other shards pass.
+- `api_e2e` failure: inspect the independent API contract job; coverage cannot
+  compensate for it.
+- `test` failure: inspect dependency-result validation, exact bundle fan-in, then
+  the named global or subsystem coverage report.
+
+A complete workflow rerun creates evidence for the same checked-out tree and is
+the clearest recovery. GitHub may rerun failed jobs, but the fan-in still rejects
+missing or stale artifacts; never upload or edit bundles manually. A new commit
+always requires a complete new run because its tree SHA differs.
+
+Four shards reduce wall-clock latency by using more concurrent runner minutes.
+Review shard durations and total Actions consumption after deployment before
+changing the shard count. If parallel execution is unstable or does not justify
+its cost, revert the single implementation PR to restore the prior sequential
+workflow; do not lower coverage, skip a shard, or add a silent fallback.

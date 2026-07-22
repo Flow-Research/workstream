@@ -163,6 +163,12 @@ Resolved:
   on 2026-07-11 after planning and post-merge memory closed.
 - D20-D22 establish service ActorProfiles, independent three-role project
   grants, and fixed service runtime admission.
+- D32 records the user-approved AUTH-10A/10B/10C split: durable truth first,
+  privacy-safe reads second, and PREP-bound mutations third. D33 further splits
+  10B into 10B1 durable authorization-read rate control and 10B2 privacy-safe
+  disclosure after review proved no reusable read scope existed. Migration
+  `0031` belongs to 10A, `0032` belongs to 10B1, and actor authorization-context
+  disclosure remains deferred to AUTH-11.
 
 External deployment details such as issuer URL, JWKS URL, approved algorithms,
 claim names, and introspection policy are configuration inputs. Their absence

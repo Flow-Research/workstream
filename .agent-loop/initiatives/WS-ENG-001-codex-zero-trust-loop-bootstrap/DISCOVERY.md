@@ -46,3 +46,99 @@
   create drift.
 - Adding CI without pinned actions would regress prior CI supply-chain hardening.
 - Weak PR automation could accidentally imply Codex may merge without approval.
+
+## 2026-07-20 Loop Projection Discovery
+
+### Observations
+
+- `.github/workflows/loop-memory.yml` stages only
+  `.agent-loop/{STATE.json,LOOP_STATE.md,MERGE_LOG.jsonl,STATE.sig}`.
+- `scripts/update_post_merge_memory.py` defines those same four paths and
+  renders only `LOOP_STATE.md`.
+- `scripts/check_loop_memory_state.py --state-root` validates `STATE.json`,
+  `LOOP_STATE.md`, and `MERGE_LOG.jsonl`; the workflow verifies their signature.
+  It does not validate `WORK_QUEUE.md` or initiative `STATUS.md` in that mode.
+- Authored queue/status scanning occurs only without `--state-root`; authored
+  checks and generated-state validation are distinct modes.
+- Loop Memory run `29721110272` succeeded for AUTH-09E PR #157. Generated commit
+  `a5b9bad3` correctly recorded 09E completion but did not touch the stale queue
+  or AUTH status copies.
+
+### Tests and gaps
+
+- Existing tests cover intent validation, signed replay, hostile path types,
+  corruption, escaping, workflow isolation, and protected-main freshness.
+- No test requires a closed automation-branch file manifest.
+- No projection reduces `MERGE_LOG.jsonl` to latest state per initiative.
+- No generated queue/status is compared byte-for-byte with a renderer.
+- No authenticated explicit-start event exists; merge output always reports no
+  active planning or implementation chunk.
+
+### Dependencies, risks, and unknowns
+
+GitHub PR/check metadata, protected `main`, repository replay, the Actions-only
+Ed25519 key, and merge-intent schema v2 are existing inputs. A single global
+last-merge record cannot render all initiatives; the ledger must be reduced per
+initiative. The automation branch currently has 626 tracked legacy files, so an
+enumerated deletion list would be brittle and an in-place recursive cleanup
+would be unsafe. A fresh deterministic Git tree can instead be built from an
+empty temporary index and an empty generated-output directory, committed as a
+normal child of the authenticated state-branch tip, and pushed fast-forward.
+This omits legacy paths without traversing or deleting their worktree objects.
+04B defers the start-event schema, actor/environment protection, and mandatory
+cancel/correct semantics; none is required for 04A.
+
+## 2026-07-20 Explicit-Start Discovery
+
+### Current trusted surfaces
+
+- `.github/workflows/loop-memory.yml` runs reviewed code from protected `main`,
+  serializes writes with `workstream-loop-memory`, signs the complete generated
+  tree with an Actions-only Ed25519 key, and pushes only
+  `automation/loop-memory` by fast-forward.
+- `scripts/update_post_merge_memory.py` already authenticates the prior state,
+  rebuilds into an empty output root, renders every canonical projection, and
+  validates exact Git trees. These are the reusable mutation boundaries.
+- Schema-v2 merge intent supplies the only reviewed same-initiative successor.
+  Current state records `stopped_after_merge`, the successor or `null`, and the
+  protected-main SHA that produced it.
+- GitHub `workflow_dispatch` is attributable, but dispatch alone is not enough:
+  a caller can select a ref and rerun metadata can differ. The workflow must
+  require `refs/heads/main`, resolve current protected `main` independently,
+  reject stale expected SHAs, and use a protected environment whose reviewers
+  authorize the start/cancel job.
+
+### State and lifecycle gaps
+
+- The ledger currently contains merge records only; it needs a closed typed
+  event union without rewriting merge history.
+- Projections have no active state, start actor, start event ID, or start reason.
+- A duplicated workflow run, stale dispatch, null successor, wrong initiative,
+  wrong chunk, already-active initiative, or same event ID with different bytes
+  must fail closed.
+- Cancellation must not erase history. It returns the initiative to the same
+  stopped successor gate so a later protected start can retry. A correction is
+  represented as an attributable corrective cancellation plus a later start,
+  avoiding an arbitrary replacement path.
+- Existing in-flight initiatives predate signed starts. A signed 04B cutover
+  must seal an exact reviewed initiative/chunk inventory. Each exemption is
+  consumed once by merge; every post-cutover no-active merge outside that list
+  fails closed.
+- Environment approval and dispatch are distinct GitHub actions. The protected
+  environment supplies authorization through a required reviewer distinct from
+  the dispatcher; workflow-run approval history supplies signed approver
+  provenance, while the dispatcher remains signed attribution.
+
+### Tests and operational dependencies
+
+- Existing fixture helpers can construct signed state roots and Git trees.
+- New tests must cover typed-event schema, signature coverage, projection bytes,
+  stale-main, replay, event-ID collision, actor/reason validation, null/wrong
+  successor, active conflict, cancel/retry, active-merge mismatch, workflow ref,
+  environment, permissions, concurrency, fixed push target, and secret handling.
+- Repository configuration must create and protect the `loop-memory-start`
+  environment with required human reviewers before the workflow can succeed.
+  This external configuration is a deployment gate, not repository code.
+- The start/cancel transaction must first reuse merge reconciliation through the
+  requested main SHA; shared concurrency alone cannot make a lagging signed
+  branch current.

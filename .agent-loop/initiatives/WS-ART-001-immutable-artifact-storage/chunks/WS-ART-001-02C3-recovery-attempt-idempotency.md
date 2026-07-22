@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-02C3 Recovery Attempt And Idempotency Chain
+# Chunk Contract: WS-ART-001-02C3 - Recovery Attempt And Idempotency Chain
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02C2
 

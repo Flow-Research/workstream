@@ -1250,7 +1250,15 @@ async def test_legacy_activation_writes_only_compatibility_metadata(
         )
         assert "admin_role_grants" in table_names
         assert await session.scalar(text("select count(*) from admin_role_grants")) == 0
-        assert "project_role_grants" not in table_names
+        assert "project_role_grants" in table_names
+        assert "project_role_qualification_snapshots" in table_names
+        assert await session.scalar(text("select count(*) from project_role_grants")) == 0
+        assert (
+            await session.scalar(
+                text("select count(*) from project_role_qualification_snapshots")
+            )
+            == 0
+        )
 
 
 async def test_repeated_legacy_activation_updates_one_row_and_audits_only_changes(

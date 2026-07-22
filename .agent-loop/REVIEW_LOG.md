@@ -1,5 +1,71 @@
 # Review Log
 
+## 2026-07-21 - WS-AUTH-001-10B Internal Plan Review
+
+The inherited AUTH-10B contract failed required L1 review before runtime edits:
+the repository had no read-rate scope to reuse, and existing 403/404 translation
+could not conceal sensitive project/grant existence without preserving denial
+evidence. The user approved D33 and the sequential 10B1/10B2 repair.
+
+Exact planning SHA `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044` passes senior
+engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+docs, reuse/dedup, and test-delta review. 10B1 owns only durable
+`authorization_read` control and migration `0032`; 10B2 owns exactly three
+rate-controlled reads, audited concealment, strict schemas, and signed cursors.
+Markdown links, stale scans, merge-intent validation, and diff integrity pass.
+GitHub, CodeRabbit, and explicit human review remain.
+
+## 2026-07-21 - WS-ENG-005 Parallel Initiative Execution Plan
+
+The user approved maximum safe concurrent work across distinct initiatives.
+The L1 plan retains exactly one active planning or implementation chunk per
+initiative, removes only the three global-idle checks, preserves serialized
+signed publication and reviewed merges, and bootstraps through one exact
+self-consuming WS-ENG-005-01 recovery. Plan review passed after adding a
+three-initiative mixed-phase proof, cross-initiative close isolation, exact
+projection expectations, and forward-only recovery after parallel history.
+
+## 2026-07-21 - WS-ENG-004-01R1 Renderer Recovery Repair
+
+Post-merge run `29835344158` failed before consuming recovery: rebuild
+authentication applied current renderer equality to authenticated prior-renderer
+bytes and cleared otherwise valid signed state. Repair chunk WS-ENG-004-01R1
+authenticates the closed manifest, semantic state, ledger, and signature first;
+copies only state and ledger; regenerates every projection; and retains strict
+current-renderer validation before publication. The recovery policy binds exact
+PR #169 merge `dda60ed0` plus the repair and consumes both exemptions.
+
+## 2026-07-20 - WS-AUTH-001-ART-CUSTODY Internal Review Passed
+
+- Exact code SHA `abb3fb1a035f544f5ee07b7d725451dfa2d90864` passes senior
+  engineering, QA/test, security/auth, product/ops, architecture, CI integrity,
+  docs, reuse/dedup, and test-delta review against trusted main `42a89b2d`.
+- Initial candidate `e7c2602e` had self-referential owner expectations and
+  permissive documentation proof. The repair freezes literal owner truth,
+  parses exact custody tables and operations invariants, and proves no planned
+  ART action reaches revalidation or administrative grant dependencies.
+- Forty-five focused cases, Ruff, stale scans, Markdown links, loop state,
+  merge intent, Alembic `0029`, migration no-diff, and diff integrity pass.
+  Hosted Backend remains the authoritative full-suite coverage gate.
+
+## 2026-07-20 - WS-AUTH-001-ART-CUSTODY Preimplementation Review Passed
+
+- PR #157 merged AUTH-09E to trusted `main` as `42a89b2d`; signed schema-v2
+  memory `a5b9bad3` stopped and named ART custody. The user explicitly started
+  this chunk on 2026-07-20.
+- Initial QA/security/product/CI/test-delta review rejected self-derived
+  baselines, ambiguous database-owner parity, incomplete all-action denial
+  proof, unclear `OPERATOR` wording, missing non-ART freeze and hosted CI gate,
+  and insufficient reuse/test-preservation constraints before runtime edits.
+- The repaired contract freezes all 65 action mappings and availability values,
+  exact counts and service matrix, the 25-row/eight-custodian ART map, every
+  non-ART owner, Alembic head `0029`, and zero migration delta. It requires all
+  25 actions to remain unavailable through the real kernel and keeps ART, REV,
+  and PREP as separate human-started chunks.
+- Senior engineering, QA/test, security/auth, product/ops, architecture, CI
+  integrity, docs, reuse/dedup, and test-delta tracks pass. Implementation may
+  begin for ART custody only; no action availability or ART behavior may change.
+
 ## 2026-07-20 - WS-AUTH-001-09E External Review Repair
 
 CodeRabbit raised two valid findings. The specification now says the service
@@ -2615,3 +2681,140 @@ rejected the stale pre-final evidence record. This state-transition commit is
 therefore the exact review target; its evidence-only descendant must bind the
 reviewed SHA, record every reviewer run, pass the evidence gate, and then receive
 final CI/docs confirmation before external checks resume.
+## 2026-07-20 - WS-AUTH-001-REV-CUSTODY Internal Review
+
+The inherited REV custody contract failed preimplementation review because it
+did not independently freeze the exact 19-row transfer, non-dispatch denial,
+documentation parity, migration boundary, or hosted coverage gates. The
+repaired contract passed all nine plan-review tracks before production edits.
+
+Implementation candidate `c95239b9` then received all nine required tracks.
+Review found a retained ART documentation regression and a stale spec statement
+that still described REV custody as pending. Candidate `baa86dfe` restores the
+exact ART no-migration invariant, records REV no-migration separately, and
+states the completed owner-only transfer. Sixty-three focused cases and all
+deterministic scans pass; all nine exact-SHA reviewers report PASS with no open
+finding. GitHub full-suite, Agent Gates, CodeRabbit, and human review remain.
+
+## 2026-07-20 - WS-AUTH-001-PREP Internal Review
+
+Prepared mutation authorization now uses a kernel-issued opaque single-use
+handle, exact service/session/root-transaction binding, and canonical authority
+locks and facts. Exact consume attempts tombstone before evaluation;
+pre-consume cancellation or rollback invalidates the issuance through
+transaction binding and cleanup. Real PostgreSQL proof covers both supported mutation
+race orders and confirms that active system-role uniqueness makes a second
+eligible same-role administrative grant structurally impossible.
+
+Implementation candidate `38acb8f9` passes senior engineering, QA/test,
+security/auth, product/ops, architecture, CI integrity, docs, reuse/dedup, and
+test-delta review with no open finding. No migration or product consumer is
+included. GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
+
+The first hosted Backend run then found invalid setup/teardown in the new real
+PostgreSQL proof. Synthetic bootstrap-provenance grants and immutable actor
+history cleanup were rejected by user triggers; the cleanup rollback leaked
+evidence and produced cascading migration errors. The fixture-only repair
+disables and restores the relevant user triggers while leaving unique indexes
+and constraints active. Focused PREP tests and Ruff pass; exact-SHA internal
+repair review and the hosted Backend rerun remain.
+
+After trusted-main CI acceleration sync, candidate `9e926d04` passed all nine
+internal tracks and evidence descendant `8a705e5b` passed Agent Gates. CodeRabbit
+reported one minor external-status provenance ambiguity: the trust bundle did
+not identify which SHA and runs its results described. The response now binds
+Agent Gates `29784118660` and CodeRabbit
+`d64c773b-4f76-491e-ae6e-cab19d25dc4b` to published head `8a705e5b` and keeps
+sharded Backend `29784025021` explicitly pending.
+
+That sharded Backend run later completed with shard 2 failing in the eight
+PREP/real-lifecycle race cases. Focused PostgreSQL reproduction found fixture
+state and assertion drift rather than a runtime PREP defect: duplicate
+bootstrap provenance, legacy audit names, incomplete bootstrap-control cleanup,
+and over-specific mutation-first denial expectations. Repair candidate
+`349ac313` establishes one valid bootstrap administrator, restores the control
+singleton during teardown, uses canonical audit fields/tokens, and asserts the
+kernel's privacy-safe `permission_not_granted` result. Thirteen focused
+PostgreSQL PREP/race cases pass locally. Senior engineering, architecture,
+reuse/dedup, QA/test, security/auth, test-delta, product/ops, and CI-integrity
+reviews pass; docs requested the chronology corrections recorded in this
+paragraph and the external-review response before exact-SHA re-review.
+
+## 2026-07-20 - WS-ENG-001-04B External Review Repair
+
+Pre-repair PR #165 head `e8ade1f8` passed Agent Gates, backend preflight, API
+e2e, all four backend shards, the aggregate 78 percent coverage gate, and human
+review. CodeRabbit found that replay guidance was not workflow-specific and that
+cutover depended on mutable working-tree policy. The repair scopes replay
+correctly, makes cutover explicit, loads the exemption inventory from the
+immutable cutover merge, fails closed on missing or invalid historical data, and
+pins exact non-interpolated production arguments. All nine internal tracks pass
+exact SHA `acc15aa5`; fresh hosted checks, CodeRabbit incremental re-review, and
+any branch-policy-required renewed approval remain after publication.
+The later documentation-only audit reconciliation is reviewed independently and
+bound by the chunk's internal-review evidence; it does not replace `acc15aa5` as
+the canonical implementation and closeout evidence head.
+## 2026-07-21 - WS-AUTH-001-10 Internal Plan Review
+
+The inherited combined AUTH-10 runtime contract failed L1 plan review because
+it mixed migration/evidence, privacy-sensitive reads, and PREP-bound mutations.
+The user approved a sequential 10A/10B/10C design. The repaired plan freezes
+independent submitter/reviewer/adjudicator grants, exact API and privacy shapes,
+deterministic lock/replay behavior, migration refusal predicates, and planned
+catalogue/evidence custody without activating a route or changing runtime.
+
+Planning candidate `ca52fd6a6c51f78b3e3a10faf77f4ab235843ad2` passes
+senior engineering, QA/test, security/auth, product/ops, architecture, CI
+integrity, docs, reuse/dedup, and test-delta review with no open finding. Stale
+authorization wording, Markdown links, merge-intent validation, and diff
+integrity pass. GitHub Agent Gates, CodeRabbit, and human review remain; 10A
+requires a separate signed start after this planning parent merges.
+
+## 2026-07-21 - WS-AUTH-001-10 External Gate Repair
+
+PR #168 preflight rejected a noncanonical internal-evidence SHA heading, while
+Agent Gates rejected branch-local live state in AUTH `STATUS.md`. The repair
+uses the required `Reviewed code SHA` provenance label and restores the authored
+status file to trusted-main state; signed automation remains the sole owner of
+live active/review projection. The Backend aggregate failure was consequential:
+preflight blocked shards and API E2E, so no runtime test failed. All 88 Agent
+Gate regression tests pass locally. Exact-SHA internal repair review, an
+evidence-only binding descendant, fresh GitHub checks, and CodeRabbit remain.
+
+CodeRabbit later posted five valid planning/specification findings. The repair
+adds review-log scope to the parent contract, persists the exact active-1/
+revoked-2 grant version, keeps child actions planned until their owning child
+activates them with routes, records the complete PREP/idempotency/advisory-lock
+issue order, and makes `/api/v1` the sole endpoint namespace. Exact-SHA internal
+review and fresh external checks remain.
+
+## 2026-07-21 - WS-AUTH-001-10A Internal Implementation Review
+
+AUTH-10A implementation SHA `e8d9c37e` establishes immutable qualification
+snapshots, independent submitter/reviewer/adjudicator grant history, exact typed
+and PostgreSQL evidence parity, and five planned future actions without exposing
+runtime behavior. Two internal repair loops closed timestamp/truncate custody,
+ORM and UUID parity, exhaustive migration refusal/no-mutation proof, composite
+ownership proof, unrelated-history preservation, and operator preflight gaps.
+Senior engineering, architecture, reuse/dedup, security/auth, QA/test,
+test-delta, product/ops, CI integrity, and docs all pass the exact SHA. GitHub
+full CI/coverage, CodeRabbit, and human review remain.
+
+## 2026-07-21 - WS-ENG-004-01 Writer-Directed Starts
+
+The user confirmed ordinary engineering starts must work for current repository
+writers without a second admin checkpoint. The reviewed repair allows a
+declared successor or unique reviewed contract only on exact main, globally
+idle signed state, and an uncompleted identity. It binds exact Git path/title/
+blob/phase evidence and current GitHub write-level permission, preserves the
+distinct cancellation approval, and independently rechecks historical Git
+objects. A one-target self-consuming recovery certificate bootstraps this
+otherwise-unstartable repair. All nine reviewer tracks pass reviewed code SHA
+`dddf715fea413714395bc7ecf348f198e139a0fa`; 105 focused tests and 88 agent
+gates pass. External review and explicit human approval of the specific PR remain.
+
+PR #169 Agent Gates then correctly rejected 88.27 percent branch coverage for
+the independent checker against its unchanged 90 percent floor. The repair adds
+focused malformed-selection and exact-Git-identity cases; the identical command
+now passes 206 tests at 90.18 percent branch coverage. Exact-SHA internal repair
+review and fresh hosted checks remain.

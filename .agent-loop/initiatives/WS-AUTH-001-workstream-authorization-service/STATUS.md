@@ -105,9 +105,9 @@ internal review, and external checks passed before PR #152 merged as
 foundation. The user explicitly started that chunk; exact contract `2a21166d`
 passed required L1 review. Initial exact-SHA implementation review found
 diagnostic-privacy and proof gaps; bounded repair and deterministic evidence are
-complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR and
-external checks are current; aggregate coverage remains a mandatory GitHub
-Backend gate. No service caller or consumer feature action is active.
+complete, and exact code SHA `4d1fc507` passed all nine internal tracks. PR #153
+merged the contributor foundation as `8d5eb15` on 2026-07-19. No service caller
+or consumer feature action is active.
 
 ## Active planning chunk
 
@@ -115,14 +115,12 @@ None. `WS-AUTH-001-XINT` merged through PR #140.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-09E` - Fixed Service Runtime Admission. Explicitly started from
-trusted `main` at `8d5eb15b`; the refreshed contract passed all nine required
-L1 preimplementation tracks. Runtime implementation is active and changes no
+None. `WS-AUTH-001-09E` merged through PR #157 as `42a89b2d` without changing
 feature action availability.
 
 ## Current review branch
 
-`codex/ws-auth-001-09e-fixed-service-runtime-admission`
+None.
 
 ## Chunk status
 
@@ -153,10 +151,10 @@ feature action availability.
 | `WS-AUTH-001-09D-A` | Merged | `codex/ws-auth-001-09d-actor-identity-lifecycle` | #148 | Merged as `99ae4c9`; signed memory `cf8a3e8` passed and stopped. |
 | `WS-AUTH-001-09D-B` | Merged | `codex/ws-auth-001-09d-b-identity-link-lifecycle` | #152 | Merged as `93dd392`; signed memory `912a6254` passed and stopped. |
 | `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Merged | `codex/ws-auth-001-contributor-foundation` | #153 | Merged as `8d5eb15b`; signed memory `66ab58d` passed and stopped. |
-| `WS-AUTH-001-09E` | PR gate | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | - | Runtime, focused evidence, and all nine internal tracks pass after repair; hosted Backend CI and human review remain. |
-| `WS-AUTH-001-ART-CUSTODY` | Proposed | - | - | Availability-neutral 25-row ART owner transfer after 09E. |
-| `WS-AUTH-001-REV-CUSTODY` | Proposed | - | - | Availability-neutral 19-row REV owner transfer after 09E. |
-| `WS-AUTH-001-PREP` | Proposed | - | - | AUTH-first prepared mutation protocol after 09E. |
+| `WS-AUTH-001-09E` | Merged | `codex/ws-auth-001-09e-fixed-service-runtime-admission` | #157 | Merged as `42a89b2d` on 2026-07-20. |
+| `WS-AUTH-001-ART-CUSTODY` | Merged | `codex/ws-auth-001-art-custody` | #158 | Merged as `be2a79a2` on 2026-07-20; all 25 ART actions remain planned. |
+| `WS-AUTH-001-REV-CUSTODY` | Merged | `codex/ws-auth-001-rev-custody` | #160 | Merged as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned. |
+| `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
@@ -187,7 +185,7 @@ verification commands and an overbroad feature-resource revalidation claim.
 The refreshed contract limits this chunk to AUTH-owned service authority
 resolution/revalidation, defers feature-row recomposition to later activation
 chunks, and passed all nine required L1 tracks. Runtime implementation is
-active; all feature actions remain planned.
+merged through PR #157 as `42a89b2d`; all feature actions remain planned.
 
 The four proposed REV lifecycle actions and review-evidence binding action are
 blocked on complete feature-owned typed manifests. REV fixed services are also

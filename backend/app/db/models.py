@@ -12,6 +12,7 @@ from app.modules.artifacts.models import (  # noqa: F401
     ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactReplica,
+    ArtifactRecoveryAttempt,
     ArtifactUploadItem,
     ArtifactUploadSession,
 )
@@ -19,6 +20,8 @@ from app.modules.authorization.models import (  # noqa: F401
     AdminRoleGrant,
     AuthorityControl,
     AuthorityIdempotencyRecord,
+    ProjectRoleGrant,
+    ProjectRoleQualificationSnapshot,
 )
 from app.modules.checkers.models import CheckerResult, CheckerRun  # noqa: F401
 from app.modules.outbox.models import OutboxEvent  # noqa: F401

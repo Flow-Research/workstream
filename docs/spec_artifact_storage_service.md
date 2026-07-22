@@ -747,11 +747,13 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
 No provider call occurs inside a PostgreSQL transaction. No product binding is
 created before independent verification.
 
-Chunk 02C1 implements step 3 only. It creates a `prepared` attempt with no
-executor, lease, receipt, replica, or execution generation and exposes no
-product route. Steps 4 through 9 remain inactive until their separately
-approved owning chunks. In particular, 02C1 contains no provider `put`,
-`observe_put_result`, verification publication, recovery, or product cutover.
+Chunk 02C1 implements step 3 only. Chunk 02C2 implements hidden steps 4 through
+9 with caller-only committed-source writes, read-only put resolution, durable
+verification jobs, typed receipts, and PostgreSQL fencing. Its production
+authority implementation remains deny-only, its scanner has no Beat schedule,
+and direct Celery invocation fails before claim, provider I/O, publication, or
+mutation while the three internal actions remain planned. Recovery, Operator
+routes, product cutover, and AUTH activation remain in later owning chunks.
 
 Acknowledgement loss leaves the durable put attempt and charges provisional.
 The attempt scanner publishes resolution after an ambiguous outcome or expired
@@ -812,6 +814,12 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` | `1800` | Total first-pass and provider-consumption deadline. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_MARGIN_SECONDS` | `300` | Required margin between the total deadline and reservation TTL. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_INTERVAL_SECONDS` | `300` | Celery Beat cadence for the named stale-scratch cleanup task; accepted range is 1 through 86400 seconds. |
+| `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_INTERVAL_SECONDS` | `60` | Retry/publication SLA used by hidden due-work mechanics; no 02C2 Beat schedule is active. |
+| `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_PAGE_SIZE` | `100` | Hard combined put-attempt and verification-job publication page bound. |
+| `WORKSTREAM_ARTIFACT_EXECUTION_LEASE_SECONDS` | `900` | PostgreSQL-clock executor lease with no heartbeat. |
+| `WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS` | `600` | Total deadline covering provider-open acquisition and the complete stream. |
+| `WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS` | `120` | Lease time reserved for the terminal fenced transaction. |
+| `WORKSTREAM_ARTIFACT_PROVIDER_OBSERVATION_MAXIMUM_ATTEMPTS` | `5` | Closed automatic observation budget before `provider_unavailable` is exhausted. |
 | `WORKSTREAM_ARTIFACT_STREAM_BUFFER_BYTES` | `1048576` | Bounded streaming buffer, limited to at most 1 MiB. |
 | `WORKSTREAM_ARTIFACT_OPERATION_LOCK_TIMEOUT_SECONDS` | `1800` | Maximum wait for a private cross-process artifact-store operation lock before failing closed. |
 
@@ -925,6 +933,13 @@ authority inside the same transaction as terminal CAS, receipt,
 replica/attempt, recovery, and audit writes. Suspension, revocation, resource
 drift, stale executor, or generation mismatch writes no terminal fact. Race
 tests cover each authority input for both service-execution mutation classes.
+02C2 exposes a typed two-phase authority seam so hidden behavior can be tested,
+but only the deny implementation is available in production. The merged
+AUTH-09E and AUTH-PREP foundations supply runtime admission and the generic
+prepared-authority protocol without an ART consumer or activation. The exact
+AUTH artifact-internal activation chunk later supplies evaluator integration
+and the scanner schedule; ART does not change action availability or inspect
+the static service-action matrix.
 
 ## Verification Result Matrix
 
@@ -1157,6 +1172,11 @@ Implementation is a clean cut:
   remove the foundation when any admission scope, charge, attempt, or
   attempt-charge link exists; downgrade is permitted only while all four
   tables are empty.
+- migration `0030_artifact_verification` adds polymorphic contract-v2 operation
+  receipts, typed put-observation receipts, verification jobs and receipts, and
+  execution-mode/observation fencing. Existing contributor receipt rows remain
+  readable as contract v1. Downgrade refuses when verification evidence or a
+  non-contributor receipt cannot be represented by the prior schema.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

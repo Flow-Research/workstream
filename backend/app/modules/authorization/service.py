@@ -80,7 +80,6 @@ _EVIDENCE = {
         201,
         (
             AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
-            AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED,
         ),
     ),
     AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE: _OperationEvidence(
@@ -183,12 +182,6 @@ class AuthorityMutationService:
         spec = _EVIDENCE[claim.operation]
         expected_digest = canonical_json_hash(mutation.model_dump(mode="json", exclude_none=True))
         allowed_events = spec.events
-        if isinstance(mutation, ProjectRoleGrantIssueRequest):
-            allowed_events = (
-                AuthorityEventType.PROJECT_ROLE_GRANT_REPLACED
-                if mutation.replaced_grant_id
-                else AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
-            )
         valid = (
             mutation.operation == claim.operation
             and expected_digest == claim.request_digest
@@ -361,8 +354,7 @@ def _request_matches_success(
             success.target_actor_ref_kind == ActorReferenceKind.ACTOR_PROFILE
             and success.target_actor_ref == str(request.target_actor_id)
             and success.project_id == str(request.project_id)
-            and success.matched_grant_id
-            == (str(request.replaced_grant_id) if request.replaced_grant_id else None)
+            and success.matched_grant_id is None
             and facts.get("role") == request.role.value
             and facts.get("scope_type") == "project"
             and facts.get("scope_id") == str(request.project_id)

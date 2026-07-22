@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-REV-CUSTODY",
+  "chunk_title": "REV Activation Custody Transfer",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-PREP",
+  "next_chunk_title": "Prepared Mutation Authorization Protocol",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

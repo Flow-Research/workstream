@@ -607,24 +607,38 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 74 PermissionIds and 65 ActionIds after
-AUTH-09D-B. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+The catalogue contains exactly 74 PermissionIds and 70 ActionIds after
+AUTH-10A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
-identity-link lifecycle actions are active; the other 48 entries remain planned
+identity-link lifecycle actions are active; the other 53 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
-AUTH activation owner, and availability. Until the availability-neutral custody
-transfers merge, the 25 ART and 19 REV rows retain their historical feature
-owner values as an explicitly blocked exception.
+AUTH activation owner, and availability. The availability-neutral custody
+transfers assign all 25 ART rows to eight exact AUTH custodians and all 19 REV
+rows to seven exact AUTH custodians without changing mappings or planned
+availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
+`WS-AUTH-001-REV-05`, `WS-AUTH-001-REV-06`, `WS-AUTH-001-REV-07`,
+`WS-AUTH-001-REV-08`, `WS-AUTH-001-REV-09A`, `WS-AUTH-001-REV-11`, and
+`WS-AUTH-001-REV-12`. Custodian labels grant no reviewer, Operator, or service
+authority; all 19 REV actions remain planned and unavailable. The REV transfer
+adds no migration, registration, evaluator, route, job, service identity, or
+lifecycle behavior, and the four proposed REV lifecycle actions remain
+unregistered.
 Their owning feature must publish the approved principal/resource/guard/surface/
 transaction contract before registration or activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
 blocker, not a reason to relax catalogue checks.
 
 PR #139 requires availability-neutral transfer of all 25 ART and 19 REV owner
-rows to exact AUTH chunks before feature activation. Counts and mappings remain
-unchanged. Catalogue totals are derived from the trusted entry head: four later
+rows to exact AUTH chunks before feature activation. Both transfers are now
+complete. Counts and mappings remain unchanged. The ART transfer adds no migration.
+The REV transfer adds no migration. The ART transfer does not grant Operator
+authority; its `OPERATOR` suffix denotes only future activation custody, and
+verification retry remains independently gated from read/status actions.
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 17 active actions, and
+53 planned actions after AUTH-10A registers five unavailable project-role rows.
+Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
 action, in either order. Neither addition is operational until its complete
@@ -672,6 +686,30 @@ teardown commit it, or commit AUTH evidence separately from feature state. The
 existing `AuthorityClaimHandle` is a separate idempotency-reservation contract,
 not this prepared authorization handle.
 
+PREP currently supports actor-self profile update and the eight active
+AdminRoleGrant-backed administrative mutations only; it cuts over no production
+feature command. Callers begin and own one root transaction, call `prepare`,
+lock their participant rows, compose final typed facts, call `consume` with the
+independently expected ActionId and the same strict request/idempotency input,
+flush participant work, and commit once. AUTH never commits in dependency
+teardown. Roll back the caller transaction on denial, evidence/SQL failure,
+participant failure, timeout, or cancellation; cancellation must propagate
+unchanged. The handle remains consumed after every exact attempt, including a
+rolled-back or cancelled attempt, and dependency teardown invalidates all
+outstanding handles.
+
+Do not restage a prepared denial after rollback. Its staged decision belongs to
+the failed caller transaction and rolls back with participant state. Planned
+fixed-service preparation returns bounded `action_unavailable` without evidence
+because it issues no handle and has no final resource context.
+
+Operationally, actor-self preparation locks profile then exact link. An
+administrative preparation locks `AuthorityControl(id=1)`, request profile,
+exact request link, and deterministic matched AdminRoleGrant before participant
+locks. Do not add a feature lock ahead of that order. Current fixed-service
+actions remain planned and can produce no handle. ProjectRoleGrant preparation
+is unsupported until AUTH-10 supplies and proves its canonical lock path.
+
 Downgrade is allowed only while every action ID remains null and no permission
 outside migration `0018`'s historical 49-value set exists in the decision,
 target-reference, or invalidation-reference fields. The migration takes an
@@ -687,10 +725,44 @@ exact-project grants and canonical project composition.
 AUTH-10 is a clean cut to independent `submitter`, `reviewer`, and
 `adjudicator` grants. Before rollout, scan current typed schemas, audit facts,
 idempotency records, and PostgreSQL validators for `both`, replacement fields,
-replacement events, and replacement reasons. Migration `0027` must stop on any
+replacement events, and replacement reasons. Migration `0031` must stop on any
 incompatible evidence; operators must remediate through a separately approved
 data decision, never an automatic conversion. A safe downgrade also refuses
 rather than deleting adjudicator or new exact-role evidence.
+
+Before upgrading to `0031`, run the following read-only preflight against the
+same database. Both counts must be zero:
+
+```sql
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='both' or after_facts->>'role'='both' or
+  before_facts::jsonb ? 'replaced_grant_id' or
+  after_facts::jsonb ? 'replaced_grant_id' or
+  event_type='ProjectRoleGrantReplaced' or reason='authority_replacement');
+select count(*) from authority_idempotency_records where operation in
+  ('project_role_grant.issue','project_role_grant.revoke');
+```
+
+Before downgrading from `0031`, both new tables must be empty and this count
+must be zero:
+
+```sql
+select count(*) from project_role_grants;
+select count(*) from project_role_qualification_snapshots;
+select count(*) from audit_events where event_domain='authority' and (
+  before_facts->>'role'='adjudicator' or after_facts->>'role'='adjudicator' or
+  action_id in ('project.contributor_candidate.list','project_role_grant.list',
+    'project_role_grant.read','project_role_grant.issue','project_role_grant.revoke') or
+  denial_code in ('project_role_grant_already_revoked',
+    'project_role_grant_replay_state_changed'));
+```
+
+The migration repeats these checks while holding `ACCESS EXCLUSIVE` locks on
+the affected authority tables, so schedule a maintenance window that prevents
+authority writes. A refusal occurs before schema mutation. Keep the database at
+its current revision, investigate the exact nonzero predicate, and recover
+forward through a separately reviewed data decision; never delete or convert
+authority evidence merely to make the migration proceed.
 
 Project-role revocation is routed by exact role. Submitter invalidation may
 reach task assignment; reviewer invalidation reaches only REV; adjudicator

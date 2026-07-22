@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-PREP",
+  "chunk_title": "Prepared Mutation Authorization Protocol",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-10",
+  "next_chunk_title": "Project Qualification And Contributor Role Grants",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

@@ -684,3 +684,62 @@ The foundation allocates only the then-current next migration from trusted
 `main`. This decision supersedes only the future fixed-number reservation
 clauses in D29, D30, and earlier decisions; their other boundaries remain in
 force. Merged migration ownership through AUTH-09D-A `0026` is unchanged.
+## D32: Split project-role truth, reads, and mutations
+
+Status: accepted by the user on 2026-07-21 after required AUTH-10 L1 plan
+review rejected the combined runtime boundary.
+
+AUTH-10 is a planning-only parent and splits into exactly three sequential
+same-initiative children. AUTH-10A owns migration
+`0031_project_role_grants`, the immutable qualification/grant aggregates, and
+the typed/PostgreSQL three-role evidence clean cut. It registers all five
+project-role actions as planned with exact AUTH-10B/AUTH-10C owners but activates
+no action or route. AUTH-10B owns activation of exactly the candidate,
+grant-list, and grant-detail read actions and privacy-safe pagination. AUTH-10C
+owns activation of exactly issue and revoke,
+multi-principal PREP ordering, idempotency, audit, invalidation, and mutation
+concurrency. Each child requires a separate signed start and stop.
+
+The project roles are independent `submitter`, `reviewer`, and `adjudicator`
+rows. `both`, replacement, automated issuance, conversion, and one-active-role-
+total semantics are removed from current contracts. Discovery and issuance are
+allowed only for draft, active, and paused projects. Historical grant reads and
+revocation remain possible for every existing project state so evidence cannot
+be hidden and authority cannot become irremovable.
+
+The current trusted-main Alembic head is `0030`; this decision assigns `0031`
+only to AUTH-10A and supersedes every older inactive AUTH-10 migration-number
+reservation in D21, D27, D28, D29, and D30. Historical migration ownership is
+unchanged.
+
+`GET /api/v1/actors/me/authorization-context` moves to AUTH-11. AUTH-10B does
+not expose a context that advertises still-inactive project/task/review actions;
+AUTH-11 must enumerate that surface with its exact ActionId, target, guards,
+and disclosure contract before implementation.
+
+## D33: Split AUTH-10B rate control from privacy-safe disclosure
+
+Status: accepted by the user on 2026-07-21 after required AUTH-10B L1 plan
+review rejected the inherited read-control and concealment boundary.
+
+AUTH-10B becomes a planning-only parent and splits into two sequential
+same-initiative children. AUTH-10B1 extends the existing durable PostgreSQL
+API-rate-control system with the closed `authorization_read` scope, dedicated
+limit/window configuration, and an unattached FastAPI dependency. It owns
+forward migration `0032_authorization_read_rate_control`; it adds or activates
+no authorization read route. Historical migration `0017` remains immutable,
+and existing first-access and administrative-mutation behavior is unchanged.
+
+AUTH-10B2 then activates exactly the candidate, project-role-grant list, and
+project-role-grant detail actions and attaches the shared authorization-read
+control exactly once to each route. It owns the distinct required pagination
+cursor secret and signed keyset cursor. It also adds action-aware centralized
+public concealment for these three actions while preserving the existing
+rollback, denial-evidence restaging, and commit path. Other actions retain
+their existing public error mapping.
+
+Unauthorized or nonexistent projects, terminal or archived candidate projects,
+and missing or cross-project grants have one identical public response. No
+route catches and discards `AuthorizationDenied`, no response exposes a total,
+and no candidate or grant row is queried before canonical resolution and
+authorization succeed. AUTH-10C follows only after 10B2.

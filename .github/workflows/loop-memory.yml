@@ -81,6 +81,12 @@ jobs:
             --state-root "${state_dir}" \
             --public-key .agent-loop/keys/loop-memory-signing-public.pem
           echo "state_dir=${state_dir}" >> "${GITHUB_OUTPUT}"
+          output_dir="${RUNNER_TEMP}/loop-memory-output"
+          python3 scripts/update_post_merge_memory.py prepare-output \
+            --source-root "${state_dir}" \
+            --output-root "${output_dir}" \
+            --public-key .agent-loop/keys/loop-memory-signing-public.pem
+          echo "output_dir=${output_dir}" >> "${GITHUB_OUTPUT}"
 
       - name: Reconcile every unrecorded main commit
         shell: bash
@@ -88,7 +94,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          state_dir="${{ steps.state.outputs.state_dir }}"
+          state_dir="${{ steps.state.outputs.output_dir }}"
+          branch_dir="${{ steps.state.outputs.state_dir }}"
           if [[ ! "${TARGET_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Invalid protected-main target SHA." >&2
             exit 1
@@ -110,12 +117,25 @@ jobs:
           fi
           python3 scripts/update_post_merge_memory.py "${plan_args[@]}" > "${plan_file}"
           mapfile -t merge_shas < "${plan_file}"
-          for merge_sha in "${merge_shas[@]}"; do
+          recovery_file=$(mktemp)
+          python3 scripts/update_post_merge_memory.py prepare-recovery \
+            --repository "${GITHUB_REPOSITORY}" --repository-root . \
+            --state-root "${state_dir}" --target-sha "${TARGET_SHA}" \
+            --plan-file "${plan_file}" > "${recovery_file}"
+          for index in "${!merge_shas[@]}"; do
+            merge_sha="${merge_shas[${index}]}"
             python3 scripts/update_post_merge_memory.py update \
               --repository "${GITHUB_REPOSITORY}" \
+              --repository-root . \
               --merge-sha "${merge_sha}" \
-              --state-root "${state_dir}"
+              --state-root "${state_dir}" \
+              --branch-root "${branch_dir}" \
+              --cutover-chunk-id WS-ENG-001-04B \
+              --recovery-file "${recovery_file}"
           done
+          python3 scripts/update_post_merge_memory.py assert-recovery-consumed \
+            --state-root "${state_dir}" --target-sha "${TARGET_SHA}" \
+            --recovery-file "${recovery_file}"
 
       - name: Validate generated state
         shell: bash
@@ -123,7 +143,7 @@ jobs:
           LOOP_MEMORY_SIGNING_KEY: ${{ secrets.LOOP_MEMORY_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          state_dir="${{ steps.state.outputs.state_dir }}"
+          state_dir="${{ steps.state.outputs.output_dir }}"
           private_key="${RUNNER_TEMP}/loop-memory-signing-key.pem"
           trap 'rm -f "${private_key}"' EXIT
           printf '%s\n' "${LOOP_MEMORY_SIGNING_KEY}" > "${private_key}"
@@ -136,7 +156,7 @@ jobs:
             --public-key .agent-loop/keys/loop-memory-signing-public.pem \
             --expected-main-sha "${TARGET_SHA}"
           python3 scripts/check_loop_memory_state.py \
-            --state-root "${state_dir}"
+            --state-root "${state_dir}" --repository-root .
 
       - name: Commit generated state branch
         shell: bash
@@ -145,20 +165,18 @@ jobs:
         run: |
           set -euo pipefail
           state_dir="${{ steps.state.outputs.state_dir }}"
-          git -C "${state_dir}" add -f -- \
-            .agent-loop/STATE.json \
-            .agent-loop/LOOP_STATE.md \
-            .agent-loop/MERGE_LOG.jsonl \
-            .agent-loop/STATE.sig
-          if git -C "${state_dir}" diff --cached --quiet; then
-            echo "Loop memory is already current."
-            exit 0
+          output_dir="${{ steps.state.outputs.output_dir }}"
+          parent_sha=""
+          if git -C "${state_dir}" rev-parse --verify HEAD >/dev/null 2>&1; then
+            parent_sha=$(git -C "${state_dir}" rev-parse HEAD)
           fi
           pr_number=$(python3 -c \
             'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source"]["pr_number"])' \
-            "${state_dir}/.agent-loop/STATE.json")
+              "${output_dir}/.agent-loop/STATE.json")
           git -C "${state_dir}" config user.name "workstream-loop-memory[bot]"
           git -C "${state_dir}" config user.email \
             "workstream-loop-memory[bot]@users.noreply.github.com"
-          git -C "${state_dir}" commit -m "chore(loop-memory): record PR #${pr_number}"
-          git -C "${state_dir}" push origin "HEAD:refs/heads/${STATE_BRANCH}"
+          python3 scripts/update_post_merge_memory.py publish \
+            --branch-root "${state_dir}" --output-root "${output_dir}" \
+            --expected-prior-tip "${parent_sha}" \
+            --message "chore(loop-memory): record PR #${pr_number}"

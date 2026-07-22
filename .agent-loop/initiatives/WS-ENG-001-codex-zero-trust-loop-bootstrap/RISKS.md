@@ -17,3 +17,16 @@
 | Generated branch is edited manually | High | Declare workflow-only ownership, validate JSON/render/ledger agreement, and reject conflicting replay state. |
 | One initiative declares another initiative's next lifecycle gate | High | Schema v2 requires a non-null next chunk to share the completed initiative prefix; global priority remains human-owned. |
 | Invalid schema-v1 state contaminates the corrected ledger | Critical | Reject it completely, clear only fixed generated paths, and bootstrap schema v2 from WS-ENG-001-03. |
+| Signed state is correct while generated queue/status projections are stale | High | 04A derives every canonical projection from the authenticated ledger, signs the complete manifest, and validates byte-for-byte agreement. |
+| Cleanup deletes non-automation branch content | Critical | Generate in an empty directory and construct a fresh tree from an empty temporary Git index; commit it as a normal child without traversing legacy paths or force-pushing. |
+| Last merged PR is presented as every initiative's state | High | Reduce the authenticated ledger to the latest record per initiative and render compact initiative projections deterministically. |
+| Merge automation falsely claims conversational work is active | High | 04A renders stopped/next merge state only; 04B separately owns authenticated explicit-start events. |
+| Start workflow bypasses human authority or selects arbitrary work | Critical | 04B requires protected dispatch, current-main binding, exact successor equality, contract validation, signed event provenance, and fail-closed replay/conflict handling. |
+| A mistaken or abandoned explicit start wedges an initiative | High | 04B cannot pass preimplementation review until an attributable signed cancel/correct event with reason, replay protection, and projection semantics is explicit. |
+| Dispatch runs feature-branch workflow code with a write token | Critical | Require `workflow_dispatch` on `refs/heads/main`, independently resolve protected main, detach at that SHA, and fix the state-branch destination. |
+| A write-capable collaborator bypasses intended human start authority | Critical | Gate the start/cancel job behind the protected `loop-memory-start` environment with required reviewers; record dispatcher, approver, and run ID. |
+| Rerun or duplicate dispatch replays an authority event | Critical | Require first run attempt and append-only unique event IDs; identical replay is non-mutating and collisions fail closed. |
+| 04B blocks already-approved work started before deployment | High | Seal exact pre-04B initiative/chunk exemptions at cutover and consume each once. |
+| Legacy reconciliation becomes a permanent unsigned-start bypass | Critical | Seal an exact initiative/chunk inventory in the signed cutover, consume every exemption once, and reject all other post-cutover no-active merges. |
+| Environment approval is confused with dispatcher identity | Critical | Require a distinct reviewer, disable self-review/admin bypass, fetch approval history, and sign both approver authorization and dispatcher attribution. |
+| State lags main when an explicit event is applied | Critical | Reuse merge reconciliation through expected main, then re-resolve main immediately before signing and pushing. |

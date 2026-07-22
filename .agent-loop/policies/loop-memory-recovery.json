@@ -1,0 +1,8 @@
+{
+  "activation": {
+    "chunk_id": "WS-ENG-005-01",
+    "initiative_id": "WS-ENG-005"
+  },
+  "mode": "exact_single_target",
+  "schema_version": 2
+}

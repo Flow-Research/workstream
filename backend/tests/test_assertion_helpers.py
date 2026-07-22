@@ -4,6 +4,8 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pydantic import SecretStr
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from types import SimpleNamespace
 
 from tests.assertion_helpers import assert_secret_not_retained
@@ -31,6 +33,28 @@ def test_public_object_state_rejects_nested_forbidden_value() -> None:
 
     with pytest.raises(AssertionError):
         assert_secret_not_retained(value, "forbidden")
+
+
+def test_async_session_inspection_is_bounded_to_retained_orm_state() -> None:
+    """Inspect retained caller state without walking SQLAlchemy registries."""
+    session = AsyncSession()
+    assert_secret_not_retained(session, "forbidden")
+    session.info["payload"] = "forbidden"
+
+    with pytest.raises(AssertionError):
+        assert_secret_not_retained(session, "forbidden")
+
+
+def test_session_inspection_rejects_retained_rollback_exception() -> None:
+    """Inspect the bounded transaction state that retains flush failures."""
+    session = Session()
+    transaction = session.begin()
+    transaction._rollback_exception = RuntimeError("forbidden")
+
+    with pytest.raises(AssertionError):
+        assert_secret_not_retained(session, "forbidden")
+
+    session.close()
 
 
 def test_builtin_container_subclasses_cannot_hide_forbidden_values() -> None:

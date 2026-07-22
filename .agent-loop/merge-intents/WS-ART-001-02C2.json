@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-02C2",
+  "chunk_title": "Verification Publication And Fencing",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-02C3",
+  "next_chunk_title": "Recovery Attempt And Idempotency Chain",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

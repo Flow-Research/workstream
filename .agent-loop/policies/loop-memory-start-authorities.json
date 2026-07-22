@@ -1,0 +1,9 @@
+{
+  "permissions": [
+    "admin",
+    "maintain",
+    "push",
+    "write"
+  ],
+  "schema_version": 2
+}

@@ -119,7 +119,7 @@ The active model has no `both`, replacement field, replacement event, or
 replacement reason. Qualification evidence is bound to the same actor, project,
 and exact requested role. One active row is permitted per
 actor/project/role. Issue idempotency includes the requested role; revoke derives
-the role from the locked grant. Migration `0027` refuses upgrade when obsolete
+the role from the locked grant. Migration `0031` refuses upgrade when obsolete
 combined or replacement evidence exists and never converts or deletes those
 rows. It replaces current typed and PostgreSQL validators without changing
 historical migrations.
@@ -238,8 +238,9 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 65 rows after AUTH-09D-B: 17 active actions
-and 48 planned rows. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 70 rows after AUTH-10A: 17 active actions
+and 53 planned rows. AUTH-10A adds five planned project-role read/manage rows,
+owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
@@ -288,35 +289,51 @@ route, typed resource context, evaluator, guards, transaction proof, and
 availability change. AUTH-09A supplies none of those runtime paths.
 
 The submission/review dependency matrix is closed. AUTH-07A registers only the
-four stable planned fields shown here; resource facts, candidates, guards, and
-hidden behavior remain with the listed feature owner. The current owner values
-are planned pre-transfer catalogue state, not permission for a feature chunk to
-activate. Before any review action activates, AUTH must transfer activation
-custody according to `ACTIVATION_CUSTODY.md` and the reviewed
+stable planned fields shown here; resource facts, candidates, guards, and
+hidden behavior remain with REV. `WS-AUTH-001-REV-CUSTODY` has replaced only
+the 19 historical REV owner values with the exact AUTH activation custodians
+below. Mappings and planned availability are unchanged, and the custodian
+labels grant no reviewer, Operator, or service authority. Before any review
+action activates, its dedicated AUTH custodian must integrate the complete
+feature proof according to `ACTIVATION_CUSTODY.md` and the reviewed
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_REV_HANDOFF.md`.
 
-| ActionId | PermissionId | Historical pre-transfer owner value |
+| AUTH activation custodian | Exact planned ActionIds |
+|---|---|
+| `WS-AUTH-001-REV-05` | `review.queue.read`, `review.queue.inspect` |
+| `WS-AUTH-001-REV-06` | `review.claim`, `review.release`, `review.decline_preference`, `review.preference_expiry.run`, `review.lease_expiry.run` |
+| `WS-AUTH-001-REV-07` | `review.context.read`, `review.chain.read`, `review.finding_evidence.ingest` |
+| `WS-AUTH-001-REV-08` | `review.decision` |
+| `WS-AUTH-001-REV-09A` | `review.finding_response_evidence.ingest` |
+| `WS-AUTH-001-REV-11` | `review.lease.force_release`, `review.queue.routing.override`, `review.queue.routing.correct`, `review.queue.close`, `review.reconcile.run` |
+| `WS-AUTH-001-REV-12` | `review.artifact_reference.reconcile`, `review.projection.rebuild` |
+
+All 19 actions remain planned and unavailable. The transfer adds no migration,
+registration, evaluator, route, job, grant, service identity, or lifecycle
+behavior. The four proposed REV lifecycle actions remain unregistered.
+
+| ActionId | PermissionId | AUTH activation custodian |
 |---|---|---|
 | `submission.create` | `submission.create` | `WS-AUTH-001-14` |
-| `review.queue.read` | `review.queue.read` | `WS-REV-001-05` |
-| `review.queue.inspect` | `review.queue.inspect` | `WS-REV-001-05` |
-| `review.claim` | `review.claim` | `WS-REV-001-06` |
-| `review.release` | `review.release` | `WS-REV-001-06` |
-| `review.decline_preference` | `review.decline_preference` | `WS-REV-001-06` |
-| `review.preference_expiry.run` | `operations.timer.run` | `WS-REV-001-06` |
-| `review.lease_expiry.run` | `operations.timer.run` | `WS-REV-001-06` |
-| `review.context.read` | `submission.read_for_review` | `WS-REV-001-07` |
-| `review.chain.read` | `review.chain.read` | `WS-REV-001-07` |
-| `review.finding_evidence.ingest` | `review.decision` | `WS-REV-001-07` |
-| `review.decision` | `review.decision` | `WS-REV-001-08` |
-| `review.finding_response_evidence.ingest` | `submission.create` | `WS-REV-001-09A` |
-| `review.lease.force_release` | `review.lease.force_release` | `WS-REV-001-11` |
-| `review.queue.routing.override` | `review.queue.override` | `WS-REV-001-11` |
-| `review.queue.routing.correct` | `review.queue.override` | `WS-REV-001-11` |
-| `review.queue.close` | `review.queue.override` | `WS-REV-001-11` |
-| `review.reconcile.run` | `operations.reconcile.run` | `WS-REV-001-11` |
-| `review.artifact_reference.reconcile` | `operations.reconcile.run` | `WS-REV-001-12` |
-| `review.projection.rebuild` | `operations.projection.rebuild` | `WS-REV-001-12` |
+| `review.queue.read` | `review.queue.read` | `WS-AUTH-001-REV-05` |
+| `review.queue.inspect` | `review.queue.inspect` | `WS-AUTH-001-REV-05` |
+| `review.claim` | `review.claim` | `WS-AUTH-001-REV-06` |
+| `review.release` | `review.release` | `WS-AUTH-001-REV-06` |
+| `review.decline_preference` | `review.decline_preference` | `WS-AUTH-001-REV-06` |
+| `review.preference_expiry.run` | `operations.timer.run` | `WS-AUTH-001-REV-06` |
+| `review.lease_expiry.run` | `operations.timer.run` | `WS-AUTH-001-REV-06` |
+| `review.context.read` | `submission.read_for_review` | `WS-AUTH-001-REV-07` |
+| `review.chain.read` | `review.chain.read` | `WS-AUTH-001-REV-07` |
+| `review.finding_evidence.ingest` | `review.decision` | `WS-AUTH-001-REV-07` |
+| `review.decision` | `review.decision` | `WS-AUTH-001-REV-08` |
+| `review.finding_response_evidence.ingest` | `submission.create` | `WS-AUTH-001-REV-09A` |
+| `review.lease.force_release` | `review.lease.force_release` | `WS-AUTH-001-REV-11` |
+| `review.queue.routing.override` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.queue.routing.correct` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.queue.close` | `review.queue.override` | `WS-AUTH-001-REV-11` |
+| `review.reconcile.run` | `operations.reconcile.run` | `WS-AUTH-001-REV-11` |
+| `review.artifact_reference.reconcile` | `operations.reconcile.run` | `WS-AUTH-001-REV-12` |
+| `review.projection.rebuild` | `operations.projection.rebuild` | `WS-AUTH-001-REV-12` |
 
 Initial and revision submission use the same `submission.create` action,
 permission, and route. Revision preparation is an internal participant and
@@ -361,15 +378,37 @@ dynamically, or changes availability.
 
 The following table is the single source of truth for artifact ActionId-to-
 PermissionId mappings, principal/resource facts, and ART hidden-behavior
-ownership. AUTH-07A registers only each row's stable `ActionId`, approved
-  `PermissionId`, historical pre-transfer owner value, and `planned`
-availability. Its principal-class and canonical-resource columns are not AUTH
+ownership. AUTH-07A registered each row's stable `ActionId`, approved
+`PermissionId`, historical owner value, and `planned` availability.
+`WS-AUTH-001-ART-CUSTODY` has now replaced only those historical owner values
+with the exact AUTH activation custodians below; mappings, availability, and
+ART hidden-behavior ownership are unchanged. Its principal-class and
+canonical-resource columns are not AUTH
 registry fields and are not executable authority; the owning WS-ART chunk adopts
 them with its hidden canonical resource composer, guards, surface declaration,
 and behavior tests. The complete AUTH activation-custody transfer is separately
 canonical in
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md`.
 A mapping is not a permission alias.
+
+| AUTH activation custodian | Exact planned ActionIds |
+|---|---|
+| `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
+| `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
+| `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-AUTH-001-ART-04A` | `artifact.upload_session.create`, `artifact.upload_session.read`, `artifact.upload_item.write`, `artifact.upload_session.seal`, `artifact.upload_session.cancel`, `artifact.upload_session.expire` |
+| `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
+| `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
+| `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+
+The `OPERATOR` suffix names future activation custody only; it creates no
+Operator grant or entitlement. All 25 actions remain planned and unavailable.
+`artifact.verification_job.retry` requires its own later evaluator, guards, and
+independent activation proof; read/status proof cannot activate retry. The
+ART transfer adds no migration. The separately started REV custody transfer is
+also complete: all 19 REV rows now name exact AUTH custodians, remain planned
+and unavailable, and add no migration.
 
 | ActionId | PermissionId | Principal class | Canonical resource | Resource-owning WS-ART chunk |
 |---|---|---|---|---|
@@ -543,6 +582,34 @@ AUTH locks AuthorityControl first when final-admin safety applies
 -> route or service command commits once
 ```
 
+The PREP foundation currently issues handles only for
+`actor.profile.update_self` and the eight active AdminRoleGrant-backed
+administrative mutations. Actor-self preparation locks the exact caller
+profile and then its exact identity link. Administrative preparation locks
+`AuthorityControl(id=1)`, the exact request profile, exact request identity
+link, and one deterministic effective AdminRoleGrant. The caller supplies an
+independent expected ActionId when consuming the handle; AUTH checks it before
+consumption, then checks the canonical request digest, idempotency UUID, exact
+root transaction, and final actor-self/system/exact-project scope. A matching
+attempt consumes the handle permanently before evaluation or evidence staging.
+Cancellation and failures propagate to caller-owned rollback and never restore
+the capability.
+
+Preparation-time planned fixed-service denial has no final resource context, so
+it returns the bounded `action_unavailable` outcome without staging evidence.
+An exact-consume denial stages its decision only in the caller transaction; the
+required rollback removes that event with participant state. PREP never
+restages or commits denial evidence separately.
+
+PREP intentionally ships no feature consumer. Its PostgreSQL participant is a
+test-only neutral row proving that final facts, one decision event, participant
+work, and caller commit or rollback share the same transaction. Fixed services
+are locked and refreshed before their current planned-action denial, but no
+positive fixed-service prepared capability exists until the first separately
+activated consumer proves it. ProjectRoleGrant does not exist in PREP; AUTH-10
+must add its exact row lock, evaluator branch, and crossed-revocation evidence
+before an exact-project product consumer can use that authority source.
+
 Service identity, static service-action matrix membership, and action
 availability are immutable code-owned validations after the service profile and
 link locks; they are not database rows or lock targets. Existing actor-self,
@@ -570,7 +637,9 @@ deactivation, exact grant revocation, and final-admin mutation.
 For the two active self actions, the default human authority source is
 `actor_self`; token roles and client-supplied permissions never enter the
 context. Self-read requires an active link and an active or suspended actor.
-Self-update additionally locks the exact link followed by its linked profile,
+Self-update through ordinary request authorization retains its existing
+revalidation behavior; prepared self-update locks the exact profile followed by
+its exact link,
 rebuilds current context inside the caller transaction, and requires an active
 actor plus a non-empty subset of `display_name` and `contact_email`. Revoked
 links, deactivated actors, and suspended updates deny in that order. Planned
