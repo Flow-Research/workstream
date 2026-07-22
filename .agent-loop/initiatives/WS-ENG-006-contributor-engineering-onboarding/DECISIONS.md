@@ -31,7 +31,8 @@ implementation successor.
 
 ## D6 - Self-bootstrap exactly once
 
-The root repair retargets the existing schema-v2 `exact_single_target` recovery
-certificate to 00. Reconciliation binds the target to signed first parent and
+The root repair uses the existing closed two-merge recovery certificate for
+the exact PR #176 PLAN3 checkpoint followed by 00. Reconciliation binds the
+ordered pair to signed state and
 GitHub-derived PR identity, consumes the exemption before signing, and persists
 none of it in signed history. It is not the permanent intake rule.

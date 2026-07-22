@@ -2349,6 +2349,81 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
             updater._validate_protected_actions_checks = original_checks
 
 
+def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> None:
+    """The exact REV checkpoint may precede the ENG activation lexically."""
+    updater = load_module("eng006_two_merge_recovery", "scripts/update_post_merge_memory.py")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repository_root = Path(tmpdir) / "repository"
+        state_root = Path(tmpdir) / "state"
+        subprocess.run(["git", "init", "--initial-branch", "main", str(repository_root)], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository_root), "config", "user.email", "test@example.test"], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "config", "user.name", "Test"], check=True)
+        (repository_root / "base.txt").write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+        base_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
+        (repository_root / "rev.txt").write_text("rev plan\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "rev plan"], check=True, stdout=subprocess.PIPE)
+        recovered_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
+        policy = repository_root / updater.RECOVERY_POLICY_PATH
+        policy.parent.mkdir(parents=True, exist_ok=True)
+        policy.write_text(json.dumps({
+            "activation": {"chunk_id": "WS-ENG-006-00", "initiative_id": "WS-ENG-006"},
+            "recovered_merge": {
+                "chunk_id": "WS-REV-001-PLAN3",
+                "initiative_id": "WS-REV-001",
+                "merge_sha": recovered_sha,
+                "pr_number": 176,
+            },
+            "schema_version": 1,
+        }) + "\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng activation"], check=True, stdout=subprocess.PIPE)
+        target_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
+        base = loop_record(updater, sha=base_sha)
+        base["legacy_exemptions"] = []
+        updater.apply_merge_record(state_root, base)
+        recovered = loop_record(updater, sha=recovered_sha, first_parent_sha=base_sha, pr_number=176)
+        recovered["completed_chunk"].update(
+            initiative_id="WS-REV-001", chunk_id="WS-REV-001-PLAN3",
+            next_chunk_id=None, next_chunk_title=None,
+        )
+        recovered["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        recovered["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-REV-001-PLAN3.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/176",
+        )
+        target = loop_record(updater, sha=target_sha, first_parent_sha=recovered_sha, pr_number=179)
+        target["completed_chunk"].update(
+            initiative_id="WS-ENG-006", chunk_id="WS-ENG-006-00",
+            next_chunk_id=None, next_chunk_title=None,
+        )
+        target["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        target["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-ENG-006-00.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/179",
+        )
+        records = {recovered_sha: recovered, target_sha: target}
+        original_collect = updater.collect_merge_record
+        updater.collect_merge_record = lambda _client, _repository, sha: json.loads(json.dumps(records[sha]))
+        try:
+            exemptions = updater.prepare_recovery_exemptions(
+                object(), "Flow-Research/workstream",
+                repository_root=repository_root, state_root=state_root,
+                target_sha=target_sha, planned_shas=[recovered_sha, target_sha],
+            )
+            assert [(item["initiative_id"], item["chunk_id"]) for item in exemptions] == [
+                ("WS-REV-001", "WS-REV-001-PLAN3"),
+                ("WS-ENG-006", "WS-ENG-006-00"),
+            ]
+            assert updater.apply_merge_record(state_root, recovered, recovery_exemptions=exemptions)
+            assert updater.apply_merge_record(state_root, target, recovery_exemptions=exemptions)
+            updater.assert_recovery_consumed(state_root, target_sha, exemptions)
+        finally:
+            updater.collect_merge_record = original_collect
+
+
 def test_post_merge_metadata_is_strict_and_bounded() -> None:
     """PR metadata rejects ambiguity, unknown keys, and inconsistent chunk facts."""
     updater = load_module("post_merge_metadata", "scripts/update_post_merge_memory.py")
@@ -6946,6 +7021,7 @@ def main() -> int:
         test_independent_checker_accepts_and_mutates_planning_intake_state,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
+        test_eng006_two_merge_recovery_preserves_chronological_identity_order,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
         test_loop_memory_target_resolution_rejects_stale_replays,
         test_post_merge_collection_binds_exact_pr_and_checks,

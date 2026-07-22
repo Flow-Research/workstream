@@ -104,12 +104,13 @@ reusable or identity-ambiguous self-bootstrap authorization
       historical initiative-absence behavior are deterministic.
 - [ ] Existing initiatives, replay collisions, malformed metadata, unexpected
       files, and active-state claims fail closed.
-- [ ] The 00 root migration uses the existing schema-v2 `exact_single_target`
-      recovery certificate with activation exactly `WS-ENG-006/WS-ENG-006-00`.
-      It requires one planned target, signed first parent, unique GitHub merged
+- [ ] The 00 root migration uses the existing closed two-merge recovery
+      certificate with recovered merge exactly PR #176 / `WS-REV-001-PLAN3` /
+      merge `afde967d` and activation exactly `WS-ENG-006/WS-ENG-006-00`.
+      It requires that exact ordered plan, unique GitHub merged
       PR/head/base identity, exact protected Actions checks, required external
       evidence, and successful aggregate checks;
-      consumes before signing; rejects extra/changed/reused identities; and
+      consumes both before signing; rejects extra/changed/reused identities; and
       leaks no exemption into signed state or ledger on initial run or replay.
 - [ ] One schema-v2 merge intent declares `WS-ENG-006-01` as the explicit-start
       same-initiative successor.

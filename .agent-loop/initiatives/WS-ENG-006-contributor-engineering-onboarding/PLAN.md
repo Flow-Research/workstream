@@ -50,9 +50,9 @@ Rejected because it breaks initiative custody and signed evidence.
 ## Rollout/migration strategy
 
 Chunk `WS-ENG-006-00` lands the permanent planning-intake validation by
-retargeting the closed schema-v2 `exact_single_target` recovery certificate to
-its exact initiative and chunk. Reconciliation requires a one-target plan and
-signed first parent, derives exact PR identity from GitHub, and consumes the ephemeral exemption
+using the closed two-merge recovery certificate to reconcile the already-merged
+PR #176 (`WS-REV-001-PLAN3`) followed by its exact ENG-006 activation target.
+Reconciliation derives exact PR identity from GitHub and consumes both ephemeral exemptions
 before signing. This root migration is not the permanent intake rule and cannot
 authorize another merge. After signed reconciliation, the already-given user
 instruction authorizes the orchestrator

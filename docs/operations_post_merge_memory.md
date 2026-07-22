@@ -238,10 +238,10 @@ unexpected path, ambiguous evidence, or implementation claim fails closed.
 
 ## WS-ENG-006 Exact Root Repair
 
-`WS-ENG-006-00` retargets the schema-v2 `exact_single_target` recovery
-certificate only to initiative `WS-ENG-006` and chunk `WS-ENG-006-00`. Recovery
-requires the reconciliation plan to contain exactly that target and its first
-parent to equal signed current `main`. GitHub supplies the unique merged PR,
+`WS-ENG-006-00` uses the closed two-merge recovery certificate to reconcile
+the already-merged PR #176 (`WS-REV-001-PLAN3`) followed only by initiative
+`WS-ENG-006` and chunk `WS-ENG-006-00`. Recovery requires that exact ordered
+plan from signed current `main`. GitHub supplies each unique merged PR,
 reviewed head, base, and check evidence. The temporary authorization is consumed
 before signing or publication, never persists as the permanent intake rule, and
 is inert on replay. Extra, stale, reordered, unrelated, or reused targets fail

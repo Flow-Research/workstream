@@ -2124,10 +2124,6 @@ def prepare_recovery_exemptions(
     }:
         raise LoopMemoryError("recovered merge does not match its certificate")
     exemptions = [_record_exemption(recovered_record), target_identity]
-    if exemptions != sorted(
-        exemptions, key=lambda item: (item["initiative_id"], item["chunk_id"])
-    ):
-        raise LoopMemoryError("recovery exemption order is invalid")
     existing = state.get("legacy_exemptions", [])
     if not isinstance(existing, list) or any(item in existing for item in exemptions):
         raise LoopMemoryError("recovery exemption collides with signed state")
