@@ -1,18 +1,18 @@
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false
 from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-
-from alembic import command
-from alembic.config import Config
-from fastapi import Depends
+from fastapi import Depends  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.api.deps.api_controls import (
     enforce_admin_mutation_rate_limit,
@@ -86,19 +86,13 @@ def test_rate_control_orm_model_matches_the_migration_contract() -> None:
 
 @pytest.fixture
 def rate_control_database_env(
-    postgres_database_url: str,
-    migration_lock,
+    clean_postgres_database: str,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Bind settings and migrate the exact isolated database used by this suite."""
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    """Bind settings to the clean migrated database used by this test."""
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     get_settings.cache_clear()
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
-    with migration_lock():
-        command.upgrade(config, "head")
-    yield postgres_database_url
+    yield clean_postgres_database
     get_settings.cache_clear()
 
 
@@ -118,13 +112,9 @@ async def rate_control_factory(rate_control_database_env: str):
 
 
 def test_rate_key_digest_matches_literal_vector_and_separates_boundaries() -> None:
-    expected = bytes.fromhex(
-        "35b4fb3e6a647a52596a5240b0b3ad5c2976d91771f95e2497be247081e53b31"
-    )
+    expected = bytes.fromhex("35b4fb3e6a647a52596a5240b0b3ad5c2976d91771f95e2497be247081e53b31")
 
-    assert rate_key_digest(
-        RATE_SECRET, FIRST_ACCESS_SCOPE, RATE_ISSUER, RATE_SUBJECT
-    ) == expected
+    assert rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, RATE_ISSUER, RATE_SUBJECT) == expected
     assert rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, "ab", "c") != (
         rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, "a", "bc")
     )
@@ -153,9 +143,7 @@ def test_rate_key_digest_matches_literal_vector_and_separates_boundaries() -> No
         ("issuer", "\ud800"),
     ],
 )
-def test_rate_key_digest_rejects_unbounded_identity_without_echo(
-    issuer: str, subject: str
-) -> None:
+def test_rate_key_digest_rejects_unbounded_identity_without_echo(issuer: str, subject: str) -> None:
     with pytest.raises(RateControlUnavailableError) as caught:
         rate_key_digest(RATE_SECRET, FIRST_ACCESS_SCOPE, issuer, subject)
     assert str(caught.value) == "rate control unavailable"
@@ -337,9 +325,7 @@ async def test_repository_persists_the_returned_database_timestamp(
 ) -> None:
     digest = bytes([17]) * 32
     async with rate_control_factory() as session:
-        consumed = await ApiRateControlRepository(session).consume(
-            FIRST_ACCESS_SCOPE, digest, 60
-        )
+        consumed = await ApiRateControlRepository(session).consume(FIRST_ACCESS_SCOPE, digest, 60)
         updated_at = await session.scalar(
             text(
                 "select updated_at from api_rate_control_counters "
@@ -535,9 +521,7 @@ async def test_concurrent_expired_keys_do_not_deadlock_during_pruning(
 class _FakeSession:
     """Minimal async-session context for deterministic failure tests."""
 
-    def __init__(
-        self, *, commit_error: bool = False, enter_error: bool = False
-    ) -> None:
+    def __init__(self, *, commit_error: bool = False, enter_error: bool = False) -> None:
         self.commit_error = commit_error
         self.enter_error = enter_error
         self.rolled_back = False
@@ -756,9 +740,7 @@ async def test_unattached_dependencies_emit_canonical_429_and_use_token_identity
             RateControlDecision(True, 1, 60),
         ]
     )
-    app = create_app(
-        Settings(environment="test", api_rate_limit_key_secret=RATE_SECRET_TEXT)
-    )
+    app = create_app(Settings(environment="test", api_rate_limit_key_secret=RATE_SECRET_TEXT))
     app.dependency_overrides[get_auth_verification_result] = _verified_rate_identity
     app.dependency_overrides[get_rate_control_service] = lambda: service
 

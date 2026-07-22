@@ -1,3 +1,6 @@
+# pyright: reportArgumentType=false, reportGeneralTypeIssues=false
+# pyright: reportIndexIssue=false, reportOptionalMemberAccess=false
+# pyright: reportOptionalSubscript=false, reportRedeclaration=false
 from __future__ import annotations
 
 import ast
@@ -15,13 +18,14 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
-from alembic import command
-from alembic.config import Config
-import pytest
-from pydantic import ValidationError
+import pytest  # type: ignore[import-not-found]
+from pydantic import ValidationError  # type: ignore[import-not-found]
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
+    async_sessionmaker,
+    create_async_engine,
+)
 from starlette.requests import Request
 
 from app.api.deps.authorization import (
@@ -665,9 +669,11 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
             for owner in set(parsed.values())
         } == expected_owner_counts
 
-    spec_rows = (repository_root / "docs/spec_authorization_service.md").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    spec_rows = (
+        (repository_root / "docs/spec_authorization_service.md")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
     parsed_permissions: dict[str, str] = {}
     for row in spec_rows:
         cells = [cell.strip() for cell in row.split("|")]
@@ -722,9 +728,11 @@ def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -
             for owner in set(parsed.values())
         } == expected_owner_counts
 
-    spec_rows = (repository_root / "docs/spec_authorization_service.md").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    spec_rows = (
+        (repository_root / "docs/spec_authorization_service.md")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
     parsed_permissions: dict[str, str] = {}
     for row in spec_rows:
         cells = [cell.strip() for cell in row.split("|")]
@@ -1007,9 +1015,7 @@ async def test_actor_admin_routes_authorize_before_lookup_touch_and_commit(
             }
         ]
     else:
-        assert response.updates == [
-            {"last_verified_at": resolved.identity_link.last_verified_at}
-        ]
+        assert response.updates == [{"last_verified_at": resolved.identity_link.last_verified_at}]
 
 
 @pytest.mark.parametrize(
@@ -1386,18 +1392,15 @@ def test_rev_custody_catalogue_mutations_fail_closed(mutation: str) -> None:
     )
     if mutation == "historical_owner":
         definitions[first_index] = replace(
-            definitions[first_index], owner="WS-REV-001-05"  # type: ignore[arg-type]
+            definitions[first_index],
+            owner="WS-REV-001-05",  # type: ignore[arg-type]
         )
         message = "invalid row"
     elif mutation == "wrong_custodian":
-        definitions[first_index] = replace(
-            definitions[first_index], owner=ActionOwner.AUTH_REV_12
-        )
+        definitions[first_index] = replace(definitions[first_index], owner=ActionOwner.AUTH_REV_12)
         message = "metadata mismatch"
     elif mutation == "swapped_custodians":
-        definitions[first_index] = replace(
-            definitions[first_index], owner=ActionOwner.AUTH_REV_06
-        )
+        definitions[first_index] = replace(definitions[first_index], owner=ActionOwner.AUTH_REV_06)
         definitions[second_index] = replace(
             definitions[second_index], owner=ActionOwner.AUTH_REV_05
         )
@@ -1509,9 +1512,7 @@ class _PreparedActorFacts:
                 actor_profile_id=str(actor_profile_id),
                 status="active",
             ),
-            SimpleNamespace(
-                id=str(actor_profile_id), actor_kind="human", status="active"
-            ),
+            SimpleNamespace(id=str(actor_profile_id), actor_kind="human", status="active"),
         )
 
 
@@ -1582,13 +1583,9 @@ async def test_prepared_actor_self_handle_is_exact_single_use_and_transaction_bo
         actor_profile_id=context.actor_profile_id,
     )
     with pytest.raises(TypeError, match="invalid prepared authorization consumer"):
-        await authorization._prepare_prelocked(
-            object(), ActionId.ACTOR_PROFILE_UPDATE_SELF, scope
-        )
+        await authorization._prepare_prelocked(object(), ActionId.ACTOR_PROFILE_UPDATE_SELF, scope)
     assert facts.calls == 0
-    handle = await prepared.prepare(
-        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
-    )
+    handle = await prepared.prepare(ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope)
     sealed = prepared._issued[handle].authority  # type: ignore[union-attr]
     with pytest.raises(AttributeError):
         sealed.matched_grant_status = "active"
@@ -1667,18 +1664,14 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
         await prepared.consume(
             handle,
             ActionId.ACTOR_PROFILE_UPDATE_SELF,
-            PreparedAuthorizationInput(
-                idempotency_key=idempotency_key, request_value={"v": 2}
-            ),
+            PreparedAuthorizationInput(idempotency_key=idempotency_key, request_value={"v": 2}),
             resource,
         )
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(
             handle,
             ActionId.ACTOR_PROFILE_UPDATE_SELF,
-            PreparedAuthorizationInput(
-                idempotency_key=uuid4(), request_value={"v": 1}
-            ),
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={"v": 1}),
             resource,
         )
     assert evidence.events == []
@@ -1698,9 +1691,7 @@ async def test_prepared_binding_mismatch_does_not_consume_valid_handle():
     )
     session.root = SimpleNamespace(is_active=True)
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            stale, ActionId.ACTOR_PROFILE_UPDATE_SELF, original, resource
-        )
+        await prepared.consume(stale, ActionId.ACTOR_PROFILE_UPDATE_SELF, original, resource)
 
 
 @pytest.mark.asyncio
@@ -1746,31 +1737,21 @@ async def test_prepared_rejects_cross_context_service_session_and_concurrent_con
         kind=PreparedAuthorityScopeKind.ACTOR_SELF,
         actor_profile_id=context.actor_profile_id,
     )
-    handle = await prepared.prepare(
-        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
-    )
+    handle = await prepared.prepare(ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope)
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
         resource_id=context.actor_profile_id,
         requested_fields=("display_name",),
     )
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await sibling.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        await sibling.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
     outcomes = await asyncio.gather(
-        prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        ),
-        prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        ),
+        prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource),
+        prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource),
         return_exceptions=True,
     )
     assert sum(isinstance(item, AuthorizationDecision) for item in outcomes) == 1
-    assert sum(
-        isinstance(item, PreparedAuthorizationHandleInvalid) for item in outcomes
-    ) == 1
+    assert sum(isinstance(item, PreparedAuthorizationHandleInvalid) for item in outcomes) == 1
     assert len(evidence.events) == 1
 
 
@@ -1805,9 +1786,7 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
         kind=PreparedAuthorityScopeKind.ACTOR_SELF,
         actor_profile_id=context.actor_profile_id,
     )
-    handle = await prepared.prepare(
-        ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
-    )
+    handle = await prepared.prepare(ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope)
     forged = object.__new__(PreparedAuthorizationHandle)
     resource = ActorSelfResourceContext(
         resource_type="actor_profile",
@@ -1815,9 +1794,7 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
         requested_fields=("display_name",),
     )
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            forged, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        await prepared.consume(forged, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
     with pytest.raises(copy.Error):
         copy.copy(handle)
     with pytest.raises(copy.Error):
@@ -1831,9 +1808,7 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
 
     session.nested = True
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        await prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
 
     forged_authority = object.__new__(authorization_kernel._PrelockedAuthority)
     with pytest.raises(TypeError, match="invalid prelocked authority"):
@@ -1846,9 +1821,7 @@ async def test_prepared_handle_rejects_forgery_copy_serialization_and_nested_roo
     session.nested = False
     prepared.close()
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        await prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
 
 
 @pytest.mark.asyncio
@@ -1909,9 +1882,7 @@ async def test_prepared_project_scope_rejects_system_and_other_project_without_c
     handle = await prepared.prepare(
         ActionId.ADMIN_ROLE_GRANT_ISSUE,
         caller_input,
-        PreparedAuthorityScope(
-            kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id
-        ),
+        PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
     )
     for wrong_project in (None, uuid4()):
         wrong_resource = AdminRoleGrantIssueResourceContext(
@@ -1950,9 +1921,7 @@ async def test_prepared_project_scope_rejects_system_and_other_project_without_c
     [
         (
             ActionId.ADMIN_ROLE_GRANT_REVOKE,
-            AdminRoleGrantResourceContext(
-                resource_type="admin_role_grant", resource_id=uuid4()
-            ),
+            AdminRoleGrantResourceContext(resource_type="admin_role_grant", resource_id=uuid4()),
         ),
         (
             ActionId.ACTOR_SERVICE_PROVISION,
@@ -2060,18 +2029,14 @@ async def test_prepared_exact_consume_remains_spent_after_cancellation():
         requested_fields=("display_name",),
     )
     task = asyncio.create_task(
-        prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
     )
     await entered.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
     with pytest.raises(PreparedAuthorizationHandleInvalid):
-        await prepared.consume(
-            handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource
-        )
+        await prepared.consume(handle, ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, resource)
 
 
 @pytest.mark.asyncio
@@ -2138,9 +2103,7 @@ async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_roo
         await prepared.prepare(
             ActionId.ACTOR_PROFILE_SUSPEND,
             caller_input,
-            PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()
-            ),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=uuid4()),
         )
     with pytest.raises(PreparedAuthorizationUnsupported):
         await prepared.prepare(
@@ -2148,6 +2111,7 @@ async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_roo
             caller_input,
             PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
         )
+
     async def missing_grant(*_args, **_kwargs):
         return None
 
@@ -2201,7 +2165,9 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         )
         await session.commit()
         await session.execute(
-            text("create temporary table prepared_failure_participant (id int primary key, value int)")
+            text(
+                "create temporary table prepared_failure_participant (id int primary key, value int)"
+            )
         )
         await session.execute(text("insert into prepared_failure_participant values (1, 0)"))
         await session.commit()
@@ -2215,9 +2181,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             correlation_id=uuid4(),
         )
         repository = AdminAuthorizationRepository(session)
-        authorization = AuthorizationService(
-            session, context, admin_repository=repository
-        )
+        authorization = AuthorizationService(session, context, admin_repository=repository)
         prepared = PreparedAuthorizationService(
             session,
             context,
@@ -2247,20 +2211,20 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             success_input,
             resource,
         )
-        await session.execute(
-            text("update prepared_failure_participant set value=1 where id=1")
-        )
+        await session.execute(text("update prepared_failure_participant set value=1 where id=1"))
         await session.commit()
-        assert await session.scalar(
-            text("select value from prepared_failure_participant where id=1")
-        ) == 1
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(success_decision.decision_id)},
-        ) == 1
-        await session.execute(
-            text("update prepared_failure_participant set value=0 where id=1")
+        assert (
+            await session.scalar(text("select value from prepared_failure_participant where id=1"))
+            == 1
         )
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(success_decision.decision_id)},
+            )
+            == 1
+        )
+        await session.execute(text("update prepared_failure_participant set value=0 where id=1"))
         await session.commit()
 
         participant_input = PreparedAuthorizationInput(
@@ -2276,20 +2240,22 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             participant_input,
             resource,
         )
-        await session.execute(
-            text("update prepared_failure_participant set value=1 where id=1")
-        )
+        await session.execute(text("update prepared_failure_participant set value=1 where id=1"))
         try:
             raise RuntimeError("injected participant failure")
         except RuntimeError:
             await session.rollback()
-        assert await session.scalar(
-            text("select value from prepared_failure_participant where id=1")
-        ) == 0
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(participant_decision.decision_id)},
-        ) == 0
+        assert (
+            await session.scalar(text("select value from prepared_failure_participant where id=1"))
+            == 0
+        )
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(participant_decision.decision_id)},
+            )
+            == 0
+        )
         await session.rollback()
 
         evidence_input = PreparedAuthorizationInput(
@@ -2370,9 +2336,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             commit_failure_input,
             resource,
         )
-        await session.execute(
-            text("update prepared_failure_participant set value=2 where id=1")
-        )
+        await session.execute(text("update prepared_failure_participant set value=2 where id=1"))
         original_commit = session.commit
 
         async def fail_commit():
@@ -2383,13 +2347,17 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             await session.commit()
         session.commit = original_commit  # type: ignore[method-assign]
         await session.rollback()
-        assert await session.scalar(
-            text("select value from prepared_failure_participant where id=1")
-        ) == 0
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(commit_failure_decision.decision_id)},
-        ) == 0
+        assert (
+            await session.scalar(text("select value from prepared_failure_participant where id=1"))
+            == 0
+        )
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(commit_failure_decision.decision_id)},
+            )
+            == 0
+        )
         await session.rollback()
 
         timeout_input = PreparedAuthorizationInput(
@@ -2405,20 +2373,22 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             timeout_input,
             resource,
         )
-        await session.execute(
-            text("update prepared_failure_participant set value=3 where id=1")
-        )
+        await session.execute(text("update prepared_failure_participant set value=3 where id=1"))
         with pytest.raises(TimeoutError):
             async with asyncio.timeout(0.01):
                 await asyncio.Event().wait()
         await session.rollback()
-        assert await session.scalar(
-            text("select value from prepared_failure_participant where id=1")
-        ) == 0
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(timeout_decision.decision_id)},
-        ) == 0
+        assert (
+            await session.scalar(text("select value from prepared_failure_participant where id=1"))
+            == 0
+        )
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(timeout_decision.decision_id)},
+            )
+            == 0
+        )
         await session.rollback()
 
         async def cancel_after_consume(phase: str):
@@ -2443,9 +2413,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
                     )
                     phase_holder.update(handle=phase_handle, decision=phase_decision)
                     await session.execute(
-                        text(
-                            "update prepared_failure_participant set value=4 where id=1"
-                        )
+                        text("update prepared_failure_participant set value=4 where id=1")
                     )
                     phase_entered.set()
                     await phase_blocked.wait()
@@ -2459,20 +2427,29 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
-            assert await session.scalar(
-                text("select value from prepared_failure_participant where id=1")
-            ) == 0
-            assert await session.scalar(
-                text("select count(*) from audit_events where id=:id"),
-                {"id": str(phase_holder["decision"].decision_id)},
-            ) == 0
-            assert await session.scalar(
-                text(
-                    "select count(*) from authority_idempotency_records "
-                    "where idempotency_key=:key"
-                ),
-                {"key": phase_input.idempotency_key},
-            ) == 0
+            assert (
+                await session.scalar(
+                    text("select value from prepared_failure_participant where id=1")
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    text("select count(*) from audit_events where id=:id"),
+                    {"id": str(phase_holder["decision"].decision_id)},
+                )
+                == 0
+            )
+            assert (
+                await session.scalar(
+                    text(
+                        "select count(*) from authority_idempotency_records "
+                        "where idempotency_key=:key"
+                    ),
+                    {"key": phase_input.idempotency_key},
+                )
+                == 0
+            )
             await session.rollback()
             with pytest.raises(PreparedAuthorizationHandleInvalid):
                 await prepared.consume(
@@ -2523,10 +2500,13 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         authorization._audit = original_audit
         assert await session.scalar(text("select 1")) == 1
         await session.rollback()
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(evidence_holder["decision_id"])},
-        ) == 0
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(evidence_holder["decision_id"])},
+            )
+            == 0
+        )
         await session.rollback()
         with pytest.raises(PreparedAuthorizationHandleInvalid):
             await prepared.consume(
@@ -2576,13 +2556,17 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
         with pytest.raises(asyncio.CancelledError):
             await commit_task
         session.commit = original_commit  # type: ignore[method-assign]
-        assert await session.scalar(
-            text("select value from prepared_failure_participant where id=1")
-        ) == 0
-        assert await session.scalar(
-            text("select count(*) from audit_events where id=:id"),
-            {"id": str(commit_holder["decision"].decision_id)},
-        ) == 0
+        assert (
+            await session.scalar(text("select value from prepared_failure_participant where id=1"))
+            == 0
+        )
+        assert (
+            await session.scalar(
+                text("select count(*) from audit_events where id=:id"),
+                {"id": str(commit_holder["decision"].decision_id)},
+            )
+            == 0
+        )
         await session.rollback()
         with pytest.raises(PreparedAuthorizationHandleInvalid):
             await prepared.consume(
@@ -2635,19 +2619,18 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             {"id": str(success_decision.decision_id)},
         )
         await session.execute(text("alter table audit_events enable trigger user"))
-        await session.execute(
-            text("alter table actor_identity_links disable trigger user")
-        )
+        await session.execute(text("alter table actor_identity_links disable trigger user"))
         await session.execute(text("alter table actor_profiles disable trigger user"))
         await session.execute(
             text("delete from actor_identity_links where id=:id"), {"id": str(link_id)}
         )
-        await session.execute(text("delete from actor_profiles where id=:id"), {"id": str(profile_id)})
         await session.execute(
-            text("alter table actor_identity_links enable trigger user")
+            text("delete from actor_profiles where id=:id"), {"id": str(profile_id)}
         )
+        await session.execute(text("alter table actor_identity_links enable trigger user"))
         await session.execute(text("alter table actor_profiles enable trigger user"))
         await session.commit()
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -2747,9 +2730,7 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
             authorization,
             repository,
         )
-        handle = await prepared.prepare(
-            ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
-        )
+        handle = await prepared.prepare(ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope)
 
         async def mutate_after_prepare():
             async with authorization_factory() as mutation_session:
@@ -2767,9 +2748,12 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
 
     async with authorization_factory() as verify:
         if denial_code is AuthorizationDenialCode.IDENTITY_LINK_REVOKED:
-            assert await verify.scalar(
-                text("select status from actor_identity_links where id=:link"), values
-            ) == "revoked"
+            assert (
+                await verify.scalar(
+                    text("select status from actor_identity_links where id=:link"), values
+                )
+                == "revoked"
+            )
         else:
             assert await verify.scalar(
                 text("select status from actor_profiles where id=:actor"), values
@@ -2795,9 +2779,7 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
         )
         with pytest.raises(PreparedAuthorizationUnsupported) as denied:
             await asyncio.wait_for(
-                denied_prepared.prepare(
-                    ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope
-                ),
+                denied_prepared.prepare(ActionId.ACTOR_PROFILE_UPDATE_SELF, caller_input, scope),
                 timeout=5,
             )
         assert denied.value.denial_code is denial_code
@@ -2810,23 +2792,17 @@ async def test_prepared_actor_authority_crossed_mutations_complete_in_both_order
             {"id": str(decision.decision_id)},
         )
         await cleanup.execute(text("alter table audit_events enable trigger user"))
-        await cleanup.execute(
-            text("alter table actor_identity_links disable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links disable trigger user"))
         await cleanup.execute(text("alter table actor_profiles disable trigger user"))
         await cleanup.execute(text("delete from actor_identity_links where id=:link"), values)
         await cleanup.execute(text("delete from actor_profiles where id=:actor"), values)
-        await cleanup.execute(
-            text("alter table actor_identity_links enable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links enable trigger user"))
         await cleanup.execute(text("alter table actor_profiles enable trigger user"))
         await cleanup.commit()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "mutation_kind", ["suspend", "deactivate", "link_revoke", "grant_revoke"]
-)
+@pytest.mark.parametrize("mutation_kind", ["suspend", "deactivate", "link_revoke", "grant_revoke"])
 @pytest.mark.parametrize("ordering", ["prepared_first", "mutation_first"])
 async def test_prepared_crosses_real_lifecycle_service_transactions(
     authorization_factory,
@@ -2938,12 +2914,8 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
 
     async def run_mutation(*, pause_after_authority: bool) -> None:
         async with authorization_factory() as mutation_session:
-            resolved_profile = await mutation_session.get(
-                ActorProfile, str(mutator_profile_id)
-            )
-            resolved_link = await mutation_session.get(
-                ActorIdentityLink, str(mutator_link_id)
-            )
+            resolved_profile = await mutation_session.get(ActorProfile, str(mutator_profile_id))
+            resolved_link = await mutation_session.get(ActorIdentityLink, str(mutator_link_id))
             assert resolved_profile is not None and resolved_link is not None
             resolved = ResolvedActor(resolved_profile, resolved_link)
             mutation_context = HumanAuthorizationContext(
@@ -3044,9 +3016,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             mutation_task = asyncio.create_task(run_mutation(pause_after_authority=True))
             await asyncio.wait_for(mutation_entered.wait(), timeout=5)
             prepare_task = asyncio.create_task(
-                prepared.prepare(
-                    ActionId.ACTOR_SERVICE_PROVISION, caller_input, prepared_scope
-                )
+                prepared.prepare(ActionId.ACTOR_SERVICE_PROVISION, caller_input, prepared_scope)
             )
             with pytest.raises(TimeoutError):
                 await asyncio.wait_for(asyncio.shield(prepare_task), timeout=0.2)
@@ -3054,49 +3024,61 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             await asyncio.wait_for(mutation_task, timeout=5)
             with pytest.raises(PreparedAuthorizationUnsupported) as denied:
                 await asyncio.wait_for(prepare_task, timeout=5)
-            assert (
-                denied.value.denial_code
-                is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            )
+            assert denied.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             await prepared_session.rollback()
 
     async with authorization_factory() as verify:
-        assert await verify.scalar(
-            text(
-                "select count(*) from admin_role_grants g "
-                "join actor_profiles p on p.id=g.target_actor_profile_id "
-                "join actor_identity_links l on l.actor_profile_id=p.id "
-                "where g.id in (:target, :mutator) and g.status='active' "
-                "and p.status='active' and l.status='active'"
-            ),
-            {"target": target_grant_id, "mutator": mutator_grant_id},
-        ) == 1
+        assert (
+            await verify.scalar(
+                text(
+                    "select count(*) from admin_role_grants g "
+                    "join actor_profiles p on p.id=g.target_actor_profile_id "
+                    "join actor_identity_links l on l.actor_profile_id=p.id "
+                    "where g.id in (:target, :mutator) and g.status='active' "
+                    "and p.status='active' and l.status='active'"
+                ),
+                {"target": target_grant_id, "mutator": mutator_grant_id},
+            )
+            == 1
+        )
         if mutation_kind == "grant_revoke":
-            assert await verify.scalar(
-                text("select status from admin_role_grants where id=:id"),
-                {"id": target_grant_id},
-            ) == "revoked"
-            assert await verify.scalar(
-                text("select version from admin_role_grants where id=:id"),
-                {"id": target_grant_id},
-            ) == 2
+            assert (
+                await verify.scalar(
+                    text("select status from admin_role_grants where id=:id"),
+                    {"id": target_grant_id},
+                )
+                == "revoked"
+            )
+            assert (
+                await verify.scalar(
+                    text("select version from admin_role_grants where id=:id"),
+                    {"id": target_grant_id},
+                )
+                == 2
+            )
         elif mutation_kind == "link_revoke":
-            assert await verify.scalar(
-                text("select status from actor_identity_links where id=:id"),
-                {"id": str(target_link_id)},
-            ) == "revoked"
+            assert (
+                await verify.scalar(
+                    text("select status from actor_identity_links where id=:id"),
+                    {"id": str(target_link_id)},
+                )
+                == "revoked"
+            )
         else:
             assert await verify.scalar(
                 text("select status from actor_profiles where id=:id"),
                 {"id": str(target_profile_id)},
             ) == ("suspended" if mutation_kind == "suspend" else "deactivated")
-        assert await verify.scalar(
-            text(
-                "select count(*) from authority_idempotency_records "
-                "where actor_ref=:actor and status='committed'"
-            ),
-            {"actor": str(mutator_profile_id)},
-        ) == 1
+        assert (
+            await verify.scalar(
+                text(
+                    "select count(*) from authority_idempotency_records "
+                    "where actor_ref=:actor and status='committed'"
+                ),
+                {"actor": str(mutator_profile_id)},
+            )
+            == 1
+        )
         prepared_allowed = await verify.scalar(
             text(
                 "select count(*) from audit_events where action_id=:action "
@@ -3126,14 +3108,11 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
         )
         await cleanup.execute(
             text(
-                "delete from authority_idempotency_records "
-                "where actor_ref in (:target, :mutator)"
+                "delete from authority_idempotency_records where actor_ref in (:target, :mutator)"
             ),
             {"target": actor_ids[0], "mutator": actor_ids[1]},
         )
-        await cleanup.execute(
-            text("alter table authority_idempotency_records enable trigger user")
-        )
+        await cleanup.execute(text("alter table authority_idempotency_records enable trigger user"))
         await cleanup.execute(text("alter table admin_role_grants disable trigger user"))
         await cleanup.execute(text("alter table authority_control disable trigger user"))
         await cleanup.execute(
@@ -3148,9 +3127,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
         )
         await cleanup.execute(text("alter table admin_role_grants enable trigger user"))
         await cleanup.execute(text("alter table authority_control enable trigger user"))
-        await cleanup.execute(
-            text("alter table actor_identity_links disable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links disable trigger user"))
         await cleanup.execute(text("alter table actor_profiles disable trigger user"))
         await cleanup.execute(
             text("delete from actor_identity_links where id in (:target, :mutator)"),
@@ -3160,9 +3137,7 @@ async def test_prepared_crosses_real_lifecycle_service_transactions(
             text("delete from actor_profiles where id in (:target, :mutator)"),
             {"target": actor_ids[0], "mutator": actor_ids[1]},
         )
-        await cleanup.execute(
-            text("alter table actor_identity_links enable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links enable trigger user"))
         await cleanup.execute(text("alter table actor_profiles enable trigger user"))
         await cleanup.commit()
 
@@ -3214,9 +3189,7 @@ async def test_prepared_postgresql_rejects_duplicate_supported_grant_and_reuses_
         await seed.commit()
 
     async with authorization_factory() as duplicate:
-        await duplicate.execute(
-            text("alter table admin_role_grants disable trigger user")
-        )
+        await duplicate.execute(text("alter table admin_role_grants disable trigger user"))
         duplicate.add(
             AdminRoleGrant(
                 id=duplicate_id,
@@ -3246,12 +3219,8 @@ async def test_prepared_postgresql_rejects_duplicate_supported_grant_and_reuses_
     async with authorization_factory() as session:
         await session.begin()
         repository = AdminAuthorizationRepository(session)
-        authorization = AuthorizationService(
-            session, context, admin_repository=repository
-        )
-        prepared = PreparedAuthorizationService(
-            session, context, authorization, repository
-        )
+        authorization = AuthorizationService(session, context, admin_repository=repository)
+        prepared = PreparedAuthorizationService(session, context, authorization, repository)
         caller_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "sole_grant"}
         )
@@ -3274,13 +3243,9 @@ async def test_prepared_postgresql_rejects_duplicate_supported_grant_and_reuses_
 
     async with authorization_factory() as cleanup:
         await cleanup.execute(text("alter table admin_role_grants disable trigger user"))
-        await cleanup.execute(
-            text("delete from admin_role_grants where id=:id"), {"id": grant_id}
-        )
+        await cleanup.execute(text("delete from admin_role_grants where id=:id"), {"id": grant_id})
         await cleanup.execute(text("alter table admin_role_grants enable trigger user"))
-        await cleanup.execute(
-            text("alter table actor_identity_links disable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links disable trigger user"))
         await cleanup.execute(text("alter table actor_profiles disable trigger user"))
         await cleanup.execute(
             text("delete from actor_identity_links where id=:id"), {"id": str(link_id)}
@@ -3288,9 +3253,7 @@ async def test_prepared_postgresql_rejects_duplicate_supported_grant_and_reuses_
         await cleanup.execute(
             text("delete from actor_profiles where id=:id"), {"id": str(profile_id)}
         )
-        await cleanup.execute(
-            text("alter table actor_identity_links enable trigger user")
-        )
+        await cleanup.execute(text("alter table actor_identity_links enable trigger user"))
         await cleanup.execute(text("alter table actor_profiles enable trigger user"))
         await cleanup.commit()
 
@@ -3300,7 +3263,7 @@ class _AdminPolicyFacts:
 
     def __init__(self, context: AuthorizationContext) -> None:
         self.context = context
-        self.matched = SimpleNamespace(id=uuid4())
+        self.matched: SimpleNamespace | None = SimpleNamespace(id=uuid4())
         self.has_any = False
         self.target_exists = True
         self.project_is_present = True
@@ -3538,9 +3501,7 @@ async def test_actor_profile_lifecycle_kernel_guards_self_pairing_and_disclosure
         await service.require(ActionId.ACTOR_PROFILE_SUSPEND, self_resource)
     assert self_denial.value.public_code == "resource_guard_denied"
 
-    crossed = self_resource.model_copy(
-        update={"resource_id": uuid4(), "transition": "deactivate"}
-    )
+    crossed = self_resource.model_copy(update={"resource_id": uuid4(), "transition": "deactivate"})
     with pytest.raises(AuthorizationDenied) as crossed_denial:
         await service.require(ActionId.ACTOR_PROFILE_SUSPEND, crossed)
     assert crossed_denial.value.public_code == "resource_guard_denied"
@@ -3596,9 +3557,7 @@ async def test_identity_link_lifecycle_kernel_guards_self_pairing_and_disclosure
         await service.require(ActionId.ACTOR_IDENTITY_LINK_REVOKE, self_revoke)
     assert self_denial.value.public_code == "resource_guard_denied"
 
-    crossed = self_revoke.model_copy(
-        update={"resource_id": uuid4(), "transition": "reactivate"}
-    )
+    crossed = self_revoke.model_copy(update={"resource_id": uuid4(), "transition": "reactivate"})
     with pytest.raises(AuthorizationDenied) as crossed_denial:
         await service.require(ActionId.ACTOR_IDENTITY_LINK_REVOKE, crossed)
     assert crossed_denial.value.public_code == "resource_guard_denied"
@@ -3668,9 +3627,7 @@ def _identity_link_lifecycle_decision(
         ),
     }[request.operation]
     permission = {
-        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: (
-            PermissionId.ACTOR_IDENTITY_LINK_REVOKE
-        ),
+        AuthorityOperation.ACTOR_IDENTITY_LINK_REVOKE: (PermissionId.ACTOR_IDENTITY_LINK_REVOKE),
         AuthorityOperation.ACTOR_IDENTITY_LINK_REACTIVATE: (
             PermissionId.ACTOR_IDENTITY_LINK_REACTIVATE
         ),
@@ -4362,9 +4319,7 @@ async def test_admin_resource_digest_alone_rejects_substituted_role_and_disposit
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
-    revoke_claim = issue_claim.model_copy(
-        update={"operation": revoke_request.operation}
-    )
+    revoke_claim = issue_claim.model_copy(update={"operation": revoke_request.operation})
     with pytest.raises(TypeError, match="requires exact matched authority"):
         await service.complete_revoke(
             claim=revoke_claim,
@@ -4384,9 +4339,7 @@ async def test_admin_resource_digest_alone_rejects_substituted_role_and_disposit
         await service.record_mismatch(
             actor_profile_id=actor_id,
             request=revoke_request,
-            decision=revoke_decision.model_copy(
-                update={"resource_context_digest": normal_digest}
-            ),
+            decision=revoke_decision.model_copy(update={"resource_context_digest": normal_digest}),
         )
 
 
@@ -4416,6 +4369,7 @@ async def test_final_access_admin_guard_ignores_ineffective_target_and_is_servic
     facts = Facts()
     service._repository = facts  # type: ignore[assignment]
     original_grant = grant
+
     async def get_missing_grant(*_args, **_kwargs):
         return None
 
@@ -5007,7 +4961,9 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
         correlation_id=uuid4(),
     )
     with pytest.raises(StructuredHTTPException):
-        await denial_dependency.athrow(AuthorizationDenied(denied))
+        await denial_dependency.athrow(  # type: ignore[attr-defined]
+            AuthorizationDenied(denied)
+        )
     assert denial_session.rollback_count == 1
     assert denial_session.commit_count == 0
 
@@ -5132,7 +5088,7 @@ async def test_service_denial_rolls_back_observations_before_clean_restage(
     with pytest.raises(AuthorizationDenied) as exc_info:
         await service.require(ActionId.ARTIFACT_VERIFICATION_EXECUTE, resource)
     with pytest.raises(StructuredHTTPException) as public:
-        await dependency.athrow(exc_info.value)
+        await dependency.athrow(exc_info.value)  # type: ignore[attr-defined]
 
     assert public.value.error_code == "permission_not_granted"
     assert observations == ["staged"]
@@ -5175,7 +5131,9 @@ async def test_service_dependency_cancellation_rolls_back_staged_observation(
     await anext(dependency)
 
     with pytest.raises(asyncio.CancelledError):
-        await dependency.athrow(asyncio.CancelledError())
+        await dependency.athrow(  # type: ignore[attr-defined]
+            asyncio.CancelledError()
+        )
 
     assert observations == ["staged"]
     assert session.rollback_count == 1
@@ -5412,9 +5370,17 @@ async def test_fixed_service_active_candidate_uses_one_revalidation_seam(
 @pytest.mark.parametrize(
     ("actor_status", "link_status", "expected"),
     [
-        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED, AuthorizationDenialCode.IDENTITY_LINK_REVOKED),
+        (
+            ActorStatus.ACTIVE,
+            IdentityLinkStatus.REVOKED,
+            AuthorizationDenialCode.IDENTITY_LINK_REVOKED,
+        ),
         (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE, AuthorizationDenialCode.ACTOR_SUSPENDED),
-        (ActorStatus.DEACTIVATED, IdentityLinkStatus.ACTIVE, AuthorizationDenialCode.ACTOR_DEACTIVATED),
+        (
+            ActorStatus.DEACTIVATED,
+            IdentityLinkStatus.ACTIVE,
+            AuthorizationDenialCode.ACTOR_DEACTIVATED,
+        ),
     ],
 )
 async def test_fixed_service_lifecycle_denies_before_matrix_evaluation(
@@ -5439,11 +5405,36 @@ async def test_fixed_service_lifecycle_denies_before_matrix_evaluation(
 @pytest.mark.parametrize(
     ("profile_status", "link_status", "service_identity", "expected"),
     [
-        ("suspended", "active", ServiceIdentity.ARTIFACT_VERIFIER.value, AuthorizationDenialCode.ACTOR_SUSPENDED),
-        ("deactivated", "active", ServiceIdentity.ARTIFACT_VERIFIER.value, AuthorizationDenialCode.ACTOR_DEACTIVATED),
-        ("active", "revoked", ServiceIdentity.ARTIFACT_VERIFIER.value, AuthorizationDenialCode.IDENTITY_LINK_REVOKED),
-        ("active", "active", ServiceIdentity.ARTIFACT_SCHEDULER.value, AuthorizationDenialCode.PERMISSION_NOT_GRANTED),
-        ("active", "active", "malformed-service-identity", AuthorizationDenialCode.PERMISSION_NOT_GRANTED),
+        (
+            "suspended",
+            "active",
+            ServiceIdentity.ARTIFACT_VERIFIER.value,
+            AuthorizationDenialCode.ACTOR_SUSPENDED,
+        ),
+        (
+            "deactivated",
+            "active",
+            ServiceIdentity.ARTIFACT_VERIFIER.value,
+            AuthorizationDenialCode.ACTOR_DEACTIVATED,
+        ),
+        (
+            "active",
+            "revoked",
+            ServiceIdentity.ARTIFACT_VERIFIER.value,
+            AuthorizationDenialCode.IDENTITY_LINK_REVOKED,
+        ),
+        (
+            "active",
+            "active",
+            ServiceIdentity.ARTIFACT_SCHEDULER.value,
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+        ),
+        (
+            "active",
+            "active",
+            "malformed-service-identity",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+        ),
     ],
 )
 async def test_fixed_service_real_revalidation_rejects_locked_drift(
@@ -5543,7 +5534,9 @@ async def test_fixed_service_revalidation_rejects_matrix_or_availability_drift(
                 "ACTION_BY_ID",
                 {
                     **active_actions,
-                    action: replace(active_actions[action], availability=ActionAvailability.PLANNED),
+                    action: replace(
+                        active_actions[action], availability=ActionAvailability.PLANNED
+                    ),
                 },
             )
         return current
@@ -5884,10 +5877,7 @@ async def test_actor_self_update_requires_transaction_revalidation() -> None:
     without_read_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as read_exc_info:
         await without_read_recheck.require(ActionId.ACTOR_PROFILE_READ_SELF, read_resource)
-    assert (
-        read_exc_info.value.decision.denial_code
-        is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-    )
+    assert read_exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
 
     without_recheck, _ = _runtime_service(context, revalidate=None)
     with pytest.raises(AuthorizationDenied) as exc_info:
@@ -5912,19 +5902,13 @@ async def test_actor_self_update_requires_transaction_revalidation() -> None:
 
 @pytest.fixture
 def authorization_database_env(
-    postgres_database_url: str,
-    migration_lock,
+    clean_postgres_database: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[str]:
-    """Ensure authorization tests run at the current isolated schema head."""
-    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", postgres_database_url)
+    """Ensure authorization tests use a clean current schema."""
+    monkeypatch.setenv("WORKSTREAM_DATABASE_URL", clean_postgres_database)
     get_settings.cache_clear()
-    project_root = Path(__file__).resolve().parents[1]
-    config = Config(str(project_root / "alembic.ini"))
-    config.set_main_option("script_location", str(project_root / "alembic"))
-    with migration_lock():
-        command.upgrade(config, "head")
-    yield postgres_database_url
+    yield clean_postgres_database
     get_settings.cache_clear()
 
 
@@ -6031,10 +6015,7 @@ async def test_authorization_locks_refresh_cached_actor_lifecycle_state(
         assert locked_link is cached_link
         assert locked_profile.status == "suspended"
         assert locked_link.status == "revoked"
-        assert (
-            await AdminAuthorizationRepository(stale).lock_eligible_human(profile_id)
-            is None
-        )
+        assert await AdminAuthorizationRepository(stale).lock_eligible_human(profile_id) is None
         await stale.rollback()
 
         cached_profile = await stale.get(ActorProfile, str(profile_id))
@@ -6062,9 +6043,7 @@ async def test_authorization_locks_refresh_cached_actor_lifecycle_state(
             )
             await lifecycle.commit()
 
-        eligible = await AdminAuthorizationRepository(stale).lock_eligible_human(
-            profile_id
-        )
+        eligible = await AdminAuthorizationRepository(stale).lock_eligible_human(profile_id)
         assert eligible is not None
         eligible_link, eligible_profile = eligible
         assert eligible_profile is cached_profile
@@ -7353,9 +7332,9 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             row for row in pair if row.event_type == "AuthorityInvalidationRequested"
         )
         assert invalidation_row.invalidation_cause_event_id == success_row.id
-        assert {
-            (row.request_id, row.correlation_id) for row in pair
-        } == {(success.request_id, success.correlation_id)}
+        assert {(row.request_id, row.correlation_id) for row in pair} == {
+            (success.request_id, success.correlation_id)
+        }
         expected_target = (
             success.target_actor_ref
             if success.event_type
