@@ -32,8 +32,9 @@ are bounded safety and review repairs. No workflow or product behavior changed.
 
 ## Acceptance Evidence
 
-- Fresh isolated reset suite: 27 passed.
-- Exact collection: 1,915 tests, equal to 1,888 on trusted main plus 27 new
+- Fresh isolated reset safety suite: 27 passed; two subsequent ownership and
+  runtime-boundary regressions passed independently.
+- Exact collection: 1,917 tests, equal to 1,888 on trusted main plus 29 new
   reset tests; no existing node was lost.
 - Rerun, exception, cancellation, and SIGTERM paths preserve Alembic and actor
   migration state and leave all seven guarded triggers enabled.
@@ -51,9 +52,9 @@ are bounded safety and review repairs. No workflow or product behavior changed.
 
 ## Internal Review
 
-Reviewed code SHA: 0d985c3dada26ab18fb2a18698ea36cab0e12b24
+Reviewed code SHA: cf91bb81ac44e9ff9cbdc0f8b924959ee1a0554e
 
-Reviewed at: 2026-07-22T13:57:52Z
+Reviewed at: 2026-07-22T14:22:45Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
