@@ -2818,3 +2818,15 @@ the independent checker against its unchanged 90 percent floor. The repair adds
 focused malformed-selection and exact-Git-identity cases; the identical command
 now passes 206 tests at 90.18 percent branch coverage. Exact-SHA internal repair
 review and fresh hosted checks remain.
+
+## 2026-07-22 - WS-AUTH-001-10B2 Internal Implementation Review
+
+AUTH-10B2 exact implementation SHA
+`6c7108251829c3c2853fc384bd8cc0668381ac7b` activates exactly three
+privacy-safe project candidate/grant reads after the durable authorization-read
+gate. Two internal repair cycles closed dependency-order, nonhuman concealment,
+cursor replay/pre-query, no-count SQL, service filtering, OpenAPI, hosted shape,
+and documentation proof gaps. Senior engineering, architecture, reuse/dedup,
+security/auth, QA/test, test delta, product/ops, docs, and CI integrity all pass
+with no open finding. Focused and isolated PostgreSQL evidence passes; GitHub
+full CI/coverage, hosted API E2E, CodeRabbit, and human review remain.
