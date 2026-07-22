@@ -1,10 +1,10 @@
 # WS-AUTH-001-10B1 Internal Review Evidence
 
-Reviewed code SHA: `9b33edea094fa997f03c3a7f7e57ecc9fd20bda8`
+Reviewed code SHA: `2d6d347e1e3f16821218d257ccb29e5e458d4a45`
 
-Reviewed against trusted main: `1473f7a0cab6d879c7b7c049a9b94f557ad712c2`
+Reviewed against trusted main: `92b8a7aa813c5914d8191547b62eb3823a37a140`
 
-Reviewed at: `2026-07-21T23:20:00Z`
+Reviewed at: `2026-07-22T00:30:00Z`
 
 Reviewer run IDs: `auth10b1_final_core`,
 `auth10b1_final_security_qa`, and `auth10b1_final_ops_docs_ci`
@@ -12,9 +12,9 @@ Reviewer run IDs: `auth10b1_final_core`,
 Reviewer tracks: senior engineering, QA/test, security/auth, product/ops,
 architecture, CI integrity, docs, reuse/dedup, and test delta
 
-Executable-code SHA: `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`;
-the reviewed tree SHA additionally contains the CodeRabbit-requested
-PostgreSQL-major operations prerequisite and its response record.
+Main-integration merge SHA: `3b90fbd7cf3c80c3dcfc199953317492e4ddcd2e`.
+The reviewed tree also contains the CodeRabbit-requested PostgreSQL-major
+prerequisite and the post-ART migration-lineage reconciliation.
 
 ## Scope
 
@@ -29,6 +29,9 @@ adds no route, action activation, cursor, disclosure, or mutation behavior.
 - Final old/new-scope concurrent consumption proof: PASS, 2 tests.
 - Post-CI migration-head repair proof: PASS, 3 tests together in a fresh
   isolated PostgreSQL database.
+- Post-main combined ART/AUTH lineage proof: PASS, 3 tests in a fresh isolated
+  PostgreSQL database.
+- Alembic heads: PASS, exactly `0033_authorization_read_rate`.
 - Dependency and digest proofs: PASS, 6 tests.
 - Ruff on all contract-owned Python paths: PASS.
 - Agent Gates: PASS, 89 tests.
@@ -65,14 +68,14 @@ scope; no test was removed, skipped, or weakened.
 GitHub shard 3 initially failed because three pre-existing migration tests
 still treated `0031_project_role_grants` as current `head`. The first stale
 assertion aborted before test-owned cleanup and caused the remaining downgrade
-failures. Repair `a8a0daef` changed those three current-head expectations to
-`0033_authorization_read_rate` after rebasing onto ART-owned migration `0032`.
-Run `29875491247` exposed two multi-step refusal-state expectations: refusal
-inside `0031` rolls back the preceding migration transaction and retains the
-current head. Repair `8ceb4e16` changes only those two expectations. The
-successful direct authorization-read downgrade assertion remains at its direct
-predecessor. A fresh isolated three-test sequence
-passed, and all nine tracks re-reviewed exact repair SHA `8ceb4e16` and passed.
+failures. Repair `a8a0daef` changed those expectations to then-current AUTH
+head `0032`. Run `29875491247` exposed two multi-step refusal-state
+expectations; repair `8ceb4e16` correctly proved a refusal retains the starting
+head. After ART merged `0032_artifact_recovery`, integration merge `3b90fbd7`
+rebased AUTH linearly to `0033_authorization_read_rate`. Current-head and
+refusal expectations now retain `0033`, while successful AUTH downgrade stops
+at direct predecessor ART `0032`. All nine tracks passed on final integrated
+implementation/docs SHA `2d6d347e` against main `92b8a7aa`.
 
 Valid findings addressed: yes
 

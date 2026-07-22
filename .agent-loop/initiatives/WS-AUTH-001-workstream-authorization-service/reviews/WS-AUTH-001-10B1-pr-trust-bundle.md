@@ -26,9 +26,10 @@ route attachment, disclosure, concealment, cursors, and action activation.
 
 ## Evidence and review
 
-Exact reviewed tree `9b33edea094fa997f03c3a7f7e57ecc9fd20bda8`
-with executable-code commit `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e`
-passed all nine required internal tracks against trusted main `1473f7a0`.
+Exact integrated implementation/docs tree
+`2d6d347e1e3f16821218d257ccb29e5e458d4a45`, including integration merge
+`3b90fbd7cf3c80c3dcfc199953317492e4ddcd2e`, passed all nine required internal
+tracks against trusted main `92b8a7aa813c5914d8191547b62eb3823a37a140`.
 Focused PostgreSQL, dependency, migration, concurrency, Ruff, Agent Gates,
 stale-doc, Markdown-link, and diff-integrity checks pass. Full sharded tests and
 coverage run in GitHub Actions because the local full suite takes hours.
@@ -42,6 +43,7 @@ head. After ART claimed `0032_artifact_recovery`, AUTH rebased linearly to
 retain `0033`, while successful AUTH downgrade stops at direct predecessor
 `0032_artifact_recovery`. The combined lineage/migration suite passes 3/3 on a
 fresh isolated database. A new hosted run remains required for the merged tree.
+Alembic reports exactly one head: `0033_authorization_read_rate`.
 
 ## Risks and controls
 

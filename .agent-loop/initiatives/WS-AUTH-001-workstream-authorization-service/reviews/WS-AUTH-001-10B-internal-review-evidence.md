@@ -1,15 +1,16 @@
 # WS-AUTH-001-10B Internal Review Evidence
 
-Reviewed code SHA: `dd8afb790ddbe0e04581ee717e5fc03952e6b23e`
+Reviewed code SHA: `2d6d347e1e3f16821218d257ccb29e5e458d4a45`
 
 Reviewed planning SHA: `25b6ae134e3e3db4350fbcbb5c7cfeaa9e261044`
 
-Reviewed against trusted main: `f2aa57a45f9088a91e8f7adcf79ec7e05a2b5734`
+Reviewed against trusted main: `92b8a7aa813c5914d8191547b62eb3823a37a140`
 
-Reviewed at: `2026-07-21T16:26:06Z`
+Reviewed at: `2026-07-22T00:30:00Z`
 
-Reviewer run IDs: `auth10_plan_core`, `auth10_plan_security_qa`,
-`auth10_plan_ops_ci_docs`
+Reviewer run IDs: original `auth10_plan_core`, `auth10_plan_security_qa`, and
+`auth10_plan_ops_ci_docs`; integration `auth10b1_final_core`,
+`auth10b1_final_security_qa`, and `auth10b1_final_ops_docs_ci`
 
 Reviewer tracks: senior engineering, QA/test, security/auth, product/ops,
 architecture, CI integrity, docs, reuse/dedup, and test delta

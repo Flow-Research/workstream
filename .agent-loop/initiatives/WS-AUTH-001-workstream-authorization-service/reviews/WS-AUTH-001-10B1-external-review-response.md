@@ -8,8 +8,8 @@ the former `0031_project_role_grants` head after a successful upgrade. That
 assertion stopped before test-owned cleanup, so later migration tests correctly
 refused to downgrade the leaked immutable project-role evidence.
 
-Repair `a8a0daef60c1374f103e26c092b59600f5465480` updates exactly three
-current-head expectations, now rebased to `0033_authorization_read_rate`: project-role
+Repair `a8a0daef60c1374f103e26c092b59600f5465480` updated exactly three
+current-head expectations to then-current AUTH head `0032`: project-role
 schema, outbox schema, and the outbox downgrade transaction that rolls back to
 its pre-attempt head.
 
@@ -21,6 +21,17 @@ preceding steps and retains the current authorization-read head.
 Repair `8ceb4e16d8e152572c94ad3032d8a2edc2cea55e` changes only those two
 multi-step refusal-state expectations. The separate successful direct
 downgrade-to-`0031` expectation remains unchanged.
+
+## Post-main integration
+
+Trusted main `92b8a7aa813c5914d8191547b62eb3823a37a140` merged ART-owned
+`0032_artifact_recovery`. Integration merge
+`3b90fbd7cf3c80c3dcfc199953317492e4ddcd2e` rebased the unchanged AUTH
+migration to direct successor `0033_authorization_read_rate`, leaving exactly
+one Alembic head. Final implementation/docs SHA
+`2d6d347e1e3f16821218d257ccb29e5e458d4a45` passed all nine internal tracks;
+the combined ART/AUTH migration proof passed 3/3 on a fresh isolated database.
+A hosted rerun remains required on the integrated PR head.
 
 ## Repair evidence
 
