@@ -148,3 +148,25 @@ thresholds, disable shards, or silently fall back inside the workflow.
 
 Implementation does not begin until the reviewed 01 contract receives explicit
 human approval.
+
+## 02 planning amendment — migrate-once semantic lanes
+
+PR #180 supplied useful discovery and local measurements but is not authorized
+implementation evidence. It showed repeated per-test migrations dominate wall
+time and proposed four dependency-based processes in one job, each PostgreSQL
+lane owning a private migrated database and role. The implementation successor
+is `WS-CI-001-02A`; routing, cache suppression, sampling, and test skipping are
+not part of it.
+
+02A may adopt Konan's commits while preserving authorship only after this
+planning chunk merges and 02A receives a signed implementation start. Adoption
+must restore exact collected-node-to-completed-node custody, strict Boolean
+assertions, canonical seven-table trigger restoration proof, prospective file
+scope, internal review evidence, one merge intent, and exact hosted timing and
+coverage results. Four semantic lanes are a dependency partition, not arbitrary
+shards and not a substitute for exact execution proof.
+
+The target remains under eight minutes for the complete Backend required job,
+but correctness, real PostgreSQL/MinIO contracts, 78% global coverage, and all
+protected 90% floors are hard gates. No timing claim is accepted from a local or
+different commit.

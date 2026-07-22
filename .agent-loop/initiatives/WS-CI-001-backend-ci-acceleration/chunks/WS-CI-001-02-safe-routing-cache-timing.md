@@ -46,10 +46,17 @@ approval; any coverage/test weakening; backend product changes; 04B activation.
 - [ ] A separate reviewed amendment defines exact files and fail-closed routing.
 - [ ] Cache and timing provenance cannot cross dependency or commit boundaries.
 - [ ] Full-suite-required change classes default closed on ambiguity.
+- [ ] A prospective `WS-CI-001-02A` implementation contract incorporates the
+      measured migrate-once semantic-lane discovery from PR #180 without
+      treating that PR as authorized implementation evidence.
+- [ ] The successor contract requires exact collected/completed node custody,
+      strict test assertions, all guarded-trigger restoration, unchanged
+      coverage floors, and exact hosted proof.
 
 ## Verification commands
 
-To be defined from 01 hosted evidence.
+Planning artifacts, merge-intent validation, Markdown links, stale-wording
+checks, internal review evidence gate, and Agent Gate tests.
 
 ## Required reviewers
 

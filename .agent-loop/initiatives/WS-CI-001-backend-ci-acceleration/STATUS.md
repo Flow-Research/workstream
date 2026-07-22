@@ -1,9 +1,10 @@
 # STATUS: WS-CI-001 - Backend CI Acceleration
 
-- Phase: post-merge timeout cleanup repair
-- Active implementation chunk: `WS-CI-001-01R1`
-- Proposed first chunk: `WS-CI-001-01`
-- Human direction: prioritize full-suite CI acceleration before
-  `WS-ENG-001-04B`
-- Current gate: exact rebased-head review, repair PR CI, and human review
+- Phase: signed planning amendment
+- Active planning chunk: `WS-CI-001-02`
+- Active implementation chunk: none
+- Proposed implementation successor: `WS-CI-001-02A`
+- Human direction: preserve Konan's authorship and measured work from PR #180,
+  but adopt it only under prospective zero-trust scope and evidence
+- Current gate: planning review, planning-only PR, and user-owned PR decision
 - `WS-ENG-001-04B`: remains inactive
