@@ -15,9 +15,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: fabe30414a12b4368d9db5e4e74c8a0ca1c6a6c3
+Reviewed code SHA: 7c7d5ec2b8264a5c8f4a689195071157263f4b1f
 
-Reviewed at: 2026-07-22T10:10:00Z
+Reviewed at: 2026-07-22T10:20:00Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
@@ -50,6 +50,10 @@ After the reviewed SHA, only evidence and status files changed.
   blobs, tree identities, paths, and digest.
 - Added clean replay proof for squash and rebase shapes after deleting refs,
   expiring reflogs, pruning Git objects, and proving the original head is gone.
+- Fixed CodeRabbit findings so malformed tree responses fail closed and the
+  historical PR reference renders as ordinary runbook prose.
+- Added independent path mutations and restored checker coverage to 90.08%
+  without changing the 90% threshold.
 - Bound the exact missed PR #176 PLAN3 merge followed by `WS-ENG-006-00`,
   authenticated the activation checks, and consumed both recovery identities
   before signing, with CLI reload, collision, replay, and leakage checks.
@@ -72,4 +76,4 @@ git diff --check origin/main...HEAD
 - The recovery certificate is intentionally exceptional, but it is bound to
   exact PR #176 followed by one ENG-006 activation target; both identities are
   consumed before state signing and cannot authorize later work.
-- External GitHub checks and CodeRabbit remain pending until the PR is opened.
+- Fresh GitHub checks remain pending after the final evidence-only commit.

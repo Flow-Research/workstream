@@ -101,14 +101,14 @@ updater coverage tests passed.
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | Runs after PR publication; supplementary evidence only. |
-| GitHub checks | Pending | Runs after PR publication. |
+| CodeRabbit | Addressed | Both actionable comments fixed and internally re-reviewed. |
+| GitHub checks | Rerun required | Checker coverage repaired to 90.08% locally. |
 
 ## Reviewer results
 
-Reviewed code SHA: fabe30414a12b4368d9db5e4e74c8a0ca1c6a6c3
+Reviewed code SHA: 7c7d5ec2b8264a5c8f4a689195071157263f4b1f
 
-Reviewed at: 2026-07-22T10:10:00Z
+Reviewed at: 2026-07-22T10:20:00Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
