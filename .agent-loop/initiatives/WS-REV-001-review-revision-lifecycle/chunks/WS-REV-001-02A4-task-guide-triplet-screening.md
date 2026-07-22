@@ -1,5 +1,9 @@
 # Chunk Contract: WS-REV-001-02A4 - Task Guide Triplet And Screening
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
+> belongs to upstream owners, not the REV lifecycle.
+> Every remaining Status, Goal, and Stop statement below is archival and void.
+
 ## Goal
 
 Stamp one immutable same-Project guide ID/version/activation-sequence triplet on

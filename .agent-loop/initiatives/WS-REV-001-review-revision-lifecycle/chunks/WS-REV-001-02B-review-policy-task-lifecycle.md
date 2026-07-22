@@ -1,5 +1,10 @@
 # Chunk Contract: WS-REV-001-02B - Locked Review Policy And Dormant Task Lifecycle Compatibility
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3. Any missing
+> upstream policy or Task lifecycle capability must be implemented by its owner.
+> Every remaining Status, Goal, and Stop statement below is archival and void;
+> REV-owned policy work is re-scoped to 03P.
+
 ## Parent initiative
 
 `WS-REV-001` - Review And Revision Lifecycle

@@ -1,5 +1,9 @@
 # Chunk Contract: WS-REV-001-02A - Guide Chronology And Task Locking Split
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
+> belongs to upstream owners, not the REV lifecycle.
+> Every remaining Status, Goal, and Stop statement below is archival and void.
+
 ## Goal
 
 Convert the oversized guide chronology, publication fencing, and Task guide

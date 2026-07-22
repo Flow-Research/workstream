@@ -1,5 +1,21 @@
 # Discovery: WS-REV-001 Review And Revision Lifecycle
 
+## 2026-07-22 Boundary Correction
+
+Complete rereading of the checksum-bound WS-REV Markdown, all 52 pages of its
+PDF companion, the active `docs/spec_review_lifecycle.md`, and ADR 0010 confirms
+that REV begins after a final current checker `allow_review` admission and must
+preserve the proven Project Guide/Task/Submission/Checker intake spine. ADR 0010
+requires REV revision preparation to consume a stable active-guide identity; it
+does not transfer Project Guide setup or activation ownership to REV.
+
+The derived PLAN2/02A sequence incorrectly converted that dependency into REV
+implementation ownership. Proposed 02A1 Project/setup fencing, 02A3 activation
+chronology, 02A4 general Task stamping, and 02A2 guide reactivation are therefore
+retired as REV chunks. Any still-needed capability must be specified as an
+external owner handoff. The unmerged 02A1 runtime candidate was reverted before
+publication.
+
 ## Baseline
 
 Discovery was refreshed read-only from trusted main

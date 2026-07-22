@@ -1,18 +1,37 @@
 # Plan: WS-REV-001 Review And Revision Lifecycle
 
+## Boundary Reset — 2026-07-22
+
+This section supersedes every later passage that assigns Project Guide setup,
+publication, activation, chronology, reactivation, or general Task-context
+stamping to a REV chunk. Those passages remain historical planning evidence but
+are not implementation authority.
+
+REV consumes one existing finalized Submission after a durable final current
+CheckerRun recommends `allow_review`. It then owns admission into review,
+routing, leases, packet semantics, immutable Reviews/findings/resolutions,
+human revision replay, FinalAcceptance, and decision orchestration into CON.
+Every Review creates one reviewer contribution; accept alone creates
+FinalAcceptance and the submitter accepted-submission contribution.
+
+Submission and Review history are immutable predecessor chains scoped to one
+Task and must be completely traversable for operations and future adjudication.
+Adjudication itself remains out of scope. Missing upstream facts become typed
+owner handoffs and blockers; REV does not implement them.
+
 ## Planning authority
 
-This plan is reconciled from trusted main
-`44f2467cedc266d2efe261119cfff436ac6b7715`, which additionally contains ART
-admission foundation PR #154 after REV PLAN2 PR #150, AUTH-09D-B PR #152, and
-the AUTH contributor foundation PR #153. Worktree branches, unmerged PRs, and
-proposed owner changes are discovery evidence only.
+This PLAN3 candidate is reconciled from current trusted main
+`92b8a7aa813c5914d8191547b62eb3823a37a140`; its single Alembic head is
+`0032_artifact_recovery`. Worktree branches, unmerged PRs, and proposed owner
+changes are discovery evidence only. The detailed facts below were captured at
+the earlier PLAN2 snapshot and are historical unless independently re-proven.
 They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
 schema head, typed contract, and tests exist on trusted main.
 
 Current merged facts are:
 
-- the single Alembic head is `0028_artifact_admission`;
+- the PLAN2 snapshot Alembic head was `0028_artifact_admission`;
 - TaskAssignment and Submission attribution use canonical `contributor_id`
   ActorProfile foreign keys and database-enforced human lineage;
 - the AUTH catalogue contains 74 PermissionIds and 65 ActionIds, with 15 active
@@ -284,19 +303,19 @@ errors but do not substitute for database enforcement.
 
 ## Chunk strategy
 
-Merged parent references remain as non-executable split records. Parent 02A is
-the active planning-only split repair after its L1 preimplementation review
-failed; 02A1, 02A3, and 02A4 are the only executable children it declares.
-Each child still requires its own current-main refresh, risk routing, plan
-review, explicit start, and exact owner evidence before code.
+PLAN3 is a proposed planning-only boundary correction, not signed active work. The entire 02A family,
+02B, and 02C are retired historical records and are never executable by REV.
+03P is the first proposed REV runtime child and contains only REV-owned policy;
+it still requires current-main refresh, risk routing, plan review, signed start,
+and exact owner evidence. Queue persistence follows separately in 03A.
 
 The detailed order is maintained in `CHUNK_MAP.md`. The important boundaries
 are:
 
-- 02A1 establishes the shared Project/setup fence; 02A3 adds guide chronology;
-  02A4 adds Task triplet screening. 02A2 remains later after 08 and adds hidden
-  prepared-authorized, stale-retry-safe reactivation before AUTH-12 activation.
-- 03A queue/lease base schema; 03B normalized packet manifest after ART contract.
+- Upstream owners supply Project Guide, Task, Submission, checker, AUTH, ART,
+  and CON facts through typed, proven handoffs; REV reports gaps and stops.
+- 03A queue/lease base schema and immutable linkage only; 03B normalized packet
+  manifest after ART contract.
 - 04A immutable review-chain persistence; 04B FinalAcceptance/task linkage and
   shared audit/outbox persistence primitives.
 - 05A online checker admission; 05B server-selected reviewer/admin reads.
@@ -306,7 +325,7 @@ are:
 - 08 pure decision schemas, validation, and typed participant inputs only.
 - 09A1 Review-rooted preparation schema; 09A2 preparation resolver and Task
   Context; 09A3 human response evidence; 09A4 internal prepared human N+1 plus
-  the exact source XOR that retains 02C's immutable checker-remediation
+  the exact source XOR that consumes the owner's immutable checker-remediation
   `remediation_source_checker_run_id`;
   09A5 replacement-assignment transfer; 09B replay/resolution/return routing.
 - 10 first hidden canonical Review/FinalAcceptance/CON transaction.
@@ -357,7 +376,6 @@ skip, or rewrite existing checker-caused revision coverage.
 
 ## Stop rule
 
-`WS-REV-001-02A` now changes planning/specification only because its L1
-preimplementation review rejected the oversized runtime contract. After this
-split merges, automated memory names `WS-REV-001-02A1` with an explicit-start
-gate. No runtime child or successor starts automatically.
+Complete PLAN3 and stop. Automated memory may name 03P only with a signed
+explicit-start gate. No runtime child starts automatically, and no retired 02A-family,
+02B, or 02C contract may be revived as REV work.

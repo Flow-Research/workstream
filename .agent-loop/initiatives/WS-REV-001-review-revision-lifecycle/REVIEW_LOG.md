@@ -1,5 +1,35 @@
 # Internal Plan Review Log: WS-REV-001
 
+## WS-REV-001-PLAN3 Boundary Audit And Runtime Revert - 2026-07-22
+
+A complete end-to-end reread of both canonical review-lifecycle source forms
+and the repository specification established that REV starts at the durable
+final checker `allow_review` outcome. REV consumes the existing Submission and
+its submitted/verified artifact set; it does not own Project Guide setup,
+activation, Task intake, or publication fencing. The 02A plan family and the
+02A1 runtime candidate therefore crossed initiative boundaries.
+
+The 02A1 runtime candidate was reverted in full. D28 supersedes the invalid
+ownership assignments while preserving their records as historical evidence.
+PLAN3 now records the correct review flow: immutable and traversable Submission
+versions and Review predecessors, append-only findings and decisions, one
+reviewer contribution per completed Review, and FinalAcceptance plus exactly
+one submitter accepted-task contribution only on `accept`. Future adjudication
+consumes this history but remains out of scope.
+
+All earlier 02A reviewer results are historical and cannot authorize runtime.
+Fresh internal review is required for this exact PLAN3 candidate.
+
+The first exact-candidate review failed closed on residual executable wording,
+an over-broad 03A that mixed persistence with 05A admission, omission of
+REV-owned policy after retiring mixed 02B, stale trusted-main facts, and an
+unsigned claim that PLAN3 was active. Repairs archive every retired contract,
+restore policy as bounded 03P, keep 03A persistence-only, reserve admission for
+05A, update main/head facts, and require signed loop-memory starts.
+The repaired-candidate re-review passed QA/product/test-delta and found one
+remaining live 03A phrase that treated chat approval as start authority. That
+phrase now requires the same signed exact-current-main workflow as 03P.
+
 ## WS-REV-001-02A Post-Rebase Conformance Repair - 2026-07-19
 
 CodeRabbit's review of rebased PR #156 found that the conformance matrix's

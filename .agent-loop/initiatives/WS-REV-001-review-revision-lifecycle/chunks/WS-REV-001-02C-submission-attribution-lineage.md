@@ -1,5 +1,9 @@
 # Chunk Contract: WS-REV-001-02C - Submission Attribution, Context, And Immutable Lineage
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3. REV consumes the
+> Submission owner's proven immutable lineage rather than creating it upstream.
+> Every remaining Status, Goal, and Stop statement below is archival and void.
+
 ## Parent initiative
 
 `WS-REV-001` - Review And Revision Lifecycle

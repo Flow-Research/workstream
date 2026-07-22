@@ -1,5 +1,9 @@
 # Chunk Contract: WS-REV-001-02A1 - Project And Setup Publication Fence
 
+> **RETIRED — NOT EXECUTABLE:** superseded by D28 and PLAN3 because this work
+> belongs to upstream owners, not the REV lifecycle.
+> Every remaining Status, Goal, and Stop statement below is archival and void.
+
 ## Goal
 
 Make every current Project Guide setup writer serialize through one shared
