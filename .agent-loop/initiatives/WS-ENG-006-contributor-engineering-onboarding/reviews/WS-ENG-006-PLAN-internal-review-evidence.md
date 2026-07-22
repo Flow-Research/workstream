@@ -15,9 +15,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: a297588f614820dc8566df3bee1000b8107b2509
+Reviewed code SHA: 9ad6292e31a9a4bb6a03ff779cc7a8f2989ec1a1
 
-Reviewed at: 2026-07-22T06:16:09Z
+Reviewed at: 2026-07-22T10:02:00Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
@@ -28,7 +28,7 @@ After the reviewed SHA, only evidence and status files changed.
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS AFTER FIXES | None | Durable replay and bounded lifecycle reviewed. |
-| QA/test | PASS AFTER FIXES | None | All 94 Agent Gate tests passed. |
+| QA/test | PASS AFTER FIXES | None | All 95 Agent Gate tests passed. |
 | security/auth | PASS AFTER FIXES | None | Unsigned planning boundary and recovery containment reviewed. |
 | product/ops | PASS | None | Product lifecycle and contributor authorization are unchanged. |
 | architecture | PASS AFTER FIXES | None | One reducer/signer/state path remains canonical. |
@@ -50,8 +50,9 @@ After the reviewed SHA, only evidence and status files changed.
   blobs, tree identities, paths, and digest.
 - Added clean replay proof for squash and rebase shapes after deleting refs,
   expiring reflogs, pruning Git objects, and proving the original head is gone.
-- Bound and consumed the exact one-use `WS-ENG-006-00` root recovery target
-  before signing, with collision, replay, and leakage checks.
+- Bound the exact missed PR #176 PLAN3 merge followed by `WS-ENG-006-00`,
+  authenticated the activation checks, and consumed both recovery identities
+  before signing, with CLI reload, collision, replay, and leakage checks.
 
 ## Commands Run
 
@@ -67,7 +68,7 @@ git diff --check origin/main...HEAD
 
 ## Remaining Risks
 
-- The root recovery certificate is intentionally exceptional, but it is bound
-  to one initiative, one chunk, one target, and the signed first parent; it is
+- The recovery certificate is intentionally exceptional, but it is bound to
+  exact PR #176 followed by one ENG-006 activation target; both identities are
   consumed before state signing and cannot authorize later work.
 - External GitHub checks and CodeRabbit remain pending until the PR is opened.

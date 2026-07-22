@@ -77,7 +77,7 @@ python3 -m py_compile scripts/update_post_merge_memory.py scripts/check_loop_mem
 git diff --check origin/main...HEAD
 ```
 
-Result: all passed; 94 Agent Gate tests passed.
+Result: all passed; 95 Agent Gate tests passed.
 
 ## Test delta
 
@@ -104,16 +104,16 @@ Result: all passed; 94 Agent Gate tests passed.
 
 ## Reviewer results
 
-Reviewed code SHA: a297588f614820dc8566df3bee1000b8107b2509
+Reviewed code SHA: 9ad6292e31a9a4bb6a03ff779cc7a8f2989ec1a1
 
-Reviewed at: 2026-07-22T06:16:09Z
+Reviewed at: 2026-07-22T10:02:00Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
 | senior engineering | PASS AFTER FIXES | None | Exact final SHA reviewed. |
-| QA/test | PASS AFTER FIXES | None | 94 tests passed. |
+| QA/test | PASS AFTER FIXES | None | 95 tests passed. |
 | security/auth | PASS AFTER FIXES | None | Admission and recovery boundaries pass. |
 | product/ops | PASS | None | Product behavior unchanged. |
 | architecture | PASS AFTER FIXES | None | Durable single-path design. |
@@ -124,8 +124,9 @@ Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_o
 
 ## Remaining risks
 
-External PR checks have not yet run. The one-use recovery certificate remains
-high impact but is exact-target, first-parent-bound, consumed, and replay-inert.
+External PR checks must rerun. The one-use recovery certificate remains high
+impact but is bound to exact PR #176 plus the ENG-006 target, consumed, and
+replay-inert.
 
 ## Follow-up work
 
