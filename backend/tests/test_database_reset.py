@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import asyncpg  # type: ignore[import-not-found]
 import pytest  # type: ignore[import-not-found]
@@ -18,11 +18,12 @@ from conftest import (
     RESETTABLE_TEST_TABLES,
     TRUNCATE_GUARDED_TABLES,
     _assert_owned_test_database,
+    clean_postgres_database as clean_postgres_database_fixture,
 )
 
 
 def test_alembic_schema_mutators_declare_schema_ownership() -> None:
-    """Every test that moves Alembic revisions must own schema setup and cleanup."""
+    """Guide direct Alembic revision movers to schema-owning cleanup."""
     unmarked: list[str] = []
     for test_path in sorted(Path(__file__).parent.glob("test_*.py")):
         tree = ast.parse(test_path.read_text(encoding="utf-8"))
@@ -52,6 +53,42 @@ def test_alembic_schema_mutators_declare_schema_ownership() -> None:
                 unmarked.append(f"{test_path.name}::{node.name}")
 
     assert unmarked == []
+
+
+@pytest.mark.postgres_schema_contract
+def test_unmarked_fixture_teardown_rejects_hidden_schema_mutation(
+    postgres_database_url: str,
+    clean_postgres_database: str,
+) -> None:
+    """Runtime teardown catches schema mutation hidden behind an arbitrary helper."""
+    del clean_postgres_database
+    request = Mock()
+    request.node.get_closest_marker.return_value = None
+    fixture = clean_postgres_database_fixture.__wrapped__(
+        postgres_database_url,
+        request,
+    )
+    assert next(fixture) == postgres_database_url
+
+    async def hidden_mutation() -> None:
+        connection = await asyncpg.connect(postgres_database_url.replace("+asyncpg", ""))
+        try:
+            await connection.execute('create collation hidden_reset_drift from "C"')
+        finally:
+            await connection.close()
+
+    asyncio.run(hidden_mutation())
+    with pytest.raises(RuntimeError, match="unexpected public schema object fingerprint"):
+        next(fixture)
+
+    async def cleanup() -> None:
+        connection = await asyncpg.connect(postgres_database_url.replace("+asyncpg", ""))
+        try:
+            await connection.execute("drop collation if exists hidden_reset_drift")
+        finally:
+            await connection.close()
+
+    asyncio.run(cleanup())
 
 
 async def _protected_state(connection: asyncpg.Connection) -> tuple[str, str | None]:

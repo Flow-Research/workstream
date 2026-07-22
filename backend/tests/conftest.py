@@ -247,6 +247,16 @@ def _rebuild_test_database_schema(database_url: str) -> None:
         command.upgrade(_alembic_config(), "head")
 
 
+async def _verify_test_database_schema(database_url: str) -> None:
+    """Verify that an ordinary test returned its owned database schema unchanged."""
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+    try:
+        await _assert_owned_test_database(connection, database_url)
+        await _assert_canonical_test_schema(connection)
+    finally:
+        await connection.close()
+
+
 async def _reset_test_database_state(
     database_url: str,
     *,
@@ -319,9 +329,13 @@ def clean_postgres_database(
         yield postgres_database_url
     finally:
         asyncio.run(db_session.dispose_engine())
-        if owns_schema:
-            _rebuild_test_database_schema(postgres_database_url)
-        get_settings.cache_clear()
+        try:
+            if owns_schema:
+                _rebuild_test_database_schema(postgres_database_url)
+            else:
+                asyncio.run(_verify_test_database_schema(postgres_database_url))
+        finally:
+            get_settings.cache_clear()
 
 
 @pytest.fixture
