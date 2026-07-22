@@ -45,6 +45,7 @@ docs/operations_post_merge_memory.md
 scripts/update_post_merge_memory.py
 scripts/check_loop_memory_state.py
 scripts/test_agent_gates.py
+scripts/test_update_post_merge_memory.py
 .agent-loop/initiatives/WS-ENG-006-contributor-engineering-onboarding/**
 .agent-loop/merge-intents/WS-ENG-006-00.json
 ```
