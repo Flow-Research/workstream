@@ -40,14 +40,17 @@ HTTP response and audit identifiers.
 
 ## Admission pressure
 
-`GET /api/v1/operator/artifacts/admission-usage` reports bounded current,
-configured, and remaining bytes per scope. It is read-only: it cannot release
-charges, change configuration, or create recovery work.
+`GET /api/v1/operator/artifacts/admission-usage` requires an exact canonical
+`project_id` and reports bounded deployment, project, and optional task usage.
+It never enumerates producer-scope identifiers. It is read-only: it cannot
+release charges, change configuration, or create recovery work.
 
-The service emits `workstream_artifact_admission_pressure_total` with only
+Every admission transaction emits `workstream_artifact_admission_pressure_total`
+for each derived deployment, project, producer, and task scope. The bounded
+structured-log metric contains only
 `scope_type` (`deployment`, `project`, `producer`, or `task`) and
 `pressure_band` (`normal`, `warning`, `critical`, or `exhausted`). Configure
-alerts for:
+the deployment log collector to aggregate this counter and alert for:
 
 - warning at 75 percent;
 - critical at 90 percent;
@@ -60,15 +63,18 @@ charges or edit counters in PostgreSQL.
 
 ## Quota expansion and rollback
 
-Quota changes are configuration-driven. Increase the smallest affected scope,
-deploy the validated configuration, and confirm the read-only admission view
-reports the intended configured limit before allowing new writes. Keep task,
-producer, project, and deployment limits mutually consistent.
+Quota changes are configuration-driven. Increase the smallest affected scope
+and deploy the validated configuration. The next admission transaction locks
+the affected counters and reconciles their persisted limits with configuration
+using CAS fencing before reserving bytes. Confirm the read-only admission view
+reports matching configured and persisted limits. Keep task, producer, project,
+and deployment limits mutually consistent.
 
-If the change is wrong, restore the previous configuration and redeploy. A
-rollback must not reduce a persisted limit below already-counted bytes. If that
-would occur, stop new artifact writes, retain the higher safe limit, and resolve
-the incident without deleting charges or directly editing database state.
+If the change is wrong, restore the previous configuration and redeploy. The
+same locked reconciliation permits a decrease only when it is not below
+already-counted bytes. Otherwise admission fails closed: stop new artifact
+writes, retain the higher safe limit, and resolve the incident without deleting
+charges or directly editing database state.
 
 ## Prohibited operations
 

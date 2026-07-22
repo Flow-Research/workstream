@@ -44,10 +44,15 @@ from app.modules.artifacts.models import (
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
 )
+from app.modules.artifacts.metrics import (
+    ArtifactAdmissionMetrics,
+    artifact_admission_metrics,
+)
 from app.modules.artifacts.repository import ArtifactRepository
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionRequest,
     ArtifactAdmissionResult,
+    ArtifactAuthorityDeniedError,
     ArtifactInternalAuthority,
     ArtifactInternalResourceType,
     ArtifactPutAttemptAuthorityFacts,
@@ -58,6 +63,7 @@ from app.modules.artifacts.schemas import (
     ArtifactRecoveryAuthorityFacts,
     ArtifactRecoveryConflictError,
     ArtifactRecoveryIneligibleError,
+    ArtifactRecoveryNotFoundError,
     DenyArtifactInternalAuthority,
     CheckerOutputArtifactAdmissionRequest,
     ContributorArtifactAdmissionRequest,
@@ -237,9 +243,7 @@ class ArtifactStorageOrchestrator:
                 return "stale"
             assert claimed is not None
             self._validate_put_execution_namespace(claimed, persisted_namespace)
-            claimed_facts = _put_authority_facts(
-                claimed, executor_id, claimed.execution_generation
-            )
+            claimed_facts = _put_authority_facts(claimed, executor_id, claimed.execution_generation)
             if (
                 claimed_facts != facts
                 or source.commitment.sha256 != claimed.sha256
@@ -317,9 +321,7 @@ class ArtifactStorageOrchestrator:
                 return "stale"
             assert claimed is not None
             self._validate_put_execution_namespace(claimed, persisted_namespace)
-            if _put_authority_facts(
-                claimed, executor_id, claimed.execution_generation
-            ) != facts:
+            if _put_authority_facts(claimed, executor_id, claimed.execution_generation) != facts:
                 await claim_transaction.rollback()
                 return "stale"
         commitment = _attempt_commitment(claimed)
@@ -1195,49 +1197,76 @@ class ArtifactRecoveryService:
             # the authoritative replay row is read.
             async with self._session.begin():
                 existing = await self._repo.lock_recovery_by_source(source_id)
-                if existing is not None and self._is_exact_replay(existing, request, digest):
-                    await self._authorize_request(request)
-                    return self._result(existing, replayed=True)
                 if existing is not None:
-                    raise ArtifactRecoveryConflictError(
-                        "artifact recovery source is already owned"
+                    await self._authorize_request(
+                        request,
+                        project_id=UUID(existing.project_id),
+                        task_id=UUID(existing.task_id) if existing.task_id else None,
+                        submission_id=(
+                            UUID(existing.submission_id) if existing.submission_id else None
+                        ),
                     )
+                    if self._is_exact_replay(existing, request, digest):
+                        return self._result(existing, replayed=True)
+                    raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
             raise
+
+    async def retry_verification(self, request: ArtifactRecoveryRequest) -> ArtifactRecoveryResult:
+        """Implement the approved Operator recovery port."""
+        return await self.create(request)
 
     async def _create_locked(
         self, request: ArtifactRecoveryRequest, source_id: str, digest: str
     ) -> ArtifactRecoveryResult:
         existing = await self._repo.lock_recovery_by_source(source_id)
         if existing is not None:
+            await self._authorize_request(
+                request,
+                project_id=UUID(existing.project_id),
+                task_id=UUID(existing.task_id) if existing.task_id else None,
+                submission_id=UUID(existing.submission_id) if existing.submission_id else None,
+            )
             if self._is_exact_replay(existing, request, digest):
-                await self._authorize_request(request)
                 return self._result(existing, replayed=True)
             raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
         source = await self._repo.lock_verification_job(source_id)
-        if source is None or not self._is_exhausted_unavailable(source):
-            raise ArtifactRecoveryIneligibleError(
-                "artifact verification job is not exhausted provider-unavailable work"
-            )
-        if source.cas_version != request.expected_source_job_cas_version:
-            raise ArtifactRecoveryConflictError("artifact verification source changed")
+        if source is None:
+            raise ArtifactRecoveryNotFoundError("artifact recovery resource was not found")
         put_attempt = await self._repo.lock_put_attempt(source.originating_put_attempt_id)
+        if put_attempt is None:
+            raise ArtifactRecoveryNotFoundError("artifact recovery resource was not found")
         checker_run = (
             await self._repo.lock_checker_run(put_attempt.checker_run_id)
-            if put_attempt is not None and put_attempt.checker_run_id is not None
+            if put_attempt.checker_run_id is not None
             else None
         )
         canonical_submission_id = checker_run.submission_id if checker_run is not None else None
+        canonical_project_id = UUID(put_attempt.project_id)
+        canonical_task_id = UUID(put_attempt.task_id) if put_attempt.task_id else None
+        canonical_submission_uuid = (
+            UUID(canonical_submission_id) if canonical_submission_id else None
+        )
+        authorization = await self._authorize_request(
+            request,
+            project_id=canonical_project_id,
+            task_id=canonical_task_id,
+            submission_id=canonical_submission_uuid,
+        )
         if (
-            put_attempt is None
-            or put_attempt.project_id != str(request.project_id)
+            put_attempt.project_id != str(request.project_id)
             or put_attempt.task_id
             != (str(request.task_id) if request.task_id is not None else None)
             or canonical_submission_id
             != (str(request.submission_id) if request.submission_id is not None else None)
         ):
             raise ArtifactRecoveryConflictError("artifact recovery resource facts changed")
+        if not self._is_exhausted_unavailable(source):
+            raise ArtifactRecoveryIneligibleError(
+                "artifact verification job is not exhausted provider-unavailable work"
+            )
+        if source.cas_version != request.expected_source_job_cas_version:
+            raise ArtifactRecoveryConflictError("artifact verification source changed")
         context = request.authorization_context
-        authorization = await self._authorize_request(request)
         parent = await self._repo.lock_recovery_by_retry(source_id)
         retry_id = str(uuid4())
         recovery_id = str(uuid4())
@@ -1277,11 +1306,9 @@ class ArtifactRecoveryService:
             requester_identity_link_id=str(context.identity_link_id),
             authorization_request_id=str(context.request_id),
             authorization_correlation_id=str(context.correlation_id),
-            project_id=str(request.project_id),
-            task_id=str(request.task_id) if request.task_id is not None else None,
-            submission_id=(
-                str(request.submission_id) if request.submission_id is not None else None
-            ),
+            project_id=str(canonical_project_id),
+            task_id=str(canonical_task_id) if canonical_task_id is not None else None,
+            submission_id=(str(canonical_submission_uuid) if canonical_submission_uuid else None),
             source_verification_job_id=source.id,
             retry_verification_job_id=retry_id,
             parent_recovery_attempt_id=parent.id if parent is not None else None,
@@ -1295,7 +1322,14 @@ class ArtifactRecoveryService:
         await self._repo.add_recovery_attempt(recovery)
         return self._result(recovery, replayed=False)
 
-    async def _authorize_request(self, request: ArtifactRecoveryRequest):
+    async def _authorize_request(
+        self,
+        request: ArtifactRecoveryRequest,
+        *,
+        project_id: UUID,
+        task_id: UUID | None,
+        submission_id: UUID | None,
+    ):
         """Revalidate the human requester and exact Operator action on every call."""
         context = request.authorization_context
         actor = await self._actors.lock_admission_proof(
@@ -1313,23 +1347,22 @@ class ArtifactRecoveryService:
             or actor.identity_link_subject_kind != "human"
             or actor.identity_link_status != "active"
         ):
-            raise ArtifactRecoveryConflictError("artifact recovery requester is unavailable")
+            raise ArtifactAuthorityDeniedError("artifact recovery requester is unavailable")
         authorization = await self._authority.authorize(
             authorization_context=context,
             facts=ArtifactRecoveryAuthorityFacts(
-                project_id=request.project_id,
-                task_id=request.task_id,
-                submission_id=request.submission_id,
+                project_id=project_id,
+                task_id=task_id,
+                submission_id=submission_id,
                 source_verification_job_id=request.source_verification_job_id,
                 expected_source_job_cas_version=request.expected_source_job_cas_version,
             ),
         )
         if (
             authorization.action_id is not ActionId.ARTIFACT_VERIFICATION_JOB_RETRY
-            or authorization.permission_id
-            != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
+            or authorization.permission_id != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
         ):
-            raise ArtifactRecoveryConflictError(
+            raise ArtifactAuthorityDeniedError(
                 "artifact recovery authorization evidence is invalid"
             )
         return authorization
@@ -1399,9 +1432,7 @@ class ArtifactRecoveryService:
         )
 
     @staticmethod
-    def _result(
-        attempt: ArtifactRecoveryAttempt, *, replayed: bool
-    ) -> ArtifactRecoveryResult:
+    def _result(attempt: ArtifactRecoveryAttempt, *, replayed: bool) -> ArtifactRecoveryResult:
         return ArtifactRecoveryResult(
             recovery_attempt_id=UUID(attempt.id),
             source_verification_job_id=UUID(attempt.source_verification_job_id),
@@ -1446,6 +1477,7 @@ class ArtifactAdmissionService:
         session: AsyncSession,
         settings: Settings,
         namespace: ArtifactStorageNamespaceSpec,
+        metrics: ArtifactAdmissionMetrics = artifact_admission_metrics,
     ) -> None:
         """Bind admission to one transaction owner and configured namespace."""
         self._session = session
@@ -1453,6 +1485,7 @@ class ArtifactAdmissionService:
         self._namespace = namespace
         self._repo = ArtifactRepository(session)
         self._actors = ActorService(session)
+        self._metrics = metrics
 
     async def admit(
         self,
@@ -1511,6 +1544,10 @@ class ArtifactAdmissionService:
                 sha256=commitment.sha256,
                 byte_count=commitment.byte_count,
             )
+            for counter in counters:
+                self._metrics.pressure(
+                    counter.scope_type, counter.counted_bytes, counter.limit_bytes
+                )
             if replay is not None:
                 linked_charge_ids = await self._repo.list_put_attempt_charge_ids(replay.id)
                 reserved_charge_ids = tuple(sorted(charge.id for charge in charges))
@@ -1820,9 +1857,12 @@ class ArtifactAdmissionService:
         for scope in scopes:
             counter = counter_by_key[(scope.scope_type, scope.scope_id)]
             if counter.limit_bytes != scope.limit_bytes:
-                raise ArtifactAdmissionConfigurationError(
-                    "artifact admission scope limit does not match configuration"
-                )
+                if scope.limit_bytes < counter.counted_bytes:
+                    raise ArtifactAdmissionConfigurationError(
+                        "artifact admission configured limit is below counted bytes"
+                    )
+                counter.limit_bytes = scope.limit_bytes
+                counter.cas_version += 1
             charge = await self._repo.get_admission_charge(
                 scope_type=scope.scope_type,
                 scope_id=scope.scope_id,

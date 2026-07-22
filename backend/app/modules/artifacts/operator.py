@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import logging
-from collections import Counter
 from dataclasses import dataclass
-from threading import Lock
-from typing import Literal, Protocol
 from uuid import UUID
 
 from sqlalchemy import Select, and_, or_, select
@@ -29,54 +24,23 @@ from app.modules.artifacts.models import (
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
 )
+from app.modules.artifacts.metrics import ArtifactAdmissionMetrics
 from app.modules.artifacts.schemas import (
     ArtifactOperatorAuthority,
     ArtifactOperatorAuthorityFacts,
     ArtifactOperatorAuthorizationEvidence,
     ArtifactOperatorResourceType,
 )
+from app.modules.checkers.models import CheckerRun
+from app.modules.projects.models import (
+    GuideSourceSnapshot,
+    GuideSourceSnapshotItem,
+    Project,
+    ProjectGuide,
+)
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.runtime import AuthorizationContext
-from app.modules.tasks.models import AuditEvent
-from app.modules.tasks.models import WorkstreamTask
-
-logger = logging.getLogger(__name__)
-AdmissionPressureBand = Literal["normal", "warning", "critical", "exhausted"]
-
-
-class ArtifactAdmissionMetrics(Protocol):
-    def pressure(self, scope_type: str, band: AdmissionPressureBand) -> None: ...
-
-
-class InProcessArtifactAdmissionMetrics:
-    """Bounded admission-pressure counters following the verifier convention."""
-
-    _SCOPES = frozenset({"deployment", "project", "producer", "task"})
-    _BANDS = frozenset({"normal", "warning", "critical", "exhausted"})
-
-    def __init__(self) -> None:
-        self._counts: Counter[tuple[str, str]] = Counter()
-        self._lock = Lock()
-
-    def pressure(self, scope_type: str, band: AdmissionPressureBand) -> None:
-        if scope_type not in self._SCOPES or band not in self._BANDS:
-            raise ValueError("artifact admission metric labels are not allowed")
-        with self._lock:
-            self._counts[(scope_type, band)] += 1
-        logger.info(
-            "artifact_admission_metric %s",
-            json.dumps(
-                {
-                    "metric": "workstream_artifact_admission_pressure_total",
-                    "labels": {"scope_type": scope_type, "pressure_band": band},
-                },
-                sort_keys=True,
-            ),
-        )
-
-    def snapshot(self) -> dict[tuple[str, str], int]:
-        with self._lock:
-            return dict(self._counts)
+from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,25 +106,27 @@ class ArtifactOperatorService:
         cursor: str | None,
         limit: int,
     ) -> ArtifactPage:
+        canonical_project = await self._binding_resource_project(resource_type, str(resource_id))
+        if canonical_project is None:
+            raise ArtifactOperatorNotFound("artifact resource was not found")
+        project = (UUID(canonical_project),)
+        await self._authorize(
+            authorization_context,
+            ActionId.ARTIFACT_BINDING_READ,
+            ArtifactOperatorResourceType.BINDING_SCOPE,
+            f"{resource_type}:{resource_id}",
+            project,
+        )
         base = (
             select(ArtifactBinding)
             .where(
+                ArtifactBinding.project_id == canonical_project,
                 ArtifactBinding.resource_type == resource_type,
                 ArtifactBinding.resource_id == str(resource_id),
             )
             .with_for_update()
         )
         rows = await self._page(base, ArtifactBinding.id, cursor, limit)
-        if not rows:
-            raise ArtifactOperatorNotFound("artifact resource was not found")
-        projects = self._project_ids(row.project_id for row in rows)
-        await self._authorize(
-            authorization_context,
-            ActionId.ARTIFACT_BINDING_READ,
-            ArtifactOperatorResourceType.BINDING_SCOPE,
-            f"{resource_type}:{resource_id}",
-            projects,
-        )
         return self._result(
             rows,
             limit,
@@ -235,15 +201,27 @@ class ArtifactOperatorService:
             projects,
         )
 
-        def cursor_filter(column):
-            return column > cursor if cursor else True
+        receipt_order = {"put": 0, "put_observation": 1, "verification": 2}
+        cursor_type: str | None = None
+        cursor_id = ""
+        if cursor:
+            cursor_type, separator, cursor_id = cursor.partition(":")
+            if not separator or cursor_type not in receipt_order:
+                raise ArtifactOperatorInputError("artifact receipt cursor is invalid")
+
+        def after_cursor(receipt_type: str, id_column):
+            if cursor_type is None or receipt_order[receipt_type] > receipt_order[cursor_type]:
+                return True
+            if receipt_order[receipt_type] < receipt_order[cursor_type]:
+                return False
+            return id_column > cursor_id
 
         operations = (
             await self._session.scalars(
                 select(ArtifactOperationReceipt)
                 .where(
                     ArtifactOperationReceipt.replica_id == str(replica_id),
-                    cursor_filter(ArtifactOperationReceipt.id),
+                    after_cursor("put", ArtifactOperationReceipt.id),
                 )
                 .order_by(ArtifactOperationReceipt.id)
                 .limit(limit + 1)
@@ -258,7 +236,7 @@ class ArtifactOperatorService:
                 )
                 .where(
                     ArtifactPutAttempt.replica_id == str(replica_id),
-                    cursor_filter(ArtifactPutObservationReceipt.id),
+                    after_cursor("put_observation", ArtifactPutObservationReceipt.id),
                 )
                 .order_by(ArtifactPutObservationReceipt.id)
                 .limit(limit + 1)
@@ -273,7 +251,7 @@ class ArtifactOperatorService:
                 )
                 .where(
                     ArtifactVerificationJob.replica_id == str(replica_id),
-                    cursor_filter(ArtifactVerificationReceipt.id),
+                    after_cursor("verification", ArtifactVerificationReceipt.id),
                 )
                 .order_by(ArtifactVerificationReceipt.id)
                 .limit(limit + 1)
@@ -316,11 +294,15 @@ class ArtifactOperatorService:
                 for row, bound_replica in verifications
             ]
         )
-        encoded.sort(key=lambda item: str(item["id"]))
+        encoded.sort(key=lambda item: (receipt_order[str(item["receipt_type"])], str(item["id"])))
         visible = encoded[:limit]
         return ArtifactPage(
             tuple(visible),
-            str(visible[-1]["id"]) if len(encoded) > limit and visible else None,
+            (
+                f"{visible[-1]['receipt_type']}:{visible[-1]['id']}"
+                if len(encoded) > limit and visible
+                else None
+            ),
         )
 
     async def get_verification_job(
@@ -465,6 +447,8 @@ class ArtifactOperatorService:
         cursor: str | None,
         limit: int,
     ) -> ArtifactPage:
+        if project_id is None:
+            raise ArtifactOperatorInputError("artifact admission project scope is required")
         filters = []
         projects: tuple[UUID, ...] = ()
         if task_id is not None:
@@ -478,17 +462,16 @@ class ArtifactOperatorService:
             ):
                 raise ArtifactOperatorNotFound("artifact resource was not found")
             projects = (UUID(canonical_project),)
-        if project_id is not None:
-            filters.append(
-                or_(
-                    and_(
-                        ArtifactAdmissionScope.scope_type == "project",
-                        ArtifactAdmissionScope.scope_id == str(project_id),
-                    ),
-                    ArtifactAdmissionScope.scope_type == "deployment",
-                )
+        filters.append(
+            or_(
+                and_(
+                    ArtifactAdmissionScope.scope_type == "project",
+                    ArtifactAdmissionScope.scope_id == str(project_id),
+                ),
+                ArtifactAdmissionScope.scope_type == "deployment",
             )
-            projects = (project_id,)
+        )
+        projects = (project_id,)
         if task_id is not None:
             filters.append(
                 and_(
@@ -529,10 +512,6 @@ class ArtifactOperatorService:
             ).all()
         )
         configured = self._configured_limits()
-        for row in rows[:limit]:
-            self._metrics.pressure(
-                row.scope_type, self._pressure(row.counted_bytes, row.limit_bytes)
-            )
         return self._result(
             rows,
             limit,
@@ -569,22 +548,90 @@ class ArtifactOperatorService:
         return evidence
 
     async def _content_projects(self, content_id: str) -> tuple[UUID, ...]:
-        values = (
+        binding_values = (
             await self._session.scalars(
                 select(ArtifactBinding.project_id)
                 .where(ArtifactBinding.content_id == content_id)
                 .with_for_update()
             )
         ).all()
-        return self._project_ids(values)
+        attempt_values = (
+            await self._session.scalars(
+                select(ArtifactPutAttempt.project_id)
+                .join(ArtifactReplica, ArtifactReplica.id == ArtifactPutAttempt.replica_id)
+                .where(ArtifactReplica.content_id == content_id)
+                .with_for_update(of=(ArtifactPutAttempt, ArtifactReplica))
+            )
+        ).all()
+        return self._project_ids((*binding_values, *attempt_values))
 
     async def _replica_projects(self, replica_id: str) -> tuple[UUID, ...]:
+        values = (
+            await self._session.scalars(
+                select(ArtifactPutAttempt.project_id)
+                .where(ArtifactPutAttempt.replica_id == replica_id)
+                .with_for_update()
+            )
+        ).all()
+        if values:
+            return self._project_ids(values)
         content_id = await self._session.scalar(
             select(ArtifactReplica.content_id)
             .where(ArtifactReplica.id == replica_id)
             .with_for_update()
         )
         return await self._content_projects(content_id) if content_id else ()
+
+    async def _binding_resource_project(self, resource_type: str, resource_id: str) -> str | None:
+        if resource_type == "project":
+            return await self._session.scalar(
+                select(Project.id).where(Project.id == resource_id).with_for_update()
+            )
+        if resource_type == "project_guide":
+            return await self._session.scalar(
+                select(ProjectGuide.project_id)
+                .where(ProjectGuide.id == resource_id)
+                .with_for_update()
+            )
+        if resource_type == "guide_source_snapshot":
+            return await self._session.scalar(
+                select(GuideSourceSnapshot.project_id)
+                .where(GuideSourceSnapshot.id == resource_id)
+                .with_for_update()
+            )
+        if resource_type == "guide_source_snapshot_item":
+            return await self._session.scalar(
+                select(GuideSourceSnapshot.project_id)
+                .join(
+                    GuideSourceSnapshotItem,
+                    GuideSourceSnapshotItem.source_snapshot_id == GuideSourceSnapshot.id,
+                )
+                .where(GuideSourceSnapshotItem.id == resource_id)
+                .with_for_update(of=(GuideSourceSnapshot, GuideSourceSnapshotItem))
+            )
+        if resource_type == "task":
+            return await self._session.scalar(
+                select(WorkstreamTask.project_id)
+                .where(WorkstreamTask.id == resource_id)
+                .with_for_update()
+            )
+        if resource_type == "submission":
+            return await self._session.scalar(
+                select(WorkstreamTask.project_id)
+                .join(Submission, Submission.task_id == WorkstreamTask.id)
+                .where(Submission.id == resource_id)
+                .with_for_update(of=(Submission, WorkstreamTask))
+            )
+        if resource_type == "checker_run":
+            return await self._session.scalar(
+                select(WorkstreamTask.project_id)
+                .join(CheckerRun, CheckerRun.task_id == WorkstreamTask.id)
+                .where(CheckerRun.id == resource_id)
+                .with_for_update(of=(CheckerRun, WorkstreamTask))
+            )
+        # The review lifecycle has no canonical review record yet. Fail closed
+        # until its owning initiative provides one.
+        return None
 
     async def _audit_projects(self, resource_type: str, resource_id: str) -> tuple[UUID, ...]:
         if resource_type == "artifact_binding":
@@ -599,14 +646,40 @@ class ArtifactOperatorService:
         if resource_type in {"artifact_replica", "artifact_receipt"}:
             replica_id = resource_id
             if resource_type == "artifact_receipt":
-                replica_id = (
-                    await self._session.scalar(
-                        select(ArtifactOperationReceipt.replica_id)
-                        .where(ArtifactOperationReceipt.id == resource_id)
-                        .with_for_update()
-                    )
-                    or ""
+                candidates: list[str] = []
+                operation_replica = await self._session.scalar(
+                    select(ArtifactOperationReceipt.replica_id)
+                    .where(ArtifactOperationReceipt.id == resource_id)
+                    .with_for_update()
                 )
+                if operation_replica:
+                    candidates.append(operation_replica)
+                observation_replica = await self._session.scalar(
+                    select(ArtifactPutAttempt.replica_id)
+                    .join(
+                        ArtifactPutObservationReceipt,
+                        ArtifactPutObservationReceipt.put_attempt_id == ArtifactPutAttempt.id,
+                    )
+                    .where(ArtifactPutObservationReceipt.id == resource_id)
+                    .with_for_update(of=(ArtifactPutObservationReceipt, ArtifactPutAttempt))
+                )
+                if observation_replica:
+                    candidates.append(observation_replica)
+                verification_replica = await self._session.scalar(
+                    select(ArtifactVerificationJob.replica_id)
+                    .join(
+                        ArtifactVerificationReceipt,
+                        ArtifactVerificationReceipt.verification_job_id
+                        == ArtifactVerificationJob.id,
+                    )
+                    .where(ArtifactVerificationReceipt.id == resource_id)
+                    .with_for_update(of=(ArtifactVerificationReceipt, ArtifactVerificationJob))
+                )
+                if verification_replica:
+                    candidates.append(verification_replica)
+                if len(set(candidates)) != 1:
+                    return ()
+                replica_id = candidates[0]
             return await self._replica_projects(replica_id)
         if resource_type == "artifact_verification_job":
             replica_id = await self._session.scalar(
@@ -650,17 +723,6 @@ class ArtifactOperatorService:
             "project": self._settings.artifact_admission_project_maximum_bytes,
             "deployment": self._settings.artifact_admission_deployment_maximum_bytes,
         }
-
-    @staticmethod
-    def _pressure(counted: int, limit: int) -> AdmissionPressureBand:
-        ratio = counted / limit
-        if ratio >= 1:
-            return "exhausted"
-        if ratio >= 0.9:
-            return "critical"
-        if ratio >= 0.75:
-            return "warning"
-        return "normal"
 
 
 def artifact_provider_readiness(settings: Settings) -> dict[str, object]:

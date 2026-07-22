@@ -236,10 +236,16 @@ def active_artifact_coverage_phase() -> str:
     if active_chunks:
         active = active_chunks[0]
         if active == "WS-ART-001-OBJECT-STORAGE-AMENDMENT":
-            return "foundation"
-        phase = active.removeprefix("WS-ART-001-")
-        assert phase in ARTIFACT_COVERAGE_ORDER, phase
-        return phase
+            phase = "foundation"
+        else:
+            phase = active.removeprefix("WS-ART-001-")
+            assert phase in ARTIFACT_COVERAGE_ORDER, phase
+        reviewed_intent_phases = {
+            path.stem.removeprefix("WS-ART-001-")
+            for path in (ROOT / ".agent-loop/merge-intents").glob("WS-ART-001-*.json")
+            if path.stem.removeprefix("WS-ART-001-") in ARTIFACT_COVERAGE_ORDER
+        }
+        return max({phase, *reviewed_intent_phases}, key=ARTIFACT_COVERAGE_ORDER.index)
 
     completed = queue.split("## Completed", maxsplit=1)[1].split(
         "## Proposed Next",

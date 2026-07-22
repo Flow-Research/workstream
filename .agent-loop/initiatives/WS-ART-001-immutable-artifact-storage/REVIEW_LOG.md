@@ -14,6 +14,21 @@
   recovery/audit follow-through, admission usage, inactive readiness,
   pagination, and concealed denial. Required implementation reviewer fanout is
   pending on the candidate commit.
+- First implementation review on `6f281793`: circuit-breaker PASS with a
+  justified single-contract size exception; all nine reviewer tracks FAIL.
+  Blocking findings covered canonical product/pre-binding lineage, recovery
+  port bypass and authorization ordering, open response dictionaries, receipt
+  cursor/audit completeness, project-scoped admission redaction, proactive
+  metrics, safe quota reconciliation, CI gate activation, and missing
+  adversarial HTTP/race proofs.
+- Repair replaces page-derived scope with locked product and put-attempt
+  lineage, routes retry through `ArtifactOperatorRecoveryPort`, authorizes
+  canonical recovery facts before differentiated errors, installs strict
+  response models and composite receipt cursors, covers every receipt audit
+  lineage, requires project-scoped usage, emits all four pressure scopes from
+  admission, reconciles configured limits under locked CAS guards, activates
+  the exact API-router CI gate, and expands HTTP replay/race/concealment and
+  pagination proof. Exact-SHA re-review remains pending.
 
 ## WS-ART-001-02C3
 

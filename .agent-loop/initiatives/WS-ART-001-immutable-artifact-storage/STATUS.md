@@ -30,10 +30,6 @@ assigned to future
 `WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
 inactive.
 
-Verification/put-resolution custody (`02C2`) and the recovery-attempt chain
-(`02C3`) are now merged on trusted main; `02C3` merged through PR #174 at
-`92b8a7aa`. Signed automation then started `WS-ART-001-02D` on that exact main.
-
 The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks
 but failed internal review on recovery/API completeness. Before repair, the user
 approved a first-principle change on 2026-07-14:
@@ -51,23 +47,26 @@ approval or reusable evidence. Its source remains on branch
 
 ## Current Work
 
-`WS-ART-001-02D` is active after the user's signed explicit start on
-2026-07-22. It adds hidden, provider-neutral Operator reads, exact retry and
-recovery HTTP composition, redacted audit/admission views, bounded admission
-pressure metrics, and static inactive readiness. Production composition is
-deny-only: all eight Operator actions and three internal actions remain planned
-and AUTH retains sole activation custody. AWS live proof, product cutovers,
-deletion, retention, and release remain out of scope.
+`WS-ART-001-02C2` is active after the user's explicit start on 2026-07-19. It
+adds caller-only committed put execution, read-only ambiguous-put resolution,
+durable verification jobs and typed receipts, PostgreSQL executor/generation
+fencing, bounded publication scanning, and complete-read deadlines. Production
+composition remains deny-only: the three internal artifact actions stay
+planned, no 02C2 Beat schedule is active, and AUTH retains sole activation
+custody. Recovery attempts, Operator routes, product cutovers, deletion, and
+background write replay remain out of scope.
 
 ## Next Proposed Chunk
 
-`03` may store and bind guide-source bytes only after 02D merges and receives a
-separate explicit start. No deferred provider has a v0.1 chunk.
+`02C3` may add the recovery-attempt and idempotency chain only after 02C2 merges
+and receives a separate explicit start. No deferred provider has a v0.1 chunk.
 
 ## Gate
 
-The 02D candidate integrates trusted main `92b8a7aa` without activating ART.
-The current gate is deterministic evidence and required internal review,
-followed by external CI/review and explicit human merge approval. Production
-activation and AWS live proof remain in later owning chunks. No later artifact
-chunk starts automatically, and only the user may approve merge.
+The candidate integrates trusted main `c559d556`, the sharded Backend workflow,
+and merged AUTH-PREP without activating ART. Exact-SHA internal evidence is
+complete for reviewed code `59fbab56`; hosted checks must rerun on the published
+evidence head. The current gate is external CI/review followed by explicit human
+merge approval.
+Production activation and recovery remain in later owning chunks. No later
+artifact chunk starts automatically, and only the user may approve merge.

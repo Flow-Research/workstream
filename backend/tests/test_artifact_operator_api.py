@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.routing import APIRoute
 from httpx import ASGITransport, AsyncClient
@@ -13,7 +13,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.db.session import get_db_session
 from app.main import create_app
 from app.modules.artifacts.operator import artifact_provider_readiness
-from app.modules.artifacts.models import ArtifactBinding, ArtifactPutAttempt, ArtifactReplica
+from app.modules.artifacts.metrics import artifact_admission_metrics
+from app.modules.artifacts.models import (
+    ArtifactBinding,
+    ArtifactPutAttempt,
+    ArtifactPutObservationReceipt,
+    ArtifactReplica,
+    ArtifactVerificationReceipt,
+)
 from app.modules.artifacts.router import (
     _concealed,
     get_artifact_authorization_context,
@@ -22,11 +29,13 @@ from app.modules.artifacts.router import (
     router,
 )
 from app.modules.artifacts.schemas import (
+    ArtifactAuthorityDeniedError,
     ArtifactOperatorAuthorizationEvidence,
     DenyArtifactOperatorAuthority,
     DenyArtifactRecoveryAuthority,
 )
 from app.modules.authorization.catalogue import ACTION_BY_ID
+from app.modules.authorization.runtime import ActorStatus, IdentityLinkStatus
 from app.core.config import Settings
 from tests.test_artifact_recovery import (
     _AllowRecoveryAuthority,
@@ -90,6 +99,26 @@ class _AllowOperatorAuthority:
         )
 
 
+class _ProjectOperatorAuthority(_AllowOperatorAuthority):
+    def __init__(self, project_id: str) -> None:
+        self._project_id = UUID(project_id)
+
+    async def authorize(self, *, facts, **values: object) -> ArtifactOperatorAuthorizationEvidence:
+        if facts.project_ids != (self._project_id,):
+            raise ArtifactAuthorityDeniedError("project scope is not authorized")
+        return await super().authorize(facts=facts, **values)
+
+
+class _ProjectRecoveryAuthority(_AllowRecoveryAuthority):
+    def __init__(self, project_id: str) -> None:
+        self._project_id = UUID(project_id)
+
+    async def authorize(self, *, facts, **values: object):
+        if facts.project_id != self._project_id:
+            raise ArtifactAuthorityDeniedError("project scope is not authorized")
+        return await super().authorize(facts=facts, **values)
+
+
 @pytest.mark.asyncio
 async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
     recovery_database_env: str,  # noqa: F811
@@ -105,43 +134,27 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
             project_id, task_id, source_job, _orchestrator, bootstrap = await _exhausted_job(
                 session, settings, tmp_path, context
             )
+            assert {scope_type for scope_type, _band in artifact_admission_metrics.snapshot()} == {
+                "deployment",
+                "project",
+                "producer",
+                "task",
+            }
             attempt = await session.scalar(select(ArtifactPutAttempt))
             assert attempt is not None and attempt.replica_id is not None
+            attempt_id = attempt.id
+            attempt_sha256 = attempt.sha256
+            attempt_byte_count = attempt.byte_count
             replica = await session.get(ArtifactReplica, attempt.replica_id)
             assert replica is not None
             replica_id = replica.id
+            content_id = replica.content_id
             source_job_id = source_job.id
             source_job_cas_version = source_job.cas_version
             binding_id = "00000000-0000-0000-0000-000000000101"
             second_binding_id = "00000000-0000-0000-0000-000000000102"
-            session.add_all(
-                [
-                    ArtifactBinding(
-                        id=binding_id,
-                        content_id=replica.content_id,
-                        project_id=project_id,
-                        resource_type="task",
-                        resource_id=task_id,
-                        logical_role="submission",
-                        scope_version=1,
-                        actor_id=str(context.actor_profile_id),
-                        attribution_type="human",
-                    ),
-                    ArtifactBinding(
-                        id=second_binding_id,
-                        content_id=replica.content_id,
-                        project_id=project_id,
-                        resource_type="task",
-                        resource_id=task_id,
-                        logical_role="diagnostic",
-                        scope_version=1,
-                        actor_id=str(context.actor_profile_id),
-                        attribution_type="human",
-                    ),
-                ]
-            )
-            await session.commit()
-
+            observation_receipt_id = "00000000-0000-0000-0000-000000000201"
+            verification_receipt_id = "00000000-0000-0000-0000-000000000202"
             app = create_app(settings)
 
             async def session_override():
@@ -162,6 +175,54 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
+                unbound_replicas = await client.get(
+                    f"/api/v1/operator/artifacts/contents/{content_id}/replicas"
+                )
+                unbound_job = await client.get(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}"
+                )
+                assert unbound_replicas.status_code == unbound_job.status_code == 200
+                session.add_all(
+                    [
+                        ArtifactBinding(
+                            id=binding_id,
+                            content_id=content_id,
+                            project_id=project_id,
+                            resource_type="task",
+                            resource_id=task_id,
+                            logical_role="submission",
+                            scope_version=1,
+                            actor_id=str(context.actor_profile_id),
+                            attribution_type="human",
+                        ),
+                        ArtifactBinding(
+                            id=second_binding_id,
+                            content_id=content_id,
+                            project_id=project_id,
+                            resource_type="task",
+                            resource_id=task_id,
+                            logical_role="diagnostic",
+                            scope_version=1,
+                            actor_id=str(context.actor_profile_id),
+                            attribution_type="human",
+                        ),
+                        ArtifactPutObservationReceipt(
+                            id=observation_receipt_id,
+                            put_attempt_id=attempt_id,
+                            execution_generation=99,
+                            outcome="conflict",
+                            expected_sha256=attempt_sha256,
+                            expected_byte_count=attempt_byte_count,
+                        ),
+                        ArtifactVerificationReceipt(
+                            id=verification_receipt_id,
+                            verification_job_id=source_job_id,
+                            execution_generation=99,
+                            outcome="conflict",
+                        ),
+                    ]
+                )
+                await session.commit()
                 binding = await client.get(
                     "/api/v1/operator/artifacts/bindings",
                     params={"resource_type": "task", "resource_id": task_id, "limit": 1},
@@ -169,7 +230,7 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 assert binding.status_code == 200
                 assert binding.json()["items"][0]["id"] == binding_id
                 assert binding.json()["next_cursor"] == binding_id
-                content_id = binding.json()["items"][0]["content_id"]
+                assert binding.json()["items"][0]["content_id"] == content_id
                 next_binding = await client.get(
                     "/api/v1/operator/artifacts/bindings",
                     params={
@@ -180,6 +241,17 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     },
                 )
                 assert next_binding.json()["items"][0]["id"] == second_binding_id
+                final_binding_page = await client.get(
+                    "/api/v1/operator/artifacts/bindings",
+                    params={
+                        "resource_type": "task",
+                        "resource_id": task_id,
+                        "cursor": second_binding_id,
+                        "limit": 1,
+                    },
+                )
+                assert final_binding_page.status_code == 200
+                assert final_binding_page.json() == {"items": [], "next_cursor": None}
 
                 replicas = await client.get(
                     f"/api/v1/operator/artifacts/contents/{content_id}/replicas"
@@ -191,17 +263,87 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 assert "provider_profile" not in replica_payload
 
                 receipts = await client.get(
-                    f"/api/v1/operator/artifacts/replicas/{replica_id}/receipts"
+                    f"/api/v1/operator/artifacts/replicas/{replica_id}/receipts",
+                    params={"limit": 1},
                 )
                 assert receipts.status_code == 200
                 assert "request_digest" not in receipts.text
                 assert "idempotency_key" not in receipts.text
+                receipt_types = [receipts.json()["items"][0]["receipt_type"]]
+                receipt_cursor = receipts.json()["next_cursor"]
+                while receipt_cursor is not None:
+                    receipt_page = await client.get(
+                        f"/api/v1/operator/artifacts/replicas/{replica_id}/receipts",
+                        params={"limit": 1, "cursor": receipt_cursor},
+                    )
+                    assert receipt_page.status_code == 200, receipt_page.text
+                    receipt_types.extend(
+                        item["receipt_type"] for item in receipt_page.json()["items"]
+                    )
+                    receipt_cursor = receipt_page.json().get("next_cursor")
+                assert receipt_types == ["put", "put_observation", "verification"]
+                for receipt_id in (observation_receipt_id, verification_receipt_id):
+                    receipt_audit = await client.get(
+                        "/api/v1/operator/artifacts/audit-events",
+                        params={
+                            "resource_type": "artifact_receipt",
+                            "resource_id": receipt_id,
+                        },
+                    )
+                    assert receipt_audit.status_code == 200
+                    assert receipt_audit.json()["items"] == []
 
                 job = await client.get(
                     f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}"
                 )
                 assert job.status_code == 200
                 assert job.json()["status"] == "provider_unavailable"
+
+                app.dependency_overrides[get_artifact_recovery_authority] = (
+                    DenyArtifactRecoveryAuthority
+                )
+                denied_before_create = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "authority race",
+                        "client_idempotency_key": "authority-race",
+                        "expected_source_job_cas_version": source_job_cas_version,
+                    },
+                )
+                assert denied_before_create.status_code == 404
+                app.dependency_overrides[get_artifact_recovery_authority] = _AllowRecoveryAuthority
+                for unavailable_context in (
+                    context.model_copy(update={"actor_status": ActorStatus.SUSPENDED}),
+                    context.model_copy(update={"identity_link_status": IdentityLinkStatus.REVOKED}),
+                ):
+                    app.dependency_overrides[get_artifact_authorization_context] = (
+                        lambda unavailable_context=unavailable_context: unavailable_context
+                    )
+                    unavailable = await client.post(
+                        f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                        json={
+                            "project_id": project_id,
+                            "task_id": task_id,
+                            "reason": "identity race",
+                            "client_idempotency_key": str(unavailable_context.actor_status),
+                            "expected_source_job_cas_version": source_job_cas_version,
+                        },
+                    )
+                    assert unavailable.status_code == 404
+                app.dependency_overrides[get_artifact_authorization_context] = context_override
+                stale_source = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "stale source fence",
+                        "client_idempotency_key": "stale-source",
+                        "expected_source_job_cas_version": source_job_cas_version + 1,
+                    },
+                )
+                assert stale_source.status_code == 409
 
                 retry = await client.post(
                     f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
@@ -215,6 +357,42 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 )
                 assert retry.status_code == 202
                 recovery_id = retry.json()["recovery_attempt_id"]
+                retry_job_id = retry.json()["retry_verification_job_id"]
+                replay = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "provider remained unavailable",
+                        "client_idempotency_key": "operator-http-retry",
+                        "expected_source_job_cas_version": source_job_cas_version,
+                    },
+                )
+                assert replay.status_code == 202
+                assert replay.json()["replayed"] is True
+                assert replay.json()["recovery_attempt_id"] == recovery_id
+                altered = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "altered replay",
+                        "client_idempotency_key": "operator-http-retry",
+                        "expected_source_job_cas_version": source_job_cas_version,
+                    },
+                )
+                assert altered.status_code == 409
+                ineligible = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{retry_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "pending retry is ineligible",
+                        "client_idempotency_key": "ineligible-retry",
+                        "expected_source_job_cas_version": 0,
+                    },
+                )
+                assert ineligible.status_code == 422
 
                 recovery = await client.get(
                     f"/api/v1/operator/artifacts/recovery-attempts/{recovery_id}"
@@ -234,11 +412,26 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
 
                 usage = await client.get(
                     "/api/v1/operator/artifacts/admission-usage",
-                    params={"project_id": project_id, "task_id": task_id},
+                    params={"project_id": project_id, "task_id": task_id, "limit": 1},
                 )
                 assert usage.status_code == 200
                 assert usage.json()["items"]
                 assert "producer_ref" not in usage.text
+                usage_types = [usage.json()["items"][0]["scope_type"]]
+                usage_cursor = usage.json()["next_cursor"]
+                while usage_cursor is not None:
+                    usage_page = await client.get(
+                        "/api/v1/operator/artifacts/admission-usage",
+                        params={
+                            "project_id": project_id,
+                            "task_id": task_id,
+                            "limit": 1,
+                            "cursor": usage_cursor,
+                        },
+                    )
+                    usage_types.extend(item["scope_type"] for item in usage_page.json()["items"])
+                    usage_cursor = usage_page.json()["next_cursor"]
+                assert usage_types == ["deployment", "project", "task"]
                 invalid_cursor = await client.get(
                     "/api/v1/operator/artifacts/admission-usage",
                     params={"project_id": project_id, "cursor": "invalid"},
@@ -249,6 +442,19 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 assert readiness.status_code == 200
                 assert readiness.json()["active"] is False
 
+                app.dependency_overrides[get_artifact_operator_authority] = lambda: (
+                    _ProjectOperatorAuthority(str(uuid4()))
+                )
+                cross_project = await client.get(
+                    f"/api/v1/operator/artifacts/contents/{content_id}/replicas"
+                )
+                missing = await client.get(
+                    f"/api/v1/operator/artifacts/contents/{uuid4()}/replicas"
+                )
+                assert cross_project.status_code == missing.status_code == 404
+                assert cross_project.json()["detail"] == missing.json()["detail"]
+                assert cross_project.json()["error"]["code"] == missing.json()["error"]["code"]
+
                 app.dependency_overrides[get_artifact_operator_authority] = (
                     DenyArtifactOperatorAuthority
                 )
@@ -258,8 +464,18 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                 assert concealed.status_code == 404
                 assert content_id not in concealed.text
 
-                app.dependency_overrides[get_artifact_recovery_authority] = (
-                    DenyArtifactRecoveryAuthority
+                app.dependency_overrides[get_artifact_recovery_authority] = lambda: (
+                    _ProjectRecoveryAuthority(str(uuid4()))
+                )
+                cross_project_retry = await client.post(
+                    f"/api/v1/operator/artifacts/verification-jobs/{source_job_id}/retry",
+                    json={
+                        "project_id": project_id,
+                        "task_id": task_id,
+                        "reason": "cross-project probe",
+                        "client_idempotency_key": "cross-project-probe",
+                        "expected_source_job_cas_version": source_job_cas_version,
+                    },
                 )
                 denied_retry = await client.post(
                     f"/api/v1/operator/artifacts/verification-jobs/{uuid4()}/retry",
@@ -270,7 +486,8 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                         "expected_source_job_cas_version": 0,
                     },
                 )
-                assert denied_retry.status_code == 404
+                assert cross_project_retry.status_code == denied_retry.status_code == 404
+                assert cross_project_retry.json()["detail"] == denied_retry.json()["detail"]
     finally:
         if bootstrap is not None:
             bootstrap.close()

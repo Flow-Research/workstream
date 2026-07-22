@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.modules.artifacts.operator import (
     ArtifactOperatorEvidenceError,
     ArtifactOperatorService,
-    InProcessArtifactAdmissionMetrics,
     artifact_provider_readiness,
 )
+from app.modules.artifacts.models import ArtifactAdmissionScope
+from app.modules.artifacts.metrics import InProcessArtifactAdmissionMetrics, pressure_band
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     ArtifactOperatorAuthorityFacts,
@@ -30,6 +35,13 @@ from app.modules.authorization.runtime import (
     SystemResourceContext,
 )
 from app.core.config import Settings
+from app.modules.artifacts.service import (
+    ArtifactAdmissionConfigurationError,
+    ArtifactAdmissionService,
+    _AdmissionFacts,
+    _AdmissionScopeSpec,
+)
+from app.modules.artifacts.router import ArtifactReplicaResponse
 from tests.test_authorization import _runtime_context, _runtime_service
 
 
@@ -111,15 +123,15 @@ async def test_operator_service_rejects_mismatched_authority_evidence() -> None:
 
 def test_admission_metrics_are_bounded_and_classified() -> None:
     metrics = InProcessArtifactAdmissionMetrics()
-    for band in ("normal", "warning", "critical", "exhausted"):
-        metrics.pressure("project", band)
+    for counted in (0, 75, 90, 100):
+        metrics.pressure("project", counted, 100)
     assert sum(metrics.snapshot().values()) == 4
-    assert ArtifactOperatorService._pressure(74, 100) == "normal"
-    assert ArtifactOperatorService._pressure(75, 100) == "warning"
-    assert ArtifactOperatorService._pressure(90, 100) == "critical"
-    assert ArtifactOperatorService._pressure(100, 100) == "exhausted"
+    assert pressure_band(74, 100) == "normal"
+    assert pressure_band(75, 100) == "warning"
+    assert pressure_band(90, 100) == "critical"
+    assert pressure_band(100, 100) == "exhausted"
     with pytest.raises(ValueError):
-        metrics.pressure("credential", "normal")
+        metrics.pressure("credential", 1, 2)
 
 
 def test_readiness_is_static_and_aws_never_active() -> None:
@@ -140,3 +152,66 @@ def test_readiness_is_static_and_aws_never_active() -> None:
     assert readiness["status"] == "inactive_live_proof_required"
     assert readiness["active"] is False
     assert readiness["prerequisites"]["aws_live_proof_present"] is False
+
+
+async def test_quota_reconciliation_is_configuration_driven_and_rollback_safe() -> None:
+    service = ArtifactAdmissionService(object(), Settings(), object())
+    existing_charge = SimpleNamespace(state="completed")
+    service._repo = SimpleNamespace(
+        database_now=AsyncMock(return_value=datetime.now(UTC)),
+        get_admission_charge=AsyncMock(return_value=existing_charge),
+    )
+    counter = ArtifactAdmissionScope(
+        scope_type="project",
+        scope_id=str(uuid4()),
+        limit_bytes=100,
+        counted_bytes=80,
+        cas_version=3,
+    )
+    facts = _AdmissionFacts(
+        request_type="guide",
+        producer_type="actor_profile",
+        producer_ref=str(uuid4()),
+        project_id=counter.scope_id,
+        task_id=None,
+        guide_source_item_id=str(uuid4()),
+        upload_item_id=None,
+        checker_run_id=None,
+        logical_role=None,
+        operation_identity="sha256:" + "a" * 64,
+    )
+    result = await service._reserve_charges(
+        scopes=(_AdmissionScopeSpec("project", counter.scope_id, 200),),
+        counters=(counter,),
+        facts=facts,
+        sha256="sha256:" + "b" * 64,
+        byte_count=10,
+    )
+    assert result == (existing_charge,)
+    assert counter.limit_bytes == 200
+    assert counter.cas_version == 4
+
+    with pytest.raises(ArtifactAdmissionConfigurationError):
+        await service._reserve_charges(
+            scopes=(_AdmissionScopeSpec("project", counter.scope_id, 79),),
+            counters=(counter,),
+            facts=facts,
+            sha256="sha256:" + "c" * 64,
+            byte_count=1,
+        )
+    assert counter.limit_bytes == 200
+
+
+def test_operator_response_schema_rejects_provider_fields() -> None:
+    with pytest.raises(ValidationError):
+        ArtifactReplicaResponse(
+            id=uuid4(),
+            content_id=uuid4(),
+            verification_state="pending",
+            availability_state="unknown",
+            integrity_state="unknown",
+            last_reconciled_at=None,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+            provider_object_ref="secret/key",
+        )

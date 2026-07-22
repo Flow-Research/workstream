@@ -186,6 +186,10 @@ class ArtifactRecoveryIneligibleError(ArtifactRecoveryError):
     """Raised when the source job is not exhausted provider-unavailable work."""
 
 
+class ArtifactRecoveryNotFoundError(ArtifactRecoveryError):
+    """Conceal a missing recovery lineage before an exact authority decision."""
+
+
 @final
 @dataclass(frozen=True, slots=True)
 class ArtifactRecoveryAuthorityFacts:
