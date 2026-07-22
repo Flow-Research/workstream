@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -215,3 +215,51 @@ def test_operator_response_schema_rejects_provider_fields() -> None:
             updated_at=datetime.now(UTC),
             provider_object_ref="secret/key",
         )
+
+
+@pytest.mark.parametrize(
+    "resource_type",
+    (
+        "project",
+        "project_guide",
+        "guide_source_snapshot",
+        "guide_source_snapshot_item",
+        "task",
+        "submission",
+        "checker_run",
+    ),
+)
+async def test_binding_resource_resolver_uses_canonical_product_lineage(
+    resource_type: str,
+) -> None:
+    project_id = str(uuid4())
+    session = SimpleNamespace(scalar=AsyncMock(return_value=project_id))
+    service = ArtifactOperatorService(
+        session, _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+
+    assert await service._binding_resource_project(resource_type, str(uuid4())) == project_id
+    session.scalar.assert_awaited_once()
+
+
+async def test_binding_resource_resolver_fails_closed_for_unknown_type() -> None:
+    session = SimpleNamespace(scalar=AsyncMock())
+    service = ArtifactOperatorService(
+        session, _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+
+    assert await service._binding_resource_project("review", str(uuid4())) is None
+    session.scalar.assert_not_awaited()
+
+
+def test_operator_page_helpers_are_bounded_and_deduplicate_projects() -> None:
+    first, second, third = (SimpleNamespace(id=str(uuid4())) for _ in range(3))
+    page = ArtifactOperatorService._result(
+        [first, second, third], 2, lambda row: {"id": row.id}
+    )
+    assert page.items == ({"id": first.id}, {"id": second.id})
+    assert page.next_cursor == second.id
+    assert ArtifactOperatorService._result([], 2, lambda row: row).next_cursor is None
+
+    project_ids = ArtifactOperatorService._project_ids((second.id, first.id, second.id))
+    assert project_ids == tuple(sorted({UUID(first.id), UUID(second.id)}, key=str))
