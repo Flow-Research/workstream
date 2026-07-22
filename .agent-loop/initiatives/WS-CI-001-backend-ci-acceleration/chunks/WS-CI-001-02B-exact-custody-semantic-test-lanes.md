@@ -14,7 +14,9 @@ migrate-once reset, while preserving exact execution and coverage custody.
 02A is merged with hosted reset evidence. This contract then requires its own
 signed implementation start. Eligible contributor source is limited to commits
 `e22e9fba681f6f076d67433c90a268218be7662b` and
-`c73b28931b3b2a68a9ee2389181220132efaa41e`; later commits require review.
+`c73b28931b3b2a68a9ee2389181220132efaa41e`. Later commits are ineligible
+unless a subsequent reviewed contract names their immutable SHAs and exact file
+scope.
 
 ## Risk class
 
@@ -37,7 +39,10 @@ L1 / P0 CI integrity
 - `backend/tests/test_test_lane_evidence.py`
 - `docs/operations_backend_testing.md`
 - `scripts/test_agent_gates.py`
-- this initiative's status, review, and evidence files
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/STATUS.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02B-internal-review-evidence.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02B-pr-trust-bundle.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02B-external-review-response.md`
 - `.agent-loop/merge-intents/WS-CI-001-02B.json`
 
 ## Not allowed changes

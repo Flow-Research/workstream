@@ -105,8 +105,10 @@ condition or blocker.
 
 PR #180 supplied discovery and contributor measurements. Its review findings
 were incorporated into prospective contracts; it remains unauthorized for
-merge under this planning chunk. Fresh GitHub and CodeRabbit review will run on
-this planning PR.
+merge under this planning chunk. CodeRabbit's three valid scope/wording findings
+were repaired. Its title-change suggestion was rejected because the trust bundle
+and merge intent intentionally match the canonical signed chunk title; the goal
+and PR title describe the planning amendment and reset-safety successor.
 
 ## Remaining risks
 

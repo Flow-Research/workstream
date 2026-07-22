@@ -79,6 +79,6 @@ git diff --check origin/main...HEAD
 ## Remaining Risks
 
 - PR #180 remains open and mutable; only its two pinned contributor commits are
-  eligible discovery sources, and adoption still requires signed 02A custody.
+  eligible discovery sources, and adoption still requires a signed 02A start.
 - Hosted implementation timing and exact test equivalence remain future 02A/02B
   evidence, not claims made by this planning PR.

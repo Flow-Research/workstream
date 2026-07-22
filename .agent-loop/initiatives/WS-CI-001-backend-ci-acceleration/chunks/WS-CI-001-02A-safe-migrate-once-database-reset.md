@@ -47,7 +47,10 @@ P1
 - `backend/tests/test_outbox.py`
 - `backend/tests/test_projects.py`
 - `backend/tests/test_tasks.py`
-- this initiative's status, review, and evidence files
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/STATUS.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02A-internal-review-evidence.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02A-pr-trust-bundle.md`
+- `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02A-external-review-response.md`
 - `.agent-loop/merge-intents/WS-CI-001-02A.json`
 
 ## Not allowed changes
