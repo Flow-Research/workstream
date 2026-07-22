@@ -12,9 +12,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 6bfd9fe33af33287ed1a762319cce444a82429e6
+Reviewed code SHA: 18a8c7f2d81a28e58144e8a98f0998539f06bd39
 
-Reviewed at: 2026-07-22T13:36:15Z
+Reviewed at: 2026-07-22T13:52:38Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
@@ -47,12 +47,15 @@ changed.
   collations, columns, and triggers, proving rejection occurs before mutation.
 - Proved repeated reset, exception, cancellation, and real termination preserve
   protected state and restore every guarded trigger.
+- Replaced schema-contract teardown's marker-trusting upgrade with a full
+  custody-checked rebuild so migration tests cannot poison later shard tests.
 - Restored exact Boolean assertions and preserved the trusted-main collection.
 
 ## Evidence
 
 - `ruff check tests/conftest.py tests/test_database_reset.py`: passed.
 - Isolated reset suite: 27 passed on a freshly migrated database.
+- Focused schema-contract-to-ordinary-test ordering proof: 2 passed.
 - Isolated runner suite: 16 passed.
 - Collection: 1,915 tests, exactly 1,888 trusted-main tests plus 27 reset tests.
 - Agent gates: 95 passed.

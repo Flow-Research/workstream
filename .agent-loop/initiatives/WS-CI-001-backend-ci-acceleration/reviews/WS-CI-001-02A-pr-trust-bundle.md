@@ -19,6 +19,8 @@ reset is confined to an exact runner-owned database and reviewed schema.
 - Added exact protected/resettable inventories and a canonical full-schema
   fingerprint, including generic public namespace-object membership.
 - Added rollback, signal, repeated-reset, and adversarial schema-drift tests.
+- Made explicitly marked whole-schema migration tests rebuild from blank,
+  custody-checked schema state in both setup and teardown.
 - Preserved exact assertions, existing test collection, coverage thresholds,
   workflows, runner topology, product code, and migrations.
 
@@ -49,15 +51,16 @@ are bounded safety and review repairs. No workflow or product behavior changed.
 
 ## Internal Review
 
-Reviewed code SHA: 6bfd9fe33af33287ed1a762319cce444a82429e6
+Reviewed code SHA: 18a8c7f2d81a28e58144e8a98f0998539f06bd39
 
-Reviewed at: 2026-07-22T13:36:15Z
+Reviewed at: 2026-07-22T13:52:38Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
-Senior/architecture and QA/CI/test-delta passed with only hosted evidence
-conditions. Security/auth, product/ops, reuse/dedup, and documentation passed
-without a code blocker. All valid internal findings were repaired.
+Senior/architecture and QA/CI/test-delta passed after the hosted ordering repair,
+with only hosted evidence conditions. Security/auth, product/ops, reuse/dedup,
+and documentation passed without a code blocker. All valid internal findings
+were repaired.
 
 ## Remaining Risk and Human Review Focus
 
@@ -82,4 +85,3 @@ start.
 - [ ] I know what could break.
 - [ ] I accept the remaining risks.
 - [ ] The user explicitly approved this specific PR for merge.
-
