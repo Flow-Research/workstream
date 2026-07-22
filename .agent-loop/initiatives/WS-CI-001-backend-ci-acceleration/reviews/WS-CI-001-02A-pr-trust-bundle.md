@@ -51,9 +51,9 @@ are bounded safety and review repairs. No workflow or product behavior changed.
 
 ## Internal Review
 
-Reviewed code SHA: 18a8c7f2d81a28e58144e8a98f0998539f06bd39
+Reviewed code SHA: 0d985c3dada26ab18fb2a18698ea36cab0e12b24
 
-Reviewed at: 2026-07-22T13:52:38Z
+Reviewed at: 2026-07-22T13:57:52Z
 
 Reviewer run IDs: eng006_senior_arch_docs, eng006_qa_ci_tests, eng006_security_ops_reuse
 
