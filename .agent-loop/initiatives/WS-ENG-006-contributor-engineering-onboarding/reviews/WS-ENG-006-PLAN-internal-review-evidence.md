@@ -71,4 +71,3 @@ git diff --check origin/main...HEAD
   to one initiative, one chunk, one target, and the signed first parent; it is
   consumed before state signing and cannot authorize later work.
 - External GitHub checks and CodeRabbit remain pending until the PR is opened.
-

@@ -247,6 +247,12 @@ before signing or publication, never persists as the permanent intake rule, and
 is inert on replay. Extra, stale, reordered, unrelated, or reused targets fail
 closed.
 
+The activation target must have unique successful `agent-gates` and `test`
+runs from the pinned GitHub Actions app on its reviewed head. Historical PR
+#176 is pinned by merge SHA, PR number, initiative, and chunk and must retain
+successful aggregate required-check evidence; its historical duplicate
+successful `agent-gates` reruns are not reinterpreted as target authority.
+
 The cutover inventory is fixed in
 `.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry
 can close once without a signed start and is then consumed. No new exemption may

@@ -2406,8 +2406,36 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
         )
         records = {recovered_sha: recovered, target_sha: target}
         original_collect = updater.collect_merge_record
+        original_checks = updater._validate_protected_actions_checks
         updater.collect_merge_record = lambda _client, _repository, sha: json.loads(json.dumps(records[sha]))
+        checked_heads: list[str] = []
+        updater._validate_protected_actions_checks = (
+            lambda _client, _repository, head: checked_heads.append(head)
+        )
         try:
+            records[recovered_sha]["checks"]["all_required_passed"] = False
+            assert_loop_error(
+                updater,
+                lambda: updater.prepare_recovery_exemptions(
+                    object(), "Flow-Research/workstream",
+                    repository_root=repository_root, state_root=state_root,
+                    target_sha=target_sha, planned_shas=[recovered_sha, target_sha],
+                ),
+                "required checks",
+            )
+            records[recovered_sha]["checks"]["all_required_passed"] = True
+            records[target_sha]["checks"]["all_required_passed"] = False
+            assert_loop_error(
+                updater,
+                lambda: updater.prepare_recovery_exemptions(
+                    object(), "Flow-Research/workstream",
+                    repository_root=repository_root, state_root=state_root,
+                    target_sha=target_sha, planned_shas=[recovered_sha, target_sha],
+                ),
+                "required checks",
+            )
+            records[target_sha]["checks"]["all_required_passed"] = True
+            checked_heads.clear()
             exemptions = updater.prepare_recovery_exemptions(
                 object(), "Flow-Research/workstream",
                 repository_root=repository_root, state_root=state_root,
@@ -2417,11 +2445,26 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
                 ("WS-REV-001", "WS-REV-001-PLAN3"),
                 ("WS-ENG-006", "WS-ENG-006-00"),
             ]
-            assert updater.apply_merge_record(state_root, recovered, recovery_exemptions=exemptions)
-            assert updater.apply_merge_record(state_root, target, recovery_exemptions=exemptions)
-            updater.assert_recovery_consumed(state_root, target_sha, exemptions)
+            assert checked_heads == [target["source"]["head_sha"]]
+            serialized = json.loads(json.dumps({"schema_version": 1, "exemptions": exemptions}))
+            reloaded = updater._validate_recovery_exemptions(serialized)
+            assert reloaded == exemptions
+            assert updater.apply_merge_record(state_root, recovered, recovery_exemptions=reloaded)
+            reloaded = updater._validate_recovery_exemptions(serialized)
+            assert updater.apply_merge_record(state_root, target, recovery_exemptions=reloaded)
+            updater.assert_recovery_consumed(
+                state_root, target_sha,
+                updater._validate_recovery_exemptions(serialized),
+            )
+            duplicate = {"schema_version": 1, "exemptions": [exemptions[0], exemptions[0]]}
+            assert_loop_error(
+                updater,
+                lambda: updater._validate_recovery_exemptions(duplicate),
+                "not unique and bounded",
+            )
         finally:
             updater.collect_merge_record = original_collect
+            updater._validate_protected_actions_checks = original_checks
 
 
 def test_post_merge_metadata_is_strict_and_bounded() -> None:

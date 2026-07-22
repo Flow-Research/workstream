@@ -1962,6 +1962,30 @@ def _validate_legacy_exemptions(payload: Any) -> list[dict[str, Any]]:
     return result
 
 
+def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
+    """Validate a chronological ephemeral recovery plan without reordering it."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("exemptions"), list):
+        raise LoopMemoryError("recovery exemption inventory has an invalid schema")
+    chronological = json.loads(_canonical_json(payload["exemptions"]))
+    _validate_legacy_exemptions({
+        "schema_version": payload.get("schema_version"),
+        "exemptions": sorted(
+            chronological,
+            key=lambda item: (
+                item.get("initiative_id", "") if isinstance(item, dict) else "",
+                item.get("chunk_id", "") if isinstance(item, dict) else "",
+            ),
+        ),
+    })
+    identities = [
+        (item["initiative_id"], item["chunk_id"], item["pr_number"])
+        for item in chronological
+    ]
+    if len(chronological) > 2 or len(identities) != len(set(identities)):
+        raise LoopMemoryError("recovery exemption inventory is not unique and bounded")
+    return chronological
+
+
 def load_legacy_exemptions(repository_root: Path) -> list[dict[str, Any]]:
     """Load the reviewed inventory from the repository working tree."""
     return _validate_legacy_exemptions(
@@ -2123,6 +2147,14 @@ def prepare_recovery_exemptions(
         "pr_number": recovered["pr_number"],
     }:
         raise LoopMemoryError("recovered merge does not match its certificate")
+    _validate_protected_actions_checks(
+        client, repository, target_record["source"]["head_sha"]
+    )
+    if (
+        not recovered_record.get("checks", {}).get("all_required_passed")
+        or not target_record.get("checks", {}).get("all_required_passed")
+    ):
+        raise LoopMemoryError("two-merge recovery required checks did not pass")
     exemptions = [_record_exemption(recovered_record), target_identity]
     existing = state.get("legacy_exemptions", [])
     if not isinstance(existing, list) or any(item in existing for item in exemptions):
@@ -3071,7 +3103,7 @@ def main(argv: list[str] | None = None) -> int:
                 }
             recovery_exemptions = []
             if args.recovery_file:
-                recovery_exemptions = _validate_legacy_exemptions(
+                recovery_exemptions = _validate_recovery_exemptions(
                     _load_json(args.recovery_file)
                 )
             if recovery_exemptions:
@@ -3098,7 +3130,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(_canonical_json({"schema_version": 1, "exemptions": exemptions}))
         elif args.command == "assert-recovery-consumed":
-            exemptions = _validate_legacy_exemptions(_load_json(args.recovery_file))
+            exemptions = _validate_recovery_exemptions(_load_json(args.recovery_file))
             assert_recovery_consumed(args.state_root, args.target_sha, exemptions)
             print("Loop-memory recovery inventory is fully consumed.")
         elif args.command == "apply-event":
