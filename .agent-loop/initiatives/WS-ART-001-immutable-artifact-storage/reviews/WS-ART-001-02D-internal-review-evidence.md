@@ -1,10 +1,10 @@
 # WS-ART-001-02D Internal Review Evidence
 
-Reviewed code SHA: `4e53bf6453d1a1235d23d6427bce3486ef34cda5`
+Reviewed code SHA: `1844f5a9637f9dc8d7bf617c85b7c706f1160861`
 
-Reviewed against trusted main: `14fa4316`
+Reviewed against trusted main: `afde967d56914cdc6a941aa17b3ff0e98b2e9c64`
 
-Reviewed at: `2026-07-22T05:41:00Z`
+Reviewed at: `2026-07-22T06:10:15Z`
 
 Reviewer run IDs: `art_02d_plan_review`, `ci_repair_qa_security`,
 `ci_repair_ops_ci_docs`
@@ -68,7 +68,13 @@ Open sub-agent sessions: none
 The reviewed metadata repair canonicalizes the declared successor contract
 heading for `WS-ART-001-03`; its explicit-start gate remains unchanged.
 
+The exact reviewed head merges trusted main `afde967d` without conflicts. The
+incoming main delta is confined to `WS-REV-001` planning and evidence; no ART
+implementation, test, workflow, script, documentation, or merge-intent file
+changed during reconciliation.
+
 ## Remaining gate
 
-Hosted sharded CI, cumulative coverage, CodeRabbit/GitHub external review, and
-explicit human approval for this PR remain required.
+Fresh hosted sharded CI and cumulative coverage on the reconciled head,
+CodeRabbit/GitHub external review, and explicit human approval for this PR
+remain required.
