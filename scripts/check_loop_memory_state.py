@@ -109,6 +109,7 @@ STATE_BRANCH = "automation/loop-memory"
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -428,6 +429,8 @@ def _record_failures(record: object, label: str) -> list[str]:
     if not isinstance(record, dict) or frozenset(record) not in {
         frozenset(expected),
         frozenset(expected | {"legacy_exemptions"}),
+        frozenset(expected | {"planning_intake"}),
+        frozenset(expected | {"planning_intake", "legacy_exemptions"}),
     }:
         return [f"{label}: invalid record schema"]
     failures: list[str] = []
@@ -454,6 +457,42 @@ def _record_failures(record: object, label: str) -> list[str]:
                 ):
                     failures.append(f"{label}: invalid or duplicate legacy exemption")
                 identities.add(identity)
+    planning_intake = record.get("planning_intake")
+    if planning_intake is not None:
+        intake_keys = {
+            "schema_version",
+            "initiative_directory",
+            "base_tree_sha",
+            "head_tree_sha",
+            "first_parent_tree_sha",
+            "merge_tree_sha",
+            "delta_sha256",
+            "changed_paths",
+        }
+        if not isinstance(planning_intake, dict) or set(planning_intake) != intake_keys:
+            failures.append(f"{label}: invalid planning intake schema")
+            planning_intake = {}
+        if planning_intake.get("schema_version") != 1:
+            failures.append(f"{label}: invalid planning intake version")
+        directory = planning_intake.get("initiative_directory")
+        paths = planning_intake.get("changed_paths")
+        if (
+            not isinstance(directory, str)
+            or not isinstance(paths, list)
+            or not paths
+            or not all(isinstance(path, str) for path in paths)
+            or paths != sorted(set(paths))
+        ):
+            failures.append(f"{label}: invalid planning intake paths")
+        for field in (
+            "base_tree_sha", "head_tree_sha", "first_parent_tree_sha", "merge_tree_sha"
+        ):
+            value = planning_intake.get(field)
+            if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
+                failures.append(f"{label}: invalid planning intake {field}")
+        digest = planning_intake.get("delta_sha256")
+        if not isinstance(digest, str) or not SHA256_PATTERN.fullmatch(digest):
+            failures.append(f"{label}: invalid planning intake delta digest")
     if not _is_current_schema_version(record.get("schema_version")):
         failures.append(f"{label}: unsupported schema version")
     if record.get("state_branch") != STATE_BRANCH:
@@ -522,6 +561,23 @@ def _record_failures(record: object, label: str) -> list[str]:
         }
         if record.get("gate") != expected_gate:
             failures.append(f"{label}: next gate does not match completed chunk")
+        if planning_intake is not None:
+            initiative_id = metadata.get("initiative_id")
+            directory = planning_intake.get("initiative_directory")
+            paths = planning_intake.get("changed_paths")
+            intent_path = f".agent-loop/merge-intents/{initiative_id}-PLAN.json"
+            prefix = f".agent-loop/initiatives/{directory}/"
+            if (
+                metadata.get("chunk_id") != f"{initiative_id}-PLAN"
+                or not metadata.get("next_chunk_id")
+                or metadata.get("next_requires_explicit_start") is not True
+                or not isinstance(directory, str)
+                or not directory.startswith(f"{initiative_id}-")
+                or not isinstance(paths, list)
+                or intent_path not in paths
+                or any(path != intent_path and not path.startswith(prefix) for path in paths)
+            ):
+                failures.append(f"{label}: planning intake lifecycle identity is invalid")
     if record.get("active") != {
         "planning_chunk": None,
         "implementation_chunk": None,
@@ -562,6 +618,8 @@ def _record_failures(record: object, label: str) -> list[str]:
             )
             if checks.get("all_required_passed") is not calculated:
                 failures.append(f"{label}: inconsistent aggregate check evidence")
+            if planning_intake is not None and calculated is not True:
+                failures.append(f"{label}: planning intake required checks did not pass")
     return failures
 
 

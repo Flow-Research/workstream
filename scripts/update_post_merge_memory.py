@@ -43,6 +43,7 @@ CHUNK_CONTRACT_ROOT = ".agent-loop/initiatives/"
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
 REQUIRED_METADATA_KEYS = {
     "schema_version",
@@ -801,10 +802,10 @@ def _commit_tree_sha(payload: Any, label: str) -> str:
     return tree_sha
 
 
-def _validate_planning_intake_checks(
+def _validate_protected_actions_checks(
     client: GitHubClient, repository: str, head_sha: str
 ) -> None:
-    """Require exact, non-spoofable reviewed-head checks for planning intake."""
+    """Require exact protected GitHub Actions checks on one reviewed head."""
     payload = client.get_json(
         f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100"
     )
@@ -828,20 +829,47 @@ def _validate_planning_intake_checks(
             or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
         ):
             raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
-    statuses = client.get_paginated(
-        f"/repos/{repository}/commits/{head_sha}/statuses"
-    )
-    coderabbit = [
-        item for item in statuses
-        if isinstance(item, dict) and item.get("context") == "CodeRabbit"
-    ]
-    if (
-        len(coderabbit) != 1
-        or coderabbit[0].get("sha") != head_sha
-        or coderabbit[0].get("state") != "success"
-        or coderabbit[0].get("creator") is not None
-    ):
-        raise LoopMemoryError("planning intake CodeRabbit status has invalid provenance")
+
+
+def _tree_entries(
+    client: GitHubClient, repository: str, tree_sha: str, label: str
+) -> dict[str, tuple[str, str, str]]:
+    """Return a complete canonical path-to-entry map for one Git tree."""
+    tree = client.get_json(f"/repos/{repository}/git/trees/{tree_sha}?recursive=1")
+    entries = tree.get("tree") if isinstance(tree, dict) else None
+    if tree.get("truncated") is not False or not isinstance(entries, list):
+        raise LoopMemoryError(f"planning intake {label} tree is incomplete")
+    result: dict[str, tuple[str, str, str]] = {}
+    for item in entries:
+        if not isinstance(item, dict):
+            raise LoopMemoryError(f"planning intake {label} tree is malformed")
+        path, mode, kind, sha = (
+            item.get("path"), item.get("mode"), item.get("type"), item.get("sha")
+        )
+        if (
+            not isinstance(path, str)
+            or not path
+            or path in result
+            or not isinstance(mode, str)
+            or not isinstance(kind, str)
+            or not isinstance(sha, str)
+            or not SHA_PATTERN.fullmatch(sha)
+        ):
+            raise LoopMemoryError(f"planning intake {label} tree is malformed")
+        result[path] = (mode, kind, sha)
+    return result
+
+
+def _tree_delta(
+    before: dict[str, tuple[str, str, str]],
+    after: dict[str, tuple[str, str, str]],
+) -> dict[str, tuple[str, str, str] | None]:
+    """Return the exact path delta between two complete trees."""
+    return {
+        path: after.get(path)
+        for path in sorted(set(before) | set(after))
+        if before.get(path) != after.get(path)
+    }
 
 
 def _planning_intake_directory(path: str, initiative_id: str) -> str | None:
@@ -861,11 +889,15 @@ def _collect_planning_intake(
     metadata: LoopMetadata,
     pr_number: int,
     head_sha: str,
+    base_sha: str,
+    first_parent_sha: str,
     merge_commit: dict[str, Any],
 ) -> dict[str, Any] | None:
     """Validate and describe one closed planning-only first-initiative PR."""
     if metadata.chunk_id != f"{metadata.initiative_id}-PLAN":
         return None
+    if not isinstance(base_sha, str) or not SHA_PATTERN.fullmatch(base_sha):
+        raise LoopMemoryError("planning intake has no canonical reviewed base SHA")
     if (
         metadata.next_chunk_id is None
         or not metadata.next_requires_explicit_start
@@ -943,32 +975,42 @@ def _collect_planning_intake(
     ):
         raise LoopMemoryError("planning intake status claims active work")
     head_commit = client.get_json(f"/repos/{repository}/commits/{head_sha}")
+    base_commit = client.get_json(f"/repos/{repository}/commits/{base_sha}")
+    first_parent_commit = client.get_json(
+        f"/repos/{repository}/commits/{first_parent_sha}"
+    )
     head_tree = _commit_tree_sha(head_commit, "reviewed head")
+    base_tree = _commit_tree_sha(base_commit, "reviewed base")
+    first_parent_tree = _commit_tree_sha(first_parent_commit, "first parent")
     merge_tree = _commit_tree_sha(merge_commit, "merge")
-    if head_tree != merge_tree:
-        raise LoopMemoryError("planning intake merge tree differs from reviewed head")
-    tree = client.get_json(f"/repos/{repository}/git/trees/{head_tree}?recursive=1")
-    entries = tree.get("tree") if isinstance(tree, dict) else None
-    if tree.get("truncated") is not False or not isinstance(entries, list):
-        raise LoopMemoryError("planning intake reviewed tree is incomplete")
-    entry_map = {
-        item.get("path"): item
-        for item in entries
-        if isinstance(item, dict) and isinstance(item.get("path"), str)
-    }
+    base_entries = _tree_entries(client, repository, base_tree, "reviewed base")
+    head_entries = _tree_entries(client, repository, head_tree, "reviewed head")
+    first_parent_entries = _tree_entries(
+        client, repository, first_parent_tree, "first parent"
+    )
+    merge_entries = _tree_entries(client, repository, merge_tree, "merge")
+    reviewed_delta = _tree_delta(base_entries, head_entries)
+    merged_delta = _tree_delta(first_parent_entries, merge_entries)
+    if reviewed_delta != merged_delta or sorted(reviewed_delta) != sorted(changed_paths):
+        raise LoopMemoryError("planning intake authoritative tree delta does not match")
     if any(
-        path not in entry_map
-        or entry_map[path].get("type") != "blob"
-        or entry_map[path].get("mode") != "100644"
-        for path in changed_paths
-    ):
+        path in base_entries or entry != ("100644", "blob", entry[2])
+        for path, entry in reviewed_delta.items()
+        if entry is not None
+    ) or any(entry is None for entry in reviewed_delta.values()):
         raise LoopMemoryError("planning intake file mode is invalid")
-    _validate_planning_intake_checks(client, repository, head_sha)
+    delta_sha256 = hashlib.sha256(
+        _canonical_json(reviewed_delta).encode("utf-8")
+    ).hexdigest()
+    _validate_protected_actions_checks(client, repository, head_sha)
     return {
         "schema_version": PLANNING_INTAKE_VERSION,
         "initiative_directory": initiative_directory,
+        "base_tree_sha": base_tree,
         "head_tree_sha": head_tree,
+        "first_parent_tree_sha": first_parent_tree,
         "merge_tree_sha": merge_tree,
+        "delta_sha256": delta_sha256,
         "changed_paths": sorted(changed_paths),
     }
 
@@ -1015,6 +1057,7 @@ def collect_merge_record(
     head_sha = pr.get("head", {}).get("sha")
     if not isinstance(head_sha, str) or not SHA_PATTERN.fullmatch(head_sha):
         raise LoopMemoryError("merged pull request has no canonical head SHA")
+    base_sha = pr.get("base", {}).get("sha")
     metadata, intent_path, intent_blob_sha = load_committed_merge_intent(
         client,
         repository,
@@ -1100,6 +1143,8 @@ def collect_merge_record(
         metadata=metadata,
         pr_number=pr_number,
         head_sha=head_sha,
+        base_sha=base_sha,
+        first_parent_sha=first_parent_sha,
         merge_commit=commit_payload,
     )
     if planning_intake is not None:
@@ -1724,8 +1769,11 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         expected_intake_keys = {
             "schema_version",
             "initiative_directory",
+            "base_tree_sha",
             "head_tree_sha",
+            "first_parent_tree_sha",
             "merge_tree_sha",
+            "delta_sha256",
             "changed_paths",
         }
         if (
@@ -1744,10 +1792,14 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             or not all(isinstance(path, str) for path in paths)
         ):
             raise LoopMemoryError("planning intake path evidence is invalid")
-        _validate_sha(planning_intake.get("head_tree_sha"))
-        _validate_sha(planning_intake.get("merge_tree_sha"))
-        if planning_intake["head_tree_sha"] != planning_intake["merge_tree_sha"]:
-            raise LoopMemoryError("planning intake tree evidence does not match")
+        for field in (
+            "base_tree_sha", "head_tree_sha", "first_parent_tree_sha", "merge_tree_sha"
+        ):
+            _validate_sha(planning_intake.get(field))
+        if not isinstance(planning_intake.get("delta_sha256"), str) or not SHA256_PATTERN.fullmatch(
+            planning_intake["delta_sha256"]
+        ):
+            raise LoopMemoryError("planning intake delta digest is invalid")
     if event_type == "cutover":
         _validate_cutover_event(
             record.get("event"), exemptions, record.get("source", {}).get("main_sha")
@@ -2023,6 +2075,11 @@ def prepare_recovery_exemptions(
     ):
         return []
     if policy["schema_version"] == 2:
+        _validate_protected_actions_checks(
+            client, repository, target_record["source"]["head_sha"]
+        )
+        if not target_record.get("checks", {}).get("all_required_passed"):
+            raise LoopMemoryError("single-target recovery required checks did not pass")
         signed_main = (
             state.get("event", {}).get("main_sha")
             if _event_type(state) in {"start", "cancel"}

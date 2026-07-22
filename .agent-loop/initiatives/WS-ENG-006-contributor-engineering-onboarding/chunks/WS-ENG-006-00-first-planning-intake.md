@@ -85,11 +85,12 @@ reusable or identity-ambiguous self-bootstrap authorization
       `implementation`; the merge intent separately names that same-initiative
       successor and sets `next_requires_explicit_start` to true.
 - [ ] Exact reviewed-head `agent-gates` and `test` check runs each resolve to one
-      completed success from GitHub Actions app ID `15368`; `CodeRabbit` resolves
-      to the repository's exact unique success status context with its expected
-      null creator/source shape. Wrong app ID/slug, stale-head success,
-      duplicate-name/app spoofing, pending, skipped, neutral, cancelled, missing,
-      pagination overflow, and check/status collisions fail.
+      completed success from GitHub Actions app ID `15368`. Wrong app ID/slug,
+      stale-head success, duplicate-name/app spoofing, pending, skipped, neutral,
+      cancelled, missing, or pagination overflow fails closed. CodeRabbit remains
+      required external evidence under the existing merge-record check set, but
+      its legacy status is supplementary and is never treated as start or
+      authenticated planning authority.
 - [ ] Accepted intake records a signed normal merge with no active chunk,
       `stopped_after_merge`, and implementation possible only by later start.
 - [ ] Sequential reconciliation, clean trusted-main rebuild, duplicate no-op,
@@ -100,7 +101,8 @@ reusable or identity-ambiguous self-bootstrap authorization
 - [ ] The 00 root migration uses the existing schema-v2 `exact_single_target`
       recovery certificate with activation exactly `WS-ENG-006/WS-ENG-006-00`.
       It requires one planned target, signed first parent, unique GitHub merged
-      PR/head/base identity, exact reviewed evidence and successful checks;
+      PR/head/base identity, exact protected Actions checks, required external
+      evidence, and successful aggregate checks;
       consumes before signing; rejects extra/changed/reused identities; and
       leaks no exemption into signed state or ledger on initial run or replay.
 - [ ] One schema-v2 merge intent declares `WS-ENG-006-01` as the explicit-start

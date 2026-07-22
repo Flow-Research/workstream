@@ -225,8 +225,9 @@ renames, links, submodules, code, configuration, scripts, workflows, policies,
 and generated state fail closed.
 
 The intent names one exact same-initiative implementation contract and requires
-explicit start. Required checks bind to the exact reviewed head and trusted
-sources. After human merge, automation signs the merge with both active slots
+explicit start. Protected Actions checks bind to the exact reviewed head and
+GitHub Actions app; CodeRabbit remains supplementary external evidence, not
+authority. After human merge, automation signs the merge with both active slots
 null and gate `stopped_after_merge`. Planning intake never authorizes
 implementation. A repository writer starts the successor through `Loop Memory
 Explicit Event` after explicit user instruction, without a second approval.
@@ -234,6 +235,17 @@ Explicit Event` after explicit user instruction, without a second approval.
 Replay evaluates initiative absence at the historical ledger point and must
 reconstruct the same stopped projection. An existing initiative, repeated PLAN,
 unexpected path, ambiguous evidence, or implementation claim fails closed.
+
+## WS-ENG-006 Exact Root Repair
+
+`WS-ENG-006-00` retargets the schema-v2 `exact_single_target` recovery
+certificate only to initiative `WS-ENG-006` and chunk `WS-ENG-006-00`. Recovery
+requires the reconciliation plan to contain exactly that target and its first
+parent to equal signed current `main`. GitHub supplies the unique merged PR,
+reviewed head, base, and check evidence. The temporary authorization is consumed
+before signing or publication, never persists as the permanent intake rule, and
+is inert on replay. Extra, stale, reordered, unrelated, or reused targets fail
+closed.
 
 The cutover inventory is fixed in
 `.agent-loop/policies/loop-memory-legacy-start-exemptions.json`. Each exact entry

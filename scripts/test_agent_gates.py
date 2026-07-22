@@ -1833,8 +1833,11 @@ def planning_intake_record(module, *, first_parent_sha: str = "a" * 40) -> dict:
     record["planning_intake"] = {
         "schema_version": module.PLANNING_INTAKE_VERSION,
         "initiative_directory": "WS-NEW-001-example",
+        "base_tree_sha": "2" * 40,
         "head_tree_sha": "f" * 40,
-        "merge_tree_sha": "f" * 40,
+        "first_parent_tree_sha": "3" * 40,
+        "merge_tree_sha": "4" * 40,
+        "delta_sha256": "5" * 64,
         "changed_paths": sorted(paths),
     }
     return record
@@ -1881,7 +1884,7 @@ def test_planning_intake_record_schema_fails_closed() -> None:
     """Planning intake identity, tree, checks, and successor remain exact."""
     updater = load_module("planning_intake_schema", "scripts/update_post_merge_memory.py")
     mutations = (
-        ("planning intake", lambda item: item["planning_intake"].update(merge_tree_sha="2" * 40)),
+        ("planning intake", lambda item: item["planning_intake"].update(delta_sha256="bad")),
         ("intent path", lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01")),
         ("planning intake", lambda item: item["completed_chunk"].update(next_requires_explicit_start=False)),
         ("planning intake", lambda item: item["checks"].update(all_required_passed=False)),
@@ -1894,6 +1897,33 @@ def test_planning_intake_record_schema_fails_closed() -> None:
             lambda record=record: updater._validate_record(record),
             expected,
         )
+
+
+def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None:
+    """Independent generated-state validation has planning-intake schema parity."""
+    updater = load_module("planning_checker_updater", "scripts/update_post_merge_memory.py")
+    checker = load_module("planning_checker", "scripts/check_loop_memory_state.py")
+    record = planning_intake_record(updater)
+    assert checker._record_failures(record, "record") == []
+    mutations = (
+        lambda item: item["planning_intake"].update(delta_sha256="bad"),
+        lambda item: item["planning_intake"].update(changed_paths=[]),
+        lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01"),
+        lambda item: item["completed_chunk"].update(next_requires_explicit_start=False),
+        lambda item: item.update(active={"planning_chunk": "WS-NEW-001-PLAN", "implementation_chunk": None}),
+        lambda item: item["checks"].update(all_required_passed=False),
+    )
+    for mutate in mutations:
+        changed = json.loads(json.dumps(record))
+        mutate(changed)
+        assert checker._record_failures(changed, "record")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        base = loop_record(updater)
+        base["legacy_exemptions"] = []
+        updater.apply_merge_record(root, base)
+        updater.apply_merge_record(root, record)
+        assert checker.generated_state_failures(root, ROOT) == []
 
 
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
@@ -1914,16 +1944,29 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         f"{root}/reviews/WS-NEW-001-PLAN-pr-trust-bundle.md",
     ]
     head_sha = "e" * 40
-    tree_sha = "f" * 40
+    base_sha = "6" * 40
+    first_parent_sha = "7" * 40
+    base_tree = "8" * 40
+    head_tree = "f" * 40
+    first_parent_tree = "3" * 40
+    merge_tree = "4" * 40
 
     class IntakeClient:
         def __init__(self) -> None:
             self.app_id = updater.GITHUB_ACTIONS_APP_ID
+            self.app_slug = updater.GITHUB_ACTIONS_APP_SLUG
             self.mode = "100644"
+            self.file_status = "added"
+            self.extra_path: str | None = None
+            self.duplicate_run = False
+            self.check_status = "completed"
+            self.check_conclusion = "success"
+            self.truncated_tree: str | None = None
 
         def get_paginated(self, path: str) -> list[dict]:
             if "/pulls/201/files" in path:
-                return [{"filename": item, "status": "added"} for item in paths]
+                items = [*paths, *([self.extra_path] if self.extra_path else [])]
+                return [{"filename": item, "status": self.file_status} for item in items]
             if path.endswith("/statuses"):
                 return [{
                     "context": "CodeRabbit",
@@ -1934,28 +1977,52 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             raise AssertionError(path)
 
         def get_json(self, path: str):
-            if path.endswith(f"/commits/{head_sha}"):
-                return {"commit": {"tree": {"sha": tree_sha}}}
-            if path.endswith(f"/git/trees/{tree_sha}?recursive=1"):
+            commit_trees = {
+                head_sha: head_tree,
+                base_sha: base_tree,
+                first_parent_sha: first_parent_tree,
+            }
+            for commit_sha, tree_sha in commit_trees.items():
+                if path.endswith(f"/commits/{commit_sha}"):
+                    return {"commit": {"tree": {"sha": tree_sha}}}
+            tree_entries = {
+                base_tree: [{"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40}],
+                head_tree: [
+                    {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
+                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                ],
+                first_parent_tree: [
+                    {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
+                    {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
+                ],
+                merge_tree: [
+                    {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
+                    {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
+                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                ],
+            }
+            for tree_sha, entries in tree_entries.items():
+                if path.endswith(f"/git/trees/{tree_sha}?recursive=1"):
+                    return {"truncated": tree_sha == self.truncated_tree, "tree": entries}
+            if path.endswith("/unused"):
                 return {
                     "truncated": False,
-                    "tree": [
-                        {"path": item, "type": "blob", "mode": self.mode}
-                        for item in paths
-                    ],
+                    "tree": [],
                 }
             if "/check-runs?per_page=100" in path:
                 runs = [
                     {
                         "name": name,
                         "head_sha": head_sha,
-                        "status": "completed",
-                        "conclusion": "success",
+                        "status": self.check_status,
+                        "conclusion": self.check_conclusion,
                         "completed_at": "2026-07-22T08:00:00Z",
-                        "app": {"id": self.app_id, "slug": "github-actions"},
+                        "app": {"id": self.app_id, "slug": self.app_slug},
                     }
                     for name in ("agent-gates", "test")
                 ]
+                if self.duplicate_run:
+                    runs.append(dict(runs[0]))
                 return {"total_count": len(runs), "check_runs": runs}
             if "STATUS.md?ref=" in path:
                 value = "- Active planning chunk: none\n- Active implementation chunk: none\n"
@@ -1969,20 +2036,25 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             return {"encoding": "base64", "sha": "9" * 40, "content": updater_base64(value)}
 
     client = IntakeClient()
-    merge_commit = {"commit": {"tree": {"sha": tree_sha}}}
+    merge_commit = {"commit": {"tree": {"sha": merge_tree}}}
     evidence = updater._collect_planning_intake(
         client,
         "Flow-Research/workstream",
         metadata=metadata,
         pr_number=201,
         head_sha=head_sha,
+        base_sha=base_sha,
+        first_parent_sha=first_parent_sha,
         merge_commit=merge_commit,
     )
     assert evidence == {
         "schema_version": updater.PLANNING_INTAKE_VERSION,
         "initiative_directory": "WS-NEW-001-example",
-        "head_tree_sha": tree_sha,
-        "merge_tree_sha": tree_sha,
+        "base_tree_sha": base_tree,
+        "head_tree_sha": head_tree,
+        "first_parent_tree_sha": first_parent_tree,
+        "merge_tree_sha": merge_tree,
+        "delta_sha256": evidence["delta_sha256"],
         "changed_paths": sorted(paths),
     }
     client.app_id = 1
@@ -1994,6 +2066,8 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             metadata=metadata,
             pr_number=201,
             head_sha=head_sha,
+            base_sha=base_sha,
+            first_parent_sha=first_parent_sha,
             merge_commit=merge_commit,
         ),
         "invalid provenance",
@@ -2008,10 +2082,39 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             metadata=metadata,
             pr_number=201,
             head_sha=head_sha,
+            base_sha=base_sha,
+            first_parent_sha=first_parent_sha,
             merge_commit=merge_commit,
         ),
         "file mode",
     )
+    client.mode = "100644"
+    cases = (
+        (lambda: setattr(client, "app_slug", "foreign-app"), "invalid provenance"),
+        (lambda: setattr(client, "duplicate_run", True), "missing or duplicated"),
+        (lambda: setattr(client, "check_status", "queued"), "invalid provenance"),
+        (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
+        (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
+        (lambda: setattr(client, "extra_path", "backend/app/unsafe.py"), "foreign path"),
+        (lambda: setattr(client, "truncated_tree", merge_tree), "tree is incomplete"),
+    )
+    for mutate, expected in cases:
+        client = IntakeClient()
+        mutate()
+        assert_loop_error(
+            updater,
+            lambda client=client: updater._collect_planning_intake(
+                client,
+                "Flow-Research/workstream",
+                metadata=metadata,
+                pr_number=201,
+                head_sha=head_sha,
+                base_sha=base_sha,
+                first_parent_sha=first_parent_sha,
+                merge_commit=merge_commit,
+            ),
+            expected,
+        )
 
 
 def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> None:
@@ -2069,7 +2172,12 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
             next_chunk_title=metadata.next_chunk_title,
         )
         original_collect = updater.collect_merge_record
+        original_checks = updater._validate_protected_actions_checks
         updater.collect_merge_record = lambda *_args, **_kwargs: json.loads(json.dumps(target))
+        checked_heads: list[str] = []
+        updater._validate_protected_actions_checks = (
+            lambda _client, _repository, checked_head: checked_heads.append(checked_head)
+        )
         try:
             exemptions = updater.prepare_recovery_exemptions(
                 object(),
@@ -2084,6 +2192,7 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
                 "chunk_id": "WS-ENG-006-00",
                 "pr_number": 206,
             }]
+            assert checked_heads == [target["source"]["head_sha"]]
             assert updater.apply_merge_record(state_root, target, recovery_exemptions=exemptions)
             updater.assert_recovery_consumed(state_root, target_sha, exemptions)
             assert updater.prepare_recovery_exemptions(
@@ -2096,8 +2205,43 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
             ) == []
             ledger = (state_root / updater.LEDGER_PATH).read_text(encoding="utf-8")
             assert '"chunk_id":"WS-ENG-006-00","initiative_id":"WS-ENG-006","pr_number":206' not in ledger
+            replay_root = Path(tmpdir) / "replay-state"
+            updater.apply_merge_record(replay_root, json.loads(json.dumps(base)))
+            replay_exemptions = updater.prepare_recovery_exemptions(
+                object(),
+                "Flow-Research/workstream",
+                repository_root=repository_root,
+                state_root=replay_root,
+                target_sha=target_sha,
+                planned_shas=[target_sha],
+            )
+            assert updater.apply_merge_record(
+                replay_root,
+                json.loads(json.dumps(target)),
+                recovery_exemptions=replay_exemptions,
+            )
+            updater.assert_recovery_consumed(replay_root, target_sha, replay_exemptions)
+            assert (replay_root / updater.STATE_PATH).read_text(encoding="utf-8") == (
+                state_root / updater.STATE_PATH
+            ).read_text(encoding="utf-8")
+            assert (replay_root / updater.LEDGER_PATH).read_text(encoding="utf-8") == (
+                state_root / updater.LEDGER_PATH
+            ).read_text(encoding="utf-8")
+            assert_loop_error(
+                updater,
+                lambda: updater.prepare_recovery_exemptions(
+                    object(),
+                    "Flow-Research/workstream",
+                    repository_root=repository_root,
+                    state_root=replay_root,
+                    target_sha=target_sha,
+                    planned_shas=[target_sha],
+                ),
+                "signed first parent",
+            )
         finally:
             updater.collect_merge_record = original_collect
+            updater._validate_protected_actions_checks = original_checks
 
 
 def test_post_merge_metadata_is_strict_and_bounded() -> None:
@@ -6694,6 +6838,7 @@ def main() -> int:
         test_post_merge_state_is_idempotent_and_monotonic,
         test_planning_intake_is_stopped_idempotent_and_new_initiative_only,
         test_planning_intake_record_schema_fails_closed,
+        test_independent_checker_accepts_and_mutates_planning_intake_state,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
