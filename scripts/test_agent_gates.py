@@ -2014,6 +2014,92 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
     )
 
 
+def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> None:
+    """ENG-006 root recovery is exact, ephemeral, consumed, and replay inert."""
+    updater = load_module("eng006_recovery", "scripts/update_post_merge_memory.py")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        repository_root = Path(tmpdir) / "repository"
+        state_root = Path(tmpdir) / "state"
+        subprocess.run(
+            ["git", "init", "--initial-branch", "main", str(repository_root)],
+            check=True,
+            stdout=subprocess.PIPE,
+        )
+        subprocess.run(["git", "-C", str(repository_root), "config", "user.email", "test@example.test"], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "config", "user.name", "Test"], check=True)
+        policy = repository_root / updater.RECOVERY_POLICY_PATH
+        policy.parent.mkdir(parents=True)
+        policy.write_text(
+            '{"activation":{"chunk_id":"WS-ENG-006-00",'
+            '"initiative_id":"WS-ENG-006"},"mode":"exact_single_target",'
+            '"schema_version":2}\n',
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
+        base_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
+        (repository_root / "target.txt").write_text("target\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(repository_root), "add", "target.txt"], check=True)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "target"], check=True, stdout=subprocess.PIPE)
+        target_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
+        base = loop_record(updater, sha=base_sha)
+        base["legacy_exemptions"] = []
+        updater.apply_merge_record(state_root, base)
+        metadata = updater.parse_loop_metadata(
+            '{"schema_version":2,"initiative_id":"WS-ENG-006",'
+            '"chunk_id":"WS-ENG-006-00","chunk_title":"First-New-Initiative Planning Intake",'
+            '"next_chunk_id":"WS-ENG-006-01",'
+            '"next_chunk_title":"Canonical Human And Agent Contribution Entry",'
+            '"next_requires_explicit_start":true}'
+        )
+        target = loop_record(
+            updater,
+            sha=target_sha,
+            first_parent_sha=base_sha,
+            pr_number=206,
+            merged_at="2026-07-22T10:00:00Z",
+        )
+        target["completed_chunk"] = updater.asdict(metadata)
+        target["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-ENG-006-00.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/206",
+        )
+        target["gate"].update(
+            next_chunk_id=metadata.next_chunk_id,
+            next_chunk_title=metadata.next_chunk_title,
+        )
+        original_collect = updater.collect_merge_record
+        updater.collect_merge_record = lambda *_args, **_kwargs: json.loads(json.dumps(target))
+        try:
+            exemptions = updater.prepare_recovery_exemptions(
+                object(),
+                "Flow-Research/workstream",
+                repository_root=repository_root,
+                state_root=state_root,
+                target_sha=target_sha,
+                planned_shas=[target_sha],
+            )
+            assert exemptions == [{
+                "initiative_id": "WS-ENG-006",
+                "chunk_id": "WS-ENG-006-00",
+                "pr_number": 206,
+            }]
+            assert updater.apply_merge_record(state_root, target, recovery_exemptions=exemptions)
+            updater.assert_recovery_consumed(state_root, target_sha, exemptions)
+            assert updater.prepare_recovery_exemptions(
+                object(),
+                "Flow-Research/workstream",
+                repository_root=repository_root,
+                state_root=state_root,
+                target_sha=target_sha,
+                planned_shas=[],
+            ) == []
+            ledger = (state_root / updater.LEDGER_PATH).read_text(encoding="utf-8")
+            assert '"chunk_id":"WS-ENG-006-00","initiative_id":"WS-ENG-006","pr_number":206' not in ledger
+        finally:
+            updater.collect_merge_record = original_collect
+
+
 def test_post_merge_metadata_is_strict_and_bounded() -> None:
     """PR metadata rejects ambiguity, unknown keys, and inconsistent chunk facts."""
     updater = load_module("post_merge_metadata", "scripts/update_post_merge_memory.py")
@@ -6609,6 +6695,7 @@ def main() -> int:
         test_planning_intake_is_stopped_idempotent_and_new_initiative_only,
         test_planning_intake_record_schema_fails_closed,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
+        test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
         test_loop_memory_target_resolution_rejects_stale_replays,
         test_post_merge_collection_binds_exact_pr_and_checks,
