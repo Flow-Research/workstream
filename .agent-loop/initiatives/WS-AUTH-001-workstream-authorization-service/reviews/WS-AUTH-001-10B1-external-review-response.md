@@ -59,3 +59,13 @@ not bypass the fail-closed drift check.
 Its generated docstring warning reported 33.33 percent, but GitHub preflight's
 repository-owned Docstring Coverage gate passed on the exact PR head. No
 unrelated docstrings were added to satisfy a contradictory advisory metric.
+
+## Post-integration CodeRabbit repair
+
+CodeRabbit correctly observed that the migration round-trip seeded only
+`first_access`. Repair `746e577a` now seeds both legacy scopes,
+`first_access` and `admin_mutation`, and proves both survive the upgrade, the
+refused downgrade, and the successful downgrade after only
+`authorization_read` rows are cleared. The focused test passes against a
+freshly provisioned PostgreSQL 16 database. All nine internal reviewer tracks
+re-reviewed this one-file test strengthening and passed with no findings.

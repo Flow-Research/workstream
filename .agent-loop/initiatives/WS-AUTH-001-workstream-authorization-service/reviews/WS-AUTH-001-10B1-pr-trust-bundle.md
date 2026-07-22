@@ -45,6 +45,11 @@ retain `0033`, while successful AUTH downgrade stops at direct predecessor
 fresh isolated database. A new hosted run remains required for the merged tree.
 Alembic reports exactly one head: `0033_authorization_read_rate`.
 
+Post-integration CodeRabbit repair `746e577a` strengthens the migration
+round-trip to seed and preserve both legacy scopes. Its focused isolated
+PostgreSQL 16 test passes, and all nine internal tracks passed the exact
+one-file delta. The hosted checks must pass again on the final evidence head.
+
 ## Risks and controls
 
 Migration drift fails closed before DDL and leaves revision, constraint, and

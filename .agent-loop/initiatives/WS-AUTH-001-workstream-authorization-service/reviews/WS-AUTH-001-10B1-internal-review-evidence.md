@@ -77,6 +77,15 @@ refusal expectations now retain `0033`, while successful AUTH downgrade stops
 at direct predecessor ART `0032`. All nine tracks passed on final integrated
 implementation/docs SHA `2d6d347e` against main `92b8a7aa`.
 
+## Post-integration CodeRabbit repair
+
+CodeRabbit's preservation finding was repaired in test SHA `746e577a`. The
+round-trip now seeds and asserts both legacy scopes through upgrade, refused
+downgrade, and successful downgrade. The focused isolated PostgreSQL 16 proof
+passed 1/1, and all nine reviewer tracks re-reviewed the one-file delta: senior
+engineering, architecture, reuse/dedup, security/auth, QA/test, test delta,
+product/ops, docs, and CI integrity all passed with no findings.
+
 Valid findings addressed: yes
 
 Open sub-agent sessions: none after evidence publication
