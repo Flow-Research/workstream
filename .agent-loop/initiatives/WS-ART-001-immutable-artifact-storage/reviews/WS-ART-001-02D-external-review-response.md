@@ -18,6 +18,13 @@
   binding/content/replica/verification-job audit composition, unknown resource
   handling, and missing lineage. The focused union gains 14 statements against
   the remaining roughly 13-statement gap, without production or gate changes.
+- GitHub Backend run `29893224494` reached 89.98 percent. Commit `4e53bf64`
+  covers the exact missing canonical-resource branch and proves authority/page
+  work does not run after concealed not-found.
+- Final Backend run `29894507010`: preflight, API E2E, all four shards,
+  repository coverage, every cumulative scoped gate, and the artifact
+  foundation gate pass. Artifact foundation coverage is exactly 90.00 percent
+  (4,370 statements, 437 missed).
 
 ## Comments deferred
 
@@ -42,8 +49,11 @@ PR #177.
 - all nine internal reviewer tracks: PASS on `f1b9480c`.
 - `pytest tests/test_artifact_authorization.py -q`: 28 passed;
 - all nine internal reviewer tracks: PASS on `45725a85`.
+- `pytest tests/test_artifact_authorization.py -q`: 30 passed;
+- all nine internal reviewer tracks: PASS on `4e53bf64`.
 
 ## Remaining risks
 
-The full hosted backend rerun and cumulative coverage gates remain required.
-CodeRabbit did not provide a substantive review due to its external rate limit.
+Hosted backend and cumulative coverage gates pass. CodeRabbit did not provide a
+substantive review due to its external rate limit. Explicit human merge approval
+remains required.

@@ -78,7 +78,9 @@ The next run reached 89.70 percent. A second test-only repair covers exact
 audit-resource composition and missing lineage, adding 14 Operator statements
 for the remaining roughly 13-statement gap. Twenty-eight focused tests and all
 reviewer tracks pass; the 90 percent gate remains unchanged. A final hosted
-coverage rerun remains required.
+coverage rerun was required. Final Backend run `29894507010` now passes every
+job and coverage gate, including artifact foundation coverage at exactly 90.00
+percent. Agent Gates and API E2E are also green.
 
 ## Remaining Risks And Follow-Up
 

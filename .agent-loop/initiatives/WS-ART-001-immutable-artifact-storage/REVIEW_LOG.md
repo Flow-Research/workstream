@@ -42,7 +42,10 @@
   `45725a85` adds exact audit-resource composition and missing-lineage tests,
   covering 14 additional Operator statements for the remaining roughly
   13-statement gap; 28 focused tests and all reviewer tracks pass. A final
-  hosted coverage rerun remains required.
+  binding projection/missing-resource proof closes the last statement without
+  changing production code or the threshold. Final Backend run `29894507010`
+  passes preflight, API E2E, all four shards, repository coverage, every scoped
+  coverage gate, and artifact foundation coverage at exactly 90.00 percent.
 
 ## WS-ART-001-02C3
 
