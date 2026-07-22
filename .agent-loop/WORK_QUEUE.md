@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | `WS-ART-001` | `WS-ART-001-02C3` | `active` | `WS-ART-001-02D` | yes |
 | `WS-AUTH-001` | `WS-AUTH-001-10B1` | `active` | `WS-AUTH-001-10B2` | yes |
-| `WS-CI-001` | `WS-CI-001-01R1` | `active` | `WS-CI-001-02` | yes |
+| `WS-CI-001` | `WS-CI-001-02` | `stopped_after_merge` | `WS-CI-001-02A` | yes |
 | `WS-CON-001` | `WS-CON-001-02A` | `stopped_after_merge` | `WS-CON-001-02B` | yes |
 | `WS-ENG-001` | `WS-ENG-001-04B` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-002` | `WS-ENG-002-01` | `stopped_after_merge` | `none` | yes |
@@ -17,4 +17,4 @@
 | `WS-REV-001` | `WS-REV-001-PLAN3` | `stopped_after_merge` | `WS-REV-001-03P` | yes |
 | `WS-XINT-001` | `WS-XINT-001-PLAN` | `stopped_after_merge` | `none` | yes |
 
-Latest global merge: `d7dfd73b640456bf500b8c4c969a20df1197fe6c`
+Latest global merge: `196e7f65268bcc6d12fa95387551827f8385fbea`
