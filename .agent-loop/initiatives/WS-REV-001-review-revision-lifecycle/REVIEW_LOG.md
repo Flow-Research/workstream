@@ -30,6 +30,17 @@ The repaired-candidate re-review passed QA/product/test-delta and found one
 remaining live 03A phrase that treated chat approval as start authority. That
 phrase now requires the same signed exact-current-main workflow as 03P.
 
+Main reconciliation then merged AUTH PR #175 at trusted main
+`14fa4316f7d984f2176657bfafd2a2dae56f944e` without conflict and advanced the
+sole Alembic head to `0033_authorization_read_rate_control`. It changes no REV
+ownership or handoff semantics. Deterministic gates and internal reviews must
+be rebound to the refreshed exact candidate.
+
+The first refreshed QA/product review failed closed because the lower PLAN2
+discovery inventory still looked current and assigned retired 02A/02C work.
+The repair now states current owner handoffs from main and marks the entire old
+snapshot archival and void.
+
 ## WS-REV-001-02A Post-Rebase Conformance Repair - 2026-07-19
 
 CodeRabbit's review of rebased PR #156 found that the conformance matrix's

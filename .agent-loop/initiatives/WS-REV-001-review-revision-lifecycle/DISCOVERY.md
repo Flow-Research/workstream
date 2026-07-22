@@ -16,18 +16,54 @@ retired as REV chunks. Any still-needed capability must be specified as an
 external owner handoff. The unmerged 02A1 runtime candidate was reverted before
 publication.
 
+After merging current main at `14fa4316f7d984f2176657bfafd2a2dae56f944e`,
+the sole migration head is `0033_authorization_read_rate_control`. AUTH PR #175
+changes no REV product boundary. Signed loop memory remains stopped with retired
+02A1 named next; PLAN3 must replace that successor through reviewed merge memory
+before 03P can receive a signed start.
+
 ## Baseline
 
 Discovery was refreshed read-only from trusted main
-`44f2467cedc266d2efe261119cfff436ac6b7715` after ART admission foundation PR
-#154 merged on top of REV PLAN2 PR #150, AUTH-09D-B PR #152, and the AUTH
-contributor foundation PR #153. The active parent-split repair makes no
-backend/runtime changes.
+`14fa4316f7d984f2176657bfafd2a2dae56f944e`. PLAN3 makes no backend/runtime
+changes.
 
-## Current backend
+## Current boundary facts
+
+- The repository remains FastAPI/Python with async SQLAlchemy 2.x, Alembic,
+  Pydantic, and PostgreSQL; the sole head is
+  `0033_authorization_read_rate_control`.
+- `Submission` remains the owner-supplied versioned submission entity. REV must
+  consume its exact finalized identity, immediate-predecessor lineage, Task and
+  contributor facts, and submitted artifact membership; any missing invariant
+  or typed read contract is work for that owner.
+- Checker completion remains owner-supplied. REV admission may consume only one
+  durable final/current `allow_review` result; it may not produce or repair a
+  CheckerRun.
+- ART recovery is present through migration `0032_artifact_recovery_attempts`,
+  but each future REV artifact read/evidence need still requires an exact merged
+  typed owner contract and proof at that chunk's signed start.
+- AUTH PR #175 and migration `0033_authorization_read_rate_control` add
+  authorization-read rate control without transferring reviewer identity,
+  permission, or lifecycle ownership to REV.
+- CON remains the owner of contribution records. REV later composes its typed
+  participant so every committed Review creates one reviewer contribution and
+  only accept creates the submitter accepted-submission contribution.
+- REV owns ReviewPolicy/RevisionPolicy (03P), queue/lease persistence (03A/03B),
+  admission/routing (05A/05B), immutable Review/finding/resolution chains,
+  human revision replay, FinalAcceptance, and decision orchestration.
+
+## Historical PLAN2 discovery snapshot — archival and void
+
+> Every section and ownership/chunk statement below this heading records the
+> superseded PLAN2/02A investigation only. It is not current dependency truth,
+> an owner assignment, a human-decision request, or implementation authority.
+> D28, PLAN3, `CHUNK_MAP.md`, and the proposed 03P/03A contracts control.
+
+## Historical backend snapshot
 
 - FastAPI/Python, async SQLAlchemy 2.x, Alembic, Pydantic, PostgreSQL.
-- Single Alembic head: `0028_artifact_admission`.
+- Historical single Alembic head: `0028_artifact_admission`.
 - `Submission` is the existing versioned submission entity; no separate
   SubmissionVersion is needed.
 - TaskAssignment and Submission now expose only `contributor_id`; each has an

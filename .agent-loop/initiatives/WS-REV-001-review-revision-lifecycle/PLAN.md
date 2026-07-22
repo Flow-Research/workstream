@@ -22,10 +22,15 @@ owner handoffs and blockers; REV does not implement them.
 ## Planning authority
 
 This PLAN3 candidate is reconciled from current trusted main
-`92b8a7aa813c5914d8191547b62eb3823a37a140`; its single Alembic head is
-`0032_artifact_recovery`. Worktree branches, unmerged PRs, and proposed owner
+`14fa4316f7d984f2176657bfafd2a2dae56f944e`; its single Alembic head is
+`0033_authorization_read_rate_control`. Worktree branches, unmerged PRs, and proposed owner
 changes are discovery evidence only. The detailed facts below were captured at
 the earlier PLAN2 snapshot and are historical unless independently re-proven.
+
+Signed loop memory still records retired 02A1 as the next chunk because that is
+the last merged successor declaration. PLAN3 does not treat that projection as
+implementation authority. Its schema-v2 merge intent replaces the successor
+with 03P; only the post-merge signed projection may then authorize a 03P start.
 They are not runtime dependencies until their exact owner chunk, PR, merge SHA,
 schema head, typed contract, and tests exist on trusted main.
 
