@@ -837,7 +837,8 @@ def _tree_entries(
     """Return a complete canonical path-to-entry map for one Git tree."""
     tree = client.get_json(f"/repos/{repository}/git/trees/{tree_sha}?recursive=1")
     entries = tree.get("tree") if isinstance(tree, dict) else None
-    if tree.get("truncated") is not False or not isinstance(entries, list):
+    truncated = tree.get("truncated") if isinstance(tree, dict) else None
+    if truncated is not False or not isinstance(entries, list):
         raise LoopMemoryError(f"planning intake {label} tree is incomplete")
     result: dict[str, tuple[str, str, str]] = {}
     for item in entries:

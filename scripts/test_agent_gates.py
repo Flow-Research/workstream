@@ -1903,6 +1903,28 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
     """Independent validation recomputes planning paths, trees, and digest."""
     updater = load_module("planning_checker_updater", "scripts/update_post_merge_memory.py")
     checker = load_module("planning_checker", "scripts/check_loop_memory_state.py")
+    assert checker._planning_path_failures({}, {}, "record")
+    malformed_intake = {
+        "initiative_directory": "WS-NEW-001-.hidden",
+        "changed_paths": [],
+    }
+    assert checker._planning_path_failures(
+        malformed_intake,
+        {"initiative_id": "WS-NEW-001", "next_chunk_id": "WS-NEW-001-01"},
+        "record",
+    )
+    nested_intake = {
+        "initiative_directory": "WS-NEW-001-example",
+        "changed_paths": [
+            ".agent-loop/merge-intents/WS-NEW-001-PLAN.json",
+            ".agent-loop/initiatives/WS-NEW-001-example/chunks/nested/unsafe.md",
+        ],
+    }
+    assert checker._planning_path_failures(
+        nested_intake,
+        {"initiative_id": "WS-NEW-001", "next_chunk_id": "WS-NEW-001-01"},
+        "record",
+    )
     with tempfile.TemporaryDirectory() as tmpdir:
         repository = Path(tmpdir) / "repository"
         subprocess.run(["git", "init", "--initial-branch", "base", str(repository)], check=True, stdout=subprocess.PIPE)
@@ -2010,6 +2032,17 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
     """Planning intake collection binds the reviewed tree and trusted checks."""
     updater = load_module("planning_intake_collection", "scripts/update_post_merge_memory.py")
+    class MalformedTreeClient:
+        def get_json(self, _path: str):
+            return []
+
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            MalformedTreeClient(), "Flow-Research/workstream", "a" * 40, "bad"
+        ),
+        "tree is incomplete",
+    )
     metadata = updater.parse_loop_metadata(
         '{"schema_version":2,"initiative_id":"WS-NEW-001",'
         '"chunk_id":"WS-NEW-001-PLAN","chunk_title":"New Initiative Plan",'
