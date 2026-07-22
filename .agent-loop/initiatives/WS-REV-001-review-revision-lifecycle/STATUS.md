@@ -2,28 +2,18 @@
 
 ## Current status
 
-Trusted main is `cb9d5f9f9c311e644ed20a988c69843d3618a6b0`, which includes
-the merged parent 02A planning split in PR #156, ART admission foundation PR
-#154, and shared transactional outbox PR #155. Automated loop memory named
-`WS-REV-001-02A1` behind an explicit-start
-gate, and the user explicitly started that child on 2026-07-19. Current work is
-the bounded L1 Project/setup publication-fence implementation. No migration,
-model, schema, router, background-job, public API, authorization, policy-semantics, or
-02A3 change is authorized.
-
-The reconciled refresh confirmed sole Alembic head
-`0029_shared_transactional_outbox`, the
-literal 18-writer inventory, no ART-owned Project/setup writer, and a clean
-dependency merge. Initial QA plan review failed closed on abstract race
-fixtures; the repaired contract now defines each writer row, both acquisition
-orders, PostgreSQL wait observation, independent AST inventory proof, remote
-transaction boundaries, and structural setup-worker isolation. Senior/
-architecture/reuse, QA/product/test-delta, and security/docs/CI plan tracks all
-then returned PASS before application code changed.
+Trusted main is `44f2467cedc266d2efe261119cfff436ac6b7715`, which additionally
+includes ART admission foundation PR #154 after REV PLAN2 PR #150, AUTH-09D-B
+PR #152, and `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` PR #153. The user explicitly
+started parent 02A on 2026-07-19. L1 preimplementation review returned FAIL
+before runtime edits because the contract combined three separately reviewable
+database/concurrency boundaries. Parent 02A is therefore the active planning-
+only split repair; no backend, migration, workflow, route, or test edit is
+authorized in this PR.
 
 ## Trusted dependency truth
 
-- Single Alembic head: `0029_shared_transactional_outbox`.
+- Single Alembic head: `0028_artifact_admission`.
 - TaskAssignment and Submission expose canonical `contributor_id` with
   ActorProfile foreign keys and human-kind database guards.
 - All 24 REV lifecycle action dependencies remain unavailable.
@@ -41,10 +31,9 @@ then returned PASS before application code changed.
   `0028_artifact_admission`. It changes no Project/setup writer and does not
   supply review packet-read, review-evidence candidate/finalize, or
   server-derived Submission artifact-digest capability.
-- CON-01 merged its specification and CON-02A shared transactional outbox
-  persistence merged through PR #155, advancing the sole migration head to
-  `0029_shared_transactional_outbox`. It changes no 02A1-owned Project/setup
-  writer.
+- CON-01 merged its specification. CON runtime chunks 02A onward remain
+  proposed on trusted main. Any unmerged CON migration must rebase from the
+  then-current head before it is consumable.
 - Sibling AUTH/ART/CON status files contain stale post-merge wording. REV records
   actual merge facts but does not edit owner initiative memory.
 
@@ -107,5 +96,6 @@ then returned PASS before application code changed.
 
 ## Stop condition
 
-Publish only `WS-REV-001-02A1`, obtain the explicit human merge decision, let
-automated memory record the merge, and stop. Do not start 02A3 automatically.
+Publish only the parent 02A planning split, let automated memory name 02A1 with
+an explicit-start gate, and stop. Do not implement or start 02A1, 02A3, 02A4,
+02A2, or 02B from this PR.

@@ -31,19 +31,13 @@ Missing evidence stops before REV generates a migration.
   than direct mutation; the setup job remains a service-only caller.
 - The exact 18-row writer inventory in the 02A1 contract is the race matrix;
   every row races with activation in both Project-lock acquisition orders and
-  observes a PostgreSQL wait through `pg_blocking_pids`, synchronized by a
-  callback after Project-lock acquisition. A separate AST-derived structural
-  test, independent of the implementation registry, fails if any current or
+  observes a PostgreSQL wait. A separate structural test fails if any current or
   newly discovered writer bypasses the shared fence.
 - Setup-run ID-only commands use an authority-free project projection, lock
   Project first, refresh the graph, and revalidate project/guide ownership.
 - Activation-first, writer-first, insert-only create-guide, competing activation,
   readiness-denial, post-commit delegation, and remote-output assertions match
   the exact matrix contract; no partial or stale graph commits.
-- `create_guide` races activation of a separate ready draft in the same Project.
-  The actual post-commit helper is exercised separately from its task-ID service
-  participant. Setup workers have no ORM or approval/activation call path;
-  direct service-actor approval rejection remains 02A3-owned.
 
 ## 02A3 guide activation chronology
 

@@ -539,7 +539,9 @@ class ProjectService:
             GuideVersionConflict: If the project already has the requested guide version.
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
-        await self._lock_project_setup_publication_graph(project_id)
+        project = await self._repo.get_project(project_id)
+        if project is None:
+            raise ProjectNotFound("project not found")
         guide = ProjectGuide(
             id=str(uuid4()),
             project_id=project_id,
@@ -989,8 +991,6 @@ class ProjectService:
         """
         require_any_role(actor, PROJECT_SETUP_ROLES)
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can receive sufficiency reports")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
         await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
@@ -1552,7 +1552,7 @@ class ProjectService:
             raise StaleProjectSetupContinuation(
                 "compiled project pre-submit checker policy changed during post-submit derivation"
             )
-        setup_run = await self._repo.get_project_setup_run_after_publication_fence(setup_run_id)
+        setup_run = await self._repo.lock_project_setup_run(setup_run_id)
         if setup_run is None:
             raise ProjectSetupRunNotFound("project setup run not found")
         await self._validate_post_submit_continuation_payload(
@@ -2149,45 +2149,11 @@ class ProjectService:
         project_id: str,
         guide_id: str,
     ) -> ProjectGuide:
-        """Enter the shared Project-first fence and refresh its target guide."""
-        await self._lock_project_setup_publication_graph(project_id)
-        guide = await self._repo.get_guide_after_publication_fence(guide_id)
+        """Load and lock a guide row before mutating setup records."""
+        guide = await self._repo.lock_project_guide(guide_id)
         if guide is None or guide.project_id != project_id:
             raise GuideNotFound("guide not found")
         return guide
-
-    async def _lock_project_setup_publication_graph(self, project_id: str) -> Project:
-        """Enter the canonical Project-first publication fence."""
-        project = await self._repo.lock_project_setup_publication_graph(project_id)
-        if project is None:
-            raise ProjectNotFound("project not found")
-        return project
-
-    async def _lock_project_setup_run_for_update(
-        self,
-        setup_run_id: str,
-        *,
-        claimed_project_id: str | None = None,
-    ) -> tuple[ProjectGuide, ProjectSetupRun]:
-        """Resolve a setup run, then lock and refresh its complete Project graph."""
-        projected_project_id = await self._repo.get_project_id_for_setup_run(setup_run_id)
-        if projected_project_id is None:
-            raise ProjectSetupRunNotFound("project setup run not found")
-        if claimed_project_id is not None and projected_project_id != claimed_project_id:
-            raise PolicySetupConflict("project setup run context mismatch")
-        try:
-            project = await self._lock_project_setup_publication_graph(projected_project_id)
-        except ProjectNotFound as exc:
-            raise ProjectSetupRunNotFound("project setup run not found") from exc
-        setup_run = await self._repo.get_project_setup_run_after_publication_fence(setup_run_id)
-        if setup_run is None or setup_run.project_id != project.id:
-            raise ProjectSetupRunNotFound("project setup run not found")
-        if claimed_project_id is not None and setup_run.project_id != claimed_project_id:
-            raise PolicySetupConflict("project setup run context mismatch")
-        guide = await self._repo.get_guide_after_publication_fence(setup_run.guide_id)
-        if guide is None or guide.project_id != setup_run.project_id:
-            raise PolicySetupConflict("project setup run context mismatch")
-        return guide, setup_run
 
     async def _upsert_optional_policies(
         self,
@@ -2363,10 +2329,10 @@ class ProjectService:
                 error_summary=safe_summary,
             )
             return None
-        await self.update_project_setup_run_task_id(
-            setup_run_id,
-            task_id=task_id,
-        )
+        setup_run = await self._repo.get_project_setup_run(setup_run_id)
+        if setup_run is not None:
+            setup_run.celery_task_id = task_id
+            await self._session.commit()
         return task_id
 
     async def _enqueue_post_submit_setup_continuation_after_commit(
@@ -2431,35 +2397,23 @@ class ProjectService:
         setup_run_id: str,
         *,
         task_id: str,
-        continuation_effective_policy_id: str | None = None,
-        continuation_pre_submit_checker_policy_id: str | None = None,
+        continuation_effective_policy_id: str,
+        continuation_pre_submit_checker_policy_id: str,
     ) -> ProjectSetupRunResponse:
         """Record a queued continuation task id only for the current payload."""
-        uses_continuation_payload = (
-            continuation_effective_policy_id is not None
-            or continuation_pre_submit_checker_policy_id is not None
+        setup_run = await self._repo.lock_project_setup_run(setup_run_id)
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
+        await self._validate_post_submit_continuation_payload(
+            setup_run,
+            project_id=setup_run.project_id,
+            guide_id=setup_run.guide_id,
+            source_snapshot_id=setup_run.source_snapshot_id,
+            effective_policy_id=continuation_effective_policy_id,
+            pre_submit_checker_policy_id=continuation_pre_submit_checker_policy_id,
         )
-        if uses_continuation_payload and (
-            continuation_effective_policy_id is None
-            or continuation_pre_submit_checker_policy_id is None
-        ):
-            raise PolicySetupConflict("incomplete post-submit continuation payload")
-        guide, setup_run = await self._lock_project_setup_run_for_update(setup_run_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can update project setup runs")
-        if uses_continuation_payload:
-            assert continuation_effective_policy_id is not None
-            assert continuation_pre_submit_checker_policy_id is not None
-            await self._validate_post_submit_continuation_payload(
-                setup_run,
-                project_id=setup_run.project_id,
-                guide_id=setup_run.guide_id,
-                source_snapshot_id=setup_run.source_snapshot_id,
-                effective_policy_id=continuation_effective_policy_id,
-                pre_submit_checker_policy_id=continuation_pre_submit_checker_policy_id,
-            )
-            if setup_run.status == "post_submit_policy_compiled":
-                return ProjectSetupRunResponse.model_validate(setup_run)
+        if setup_run.status == "post_submit_policy_compiled":
+            return ProjectSetupRunResponse.model_validate(setup_run)
         setup_run.celery_task_id = task_id
         await self._session.commit()
         await self._session.refresh(setup_run)
@@ -2490,9 +2444,13 @@ class ProjectService:
             or continuation_pre_submit_checker_policy_id is None
         ):
             raise PolicySetupConflict("incomplete post-submit continuation payload")
-        guide, setup_run = await self._lock_project_setup_run_for_update(setup_run_id)
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can update project setup runs")
+        setup_run = (
+            await self._repo.lock_project_setup_run(setup_run_id)
+            if uses_continuation_payload
+            else await self._repo.get_project_setup_run(setup_run_id)
+        )
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
         if uses_continuation_payload:
             assert continuation_effective_policy_id is not None
             assert continuation_pre_submit_checker_policy_id is not None
@@ -2606,12 +2564,9 @@ class ProjectService:
         pre_submit_checker_policy_id: str,
     ) -> str:
         """Move a setup run into post-submit derivation or return idempotent state."""
-        guide, setup_run = await self._lock_project_setup_run_for_update(
-            setup_run_id,
-            claimed_project_id=project_id,
-        )
-        if guide.status != "draft":
-            raise GuideEditBlocked("only draft guides can start project setup continuations")
+        setup_run = await self._repo.lock_project_setup_run(setup_run_id)
+        if setup_run is None:
+            raise ProjectSetupRunNotFound("project setup run not found")
         await self._validate_post_submit_continuation_payload(
             setup_run,
             project_id=project_id,
