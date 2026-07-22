@@ -2797,15 +2797,20 @@ def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
             command.downgrade(config, "base")
             command.upgrade(config, "0032_artifact_recovery")
             asyncio.run(insert("first_access", 41))
+            asyncio.run(insert("admin_mutation", 42))
             command.upgrade(config, "0033_authorization_read_rate")
-            assert asyncio.run(scopes()) == ["first_access"]
-            asyncio.run(insert("authorization_read", 42))
+            assert asyncio.run(scopes()) == ["admin_mutation", "first_access"]
+            asyncio.run(insert("authorization_read", 43))
             with pytest.raises(
                 RuntimeError,
                 match="cannot downgrade live authorization-read rate controls",
             ):
                 command.downgrade(config, "0032_artifact_recovery")
-            assert asyncio.run(scopes()) == ["authorization_read", "first_access"]
+            assert asyncio.run(scopes()) == [
+                "admin_mutation",
+                "authorization_read",
+                "first_access",
+            ]
             asyncio.run(clear_new_scope())
 
             inserted = threading.Event()
@@ -2840,7 +2845,7 @@ def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
 
             asyncio.run(clear_new_scope())
             command.downgrade(config, "0032_artifact_recovery")
-            assert asyncio.run(scopes()) == ["first_access"]
+            assert asyncio.run(scopes()) == ["admin_mutation", "first_access"]
             with pytest.raises(IntegrityError):
                 asyncio.run(insert("authorization_read", 43))
             command.upgrade(config, "0033_authorization_read_rate")
