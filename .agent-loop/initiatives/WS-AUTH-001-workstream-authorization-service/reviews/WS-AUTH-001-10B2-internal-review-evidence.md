@@ -5,9 +5,12 @@
 `WS-AUTH-001-10B2` — Privacy-Safe Project Role Grant Reads. Risk: L1
 authorization/privacy. Trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`.
 
-Reviewed code SHA: `95c3ecf77afed2746a66f314d05eb547cfa15f3c`
-Reviewed at: 2026-07-22T04:55:55Z
+Reviewed code SHA: `f00759f0242752150d2c7e8b3ea17f1f486678ea`
+Reviewed at: 2026-07-22T05:17:30Z
 Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /root/auth10b1_final_ops_docs_ci
+
+Runtime repair SHA `95c3ecf77afed2746a66f314d05eb547cfa15f3c`
+was reviewed by the same tracks before the evidence-only descendants.
 
 ## Implemented Contract
 
