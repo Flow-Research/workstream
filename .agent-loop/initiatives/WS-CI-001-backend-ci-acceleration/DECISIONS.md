@@ -37,3 +37,24 @@ node IDs are therefore not executable cross-process authority. Shards execute
 validated whole modules, record final collection and completion in the same
 pytest process, require those exact sets to match, and bind their stable
 test-base cardinalities to the authenticated preflight manifest.
+
+## 2026-07-22 - Split reset safety from semantic-lane topology
+
+PR #180 is discovery and an immutable contributor source, not authorized
+implementation. Review showed its destructive migrate-once reset and its CI
+lane/workflow rewrite cross separable L1/P0 boundaries. Chunk 02A must first
+prove runner-owned reset containment, canonical trigger restoration, migration
+state, and fixture equivalence under the existing CI topology. Only later chunk
+02B may replace that topology, with independent exact-node validation and
+isolated PostgreSQL and MinIO custody. This limits rollback and review scope
+while preserving Konan's authorship.
+
+## 2026-07-22 - Defer routing, dependency cache, and durable timing weights
+
+Measured evidence shows repeated migrations and service-heavy execution are the
+current bottleneck. Path routing, dependency caching, sampling, and durable
+timing weights add invalidation and silent-suppression risk without addressing
+that cause. Chunk 02 therefore makes a reviewed no-implementation decision for
+those original options. They may be reassessed only in future planning chunk
+`WS-CI-001-03`, after 02B exact-head evidence exists; 03 is not a successor of
+this PR and has no start authority.
