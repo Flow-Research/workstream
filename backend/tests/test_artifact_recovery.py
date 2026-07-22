@@ -84,6 +84,17 @@ class _AllowRecoveryAuthority:
         )
 
 
+class _AllowThenDenyRecoveryAuthority(_AllowRecoveryAuthority):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def authorize(self, **values: object) -> ArtifactRecoveryAuthorizationEvidence:
+        self.calls += 1
+        if self.calls == 2:
+            raise ArtifactAuthorityDeniedError("terminal authority changed")
+        return await super().authorize(**values)
+
+
 def _alembic_config() -> Config:
     root = Path(__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
@@ -277,7 +288,9 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
     )
     source_cm = minted_source(tmp_path / "guide-source", b"recover guide")
     source = await source_cm.__aenter__()
-    await _seed_contributor(session, context, source.commitment.sha256, source.commitment.byte_count)
+    await _seed_contributor(
+        session, context, source.commitment.sha256, source.commitment.byte_count
+    )
     project = await session.scalar(select(Project))
     assert project is not None
     project_id = project.id
@@ -395,11 +408,14 @@ async def test_exact_replay_creates_one_recovery_job_and_audit(
             assert replay.replayed is True
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
             assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
-            assert await session.scalar(
-                select(func.count(AuditEvent.id)).where(
-                    AuditEvent.event_type == "ArtifactRecoveryInitiated"
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryInitiated"
+                    )
                 )
-            ) == 1
+                == 1
+            )
             bootstrap.close()
     finally:
         await engine.dispose()
@@ -435,11 +451,14 @@ async def test_taskless_recovery_and_deny_only_authority_boundary(
                 ).create(request)
             assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 1
             assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 2
-            assert await session.scalar(
-                select(func.count(AuditEvent.id)).where(
-                    AuditEvent.event_type == "ArtifactRecoveryInitiated"
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryInitiated"
+                    )
                 )
-            ) == 1
+                == 1
+            )
             await session.rollback()
             replay = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
@@ -511,6 +530,40 @@ async def test_changed_or_ineligible_recovery_has_no_side_effects(
 
 
 @pytest.mark.asyncio
+async def test_terminal_recovery_authority_change_rolls_back_all_facts(
+    recovery_database_env: str, tmp_path: Path
+) -> None:
+    engine = create_async_engine(recovery_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            context = _context()
+            settings = _settings(tmp_path)
+            project_id, task_id, source, _orchestrator, bootstrap = await _exhausted_job(
+                session, settings, tmp_path, context
+            )
+            authority = _AllowThenDenyRecoveryAuthority()
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await ArtifactRecoveryService(session, settings, authority).create(
+                    _request(context, project_id, task_id, source)
+                )
+            assert authority.calls == 2
+            assert await session.scalar(select(func.count(ArtifactRecoveryAttempt.id))) == 0
+            assert await session.scalar(select(func.count(ArtifactVerificationJob.id))) == 1
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryInitiated"
+                    )
+                )
+                == 0
+            )
+            bootstrap.close()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_retry_terminalizes_recovery_under_verification_fence(
     recovery_database_env: str, tmp_path: Path
 ) -> None:
@@ -525,30 +578,26 @@ async def test_retry_terminalizes_recovery_under_verification_fence(
             )
             created = await ArtifactRecoveryService(
                 session, settings, _AllowRecoveryAuthority()
-            ).create(
-                _request(context, project_id, task_id, source)
-            )
+            ).create(_request(context, project_id, task_id, source))
             orchestrator._read_complete = ArtifactStorageOrchestrator._read_complete.__get__(
                 orchestrator
             )
-            assert (
-                await orchestrator.verify_object(created.retry_verification_job_id)
-                == "verified"
-            )
-            recovery = await session.get(
-                ArtifactRecoveryAttempt, str(created.recovery_attempt_id)
-            )
+            assert await orchestrator.verify_object(created.retry_verification_job_id) == "verified"
+            recovery = await session.get(ArtifactRecoveryAttempt, str(created.recovery_attempt_id))
             assert recovery is not None
             assert (recovery.status, recovery.terminal_result_code) == (
                 "succeeded",
                 "verified",
             )
             assert recovery.terminal_audit_event_id is not None
-            assert await session.scalar(
-                select(func.count(AuditEvent.id)).where(
-                    AuditEvent.event_type == "ArtifactRecoveryCompleted"
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryCompleted"
+                    )
                 )
-            ) == 1
+                == 1
+            )
             bootstrap.close()
     finally:
         await engine.dispose()
@@ -576,9 +625,7 @@ async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
             )
             with pytest.raises(ArtifactAuthorityDeniedError):
                 await orchestrator.verify_object(created.retry_verification_job_id)
-            recovery = await session.get(
-                ArtifactRecoveryAttempt, str(created.recovery_attempt_id)
-            )
+            recovery = await session.get(ArtifactRecoveryAttempt, str(created.recovery_attempt_id))
             retry = await session.get(
                 ArtifactVerificationJob, str(created.retry_verification_job_id)
             )
@@ -587,11 +634,14 @@ async def test_terminal_authority_drift_writes_no_recovery_terminal_facts(
             assert recovery.terminal_at is None
             assert retry.status == "running"
             assert retry.terminal_at is None
-            assert await session.scalar(
-                select(func.count(AuditEvent.id)).where(
-                    AuditEvent.event_type == "ArtifactRecoveryCompleted"
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryCompleted"
+                    )
                 )
-            ) == 0
+                == 0
+            )
             bootstrap.close()
     finally:
         await engine.dispose()
@@ -632,19 +682,20 @@ async def test_every_failed_retry_outcome_terminalizes_recovery_once(
                 await orchestrator.verify_object(created.retry_verification_job_id)
                 == expected_outcome
             )
-            recovery = await session.get(
-                ArtifactRecoveryAttempt, str(created.recovery_attempt_id)
-            )
+            recovery = await session.get(ArtifactRecoveryAttempt, str(created.recovery_attempt_id))
             assert recovery is not None
             assert (recovery.status, recovery.terminal_result_code) == (
                 "failed",
                 expected_outcome,
             )
-            assert await session.scalar(
-                select(func.count(AuditEvent.id)).where(
-                    AuditEvent.event_type == "ArtifactRecoveryCompleted"
+            assert (
+                await session.scalar(
+                    select(func.count(AuditEvent.id)).where(
+                        AuditEvent.event_type == "ArtifactRecoveryCompleted"
+                    )
                 )
-            ) == 1
+                == 1
+            )
             bootstrap.close()
     finally:
         await engine.dispose()
@@ -667,12 +718,12 @@ async def test_concurrent_exact_replay_has_one_envelope_and_retry_job(
             request = _request(context, project_id, task_id, source)
         async with factory() as first_session, factory() as second_session:
             first, second = await asyncio.gather(
-                ArtifactRecoveryService(
-                    first_session, settings, _AllowRecoveryAuthority()
-                ).create(request),
-                ArtifactRecoveryService(
-                    second_session, settings, _AllowRecoveryAuthority()
-                ).create(request),
+                ArtifactRecoveryService(first_session, settings, _AllowRecoveryAuthority()).create(
+                    request
+                ),
+                ArtifactRecoveryService(second_session, settings, _AllowRecoveryAuthority()).create(
+                    request
+                ),
             )
             assert {first.replayed, second.replayed} == {False, True}
             assert first.retry_verification_job_id == second.retry_verification_job_id
@@ -707,9 +758,7 @@ async def test_exhausted_retry_can_form_only_the_next_linear_chain_link(
                 await orchestrator.verify_object(first.retry_verification_job_id)
                 == "provider_unavailable"
             )
-            retry = await session.get(
-                ArtifactVerificationJob, str(first.retry_verification_job_id)
-            )
+            retry = await session.get(ArtifactVerificationJob, str(first.retry_verification_job_id))
             first_attempt = await session.get(
                 ArtifactRecoveryAttempt, str(first.recovery_attempt_id)
             )

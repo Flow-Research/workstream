@@ -1246,7 +1246,7 @@ class ArtifactRecoveryService:
         canonical_submission_uuid = (
             UUID(canonical_submission_id) if canonical_submission_id else None
         )
-        authorization = await self._authorize_request(
+        await self._authorize_request(
             request,
             project_id=canonical_project_id,
             task_id=canonical_task_id,
@@ -1266,8 +1266,17 @@ class ArtifactRecoveryService:
             )
         if source.cas_version != request.expected_source_job_cas_version:
             raise ArtifactRecoveryConflictError("artifact verification source changed")
-        context = request.authorization_context
         parent = await self._repo.lock_recovery_by_retry(source_id)
+        # Revalidate the locked actor/link and exact AUTH decision at the
+        # terminal boundary. No await occurs between this proof and staging the
+        # atomic retry, recovery, and audit facts below.
+        authorization = await self._authorize_request(
+            request,
+            project_id=canonical_project_id,
+            task_id=canonical_task_id,
+            submission_id=canonical_submission_uuid,
+        )
+        context = request.authorization_context
         retry_id = str(uuid4())
         recovery_id = str(uuid4())
         audit_id = str(uuid4())

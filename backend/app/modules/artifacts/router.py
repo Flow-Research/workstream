@@ -256,6 +256,10 @@ async def list_artifact_bindings(
         ArtifactOperatorEvidenceError,
     ) as exc:
         raise _concealed(exc) from exc
+    except ArtifactOperatorInputError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
 
 
 @router.get(
@@ -283,6 +287,10 @@ async def list_artifact_replicas(
         ArtifactOperatorEvidenceError,
     ) as exc:
         raise _concealed(exc) from exc
+    except ArtifactOperatorInputError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
 
 
 @router.get(
@@ -311,6 +319,10 @@ async def list_artifact_receipts(
         ArtifactOperatorEvidenceError,
     ) as exc:
         raise _concealed(exc) from exc
+    except ArtifactOperatorInputError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
 
 
 @router.get(

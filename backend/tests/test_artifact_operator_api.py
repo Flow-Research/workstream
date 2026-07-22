@@ -282,6 +282,11 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     )
                     receipt_cursor = receipt_page.json().get("next_cursor")
                 assert receipt_types == ["put", "put_observation", "verification"]
+                malformed_receipt_cursor = await client.get(
+                    f"/api/v1/operator/artifacts/replicas/{replica_id}/receipts",
+                    params={"cursor": "invalid"},
+                )
+                assert malformed_receipt_cursor.status_code == 422
                 for receipt_id in (observation_receipt_id, verification_receipt_id):
                     receipt_audit = await client.get(
                         "/api/v1/operator/artifacts/audit-events",
@@ -437,6 +442,24 @@ async def test_real_http_operator_path_returns_redacted_lineage_and_recovery(
                     params={"project_id": project_id, "cursor": "invalid"},
                 )
                 assert invalid_cursor.status_code == 422
+                missing_project_usage = await client.get(
+                    "/api/v1/operator/artifacts/admission-usage",
+                    params={"project_id": str(uuid4())},
+                )
+                wrong_project_usage = await client.get(
+                    "/api/v1/operator/artifacts/admission-usage",
+                    params={"project_id": str(uuid4()), "task_id": task_id},
+                )
+                assert missing_project_usage.status_code == wrong_project_usage.status_code == 404
+                assert (
+                    missing_project_usage.json()["detail"] == wrong_project_usage.json()["detail"]
+                )
+
+                deferred_review_lookup = await client.get(
+                    "/api/v1/operator/artifacts/bindings",
+                    params={"resource_type": "review", "resource_id": str(uuid4())},
+                )
+                assert deferred_review_lookup.status_code == 422
 
                 readiness = await client.get("/api/v1/operator/artifacts/readiness")
                 assert readiness.status_code == 200

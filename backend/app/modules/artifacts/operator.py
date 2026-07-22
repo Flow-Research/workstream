@@ -449,19 +449,20 @@ class ArtifactOperatorService:
     ) -> ArtifactPage:
         if project_id is None:
             raise ArtifactOperatorInputError("artifact admission project scope is required")
+        canonical_project = await self._session.scalar(
+            select(Project.id).where(Project.id == str(project_id)).with_for_update()
+        )
+        if canonical_project is None:
+            raise ArtifactOperatorNotFound("artifact resource was not found")
         filters = []
-        projects: tuple[UUID, ...] = ()
         if task_id is not None:
-            canonical_project = await self._session.scalar(
+            task_project = await self._session.scalar(
                 select(WorkstreamTask.project_id)
                 .where(WorkstreamTask.id == str(task_id))
                 .with_for_update()
             )
-            if canonical_project is None or (
-                project_id is not None and canonical_project != str(project_id)
-            ):
+            if task_project is None or task_project != canonical_project:
                 raise ArtifactOperatorNotFound("artifact resource was not found")
-            projects = (UUID(canonical_project),)
         filters.append(
             or_(
                 and_(
@@ -471,7 +472,7 @@ class ArtifactOperatorService:
                 ArtifactAdmissionScope.scope_type == "deployment",
             )
         )
-        projects = (project_id,)
+        projects = (UUID(canonical_project),)
         if task_id is not None:
             filters.append(
                 and_(
@@ -629,8 +630,6 @@ class ArtifactOperatorService:
                 .where(CheckerRun.id == resource_id)
                 .with_for_update(of=(CheckerRun, WorkstreamTask))
             )
-        # The review lifecycle has no canonical review record yet. Fail closed
-        # until its owning initiative provides one.
         return None
 
     async def _audit_projects(self, resource_type: str, resource_id: str) -> tuple[UUID, ...]:

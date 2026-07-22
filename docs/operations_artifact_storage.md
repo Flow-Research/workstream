@@ -20,8 +20,9 @@ anonymous-read-negative, lifecycle, and activation proof.
 
 ## Diagnosis sequence
 
-1. Start from the exact project guide, snapshot, task, submission, checker run,
-   or review resource and list its artifact bindings.
+1. Start from the exact project, project guide, snapshot, snapshot item, task,
+   submission, or checker run and list its artifact bindings. Review lookup is
+   deferred until the review lifecycle owns a canonical review record.
 2. Follow the stable `content_id` to replicas. Replica responses contain only
    Workstream identity and verification, availability, and integrity states.
 3. Follow a `replica_id` to redacted put receipts and its verification job.
@@ -45,7 +46,8 @@ HTTP response and audit identifiers.
 It never enumerates producer-scope identifiers. It is read-only: it cannot
 release charges, change configuration, or create recovery work.
 
-Every admission transaction emits `workstream_artifact_admission_pressure_total`
+Every successful admission transaction emits
+`workstream_artifact_admission_pressure_total`
 for each derived deployment, project, producer, and task scope. The bounded
 structured-log metric contains only
 `scope_type` (`deployment`, `project`, `producer`, or `task`) and
