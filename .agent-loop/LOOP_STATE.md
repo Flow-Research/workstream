@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-CI-001-02.json` at blob `c568ee8a8e135d579ca57e7d7d426f48273fe283`
 - Completed chunk: `WS-CI-001-02` - Safe Routing, Cache, and Timing Refinement
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B2`
+- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B2`, `WS-CI-001-02A`
+- Latest authority event: `start` for `WS-CI-001-02A`
+- Authority initiative: `WS-CI-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-CI-001-02A` - Safe Migrate-Once Database Reset; requires a separate explicit start.
 - Required check evidence: passed

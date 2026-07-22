@@ -4,9 +4,9 @@
 
 - Initiative: `WS-CI-001`
 - Latest completed chunk: `WS-CI-001-02` - Safe Routing, Cache, and Timing Refinement
-- Gate: `stopped_after_merge`
+- Gate: `active`
 - Active planning chunk: `none`
-- Active implementation chunk: `none`
+- Active implementation chunk: `WS-CI-001-02A`
 - Next chunk: `WS-CI-001-02A`
 - Separate explicit start required: `true`
 - Source PR: [#185](https://github.com/Flow-Research/workstream/pull/185)

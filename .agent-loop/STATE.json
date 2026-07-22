@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-CI-001-02A",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-CI-001-02",
+      "chunk_title": "Safe Routing, Cache, and Timing Refinement",
+      "initiative_id": "WS-CI-001",
+      "next_chunk_id": "WS-CI-001-02A",
+      "next_chunk_title": "Safe Migrate-Once Database Reset",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-CI-001-02A",
+      "next_chunk_title": "Safe Migrate-Once Database Reset",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "d7dfd73b640456bf500b8c4c969a20df1197fe6c",
+      "head_ref": "codex/ws-ci-001-02-semantic-lane-plan",
+      "head_sha": "0df43f907a7af7aa7784d84fa0861f22bbc0befd",
+      "intent_blob_sha": "c568ee8a8e135d579ca57e7d7d426f48273fe283",
+      "intent_path": ".agent-loop/merge-intents/WS-CI-001-02.json",
+      "main_sha": "196e7f65268bcc6d12fa95387551827f8385fbea",
+      "merged_at": "2026-07-22T12:13:31Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 185,
+      "pr_title": "Plan safe migrate-once backend CI acceleration",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/185"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": "Safe Migrate-Once Database Reset",
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-CI-001-02A",
+    "created_at": "2026-07-22T12:16:10Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:29918937526:start",
+    "initiative_id": "WS-CI-001",
+    "main_sha": "196e7f65268bcc6d12fa95387551827f8385fbea",
+    "prior_state_tip": "e4b11a70f05ff4f25ef95c6488dcfa586f05f77b",
+    "reason": "User directed start of reviewed safe migrate-once database reset chunk",
+    "run_id": 29918937526,
+    "selection": {
+      "contract_blob_sha": "05b1a50d9e0ed85360fcbdeb6559ae5e290a0b5c",
+      "contract_path": ".agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02A-safe-migrate-once-database-reset.md",
+      "contract_title": "Safe Migrate-Once Database Reset",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": "WS-CI-001-02A",
@@ -61,5 +121,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/185"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-22T12:13:31Z"
+  "updated_at": "2026-07-22T12:16:10Z"
 }
