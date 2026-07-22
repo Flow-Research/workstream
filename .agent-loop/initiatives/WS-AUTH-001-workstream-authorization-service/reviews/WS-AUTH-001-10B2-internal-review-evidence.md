@@ -67,14 +67,9 @@ Two repair cycles closed every valid finding. Open reviewer sessions: none.
 Open sub-agent sessions: none
 Valid findings addressed: yes
 
-## GitHub Proof Repair
+## Internal Repair Re-review
 
-The first hosted run correctly returned 404 because the bootstrap Access
-Administrator was not a project-scoped Project Manager. The repair provisions a
-separate canonical human reader and uses the existing authenticated AUTH-08 API
-to issue that different actor one project-scoped Project Manager grant, avoiding
-self-grant and proving the real scope path. Shard 1 also found its closed audit
-active-set fixture omitted the three newly active actions; the exact equality set
-now adds only those three. Ruff and the focused audit test pass. All nine tracks
-pass repair SHA `95c3ecf77afed2746a66f314d05eb547cfa15f3c` with no open finding;
-fresh hosted/full GitHub checks remain required.
+All nine internal tracks pass repair SHA
+`95c3ecf77afed2746a66f314d05eb547cfa15f3c` with no open finding. External
+GitHub and CodeRabbit findings, repairs, and final statuses are recorded only in
+`WS-AUTH-001-10B2-external-review-response.md`.

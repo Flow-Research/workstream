@@ -44,7 +44,13 @@ No test or CI threshold was weakened. All nine internal tracks pass exact SHA
 
 ## External Review, Risk, And Human Focus
 
-GitHub full shards/API E2E/coverage, Agent Gates, and CodeRabbit remain required.
+GitHub Backend run `29892395881` passes preflight, hosted API E2E, all four
+isolated shards, and aggregate coverage. Agent Gates passes. CodeRabbit has no
+inline code finding; its refreshed description check passes. Its remaining
+37.61 percent docstring warning conflicts with the unchanged authoritative
+repository gate, which passes at 87.6 percent, and identifies no file or symbol.
+The external-response artifact records this as non-actionable rather than
+expanding the reviewed diff to satisfy an unexplained external calculation.
 The first hosted run exposed missing project-scoped reader authority and one
 stale exact audit action set. Repair SHA `95c3ecf7` provisions a distinct reader
 through the public project-scoped AdminRoleGrant API and adds only the three
