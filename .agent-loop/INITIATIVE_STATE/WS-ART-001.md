@@ -4,9 +4,9 @@
 
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02C3` - Recovery Attempt And Idempotency Chain
-- Gate: `stopped_after_merge`
+- Gate: `active`
 - Active planning chunk: `none`
-- Active implementation chunk: `none`
+- Active implementation chunk: `WS-ART-001-02D`
 - Next chunk: `WS-ART-001-02D`
 - Separate explicit start required: `true`
 - Source PR: [#174](https://github.com/Flow-Research/workstream/pull/174)

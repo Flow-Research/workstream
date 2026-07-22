@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ART-001-02C3.json` at blob `a5ad589f904b8460edc14e834fc1b66b8c95cbb3`
 - Completed chunk: `WS-ART-001-02C3` - Recovery Attempt And Idempotency Chain
 - Active planning chunks: none
-- Active implementation chunks: `WS-AUTH-001-10B1`
+- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B1`
+- Latest authority event: `start` for `WS-ART-001-02D`
+- Authority initiative: `WS-ART-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-ART-001-02D` - Operator Artifact Operations; requires a separate explicit start.
 - Required check evidence: passed
