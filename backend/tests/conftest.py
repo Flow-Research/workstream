@@ -250,11 +250,9 @@ def _rebuild_test_database_schema(database_url: str) -> None:
 async def _reset_test_database_state(
     database_url: str,
     *,
-    include_canonical_actors: bool = False,
     after_disable: ResetHook | None = None,
 ) -> None:
     """Restore the already-migrated isolated database to its empty baseline."""
-    del include_canonical_actors
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         await _assert_owned_test_database(connection, database_url)

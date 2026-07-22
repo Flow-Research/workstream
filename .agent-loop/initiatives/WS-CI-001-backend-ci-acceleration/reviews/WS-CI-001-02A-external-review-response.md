@@ -20,10 +20,13 @@ GitHub Backend run `29924806229` on PR #186.
   sequence under the database-specific DDL lock.
 - Ordinary resets retain the exact table inventory and full fingerprint gate.
 - Removed the trust bundle's extra blank line at EOF.
+- Removed CodeRabbit's valid obsolete `include_canonical_actors` reset argument;
+  it had no callers and no behavior beyond deleting its value.
 
 ## Comments Deferred
 
-None.
+- CodeRabbit's generic 80 percent docstring-coverage warning is not a repository
+  gate and would require unrelated documentation churn outside signed 02A scope.
 
 ## Human Decisions Needed
 
