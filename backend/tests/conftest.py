@@ -333,7 +333,17 @@ def clean_postgres_database(
             if owns_schema:
                 _rebuild_test_database_schema(postgres_database_url)
             else:
-                asyncio.run(_verify_test_database_schema(postgres_database_url))
+                try:
+                    asyncio.run(_verify_test_database_schema(postgres_database_url))
+                except BaseException as verification_error:
+                    try:
+                        _rebuild_test_database_schema(postgres_database_url)
+                    except BaseException as rebuild_error:
+                        raise BaseExceptionGroup(
+                            "schema verification and recovery both failed",
+                            [verification_error, rebuild_error],
+                        ) from verification_error
+                    raise
         finally:
             get_settings.cache_clear()
 

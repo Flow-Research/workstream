@@ -18,6 +18,7 @@ from conftest import (
     RESETTABLE_TEST_TABLES,
     TRUNCATE_GUARDED_TABLES,
     _assert_owned_test_database,
+    _verify_test_database_schema,
     clean_postgres_database as clean_postgres_database_fixture,
 )
 
@@ -80,15 +81,7 @@ def test_unmarked_fixture_teardown_rejects_hidden_schema_mutation(
     asyncio.run(hidden_mutation())
     with pytest.raises(RuntimeError, match="unexpected public schema object fingerprint"):
         next(fixture)
-
-    async def cleanup() -> None:
-        connection = await asyncpg.connect(postgres_database_url.replace("+asyncpg", ""))
-        try:
-            await connection.execute("drop collation if exists hidden_reset_drift")
-        finally:
-            await connection.close()
-
-    asyncio.run(cleanup())
+    asyncio.run(_verify_test_database_schema(postgres_database_url))
 
 
 async def _protected_state(connection: asyncpg.Connection) -> tuple[str, str | None]:

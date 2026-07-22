@@ -26,6 +26,10 @@ GitHub Backend run `29924806229` on PR #186.
   canonical schema fingerprint during teardown. The AST ownership scan remains
   early guidance; runtime verification is authoritative even when DDL is hidden
   behind aliases, helpers, fixtures, or another migration entry point.
+- When ordinary teardown detects drift, it fails the originating test, performs
+  a custody-checked full rebuild, and then re-raises the original verification
+  error. If recovery also fails, both failures are preserved in an exception
+  group, preventing both silent healing and shard-wide contamination.
 - Ordinary resets retain the exact table inventory and full fingerprint gate.
 - Removed the trust bundle's extra blank line at EOF.
 - Removed CodeRabbit's valid obsolete `include_canonical_actors` reset argument;
