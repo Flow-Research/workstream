@@ -38,7 +38,11 @@
   90 percent artifact foundation gate reported 89.50 percent. Commit
   `f1b9480c` adds meaningful resolver/page helper tests without changing the
   threshold or production code; 26 focused tests and all reviewer tracks pass.
-  A final hosted coverage rerun remains required.
+  The next hosted run improved the unchanged gate to 89.70 percent. Commit
+  `45725a85` adds exact audit-resource composition and missing-lineage tests,
+  covering 14 additional Operator statements for the remaining roughly
+  13-statement gap; 28 focused tests and all reviewer tracks pass. A final
+  hosted coverage rerun remains required.
 
 ## WS-ART-001-02C3
 

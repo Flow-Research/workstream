@@ -74,7 +74,11 @@ locally and all internal tracks reapproved the repair. The rerun passed every
 shard, then the unchanged artifact foundation gate reported 89.50 percent.
 Focused canonical-resolver and page-helper tests were added without changing
 production code or thresholds; 26 focused tests and all reviewer tracks pass.
-A final hosted coverage rerun remains required.
+The next run reached 89.70 percent. A second test-only repair covers exact
+audit-resource composition and missing lineage, adding 14 Operator statements
+for the remaining roughly 13-statement gap. Twenty-eight focused tests and all
+reviewer tracks pass; the 90 percent gate remains unchanged. A final hosted
+coverage rerun remains required.
 
 ## Remaining Risks And Follow-Up
 

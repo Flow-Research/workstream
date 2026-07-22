@@ -13,6 +13,11 @@
   meaningful focused coverage for every canonical binding resolver branch,
   unknown-type fail-closed behavior, bounded pages, and deterministic project
   deduplication. It changes no production code or threshold.
+- GitHub Backend run `29891405683`: all shards passed and the unchanged gate
+  improved to 89.70 percent. Commit `45725a85` adds branch-specific tests for
+  binding/content/replica/verification-job audit composition, unknown resource
+  handling, and missing lineage. The focused union gains 14 statements against
+  the remaining roughly 13-statement gap, without production or gate changes.
 
 ## Comments deferred
 
@@ -35,6 +40,8 @@ PR #177.
 - all nine internal reviewer tracks: PASS on `536213ff`.
 - `pytest tests/test_artifact_authorization.py -q`: 26 passed;
 - all nine internal reviewer tracks: PASS on `f1b9480c`.
+- `pytest tests/test_artifact_authorization.py -q`: 28 passed;
+- all nine internal reviewer tracks: PASS on `45725a85`.
 
 ## Remaining risks
 
