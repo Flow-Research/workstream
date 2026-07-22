@@ -1797,6 +1797,223 @@ def loop_record(
     }
 
 
+def planning_intake_record(module, *, first_parent_sha: str = "a" * 40) -> dict:
+    """Return one signed planning-intake merge fixture."""
+    metadata = module.parse_loop_metadata(
+        '{"schema_version":2,"initiative_id":"WS-NEW-001",'
+        '"chunk_id":"WS-NEW-001-PLAN","chunk_title":"New Initiative Plan",'
+        '"next_chunk_id":"WS-NEW-001-01","next_chunk_title":"First Implementation",'
+        '"next_requires_explicit_start":true}'
+    )
+    record = loop_record(
+        module,
+        sha="c" * 40,
+        first_parent_sha=first_parent_sha,
+        pr_number=201,
+        merged_at="2026-07-22T08:00:00Z",
+    )
+    record["source"].update(
+        head_sha="e" * 40,
+        head_ref="codex/ws-new-001-plan",
+        intent_path=".agent-loop/merge-intents/WS-NEW-001-PLAN.json",
+    )
+    record["completed_chunk"] = module.asdict(metadata)
+    record["gate"].update(
+        next_chunk_id=metadata.next_chunk_id,
+        next_chunk_title=metadata.next_chunk_title,
+    )
+    root = ".agent-loop/initiatives/WS-NEW-001-example"
+    paths = [
+        ".agent-loop/merge-intents/WS-NEW-001-PLAN.json",
+        *(f"{root}/{name}" for name in sorted(module.PLANNING_ROOT_FILES)),
+        f"{root}/chunks/WS-NEW-001-01-first.md",
+        f"{root}/reviews/WS-NEW-001-PLAN-internal-review-evidence.md",
+        f"{root}/reviews/WS-NEW-001-PLAN-pr-trust-bundle.md",
+    ]
+    record["planning_intake"] = {
+        "schema_version": module.PLANNING_INTAKE_VERSION,
+        "initiative_directory": "WS-NEW-001-example",
+        "head_tree_sha": "f" * 40,
+        "merge_tree_sha": "f" * 40,
+        "changed_paths": sorted(paths),
+    }
+    return record
+
+
+def test_planning_intake_is_stopped_idempotent_and_new_initiative_only() -> None:
+    """Planning intake creates stopped state and never reopens an initiative."""
+    updater = load_module("planning_intake_state", "scripts/update_post_merge_memory.py")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        base = loop_record(updater)
+        base["legacy_exemptions"] = []
+        updater.apply_merge_record(root, base)
+        intake = planning_intake_record(updater)
+        assert updater.apply_merge_record(root, intake) is True
+        assert updater.apply_merge_record(root, intake) is False
+        state = json.loads((root / updater.STATE_PATH).read_text(encoding="utf-8"))
+        assert state["active"] == {
+            "planning_chunk": None,
+            "implementation_chunk": None,
+        }
+        assert state["gate"] == {
+            "status": "stopped_after_merge",
+            "next_chunk_id": "WS-NEW-001-01",
+            "next_chunk_title": "First Implementation",
+            "next_requires_explicit_start": True,
+        }
+        second = planning_intake_record(updater, first_parent_sha="c" * 40)
+        second["source"].update(
+            main_sha="1" * 40,
+            pr_number=202,
+            pr_url="https://github.com/Flow-Research/workstream/pull/202",
+            merged_at="2026-07-22T09:00:00Z",
+        )
+        second["updated_at"] = second["source"]["merged_at"]
+        assert_loop_error(
+            updater,
+            lambda: updater.apply_merge_record(root, second),
+            "initiative already exists",
+        )
+
+
+def test_planning_intake_record_schema_fails_closed() -> None:
+    """Planning intake identity, tree, checks, and successor remain exact."""
+    updater = load_module("planning_intake_schema", "scripts/update_post_merge_memory.py")
+    mutations = (
+        ("planning intake", lambda item: item["planning_intake"].update(merge_tree_sha="2" * 40)),
+        ("intent path", lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01")),
+        ("planning intake", lambda item: item["completed_chunk"].update(next_requires_explicit_start=False)),
+        ("planning intake", lambda item: item["checks"].update(all_required_passed=False)),
+    )
+    for expected, mutate in mutations:
+        record = planning_intake_record(updater)
+        mutate(record)
+        assert_loop_error(
+            updater,
+            lambda record=record: updater._validate_record(record),
+            expected,
+        )
+
+
+def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
+    """Planning intake collection binds the reviewed tree and trusted checks."""
+    updater = load_module("planning_intake_collection", "scripts/update_post_merge_memory.py")
+    metadata = updater.parse_loop_metadata(
+        '{"schema_version":2,"initiative_id":"WS-NEW-001",'
+        '"chunk_id":"WS-NEW-001-PLAN","chunk_title":"New Initiative Plan",'
+        '"next_chunk_id":"WS-NEW-001-01","next_chunk_title":"First Implementation",'
+        '"next_requires_explicit_start":true}'
+    )
+    root = ".agent-loop/initiatives/WS-NEW-001-example"
+    paths = [
+        ".agent-loop/merge-intents/WS-NEW-001-PLAN.json",
+        *(f"{root}/{name}" for name in sorted(updater.PLANNING_ROOT_FILES)),
+        f"{root}/chunks/WS-NEW-001-01-first.md",
+        f"{root}/reviews/WS-NEW-001-PLAN-internal-review-evidence.md",
+        f"{root}/reviews/WS-NEW-001-PLAN-pr-trust-bundle.md",
+    ]
+    head_sha = "e" * 40
+    tree_sha = "f" * 40
+
+    class IntakeClient:
+        def __init__(self) -> None:
+            self.app_id = updater.GITHUB_ACTIONS_APP_ID
+            self.mode = "100644"
+
+        def get_paginated(self, path: str) -> list[dict]:
+            if "/pulls/201/files" in path:
+                return [{"filename": item, "status": "added"} for item in paths]
+            if path.endswith("/statuses"):
+                return [{
+                    "context": "CodeRabbit",
+                    "sha": head_sha,
+                    "state": "success",
+                    "creator": None,
+                }]
+            raise AssertionError(path)
+
+        def get_json(self, path: str):
+            if path.endswith(f"/commits/{head_sha}"):
+                return {"commit": {"tree": {"sha": tree_sha}}}
+            if path.endswith(f"/git/trees/{tree_sha}?recursive=1"):
+                return {
+                    "truncated": False,
+                    "tree": [
+                        {"path": item, "type": "blob", "mode": self.mode}
+                        for item in paths
+                    ],
+                }
+            if "/check-runs?per_page=100" in path:
+                runs = [
+                    {
+                        "name": name,
+                        "head_sha": head_sha,
+                        "status": "completed",
+                        "conclusion": "success",
+                        "completed_at": "2026-07-22T08:00:00Z",
+                        "app": {"id": self.app_id, "slug": "github-actions"},
+                    }
+                    for name in ("agent-gates", "test")
+                ]
+                return {"total_count": len(runs), "check_runs": runs}
+            if "STATUS.md?ref=" in path:
+                value = "- Active planning chunk: none\n- Active implementation chunk: none\n"
+            elif "/chunks/WS-NEW-001-01-first.md?ref=" in path:
+                value = (
+                    "# Chunk Contract: WS-NEW-001-01 — First Implementation\n\n"
+                    "## Start phase\n\n`implementation`\n"
+                )
+            else:
+                raise AssertionError(path)
+            return {"encoding": "base64", "sha": "9" * 40, "content": updater_base64(value)}
+
+    client = IntakeClient()
+    merge_commit = {"commit": {"tree": {"sha": tree_sha}}}
+    evidence = updater._collect_planning_intake(
+        client,
+        "Flow-Research/workstream",
+        metadata=metadata,
+        pr_number=201,
+        head_sha=head_sha,
+        merge_commit=merge_commit,
+    )
+    assert evidence == {
+        "schema_version": updater.PLANNING_INTAKE_VERSION,
+        "initiative_directory": "WS-NEW-001-example",
+        "head_tree_sha": tree_sha,
+        "merge_tree_sha": tree_sha,
+        "changed_paths": sorted(paths),
+    }
+    client.app_id = 1
+    assert_loop_error(
+        updater,
+        lambda: updater._collect_planning_intake(
+            client,
+            "Flow-Research/workstream",
+            metadata=metadata,
+            pr_number=201,
+            head_sha=head_sha,
+            merge_commit=merge_commit,
+        ),
+        "invalid provenance",
+    )
+    client.app_id = updater.GITHUB_ACTIONS_APP_ID
+    client.mode = "100755"
+    assert_loop_error(
+        updater,
+        lambda: updater._collect_planning_intake(
+            client,
+            "Flow-Research/workstream",
+            metadata=metadata,
+            pr_number=201,
+            head_sha=head_sha,
+            merge_commit=merge_commit,
+        ),
+        "file mode",
+    )
+
+
 def test_post_merge_metadata_is_strict_and_bounded() -> None:
     """PR metadata rejects ambiguity, unknown keys, and inconsistent chunk facts."""
     updater = load_module("post_merge_metadata", "scripts/update_post_merge_memory.py")
@@ -6389,6 +6606,9 @@ def main() -> int:
         test_post_merge_metadata_is_strict_and_bounded,
         test_next_chunk_contract_binding_is_exact_locally_and_remotely,
         test_post_merge_state_is_idempotent_and_monotonic,
+        test_planning_intake_is_stopped_idempotent_and_new_initiative_only,
+        test_planning_intake_record_schema_fails_closed,
+        test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
         test_loop_memory_target_resolution_rejects_stale_replays,
         test_post_merge_collection_binds_exact_pr_and_checks,

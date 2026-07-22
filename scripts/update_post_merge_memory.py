@@ -53,6 +53,20 @@ REQUIRED_METADATA_KEYS = {
     "next_chunk_title",
     "next_requires_explicit_start",
 }
+PLANNING_INTAKE_VERSION = 1
+PLANNING_ROOT_FILES = frozenset(
+    {
+        "INTENT.md",
+        "DISCOVERY.md",
+        "PLAN.md",
+        "CHUNK_MAP.md",
+        "STATUS.md",
+        "RISKS.md",
+        "DECISIONS.md",
+    }
+)
+GITHUB_ACTIONS_APP_ID = 15368
+GITHUB_ACTIONS_APP_SLUG = "github-actions"
 
 
 class LoopMemoryError(RuntimeError):
@@ -776,6 +790,189 @@ def _check_evidence(
     return {"required": observed, "all_required_passed": passed}
 
 
+def _commit_tree_sha(payload: Any, label: str) -> str:
+    """Return one canonical tree SHA from a GitHub commit payload."""
+    tree_sha = (
+        payload.get("commit", {}).get("tree", {}).get("sha")
+        if isinstance(payload, dict)
+        else None
+    )
+    _validate_sha(tree_sha)
+    return tree_sha
+
+
+def _validate_planning_intake_checks(
+    client: GitHubClient, repository: str, head_sha: str
+) -> None:
+    """Require exact, non-spoofable reviewed-head checks for planning intake."""
+    payload = client.get_json(
+        f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100"
+    )
+    runs = payload.get("check_runs") if isinstance(payload, dict) else None
+    total = payload.get("total_count") if isinstance(payload, dict) else None
+    if not isinstance(runs, list) or type(total) is not int or total != len(runs):
+        raise LoopMemoryError("planning intake check-run evidence is incomplete")
+    for name in ("agent-gates", "test"):
+        matches = [item for item in runs if isinstance(item, dict) and item.get("name") == name]
+        if len(matches) != 1:
+            raise LoopMemoryError(f"planning intake check {name} is missing or duplicated")
+        item = matches[0]
+        app = item.get("app")
+        if (
+            item.get("head_sha") != head_sha
+            or item.get("status") != "completed"
+            or item.get("conclusion") != "success"
+            or not item.get("completed_at")
+            or not isinstance(app, dict)
+            or app.get("id") != GITHUB_ACTIONS_APP_ID
+            or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
+        ):
+            raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
+    statuses = client.get_paginated(
+        f"/repos/{repository}/commits/{head_sha}/statuses"
+    )
+    coderabbit = [
+        item for item in statuses
+        if isinstance(item, dict) and item.get("context") == "CodeRabbit"
+    ]
+    if (
+        len(coderabbit) != 1
+        or coderabbit[0].get("sha") != head_sha
+        or coderabbit[0].get("state") != "success"
+        or coderabbit[0].get("creator") is not None
+    ):
+        raise LoopMemoryError("planning intake CodeRabbit status has invalid provenance")
+
+
+def _planning_intake_directory(path: str, initiative_id: str) -> str | None:
+    """Return one canonical new-initiative directory for a planning path."""
+    prefix = f"{CHUNK_CONTRACT_ROOT}{initiative_id}-"
+    if not path.startswith(prefix):
+        return None
+    relative = path[len(CHUNK_CONTRACT_ROOT) :]
+    directory = relative.split("/", 1)[0]
+    return directory if directory != initiative_id and "/" in relative else None
+
+
+def _collect_planning_intake(
+    client: GitHubClient,
+    repository: str,
+    *,
+    metadata: LoopMetadata,
+    pr_number: int,
+    head_sha: str,
+    merge_commit: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Validate and describe one closed planning-only first-initiative PR."""
+    if metadata.chunk_id != f"{metadata.initiative_id}-PLAN":
+        return None
+    if (
+        metadata.next_chunk_id is None
+        or not metadata.next_requires_explicit_start
+    ):
+        raise LoopMemoryError("planning intake requires one explicit-start successor")
+    files = client.get_paginated(f"/repos/{repository}/pulls/{pr_number}/files")
+    if not files:
+        raise LoopMemoryError("planning intake has no reviewed files")
+    changed_paths: list[str] = []
+    initiative_directory: str | None = None
+    intent_path = _intent_path(metadata)
+    for item in files:
+        if not isinstance(item, dict) or not {"filename", "status"}.issubset(item):
+            raise LoopMemoryError("planning intake file evidence is malformed")
+        path = item.get("filename")
+        if not isinstance(path, str) or item.get("status") != "added":
+            raise LoopMemoryError("planning intake permits additive files only")
+        if path != intent_path:
+            directory = _planning_intake_directory(path, metadata.initiative_id)
+            if directory is None:
+                raise LoopMemoryError("planning intake contains a foreign path")
+            if initiative_directory is None:
+                initiative_directory = directory
+            elif initiative_directory != directory:
+                raise LoopMemoryError("planning intake contains multiple initiative directories")
+        changed_paths.append(path)
+    if initiative_directory is None or len(changed_paths) != len(set(changed_paths)):
+        raise LoopMemoryError("planning intake path set is invalid")
+    root = f"{CHUNK_CONTRACT_ROOT}{initiative_directory}/"
+    root_files: set[str] = set()
+    chunks: list[str] = []
+    reviews: set[str] = set()
+    for path in changed_paths:
+        if path == intent_path:
+            continue
+        relative = path.removeprefix(root)
+        if "/" not in relative:
+            root_files.add(relative)
+        elif relative.startswith("chunks/") and relative.count("/") == 1 and relative.endswith(".md"):
+            chunks.append(path)
+        elif relative.startswith("reviews/") and relative.count("/") == 1:
+            reviews.add(relative.removeprefix("reviews/"))
+        else:
+            raise LoopMemoryError("planning intake path grammar is invalid")
+    if root_files not in {PLANNING_ROOT_FILES, PLANNING_ROOT_FILES | {"REVIEW_LOG.md"}}:
+        raise LoopMemoryError("planning intake root file set is invalid")
+    expected_reviews = {
+        f"{metadata.initiative_id}-PLAN-internal-review-evidence.md",
+        f"{metadata.initiative_id}-PLAN-pr-trust-bundle.md",
+    }
+    if reviews != expected_reviews or not chunks:
+        raise LoopMemoryError("planning intake review or contract set is invalid")
+    successor_matches = [
+        path for path in chunks
+        if _successor_contract_name_matches(path.rsplit("/", 1)[-1], metadata.next_chunk_id)
+    ]
+    if len(successor_matches) != 1:
+        raise LoopMemoryError("planning intake successor contract is not exact")
+    successor_payload = client.get_json(
+        f"/repos/{repository}/contents/"
+        f"{urllib.parse.quote(successor_matches[0], safe='/')}?ref={head_sha}"
+    )
+    successor_text, _successor_blob = _decode_github_blob(
+        successor_payload, "planning successor", 262144
+    )
+    if _contract_start_phase(successor_text) != "implementation":
+        raise LoopMemoryError("planning intake successor is not implementation phase")
+    status_path = f"{root}STATUS.md"
+    status_payload = client.get_json(
+        f"/repos/{repository}/contents/{urllib.parse.quote(status_path, safe='/')}?ref={head_sha}"
+    )
+    status_text, _status_blob = _decode_github_blob(status_payload, "planning status", 65536)
+    if not re.search(r"(?mi)^- Active planning chunk:\s*(?:`?none`?)\s*$", status_text) or not re.search(
+        r"(?mi)^- Active implementation chunk:\s*(?:`?none`?)\s*$", status_text
+    ):
+        raise LoopMemoryError("planning intake status claims active work")
+    head_commit = client.get_json(f"/repos/{repository}/commits/{head_sha}")
+    head_tree = _commit_tree_sha(head_commit, "reviewed head")
+    merge_tree = _commit_tree_sha(merge_commit, "merge")
+    if head_tree != merge_tree:
+        raise LoopMemoryError("planning intake merge tree differs from reviewed head")
+    tree = client.get_json(f"/repos/{repository}/git/trees/{head_tree}?recursive=1")
+    entries = tree.get("tree") if isinstance(tree, dict) else None
+    if tree.get("truncated") is not False or not isinstance(entries, list):
+        raise LoopMemoryError("planning intake reviewed tree is incomplete")
+    entry_map = {
+        item.get("path"): item
+        for item in entries
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    }
+    if any(
+        path not in entry_map
+        or entry_map[path].get("type") != "blob"
+        or entry_map[path].get("mode") != "100644"
+        for path in changed_paths
+    ):
+        raise LoopMemoryError("planning intake file mode is invalid")
+    _validate_planning_intake_checks(client, repository, head_sha)
+    return {
+        "schema_version": PLANNING_INTAKE_VERSION,
+        "initiative_directory": initiative_directory,
+        "head_tree_sha": head_tree,
+        "merge_tree_sha": merge_tree,
+        "changed_paths": sorted(changed_paths),
+    }
+
+
 def collect_merge_record(
     client: GitHubClient,
     repository: str,
@@ -865,7 +1062,7 @@ def collect_merge_record(
             "merged pull request URL does not match repository and number"
         )
 
-    return {
+    record = {
         "schema_version": SCHEMA_VERSION,
         "repository": repository,
         "state_branch": STATE_BRANCH,
@@ -897,6 +1094,17 @@ def collect_merge_record(
         },
         "checks": _check_evidence(check_runs, statuses),
     }
+    planning_intake = _collect_planning_intake(
+        client,
+        repository,
+        metadata=metadata,
+        pr_number=pr_number,
+        head_sha=head_sha,
+        merge_commit=commit_payload,
+    )
+    if planning_intake is not None:
+        record["planning_intake"] = planning_intake
+    return record
 
 
 def _parse_timestamp(value: Any, field: str) -> datetime:
@@ -1479,10 +1687,14 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         "checks",
     }
     allowed_record_keys = expected_record_keys | {"legacy_exemptions"}
+    planning_record_keys = expected_record_keys | {"planning_intake"}
+    planning_legacy_record_keys = planning_record_keys | {"legacy_exemptions"}
     cutover_record_keys = allowed_record_keys | {"event"}
     if frozenset(record) not in {
         frozenset(expected_record_keys),
         frozenset(allowed_record_keys),
+        frozenset(planning_record_keys),
+        frozenset(planning_legacy_record_keys),
         frozenset(cutover_record_keys),
     } or not _is_current_schema_version(
         record.get("schema_version")
@@ -1507,6 +1719,35 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             ):
                 raise LoopMemoryError("legacy exemption is invalid or duplicated")
             identities.add(identity)
+    planning_intake = record.get("planning_intake")
+    if planning_intake is not None:
+        expected_intake_keys = {
+            "schema_version",
+            "initiative_directory",
+            "head_tree_sha",
+            "merge_tree_sha",
+            "changed_paths",
+        }
+        if (
+            not isinstance(planning_intake, dict)
+            or set(planning_intake) != expected_intake_keys
+            or planning_intake.get("schema_version") != PLANNING_INTAKE_VERSION
+        ):
+            raise LoopMemoryError("planning intake evidence has an invalid schema")
+        directory = planning_intake.get("initiative_directory")
+        paths = planning_intake.get("changed_paths")
+        if (
+            not isinstance(directory, str)
+            or not isinstance(paths, list)
+            or not paths
+            or paths != sorted(set(paths))
+            or not all(isinstance(path, str) for path in paths)
+        ):
+            raise LoopMemoryError("planning intake path evidence is invalid")
+        _validate_sha(planning_intake.get("head_tree_sha"))
+        _validate_sha(planning_intake.get("merge_tree_sha"))
+        if planning_intake["head_tree_sha"] != planning_intake["merge_tree_sha"]:
+            raise LoopMemoryError("planning intake tree evidence does not match")
     if event_type == "cutover":
         _validate_cutover_event(
             record.get("event"), exemptions, record.get("source", {}).get("main_sha")
@@ -1557,6 +1798,20 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
     metadata = parse_loop_metadata(_canonical_json(completed))
     if source.get("intent_path") != _intent_path(metadata):
         raise LoopMemoryError("loop-memory intent path does not match completed chunk")
+    if planning_intake is not None:
+        if (
+            metadata.chunk_id != f"{metadata.initiative_id}-PLAN"
+            or metadata.next_chunk_id is None
+            or not metadata.next_requires_explicit_start
+            or planning_intake["initiative_directory"]
+            != _initiative_directory_from_path(
+                f"{CHUNK_CONTRACT_ROOT}{planning_intake['initiative_directory']}/chunks/x.md",
+                metadata.initiative_id,
+            )
+        ):
+            raise LoopMemoryError("planning intake lifecycle identity is invalid")
+        if not record.get("checks", {}).get("all_required_passed"):
+            raise LoopMemoryError("planning intake required checks did not pass")
 
     active = record.get("active")
     if active != {"planning_chunk": None, "implementation_chunk": None}:
@@ -2091,6 +2346,9 @@ def apply_merge_record(
     if existing is not None:
         initiative_id = record["completed_chunk"]["initiative_id"]
         initiative_state = _latest_by_initiative(records).get(initiative_id)
+        planning_intake = record.get("planning_intake")
+        if planning_intake is not None and initiative_state is not None:
+            raise LoopMemoryError("planning intake initiative already exists in signed history")
         active_values = initiative_state.get("active", {}) if initiative_state else {}
         active_chunks = [
             value
@@ -2130,7 +2388,7 @@ def apply_merge_record(
                 None,
             )
             if active_chunk is None:
-                if match is None:
+                if match is None and planning_intake is None:
                     raise LoopMemoryError(
                         "post-cutover merge has no signed start or exemption"
                     )
