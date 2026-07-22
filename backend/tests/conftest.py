@@ -70,8 +70,12 @@ async def _reset_test_database_state(
                 "order by tablename"
             )
             tables = {row["tablename"]: row["identifier"] for row in rows}
-            if not tables or not set(TRUNCATE_GUARDED_TABLES).issubset(tables):
-                raise RuntimeError("test database is not migrated to the expected schema")
+            missing_tables = set(TRUNCATE_GUARDED_TABLES) - tables.keys()
+            if not tables or missing_tables:
+                missing = ",".join(sorted(missing_tables)) or "all"
+                raise RuntimeError(
+                    f"test database is not migrated to the expected schema: {missing}"
+                )
             for name in TRUNCATE_GUARDED_TABLES:
                 await connection.execute(f"alter table {tables[name]} disable trigger user")
             await connection.execute(
