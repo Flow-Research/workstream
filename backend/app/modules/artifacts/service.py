@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
@@ -27,6 +28,7 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from app.interfaces.artifact_operations import ArtifactRecoveryRequest
 from app.modules.actors.service import ActorService
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.models import (
@@ -37,6 +39,7 @@ from app.modules.artifacts.models import (
     ArtifactOperationReceipt,
     ArtifactPutObservationReceipt,
     ArtifactReplica,
+    ArtifactRecoveryAttempt,
     ArtifactStorageNamespace,
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
@@ -50,6 +53,11 @@ from app.modules.artifacts.schemas import (
     ArtifactPutAttemptAuthorityFacts,
     ArtifactPendingWorkAuthorityFacts,
     ArtifactVerificationAuthorityFacts,
+    ArtifactRecoveryResult,
+    ArtifactRecoveryAuthority,
+    ArtifactRecoveryAuthorityFacts,
+    ArtifactRecoveryConflictError,
+    ArtifactRecoveryIneligibleError,
     DenyArtifactInternalAuthority,
     CheckerOutputArtifactAdmissionRequest,
     ContributorArtifactAdmissionRequest,
@@ -64,7 +72,9 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     ServiceAuthorizationContext,
 )
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.audit.repository import AuditRepository
+from app.modules.tasks.models import AuditEvent
 
 
 ARTIFACT_STORAGE_NAMESPACE_ID = "primary"
@@ -896,6 +906,8 @@ class ArtifactStorageOrchestrator:
             job.terminal_at = now if exhausted else None
             job.terminal_result_code = "provider_unavailable" if exhausted else None
             _clear_job_fence(job)
+            if exhausted:
+                await self._finalize_recovery_for_job(job, "provider_unavailable", now)
         return "provider_unavailable"
 
     async def _complete_verification(
@@ -993,6 +1005,8 @@ class ArtifactStorageOrchestrator:
                             item_changed = True
                     elif outcome == "integrity_mismatch":
                         item.state = "failed"
+                        item.content_id = None
+                        item.provider_object_ref = None
                         item.error_code = "artifact_integrity_failure"
                         item_changed = True
                     if item_changed:
@@ -1002,6 +1016,7 @@ class ArtifactStorageOrchestrator:
             job.terminal_result_code = outcome
             job.terminal_at = now
             _clear_job_fence(job)
+            await self._finalize_recovery_for_job(job, outcome, now)
         return outcome
 
     async def _terminalize_verification_conflict(
@@ -1025,6 +1040,39 @@ class ArtifactStorageOrchestrator:
         job.terminal_result_code = "conflict"
         job.terminal_at = now
         _clear_job_fence(job)
+        await self._finalize_recovery_for_job(job, "conflict", now)
+
+    async def _finalize_recovery_for_job(
+        self, job: ArtifactVerificationJob, outcome: str, now: datetime
+    ) -> None:
+        """Terminalize the linked recovery envelope under the job's held fence."""
+        recovery = await self._repo.lock_recovery_by_retry(job.id)
+        if recovery is None:
+            return
+        if recovery.status != "requested" or recovery.terminal_at is not None:
+            raise ArtifactIngestStateError("artifact recovery envelope is already terminal")
+        audit_id = str(uuid4())
+        await AuditRepository(self._session).add_audit_event(
+            ArtifactRecoveryService._audit_event(
+                event_id=audit_id,
+                event_type="ArtifactRecoveryCompleted",
+                recovery_id=recovery.id,
+                actor_id=ServiceIdentity.ARTIFACT_VERIFIER.value,
+                reason=recovery.reason,
+                payload={
+                    "source_verification_job_id": recovery.source_verification_job_id,
+                    "retry_verification_job_id": job.id,
+                    "terminal_result_code": outcome,
+                    "execution_actor_kind": "service_identity",
+                    "execution_service_identity": ServiceIdentity.ARTIFACT_VERIFIER.value,
+                },
+            )
+        )
+        recovery.status = "succeeded" if outcome == "verified" else "failed"
+        recovery.terminal_result_code = outcome
+        recovery.terminal_at = now
+        recovery.terminal_audit_event_id = audit_id
+        recovery.cas_version += 1
 
     async def _claim_and_validate_namespace(self) -> ArtifactStorageNamespace:
         """Atomically claim the singleton or reject deployment identity drift."""
@@ -1113,6 +1161,281 @@ class ArtifactPendingWorkScanner:
         for job_id in job_ids:
             await self._publish_verification_job(job_id)
         return len(put_ids) + len(job_ids)
+
+
+class ArtifactRecoveryService:
+    """Create one idempotent read-only verification recovery chain link."""
+
+    _RECOVERY_CLASS = "provider_observation"
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        settings: Settings,
+        authority: ArtifactRecoveryAuthority,
+    ) -> None:
+        self._session = session
+        self._settings = settings
+        self._authority = authority
+        self._repo = ArtifactRepository(session)
+        self._actors = ActorService(session)
+        self._audit = AuditRepository(session)
+
+    async def create(self, request: ArtifactRecoveryRequest) -> ArtifactRecoveryResult:
+        """Create or replay one envelope, retry job, and initiation audit atomically."""
+        self._validate_request(request)
+        digest = self._request_digest(request)
+        source_id = str(request.source_verification_job_id)
+        try:
+            async with self._session.begin():
+                return await self._create_locked(request, source_id, digest)
+        except IntegrityError:
+            # A concurrent winner may have committed either lifetime-source or
+            # idempotency ownership.  The failed transaction is closed before
+            # the authoritative replay row is read.
+            async with self._session.begin():
+                existing = await self._repo.lock_recovery_by_source(source_id)
+                if existing is not None and self._is_exact_replay(existing, request, digest):
+                    await self._authorize_request(request)
+                    return self._result(existing, replayed=True)
+                if existing is not None:
+                    raise ArtifactRecoveryConflictError(
+                        "artifact recovery source is already owned"
+                    )
+            raise
+
+    async def _create_locked(
+        self, request: ArtifactRecoveryRequest, source_id: str, digest: str
+    ) -> ArtifactRecoveryResult:
+        existing = await self._repo.lock_recovery_by_source(source_id)
+        if existing is not None:
+            if self._is_exact_replay(existing, request, digest):
+                await self._authorize_request(request)
+                return self._result(existing, replayed=True)
+            raise ArtifactRecoveryConflictError("artifact recovery source is already owned")
+        source = await self._repo.lock_verification_job(source_id)
+        if source is None or not self._is_exhausted_unavailable(source):
+            raise ArtifactRecoveryIneligibleError(
+                "artifact verification job is not exhausted provider-unavailable work"
+            )
+        if source.cas_version != request.expected_source_job_cas_version:
+            raise ArtifactRecoveryConflictError("artifact verification source changed")
+        put_attempt = await self._repo.lock_put_attempt(source.originating_put_attempt_id)
+        checker_run = (
+            await self._repo.lock_checker_run(put_attempt.checker_run_id)
+            if put_attempt is not None and put_attempt.checker_run_id is not None
+            else None
+        )
+        canonical_submission_id = checker_run.submission_id if checker_run is not None else None
+        if (
+            put_attempt is None
+            or put_attempt.project_id != str(request.project_id)
+            or put_attempt.task_id
+            != (str(request.task_id) if request.task_id is not None else None)
+            or canonical_submission_id
+            != (str(request.submission_id) if request.submission_id is not None else None)
+        ):
+            raise ArtifactRecoveryConflictError("artifact recovery resource facts changed")
+        context = request.authorization_context
+        authorization = await self._authorize_request(request)
+        parent = await self._repo.lock_recovery_by_retry(source_id)
+        retry_id = str(uuid4())
+        recovery_id = str(uuid4())
+        audit_id = str(uuid4())
+        retry = ArtifactVerificationJob(
+            id=retry_id,
+            originating_put_attempt_id=source.originating_put_attempt_id,
+            parent_verification_job_id=source.id,
+            replica_id=source.replica_id,
+            status="pending",
+            maximum_attempts=self._settings.artifact_provider_observation_maximum_attempts,
+        )
+        await self._repo.add_verification_job(retry)
+        await self._audit.add_audit_event(
+            self._audit_event(
+                event_id=audit_id,
+                event_type="ArtifactRecoveryInitiated",
+                recovery_id=recovery_id,
+                actor_id=str(context.actor_profile_id),
+                reason=request.reason,
+                payload={
+                    "source_verification_job_id": source.id,
+                    "retry_verification_job_id": retry_id,
+                    "recovery_class": self._RECOVERY_CLASS,
+                    "request_digest": digest,
+                    "authorization_action_id": authorization.action_id.value,
+                    "authorization_permission_id": authorization.permission_id,
+                    "authorization_decision_id": str(authorization.decision_id),
+                    "authorization_request_id": str(context.request_id),
+                    "authorization_correlation_id": str(context.correlation_id),
+                },
+            )
+        )
+        recovery = ArtifactRecoveryAttempt(
+            id=recovery_id,
+            requester_actor_profile_id=str(context.actor_profile_id),
+            requester_identity_link_id=str(context.identity_link_id),
+            authorization_request_id=str(context.request_id),
+            authorization_correlation_id=str(context.correlation_id),
+            project_id=str(request.project_id),
+            task_id=str(request.task_id) if request.task_id is not None else None,
+            submission_id=(
+                str(request.submission_id) if request.submission_id is not None else None
+            ),
+            source_verification_job_id=source.id,
+            retry_verification_job_id=retry_id,
+            parent_recovery_attempt_id=parent.id if parent is not None else None,
+            recovery_class=self._RECOVERY_CLASS,
+            reason=request.reason,
+            client_idempotency_key=request.client_idempotency_key,
+            request_digest=digest,
+            status="requested",
+            initiation_audit_event_id=audit_id,
+        )
+        await self._repo.add_recovery_attempt(recovery)
+        return self._result(recovery, replayed=False)
+
+    async def _authorize_request(self, request: ArtifactRecoveryRequest):
+        """Revalidate the human requester and exact Operator action on every call."""
+        context = request.authorization_context
+        actor = await self._actors.lock_admission_proof(
+            context.actor_profile_id, context.identity_link_id
+        )
+        if (
+            context.actor_kind is not ActorKind.HUMAN
+            or context.actor_status is not ActorStatus.ACTIVE
+            or context.identity_link_status is not IdentityLinkStatus.ACTIVE
+            or actor is None
+            or actor.actor_kind != "human"
+            or actor.actor_status != "active"
+            or actor.service_identity is not None
+            or actor.identity_link_id != str(context.identity_link_id)
+            or actor.identity_link_subject_kind != "human"
+            or actor.identity_link_status != "active"
+        ):
+            raise ArtifactRecoveryConflictError("artifact recovery requester is unavailable")
+        authorization = await self._authority.authorize(
+            authorization_context=context,
+            facts=ArtifactRecoveryAuthorityFacts(
+                project_id=request.project_id,
+                task_id=request.task_id,
+                submission_id=request.submission_id,
+                source_verification_job_id=request.source_verification_job_id,
+                expected_source_job_cas_version=request.expected_source_job_cas_version,
+            ),
+        )
+        if (
+            authorization.action_id is not ActionId.ARTIFACT_VERIFICATION_JOB_RETRY
+            or authorization.permission_id
+            != PermissionId.ARTIFACT_VERIFICATION_JOB_RETRY.value
+        ):
+            raise ArtifactRecoveryConflictError(
+                "artifact recovery authorization evidence is invalid"
+            )
+        return authorization
+
+    @staticmethod
+    def _validate_request(request: ArtifactRecoveryRequest) -> None:
+        if type(request) is not ArtifactRecoveryRequest:
+            raise TypeError("invalid artifact recovery request")
+        if type(request.authorization_context) is not HumanAuthorizationContext:
+            raise TypeError("artifact recovery requires a human requester")
+        if (
+            request.reason != request.reason.strip()
+            or not request.reason
+            or len(request.reason) > 1000
+            or request.client_idempotency_key != request.client_idempotency_key.strip()
+            or not request.client_idempotency_key
+            or len(request.client_idempotency_key) > 200
+            or request.expected_source_job_cas_version < 0
+        ):
+            raise ValueError("invalid artifact recovery request")
+
+    @classmethod
+    def _request_digest(cls, request: ArtifactRecoveryRequest) -> str:
+        context = request.authorization_context
+        return canonical_json_hash(
+            {
+                "requester_actor_profile_id": str(context.actor_profile_id),
+                "requester_identity_link_id": str(context.identity_link_id),
+                "project_id": str(request.project_id),
+                "task_id": str(request.task_id) if request.task_id is not None else None,
+                "submission_id": (
+                    str(request.submission_id) if request.submission_id is not None else None
+                ),
+                "source_verification_job_id": str(request.source_verification_job_id),
+                "recovery_class": cls._RECOVERY_CLASS,
+                "reason": request.reason,
+                "client_idempotency_key": request.client_idempotency_key,
+                "expected_source_job_cas_version": request.expected_source_job_cas_version,
+            }
+        )
+
+    @staticmethod
+    def _is_exhausted_unavailable(job: ArtifactVerificationJob) -> bool:
+        return (
+            job.status == "provider_unavailable"
+            and job.terminal_result_code == "provider_unavailable"
+            and job.terminal_at is not None
+            and job.next_run_at is None
+            and job.executor_id is None
+            and job.lease_expires_at is None
+            and job.attempt_count >= job.maximum_attempts
+        )
+
+    @staticmethod
+    def _is_exact_replay(
+        attempt: ArtifactRecoveryAttempt,
+        request: ArtifactRecoveryRequest,
+        digest: str,
+    ) -> bool:
+        return (
+            attempt.requester_actor_profile_id
+            == str(request.authorization_context.actor_profile_id)
+            and attempt.source_verification_job_id == str(request.source_verification_job_id)
+            and attempt.recovery_class == ArtifactRecoveryService._RECOVERY_CLASS
+            and attempt.client_idempotency_key == request.client_idempotency_key
+            and attempt.request_digest == digest
+        )
+
+    @staticmethod
+    def _result(
+        attempt: ArtifactRecoveryAttempt, *, replayed: bool
+    ) -> ArtifactRecoveryResult:
+        return ArtifactRecoveryResult(
+            recovery_attempt_id=UUID(attempt.id),
+            source_verification_job_id=UUID(attempt.source_verification_job_id),
+            retry_verification_job_id=UUID(attempt.retry_verification_job_id),
+            replayed=replayed,
+        )
+
+    @staticmethod
+    def _audit_event(
+        *,
+        event_id: str,
+        event_type: str,
+        recovery_id: str,
+        actor_id: str,
+        reason: str,
+        payload: dict[str, object],
+    ) -> AuditEvent:
+        """Build one privacy-bounded append-only legacy-domain artifact event."""
+        return AuditEvent(
+            id=event_id,
+            entity_type="artifact_recovery_attempt",
+            entity_id=recovery_id,
+            event_type=event_type,
+            actor_id=actor_id,
+            external_subject=actor_id,
+            external_issuer="workstream",
+            actor_roles=[],
+            claim_snapshot={},
+            auth_source="external_flow",
+            is_dev_auth=False,
+            reason=reason,
+            event_payload=payload,
+            event_domain="legacy_lifecycle",
+        )
 
 
 class ArtifactAdmissionService:

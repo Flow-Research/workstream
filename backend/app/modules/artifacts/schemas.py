@@ -162,3 +162,71 @@ class DenyArtifactInternalAuthority:
     ) -> None:
         del service_identity, action_id, facts
         raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryResult:
+    """Stable identifiers returned by an exact recovery request or replay."""
+
+    recovery_attempt_id: UUID
+    source_verification_job_id: UUID
+    retry_verification_job_id: UUID
+    replayed: bool
+
+
+class ArtifactRecoveryError(Exception):
+    """Base failure for an internal recovery request."""
+
+
+class ArtifactRecoveryConflictError(ArtifactRecoveryError):
+    """Raised when idempotency or lifetime source ownership conflicts."""
+
+
+class ArtifactRecoveryIneligibleError(ArtifactRecoveryError):
+    """Raised when the source job is not exhausted provider-unavailable work."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryAuthorityFacts:
+    """Canonical facts bound to one exact Operator retry decision."""
+
+    project_id: UUID
+    task_id: UUID | None
+    submission_id: UUID | None
+    source_verification_job_id: UUID
+    expected_source_job_cas_version: int
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactRecoveryAuthorizationEvidence:
+    """Privacy-bounded evidence returned by the AUTH-owned recovery seam."""
+
+    action_id: ActionId
+    permission_id: str
+    decision_id: UUID
+
+
+class ArtifactRecoveryAuthority(Protocol):
+    """Fresh exact Operator authority seam owned by the later activation chunk."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactRecoveryAuthorityFacts,
+    ) -> ArtifactRecoveryAuthorizationEvidence: ...
+
+
+class DenyArtifactRecoveryAuthority:
+    """Production-safe recovery authority until AUTH activates the Operator action."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactRecoveryAuthorityFacts,
+    ) -> ArtifactRecoveryAuthorizationEvidence:
+        del authorization_context, facts
+        raise ArtifactAuthorityDeniedError("artifact recovery action is unavailable")
