@@ -154,19 +154,30 @@ human approval.
 PR #180 supplied useful discovery and local measurements but is not authorized
 implementation evidence. It showed repeated per-test migrations dominate wall
 time and proposed four dependency-based processes in one job, each PostgreSQL
-lane owning a private migrated database and role. The implementation successor
-is `WS-CI-001-02A`; routing, cache suppression, sampling, and test skipping are
-not part of it.
+lane owning a private migrated database and role. The immediate implementation
+successor is the reset-only `WS-CI-001-02A`; lane orchestration is deferred to
+`WS-CI-001-02B`. Routing, cache suppression, sampling, and test skipping are not
+part of either chunk.
 
-02A may adopt Konan's commits while preserving authorship only after this
-planning chunk merges and 02A receives a signed implementation start. Adoption
-must restore exact collected-node-to-completed-node custody, strict Boolean
-assertions, canonical seven-table trigger restoration proof, prospective file
-scope, internal review evidence, one merge intent, and exact hosted timing and
-coverage results. Four semantic lanes are a dependency partition, not arbitrary
-shards and not a substitute for exact execution proof.
+The work is split at the destructive-reset/workflow boundary. 02A may adopt the
+database reset and fixture changes from Konan's immutable commits
+`e22e9fba681f6f076d67433c90a268218be7662b` and
+`c73b28931b3b2a68a9ee2389181220132efaa41e`, with exact file scope and preserved
+authorship, only after this planning chunk merges and 02A receives a signed
+implementation start. It must prove database ownership, reset containment,
+canonical trigger restoration, migration-state preservation, and unchanged
+test behavior under the existing CI topology.
+
+02B is a later, separately started successor that may adopt the semantic-lane
+runner and workflow topology only after 02A merges. It must prove exact
+collected-node-to-completed-node custody, isolated PostgreSQL and MinIO state,
+unchanged coverage floors, failure custody, and exact hosted timing. Four
+semantic lanes are a dependency partition, not arbitrary shards and not a
+substitute for exact execution proof.
 
 The target remains under eight minutes for the complete Backend required job,
 but correctness, real PostgreSQL/MinIO contracts, 78% global coverage, and all
 protected 90% floors are hard gates. No timing claim is accepted from a local or
-different commit.
+different commit. Exceeding eight minutes does not permit gate weakening: 02B
+must stop for explicit human risk acceptance or further optimization, with wall
+time, slowest-lane time, and aggregate runner minutes recorded.

@@ -46,17 +46,26 @@ approval; any coverage/test weakening; backend product changes; 04B activation.
 - [ ] A separate reviewed amendment defines exact files and fail-closed routing.
 - [ ] Cache and timing provenance cannot cross dependency or commit boundaries.
 - [ ] Full-suite-required change classes default closed on ambiguity.
-- [ ] A prospective `WS-CI-001-02A` implementation contract incorporates the
-      measured migrate-once semantic-lane discovery from PR #180 without
-      treating that PR as authorized implementation evidence.
-- [ ] The successor contract requires exact collected/completed node custody,
+- [ ] Prospective `WS-CI-001-02A` and `WS-CI-001-02B` contracts split the
+      migrate-once reset from semantic-lane orchestration without treating PR
+      #180 as authorized implementation evidence.
+- [ ] The contracts require destructive-reset ownership, exact node custody,
       strict test assertions, all guarded-trigger restoration, unchanged
-      coverage floors, and exact hosted proof.
+      coverage floors, isolated services, and exact hosted proof.
 
 ## Verification commands
 
-Planning artifacts, merge-intent validation, Markdown links, stale-wording
-checks, internal review evidence gate, and Agent Gate tests.
+```bash
+python3 scripts/update_post_merge_memory.py validate-merge-intent --repository-root . --base-ref origin/main
+python3 scripts/test_agent_gates.py
+python3 scripts/check_loop_memory_state.py
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_artifact_contracts.py
+python3 scripts/check_internal_review_evidence.py
+git diff --check origin/main...HEAD
+```
 
 ## Required reviewers
 
