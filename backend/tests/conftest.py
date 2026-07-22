@@ -231,10 +231,10 @@ def _alembic_config() -> Config:
 
 
 async def _drop_test_database_schema(database_url: str) -> None:
+    """Clear schema state owned by an explicitly marked migration-contract test."""
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         await _assert_owned_test_database(connection, database_url)
-        await _assert_canonical_test_schema(connection)
         await connection.execute("drop schema if exists public cascade")
         await connection.execute("create schema public")
     finally:
@@ -322,8 +322,7 @@ def clean_postgres_database(
     finally:
         asyncio.run(db_session.dispose_engine())
         if owns_schema:
-            with postgres_ddl_lock(postgres_database_url):
-                command.upgrade(_alembic_config(), "head")
+            _rebuild_test_database_schema(postgres_database_url)
         get_settings.cache_clear()
 
 
