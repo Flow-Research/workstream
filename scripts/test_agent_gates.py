@@ -2462,6 +2462,12 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
                 lambda: updater._validate_recovery_exemptions(duplicate),
                 "not unique and bounded",
             )
+            foreign_key = {**serialized, "unexpected": True}
+            assert_loop_error(
+                updater,
+                lambda: updater._validate_recovery_exemptions(foreign_key),
+                "invalid schema",
+            )
         finally:
             updater.collect_merge_record = original_collect
             updater._validate_protected_actions_checks = original_checks

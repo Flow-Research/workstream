@@ -1964,7 +1964,11 @@ def _validate_legacy_exemptions(payload: Any) -> list[dict[str, Any]]:
 
 def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
     """Validate a chronological ephemeral recovery plan without reordering it."""
-    if not isinstance(payload, dict) or not isinstance(payload.get("exemptions"), list):
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema_version", "exemptions"}
+        or not isinstance(payload.get("exemptions"), list)
+    ):
         raise LoopMemoryError("recovery exemption inventory has an invalid schema")
     chronological = json.loads(_canonical_json(payload["exemptions"]))
     _validate_legacy_exemptions({
