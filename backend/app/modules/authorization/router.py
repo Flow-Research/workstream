@@ -6,18 +6,24 @@ from collections.abc import Awaitable
 from typing import Annotated, Literal, TypeVar
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.api_controls import enforce_admin_mutation_rate_limit
 from app.api.deps.rate_controls import service_unavailable_error
 from app.api.deps.auth import get_application_auth_verifier
-from app.api.deps.authorization import get_authorization_actor, get_authorization_service
+from app.api.deps.authorization import (
+    enforce_human_authorization_read,
+    get_authorization_actor,
+    get_authorization_service,
+)
 from app.core.api_controls import ApiErrorResponse, StructuredHTTPException
+from app.core.config import decode_pagination_cursor_hmac_secret
 from app.db.session import get_db_session
 from app.interfaces.auth import AuthVerificationUnavailableError, AuthVerifier
 from app.modules.actors.service import ActorService, ResolvedActor
+from app.modules.actors.repository import ActorRepository
 from app.modules.actors.schemas import (
     ActorIdentityLinkAdminResponse,
     ActorProfileAdminResponse,
@@ -36,6 +42,15 @@ from app.modules.authorization.admin_service import (
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.pagination import (
+    AuthorizationReadCursorCodec,
+    InvalidPaginationCursor,
+)
+from app.modules.authorization.read_service import (
+    ProjectRoleReadResourceNotFound,
+    ProjectRoleReadService,
+)
+from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
     ActorLifecycleMutationResponse,
@@ -74,9 +89,14 @@ from app.modules.authorization.schemas import (
     AdminScope,
     AuthorityOperation,
     ServiceActorCreateRequest,
+    ContributorCandidateListResponse,
+    ProjectRole,
+    ProjectRoleGrantListResponse,
+    ProjectRoleGrantRead,
     derive_reason_digest,
     derive_service_identity_digest,
 )
+from app.modules.projects.repository import ProjectRepository
 from app.modules.authorization.service_actor_schemas import (
     ServiceActorProvisionBody,
     ServiceActorProvisionResponse,
@@ -102,6 +122,30 @@ def _domain_error(status_code: int, code: str, message: str) -> StructuredHTTPEx
 
 def _actor_resource_not_found() -> StructuredHTTPException:
     return _domain_error(404, "actor_resource_not_found", "Actor resource not found")
+
+
+def _project_role_resource_not_found() -> StructuredHTTPException:
+    return _domain_error(
+        404,
+        "project_authorization_resource_not_found",
+        "Project authorization resource not found",
+    )
+
+
+def _project_role_read_service(
+    request: Request,
+    session: AsyncSession,
+    authorization: AuthorizationService,
+) -> ProjectRoleReadService:
+    secret = request.app.state.settings.pagination_cursor_hmac_secret
+    if secret is None:
+        raise service_unavailable_error()
+    return ProjectRoleReadService(
+        authorization,
+        ActorRepository(session),
+        AdminAuthorizationRepository(session),
+        AuthorizationReadCursorCodec(decode_pagination_cursor_hmac_secret(secret)),
+    )
 
 
 def _scope_resource_id(scope_type: AdminScope, project_id: UUID | None):
@@ -1124,3 +1168,100 @@ async def revoke_admin_role_grant(
     except SQLAlchemyError as exc:
         await session.rollback()
         raise service_unavailable_error() from exc
+
+
+async def _canonical_project(session: AsyncSession, project_id: UUID):
+    project = await ProjectRepository(session).get_project(str(project_id))
+    if project is None:
+        raise _project_role_resource_not_found()
+    return project
+
+
+@router.get(
+    "/projects/{project_id}/contributor-candidates",
+    response_model=ContributorCandidateListResponse,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST.value
+    },
+)
+async def list_project_contributor_candidates(
+    project_id: UUID,
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> ContributorCandidateListResponse:
+    """List privacy-safe contributor candidates for one canonical project."""
+    project = await _canonical_project(session, project_id)
+    service = _project_role_read_service(request, session, authorization)
+    try:
+        return await service.list_contributor_candidates(
+            project=project,
+            caller_actor_profile_id=UUID(resolved.profile.id),
+            limit=limit,
+            cursor=cursor,
+        )
+    except InvalidPaginationCursor as exc:
+        raise _domain_error(400, "invalid_cursor", "Invalid cursor") from exc
+
+
+@router.get(
+    "/projects/{project_id}/role-grants",
+    response_model=ProjectRoleGrantListResponse,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_ROLE_GRANT_LIST.value},
+)
+async def list_project_role_grants(
+    project_id: UUID,
+    request: Request,
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    status_filter: Annotated[
+        Literal["active", "revoked"] | None,
+        Query(alias="status"),
+    ] = None,
+    role: Annotated[ProjectRole | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+) -> ProjectRoleGrantListResponse:
+    """List immutable project-role grant history without a count."""
+    project = await _canonical_project(session, project_id)
+    service = _project_role_read_service(request, session, authorization)
+    try:
+        return await service.list_project_role_grants(
+            project=project,
+            status=status_filter,
+            role=role,
+            limit=limit,
+            cursor=cursor,
+        )
+    except InvalidPaginationCursor as exc:
+        raise _domain_error(400, "invalid_cursor", "Invalid cursor") from exc
+
+
+@router.get(
+    "/projects/{project_id}/role-grants/{grant_id}",
+    response_model=ProjectRoleGrantRead,
+    dependencies=[Depends(enforce_human_authorization_read)],
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_ROLE_GRANT_READ.value},
+)
+async def read_project_role_grant(
+    project_id: UUID,
+    grant_id: UUID,
+    request: Request,
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ProjectRoleGrantRead:
+    """Read one grant only through its canonical project relationship."""
+    project = await _canonical_project(session, project_id)
+    service = _project_role_read_service(request, session, authorization)
+    try:
+        return await service.read_project_role_grant(
+            project=project,
+            grant_id=grant_id,
+        )
+    except ProjectRoleReadResourceNotFound as exc:
+        raise _project_role_resource_not_found() from exc

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
+import base64
 import fcntl
 import hashlib
 import os
@@ -14,6 +15,19 @@ from app.core.config import get_settings
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
 TestDatabaseReset = Callable[..., Awaitable[None]]
+PAGINATION_CURSOR_HMAC_SECRET = base64.b64encode(bytes(range(32))).decode("ascii")
+
+
+@pytest.fixture(autouse=True)
+def pagination_cursor_hmac_secret(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Provision the required cursor key explicitly for isolated test apps."""
+    monkeypatch.setenv(
+        "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET",
+        PAGINATION_CURSOR_HMAC_SECRET,
+    )
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 async def _reset_test_database_state(

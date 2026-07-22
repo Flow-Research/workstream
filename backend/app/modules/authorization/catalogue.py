@@ -316,17 +316,17 @@ ACTION_DEFINITIONS = (
         PermissionId.ACTOR_SERVICE_PROVISION,
         ActionOwner.AUTH_09B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         PermissionId.PROJECT_ROLE_GRANT_MANAGE,
         ActionOwner.AUTH_10B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_ROLE_GRANT_LIST,
         PermissionId.PROJECT_ROLE_GRANT_READ,
         ActionOwner.AUTH_10B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_ROLE_GRANT_READ,
         PermissionId.PROJECT_ROLE_GRANT_READ,
         ActionOwner.AUTH_10B,
@@ -630,6 +630,9 @@ def _index_actions(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
     }
     if {
         definition.action_id

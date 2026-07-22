@@ -16,6 +16,7 @@ from app.api.deps.auth import (
     get_auth_verification_result,
 )
 from app.api.deps.rate_controls import enforce_rate_control, get_rate_control_service
+from app.api.deps.api_controls import enforce_authorization_read_rate_limit
 from app.core.api_controls import StructuredHTTPException, request_ids
 from app.db.session import get_db_session
 from app.modules.actors.service import (
@@ -120,6 +121,18 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
         "grant_not_found": "Grant not found",
         "resource_not_found": "Resource not found",
     }
+    concealed_project_reads = {
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
+    }
+    if exc.decision.action_id in concealed_project_reads:
+        return StructuredHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project authorization resource not found",
+            error_code="project_authorization_resource_not_found",
+            error_message="Project authorization resource not found",
+        )
     code = exc.public_code
     message = messages[code]
     status_code = (
@@ -133,6 +146,20 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
         error_code=code,
         error_message=message,
     )
+
+
+async def enforce_human_authorization_read(
+    _rate_control: Annotated[None, Depends(enforce_authorization_read_rate_limit)],
+    result: Annotated[AuthVerificationResult, Depends(get_auth_verification_result)],
+) -> None:
+    """Consume rate first, then conceal every nonhuman authorization read."""
+    if result.token.subject_kind != "human":
+        raise StructuredHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project authorization resource not found",
+            error_code="project_authorization_resource_not_found",
+            error_message="Project authorization resource not found",
+        )
 
 
 async def get_authorization_service(

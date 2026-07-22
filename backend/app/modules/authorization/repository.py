@@ -15,6 +15,8 @@ from app.modules.authorization.models import (
     AdminRoleGrant,
     AuthorityControl,
     AuthorityIdempotencyRecord,
+    ProjectRoleGrant,
+    ProjectRoleQualificationSnapshot,
 )
 from app.modules.authorization.policy import permissions_for
 from app.modules.authorization.schemas import (
@@ -41,6 +43,70 @@ class AdminAuthorizationRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._projects = ProjectRepository(session)
+
+    async def list_project_role_grants(
+        self,
+        *,
+        project_id: UUID,
+        status: str | None,
+        role: str | None,
+        cursor: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[tuple[ProjectRoleGrant, ProjectRoleQualificationSnapshot]]:
+        """List grant history with its exact immutable snapshot and keyset."""
+        query = (
+            select(ProjectRoleGrant, ProjectRoleQualificationSnapshot)
+            .join(
+                ProjectRoleQualificationSnapshot,
+                ProjectRoleQualificationSnapshot.id
+                == ProjectRoleGrant.qualification_snapshot_id,
+            )
+            .where(ProjectRoleGrant.project_id == str(project_id))
+        )
+        if status is not None:
+            query = query.where(ProjectRoleGrant.status == status)
+        if role is not None:
+            query = query.where(ProjectRoleGrant.role == role)
+        if cursor is not None:
+            granted_at, grant_id = cursor
+            query = query.where(
+                or_(
+                    ProjectRoleGrant.granted_at > granted_at,
+                    and_(
+                        ProjectRoleGrant.granted_at == granted_at,
+                        ProjectRoleGrant.id > grant_id,
+                    ),
+                )
+            )
+        rows = await self._session.execute(
+            query.order_by(ProjectRoleGrant.granted_at, ProjectRoleGrant.id)
+            .limit(limit + 1)
+            .execution_options(populate_existing=True)
+        )
+        return list(rows.tuples().all())
+
+    async def get_project_role_grant(
+        self,
+        *,
+        project_id: UUID,
+        grant_id: UUID,
+    ) -> tuple[ProjectRoleGrant, ProjectRoleQualificationSnapshot] | None:
+        """Load one grant only through its canonical project relationship."""
+        row = (
+            await self._session.execute(
+                select(ProjectRoleGrant, ProjectRoleQualificationSnapshot)
+                .join(
+                    ProjectRoleQualificationSnapshot,
+                    ProjectRoleQualificationSnapshot.id
+                    == ProjectRoleGrant.qualification_snapshot_id,
+                )
+                .where(
+                    ProjectRoleGrant.project_id == str(project_id),
+                    ProjectRoleGrant.id == grant_id,
+                )
+            )
+        ).one_or_none()
+        return tuple(row) if row is not None else None
 
     async def lock_control(self) -> AuthorityControl:
         """Lock the irreversible singleton before any administrative mutation."""

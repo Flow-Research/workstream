@@ -43,8 +43,10 @@ backend/app/core/config.py
 backend/app/main.py
 backend/tests/test_actors.py
 backend/tests/test_authorization.py
+backend/tests/test_api_controls.py
 backend/tests/test_projects.py
 backend/tests/test_config.py
+backend/tests/conftest.py
 backend/scripts/api_contract_e2e.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
@@ -104,9 +106,11 @@ principals deny before product-row lookup.
   mismatches, and lifecycle concealment do not fabricate authorization-denial
   evidence except candidate terminal/archived status, which is an evidenced
   kernel resource-guard denial after canonical project load. Tests prove each path.
-- A composed human-only prelookup dependency rejects fixed services before
-  `ProjectRepository.get_project`; agent and Space kinds remain rejected by the
-  existing actor-resolution boundary. Because no canonical project exists at
+- A composed human-only prelookup dependency rejects every verified nonhuman
+  subject kind before `ProjectRepository.get_project`. This includes fixed
+  services and the currently unsupported agent and Space kinds, and intentionally
+  fails earlier than the general actor-resolution boundary for these three
+  privacy-sensitive routes. Because no canonical project exists at
   this point, this prelookup rejection does not fabricate an action decision or
   authority audit event. It returns the same public 404 and tests prove zero
   project/candidate/grant query. It never constructs a canonical context from
@@ -116,7 +120,10 @@ principals deny before product-row lookup.
   `(created_at, actor_profile_id)`; executes no count; and returns only ID plus
   nullable display name. Active-link eligibility uses `EXISTS`, not a
   multiplicative join, so each profile occurs once even if bad/legacy data
-  exposes multiple eligible links; regression proof covers uniqueness. Only
+  exposes multiple eligible links. Current PostgreSQL also enforces the existing
+  one-link-per-profile unique constraint, so regression proof binds that
+  structural constraint plus the defensive `EXISTS` query rather than inserting
+  an impossible second link. Only
   draft, active, and paused projects qualify.
 - Grant list/detail remain readable in every existing project state. List
   applies optional status/role before keyset and `limit + 1`, orders ascending
@@ -176,9 +183,13 @@ principals deny before product-row lookup.
   project-state behavior, strict fields/no totals, and the unchanged
   no-migration/no-PREP/no-mutation boundary.
 - Hosted `api_contract_e2e.py` provisions an isolated cursor secret and exercises
-  all three real routes, practical 429/503 mappings, identical 404 concealment,
-  OpenAPI action IDs, strict shapes, and absence of extra surfaces. The merge
-  intent names only 10B2 and its successor 10C.
+  all three real routes, identical 404 concealment, OpenAPI action IDs, strict
+  shapes, and absence of extra surfaces. Deterministic ASGI dependency tests own
+  practical 429/`Retry-After` and retryable 503 injection because making the
+  isolated hosted database unavailable would also destroy the server and its
+  cleanup boundary; they exercise the real nested rate dependency and prove the
+  failure precedes project SQL. The merge intent names only 10B2 and its
+  successor 10C.
 
 ## Verification commands
 
@@ -203,6 +214,46 @@ integrity, docs, reuse/dedup, and test delta.
 
 Review rate-before-lookup, canonical scope, identical audited concealment,
 filter-before-keyset behavior, minimal fields, cursor binding, and exact activation.
+
+## Preimplementation plan-review resolution
+
+- Dependency precedence is exact: verified token, one `authorization_read`
+  consumption, actor resolution plus human-only admission, canonical project
+  load, kernel authorization, cursor validation, then row query. For every
+  verified token, exhausted 429 or private retryable 503 therefore precedes the
+  identical nonhuman 404. Tests cover human, service, agent, Space, concealed,
+  missing-resource, and invalid-cursor paths at this ordering.
+- Candidate project-state eligibility remains a typed resource guard inside the
+  single `AuthorizationService.require` decision. Grant list/detail deliberately
+  carry no project-state guard.
+- Cursor-secret parsing and redaction land before route activation and startup
+  validates the required canonical Base64 32-byte value. There is no default,
+  test compatibility value, auth/rate-secret fallback, or serialization path.
+  Coordinated rotation intentionally invalidates outstanding cursors and requires
+  quiescence plus restart across replicas. The shared pytest harness explicitly
+  provisions an isolated test-only value because startup validation applies to
+  every application fixture; this is environment provisioning, not a Settings
+  default or compatibility fallback.
+- Permission/scope and candidate lifecycle denials retain dependency-owned
+  rollback, bounded denial restaging, commit, and identical 404 translation.
+  Evidence persistence failure maps to private retryable 503. Missing project or
+  grant, project/grant mismatch, and nonhuman prelookup rejection create no
+  fabricated decision or audit row; routes neither catch `AuthorizationDenied`
+  nor commit.
+- Activation is atomic with the complete route boundary: exactly the three
+  existing `ActionOwner.AUTH_10B` rows and three OpenAPI operations become
+  active. AUTH-10C remains planned. No CI workflow, threshold, skip, xfail, or
+  fixture-scope workaround is permitted; any required file outside the contract
+  is a stop for contract amendment.
+- Final architecture review confirmed that rejecting every verified nonhuman
+  token immediately after the durable rate gate is the smaller route-specific
+  boundary: it avoids actor-registry and product SQL and emits no fabricated
+  action decision. The earlier fixed-service-only wording is superseded;
+  general actor resolution remains unchanged for every other route.
+- The existing exact OpenAPI inventory gate must move from 62 to 65 routes and
+  record precisely these three actions. `backend/tests/test_api_controls.py` is
+  allowed only for that strengthened manifest regression; no inventory
+  assertion may be removed or loosened.
 
 ## Stop conditions
 

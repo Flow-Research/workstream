@@ -238,8 +238,8 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 70 rows after AUTH-10A: 17 active actions
-and 53 planned rows. AUTH-10A adds five planned project-role read/manage rows,
+The closed action registry contains 70 rows after AUTH-10B2: 20 active actions
+and 50 planned rows. AUTH-10A added five project-role read/manage rows,
 owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
@@ -883,6 +883,34 @@ counter with the closed `authorization_read` scope. Its dependency remains
 unattached and activates no action until AUTH-10B2. The dedicated default is
 120 requests per 60 seconds per verified issuer/subject digest, independently
 configurable within the existing bounded limit and window ranges.
+
+AUTH-10B2 activates only `project.contributor_candidate.list`,
+`project_role_grant.list`, and `project_role_grant.read`. Their canonical targets
+are the server-loaded project and, for detail, the grant joined through that
+project. Candidate discovery is Project-Manager-only and permits draft, active,
+and paused projects; grant history permits covered Project Manager or Audit
+Authority access in every project state. Services and unsupported agent/Space
+subjects are concealed before project lookup. Authorization denials, missing
+resources, project/grant mismatch, and candidate lifecycle denial use one public
+404 shape while bounded kernel denials retain their established audit evidence.
+
+Candidate pages expose exactly actor profile ID plus nullable display name.
+Grant pages accept only optional active/revoked status and
+submitter/reviewer/adjudicator role filters, a 1..100 limit (default 50), and a
+cursor bounded to 512 characters. Each grant exposes exactly `id`, `project_id`,
+`actor_profile_id`, `role`, `status`, `version`, `grant_method`,
+`qualification_snapshot`, both granting actor/admin-grant identifiers,
+`granted_at`, `grant_reason`, and the three present-but-nullable revocation
+fields. The nested snapshot exposes exactly its ID, requested role, bounded
+skills and reputation availability/reference objects, prior-project and
+external-expertise references, both capturing actor/admin-grant identifiers,
+and capture time. Both page
+envelopes are exactly `items` and `next_cursor`, without totals. A strict signed
+keyset cursor binds action, project, normalized filters, limit, ordering,
+timestamp, and UUID. The required independent 32-byte Base64 cursor HMAC key
+fails startup when absent or invalid; coordinated rotation invalidates all
+outstanding cursors. AUTH-10B2 adds no migration and does not change PREP or
+grant mutation behavior.
 
 ## Conformance Requirements
 

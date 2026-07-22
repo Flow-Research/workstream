@@ -703,8 +703,8 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 74 PermissionIds, 70 ActionIds, 17 active actions, and
-53 planned actions after AUTH-10A registers five unavailable project-role rows.
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 20 active actions, and
+50 planned actions after AUTH-10B2 activates the three project-role read rows.
 Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
@@ -1084,6 +1084,53 @@ canonical resource and evaluate current authority again before responding;
 later route owners must preserve the same rule. There is currently no
 invalidation consumer or backlog processor; the durable event is foundation
 evidence for the owning later chunk.
+
+## Project Role Read Operations
+
+AUTH-10B2 exposes exactly three human-only, durable-rate-controlled reads:
+
+```text
+GET /api/v1/projects/{project_id}/contributor-candidates
+GET /api/v1/projects/{project_id}/role-grants
+GET /api/v1/projects/{project_id}/role-grants/{grant_id}
+```
+
+Contributor candidates require a covered Project Manager and are available only
+for draft, active, or paused projects. Each item contains only
+`actor_profile_id` and nullable `display_name`. Grant list/detail require a
+covered Project Manager or Audit Authority and remain readable for every project
+state. List responses contain exactly `items` and `next_cursor`; no count or
+total is computed or returned. Candidate pages accept `limit` 1..100 (default
+50) and a cursor of at most 512 characters. Grant pages add only optional
+`status=active|revoked` and `role=submitter|reviewer|adjudicator` filters.
+
+Each grant contains exactly `id`, `project_id`, `actor_profile_id`, `role`,
+`status`, `version`, `grant_method`, `qualification_snapshot`,
+`granted_by_actor_profile_id`, `granted_by_admin_role_grant_id`, `granted_at`,
+`grant_reason`, and nullable `revoked_by_actor_profile_id`, `revoked_at`, and
+`revoked_reason`. Its qualification snapshot contains exactly `id`,
+`requested_role`, `skills_snapshot`, `reputation_snapshot`,
+`prior_project_work_refs`, `external_expertise_refs`,
+`captured_by_actor_profile_id`, `captured_by_admin_role_grant_id`, and
+`captured_at`. Skills and reputation objects contain only `availability`,
+`reference_ids`, and nullable `unavailable_reason`.
+
+Permission/scope denial, an ineligible candidate
+project, missing project or grant, and project/grant mismatch share the same
+`project_authorization_resource_not_found` 404.
+
+Provision `WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET` as canonical Base64 for
+exactly 32 random bytes. For example, generate it with
+`openssl rand -base64 32`. Missing or malformed values stop application startup.
+The key is independent from authentication and rate-control secrets. Rotation
+must be coordinated across all instances; replacing it invalidates every
+outstanding cursor, so drain or accept bounded client pagination restarts. Never
+log the key, a cursor, or distinctions hidden by the shared 404. Authorization
+read exhaustion returns 429 with `Retry-After`, and unavailable rate/evidence
+persistence returns retryable 503 before private row lookup.
+
+This read activation adds no migration and changes no PREP, project-role grant
+issue/revoke, or other mutation behavior.
 
 ## Authority Audit Custody
 

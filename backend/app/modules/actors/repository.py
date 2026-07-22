@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +43,42 @@ class ActorRepository:
             framed.extend(encoded)
         digest = hashlib.sha256(framed).digest()
         return int.from_bytes(digest[:8], "big", signed=True)
+
+    async def list_contributor_candidates(
+        self,
+        *,
+        caller_actor_profile_id: UUID,
+        cursor: tuple[datetime, UUID] | None,
+        limit: int,
+    ) -> list[ActorProfile]:
+        """List unique eligible humans using a strict timestamp/UUID keyset."""
+        active_link = exists(
+            select(ActorIdentityLink.id).where(
+                ActorIdentityLink.actor_profile_id == ActorProfile.id,
+                ActorIdentityLink.status == "active",
+            )
+        )
+        query = select(ActorProfile).where(
+            ActorProfile.actor_kind == "human",
+            ActorProfile.status == "active",
+            ActorProfile.id != str(caller_actor_profile_id),
+            active_link,
+        )
+        if cursor is not None:
+            created_at, actor_profile_id = cursor
+            query = query.where(
+                or_(
+                    ActorProfile.created_at > created_at,
+                    (
+                        (ActorProfile.created_at == created_at)
+                        & (ActorProfile.id > str(actor_profile_id))
+                    ),
+                )
+            )
+        rows = await self._session.scalars(
+            query.order_by(ActorProfile.created_at, ActorProfile.id).limit(limit + 1)
+        )
+        return list(rows.all())
 
     async def get_identity_link(
         self,
