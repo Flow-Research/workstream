@@ -589,3 +589,21 @@ the unique children in `CHUNK_MAP.md` may receive future implementation
 contracts. Chunk 08 is pure contracts/validation only; chunk 10 is the first
 canonical Review/FinalAcceptance/CON commit. Active release docs and router
 registration occur together only in 13C.
+
+### D28 - REV Starts At Allow Review And Never Repairs Upstream Owners
+
+The human reconfirmed the canonical boundary after a complete source reread.
+REV consumes the existing finalized Submission, its verified artifact bindings,
+and one durable final current CheckerRun recommendation of `allow_review`.
+Project Guide setup/publication/activation/chronology/reactivation and general
+Task intake stamping are not REV-owned. D21 and D24 are superseded wherever
+they assigned those implementations to 02A1/02A2/02A3/02A4.
+
+REV owns queue admission, routing, leases, review packet semantics, immutable
+Review/finding/resolution history, human revision replay, FinalAcceptance, and
+the canonical decision composition. Every Review produces one reviewer
+contribution through CON; accept alone produces FinalAcceptance and one
+submitter accepted-submission contribution. Submission and Review predecessor
+chains remain fully traversable for future adjudication without implementing
+adjudication now. A missing owner capability is documented and escalated to the
+human; REV never fills it opportunistically.

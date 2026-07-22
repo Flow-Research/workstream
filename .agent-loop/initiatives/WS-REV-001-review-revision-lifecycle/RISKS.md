@@ -2,6 +2,10 @@
 
 | ID | Risk | Severity | Mitigation |
 |---|---|---:|---|
+| R0 | REV converts a consumed upstream dependency into feature ownership and edits Project Guide, Task intake, Checker, AUTH, ART, or CON internals | Critical | REV starts at final current `allow_review`; record missing typed owner contracts and stop. Boundary review blocks any REV chunk that edits upstream behavior rather than a declared participant owned by that subsystem. |
+
+Rows R50-R56 below are retained only as historical evidence of the superseded
+02A/02B/02C plan. D28 and PLAN3 prohibit using them as REV implementation work.
 | R1 | Parallel AUTH/ART changes make a planned interface stale | High | Every runtime chunk starts with a main-SHA dependency refresh and plan review; consume only merged contracts. |
 | R2 | Revised reference activates Flow Node against locked AWS policy | High | Correct normative wording in the contract-adoption chunk before runtime implementation. |
 | R3 | Duplicate `SubmissionVersion` fragments identity and history | High | Extend existing `Submission`; migration and architecture tests prohibit a duplicate table. |

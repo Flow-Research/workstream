@@ -65,6 +65,15 @@ outcomes.
 
 ## Boundaries
 
+- REV runtime begins only from a durable, final, current CheckerRun whose
+  routing recommendation is `allow_review`, using the existing finalized
+  Submission and its canonical verified artifact bindings. Project Guide
+  creation, setup, publication, activation, chronology, approval provenance,
+  and general Task-context stamping remain upstream owner responsibilities.
+- If REV discovery finds a missing upstream capability, record the exact typed
+  contract, invariants, and proof needed from that owner and stop. Do not
+  implement the missing Project, Task, Submission, Checker, AUTH, ART, or CON
+  subsystem behavior inside REV.
 - Preserve the proven project guide, task, submission, and checker spine through
   `review_pending`.
 - Extend the existing versioned `Submission`; do not create a duplicate
@@ -88,6 +97,12 @@ outcomes.
   ART call or external I/O.
 - Keep frontend delivery separate until backend contracts and lifecycle guards
   are stable and proven.
+
+- Preserve a fully traversable immutable task history: every revised Submission
+  identifies its immediate predecessor, every later Review identifies the prior
+  Review in the same task chain, and findings, responses, and resolutions append
+  without rewriting history. This history is future adjudication input, but REV
+  implements no adjudication behavior.
 
 ## Non-goals
 
@@ -139,9 +154,8 @@ outcomes.
     Exact AUTH custody, PREP, registration, service-identity, and activation gates
     apply per consumer so hidden REV work can proceed while every action remains
     unavailable; REV-13C alone releases product surfaces.
-11. Guide chronology/task locking lands before hidden superseded-guide
-    reactivation. Reactivation uses AUTH PREP plus a current-active If-Match
-    precondition and must merge before AUTH-12 evaluator/cutover/activation.
+11. **Superseded by D28/PLAN3:** the former guide chronology/reactivation
+    sequencing decision is historical and provides no REV implementation authority.
 12. Persisted release phase denies execution but does not dynamically unregister
     routers, deactivate AUTH mappings, or replace operational scheduler control.
 
