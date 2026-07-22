@@ -29,18 +29,6 @@
   admission, reconciles configured limits under locked CAS guards, activates
   the exact API-router CI gate, and expands HTTP replay/race/concealment and
   pagination proof.
-- Second review on `80c6f4f5` cleared the original blockers and found four
-  remaining gaps: malformed receipt cursors, caller-asserted admission project
-  scope, advertised-but-unsupported review lookup, and insufficient terminal
-  retry authority/zero-fact proof.
-- Final repair locks the canonical Project, removes and documents deferred
-  review lookup, maps malformed receipt cursors to `422`, and performs a second
-  exact actor/link/AUTH decision at the terminal transaction boundary. Focused
-  HTTP and recovery rollback tests pass.
-- Final exact-SHA review on `584a0626`: circuit breaker PASS WITH EXCEPTION;
-  senior engineering, architecture, QA/test, security/auth, product/ops, and
-  reuse/dedup PASS WITH LOW RISKS; CI integrity PASS; test delta PASS WITH LOW
-  RISKS; docs PASS. No blocking findings or open reviewer sessions remain.
 
 ## WS-ART-001-02C3
 

@@ -4,7 +4,10 @@ Reviewed code SHA: `584a0626028da2a2dc2a93793dfe4ffef9b09163`
 
 Reviewed against trusted main: `14fa4316`
 
-Reviewed at: `2026-07-22`
+Reviewed at: `2026-07-22T03:43:00Z`
+
+Reviewer run IDs: `art_02d_plan_review`, `ci_repair_qa_security`,
+`ci_repair_ops_ci_docs`
 
 Reviewer tracks: senior engineering, architecture, QA/test, security/auth,
 product/ops, reuse/dedup, CI integrity, test delta, and docs.
