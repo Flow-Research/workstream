@@ -967,6 +967,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         audience=flow_audience,
         secret=flow_secret,
     )
+    project_reader_token = issue_flow_token(
+        f"real-api-project-reader-{run_id}",
+        [],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
     worker_subject = f"real-api-worker-{run_id}"
     worker_token = issue_flow_token(
         worker_subject,
@@ -1084,6 +1091,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert bootstrap_code == 0
         assert bootstrap["result_code"] == "bootstrapped"
+        project_reader_profile = await request_json(
+            client,
+            "GET",
+            "/api/v1/actors/me",
+            project_reader_token,
+        )
         service_payload = {
             "service_identity": "workstream.artifact.verifier",
             "subject": f"real-api-artifact-verifier-{run_id}",
@@ -1295,32 +1308,44 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
         )
         await request_json(client, "GET", f"/api/v1/projects/{project['id']}", manager_token)
+        project_manager_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": project_reader_profile["actor_profile_id"],
+                "role": "project_manager",
+                "scope_type": "project",
+                "scope_project_id": project["id"],
+                "reason": "Real API project-role read authority proof",
+            },
+        )
+        assert project_manager_grant.status_code == 201, project_manager_grant.text
         candidates = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/contributor-candidates?limit=1",
-            manager_token,
+            project_reader_token,
         )
         assert set(candidates) == {"items", "next_cursor"}
         grants = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/role-grants?limit=1",
-            manager_token,
+            project_reader_token,
         )
         assert grants == {"items": [], "next_cursor": None}
         missing_grant = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/role-grants/{uuid4()}",
-            manager_token,
+            project_reader_token,
             expected_status=404,
         )
         missing_project = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{uuid4()}/role-grants/{uuid4()}",
-            manager_token,
+            project_reader_token,
             expected_status=404,
         )
         assert missing_grant["error"]["code"] == missing_project["error"]["code"]
@@ -1491,21 +1516,21 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/contributor-candidates?limit=100",
-            manager_token,
+            project_reader_token,
         )
         assert {"actor_profile_id", "display_name"} == set(candidates["items"][0])
         grants = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/role-grants?status=active&role=submitter",
-            manager_token,
+            project_reader_token,
         )
         assert [item["id"] for item in grants["items"]] == [role_grant_id]
         grant = await request_json(
             client,
             "GET",
             f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}",
-            manager_token,
+            project_reader_token,
         )
         assert set(grant) == {
             "id", "project_id", "actor_profile_id", "role", "status", "version",

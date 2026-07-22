@@ -44,6 +44,7 @@ backend/app/main.py
 backend/tests/test_actors.py
 backend/tests/test_authorization.py
 backend/tests/test_api_controls.py
+backend/tests/test_audit.py
 backend/tests/test_projects.py
 backend/tests/test_config.py
 backend/tests/conftest.py
@@ -254,6 +255,9 @@ filter-before-keyset behavior, minimal fields, cursor binding, and exact activat
   record precisely these three actions. `backend/tests/test_api_controls.py` is
   allowed only for that strengthened manifest regression; no inventory
   assertion may be removed or loosened.
+- The existing action-aware audit registry test must add the same exact three
+  active actions. `backend/tests/test_audit.py` is allowed only for that closed
+  active-set parity assertion; no audit validation may be weakened.
 
 ## Stop conditions
 
