@@ -20,7 +20,8 @@ from app.modules.api_controls.repository import ApiRateControlRepository
 RATE_KEY_DOMAIN = b"workstream-api-rate/v1"
 FIRST_ACCESS_SCOPE = "first_access"
 ADMIN_MUTATION_SCOPE = "admin_mutation"
-RATE_SCOPES = {FIRST_ACCESS_SCOPE, ADMIN_MUTATION_SCOPE}
+AUTHORIZATION_READ_SCOPE = "authorization_read"
+RATE_SCOPES = {FIRST_ACCESS_SCOPE, ADMIN_MUTATION_SCOPE, AUTHORIZATION_READ_SCOPE}
 MAX_IDENTITY_BYTES = 4_096
 PRUNE_BATCH_SIZE = 100
 MISSING_DATABASE_ERROR = "WORKSTREAM_DATABASE_URL must be set before database access"

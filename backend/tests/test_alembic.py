@@ -133,7 +133,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0032_artifact_recovery",
+                "revision": "0033_authorization_read_rate",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -199,7 +199,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0032_artifact_recovery",
+                "revision": "0033_authorization_read_rate",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -407,7 +407,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0032_artifact_recovery",
+                    "0033_authorization_read_rate",
                     True,
                     True,
                 )
@@ -434,7 +434,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0032_artifact_recovery",
+                    "0033_authorization_read_rate",
                     True,
                     True,
                 )
@@ -462,7 +462,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0032_artifact_recovery",
+                "revision": "0033_authorization_read_rate",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -522,7 +522,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0032_artifact_recovery"
+                "0033_authorization_read_rate"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
@@ -2734,6 +2734,211 @@ def test_api_rate_control_schema_preserves_domain_and_guards_downgrade(
         "table_exists": False,
         "row_count": None,
     }
+
+
+def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0033 preserves counters and refuses a live new-scope downgrade."""
+    project_root = Path(__file__).resolve().parents[1]
+    config = Config(str(project_root / "alembic.ini"))
+    config.set_main_option("script_location", str(project_root / "alembic"))
+
+    async def insert(scope: str, marker: int) -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into api_rate_control_counters "
+                        "(control_scope,key_digest,window_started_at,window_expires_at,"
+                        "request_count,updated_at) values "
+                        "(:scope,:digest,statement_timestamp(),"
+                        "statement_timestamp()+interval '1 minute',1,statement_timestamp())"
+                    ),
+                    {"scope": scope, "digest": bytes([marker]) * 32},
+                )
+        finally:
+            await engine.dispose()
+
+    async def scopes() -> list[str]:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                return list(
+                    (
+                        await connection.execute(
+                            text(
+                                "select control_scope from api_rate_control_counters "
+                                "order by control_scope"
+                            )
+                        )
+                    ).scalars()
+                )
+        finally:
+            await engine.dispose()
+
+    async def clear_new_scope() -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "delete from api_rate_control_counters "
+                        "where control_scope='authorization_read'"
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0032_artifact_recovery")
+            asyncio.run(insert("first_access", 41))
+            asyncio.run(insert("admin_mutation", 42))
+            command.upgrade(config, "0033_authorization_read_rate")
+            assert asyncio.run(scopes()) == ["admin_mutation", "first_access"]
+            asyncio.run(insert("authorization_read", 43))
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade live authorization-read rate controls",
+            ):
+                command.downgrade(config, "0032_artifact_recovery")
+            assert asyncio.run(scopes()) == [
+                "admin_mutation",
+                "authorization_read",
+                "first_access",
+            ]
+            asyncio.run(clear_new_scope())
+
+            inserted = threading.Event()
+            release_insert = threading.Event()
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                insert_future = pool.submit(
+                    asyncio.run,
+                    _insert_rate_control_until_released(
+                        isolated_database_env,
+                        bytes([45]) * 32,
+                        inserted,
+                        release_insert,
+                        scope="authorization_read",
+                    ),
+                )
+                assert inserted.wait(timeout=5)
+                downgrade_future = pool.submit(
+                    command.downgrade,
+                    config,
+                    "0032_artifact_recovery",
+                )
+                asyncio.run(
+                    _wait_for_rate_control_table_lock(isolated_database_env)
+                )
+                release_insert.set()
+                insert_future.result(timeout=5)
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade live authorization-read rate controls",
+                ):
+                    downgrade_future.result(timeout=5)
+
+            asyncio.run(clear_new_scope())
+            command.downgrade(config, "0032_artifact_recovery")
+            assert asyncio.run(scopes()) == ["admin_mutation", "first_access"]
+            with pytest.raises(IntegrityError):
+                asyncio.run(insert("authorization_read", 43))
+            command.upgrade(config, "0033_authorization_read_rate")
+            asyncio.run(insert("authorization_read", 44))
+        finally:
+            asyncio.run(_clear_api_rate_controls(isolated_database_env))
+            command.upgrade(config, "head")
+
+
+def test_authorization_read_rate_scope_migration_refuses_constraint_drift(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Keep revision and counter state unchanged when the known constraint drifted."""
+    config = _alembic_config()
+
+    async def replace_constraint(definition: str) -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "alter table api_rate_control_counters drop constraint "
+                        "ck_api_rate_control_counters_scope_token"
+                    )
+                )
+                await connection.execute(
+                    text(
+                        "alter table api_rate_control_counters add constraint "
+                        "ck_api_rate_control_counters_scope_token check "
+                        f"({definition})"
+                    )
+                )
+        finally:
+            await engine.dispose()
+
+    async def state() -> tuple[str, str, int]:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.connect() as connection:
+                revision = str(
+                    await connection.scalar(text("select version_num from alembic_version"))
+                )
+                definition = str(
+                    await connection.scalar(
+                        text(
+                            "select pg_get_expr(conbin,conrelid) from pg_constraint "
+                            "where conrelid='api_rate_control_counters'::regclass "
+                            "and conname='ck_api_rate_control_counters_scope_token'"
+                        )
+                    )
+                )
+                rows = int(
+                    await connection.scalar(
+                        text("select count(*) from api_rate_control_counters")
+                    )
+                )
+                return revision, definition, rows
+        finally:
+            await engine.dispose()
+
+    old_definition = "control_scope in ('first_access', 'admin_mutation')"
+    new_definition = (
+        "control_scope in "
+        "('first_access', 'admin_mutation', 'authorization_read')"
+    )
+    drifted_definition = "control_scope in ('first_access')"
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0032_artifact_recovery")
+            asyncio.run(replace_constraint(drifted_definition))
+            before_upgrade = asyncio.run(state())
+            with pytest.raises(
+                RuntimeError, match="unexpected API rate-control scope constraint"
+            ):
+                command.upgrade(config, "0033_authorization_read_rate")
+            assert asyncio.run(state()) == before_upgrade
+
+            asyncio.run(replace_constraint(old_definition))
+            command.upgrade(config, "0033_authorization_read_rate")
+            asyncio.run(replace_constraint(drifted_definition))
+            before_downgrade = asyncio.run(state())
+            with pytest.raises(
+                RuntimeError, match="unexpected API rate-control scope constraint"
+            ):
+                command.downgrade(config, "0032_artifact_recovery")
+            assert asyncio.run(state()) == before_downgrade
+
+            asyncio.run(replace_constraint(new_definition))
+        finally:
+            command.upgrade(config, "head")
 
 
 def test_authority_audit_schema_preserves_legacy_and_guards_downgrade(
@@ -5102,6 +5307,8 @@ async def _insert_rate_control_until_released(
     digest: bytes,
     inserted: threading.Event,
     release: threading.Event,
+    *,
+    scope: str = "first_access",
 ) -> None:
     """Hold an uncommitted writer until the downgrade is waiting on its lock."""
     engine = create_async_engine(database_url)
@@ -5112,13 +5319,34 @@ async def _insert_rate_control_until_released(
                     "insert into api_rate_control_counters "
                     "(control_scope, key_digest, window_started_at, window_expires_at, "
                     "request_count, updated_at) values "
-                    "('first_access', :digest, statement_timestamp(), "
+                    "(:scope, :digest, statement_timestamp(), "
                     "statement_timestamp() + interval '1 minute', 1, statement_timestamp())"
                 ),
-                {"digest": digest},
+                {"scope": scope, "digest": digest},
             )
             inserted.set()
             assert await asyncio.to_thread(release.wait, 5)
+    finally:
+        await engine.dispose()
+
+
+async def _wait_for_rate_control_table_lock(database_url: str) -> None:
+    """Wait until downgrade is queued for the table's access-exclusive lock."""
+    engine = create_async_engine(database_url)
+    try:
+        for _ in range(100):
+            async with engine.connect() as connection:
+                waiting = await connection.scalar(
+                    text(
+                        "select exists(select 1 from pg_locks "
+                        "where relation='api_rate_control_counters'::regclass "
+                        "and mode='AccessExclusiveLock' and not granted)"
+                    )
+                )
+            if waiting:
+                return
+            await asyncio.sleep(0)
+        raise AssertionError("downgrade did not request the table lock")
     finally:
         await engine.dispose()
 

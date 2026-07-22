@@ -304,6 +304,73 @@ Missing secret or database access fails first access closed with retryable HTTP
 `Retry-After`. Existing exact identity links do not consume first-access
 capacity.
 
+AUTH-10B1 adds the closed `authorization_read` scope without attaching it to a
+route or activating an action. Configure every replica consistently:
+
+```text
+WORKSTREAM_API_AUTHORIZATION_READ_RATE_LIMIT=120
+WORKSTREAM_API_AUTHORIZATION_READ_RATE_WINDOW_SECONDS=60
+```
+
+The limit accepts 1 through 10,000 and the window accepts 1 through 3,600
+seconds. This scope uses the existing API rate-control HMAC key; it never uses
+an authentication or pagination-cursor key. Missing key or database access
+returns the same retryable 503 when a later route attaches the dependency.
+Exhaustion returns 429 with `Retry-After`.
+
+Before upgrading to `0033_authorization_read_rate`, confirm migration
+`0032_artifact_recovery` is current and that no unreviewed constraint changes
+exist. This migration requires PostgreSQL major version 16, matching the
+CI-pinned database used to freeze the exact `pg_get_expr` rendering. Confirm
+the target before either direction:
+
+```sql
+SELECT current_setting('server_version_num')::integer / 10000
+  AS postgres_major_version;
+```
+
+Stop if the result is not `16`; validate a different major version through a
+reviewed forward migration change rather than bypassing the drift check.
+Inspect the exact database-owned expression before either direction:
+
+```sql
+SELECT pg_get_expr(conbin, conrelid) AS scope_constraint
+FROM pg_constraint
+WHERE conrelid = 'api_rate_control_counters'::regclass
+  AND conname = 'ck_api_rate_control_counters_scope_token';
+```
+
+Before upgrade, the returned scope set must be exactly `first_access` and
+`admin_mutation`. Before downgrade, it must be exactly `first_access`,
+`admin_mutation`, and `authorization_read`. PostgreSQL may render these as an
+`ANY (ARRAY[...])` expression with text casts; compare the complete expression
+and values, not a substring. Upgrade takes an access-exclusive lock on
+`api_rate_control_counters`, replaces only its closed scope constraint, and
+preserves every existing counter. The dependency remains deliberately
+unattached after this migration.
+
+If either direction reports `unexpected API rate-control scope constraint`, it
+leaves the Alembic revision, constraint, and counter rows unchanged. Do not
+drop, bypass, or force the constraint. Compare the live definition with the
+reviewed migrations that actually ran, reconcile it to the canonical expected
+definition through a reviewed forward repair, and then retry the migration.
+Prefer forward recovery when the provenance of the drift is uncertain.
+
+Downgrade also takes the table lock before preflight and refuses while any live
+or expired `authorization_read` row exists:
+
+```sql
+SELECT count(*) AS authorization_read_rows
+FROM api_rate_control_counters
+WHERE control_scope = 'authorization_read';
+```
+
+Do not delete an unexpired row merely to force rollback. Prefer forward
+recovery. If rollback is required before AUTH-10B2 attaches the dependency,
+verify the count is zero, quiesce deployments that could run the new scope,
+then downgrade. After 10B2, wait for the largest configured window to expire,
+quiesce every reader, delete only expired rows using PostgreSQL time, and retry.
+
 Generate the secret outside the repository and store it in the deployment
 secret manager:
 

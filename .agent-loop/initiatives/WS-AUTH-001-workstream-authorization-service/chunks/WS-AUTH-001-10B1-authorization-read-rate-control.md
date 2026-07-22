@@ -33,7 +33,7 @@ P1
 ## Allowed files
 
 ```text
-backend/alembic/versions/0032_authorization_read_rate_control.py
+backend/alembic/versions/0033_authorization_read_rate_control.py
 backend/app/modules/api_controls/**
 backend/app/api/deps/api_controls.py
 backend/app/core/config.py
@@ -41,6 +41,7 @@ backend/tests/test_alembic.py
 backend/tests/test_api_rate_controls.py
 backend/tests/test_config.py
 .github/workflows/backend.yml
+scripts/test_agent_gates.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
@@ -62,7 +63,8 @@ lowering, replacing, or broadening exclusions in any coverage threshold
 
 ## Acceptance criteria
 
-- Migration `0032` changes only the current counter scope constraint from exact
+- Migration `0033_authorization_read_rate`, directly after
+  `0032_artifact_recovery`, changes only the current counter scope constraint from exact
   `first_access|admin_mutation` to exact
   `first_access|admin_mutation|authorization_read`. Historical migrations stay
   immutable; upgrade preserves rows; downgrade refuses while new-scope rows
@@ -88,7 +90,7 @@ lowering, replacing, or broadening exclusions in any coverage threshold
   `app/modules/api_controls/*` and `app/api/deps/api_controls.py`; existing
   reports and thresholds remain byte-for-byte unchanged. Zero action/OpenAPI
   delta is asserted.
-- Operations/spec docs cover `0032` upgrade and downgrade preflight, refusal
+- Operations/spec docs cover `0033_authorization_read_rate` upgrade and downgrade preflight, refusal
   with live read counters, forward recovery, limit/window settings, shared
   privacy HMAC key and secret separation, 429/Retry-After, retryable 503, and
   the intentionally unattached/no-action rollout state.
@@ -96,7 +98,7 @@ lowering, replacing, or broadening exclusions in any coverage threshold
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/api_controls app/api/deps/api_controls.py app/core/config.py tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py alembic/versions/0032_authorization_read_rate_control.py)
+(cd backend && .venv/bin/python -m ruff check app/modules/api_controls app/api/deps/api_controls.py app/core/config.py tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py alembic/versions/0033_authorization_read_rate_control.py)
 (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_api_rate_controls.py tests/test_config.py tests/test_alembic.py -k 'authorization_read or api_rate_control')
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py

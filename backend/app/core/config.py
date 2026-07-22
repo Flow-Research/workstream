@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     api_first_access_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
     api_admin_mutation_rate_limit: int = Field(default=30, ge=1, le=10_000)
     api_admin_mutation_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
+    api_authorization_read_rate_limit: int = Field(default=120, ge=1, le=10_000)
+    api_authorization_read_rate_window_seconds: int = Field(default=60, ge=1, le=3_600)
     artifact_store_backend: Literal["disabled", "local", "s3_compatible"] = "disabled"
     artifact_local_root: Path | None = None
     artifact_s3_provider_profile: Literal["aws_s3", "minio"] | None = None
