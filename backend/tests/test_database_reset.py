@@ -217,6 +217,64 @@ def test_database_reset_rejects_unexpected_non_table_object(
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize(
+    ("create_sql", "exists_sql", "drop_sql"),
+    (
+        (
+            "create type unexpected_reset_composite as (value integer)",
+            "select exists (select 1 from pg_type t join pg_namespace n "
+            "on n.oid = t.typnamespace where n.nspname = 'public' "
+            "and t.typname = 'unexpected_reset_composite')",
+            "drop type if exists unexpected_reset_composite",
+        ),
+        (
+            "alter table api_rate_control_counters "
+            "add column unexpected_reset_column integer",
+            "select exists (select 1 from information_schema.columns "
+            "where table_schema = 'public' "
+            "and table_name = 'api_rate_control_counters' "
+            "and column_name = 'unexpected_reset_column')",
+            "alter table api_rate_control_counters "
+            "drop column if exists unexpected_reset_column",
+        ),
+        (
+            "create trigger unexpected_reset_trigger before truncate "
+            "on api_rate_control_counters for each statement "
+            "execute function reject_audit_event_mutation()",
+            "select exists (select 1 from pg_trigger "
+            "where tgname = 'unexpected_reset_trigger')",
+            "drop trigger if exists unexpected_reset_trigger "
+            "on api_rate_control_counters",
+        ),
+    ),
+)
+def test_database_reset_rejects_structural_schema_drift(
+    postgres_database_url: str,
+    reset_test_database_state: Callable[..., Awaitable[None]],
+    create_sql: str,
+    exists_sql: str,
+    drop_sql: str,
+) -> None:
+    """Types, columns, and triggers outside the reviewed schema block reset."""
+
+    async def exercise() -> None:
+        url = postgres_database_url.replace("+asyncpg", "")
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute(create_sql)
+            with pytest.raises(
+                RuntimeError, match="unexpected public schema object fingerprint"
+            ):
+                await reset_test_database_state(postgres_database_url)
+            assert await connection.fetchval(exists_sql) is True
+            await _assert_guards_enabled(connection)
+        finally:
+            await connection.execute(drop_sql)
+            await connection.close()
+
+    asyncio.run(exercise())
+
+
 @pytest.mark.parametrize("failure", (RuntimeError("injected"), asyncio.CancelledError()))
 def test_database_reset_rolls_back_after_trigger_disable(
     postgres_database_url: str,

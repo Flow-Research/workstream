@@ -21,7 +21,7 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
 EXPECTED_PUBLIC_SCHEMA_SHA256 = (
-    "1923f1e5f55a32c394f1e4256c606fd98a09bb25031a0ee116b1157a5ffde4a1"
+    "b208984d0143b7b113714cb2f138d0ef0efbb4ad099e6440cad45da0e0297050"
 )
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
@@ -153,24 +153,67 @@ async def _assert_canonical_test_schema(
             f"unexpected test database schema: missing={missing}; unexpected={unexpected}"
         )
     object_rows = await connection.fetch(
-        "select kind, name from ("
-        "select 'class:' || c.relkind::text as kind, c.relname as name "
-        "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
-        "where n.nspname = 'public' and c.relkind in ('r','p','v','m','S','f','i') "
-        "union all select 'function', p.proname || '(' || "
-        "pg_get_function_identity_arguments(p.oid) || ')' "
-        "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
-        "where n.nspname = 'public' "
-        "union all select 'type', t.typname "
-        "from pg_type t join pg_namespace n on n.oid = t.typnamespace "
-        "where n.nspname = 'public' and t.typtype in ('e','d')"
-        ") objects order by kind, name"
+        "with parts(kind,name) as ("
+        "select 'relation',c.relname||'|'||concat_ws('|',c.relkind::text,"
+        "c.relpersistence::text,c.relreplident::text,c.relrowsecurity::text,"
+        "c.relforcerowsecurity::text,coalesce(c.reloptions::text,''),"
+        "coalesce(c.relacl::text,'')) from pg_class c join pg_namespace n "
+        "on n.oid=c.relnamespace where n.nspname='public' "
+        "union all select 'column',c.relname||'.'||a.attname||'|'||concat_ws('|',"
+        "a.attnum::text,format_type(a.atttypid,a.atttypmod),a.attnotnull::text,"
+        "a.attidentity,a.attgenerated,coalesce(pg_get_expr(d.adbin,d.adrelid),'')) "
+        "from pg_attribute a join pg_class c on c.oid=a.attrelid "
+        "join pg_namespace n on n.oid=c.relnamespace left join pg_attrdef d "
+        "on d.adrelid=a.attrelid and d.adnum=a.attnum where n.nspname='public' "
+        "and a.attnum>0 and not a.attisdropped "
+        "union all select 'constraint',coalesce(c.relname,'')||'.'||q.conname||'|'||"
+        "q.contype::text||'|'||pg_get_constraintdef(q.oid,true) from pg_constraint q "
+        "left join pg_class c on c.oid=q.conrelid join pg_namespace n "
+        "on n.oid=q.connamespace where n.nspname='public' "
+        "union all select 'index',tablename||'.'||indexname||'|'||indexdef "
+        "from pg_indexes where schemaname='public' "
+        "union all select 'trigger',c.relname||'.'||t.tgname||'|'||t.tgenabled::text||'|'||"
+        "pg_get_triggerdef(t.oid,true) from pg_trigger t join pg_class c "
+        "on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace "
+        "where n.nspname='public' and not t.tgisinternal "
+        "union all select 'policy',c.relname||'.'||p.polname||'|'||concat_ws('|',"
+        "p.polpermissive::text,p.polcmd,p.polroles::text,"
+        "coalesce(pg_get_expr(p.polqual,p.polrelid),''),"
+        "coalesce(pg_get_expr(p.polwithcheck,p.polrelid),'')) from pg_policy p "
+        "join pg_class c on c.oid=p.polrelid join pg_namespace n "
+        "on n.oid=c.relnamespace where n.nspname='public' "
+        "union all select 'rule',schemaname||'.'||tablename||'.'||rulename||'|'||"
+        "definition from pg_rules where schemaname='public' "
+        "union all select 'view',schemaname||'.'||viewname||'|'||definition "
+        "from pg_views where schemaname='public' "
+        "union all select 'matview',schemaname||'.'||matviewname||'|'||definition "
+        "from pg_matviews where schemaname='public' "
+        "union all select 'function',p.proname||'('||"
+        "pg_get_function_identity_arguments(p.oid)||')|'||pg_get_functiondef(p.oid) "
+        "from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+        "where n.nspname='public' "
+        "union all select 'sequence',c.relname||'|'||concat_ws('|',s.seqtypid::regtype::text,"
+        "s.seqstart::text,s.seqincrement::text,s.seqmax::text,s.seqmin::text,"
+        "s.seqcache::text,s.seqcycle::text) from pg_sequence s join pg_class c "
+        "on c.oid=s.seqrelid join pg_namespace n on n.oid=c.relnamespace "
+        "where n.nspname='public' "
+        "union all select 'enum',t.typname||'|'||e.enumsortorder::text||'|'||e.enumlabel "
+        "from pg_enum e join pg_type t on t.oid=e.enumtypid join pg_namespace n "
+        "on n.oid=t.typnamespace where n.nspname='public' "
+        "union all select 'type',t.typname||'|'||concat_ws('|',t.typtype::text,"
+        "t.typcategory::text,t.typispreferred::text,t.typnotnull::text,"
+        "case when t.typelem=0 then '' else t.typelem::regtype::text end,"
+        "coalesce(pg_get_expr(t.typdefaultbin,0),t.typdefault,'')) "
+        "from pg_type t join pg_namespace n on n.oid=t.typnamespace "
+        "where n.nspname='public') "
+        "select kind,name from parts order by kind,name"
     )
     serialized_objects = "".join(
         f"{row['kind']}|{row['name']}\n" for row in object_rows
     ).encode("utf-8")
-    if hashlib.sha256(serialized_objects).hexdigest() != EXPECTED_PUBLIC_SCHEMA_SHA256:
-        raise RuntimeError("unexpected public schema object fingerprint")
+    schema_sha256 = hashlib.sha256(serialized_objects).hexdigest()
+    if schema_sha256 != EXPECTED_PUBLIC_SCHEMA_SHA256:
+        raise RuntimeError(f"unexpected public schema object fingerprint: {schema_sha256}")
     return {name: actual[name] for name in RESETTABLE_TEST_TABLES}
 
 
