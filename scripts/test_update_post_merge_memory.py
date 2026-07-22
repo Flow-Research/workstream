@@ -492,6 +492,7 @@ def test_recovery_policy_schema_fails_closed(mutation, message: str) -> None:
 def test_exact_single_target_recovery_binds_signed_first_parent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(loop, "_validate_protected_actions_checks", lambda *_args: None)
     state_root = tmp_path / "state"
     repository_root = tmp_path / "repo"
     _contract(repository_root)
@@ -627,6 +628,7 @@ def _merge_record(
 def test_prepare_recovery_binds_exact_target_and_two_merge_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(loop, "_validate_protected_actions_checks", lambda *_args: None)
     state_root = tmp_path / "state"
     loop.apply_merge_record(state_root, _record())
     recovered = _merge_record("WS-ENG-002", "WS-ENG-002-01", 166, "c" * 40, "a" * 40)
@@ -709,6 +711,7 @@ def test_prepare_recovery_rejects_wrong_recovered_identity(
 def test_prepare_recovery_rejects_signed_inventory_collision(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(loop, "_validate_protected_actions_checks", lambda *_args: None)
     state_root = tmp_path / "state"
     base = _record()
     base["legacy_exemptions"] = [
@@ -812,6 +815,7 @@ def test_recovery_cli_round_trip_consumes_inventory(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    monkeypatch.setattr(loop, "_validate_protected_actions_checks", lambda *_args: None)
     state_root = tmp_path / "state"
     base = _record()
     base["legacy_exemptions"] = []

@@ -42,3 +42,13 @@ Intent
 
 The stop step is intentional. Codex must not begin the next chunk unless the
 user explicitly asks for it.
+
+## First Planning Intake
+
+A new initiative has no contract on trusted `main`, so it cannot use an ordinary
+explicit start for its first planning package. Its one planning-intake PR is
+restricted to a new canonical initiative tree plus one `<initiative>-PLAN`
+merge intent. It retains internal review, required checks, and the human merge
+checkpoint. Signed merge automation records it as stopped and grants no
+implementation authority. Each implementation contract then uses the ordinary
+signed explicit-start workflow.

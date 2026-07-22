@@ -21,6 +21,13 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
 - Canonical live post-merge state is generated on `automation/loop-memory` from trusted `main` after a PR merge. Do not open a manual post-merge memory PR when that workflow succeeds.
 - Start a declared successor or unique reviewed contract, and cancel active work, only through the `Loop Memory Explicit Event` workflow on exact current `main`. Each initiative may have at most one active planning or implementation chunk; distinct initiatives may run concurrently. A start requires an idle target initiative and an authenticated dispatcher whose current GitHub `write`/`push`, `maintain`, or `admin` permission satisfies the trusted-main start-authority policy; this is the single authorization checkpoint. After an explicit user instruction, the orchestrator dispatches without requesting a second approval. For `cancel`, a distinct `loop-memory-start` environment reviewer remains required. Chat and local worktree state are instructions or context, never canonical signed evidence. Rerun recovery uses a fresh dispatch after inspecting signed state.
+- A brand-new initiative absent from signed history may enter through exactly one
+  planning-intake PR. It adds only one canonical initiative planning tree and
+  one merge intent for `<initiative>-PLAN`, passes required reviews and checks,
+  names one reviewed same-initiative implementation successor, and reconciles
+  to stopped state. Planning intake cannot contain implementation, modify
+  existing files, or activate work. Every successor still requires the normal
+  explicit event.
 - The automation branch is a closed generated tree. Verify its signed manifest,
   JSON/ledger, loop view, work queue, and initiative projections together; do
   not treat authored narrative status copied from `main` as live automation
