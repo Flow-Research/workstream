@@ -5,14 +5,19 @@
 `WS-AUTH-001-10B2` — Privacy-Safe Project Role Grant Reads. Risk: L1
 authorization/privacy. Trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`.
 
-Reviewed code SHA: `2b7c5a83d8871b05266ee3c0a9991ca4bc686e12`
-Reviewed at: 2026-07-22T06:01:30Z
+Reviewed code SHA: `649069f38e2eb374a4302ea859a70a842e81215d`
+Reviewed at: 2026-07-22T06:31:30Z
 Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /root/auth10b1_final_ops_docs_ci
 
 Runtime repair SHA `95c3ecf77afed2746a66f314d05eb547cfa15f3c`
 was reviewed by the same tracks before the evidence-only descendants.
-Post-start main `afde967d56914cdc6a941aa17b3ff0e98b2e9c64` was reconciled
-without an AUTH runtime, contract, test, or evidence-content change.
+Prior post-start reconciliation SHA
+`2b7c5a83d8871b05266ee3c0a9991ca4bc686e12` integrated main
+`afde967d56914cdc6a941aa17b3ff0e98b2e9c64` without an AUTH runtime,
+contract, test, or evidence-content change. Latest main
+`9033a97a4be6d762cae4b210018ef81a079395c2` was then reconciled at the
+reviewed SHA above. AUTH production runtime and contract are unchanged; the
+trusted-main shared test/reset changes were conflict-resolved and reverified.
 
 ## Implemented Contract
 
