@@ -1147,7 +1147,8 @@ async def test_pre_submit_check_returns_feedback_without_durable_run(
         "check_confidentiality_attestation",
     }.issubset(result_names)
     assert any(
-        result["checker_name"] == "check_evidence_integrity" and result["would_block_if_submitted"]
+        result["checker_name"] == "check_evidence_integrity"
+        and result["would_block_if_submitted"] is True
         for result in body["results"]
     )
 
@@ -1184,7 +1185,12 @@ async def test_pre_submit_chunk8_matrix_flags_missing_evidence_and_warning(
     assert result_by_name["check_forbidden_files"]["status"] == "passed"
     assert result_by_name["check_confidentiality_attestation"]["status"] == "passed"
     assert result_by_name["check_low_quality_generated_artifacts"]["status"] == "warning"
-    assert not result_by_name["check_low_quality_generated_artifacts"]["would_block_if_submitted"]
+    assert (
+        result_by_name["check_low_quality_generated_artifacts"][
+            "would_block_if_submitted"
+        ]
+        is False
+    )
 
     async with db_session.get_session_factory()() as session:
         rows = (await session.execute(CheckerRun.__table__.select())).all()

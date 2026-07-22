@@ -105,6 +105,12 @@ def test_database_reset_preserves_schema_and_restores_guards(
         "workstream_test_bbbbbbbbbbbb",
         "postgresql://workstream_role_aaaaaaaaaaaa:x@localhost/"
         "workstream_test_aaaaaaaaaaaa",
+        "postgresql+asyncpg://workstream_role_aaaaaaaaaaaa:x@example.test/"
+        "workstream_test_aaaaaaaaaaaa",
+        "postgresql+asyncpg://workstream_role_aaaaaaaaaaaa:x@localhost/"
+        "workstream_test_aaaaaaaaaaaa?ssl=require",
+        "postgresql+asyncpg://workstream_role_aaaaaaaaaaaa:x@localhost/"
+        "workstream_test_aaaaaaaaaaaa#fragment",
     ),
 )
 def test_database_reset_rejects_non_runner_urls(database_url: str) -> None:
@@ -124,8 +130,10 @@ def test_database_reset_rejects_non_runner_urls(database_url: str) -> None:
         ({"rolsuper": True}, "custody"),
         ({"rolcreatedb": True}, "custody"),
         ({"rolcreaterole": True}, "custody"),
+        ({"rolinherit": True}, "custody"),
         ({"rolreplication": True}, "custody"),
         ({"rolbypassrls": True}, "custody"),
+        ({"membership_count": 1}, "custody"),
     ),
 )
 def test_database_reset_rejects_invalid_live_custody(
@@ -139,8 +147,10 @@ def test_database_reset_rejects_invalid_live_custody(
         "rolsuper": False,
         "rolcreatedb": False,
         "rolcreaterole": False,
+        "rolinherit": False,
         "rolreplication": False,
         "rolbypassrls": False,
+        "membership_count": 0,
     }
     custody.update(override)
     connection = AsyncMock()
@@ -180,6 +190,33 @@ def test_database_reset_rejects_unexpected_table_before_mutation(
     asyncio.run(exercise())
 
 
+def test_database_reset_rejects_unexpected_non_table_object(
+    postgres_database_url: str,
+    reset_test_database_state: Callable[..., Awaitable[None]],
+) -> None:
+    """A public function outside the canonical fingerprint blocks reset."""
+
+    async def exercise() -> None:
+        url = postgres_database_url.replace("+asyncpg", "")
+        connection = await asyncpg.connect(url)
+        try:
+            await connection.execute(
+                "create function unexpected_reset_function() returns integer "
+                "language sql immutable as 'select 1'"
+            )
+            with pytest.raises(
+                RuntimeError, match="unexpected public schema object fingerprint"
+            ):
+                await reset_test_database_state(postgres_database_url)
+            assert await connection.fetchval("select unexpected_reset_function()") == 1
+            await _assert_guards_enabled(connection)
+        finally:
+            await connection.execute("drop function if exists unexpected_reset_function()")
+            await connection.close()
+
+    asyncio.run(exercise())
+
+
 @pytest.mark.parametrize("failure", (RuntimeError("injected"), asyncio.CancelledError()))
 def test_database_reset_rolls_back_after_trigger_disable(
     postgres_database_url: str,
@@ -190,9 +227,18 @@ def test_database_reset_rolls_back_after_trigger_disable(
 
     async def exercise() -> None:
         url = postgres_database_url.replace("+asyncpg", "")
+        digest_octet = "11" if isinstance(failure, RuntimeError) else "12"
         connection = await asyncpg.connect(url)
         try:
             protected_before = await _protected_state(connection)
+            await connection.execute(
+                "insert into api_rate_control_counters "
+                "(control_scope, key_digest, window_started_at, window_expires_at, "
+                "request_count, updated_at) values "
+                f"('first_access', decode(repeat('{digest_octet}', 32), 'hex'), "
+                "clock_timestamp(), clock_timestamp() + interval '1 minute', 1, "
+                "clock_timestamp())"
+            )
         finally:
             await connection.close()
 
@@ -205,6 +251,10 @@ def test_database_reset_rolls_back_after_trigger_disable(
         connection = await asyncpg.connect(url)
         try:
             assert await _protected_state(connection) == protected_before
+            assert await connection.fetchval(
+                "select count(*) from api_rate_control_counters "
+                f"where key_digest = decode(repeat('{digest_octet}', 32), 'hex')"
+            ) == 1
             await _assert_guards_enabled(connection)
         finally:
             await connection.close()
@@ -219,6 +269,25 @@ def test_database_reset_signal_rolls_back_disabled_triggers(
     marker = Path(os.environ["PYTEST_TMPDIR"]) / "reset-disabled" if os.environ.get(
         "PYTEST_TMPDIR"
     ) else Path("/tmp") / f"workstream-reset-disabled-{os.getpid()}"
+    marker.unlink(missing_ok=True)
+
+    async def seed() -> tuple[str, str | None]:
+        connection = await asyncpg.connect(postgres_database_url.replace("+asyncpg", ""))
+        try:
+            protected = await _protected_state(connection)
+            await connection.execute(
+                "insert into api_rate_control_counters "
+                "(control_scope, key_digest, window_started_at, window_expires_at, "
+                "request_count, updated_at) values "
+                "('first_access', decode(repeat('22', 32), 'hex'), "
+                "clock_timestamp(), clock_timestamp() + interval '1 minute', 1, "
+                "clock_timestamp())"
+            )
+            return protected
+        finally:
+            await connection.close()
+
+    protected_before = asyncio.run(seed())
     child_code = """
 import asyncio
 import os
@@ -248,6 +317,11 @@ asyncio.run(reset(os.environ["WORKSTREAM_TEST_DATABASE_URL"], after_disable=paus
         async def verify() -> None:
             connection = await asyncpg.connect(postgres_database_url.replace("+asyncpg", ""))
             try:
+                assert await _protected_state(connection) == protected_before
+                assert await connection.fetchval(
+                    "select count(*) from api_rate_control_counters "
+                    "where key_digest = decode(repeat('22', 32), 'hex')"
+                ) == 1
                 await _assert_guards_enabled(connection)
             finally:
                 await connection.close()

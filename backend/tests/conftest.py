@@ -8,7 +8,6 @@ from functools import partial
 import hashlib
 import os
 from pathlib import Path
-import re
 from urllib.parse import unquote, urlsplit
 
 from alembic import command  # type: ignore[import-not-found,attr-defined]
@@ -18,10 +17,12 @@ import pytest  # type: ignore[import-not-found]
 
 from app.core.config import get_settings
 from app.db import session as db_session
+from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-TEST_DATABASE_PATTERN = re.compile(r"workstream_test_([0-9a-f]{12})")
-TEST_ROLE_PATTERN = re.compile(r"workstream_role_([0-9a-f]{12})")
+EXPECTED_PUBLIC_SCHEMA_SHA256 = (
+    "1923f1e5f55a32c394f1e4256c606fd98a09bb25031a0ee116b1157a5ffde4a1"
+)
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -96,20 +97,27 @@ async def _assert_owned_test_database(
     parsed = urlsplit(database_url)
     url_database = parsed.path.removeprefix("/")
     url_role = unquote(parsed.username or "")
-    database_match = TEST_DATABASE_PATTERN.fullmatch(url_database)
-    role_match = TEST_ROLE_PATTERN.fullmatch(url_role)
+    database_match = NAME_RE.fullmatch(url_database)
+    role_match = ROLE_RE.fullmatch(url_role)
     if (
         parsed.scheme != "postgresql+asyncpg"
+        or parsed.hostname not in LOOPBACK
+        or not parsed.password
+        or bool(parsed.query)
+        or bool(parsed.fragment)
         or database_match is None
         or role_match is None
-        or database_match.group(1) != role_match.group(1)
+        or url_database.removeprefix("workstream_test_")
+        != url_role.removeprefix("workstream_role_")
     ):
         raise RuntimeError("unsafe test database target")
 
     custody = await connection.fetchrow(
         "select current_database() as database_name, current_user as session_role, "
         "pg_get_userbyid(d.datdba) as owner_role, r.rolsuper, r.rolcreatedb, "
-        "r.rolcreaterole, r.rolreplication, r.rolbypassrls "
+        "r.rolcreaterole, r.rolinherit, r.rolreplication, r.rolbypassrls, "
+        "(select count(*) from pg_auth_members m where m.member = r.oid) "
+        "as membership_count "
         "from pg_database d join pg_roles r on r.rolname = current_user "
         "where d.datname = current_database()"
     )
@@ -120,8 +128,10 @@ async def _assert_owned_test_database(
         or custody["rolsuper"]
         or custody["rolcreatedb"]
         or custody["rolcreaterole"]
+        or custody["rolinherit"]
         or custody["rolreplication"]
         or custody["rolbypassrls"]
+        or custody["membership_count"] != 0
     ):
         raise RuntimeError("test database custody check failed")
 
@@ -142,6 +152,25 @@ async def _assert_canonical_test_schema(
         raise RuntimeError(
             f"unexpected test database schema: missing={missing}; unexpected={unexpected}"
         )
+    object_rows = await connection.fetch(
+        "select kind, name from ("
+        "select 'class:' || c.relkind::text as kind, c.relname as name "
+        "from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+        "where n.nspname = 'public' and c.relkind in ('r','p','v','m','S','f','i') "
+        "union all select 'function', p.proname || '(' || "
+        "pg_get_function_identity_arguments(p.oid) || ')' "
+        "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+        "where n.nspname = 'public' "
+        "union all select 'type', t.typname "
+        "from pg_type t join pg_namespace n on n.oid = t.typnamespace "
+        "where n.nspname = 'public' and t.typtype in ('e','d')"
+        ") objects order by kind, name"
+    )
+    serialized_objects = "".join(
+        f"{row['kind']}|{row['name']}\n" for row in object_rows
+    ).encode("utf-8")
+    if hashlib.sha256(serialized_objects).hexdigest() != EXPECTED_PUBLIC_SCHEMA_SHA256:
+        raise RuntimeError("unexpected public schema object fingerprint")
     return {name: actual[name] for name in RESETTABLE_TEST_TABLES}
 
 

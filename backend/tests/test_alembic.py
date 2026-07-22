@@ -7603,11 +7603,12 @@ async def _exercise_contributor_lineage_guards(
                 text("update task_assignments set assigned_by='updated' where id=:id"),
                 {"id": assignment_id},
             )
-            results["unrelated_update_preserved"] = bool(
+            results["unrelated_update_preserved"] = (
                 await connection.scalar(
                     text("select contributor_id=:actor from task_assignments where id=:id"),
                     {"id": assignment_id, "actor": human_id},
                 )
+                is True
             )
             for actor_id, status in (
                 (suspended_id, "suspended"),
