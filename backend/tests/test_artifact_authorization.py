@@ -263,3 +263,40 @@ def test_operator_page_helpers_are_bounded_and_deduplicate_projects() -> None:
 
     project_ids = ArtifactOperatorService._project_ids((second.id, first.id, second.id))
     assert project_ids == tuple(sorted({UUID(first.id), UUID(second.id)}, key=str))
+
+
+async def test_audit_resource_resolver_composes_exact_artifact_lineage() -> None:
+    project_id = str(uuid4())
+    replica_id = str(uuid4())
+    session = SimpleNamespace(scalar=AsyncMock(side_effect=(project_id, replica_id)))
+    service = ArtifactOperatorService(
+        session, _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+    content_projects = (uuid4(),)
+    replica_projects = (uuid4(),)
+    service._content_projects = AsyncMock(return_value=content_projects)
+    service._replica_projects = AsyncMock(return_value=replica_projects)
+
+    binding_projects = await service._audit_projects("artifact_binding", str(uuid4()))
+    assert binding_projects == (UUID(project_id),)
+    assert await service._audit_projects("artifact_content", str(uuid4())) == content_projects
+    assert await service._audit_projects("artifact_replica", replica_id) == replica_projects
+    assert (
+        await service._audit_projects("artifact_verification_job", str(uuid4()))
+        == replica_projects
+    )
+    assert await service._audit_projects("unknown", str(uuid4())) == ()
+    service._content_projects.assert_awaited_once()
+    assert service._replica_projects.await_count == 2
+
+
+async def test_audit_resource_resolver_conceals_missing_lineage() -> None:
+    session = SimpleNamespace(scalar=AsyncMock(return_value=None))
+    service = ArtifactOperatorService(
+        session, _WrongEvidenceAuthority(), Settings(), InProcessArtifactAdmissionMetrics()
+    )
+    service._replica_projects = AsyncMock()
+
+    assert await service._audit_projects("artifact_binding", str(uuid4())) == ()
+    assert await service._audit_projects("artifact_verification_job", str(uuid4())) == ()
+    service._replica_projects.assert_not_awaited()
