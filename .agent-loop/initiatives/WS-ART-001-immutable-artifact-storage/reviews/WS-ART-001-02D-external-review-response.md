@@ -7,6 +7,12 @@
   Operator routes make the exact inventories 71 total and 69 protected.
   Commit `536213ff` updates both exact counts and both full sorted-inventory
   SHA-256 hashes. The assertion remains fail-closed.
+- GitHub Backend run `29890458009`: preflight, API E2E, and all four shards
+  passed. The final unchanged artifact foundation gate reported 89.50 percent,
+  0.50 percentage point below its required 90 percent. Commit `f1b9480c` adds
+  meaningful focused coverage for every canonical binding resolver branch,
+  unknown-type fail-closed behavior, bounded pages, and deterministic project
+  deduplication. It changes no production code or threshold.
 
 ## Comments deferred
 
@@ -27,6 +33,8 @@ PR #177.
 - `ruff check tests/test_api_controls.py`: PASS;
 - `git diff --check`: PASS;
 - all nine internal reviewer tracks: PASS on `536213ff`.
+- `pytest tests/test_artifact_authorization.py -q`: 26 passed;
+- all nine internal reviewer tracks: PASS on `f1b9480c`.
 
 ## Remaining risks
 

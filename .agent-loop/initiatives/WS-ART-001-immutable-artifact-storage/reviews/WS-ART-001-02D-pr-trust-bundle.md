@@ -70,8 +70,11 @@ produced no review findings. The first hosted run passed Agent Gates, preflight,
 API E2E, and shards 1, 2, and 4; shard 3 found one stale exact OpenAPI inventory
 assertion. The inventory remains exact-count and full-hash bound after updating
 it for the nine intended protected Operator routes. The exact regression passes
-locally, all internal tracks reapproved the repair, and a hosted rerun remains
-required.
+locally and all internal tracks reapproved the repair. The rerun passed every
+shard, then the unchanged artifact foundation gate reported 89.50 percent.
+Focused canonical-resolver and page-helper tests were added without changing
+production code or thresholds; 26 focused tests and all reviewer tracks pass.
+A final hosted coverage rerun remains required.
 
 ## Remaining Risks And Follow-Up
 

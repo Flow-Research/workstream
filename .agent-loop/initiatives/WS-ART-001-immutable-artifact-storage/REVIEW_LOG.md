@@ -34,7 +34,11 @@
   one stale exact OpenAPI inventory assertion after the nine intended protected
   Operator routes were composed. Commit `536213ff` updates the exact total and
   protected counts/hashes; its single regression passes and all reviewer tracks
-  reapproved the repair. A hosted rerun remains required.
+  reapproved the repair. The rerun passed all four shards, then the unchanged
+  90 percent artifact foundation gate reported 89.50 percent. Commit
+  `f1b9480c` adds meaningful resolver/page helper tests without changing the
+  threshold or production code; 26 focused tests and all reviewer tracks pass.
+  A final hosted coverage rerun remains required.
 
 ## WS-ART-001-02C3
 
