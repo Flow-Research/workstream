@@ -2110,11 +2110,13 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
     selected = protected.get("selected")
     if not isinstance(selected, dict) or set(selected) != {"agent-gates", "test"}:
         raise LoopMemoryError("protected check evidence is incomplete")
+    selected_ids: set[int] = set()
     for name, item in selected.items():
         if not isinstance(item, dict) or set(item) != {"id", "head_sha", "app_id", "app_slug", "started_at", "completed_at", "conclusion", "merge_cutoff"}:
             raise LoopMemoryError(f"protected check evidence is invalid for {name}")
-        if type(item["id"]) is not int or item["id"] <= 0 or item["head_sha"] != source["head_sha"] or item["app_id"] != GITHUB_ACTIONS_APP_ID or item["app_slug"] != GITHUB_ACTIONS_APP_SLUG or item["conclusion"] != "success" or item["merge_cutoff"] != merged_at:
+        if type(item["id"]) is not int or item["id"] <= 0 or item["id"] in selected_ids or item["head_sha"] != source["head_sha"] or item["app_id"] != GITHUB_ACTIONS_APP_ID or item["app_slug"] != GITHUB_ACTIONS_APP_SLUG or item["conclusion"] != "success" or item["merge_cutoff"] != merged_at:
             raise LoopMemoryError(f"protected check provenance is invalid for {name}")
+        selected_ids.add(item["id"])
         started = _rfc3339_instant(item["started_at"])
         completed_at = _rfc3339_instant(item["completed_at"])
         cutoff = _rfc3339_instant(item["merge_cutoff"])

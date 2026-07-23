@@ -2130,3 +2130,44 @@ def test_recovery_policy_v4_rejects_closed_schema_mutations() -> None:
     for mutation in mutations:
         with pytest.raises(loop.LoopMemoryError):
             loop._validate_recovery_policy(mutation)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "updater_message", "checker_message"),
+    [
+        (lambda r: r.update(protected_checks=[]), "invalid schema", "invalid protected"),
+        (lambda r: r["protected_checks"].update(schema_version=2), "invalid schema", "invalid protected"),
+        (lambda r: r["protected_checks"].update(sha256="0" * 64), "digest", "digest"),
+        (lambda r: r["protected_checks"]["selected"].pop("test"), "incomplete", "digest"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(id=1), "provenance", "provenance"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(app_slug="foreign"), "provenance", "provenance"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(completed_at="2026-07-23T04:00:00Z"), "timing", "timing"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(extra=True), "invalid for test", "provenance"),
+    ],
+)
+def test_protected_record_mutations_fail_updater_and_checker(
+    mutation, updater_message: str, checker_message: str
+) -> None:
+    record = _merge_bound_record()
+    mutation(record)
+    if isinstance(record.get("protected_checks"), dict) and isinstance(record["protected_checks"].get("selected"), dict):
+        selected = record["protected_checks"]["selected"]
+        if updater_message not in {"digest", "incomplete"}:
+            record["protected_checks"]["sha256"] = loop.hashlib.sha256(loop._canonical_json(selected).encode()).hexdigest()
+    with pytest.raises(loop.LoopMemoryError, match=updater_message):
+        loop._validate_record(record)
+    assert any(checker_message in failure for failure in checker._record_failures(record, "record", None))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        {"schema_version": 9, "activation": {}},
+        {"schema_version": 4, "signed_basis": "a" * 40, "activation": [], "recovered_merges": []},
+        {"schema_version": 2, "activation": {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R3"}, "mode": "wrong"},
+    ],
+)
+def test_recovery_policy_rejects_unsupported_top_level_shapes(payload: object) -> None:
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_recovery_policy(payload)
