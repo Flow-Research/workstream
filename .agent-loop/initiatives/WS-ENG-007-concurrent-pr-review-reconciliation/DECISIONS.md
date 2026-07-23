@@ -58,7 +58,7 @@ unsupported non-tree types retain fail-closed validation.
 
 The signed start mechanism cannot reconcile PR #187 until D10 is implemented.
 Use the existing closed schema-v1 two-merge recovery mechanism, rebound to PR
-#187 merge `8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8` followed immediately by
+`#187` merge `8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8` followed immediately by
 `WS-ENG-007-00R1`. Both ephemeral
 exemptions must be consumed before signing; no wildcard, manual state edit,
 force push, new secret, or persistent exemption is allowed.

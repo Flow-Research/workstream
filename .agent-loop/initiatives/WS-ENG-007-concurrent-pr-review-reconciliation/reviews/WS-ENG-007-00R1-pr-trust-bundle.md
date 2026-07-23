@@ -31,6 +31,13 @@ merge, partial consumption, or failed required checks fails closed.
 - No workflow, coverage threshold, dependency, secret, permission, signing key,
   branch protection, product lifecycle, or human merge authority changed.
 
+## External Review
+
+CodeRabbit raised two valid minor documentation findings. The PR reference was
+reflowed to avoid malformed-heading syntax, and the risk mitigation now states
+that only validated supported non-tree leaves are preserved while unsupported
+entries fail closed. No external finding was deferred.
+
 ## Human Review Focus
 
 Confirm canonical tree comparison excludes only validated directory entries,
