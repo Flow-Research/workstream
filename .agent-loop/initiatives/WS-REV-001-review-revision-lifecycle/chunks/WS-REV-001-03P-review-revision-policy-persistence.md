@@ -36,6 +36,23 @@ docs/template_project_guide.md
 .agent-loop/merge-intents/WS-REV-001-03P.json
 ```
 
+The three cross-owner test files are proof-only exceptions:
+
+- `backend/tests/conftest.py`: update only the deterministic public-schema
+  fingerprint for migration 0034.
+- `backend/tests/test_artifact_admission.py`: update only ReviewPolicy and
+  RevisionPolicy fixture construction for schema compatibility; no ART
+  assertion or behavior may change.
+- `backend/tests/test_tasks.py`: update only policy fixture construction and add
+  immutable-policy regression proof. No Task behavior may change, and the
+  existing stamped ReviewPolicy, RevisionPolicy, and PaymentPolicy isolation
+  regression—including every payment assertion—must remain present without
+  weakening.
+- `backend/tests/test_projects.py`: adapt canonical policy requests/responses
+  while preserving every existing Project Guide activation outcome. Retired
+  request fields may become schema-denial tests, but activation denial may not
+  be removed or broadened by 03P.
+
 ## Not allowed
 
 - Task or TaskAssignment states/transitions.
@@ -124,6 +141,11 @@ docs/template_project_guide.md
   become non-null. Partial conversion, conversion after publication, or a
   complete-to-legacy transition is rejected. This deliberate replacement makes
   downgrade refuse because the original archival truth no longer exists.
+- A migrated row is fully immutable while `legacy_incomplete` remains true.
+  The triggers reject every legacy-to-legacy update, including ReviewPolicy
+  decision/finding/fixed/evidence changes and RevisionPolicy round/deadline
+  changes. Direct-SQL negatives prove both tables refuse those writes and that
+  untouched legacy rows downgrade to their exact originals.
 - Draft replacement updates `configured_by_actor` and `configured_at` to the
   verified Flow `ActorContext.actor_id` and database time. Current project setup
   does not expose canonical `actor_profile_id`; 03P records this exact upstream
@@ -154,7 +176,9 @@ docs/template_project_guide.md
 cd backend && .venv/bin/alembic heads
 cd backend && .venv/bin/pytest -q tests/test_alembic.py -k review_revision_policy
 cd backend && .venv/bin/pytest -q tests/test_projects.py -k 'review_policy or revision_policy'
-cd backend && .venv/bin/ruff check app/modules/projects tests/test_alembic.py tests/test_projects.py alembic/versions/0034_review_revision_policy_persistence.py
+cd backend && .venv/bin/pytest -q tests/test_tasks.py -k 'published_review_policy or stamped_policy_values'
+cd backend && .venv/bin/pytest -q tests/test_artifact_admission.py::test_committed_put_and_independent_verification_are_fenced
+cd backend && .venv/bin/ruff check app/modules/projects tests/conftest.py tests/test_alembic.py tests/test_projects.py tests/test_tasks.py tests/test_artifact_admission.py alembic/versions/0034_review_revision_policy_persistence.py
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 backend/.venv/bin/python scripts/test_agent_gates.py
