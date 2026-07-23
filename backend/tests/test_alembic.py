@@ -3041,7 +3041,7 @@ def test_review_revision_policy_migration_is_lossless_and_guarded(
                 )
             for table in ("review_policies", "revision_policies"):
                 with pytest.raises(IntegrityError, match="cannot be truncated"):
-                    asyncio.run(execute(f"truncate table {table}"))
+                    asyncio.run(execute(f"truncate table {table} cascade"))
         finally:
             command.upgrade(config, "head")
 

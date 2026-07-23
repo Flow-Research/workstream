@@ -33,6 +33,11 @@
   both policy tables use the existing guarded-reset path so test cleanup can
   temporarily disable and immediately restore their user triggers. No reset
   ownership check changed.
+- Backend run `30029973617`, shard 1, showed PostgreSQL's foreign-key precheck
+  rejecting the single-table `TRUNCATE` test before the new trigger could fire.
+  Each independent negative now uses `TRUNCATE ... CASCADE`, which reaches the
+  intended table's `BEFORE TRUNCATE` guard and still rolls back without erasing
+  policy or related rows.
 
 ## Comments deferred
 
