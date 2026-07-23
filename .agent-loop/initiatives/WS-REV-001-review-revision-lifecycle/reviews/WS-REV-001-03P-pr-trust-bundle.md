@@ -77,8 +77,12 @@ candidate `35531df254c6b25726d666a5e89eda997b97d792` after three repair rounds.
 
 ## External review
 
-Pending publication. GitHub Actions and CodeRabbit must pass on the final pushed
-head, and every actionable external comment must be resolved before merge.
+PR #195's first run passed preflight and Agent Gates. CodeRabbit returned pass
+with no actionable comment while reporting service rate limiting. API E2E found
+that its existing Project Guide fixture still sent retired policy fields. The
+prospectively reviewed repair changes only that fixture to the canonical 03P
+schema; exact-SHA internal review and Ruff pass. Fresh current-head GitHub
+Actions and CodeRabbit checks remain required before merge.
 
 ## Remaining risks and follow-up work
 

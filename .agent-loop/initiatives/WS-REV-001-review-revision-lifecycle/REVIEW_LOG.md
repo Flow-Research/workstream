@@ -1140,3 +1140,14 @@ passes senior engineering, QA/test, security/auth, product/ops, architecture,
 docs, reuse/dedup, test-delta, CI-integrity, and circuit-breaker review. No
 finding remains. Full backend tests and coverage are intentionally deferred to
 GitHub Actions; 03A has not started.
+
+## WS-REV-001-03P API E2E Repair - 2026-07-23
+
+PR #195's first GitHub run passed preflight and Agent Gates but API E2E rejected
+the stale Project Guide policy fixture. A prospective contract amendment
+authorized only `backend/scripts/api_contract_e2e.py::guide_payload`; all
+lifecycle, endpoint, authorization, response, and non-policy behavior remained
+prohibited. Candidate `b68a1e22b3bf373d15479784d545fcc9b5737f64`
+removes the five retired inputs, uses canonical finding fields, and supplies the
+two reviewed durations. Ruff and diff integrity pass, and all required internal
+tracks pass on the exact candidate. Fresh GitHub proof remains required.
