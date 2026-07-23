@@ -36,6 +36,7 @@ P1
 backend/app/modules/actors/repository.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/schemas.py
+backend/alembic/versions/0034_project_role_issue_evidence.py
 backend/app/modules/projects/repository.py
 backend/app/api/router.py
 backend/tests/test_actors.py
@@ -54,7 +55,7 @@ docs/spec_authorization_service.md
 ## Not allowed changes
 
 ```text
-migration or durable schema changes
+durable schema changes other than the exact 0034 idempotency-evidence trigger repair below
 read/candidate surface redesign
 task assignment or review reconciliation implementation
 admin/service/project-role authority substitution
@@ -199,6 +200,23 @@ Issue writes exactly `ProjectRoleQualificationSnapshotCaptured` followed by
 cause-event, and the role-specific future-obligation projection. No parallel
 completion writer is permitted.
 
+The existing database idempotency completion guard predates the 10A evidence
+shape and requires one success plus one invalidation for every operation. That
+would either reject 10C issue or force a false invalidation. Migration 0034 is
+therefore the sole permitted durable change in this chunk. It replaces only the
+idempotency completion guard so `project_role_grant.issue` requires exactly two
+ordered non-invalidation events —
+`ProjectRoleQualificationSnapshotCaptured` followed by
+`ProjectRoleGrantIssued` — with the qualification event bound to the same
+idempotency record, request/correlation pair, actor, permission, project, and
+issued-grant resource. It requires zero invalidations for issue. Every other
+operation retains the existing exactly-one-success plus exactly-one-invalidation
+rule. Upgrade refuses unexpected installed function/trigger definitions and
+pre-existing incompatible pending/committed project-role issue evidence without
+changing data. Downgrade refuses any committed 10C issue record or new evidence
+shape that the prior guard cannot represent, then restores the exact prior
+function. No table, column, index, enum, or product row changes are permitted.
+
 ## Acceptance criteria
 
 - Issue permits draft, active, and paused projects; terminal/archived,
@@ -232,6 +250,10 @@ completion writer is permitted.
   concurrently.
 - Cancellation and injected failure at snapshot, grant, idempotency, audit,
   invalidation, flush, and commit leave no orphan row or partial evidence.
+- Migration 0034 proves exact upgrade/downgrade function replacement, strict
+  refusal/no-mutation on unexpected definitions and incompatible evidence,
+  two linked issue events with zero invalidation, and unchanged one-success/
+  one-invalidation enforcement for every other authority operation.
 - PostgreSQL tests cover identical-role issue, different-role issue, crossed
   managers, revoke versus regrant, revoke versus authorization, replay after
   authority loss, timeout, and cancellation. PostgreSQL and API tests also
