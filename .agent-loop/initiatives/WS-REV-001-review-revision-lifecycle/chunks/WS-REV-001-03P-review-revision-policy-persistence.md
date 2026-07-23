@@ -25,6 +25,9 @@ backend/app/modules/projects/service.py
 backend/alembic/versions/0034_review_revision_policy_persistence.py
 backend/tests/test_alembic.py
 backend/tests/test_projects.py
+backend/tests/test_tasks.py
+backend/tests/test_artifact_admission.py
+backend/tests/conftest.py
 docs/architecture_data_model.md
 docs/template_project_guide.md
 .agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/{DISCOVERY,PLAN,STATUS,REVIEW_LOG}.md
@@ -100,12 +103,14 @@ docs/template_project_guide.md
   new policy or arbitrary decision/state token.
 - No index, unique constraint, or foreign key changes. Existing project/guide
   uniqueness and composite guide-context foreign keys remain authoritative.
-- Trigger function `guard_review_revision_policy_write` and triggers
+- Table-typed trigger functions `guard_review_policy_write` and
+  `guard_revision_policy_write` plus triggers
   `trg_review_policies_guard_write` and
   `trg_revision_policies_guard_write` lock the matching `project_guides` row
-  `FOR UPDATE`. Insert and update are permitted only while that guide remains
-  an unactivated draft (`status='draft'`, `effective_at is null`, and
-  `superseded_at is null`); delete is always rejected.
+  `FOR UPDATE` for insert and update. Those writes are permitted only while the
+  guide remains an unactivated draft (`status='draft'`, `effective_at is null`,
+  and `superseded_at is null`). Delete is rejected before dereferencing `NEW`
+  and therefore never waits on guide state.
 - Policy `id`, `project_id`, `guide_version`, and `created_at` are immutable from
   insert. Draft replacement updates the existing row only and may change only
   canonical policy fields plus configuring provenance. The trigger overwrites
@@ -124,11 +129,12 @@ docs/template_project_guide.md
   does not expose canonical `actor_profile_id`; 03P records this exact upstream
   attribution gap and does not add an AUTH lookup, compatibility path, or
   ActorProfile lifecycle rule.
-- Two-session PostgreSQL tests race policy update/delete/insert against direct
-  guide publication in both lock orders. The guide-row lock must serialize the
-  operations: either the draft policy write commits before publication, or the
-  post-publication write is rejected; no write observed against draft may
-  commit after publication unnoticed.
+- Two-session PostgreSQL tests exercise ReviewPolicy and RevisionPolicy insert
+  and update against direct guide publication in both lock orders. The
+  guide-row lock must serialize the operations: either the draft policy write
+  commits before publication, or the post-publication write is rejected. Direct
+  delete refusal is proved independently for both tables because delete never
+  waits on guide state.
 - Downgrade is lossless only for migration-existing legacy rows. It locks
   `project_guides`, `review_policies`, then `revision_policies` in that exact
   order with `ACCESS EXCLUSIVE`, and refuses before DDL if any non-legacy policy exists,
@@ -161,6 +167,13 @@ transaction publication races, every downgrade refusal predicate, lossless
 clean-head downgrade/re-upgrade, and restoration of the sole head.
 The full backend suite and repository/subsystem coverage gates run in GitHub
 Actions, not locally.
+
+The migration, application mapping, direct-SQL/concurrency proof, and active
+contract documentation form one atomic L1 review unit. Splitting them would
+leave either an unproved database boundary or application models incompatible
+with the sole Alembic head. Reviewers use those four sections as explicit human
+focus areas even when the resulting safety proof exceeds the preferred soft
+diff size.
 
 ## Required reviewers
 
