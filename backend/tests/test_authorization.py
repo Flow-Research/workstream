@@ -132,6 +132,7 @@ from app.modules.authorization.schemas import (
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.project_role_service import (
     _constraint_name,
+    ProjectRoleGrantMutationService,
     project_role_issue_lock_key,
 )
 from app.modules.authorization.project_role_schemas import (
@@ -182,6 +183,7 @@ from app.modules.authorization.runtime import (
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
+    ProjectRoleGrantRevokeResourceContext,
     ServiceActorProvisionResourceContext,
     ServiceAuthorizationContext,
     SystemResourceContext,
@@ -8392,7 +8394,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                 ActorProfile(id=str(target_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(target_id)),
                 ActorIdentityLink(id=str(target_link_id), actor_profile_id=str(target_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-target-{target_id}", subject_kind="human", status="active", linked_by=str(target_id), last_verified_at=now),
                 Project(id=str(project_id), name="AUTH-10C PREP proof", slug=f"auth-10c-prep-{project_id}", status="draft"),
-                AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=str(caller_id), granted_by_system_principal=None, granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL proof"),
+                AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=None, granted_by_system_principal="workstream:system:bootstrap", granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL proof"),
             ]
         )
         await session.commit()
@@ -8400,8 +8402,24 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         repository = AdminAuthorizationRepository(session)
         authorization = AuthorizationService(session, context, admin_repository=repository)
         prepared = PreparedAuthorizationService(session, context, authorization, repository)
+        issue_reason = "AUTH-10C PostgreSQL issue proof"
+        canonical_issue = ProjectRoleGrantIssueRequest(
+            operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
+            project_id=project_id,
+            target_actor_id=target_id,
+            role=ProjectRole.SUBMITTER,
+            qualification=_project_role_qualification(),
+            reason_digest=derive_reason_digest(issue_reason),
+        )
+        issue_key = uuid4()
         await session.begin()
-        caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={"target": str(target_id), "role": "submitter"})
+        issue_reservation = await ProjectRoleGrantMutationService(session).reserve(
+            key=issue_key,
+            actor_profile_id=caller_id,
+            request=canonical_issue,
+        )
+        assert isinstance(issue_reservation, ClaimedReservation)
+        caller_input = PreparedAuthorizationInput(idempotency_key=issue_key, request_value=canonical_issue.model_dump(mode="json"))
         handle = await prepared.prepare(ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER))
         assert await repository.lock_project(project_id) is not None
         await repository.take_project_role_issue_lock(project_role_issue_lock_key(target_id, project_id, "submitter"))
@@ -8409,4 +8427,169 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         decision = await prepared.consume(handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, ProjectRoleGrantIssueResourceContext(resource_type="project_role_grant_issue", resource_id=project_id, scope_project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER, project_status="draft", target_eligible=True, active_exact_role_exists=False))
         assert decision.allowed is True
         assert decision.matched_grant_id == manager_grant_id
+        issued = await ProjectRoleGrantMutationService(session).complete_issue(
+            claim=issue_reservation.claim,
+            request=canonical_issue,
+            decision=decision,
+            actor_profile_id=caller_id,
+            reason=issue_reason,
+        )
+        assert issued.status == "active"
+        await session.commit()
+        await session.execute(
+            text("update actor_profiles set status='suspended' where id=:id"),
+            {"id": str(target_id)},
+        )
+        await session.execute(
+            text("update actor_identity_links set status='revoked' where id=:id"),
+            {"id": str(target_link_id)},
+        )
+        await session.commit()
+        revoke_reason = "AUTH-10C lifecycle-independent revoke proof"
+        canonical_revoke = ProjectRoleGrantRevokeRequest(
+            operation=AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE,
+            project_id=project_id,
+            grant_id=issued.id,
+            reason_digest=derive_reason_digest(revoke_reason),
+        )
+        revoke_key = uuid4()
+        revoke_reservation = await ProjectRoleGrantMutationService(session).reserve(
+            key=revoke_key,
+            actor_profile_id=caller_id,
+            request=canonical_revoke,
+        )
+        assert isinstance(revoke_reservation, ClaimedReservation)
+        revoke_input = PreparedAuthorizationInput(
+            idempotency_key=revoke_key,
+            request_value=canonical_revoke.model_dump(mode="json"),
+        )
+        revoke_handle = await prepared.prepare(
+            ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            revoke_input,
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=project_id,
+                grant_id=issued.id,
+            ),
+        )
+        project = await repository.lock_project(project_id)
+        row = await repository.lock_project_role_grant(
+            project_id=project_id, grant_id=issued.id
+        )
+        assert project is not None and row is not None
+        grant, _snapshot = row
+        revoke_decision = await prepared.consume(
+            revoke_handle,
+            ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            revoke_input,
+            ProjectRoleGrantRevokeResourceContext(
+                resource_type="project_role_grant_revoke",
+                resource_id=issued.id,
+                scope_project_id=project_id,
+                actor_profile_id=target_id,
+                role=ProjectRole.SUBMITTER,
+                project_status="draft",
+                status="active",
+                version=1,
+            ),
+        )
+        revoked = await ProjectRoleGrantMutationService(session).complete_revoke(
+            claim=revoke_reservation.claim,
+            request=canonical_revoke,
+            decision=revoke_decision,
+            actor_profile_id=caller_id,
+            reason=revoke_reason,
+            grant=grant,
+        )
+        assert revoked.status == "revoked"
+        await session.commit()
+        assert (
+            await session.scalar(
+                text(
+                    "select count(*) from audit_events where idempotency_reference in (:issue, :revoke)"
+                ),
+                {
+                    "issue": str(issue_reservation.claim.record_id),
+                    "revoke": str(revoke_reservation.claim.record_id),
+                },
+            )
+            == 4
+        )
         await session.rollback()
+        prepared.close()
+
+    canonical = ProjectRoleGrantIssueRequest(
+        operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
+        project_id=project_id,
+        target_actor_id=target_id,
+        role=ProjectRole.SUBMITTER,
+        qualification=_project_role_qualification(),
+        reason_digest=derive_reason_digest("AUTH-10C concurrency proof"),
+    )
+    waiting_key = uuid4()
+    async with authorization_factory() as locker, authorization_factory() as waiter:
+        locker_repository = AdminAuthorizationRepository(locker)
+        locker_authorization = AuthorizationService(
+            locker, context, admin_repository=locker_repository
+        )
+        locker_prepared = PreparedAuthorizationService(
+            locker, context, locker_authorization, locker_repository
+        )
+        waiter_repository = AdminAuthorizationRepository(waiter)
+        waiter_authorization = AuthorizationService(
+            waiter, context, admin_repository=waiter_repository
+        )
+        waiter_prepared = PreparedAuthorizationService(
+            waiter, context, waiter_authorization, waiter_repository
+        )
+        scope = PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
+            target_actor_profile_id=target_id,
+            role=ProjectRole.SUBMITTER,
+        )
+        await locker.begin()
+        await locker_prepared.prepare(
+            ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            PreparedAuthorizationInput(
+                idempotency_key=uuid4(), request_value=canonical.model_dump(mode="json")
+            ),
+            scope,
+        )
+        await waiter.begin()
+        await ProjectRoleGrantMutationService(waiter).reserve(
+            key=waiting_key,
+            actor_profile_id=caller_id,
+            request=canonical,
+        )
+        wait_task = asyncio.create_task(
+            waiter_prepared.prepare(
+                ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                PreparedAuthorizationInput(
+                    idempotency_key=waiting_key,
+                    request_value=canonical.model_dump(mode="json"),
+                ),
+                scope,
+            )
+        )
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(wait_task), timeout=0.2)
+        wait_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await wait_task
+        await waiter.rollback()
+        await locker.rollback()
+        waiter_prepared.close()
+        locker_prepared.close()
+    async with authorization_factory() as clean:
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from authority_idempotency_records "
+                    "where idempotency_key=:key"
+                ),
+                {"key": str(waiting_key)},
+            )
+            == 0
+        )
+        await clean.rollback()
