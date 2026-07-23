@@ -1729,6 +1729,32 @@ def _assert_contributor_entry_contract(documents: dict[str, str]) -> None:
     lowered = contribution.lower()
     for phrase in required_contribution_semantics:
         assert phrase.lower() in lowered, phrase
+    normalized_contribution = " ".join(contribution.split())
+    required_procedures = (
+        "## Before Work",
+        "dispatch `Loop Memory Explicit Event` on exact current `main`",
+        "Confirm the target initiative is active for the exact chunk and phase",
+        "## Contributors Without Write Permission",
+        "preserving the proposal as discovery input",
+        "placing the required intent, discovery, plan, chunk map, and exact chunk contract on trusted `main`",
+        "dispatching the signed start for that exact contract and current-main SHA",
+        "applying or recreating only the in-contract parts of the preserved patch",
+        "crediting the original contributor in the resulting PR where applicable",
+        "## Implementation",
+        "Reconcile with current `main` before publication",
+        "## Before Opening A Pull Request",
+        "Complete every required internal reviewer track",
+        "Ensure the reviewed implementation SHA and signed-start provenance are recorded",
+        "Add exactly one schema-v2 merge intent",
+        "Run the chunk's complete verification commands against the current base",
+        "no reviewer agent remains active",
+        "## Review, Merge, And Stop",
+        "reviews the final exact PR head",
+        "Verify its manifest, signature, ledger, loop view, queue, and initiative projections together",
+        "Work stops",
+    )
+    for marker in required_procedures:
+        assert marker in normalized_contribution, marker
 
     canonical_loop = (
         "Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> "
@@ -1769,6 +1795,24 @@ def test_contributor_entry_semantics_are_positive_and_fail_closed() -> None:
             "CONTRIBUTING.md",
             "Automated Merge Memory never starts it automatically",
         ),
+        ("CONTRIBUTING.md", "## Before Work"),
+        (
+            "CONTRIBUTING.md",
+            "dispatch `Loop Memory Explicit",
+        ),
+        ("CONTRIBUTING.md", "preserving the proposal as discovery input"),
+        (
+            "CONTRIBUTING.md",
+            "dispatching the signed start for that exact contract and current-main SHA",
+        ),
+        (
+            "CONTRIBUTING.md",
+            "applying or recreating only the in-contract parts",
+        ),
+        ("CONTRIBUTING.md", "## Before Opening A Pull Request"),
+        ("CONTRIBUTING.md", "Complete every required internal reviewer track"),
+        ("CONTRIBUTING.md", "reviews the final exact PR head"),
+        ("CONTRIBUTING.md", "Work stops"),
     )
     for path, phrase in mutations:
         mutated = dict(documents)
