@@ -2148,17 +2148,109 @@ def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
     policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
     assert policy == {
         "activation": {
-            "chunk_id": "WS-ENG-007-00R1",
+            "chunk_id": "WS-ENG-007-00R2",
             "initiative_id": "WS-ENG-007",
         },
-        "recovered_merge": {
-            "chunk_id": "WS-ENG-007-PLAN",
-            "initiative_id": "WS-ENG-007",
-            "merge_sha": "8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8",
-            "pr_number": 187,
-        },
-        "schema_version": 1,
+        "recovered_merges": [
+            {
+                "chunk_id": "WS-ENG-007-PLAN",
+                "initiative_id": "WS-ENG-007",
+                "merge_sha": "8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8",
+                "pr_number": 187,
+            },
+            {
+                "chunk_id": "WS-ENG-007-00R1",
+                "initiative_id": "WS-ENG-007",
+                "merge_sha": "c65633f8f0991dbefe7b0635e053aab0df8f9af8",
+                "pr_number": 188,
+            },
+        ],
+        "schema_version": 3,
     }
+
+
+def test_planning_checks_canonicalize_trusted_reruns_and_fail_closed() -> None:
+    """Protected checks select the latest invocation after validating all runs."""
+    updater = load_module("planning_check_reruns", "scripts/update_post_merge_memory.py")
+    head_sha = "a" * 40
+
+    def run(
+        check_id: int,
+        name: str,
+        started: str,
+        completed: str,
+        conclusion: str = "success",
+    ) -> dict:
+        return {
+            "id": check_id,
+            "name": name,
+            "head_sha": head_sha,
+            "status": "completed",
+            "conclusion": conclusion,
+            "started_at": started,
+            "completed_at": completed,
+            "app": {"id": updater.GITHUB_ACTIONS_APP_ID, "slug": updater.GITHUB_ACTIONS_APP_SLUG},
+        }
+
+    class CheckClient:
+        def __init__(self, runs: list[dict]) -> None:
+            self.runs = runs
+
+        def get_json(self, _path: str):
+            return {"total_count": len(self.runs), "check_runs": self.runs}
+
+    test_run = run(20, "test", "2026-07-23T05:00:00Z", "2026-07-23T05:01:00Z")
+    older = run(10, "agent-gates", "2026-07-23T05:00:00Z", "2026-07-23T05:10:00Z")
+    newer = run(11, "agent-gates", "2026-07-23T05:02:00Z", "2026-07-23T05:03:00Z")
+    for ordered in ([older, newer, test_run], [test_run, newer, older]):
+        updater._validate_protected_actions_checks(
+            CheckClient(ordered), "Flow-Research/workstream", head_sha
+        )
+
+    old_failure = {**older, "conclusion": "failure"}
+    updater._validate_protected_actions_checks(
+        CheckClient([newer, old_failure, test_run]), "Flow-Research/workstream", head_sha
+    )
+    new_failure = {**newer, "conclusion": "failure"}
+    assert_loop_error(
+        updater,
+        lambda: updater._validate_protected_actions_checks(
+            CheckClient([older, new_failure, test_run]), "Flow-Research/workstream", head_sha
+        ),
+        "invalid provenance",
+    )
+    test_failure = {**test_run, "conclusion": "timed_out"}
+    assert_loop_error(
+        updater,
+        lambda: updater._validate_protected_actions_checks(
+            CheckClient([older, newer, test_failure]), "Flow-Research/workstream", head_sha
+        ),
+        "invalid provenance",
+    )
+    poisoned = (
+        {**older, "app": {"id": 1, "slug": "foreign"}},
+        {**older, "head_sha": "b" * 40},
+        {**older, "status": "queued", "completed_at": None},
+        {**older, "id": True},
+        {**older, "started_at": "2026-07-23 05:00:00"},
+    )
+    for bad in poisoned:
+        for ordered in ([bad, newer, test_run], [test_run, newer, bad]):
+            assert_loop_error(
+                updater,
+                lambda ordered=ordered: updater._validate_protected_actions_checks(
+                    CheckClient(list(ordered)), "Flow-Research/workstream", head_sha
+                ),
+                "invalid",
+            )
+    assert_loop_error(
+        updater,
+        lambda: updater._validate_protected_actions_checks(
+            CheckClient([older, dict(older), newer, test_run]),
+            "Flow-Research/workstream", head_sha,
+        ),
+        "invalid provenance",
+    )
 
 
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
@@ -2274,17 +2366,23 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             if "/check-runs?per_page=100" in path:
                 runs = [
                     {
+                        "id": index,
                         "name": name,
                         "head_sha": head_sha,
                         "status": self.check_status,
                         "conclusion": self.check_conclusion,
+                        "started_at": "2026-07-22T07:59:00Z",
                         "completed_at": "2026-07-22T08:00:00Z",
                         "app": {"id": self.app_id, "slug": self.app_slug},
                     }
-                    for name in ("agent-gates", "test")
+                    for index, name in enumerate(("agent-gates", "test"), start=1)
                 ]
                 if self.duplicate_run:
-                    runs.append(dict(runs[0]))
+                    runs.append({
+                        **runs[0], "id": 3,
+                        "started_at": "2026-07-22T08:01:00Z",
+                        "completed_at": "2026-07-22T08:02:00Z",
+                    })
                 return {"total_count": len(runs), "check_runs": runs}
             if "STATUS.md?ref=" in path:
                 value = "- Active planning chunk: none\n- Active implementation chunk: none\n"
@@ -2353,7 +2451,6 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
     client.mode = "100644"
     cases = (
         (lambda: setattr(client, "app_slug", "foreign-app"), "invalid provenance"),
-        (lambda: setattr(client, "duplicate_run", True), "missing or duplicated"),
         (lambda: setattr(client, "check_status", "queued"), "invalid provenance"),
         (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
         (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
@@ -7281,6 +7378,7 @@ def main() -> int:
         test_independent_checker_accepts_and_mutates_planning_intake_state,
         test_planning_tree_entries_canonicalize_recursive_directory_objects,
         test_ws_eng_007_recovery_policy_is_exactly_pinned,
+        test_planning_checks_canonicalize_trusted_reruns_and_fail_closed,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
         test_eng007_two_merge_recovery_binds_pr187_and_consumes_authority,

@@ -62,3 +62,23 @@ Use the existing closed schema-v1 two-merge recovery mechanism, rebound to PR
 `WS-ENG-007-00R1`. Both ephemeral
 exemptions must be consumed before signing; no wildcard, manual state edit,
 force push, new secret, or persistent exemption is allowed.
+
+## D12 - Check reruns are evidence versions, not ambiguity
+
+For each protected check name, validate every returned same-name check against
+the exact reviewed head and pinned GitHub Actions application. Reject the set if
+any candidate is foreign, wrong-head, malformed, incomplete, or reuses an ID.
+Order completed candidates by parsed `started_at` instant then positive numeric
+check-run ID. The unique latest invocation determines the result. `completed_at`
+must be a valid instant at or after start, but completion order never defines
+recency. A later-started failure supersedes an older success even when the older
+run completes last. Rerun count alone never fails reconciliation.
+
+## D13 - Recover the exact three-merge backlog once
+
+Schema v3 names an ordered `recovered_merges` list of one or two entries plus
+one activation; production requires exactly two recovered entries.
+For this repair it binds only PR #187 / `WS-ENG-007-PLAN`, PR #188 /
+`WS-ENG-007-00R1`, and direct-next `WS-ENG-007-00R2`. The plan must be exactly
+those adjacent first-parent merges. All exemptions are consumed before signing
+and cannot appear in state, ledger, projections, or replay.

@@ -59,3 +59,20 @@ tracks. A PR never authors or narrows this graph.
 - Exact GitHub merge-queue repository-setting API behavior.
 - Hosted context behavior after queue enablement. These block administrative
   enablement, not repository-side parity planning.
+
+## Recovery reliability discovery — 2026-07-23
+
+- PR #188 merged at `c65633f8f0991dbefe7b0635e053aab0df8f9af8`.
+- Loop Memory run `29984940789` failed before publication with `planning intake
+  check agent-gates is missing or duplicated`.
+- PR #187 head `34ddac158d8c8d5c96498de008dd43354205199f`
+  has two completed successful `agent-gates` runs from GitHub Actions app
+  `15368/github-actions` and one completed successful `test` run from the same
+  app.
+- `_validate_protected_actions_checks()` requires exactly one match, while
+  `_check_evidence()` already treats check history as a latest-value stream.
+- The current schema-v1 recovery certificate can name only one recovered merge
+  plus activation. Signed state is two merges behind, so the repair target is a
+  third adjacent merge and requires an exact ordered multi-recovered schema.
+- The workflow already plans all unrecorded first-parent commits and publishes
+  only after reconciliation; no workflow edit is required.
