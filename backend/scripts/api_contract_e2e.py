@@ -641,17 +641,14 @@ def guide_payload(run_id: str) -> dict:
         ),
         "change_summary": "Initial real API guide",
         "review_policy": {
-            "requires_second_review": False,
             "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
+            "minimum_finding_fields": ["description", "severity"],
+            "review_preference_window_seconds": 900,
+            "review_lease_duration_seconds": 1800,
         },
         "revision_policy": {
             "max_revision_rounds": 7,
             "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
         },
         "payment_policy": {
             "base_amount": "25.00",
