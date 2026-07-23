@@ -225,8 +225,11 @@ cross-manager, or false-invalidation shapes. Application tests prove writer call
 order; the durable schema claims exact cardinality and predecessor presence, not
 a total order derived from timestamp or UUID. Completion additionally requires
 the persisted grant's qualification snapshot, project, actor, and role tuple to
-match the persisted snapshot and request tuple. It requires zero invalidations
-for issue.
+match the persisted snapshot and the two audit envelopes. The database proves
+their project, target actor, role facts, matched manager, claim, request ID, and
+correlation ID linkage. The application `AuthorityMutationService` remains
+solely responsible for proving those envelopes against the canonical request
+digest stored by idempotency. Issue requires zero invalidations.
 
 Every other operation retains the exact existing success-event allowlist,
 response resource/type/status/version binding, one success plus one invalidation,
@@ -348,7 +351,8 @@ change is permitted beyond those two function bodies and one registry member.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app/modules/actors app/modules/authorization app/modules/projects tests/test_actors.py tests/test_authorization.py tests/test_api_controls.py tests/test_projects.py scripts/auth_api_e2e.py scripts/api_contract_e2e.py)
+(cd backend && .venv/bin/python -m ruff check alembic/versions/0034_project_role_issue_evidence.py app/modules/actors app/modules/authorization app/modules/projects tests/conftest.py tests/test_actors.py tests/test_alembic.py tests/test_audit.py tests/test_authorization.py tests/test_api_controls.py tests/test_projects.py scripts/auth_api_e2e.py scripts/api_contract_e2e.py)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 600 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_audit.py -k '0034 or project_role_issue_evidence or action_aware_audit')
 (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_projects.py -k 'project_role_grant')
 (cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/auth_api_e2e.py)
 python3 scripts/check_stale_authorization_docs.py
