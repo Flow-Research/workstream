@@ -778,7 +778,7 @@ def test_prepare_recovery_v3_binds_three_adjacent_merges_and_is_deterministic(
     three = {"schema_version": 1, "exemptions": four["exemptions"][:3]}
     with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
         loop._validate_recovery_exemptions(three)
-    with pytest.raises(loop.LoopMemoryError, match="unsupported"):
+    with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
         loop._validate_recovery_exemptions({**three, "schema_version": 3})
 
     for bad_plan in (
@@ -1900,3 +1900,342 @@ def test_publication_push_failure_leaves_remote_tip_unchanged(
         stdout=subprocess.PIPE,
     ).stdout.strip()
     assert remote_tip == published
+
+
+def test_protected_evidence_ignores_classifiable_post_merge_reruns() -> None:
+    head = "a" * 40
+
+    def run(check_id, name, started, completed, conclusion="success", **extra):
+        value = {
+            "id": check_id, "name": name, "head_sha": head,
+            "status": "completed", "conclusion": conclusion,
+            "started_at": started, "completed_at": completed,
+            "app": {"id": loop.GITHUB_ACTIONS_APP_ID, "slug": loop.GITHUB_ACTIONS_APP_SLUG},
+        }
+        value.update(extra)
+        return value
+
+    evidence = loop._protected_actions_evidence([
+        run(1, "agent-gates", "2026-07-23T07:00:00Z", "2026-07-23T07:01:00Z"),
+        run(2, "test", "2026-07-23T07:02:00Z", "2026-07-23T07:03:00Z"),
+        run(3, "agent-gates", "2026-07-23T08:01:00Z", None, status="queued", conclusion=None, app={"id": 1, "slug": "foreign"}),
+    ], head, "2026-07-23T08:00:00Z")
+    assert evidence["selected"]["agent-gates"]["id"] == 1
+
+    with pytest.raises(loop.LoopMemoryError, match="invalid provenance"):
+        loop._protected_actions_evidence([
+            run(1, "agent-gates", "2026-07-23T07:00:00Z", "2026-07-23T07:01:00Z"),
+            run(4, "agent-gates", "2026-07-23T07:30:00Z", "2026-07-23T07:31:00Z", "failure"),
+            run(2, "test", "2026-07-23T07:02:00Z", "2026-07-23T07:03:00Z"),
+        ], head, "2026-07-23T08:00:00Z")
+
+
+def test_paginated_collection_rejects_overlap_and_total_drift(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = loop.GitHubClient("token")
+    pages = {
+        1: {"total_count": 101, "check_runs": [{"id": value} for value in range(1, 101)]},
+        2: {"total_count": 101, "check_runs": [{"id": 100}]},
+    }
+    monkeypatch.setattr(client, "get_json", lambda path: pages[int(path.rsplit("page=", 1)[1])])
+    with pytest.raises(loop.LoopMemoryError, match="identity"):
+        client.get_paginated_collection("/checks", "check_runs")
+
+    pages[2] = {"total_count": 102, "check_runs": [{"id": 101}, {"id": 102}]}
+    with pytest.raises(loop.LoopMemoryError, match="changed"):
+        client.get_paginated_collection("/checks", "check_runs")
+
+
+def test_shared_reconcile_orders_recovery_and_validates_atomically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    normal_sha = "b" * 40
+    recovery_sha = "d3321698fb856f3fac320cdc7bc598f813fe1953"
+    planned = [normal_sha, recovery_sha]
+    exemptions = [
+        {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R2", "pr_number": 189},
+        {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R3", "pr_number": 190},
+    ]
+    events: list[str] = []
+    collection_calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: events.append("plan") or planned)
+    monkeypatch.setattr(loop, "prepare_recovery_exemptions", lambda *_args, **_kwargs: events.append("prepare") or exemptions)
+    def collect(_client, _repository, sha, *, historical_recovery=False):
+        collection_calls.append((sha, historical_recovery))
+        events.append("collect")
+        return _record()
+
+    monkeypatch.setattr(loop, "collect_merge_record", collect)
+    monkeypatch.setattr(loop, "apply_merge_record", lambda *_args, **_kwargs: events.append("apply") or True)
+    monkeypatch.setattr(loop, "assert_recovery_consumed", lambda *_args: events.append("assert"))
+    monkeypatch.setattr(loop, "validate_generated_state", lambda *_args: events.append("validate"))
+    loop.reconcile_to_main(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha=recovery_sha,
+    )
+    assert events == ["plan", "prepare", "collect", "apply", "collect", "apply", "assert", "validate"]
+    assert collection_calls == [(normal_sha, False), (recovery_sha, True)]
+
+
+def test_merge_bound_evidence_is_mandatory_after_cutover_in_both_validators() -> None:
+    record = _record()
+    record["source"]["merged_at"] = "2026-07-23T05:11:46Z"
+    record["updated_at"] = record["source"]["merged_at"]
+    with pytest.raises(loop.LoopMemoryError, match="merge-bound protected"):
+        loop._validate_record(record)
+    assert any(
+        "merge-bound protected" in failure
+        for failure in checker._record_failures(record, "record", None)
+    )
+
+
+def _merge_bound_record() -> dict:
+    record = _record()
+    record["source"]["merged_at"] = "2026-07-23T06:00:00Z"
+    record["updated_at"] = record["source"]["merged_at"]
+    selected = {}
+    for index, name in enumerate(("agent-gates", "test"), start=1):
+        selected[name] = {
+            "id": index, "head_sha": record["source"]["head_sha"],
+            "app_id": loop.GITHUB_ACTIONS_APP_ID, "app_slug": loop.GITHUB_ACTIONS_APP_SLUG,
+            "started_at": f"2026-07-23T05:0{index}:00Z",
+            "completed_at": f"2026-07-23T05:0{index}:30Z",
+            "conclusion": "success", "merge_cutoff": record["source"]["merged_at"],
+        }
+    record["protected_checks"] = {
+        "schema_version": 1, "selected": selected,
+        "sha256": loop.hashlib.sha256(loop._canonical_json(selected).encode()).hexdigest(),
+    }
+    return record
+
+
+@pytest.mark.parametrize("bad_value", ["2026-07-23 05:01:00Z", "not-a-time"])
+def test_independent_checker_rejects_noncanonical_protected_timestamps(bad_value: str) -> None:
+    record = _merge_bound_record()
+    record["protected_checks"]["selected"]["agent-gates"]["started_at"] = bad_value
+    selected = record["protected_checks"]["selected"]
+    record["protected_checks"]["sha256"] = loop.hashlib.sha256(loop._canonical_json(selected).encode()).hexdigest()
+    with pytest.raises(loop.LoopMemoryError, match="timestamp"):
+        loop._validate_record(record)
+    assert any("timing" in failure for failure in checker._record_failures(record, "record", None))
+
+
+def _pr189_recovery_record() -> dict:
+    record = _record()
+    record["completed_chunk"] = {
+        "schema_version": 2, "initiative_id": "WS-ENG-007",
+        "chunk_id": "WS-ENG-007-00R2", "chunk_title": "Canonical Check Evidence Recovery",
+        "next_chunk_id": "WS-ENG-007-01", "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
+        "next_requires_explicit_start": True,
+    }
+    record["source"].update(
+        main_sha="d3321698fb856f3fac320cdc7bc598f813fe1953",
+        first_parent_sha="c65633f8f0991dbefe7b0635e053aab0df8f9af8",
+        head_sha=loop.R3_HISTORICAL_HEAD_SHA, pr_number=189,
+        pr_url="https://github.com/Flow-Research/workstream/pull/189",
+        intent_path=".agent-loop/merge-intents/WS-ENG-007-00R2.json",
+        merged_at="2026-07-23T08:17:25Z",
+    )
+    record["updated_at"] = record["source"]["merged_at"]
+    record["gate"].update(
+        next_chunk_id="WS-ENG-007-01",
+        next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+    )
+    recovery = {
+        "merge_sha": record["source"]["main_sha"], "head_sha": loop.R3_HISTORICAL_HEAD_SHA,
+        "chunk_id": "WS-ENG-007-00R2", "pr_number": 189, "policy_schema": 4,
+        "signed_basis": "73b457925b02301587b83d01ced0adb66319d134",
+        "activation_chunk_id": "WS-ENG-007-00R3",
+        "certificate_sha256": loop.R3_RECOVERY_CERTIFICATE_SHA256,
+        "reason": "no-completed-pre-merge-agent-gates",
+    }
+    record["protected_checks"] = {
+        "schema_version": 1, "recovery_only": recovery,
+        "sha256": loop.hashlib.sha256(loop._canonical_json(recovery).encode()).hexdigest(),
+    }
+    return record
+
+
+@pytest.mark.parametrize("field", ["merge_sha", "head_sha", "chunk_id", "pr_number", "policy_schema", "signed_basis", "activation_chunk_id", "certificate_sha256", "reason"])
+def test_pr189_recovery_certificate_mutations_fail_both_validators(field: str) -> None:
+    record = _pr189_recovery_record()
+    recovery = record["protected_checks"]["recovery_only"]
+    recovery[field] = 0 if field in {"pr_number", "policy_schema"} else "wrong"
+    record["protected_checks"]["sha256"] = loop.hashlib.sha256(loop._canonical_json(recovery).encode()).hexdigest()
+    with pytest.raises(loop.LoopMemoryError, match="historical recovery"):
+        loop._validate_record(record)
+    assert any("historical recovery" in failure for failure in checker._record_failures(record, "record", None))
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ([], "malformed"),
+        ({"total_count": -1, "check_runs": []}, "total"),
+        ({"total_count": 1, "check_runs": [{"id": 1}, {"id": 2}]}, "exceeds"),
+        ({"total_count": 2, "check_runs": [{"id": 1}]}, "ended"),
+        ({"total_count": 1, "check_runs": [{"id": 0}]}, "identity"),
+    ],
+)
+def test_paginated_collection_rejects_closed_malformed_shapes(
+    payload: object, message: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = loop.GitHubClient("token")
+    monkeypatch.setattr(client, "get_json", lambda _path: payload)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        client.get_paginated_collection("/checks", "check_runs")
+
+
+def test_paginated_collection_accepts_empty_complete_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = loop.GitHubClient("token")
+    monkeypatch.setattr(client, "get_json", lambda _path: {"total_count": 0, "check_runs": []})
+    assert client.get_paginated_collection("/checks", "check_runs") == []
+
+
+def _protected_runs_for_mutation() -> tuple[str, list[dict]]:
+    head = "a" * 40
+    runs = []
+    for index, name in enumerate(("agent-gates", "test"), start=1):
+        runs.append({
+            "id": index, "name": name, "head_sha": head, "status": "completed",
+            "conclusion": "success", "started_at": f"2026-07-23T05:0{index}:00Z",
+            "completed_at": f"2026-07-23T05:0{index}:30Z",
+            "app": {"id": loop.GITHUB_ACTIONS_APP_ID, "slug": loop.GITHUB_ACTIONS_APP_SLUG},
+        })
+    return head, runs
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda runs: runs.pop(), "missing"),
+        (lambda runs: runs[0].update(id=0), "invalid provenance"),
+        (lambda runs: runs[1].update(id=1), "invalid provenance"),
+        (lambda runs: runs[0].update(head_sha="b" * 40), "invalid provenance"),
+        (lambda runs: runs[0].update(status="queued"), "invalid provenance"),
+        (lambda runs: runs[0].update(conclusion="unknown"), "invalid provenance"),
+        (lambda runs: runs[0].update(app={"id": 1, "slug": "foreign"}), "invalid provenance"),
+        (lambda runs: runs[0].update(completed_at="2026-07-23T04:00:00Z"), "invalid provenance"),
+        (lambda runs: runs[0].update(completed_at="2026-07-23T06:30:00Z"), "invalid provenance"),
+    ],
+)
+def test_protected_selector_rejects_eligible_provenance_mutations(mutation, message: str) -> None:
+    head, runs = _protected_runs_for_mutation()
+    mutation(runs)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop._protected_actions_evidence(runs, head, "2026-07-23T06:00:00Z")
+
+
+def test_recovery_policy_v4_rejects_closed_schema_mutations() -> None:
+    policy = json.loads((Path(__file__).parents[1] / ".agent-loop/policies/loop-memory-recovery.json").read_text())
+    assert loop._validate_recovery_policy(policy) == policy
+    mutations = []
+    bad = json.loads(json.dumps(policy)); bad["signed_basis"] = "bad"; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["recovered_merges"] = bad["recovered_merges"][:2]; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["recovered_merges"][1]["pr_number"] = 187; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["activation"]["chunk_id"] = "WRONG"; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["extra"] = True; mutations.append(bad)
+    for mutation in mutations:
+        with pytest.raises(loop.LoopMemoryError):
+            loop._validate_recovery_policy(mutation)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "updater_message", "checker_message"),
+    [
+        (lambda r: r.update(protected_checks=[]), "invalid schema", "invalid protected"),
+        (lambda r: r["protected_checks"].update(schema_version=2), "invalid schema", "invalid protected"),
+        (lambda r: r["protected_checks"].update(sha256="0" * 64), "digest", "digest"),
+        (lambda r: r["protected_checks"]["selected"].pop("test"), "incomplete", "digest"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(id=1), "provenance", "provenance"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(app_slug="foreign"), "provenance", "provenance"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(completed_at="2026-07-23T04:00:00Z"), "timing", "timing"),
+        (lambda r: r["protected_checks"]["selected"]["test"].update(extra=True), "invalid for test", "provenance"),
+    ],
+)
+def test_protected_record_mutations_fail_updater_and_checker(
+    mutation, updater_message: str, checker_message: str
+) -> None:
+    record = _merge_bound_record()
+    mutation(record)
+    if isinstance(record.get("protected_checks"), dict) and isinstance(record["protected_checks"].get("selected"), dict):
+        selected = record["protected_checks"]["selected"]
+        if updater_message not in {"digest", "incomplete"}:
+            record["protected_checks"]["sha256"] = loop.hashlib.sha256(loop._canonical_json(selected).encode()).hexdigest()
+    with pytest.raises(loop.LoopMemoryError, match=updater_message):
+        loop._validate_record(record)
+    assert any(checker_message in failure for failure in checker._record_failures(record, "record", None))
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        {"schema_version": 9, "activation": {}},
+        {"schema_version": 4, "signed_basis": "a" * 40, "activation": [], "recovered_merges": []},
+        {"schema_version": 2, "activation": {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R3"}, "mode": "wrong"},
+    ],
+)
+def test_recovery_policy_rejects_unsupported_top_level_shapes(payload: object) -> None:
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_recovery_policy(payload)
+
+
+def test_cli_plan_and_resolve_commands_cover_public_dispatch_paths(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: ["a" * 40, "b" * 40])
+    assert loop.main([
+        "plan-commits", "--repository-root", ".", "--target-sha", "b" * 40,
+        "--current-sha", "0" * 40,
+    ]) == 0
+    assert capsys.readouterr().out.splitlines() == ["a" * 40, "b" * 40]
+
+    monkeypatch.setattr(loop, "resolve_reconciliation_target", lambda *_args: "c" * 40)
+    assert loop.main([
+        "resolve-target", "--repository-root", ".", "--event-name", "push",
+        "--event-sha", "b" * 40, "--current-main-sha", "c" * 40,
+    ]) == 0
+    assert capsys.readouterr().out.strip() == "c" * 40
+
+
+def test_cli_reconcile_uses_authenticated_shared_reducer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: list[tuple] = []
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda root: observed.append(("branch", root)))
+    monkeypatch.setattr(loop, "GitHubClient", lambda token, url: (token, url))
+    monkeypatch.setattr(
+        loop, "reconcile_to_main",
+        lambda client, repository, **kwargs: observed.append(("reconcile", client, repository, kwargs)),
+    )
+    target = "d" * 40
+    state_root, branch_root = tmp_path / "state", tmp_path / "branch"
+    assert loop.main([
+        "reconcile", "--repository", "Flow-Research/workstream",
+        "--repository-root", str(tmp_path), "--state-root", str(state_root),
+        "--branch-root", str(branch_root), "--target-sha", target,
+    ]) == 0
+    assert observed[0] == ("branch", branch_root)
+    assert observed[1][0:3] == ("reconcile", ("token", "https://api.github.com"), "Flow-Research/workstream")
+    assert observed[1][3]["target_sha"] == target
+    assert capsys.readouterr().out.strip() == f"Loop memory reconciled to {target}."
+
+
+def test_shared_reconcile_rejects_missing_canonical_state(tmp_path: Path) -> None:
+    with pytest.raises(loop.LoopMemoryError, match="requires canonical state"):
+        loop.reconcile_to_main(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=tmp_path / "missing", target_sha="a" * 40,
+        )
+
+
+def test_protected_selector_rejects_names_seen_only_after_merge() -> None:
+    head, runs = _protected_runs_for_mutation()
+    for item in runs:
+        item["started_at"] = "2026-07-23T07:01:00Z"
+        item["completed_at"] = None
+    with pytest.raises(loop.LoopMemoryError, match="missing"):
+        loop._protected_actions_evidence(runs, head, "2026-07-23T06:00:00Z")

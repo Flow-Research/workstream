@@ -1,5 +1,16 @@
 # Decisions: WS-ENG-007 - Concurrent PR Review Reconciliation
 
+## D0R3 - Freeze protected evidence at merge time
+
+Protected check evidence is selected against immutable PR `merged_at`, not the
+latest present-day rerun. Signed records bind the exact selected-run provenance.
+Merge and explicit-start workflows use one bounded reconciliation sequence. The
+remaining backlog is crossed once by an exact four-entry bridge; no wildcard or
+durable bypass is introduced.
+
+This decision supersedes the present-day latest-run portions of D12 and D13
+below. Those decisions remain historical context for 00R2 only.
+
 ## D1 - CI always reruns on the combined tree
 
 Review preservation never preserves CI results across a base advance.

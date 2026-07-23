@@ -100,42 +100,10 @@ jobs:
             echo "Invalid protected-main target SHA." >&2
             exit 1
           fi
-          current_sha=""
-          if [[ -f "${state_dir}/.agent-loop/STATE.json" ]]; then
-            current_sha=$(python3 -c \
-              'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source"]["main_sha"])' \
-              "${state_dir}/.agent-loop/STATE.json")
-          fi
-          plan_file=$(mktemp)
-          plan_args=(
-            plan-commits
-            --repository-root .
-            --target-sha "${TARGET_SHA}"
-          )
-          if [[ -n "${current_sha}" ]]; then
-            plan_args+=(--current-sha "${current_sha}")
-          fi
-          python3 scripts/update_post_merge_memory.py "${plan_args[@]}" > "${plan_file}"
-          mapfile -t merge_shas < "${plan_file}"
-          recovery_file=$(mktemp)
-          python3 scripts/update_post_merge_memory.py prepare-recovery \
+          python3 scripts/update_post_merge_memory.py reconcile \
             --repository "${GITHUB_REPOSITORY}" --repository-root . \
-            --state-root "${state_dir}" --target-sha "${TARGET_SHA}" \
-            --plan-file "${plan_file}" > "${recovery_file}"
-          for index in "${!merge_shas[@]}"; do
-            merge_sha="${merge_shas[${index}]}"
-            python3 scripts/update_post_merge_memory.py update \
-              --repository "${GITHUB_REPOSITORY}" \
-              --repository-root . \
-              --merge-sha "${merge_sha}" \
-              --state-root "${state_dir}" \
-              --branch-root "${branch_dir}" \
-              --cutover-chunk-id WS-ENG-001-04B \
-              --recovery-file "${recovery_file}"
-          done
-          python3 scripts/update_post_merge_memory.py assert-recovery-consumed \
-            --state-root "${state_dir}" --target-sha "${TARGET_SHA}" \
-            --recovery-file "${recovery_file}"
+            --state-root "${state_dir}" --branch-root "${branch_dir}" \
+            --target-sha "${TARGET_SHA}"
 
       - name: Validate generated state
         shell: bash

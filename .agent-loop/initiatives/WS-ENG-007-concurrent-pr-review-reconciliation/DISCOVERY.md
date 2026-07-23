@@ -3,6 +3,21 @@
 Discovery was performed read-only against trusted `main` at merge
 `9033a97a4be6d762cae4b210018ef81a079395c2`.
 
+## 00R3 recovery addendum — 2026-07-23
+
+- Signed state remains at PR #178 (`73b4579…`) while protected `main` contains
+  PRs #187, #188, and #189 in exact first-parent order.
+- The merge workflow prepares and consumes bounded recovery state; the explicit
+  start workflow replays merges without that recovery sequence.
+- GitHub retains mutable reruns on immutable PR heads. PR #189 acquired failing
+  `agent-gates` reruns after its merge, so present-day latest-run selection can
+  rewrite evidence that existed at merge time.
+- The check-runs API is paginated. One 100-item page cannot prove completeness
+  after later rerun noise accumulates.
+- The root repair needs persisted merge-bound protected-check provenance, one
+  exact four-merge bridge through 00R3, and a shared atomic reconciliation path
+  for merge and explicit-start workflows.
+
 ## Repository behavior found
 
 - Branch protection requires `agent-gates` and `test`, uses strict up-to-date
