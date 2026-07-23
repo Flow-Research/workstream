@@ -13,3 +13,6 @@
   because mutable post-merge check history is re-evaluated and the explicit
   start workflow lacks the merge workflow's recovery path. Signed state remains
   at `73b457925b02301587b83d01ced0adb66319d134`; no successor is active.
+- Review gate: all required internal tracks passed reviewed implementation
+  `fa73182fb271d990bcc8efd827552c26a70aee88`; awaiting external checks and the
+  user-owned merge decision.
