@@ -414,18 +414,15 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
 
     session.add(Project(id=project_id, name="Checker project", slug=f"checker-{project_id}"))
     await session.flush()
-    session.add(
-        ProjectGuide(
-            id=guide_id,
-            project_id=project_id,
-            version=guide_version,
-            status="active",
-            content_markdown="# Checker guide",
-            approved_by="setup-actor",
-            effective_at=now,
-            created_by="setup-actor",
-        )
+    guide = ProjectGuide(
+        id=guide_id,
+        project_id=project_id,
+        version=guide_version,
+        status="draft",
+        content_markdown="# Checker guide",
+        created_by="setup-actor",
     )
+    session.add(guide)
     await session.flush()
     session.add(
         GuideSourceSnapshot(
@@ -556,6 +553,10 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
             ),
         ]
     )
+    await session.flush()
+    guide.status = "active"
+    guide.approved_by = "setup-actor"
+    guide.effective_at = now
     await session.flush()
     session.add(
         WorkstreamTask(
