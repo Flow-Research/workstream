@@ -15,11 +15,11 @@ Valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: `b9501b31565370306aea168ff4c218a2880e6c0b`
+Reviewed code SHA: `ba9c6249c053696dc9f32bfd750a2b9bb787e4f6`
 
-Reviewed at: 2026-07-23T16:48:45Z
+Reviewed at: 2026-07-23T16:51:33Z
 
-Reviewer run IDs: /root/plan_arch_review@b9501b31565370306aea168ff4c218a2880e6c0b; /root/qa_product_review@b9501b31565370306aea168ff4c218a2880e6c0b; /root/security_docs_ci_review@b9501b31565370306aea168ff4c218a2880e6c0b
+Reviewer run IDs: /root/plan_arch_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6; /root/qa_product_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6; /root/security_docs_ci_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6
 
 ## Reviewer results
 
