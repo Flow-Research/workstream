@@ -49,7 +49,6 @@ from app.modules.checkers.service import CheckerService
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
-    PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectSetupRun,
@@ -697,17 +696,14 @@ def complete_guide_payload(version: str = "v1") -> dict:
         ),
         "change_summary": f"Initial {version}",
         "review_policy": {
-            "requires_second_review": False,
             "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
+            "minimum_finding_fields": ["description", "severity"],
+            "review_preference_window_seconds": 900,
+            "review_lease_duration_seconds": 1800,
         },
         "revision_policy": {
             "max_revision_rounds": 7,
             "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
         },
         "payment_policy": {
             "base_amount": "25.00",
@@ -2671,7 +2667,7 @@ async def test_ready_worker_work_context_omits_private_task_source_fields(
         assert private_field not in body["task"]
 
 
-async def test_work_context_uses_stamped_policy_values_after_same_version_policy_mutation(
+async def test_published_review_policy_rejects_same_version_mutation(
     task_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2697,23 +2693,12 @@ async def test_work_context_uses_stamped_policy_values_after_same_version_policy
                 RevisionPolicy.guide_version == "v1",
             )
         )
-        payment_policy = await session.scalar(
-            select(PaymentPolicy).where(
-                PaymentPolicy.project_id == project["id"],
-                PaymentPolicy.guide_version == "v1",
-            )
-        )
         assert review_policy is not None
         assert revision_policy is not None
-        assert payment_policy is not None
-        review_policy.requires_second_review = True
         review_policy.allowed_decisions = ["reject"]
-        revision_policy.max_revision_rounds = 1
-        revision_policy.revision_deadline_hours = 1
-        payment_policy.base_amount = Decimal("999.00")
-        payment_policy.currency = "EUR"
-        payment_policy.payout_type = "manual"
-        await session.commit()
+        with pytest.raises(IntegrityError, match="published review and revision policies"):
+            await session.commit()
+        await session.rollback()
 
     after_response = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/work-context",
@@ -2722,12 +2707,7 @@ async def test_work_context_uses_stamped_policy_values_after_same_version_policy
 
     assert after_response.status_code == 200, after_response.text
     after = after_response.json()
-    assert after["review_policy"] == before["review_policy"]
-    assert after["revision_policy"] == before["revision_policy"]
-    assert after["payment_policy"] == before["payment_policy"]
-    assert after["payment_policy"]["base_amount"] == "25.00"
-    assert after["payment_policy"]["currency"] == "USD"
-    assert after["payment_policy"]["payout_type"] == "fixed"
+    assert after == before
 
 
 async def test_task_context_apis_fail_closed_when_locked_context_is_missing(

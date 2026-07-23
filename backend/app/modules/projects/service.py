@@ -107,7 +107,6 @@ logger = logging.getLogger(__name__)
 PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = "project setup failed; inspect server logs with the setup run id"
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
-ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
 HASH_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 HASH_TOKEN_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 CONTENT_CID_PATTERN = re.compile(
@@ -559,7 +558,7 @@ class ProjectService:
         except IntegrityError as exc:
             await self._session.rollback()
             raise GuideVersionConflict("guide version already exists for project") from exc
-        await self._upsert_optional_policies(project_id, payload.version, payload)
+        await self._upsert_optional_policies(actor, project_id, payload.version, payload)
         if (
             source_snapshot_payload is not None
             or get_settings().project_setup_pipeline_autostart
@@ -634,7 +633,7 @@ class ProjectService:
             }:
                 continue
             setattr(guide, field, value)
-        await self._upsert_optional_policies(project_id, guide.version, payload)
+        await self._upsert_optional_policies(actor, project_id, guide.version, payload)
         await self._session.commit()
         await self._session.refresh(guide)
         return ProjectGuideResponse.model_validate(guide)
@@ -2157,6 +2156,7 @@ class ProjectService:
 
     async def _upsert_optional_policies(
         self,
+        actor: ActorContext,
         project_id: str,
         guide_version: str,
         payload: ProjectGuideCreate | ProjectGuideUpdate,
@@ -2164,17 +2164,18 @@ class ProjectService:
         """Create or replace policy records supplied with guide payloads.
 
         Args:
+            actor: Verified Flow actor configuring the policies.
             project_id: Project that owns the policies.
             guide_version: Guide version the policies apply to.
             payload: Guide create or update payload carrying optional policies.
         """
         if payload.review_policy is not None:
             await self._repo.upsert_review_policy(
-                self._review_policy_model(project_id, guide_version, payload.review_policy)
+                self._review_policy_model(actor, project_id, guide_version, payload.review_policy)
             )
         if payload.revision_policy is not None:
             await self._repo.upsert_revision_policy(
-                self._revision_policy_model(project_id, guide_version, payload.revision_policy)
+                self._revision_policy_model(actor, project_id, guide_version, payload.revision_policy)
             )
         if payload.payment_policy is not None:
             await self._repo.upsert_payment_policy(
@@ -4293,13 +4294,8 @@ class ProjectService:
         if (
             revision_policy.max_revision_rounds < 1
             or revision_policy.revision_deadline_hours < 1
-            or not revision_policy.allowed_resubmission_states
         ):
             raise GuideActivationBlocked("revision policy is incomplete")
-        if not set(revision_policy.allowed_resubmission_states).issubset(
-            ALLOWED_REVISION_RESUBMISSION_STATES
-        ):
-            raise GuideActivationBlocked("revision policy contains invalid resubmission states")
         if payment_policy is None:
             raise GuideActivationBlocked("payment policy is required")
         if (
@@ -4329,6 +4325,7 @@ class ProjectService:
 
     def _review_policy_model(
         self,
+        actor: ActorContext,
         project_id: str,
         guide_version: str,
         payload: ReviewPolicyInput,
@@ -4336,6 +4333,7 @@ class ProjectService:
         """Build a review policy model from API input.
 
         Args:
+            actor: Verified Flow actor configuring the policy.
             project_id: Project that owns the policy.
             guide_version: Guide version the policy applies to.
             payload: Validated review policy input.
@@ -4347,14 +4345,22 @@ class ProjectService:
             id=str(uuid4()),
             project_id=project_id,
             guide_version=guide_version,
-            requires_second_review=payload.requires_second_review,
             allowed_decisions=payload.allowed_decisions,
             minimum_finding_fields=payload.minimum_finding_fields,
-            sla_hours=payload.sla_hours,
+            review_preference_window_seconds=payload.review_preference_window_seconds,
+            review_lease_duration_seconds=payload.review_lease_duration_seconds,
+            max_active_review_leases_per_reviewer=payload.max_active_review_leases_per_reviewer,
+            self_review_allowed=payload.self_review_allowed,
+            reject_policy=payload.reject_policy,
+            finding_evidence_requirement=payload.finding_evidence_requirement,
+            legacy_incomplete=False,
+            configured_by_actor=actor.actor_id,
+            configured_at=datetime.now(UTC),
         )
 
     def _revision_policy_model(
         self,
+        actor: ActorContext,
         project_id: str,
         guide_version: str,
         payload: RevisionPolicyInput,
@@ -4362,6 +4368,7 @@ class ProjectService:
         """Build a revision policy model from API input.
 
         Args:
+            actor: Verified Flow actor configuring the policy.
             project_id: Project that owns the policy.
             guide_version: Guide version the policy applies to.
             payload: Validated revision policy input.
@@ -4375,9 +4382,9 @@ class ProjectService:
             guide_version=guide_version,
             max_revision_rounds=payload.max_revision_rounds,
             revision_deadline_hours=payload.revision_deadline_hours,
-            auto_reject_after_limit=payload.auto_reject_after_limit,
-            allowed_resubmission_states=payload.allowed_resubmission_states,
-            reviewer_reassignment_rule=payload.reviewer_reassignment_rule,
+            legacy_incomplete=False,
+            configured_by_actor=actor.actor_id,
+            configured_at=datetime.now(UTC),
         )
 
     def _payment_policy_model(

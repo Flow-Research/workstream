@@ -797,10 +797,21 @@ class ProjectRepository:
             await self._session.flush()
             await self._session.refresh(policy)
             return policy
-        existing.requires_second_review = policy.requires_second_review
         existing.allowed_decisions = policy.allowed_decisions
         existing.minimum_finding_fields = policy.minimum_finding_fields
-        existing.sla_hours = policy.sla_hours
+        existing.review_preference_window_seconds = policy.review_preference_window_seconds
+        existing.review_lease_duration_seconds = policy.review_lease_duration_seconds
+        existing.max_active_review_leases_per_reviewer = (
+            policy.max_active_review_leases_per_reviewer
+        )
+        existing.self_review_allowed = policy.self_review_allowed
+        existing.reject_policy = policy.reject_policy
+        existing.finding_evidence_requirement = policy.finding_evidence_requirement
+        existing.legacy_incomplete = False
+        existing.configured_by_actor = policy.configured_by_actor
+        existing.configured_at = policy.configured_at
+        existing._legacy_requires_second_review = None
+        existing._legacy_sla_hours = None
         await self._session.flush()
         await self._session.refresh(existing)
         return existing
@@ -840,9 +851,12 @@ class ProjectRepository:
             return policy
         existing.max_revision_rounds = policy.max_revision_rounds
         existing.revision_deadline_hours = policy.revision_deadline_hours
-        existing.auto_reject_after_limit = policy.auto_reject_after_limit
-        existing.allowed_resubmission_states = policy.allowed_resubmission_states
-        existing.reviewer_reassignment_rule = policy.reviewer_reassignment_rule
+        existing.legacy_incomplete = False
+        existing.configured_by_actor = policy.configured_by_actor
+        existing.configured_at = policy.configured_at
+        existing._legacy_auto_reject_after_limit = None
+        existing._legacy_allowed_resubmission_states = None
+        existing._legacy_reviewer_reassignment_rule = None
         await self._session.flush()
         await self._session.refresh(existing)
         return existing

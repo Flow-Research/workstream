@@ -217,15 +217,61 @@ class ReviewPolicy(Base):
             name="fk_review_policies_project_guide",
         ),
         UniqueConstraint("project_id", "guide_version", name="uq_review_policies_project_version"),
+        CheckConstraint(
+            "legacy_incomplete or (max_active_review_leases_per_reviewer = 1 and "
+            "self_review_allowed = false and reject_policy = 'close_task')",
+            name="fixed_v01",
+        ),
+        CheckConstraint(
+            "legacy_incomplete or allowed_decisions::jsonb = "
+            "'[\"accept\",\"needs_revision\",\"reject\"]'::jsonb",
+            name="decisions_v01",
+        ),
+        CheckConstraint(
+            "legacy_incomplete or minimum_finding_fields::jsonb = "
+            "'[\"description\",\"severity\"]'::jsonb",
+            name="finding_fields_v01",
+        ),
+        CheckConstraint(
+            "legacy_incomplete or finding_evidence_requirement in "
+            "('optional','required_for_blocking','required_for_all')",
+            name="evidence_requirement",
+        ),
+        CheckConstraint(
+            "legacy_incomplete or (review_preference_window_seconds > 0 and "
+            "review_lease_duration_seconds > 0 and configured_by_actor is not null and "
+            "btrim(configured_by_actor) <> '' and configured_at is not null)",
+            name="complete_or_legacy",
+        ),
+        CheckConstraint(
+            "(legacy_incomplete and review_preference_window_seconds is null and "
+            "review_lease_duration_seconds is null and configured_by_actor is null and "
+            "configured_at is null) or (not legacy_incomplete and "
+            "legacy_requires_second_review is null and legacy_sla_hours is null)",
+            name="archival_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
-    requires_second_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     allowed_decisions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     minimum_finding_fields: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    sla_hours: Mapped[int | None] = mapped_column(Integer)
+    review_preference_window_seconds: Mapped[int | None] = mapped_column(Integer)
+    review_lease_duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    max_active_review_leases_per_reviewer: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    self_review_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reject_policy: Mapped[str] = mapped_column(String(30), nullable=False, default="close_task")
+    finding_evidence_requirement: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="optional"
+    )
+    legacy_incomplete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    configured_by_actor: Mapped[str | None] = mapped_column(String(100))
+    configured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    _legacy_requires_second_review: Mapped[bool | None] = mapped_column(
+        "legacy_requires_second_review", Boolean
+    )
+    _legacy_sla_hours: Mapped[int | None] = mapped_column("legacy_sla_hours", Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -244,6 +290,22 @@ class RevisionPolicy(Base):
             "guide_version",
             name="uq_revision_policies_project_version",
         ),
+        CheckConstraint(
+            "max_revision_rounds > 0 and revision_deadline_hours > 0",
+            name="positive_limits",
+        ),
+        CheckConstraint(
+            "legacy_incomplete or (configured_by_actor is not null and "
+            "btrim(configured_by_actor) <> '' and configured_at is not null)",
+            name="complete_or_legacy",
+        ),
+        CheckConstraint(
+            "(legacy_incomplete and configured_by_actor is null and configured_at is null) "
+            "or (not legacy_incomplete and legacy_auto_reject_after_limit is null and "
+            "legacy_allowed_resubmission_states is null and "
+            "legacy_reviewer_reassignment_rule is null)",
+            name="archival_shape",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -251,13 +313,18 @@ class RevisionPolicy(Base):
     guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     max_revision_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     revision_deadline_hours: Mapped[int] = mapped_column(Integer, nullable=False)
-    auto_reject_after_limit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    allowed_resubmission_states: Mapped[list[str]] = mapped_column(
-        JSON,
-        nullable=False,
-        default=list,
+    legacy_incomplete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    configured_by_actor: Mapped[str | None] = mapped_column(String(100))
+    configured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    _legacy_auto_reject_after_limit: Mapped[bool | None] = mapped_column(
+        "legacy_auto_reject_after_limit", Boolean
     )
-    reviewer_reassignment_rule: Mapped[str | None] = mapped_column(Text)
+    _legacy_allowed_resubmission_states: Mapped[list[str] | None] = mapped_column(
+        "legacy_allowed_resubmission_states", JSON
+    )
+    _legacy_reviewer_reassignment_rule: Mapped[str | None] = mapped_column(
+        "legacy_reviewer_reassignment_rule", Text
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

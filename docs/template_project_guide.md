@@ -110,8 +110,12 @@ Every active guide version must have:
 - EffectiveProjectSubmissionArtifactPolicy hash:
 - project PreSubmitCheckerPolicy compiled bundle hash:
 - PostSubmitCheckerPolicy:
-- ReviewPolicy:
-- RevisionPolicy:
+- ReviewPolicy: preference window seconds, lease duration seconds, evidence
+  requirement (`optional`, `required_for_blocking`, or `required_for_all`),
+  canonical decisions, capacity `1`, self-review `false`, reject policy
+  `close_task`, and configuring actor
+- RevisionPolicy: positive maximum human revision rounds, positive deadline
+  hours, and configuring actor; exhaustion never creates an automatic reject
 - ContributionPolicy and active published version:
 
 ContributionPolicyVersion is the source of truth for exact
@@ -171,18 +175,13 @@ Define:
 
 - maximum revision rounds:
 - revision deadline hours:
-- allowed resubmission states:
-- `RevisionPolicyInput.auto_reject_after_limit`: `false` (required explicitly
-  on project create/update; the backend schema default is not the v0.1 REV
-  contract)
 - limit/deadline exhaustion behavior: block preparation and submission pending
   reason-bound covered-manager closure; never synthesize reject
-- reviewer reassignment rule:
 
-Revision-policy activation and task screening must reject an effective policy
-whose `auto_reject_after_limit` value is not `false`. That runtime enforcement
-belongs to `WS-REV-001-02`; until it activates, this template is a required
-configuration precondition and does not claim the guard is available.
+Automatic reject, arbitrary resubmission-state lists, and reviewer-reassignment
+strings are not active `RevisionPolicy` input. Migrated values remain archival
+database evidence only. Later REV admission and revision execution consume the
+positive round/deadline facts without synthesizing a Review or decision.
 
 ## Acceptance Policy
 

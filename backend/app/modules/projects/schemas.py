@@ -14,12 +14,36 @@ class ReviewPolicyInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    requires_second_review: bool = False
     allowed_decisions: list[Literal["accept", "needs_revision", "reject"]] = Field(
         default_factory=lambda: ["accept", "needs_revision", "reject"]
     )
-    minimum_finding_fields: list[str] = Field(default_factory=list)
-    sla_hours: int | None = None
+    minimum_finding_fields: list[Literal["description", "severity"]] = Field(
+        default_factory=lambda: ["description", "severity"]
+    )
+    review_preference_window_seconds: int = Field(ge=1)
+    review_lease_duration_seconds: int = Field(ge=1)
+    max_active_review_leases_per_reviewer: Literal[1] = 1
+    self_review_allowed: Literal[False] = False
+    reject_policy: Literal["close_task"] = "close_task"
+    finding_evidence_requirement: Literal[
+        "optional", "required_for_blocking", "required_for_all"
+    ] = "optional"
+
+    @field_validator("allowed_decisions")
+    @classmethod
+    def decisions_are_canonical(cls, value: list[str]) -> list[str]:
+        """Require the single v0.1 product-decision sequence."""
+        if value != ["accept", "needs_revision", "reject"]:
+            raise ValueError("allowed_decisions must be the canonical v0.1 sequence")
+        return value
+
+    @field_validator("minimum_finding_fields")
+    @classmethod
+    def finding_fields_are_canonical(cls, value: list[str]) -> list[str]:
+        """Require the single v0.1 finding-field sequence."""
+        if value != ["description", "severity"]:
+            raise ValueError("minimum_finding_fields must be the canonical v0.1 sequence")
+        return value
 
 
 class RevisionPolicyInput(BaseModel):
@@ -29,9 +53,6 @@ class RevisionPolicyInput(BaseModel):
 
     max_revision_rounds: int = Field(ge=1)
     revision_deadline_hours: int = Field(ge=1)
-    auto_reject_after_limit: bool = True
-    allowed_resubmission_states: list[str] = Field(default_factory=lambda: ["needs_revision"])
-    reviewer_reassignment_rule: str | None = None
 
 
 class PaymentPolicyInput(BaseModel):
@@ -569,10 +590,17 @@ class ReviewPolicyResponse(BaseModel):
     id: str
     project_id: str
     guide_version: str
-    requires_second_review: bool
     allowed_decisions: list[str]
     minimum_finding_fields: list[str]
-    sla_hours: int | None
+    review_preference_window_seconds: int | None
+    review_lease_duration_seconds: int | None
+    max_active_review_leases_per_reviewer: int
+    self_review_allowed: bool
+    reject_policy: str
+    finding_evidence_requirement: str
+    legacy_incomplete: bool
+    configured_by_actor: str | None
+    configured_at: datetime | None
     created_at: datetime
 
 
@@ -586,9 +614,9 @@ class RevisionPolicyResponse(BaseModel):
     guide_version: str
     max_revision_rounds: int
     revision_deadline_hours: int
-    auto_reject_after_limit: bool
-    allowed_resubmission_states: list[str]
-    reviewer_reassignment_rule: str | None
+    legacy_incomplete: bool
+    configured_by_actor: str | None
+    configured_at: datetime | None
     created_at: datetime
 
 

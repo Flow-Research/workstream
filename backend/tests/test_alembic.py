@@ -2745,6 +2745,292 @@ def test_api_rate_control_schema_preserves_domain_and_guards_downgrade(
     }
 
 
+def test_review_revision_policy_migration_is_lossless_and_guarded(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0034 preserves legacy truth and guards canonical policy facts."""
+    config = _alembic_config()
+    project_id = str(uuid4())
+    review_id = str(uuid4())
+    revision_id = str(uuid4())
+
+    async def execute(statement: str, parameters: dict | None = None) -> None:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(text(statement), parameters or {})
+        finally:
+            await engine.dispose()
+
+    async def row(table: str, row_id: str) -> dict:
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.connect() as connection:
+                value = await connection.scalar(
+                    text(
+                        f"select row_to_json(selected) from "
+                        f"(select * from {table} where id=:id) selected"
+                    ),
+                    {"id": row_id},
+                )
+                assert isinstance(value, dict)
+                return value
+        finally:
+            await engine.dispose()
+
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0033_authorization_read_rate")
+            asyncio.run(
+                execute(
+                    "insert into projects (id,name,slug,status) "
+                    "values (:id,'Policy migration','policy-migration','draft')",
+                    {"id": project_id},
+                )
+            )
+            asyncio.run(
+                execute(
+                    "insert into project_guides "
+                    "(id,project_id,version,status,content_markdown,created_by) "
+                    "values (:id,:project_id,'v1','draft','# Guide','actor-old')",
+                    {"id": str(uuid4()), "project_id": project_id},
+                )
+            )
+            asyncio.run(
+                execute(
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,requires_second_review,"
+                    "allowed_decisions,minimum_finding_fields,sla_hours) values "
+                    "(:id,:project_id,'v1',false,"
+                    "'[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "'[\"legacy_issue\"]'::json,24)",
+                    {"id": review_id, "project_id": project_id},
+                )
+            )
+            asyncio.run(
+                execute(
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,max_revision_rounds,"
+                    "revision_deadline_hours,auto_reject_after_limit,"
+                    "allowed_resubmission_states,reviewer_reassignment_rule) values "
+                    "(:id,:project_id,'v1',7,48,true,"
+                    "'[\"needs_revision\"]'::json,'same reviewer preferred')",
+                    {"id": revision_id, "project_id": project_id},
+                )
+            )
+            old_review = asyncio.run(row("review_policies", review_id))
+            old_revision = asyncio.run(row("revision_policies", revision_id))
+
+            command.upgrade(config, "0034_review_revision_policy")
+            migrated_review = asyncio.run(row("review_policies", review_id))
+            migrated_revision = asyncio.run(row("revision_policies", revision_id))
+            assert migrated_review["legacy_incomplete"] is True
+            assert migrated_review["review_preference_window_seconds"] is None
+            assert migrated_review["legacy_sla_hours"] == 24
+            assert migrated_revision["legacy_incomplete"] is True
+            assert migrated_revision["legacy_auto_reject_after_limit"] is True
+
+            command.downgrade(config, "0033_authorization_read_rate")
+            assert asyncio.run(row("review_policies", review_id)) == old_review
+            assert asyncio.run(row("revision_policies", revision_id)) == old_revision
+
+            command.upgrade(config, "0034_review_revision_policy")
+            asyncio.run(
+                execute(
+                    "update review_policies set legacy_incomplete=false,"
+                    "legacy_requires_second_review=null,legacy_sla_hours=null,"
+                    "allowed_decisions='[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "minimum_finding_fields='[\"description\",\"severity\"]'::json,"
+                    "review_preference_window_seconds=900,review_lease_duration_seconds=1800,"
+                    "max_active_review_leases_per_reviewer=1,self_review_allowed=false,"
+                    "reject_policy='close_task',finding_evidence_requirement='optional',"
+                    "configured_by_actor='actor-new' where id=:id",
+                    {"id": review_id},
+                )
+            )
+            converted = asyncio.run(row("review_policies", review_id))
+            assert converted["legacy_incomplete"] is False
+            assert converted["configured_at"] is not None
+            invalid_finding_fields = (
+                "[]",
+                '["description"]',
+                '["description","severity","extra"]',
+                '["severity","description"]',
+                '["description","severity","severity"]',
+                '["description","severity",null]',
+                '["description","severity",1]',
+                '["description","severity",{}]',
+            )
+            for invalid_value in invalid_finding_fields:
+                with pytest.raises(IntegrityError):
+                    asyncio.run(
+                        execute(
+                            "update review_policies set minimum_finding_fields="
+                            "cast(:value as json) where id=:id",
+                            {"id": review_id, "value": invalid_value},
+                        )
+                    )
+            with pytest.raises(IntegrityError):
+                asyncio.run(
+                    execute(
+                        "update review_policies set review_lease_duration_seconds=0 "
+                        "where id=:id",
+                        {"id": review_id},
+                    )
+                )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade canonical review or revision policy facts",
+            ):
+                command.downgrade(config, "0033_authorization_read_rate")
+            assert asyncio.run(row("review_policies", review_id)) == converted
+
+            asyncio.run(
+                execute(
+                    "update project_guides set status='active',effective_at=statement_timestamp() "
+                    "where project_id=:project_id and version='v1'",
+                    {"project_id": project_id},
+                )
+            )
+            with pytest.raises(IntegrityError, match="published review and revision policies"):
+                asyncio.run(
+                    execute(
+                        "update review_policies set review_lease_duration_seconds=1900 "
+                        "where id=:id",
+                        {"id": review_id},
+                    )
+                )
+            with pytest.raises(IntegrityError, match="cannot be deleted"):
+                asyncio.run(
+                    execute("delete from revision_policies where id=:id", {"id": revision_id})
+                )
+        finally:
+            command.upgrade(config, "head")
+
+
+def test_review_policy_write_serializes_with_publication(
+    isolated_database_env: str,
+) -> None:
+    """Prove policy-first and publication-first transactions serialize safely."""
+
+    async def seed(marker: str) -> tuple[str, str]:
+        project_id = str(uuid4())
+        policy_id = str(uuid4())
+        engine = create_async_engine(isolated_database_env)
+        try:
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "insert into projects (id,name,slug,status) "
+                        "values (:id,:name,:slug,'draft')"
+                    ),
+                    {"id": project_id, "name": marker, "slug": marker},
+                )
+                await connection.execute(
+                    text(
+                        "insert into project_guides "
+                        "(id,project_id,version,status,content_markdown,created_by) "
+                        "values (:id,:project_id,'v1','draft','# Guide','actor')"
+                    ),
+                    {"id": str(uuid4()), "project_id": project_id},
+                )
+                await connection.execute(
+                    text(
+                        "insert into review_policies "
+                        "(id,project_id,guide_version,allowed_decisions,minimum_finding_fields,"
+                        "review_preference_window_seconds,review_lease_duration_seconds,"
+                        "max_active_review_leases_per_reviewer,self_review_allowed,reject_policy,"
+                        "finding_evidence_requirement,legacy_incomplete,configured_by_actor) "
+                        "values (:id,:project_id,'v1',"
+                        "'[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                        "'[\"description\",\"severity\"]'::json,900,1800,1,false,"
+                        "'close_task','optional',false,'actor')"
+                    ),
+                    {"id": policy_id, "project_id": project_id},
+                )
+            return project_id, policy_id
+        finally:
+            await engine.dispose()
+
+    async def policy_first() -> None:
+        project_id, policy_id = await seed(f"policy-first-{uuid4()}")
+        engine = create_async_engine(isolated_database_env)
+        try:
+            policy_connection = await engine.connect()
+            publication_connection = await engine.connect()
+            policy_tx = await policy_connection.begin()
+            await policy_connection.execute(
+                text(
+                    "update review_policies set review_lease_duration_seconds=1900 "
+                    "where id=:id"
+                ),
+                {"id": policy_id},
+            )
+
+            async def publish() -> None:
+                async with publication_connection.begin():
+                    await publication_connection.execute(
+                        text(
+                            "update project_guides set status='active',"
+                            "effective_at=statement_timestamp() "
+                            "where project_id=:project_id and version='v1'"
+                        ),
+                        {"project_id": project_id},
+                    )
+
+            publication = asyncio.create_task(publish())
+            await asyncio.sleep(0.1)
+            assert not publication.done()
+            await policy_tx.commit()
+            await publication
+            await policy_connection.close()
+            await publication_connection.close()
+        finally:
+            await engine.dispose()
+
+    async def publication_first() -> None:
+        project_id, policy_id = await seed(f"publication-first-{uuid4()}")
+        engine = create_async_engine(isolated_database_env)
+        try:
+            publication_connection = await engine.connect()
+            policy_connection = await engine.connect()
+            publication_tx = await publication_connection.begin()
+            await publication_connection.execute(
+                text(
+                    "update project_guides set status='active',"
+                    "effective_at=statement_timestamp() "
+                    "where project_id=:project_id and version='v1'"
+                ),
+                {"project_id": project_id},
+            )
+
+            async def mutate() -> None:
+                async with policy_connection.begin():
+                    await policy_connection.execute(
+                        text(
+                            "update review_policies set review_lease_duration_seconds=1900 "
+                            "where id=:id"
+                        ),
+                        {"id": policy_id},
+                    )
+
+            mutation = asyncio.create_task(mutate())
+            await asyncio.sleep(0.1)
+            assert not mutation.done()
+            await publication_tx.commit()
+            with pytest.raises(DBAPIError, match="published review and revision policies"):
+                await mutation
+            await publication_connection.close()
+            await policy_connection.close()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(policy_first())
+    asyncio.run(publication_first())
+
+
 def test_authorization_read_rate_scope_upgrade_and_downgrade_refusal(
     isolated_database_env: str,
     migration_lock,

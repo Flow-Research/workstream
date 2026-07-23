@@ -928,8 +928,21 @@ Fields:
 - `guide_version`
 - `allowed_decisions`
 - `minimum_finding_fields`
-- `sla_hours`
+- `review_preference_window_seconds`
+- `review_lease_duration_seconds`
+- `max_active_review_leases_per_reviewer` (fixed to `1` in v0.1)
+- `self_review_allowed` (fixed to `false` in v0.1)
+- `reject_policy` (fixed to `close_task` in v0.1)
+- `finding_evidence_requirement`
+- `legacy_incomplete`
+- `configured_by_actor`
+- `configured_at`
 - `created_at`
+
+The decision array is exactly `accept`, `needs_revision`, `reject`; minimum
+finding fields are exactly `description`, `severity`. Migrated rows retain
+retired second-review/SLA facts only in database-only archival columns and are
+explicitly legacy-incomplete. No routing duration is inferred from an SLA.
 
 ## RevisionPolicy
 
@@ -940,9 +953,15 @@ Fields:
 - `guide_version`
 - `max_revision_rounds`
 - `revision_deadline_hours`
-- `allowed_resubmission_states`
-- `reviewer_reassignment_rule`
+- `legacy_incomplete`
+- `configured_by_actor`
+- `configured_at`
 - `created_at`
+
+Migrated automatic-reject, resubmission-state, and reassignment values are
+preserved only in database-only archival columns. They are not active policy
+and are not exposed by the API. New policy rows contain only positive revision
+round and deadline inputs.
 
 Limit or deadline exhaustion blocks further preparation and submission; it does
 not synthesize a reject Review. Project Guide context selection is deterministic,

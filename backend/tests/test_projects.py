@@ -657,17 +657,14 @@ def complete_guide_payload(version: str = "v1") -> dict:
         ),
         "change_summary": f"Initial {version}",
         "review_policy": {
-            "requires_second_review": False,
             "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
+            "minimum_finding_fields": ["description", "severity"],
+            "review_preference_window_seconds": 900,
+            "review_lease_duration_seconds": 1800,
         },
         "revision_policy": {
             "max_revision_rounds": 7,
             "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
         },
         "payment_policy": {
             "base_amount": "25.00",
@@ -7208,20 +7205,20 @@ async def test_activation_requires_complete_payment_policy(project_client: Async
     assert "payment policy is incomplete" in response.json()["detail"]
 
 
-async def test_activation_requires_complete_revision_policy(project_client: AsyncClient) -> None:
+async def test_revision_policy_rejects_retired_resubmission_state_input(
+    project_client: AsyncClient,
+) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
     payload["revision_policy"]["allowed_resubmission_states"] = []
-    guide = await create_guide(project_client, project["id"], payload)
-    await create_approved_policy_bundle(project_client, project["id"], guide["id"])
-
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
+        json=payload,
     )
 
     assert response.status_code == 422
-    assert "revision policy is incomplete" in response.json()["detail"]
+    assert "allowed_resubmission_states" in response.text
 
 
 async def test_revision_policy_requires_deadline(project_client: AsyncClient) -> None:
@@ -7261,22 +7258,21 @@ async def test_guide_update_rejects_manual_post_submit_checker_policy(
     assert "post_submit_checker_policy" in response.text
 
 
-async def test_activation_rejects_unsupported_revision_resubmission_states(
+async def test_revision_policy_rejects_retired_reassignment_input(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
-    payload["revision_policy"]["allowed_resubmission_states"] = ["random_state"]
-    guide = await create_guide(project_client, project["id"], payload)
-    await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+    payload["revision_policy"]["reviewer_reassignment_rule"] = "same reviewer preferred"
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
+        json=payload,
     )
 
     assert response.status_code == 422
-    assert "invalid resubmission states" in response.json()["detail"]
+    assert "reviewer_reassignment_rule" in response.text
 
 
 async def test_activation_rejects_pending_pre_submit_checker_policy(
@@ -7484,8 +7480,14 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
         active.json()["pre_submit_checker_policy"]["checker_configs"]
         == (bundle["pre_submit_checker_policy"]["checker_configs"])
     )
+    assert active.json()["review_policy"]["review_preference_window_seconds"] == 900
+    assert active.json()["review_policy"]["review_lease_duration_seconds"] == 1800
+    assert active.json()["review_policy"]["finding_evidence_requirement"] == "optional"
+    assert active.json()["review_policy"]["legacy_incomplete"] is False
+    assert "sla_hours" not in active.json()["review_policy"]
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
-    assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
+    assert active.json()["revision_policy"]["legacy_incomplete"] is False
+    assert "auto_reject_after_limit" not in active.json()["revision_policy"]
     assert active.json()["payment_policy"]["base_amount"] == "25.00"
 
 

@@ -22,7 +22,7 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
 EXPECTED_PUBLIC_SCHEMA_SHA256 = (
-    "57c0f4b00709fb1c865277d9cac07ea2bc34d22ef26f36f93a7214986cb1388b"
+    "61c9942bff66eab0c192303cb0e5e373d2586ed48fa7eb07df3e763189b48a88"
 )
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
