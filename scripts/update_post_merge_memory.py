@@ -841,6 +841,7 @@ def _tree_entries(
     if truncated is not False or not isinstance(entries, list):
         raise LoopMemoryError(f"planning intake {label} tree is incomplete")
     result: dict[str, tuple[str, str, str]] = {}
+    seen_paths: set[str] = set()
     for item in entries:
         if not isinstance(item, dict):
             raise LoopMemoryError(f"planning intake {label} tree is malformed")
@@ -850,14 +851,37 @@ def _tree_entries(
         if (
             not isinstance(path, str)
             or not path
-            or path in result
+            or path in seen_paths
+            or path.startswith("/")
+            or "\x00" in path
+            or any(part in {"", ".", ".."} for part in path.split("/"))
             or not isinstance(mode, str)
             or not isinstance(kind, str)
             or not isinstance(sha, str)
             or not SHA_PATTERN.fullmatch(sha)
         ):
             raise LoopMemoryError(f"planning intake {label} tree is malformed")
-        result[path] = (mode, kind, sha)
+        seen_paths.add(path)
+        if kind == "tree":
+            if mode != "040000":
+                raise LoopMemoryError(
+                    f"planning intake {label} tree has unsupported entry mode"
+                )
+            continue
+        if (kind == "blob" and mode in {"100644", "100755", "120000"}) or (
+            kind == "commit" and mode == "160000"
+        ):
+            result[path] = (mode, kind, sha)
+            continue
+        raise LoopMemoryError(
+            f"planning intake {label} tree has unsupported entry mode"
+        )
+    ordered_paths = sorted(result)
+    for index, path in enumerate(ordered_paths[:-1]):
+        if ordered_paths[index + 1].startswith(f"{path}/"):
+            raise LoopMemoryError(
+                f"planning intake {label} tree has conflicting leaf paths"
+            )
     return result
 
 

@@ -236,7 +236,28 @@ Replay evaluates initiative absence at the historical ledger point and must
 reconstruct the same stopped projection. An existing initiative, repeated PLAN,
 unexpected path, ambiguous evidence, or implementation claim fails closed.
 
-## WS-ENG-006 Exact Root Repair
+## WS-ENG-007 Planning-Intake Tree Repair
+
+`WS-ENG-007-00R1` uses the closed two-merge recovery certificate to reconcile
+the already-merged PR #187 (`WS-ENG-007-PLAN`) followed only by initiative
+`WS-ENG-007` and chunk `WS-ENG-007-00R1`. GitHub's recursive tree API includes
+directory entries while `git ls-tree -r` reports leaf entries. The updater now
+validates the complete API response, excludes valid `tree/040000` directory
+entries from the canonical map, and compares the same leaf-entry model as the
+independent checker. Unsupported type/mode pairs, malformed paths, duplicate
+paths, truncated responses, and a retained leaf that prefixes another retained
+leaf fail closed.
+
+Recovery requires PR #187 at merge SHA
+`8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8` followed directly by the repair
+merge. The activation target must have unique successful `agent-gates` and
+`test` runs from the pinned GitHub Actions app on its reviewed head. PR #187 is
+pinned by merge SHA, PR number, initiative, and chunk and must retain successful
+aggregate required-check evidence. Temporary recovery authorization is consumed
+before signing, is never serialized, and is inert on replay. Any intervening
+main merge requires a new reviewed recovery plan.
+
+## Historical WS-ENG-006 Exact Root Repair
 
 `WS-ENG-006-00` uses the closed two-merge recovery certificate to reconcile
 the already-merged PR #176 (`WS-REV-001-PLAN3`) followed only by initiative

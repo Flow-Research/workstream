@@ -2035,6 +2035,61 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
         assert checker._record_failures(rebased_record, "rebase record", rebase_repository) == []
 
 
+def test_planning_tree_entries_canonicalize_recursive_directory_objects() -> None:
+    """Recursive API directory objects never enter the canonical leaf map."""
+    updater = load_module("planning_tree_entries", "scripts/update_post_merge_memory.py")
+    leaves = [f"root/dir/file-{index}.md" for index in range(13)]
+    directories = ["root", "root/dir", "root/other", "alpha", "beta", "gamma"]
+
+    class TreeClient:
+        def __init__(self, entries: list[dict]) -> None:
+            self.entries = entries
+
+        def get_json(self, _path: str):
+            return {"truncated": False, "tree": self.entries}
+
+    entries = [
+        *(
+            {"path": path, "type": "tree", "mode": "040000", "sha": hashlib.sha1(path.encode()).hexdigest()}
+            for path in directories
+        ),
+        *(
+            {"path": path, "type": "blob", "mode": "100644", "sha": hashlib.sha1(path.encode()).hexdigest()}
+            for path in leaves
+        ),
+    ]
+    canonical = updater._tree_entries(
+        TreeClient(entries), "Flow-Research/workstream", "a" * 40, "head"
+    )
+    assert len(entries) == 19
+    assert sorted(canonical) == sorted(leaves)
+
+    supported = [
+        {"path": "regular", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "executable", "type": "blob", "mode": "100755", "sha": "2" * 40},
+        {"path": "symlink", "type": "blob", "mode": "120000", "sha": "3" * 40},
+        {"path": "gitlink", "type": "commit", "mode": "160000", "sha": "4" * 40},
+    ]
+    assert set(updater._tree_entries(
+        TreeClient(supported), "Flow-Research/workstream", "a" * 40, "supported"
+    )) == {"regular", "executable", "symlink", "gitlink"}
+
+    hostile = (
+        ({"path": "bad", "type": "tree", "mode": "100644", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "bad", "type": "blob", "mode": "040000", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "bad", "type": "commit", "mode": "100644", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "../bad", "type": "blob", "mode": "100644", "sha": "5" * 40}, "malformed"),
+    )
+    for entry, message in hostile:
+        assert_loop_error(
+            updater,
+            lambda entry=entry: updater._tree_entries(
+                TreeClient([entry]), "Flow-Research/workstream", "a" * 40, "hostile"
+            ),
+            message,
+        )
+
+
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
     """Planning intake collection binds the reviewed tree and trusted checks."""
     updater = load_module("planning_intake_collection", "scripts/update_post_merge_memory.py")
@@ -2082,6 +2137,7 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             self.check_status = "completed"
             self.check_conclusion = "success"
             self.truncated_tree: str | None = None
+            self.hostile_entry: dict | None = None
 
         def get_paginated(self, path: str) -> list[dict]:
             if "/pulls/201/files" in path:
@@ -2108,17 +2164,23 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             tree_entries = {
                 base_tree: [{"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40}],
                 head_tree: [
+                    {"path": ".agent-loop", "type": "tree", "mode": "040000", "sha": "1" * 40},
+                    {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *([self.hostile_entry] if self.hostile_entry else []),
                 ],
                 first_parent_tree: [
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
                 ],
                 merge_tree: [
+                    {"path": ".agent-loop", "type": "tree", "mode": "040000", "sha": "1" * 40},
+                    {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
                     *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *([self.hostile_entry] if self.hostile_entry else []),
                 ],
             }
             for tree_sha, entries in tree_entries.items():
@@ -2241,6 +2303,18 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             "foreign path",
         ),
         (lambda: setattr(client, "truncated_tree", merge_tree), "tree is incomplete"),
+        (
+            lambda: setattr(client, "hostile_entry", {
+                "path": "foreign", "type": "tag", "mode": "100644", "sha": "5" * 40,
+            }),
+            "unsupported entry mode",
+        ),
+        (
+            lambda: setattr(client, "hostile_entry", {
+                "path": "base.txt/child", "type": "blob", "mode": "100644", "sha": "5" * 40,
+            }),
+            "conflicting leaf paths",
+        ),
     )
     for mutate, expected in cases:
         client = IntakeClient()
