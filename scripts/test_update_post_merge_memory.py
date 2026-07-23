@@ -2057,3 +2057,76 @@ def test_pr189_recovery_certificate_mutations_fail_both_validators(field: str) -
     with pytest.raises(loop.LoopMemoryError, match="historical recovery"):
         loop._validate_record(record)
     assert any("historical recovery" in failure for failure in checker._record_failures(record, "record", None))
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ([], "malformed"),
+        ({"total_count": -1, "check_runs": []}, "total"),
+        ({"total_count": 1, "check_runs": [{"id": 1}, {"id": 2}]}, "exceeds"),
+        ({"total_count": 2, "check_runs": [{"id": 1}]}, "ended"),
+        ({"total_count": 1, "check_runs": [{"id": 0}]}, "identity"),
+    ],
+)
+def test_paginated_collection_rejects_closed_malformed_shapes(
+    payload: object, message: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = loop.GitHubClient("token")
+    monkeypatch.setattr(client, "get_json", lambda _path: payload)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        client.get_paginated_collection("/checks", "check_runs")
+
+
+def test_paginated_collection_accepts_empty_complete_envelope(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = loop.GitHubClient("token")
+    monkeypatch.setattr(client, "get_json", lambda _path: {"total_count": 0, "check_runs": []})
+    assert client.get_paginated_collection("/checks", "check_runs") == []
+
+
+def _protected_runs_for_mutation() -> tuple[str, list[dict]]:
+    head = "a" * 40
+    runs = []
+    for index, name in enumerate(("agent-gates", "test"), start=1):
+        runs.append({
+            "id": index, "name": name, "head_sha": head, "status": "completed",
+            "conclusion": "success", "started_at": f"2026-07-23T05:0{index}:00Z",
+            "completed_at": f"2026-07-23T05:0{index}:30Z",
+            "app": {"id": loop.GITHUB_ACTIONS_APP_ID, "slug": loop.GITHUB_ACTIONS_APP_SLUG},
+        })
+    return head, runs
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda runs: runs.pop(), "missing"),
+        (lambda runs: runs[0].update(id=0), "invalid provenance"),
+        (lambda runs: runs[1].update(id=1), "invalid provenance"),
+        (lambda runs: runs[0].update(head_sha="b" * 40), "invalid provenance"),
+        (lambda runs: runs[0].update(status="queued"), "invalid provenance"),
+        (lambda runs: runs[0].update(conclusion="unknown"), "invalid provenance"),
+        (lambda runs: runs[0].update(app={"id": 1, "slug": "foreign"}), "invalid provenance"),
+        (lambda runs: runs[0].update(completed_at="2026-07-23T04:00:00Z"), "invalid provenance"),
+        (lambda runs: runs[0].update(completed_at="2026-07-23T06:30:00Z"), "invalid provenance"),
+    ],
+)
+def test_protected_selector_rejects_eligible_provenance_mutations(mutation, message: str) -> None:
+    head, runs = _protected_runs_for_mutation()
+    mutation(runs)
+    with pytest.raises(loop.LoopMemoryError, match=message):
+        loop._protected_actions_evidence(runs, head, "2026-07-23T06:00:00Z")
+
+
+def test_recovery_policy_v4_rejects_closed_schema_mutations() -> None:
+    policy = json.loads((Path(__file__).parents[1] / ".agent-loop/policies/loop-memory-recovery.json").read_text())
+    assert loop._validate_recovery_policy(policy) == policy
+    mutations = []
+    bad = json.loads(json.dumps(policy)); bad["signed_basis"] = "bad"; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["recovered_merges"] = bad["recovered_merges"][:2]; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["recovered_merges"][1]["pr_number"] = 187; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["activation"]["chunk_id"] = "WRONG"; mutations.append(bad)
+    bad = json.loads(json.dumps(policy)); bad["extra"] = True; mutations.append(bad)
+    for mutation in mutations:
+        with pytest.raises(loop.LoopMemoryError):
+            loop._validate_recovery_policy(mutation)
