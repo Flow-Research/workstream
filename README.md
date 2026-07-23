@@ -16,7 +16,8 @@ compensation award and fulfillment state, and reputation signals.
 
 Workstream is source-agnostic, but v0.1 is manual-first. External origin onboarding, source adapters, automated routing, owner-agent execution workspaces, and on-chain settlement remain later adapters until the internal evaluation loop is proven.
 
-The first 30 days are focused on building serious internal infrastructure that can run real projects end to end:
+Workstream v0.1 is focused on building serious internal infrastructure that can
+run real projects end to end:
 
 ```text
 Project Guide
@@ -62,6 +63,7 @@ Workstream turns that operating knowledge into reusable infrastructure.
 
 ## Planning Package
 
+- [Contribution Guide](CONTRIBUTING.md)
 - [Codex Agent Loop](.agent-loop/README.md)
 - [Repository Engineering Policy](.agent-loop/policies/repository-engineering-policy.md)
 - [30-Day Master Plan](docs/roadmap_30_day_master_plan.md)
@@ -174,7 +176,7 @@ Intent
 -> Internal Review
 -> PR
 -> Human Checkpoint
--> Memory Update
+-> Automated Merge Memory
 -> Stop
 ```
 
@@ -184,6 +186,9 @@ contracts, reviews, and status live in `.agent-loop/`.
 
 This engineering loop is separate from Workstream product state. It governs how
 the repository is changed; it does not define runtime task or review records.
+Each initiative may have at most one active planning or implementation chunk;
+distinct initiatives may run concurrently. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md) before proposing repository work.
 
 ## Local Backend Database
 
@@ -265,9 +270,9 @@ WORKSTREAM_CELERY_BROKER_URL=redis://localhost:6379/0 \
 .venv/bin/celery -A app.workers.celery_app.celery_app worker --loglevel=INFO
 ```
 
-## Day-30 Success Standard
+## v0.1 Success Standard
 
-By day 30, Workstream runs a real internal task cycle with real people:
+Workstream v0.1 must run a real internal task cycle with real people:
 
 ```text
 Create project guide

@@ -36,12 +36,18 @@ Intent
 -> Internal Review
 -> PR
 -> Human Checkpoint
--> Memory Update
+-> Automated Merge Memory
 -> Stop
 ```
 
 The stop step is intentional. Codex must not begin the next chunk unless the
 user explicitly asks for it.
+
+Every human and agent begins with [the contribution guide](../CONTRIBUTING.md).
+Each initiative may have at most one active planning or implementation chunk,
+while distinct initiatives may run concurrently. Only independently verified
+signed automation state is canonical authority; chat, issues, commits, patches,
+branches, PR prose, and worktrees are instructions or discovery input.
 
 ## First Planning Intake
 

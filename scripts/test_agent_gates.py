@@ -1713,6 +1713,156 @@ def test_pr_templates_share_merge_intent_contract() -> None:
     ) == merge_intent_contract(ROOT / ".github/pull_request_template.md")
 
 
+def _assert_contributor_entry_contract(documents: dict[str, str]) -> None:
+    """Assert stable contributor-entry policy across the canonical surfaces."""
+    contribution = documents["CONTRIBUTING.md"]
+    required_contribution_semantics = (
+        "repository contributor",
+        "Workstream product **Contributor**",
+        "Existing commit or patch is preservation and discovery input only".lower(),
+        "never retroactive authorization",
+        "GitHub issue",
+        "No agent or automation may infer merge approval".lower(),
+        "Automated Merge Memory never starts it automatically",
+        "Only independently verified signed automation state is canonical authority".lower(),
+    )
+    lowered = contribution.lower()
+    for phrase in required_contribution_semantics:
+        assert phrase.lower() in lowered, phrase
+    normalized_contribution = " ".join(contribution.split())
+    required_procedures = (
+        "## Before Work",
+        "dispatch `Loop Memory Explicit Event` on exact current `main`",
+        "Confirm the target initiative is active for the exact chunk and phase",
+        "## Contributors Without Write Permission",
+        "preserving the proposal as discovery input",
+        "placing the required intent, discovery, plan, chunk map, and exact chunk contract on trusted `main`",
+        "dispatching the signed start for that exact contract and current-main SHA",
+        "applying or recreating only the in-contract parts of the preserved patch",
+        "crediting the original contributor in the resulting PR where applicable",
+        "## Implementation",
+        "Reconcile with current `main` before publication",
+        "## Before Opening A Pull Request",
+        "Complete every required internal reviewer track",
+        "Ensure the reviewed implementation SHA and signed-start provenance are recorded",
+        "Add exactly one schema-v2 merge intent",
+        "Run the chunk's complete verification commands against the current base",
+        "no reviewer agent remains active",
+        "## Review, Merge, And Stop",
+        "reviews the final exact PR head",
+        "Verify its manifest, signature, ledger, loop view, queue, and initiative projections together",
+        "Work stops",
+    )
+    for marker in required_procedures:
+        assert marker in normalized_contribution, marker
+
+    canonical_loop = (
+        "Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> "
+        "Implementation -> Evidence -> Internal Review -> PR -> Human "
+        "Checkpoint -> Automated Merge Memory -> Stop"
+    )
+    assert canonical_loop in " ".join(contribution.split())
+    for path in ("README.md", "AGENTS.md", ".agent-loop/README.md"):
+        normalized = " ".join(documents[path].replace("`", "").split())
+        assert canonical_loop in normalized, path
+        assert "at most one active planning or implementation chunk" in normalized, path
+        assert "distinct initiatives may" in normalized and "concurrently" in normalized, path
+
+
+def test_contributor_entry_semantics_are_positive_and_fail_closed() -> None:
+    """Canonical onboarding semantics survive positive fixtures and reject drift."""
+    paths = (
+        "CONTRIBUTING.md",
+        "README.md",
+        "AGENTS.md",
+        ".agent-loop/README.md",
+    )
+    documents = {
+        path: (ROOT / path).read_text(encoding="utf-8") for path in paths
+    }
+    _assert_contributor_entry_contract(documents)
+    mutations = (
+        ("CONTRIBUTING.md", "repository contributor"),
+        ("README.md", "Automated Merge Memory"),
+        ("AGENTS.md", "at most one active planning or implementation chunk"),
+        ("CONTRIBUTING.md", "never retroactive authorization"),
+        (
+            "CONTRIBUTING.md",
+            "Only independently verified signed automation state is canonical authority",
+        ),
+        ("CONTRIBUTING.md", "No agent or automation may infer merge approval"),
+        (
+            "CONTRIBUTING.md",
+            "Automated Merge Memory never starts it automatically",
+        ),
+        ("CONTRIBUTING.md", "## Before Work"),
+        (
+            "CONTRIBUTING.md",
+            "dispatch `Loop Memory Explicit",
+        ),
+        ("CONTRIBUTING.md", "preserving the proposal as discovery input"),
+        (
+            "CONTRIBUTING.md",
+            "dispatching the signed start for that exact contract and current-main SHA",
+        ),
+        (
+            "CONTRIBUTING.md",
+            "applying or recreating only the in-contract parts",
+        ),
+        ("CONTRIBUTING.md", "## Before Opening A Pull Request"),
+        ("CONTRIBUTING.md", "Complete every required internal reviewer track"),
+        ("CONTRIBUTING.md", "reviews the final exact PR head"),
+        ("CONTRIBUTING.md", "Work stops"),
+    )
+    for path, phrase in mutations:
+        mutated = dict(documents)
+        assert phrase.lower() in mutated[path].lower()
+        start = mutated[path].lower().index(phrase.lower())
+        mutated[path] = mutated[path][:start] + mutated[path][start + len(phrase) :]
+        try:
+            _assert_contributor_entry_contract(mutated)
+        except AssertionError:
+            continue
+        raise AssertionError(f"contributor-entry drift was accepted: {path}: {phrase}")
+
+
+def _signed_start_fields(text: str) -> tuple[str, ...]:
+    """Return the stable signed-start provenance labels from a trust template."""
+    labels = (
+        "Signed start run",
+        "Authorized main SHA",
+        "Phase",
+        "Contract path",
+        "Signed contract blob SHA",
+        "Reviewed implementation SHA",
+    )
+    return tuple(label for label in labels if f"- {label}:" in text)
+
+
+def test_pr_templates_share_signed_start_provenance_fields() -> None:
+    """Both trust templates expose the same complete provenance navigation set."""
+    paths = (
+        ROOT / ".github/pull_request_template.md",
+        ROOT / ".agent-loop/templates/PR_TRUST_BUNDLE.md",
+    )
+    texts = [path.read_text(encoding="utf-8") for path in paths]
+    expected = (
+        "Signed start run",
+        "Authorized main SHA",
+        "Phase",
+        "Contract path",
+        "Signed contract blob SHA",
+        "Reviewed implementation SHA",
+    )
+    assert all(_signed_start_fields(text) == expected for text in texts)
+    warning = "Only independently verified signed automation state is canonical authority."
+    assert all(warning in text for text in texts)
+    for index, label in enumerate(expected):
+        mutated = list(texts)
+        mutated[index % 2] = mutated[index % 2].replace(f"- {label}:", "", 1)
+        assert _signed_start_fields(mutated[0]) != _signed_start_fields(mutated[1])
+
+
 def updater_base64(value: str) -> str:
     """Return GitHub-contents-style base64 text."""
     return base64.b64encode(value.encode("utf-8")).decode("ascii")
@@ -7342,6 +7492,8 @@ def main() -> int:
         test_loop_memory_state_accepts_merged_fixture,
         test_loop_memory_state_rejects_known_merged_pr_staleness,
         test_pr_templates_share_merge_intent_contract,
+        test_contributor_entry_semantics_are_positive_and_fail_closed,
+        test_pr_templates_share_signed_start_provenance_fields,
         test_post_merge_metadata_is_strict_and_bounded,
         test_next_chunk_contract_binding_is_exact_locally_and_remotely,
         test_post_merge_state_is_idempotent_and_monotonic,

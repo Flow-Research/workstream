@@ -228,6 +228,11 @@ that rebase does not replace the immutable selected contract or authorize scope
 drift. The generated queue and initiative projections are the canonical view of
 all concurrent activity.
 
+Contributors without repository write permission use the public intake and
+maintainer-adoption procedure in [CONTRIBUTING.md](../CONTRIBUTING.md). A patch
+or fork commit remains preservation and discovery input until an exact reviewed
+contract is signed and the normal implementation loop is completed.
+
 ## First-New-Initiative Planning Intake
 
 An initiative absent from signed history cannot select an unmerged contract

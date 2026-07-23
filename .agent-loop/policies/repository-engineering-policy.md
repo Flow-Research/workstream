@@ -59,6 +59,8 @@ an implementation-start substitute.
 
 ## Agent Rules
 
+- Follow the repository contribution entry path in `CONTRIBUTING.md`; it applies
+  equally to humans and agents and does not change product Contributor authority.
 - Keep PRs chunk-sized.
 - Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
 - Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
