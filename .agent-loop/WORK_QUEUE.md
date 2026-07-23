@@ -14,8 +14,8 @@
 | `WS-ENG-004` | `WS-ENG-004-01R1` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-005` | `WS-ENG-005-01` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-006` | `WS-ENG-006-00` | `stopped_after_merge` | `WS-ENG-006-01` | yes |
-| `WS-ENG-007` | `WS-ENG-007-00R3` | `stopped_after_merge` | `WS-ENG-007-01` | yes |
+| `WS-ENG-007` | `WS-ENG-007-00R5` | `stopped_after_merge` | `WS-ENG-007-01` | yes |
 | `WS-REV-001` | `WS-REV-001-PLAN3` | `stopped_after_merge` | `WS-REV-001-03P` | yes |
 | `WS-XINT-001` | `WS-XINT-001-PLAN` | `stopped_after_merge` | `none` | yes |
 
-Latest global merge: `a3eecadcf847ac70fc28c58dad642f2d761015e0`
+Latest global merge: `9c3ea09f32dc1217dcaaf68cbfcf5ac71aad8805`

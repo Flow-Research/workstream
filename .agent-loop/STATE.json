@@ -14,18 +14,18 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29998973737/job/89179341073"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30005723678/job/89201126479"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29998905015/job/89180567578"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30005723681/job/89203829860"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-007-00R3",
-    "chunk_title": "Merge-Bound Evidence Recovery",
+    "chunk_id": "WS-ENG-007-00R5",
+    "chunk_title": "R4 Activation Recovery",
     "initiative_id": "WS-ENG-007",
     "next_chunk_id": "WS-ENG-007-01",
     "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
@@ -51,41 +51,41 @@
       "agent-gates": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-23T10:21:51Z",
+        "completed_at": "2026-07-23T12:07:55Z",
         "conclusion": "success",
-        "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
-        "id": 89179341073,
-        "merge_cutoff": "2026-07-23T10:28:07Z",
-        "started_at": "2026-07-23T10:21:13Z"
+        "head_sha": "2d47a5b3f22167fa8d2762414024b97bbdf3db83",
+        "id": 89201126479,
+        "merge_cutoff": "2026-07-23T12:29:44Z",
+        "started_at": "2026-07-23T12:07:15Z"
       },
       "test": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-23T10:27:56Z",
+        "completed_at": "2026-07-23T12:20:42Z",
         "conclusion": "success",
-        "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
-        "id": 89180567578,
-        "merge_cutoff": "2026-07-23T10:28:07Z",
-        "started_at": "2026-07-23T10:27:18Z"
+        "head_sha": "2d47a5b3f22167fa8d2762414024b97bbdf3db83",
+        "id": 89203829860,
+        "merge_cutoff": "2026-07-23T12:29:44Z",
+        "started_at": "2026-07-23T12:19:58Z"
       }
     },
-    "sha256": "25cd95219b299baef12c4d09180eb48a8e9d68089eece3b07748e3d8f8bb2c5c"
+    "sha256": "7f021736c0dd471834c18926ff258d04d46940172abdd587d9e18772a7d527f6"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
-    "head_ref": "codex/ws-eng-007-00r3-merge-bound-evidence",
-    "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
-    "intent_blob_sha": "90eeaef9874f1f5965092e191e37a57ada7dfb2a",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-007-00R3.json",
-    "main_sha": "a3eecadcf847ac70fc28c58dad642f2d761015e0",
-    "merged_at": "2026-07-23T10:28:07Z",
+    "first_parent_sha": "9bf16d478f669d48172810c83cdf6a7d2b8992ed",
+    "head_ref": "codex/ws-eng-007-00r5-r4-activation",
+    "head_sha": "2d47a5b3f22167fa8d2762414024b97bbdf3db83",
+    "intent_blob_sha": "65ba957792207147a3b69e37bdfaebb40eee7b6f",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-007-00R5.json",
+    "main_sha": "9c3ea09f32dc1217dcaaf68cbfcf5ac71aad8805",
+    "merged_at": "2026-07-23T12:29:44Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 190,
-    "pr_title": "fix(loop-memory): freeze merge-bound evidence",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/190"
+    "pr_number": 192,
+    "pr_title": "fix(loop-memory): recover exact R4 activation",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/192"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-23T10:28:07Z"
+  "updated_at": "2026-07-23T12:29:44Z"
 }

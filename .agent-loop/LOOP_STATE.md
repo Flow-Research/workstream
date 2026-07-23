@@ -3,12 +3,12 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#190](https://github.com/Flow-Research/workstream/pull/190) - fix(loop-memory): freeze merge-bound evidence
-- Merge commit: `a3eecadcf847ac70fc28c58dad642f2d761015e0`
-- Final PR head: `c739a00f7a8999b4e682c8c74046251f9b739d11`
-- Merged at: `2026-07-23T10:28:07Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ENG-007-00R3.json` at blob `90eeaef9874f1f5965092e191e37a57ada7dfb2a`
-- Completed chunk: `WS-ENG-007-00R3` - Merge-Bound Evidence Recovery
+- Last merged PR: [#192](https://github.com/Flow-Research/workstream/pull/192) - fix(loop-memory): recover exact R4 activation
+- Merge commit: `9c3ea09f32dc1217dcaaf68cbfcf5ac71aad8805`
+- Final PR head: `2d47a5b3f22167fa8d2762414024b97bbdf3db83`
+- Merged at: `2026-07-23T12:29:44Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-007-00R5.json` at blob `65ba957792207147a3b69e37bdfaebb40eee7b6f`
+- Completed chunk: `WS-ENG-007-00R5` - R4 Activation Recovery
 - Active planning chunks: none
 - Active implementation chunks: none
 - Current gate: `stopped_after_merge`
