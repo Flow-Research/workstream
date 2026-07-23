@@ -107,6 +107,7 @@ logger = logging.getLogger(__name__)
 PROJECT_SETUP_PUBLIC_ERROR_SUMMARY = "project setup failed; inspect server logs with the setup run id"
 PROJECT_SETUP_ROLES = {"admin", "project_manager"}
 ALLOWED_REVIEW_DECISIONS = {"accept", "needs_revision", "reject"}
+ALLOWED_REVISION_RESUBMISSION_STATES = {"needs_revision"}
 HASH_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 HASH_TOKEN_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
 CONTENT_CID_PATTERN = re.compile(
@@ -4296,6 +4297,12 @@ class ProjectService:
             or revision_policy.revision_deadline_hours < 1
         ):
             raise GuideActivationBlocked("revision policy is incomplete")
+        if revision_policy.legacy_incomplete:
+            legacy_states = revision_policy._legacy_allowed_resubmission_states
+            if not legacy_states:
+                raise GuideActivationBlocked("revision policy is incomplete")
+            if not set(legacy_states).issubset(ALLOWED_REVISION_RESUBMISSION_STATES):
+                raise GuideActivationBlocked("revision policy contains invalid resubmission states")
         if payment_policy is None:
             raise GuideActivationBlocked("payment policy is required")
         if (

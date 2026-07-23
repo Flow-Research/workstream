@@ -199,6 +199,10 @@ def _create_write_guards() -> None:
                 if not old.legacy_incomplete and new.legacy_incomplete then
                   raise exception 'complete policy cannot become legacy' using errcode = '23514';
                 end if;
+                if old.legacy_incomplete and new.legacy_incomplete then
+                  raise exception 'legacy policy is immutable until atomic conversion'
+                    using errcode = '23514';
+                end if;
     """
     review_suffix = """
                 if old.legacy_incomplete and not new.legacy_incomplete then
@@ -228,11 +232,11 @@ def _create_write_guards() -> None:
                       using errcode = '23514';
                   end if;
                 elsif (new.legacy_auto_reject_after_limit,
-                       new.legacy_allowed_resubmission_states,
+                       new.legacy_allowed_resubmission_states::jsonb,
                        new.legacy_reviewer_reassignment_rule)
                       is distinct from
                       (old.legacy_auto_reject_after_limit,
-                       old.legacy_allowed_resubmission_states,
+                       old.legacy_allowed_resubmission_states::jsonb,
                        old.legacy_reviewer_reassignment_rule) then
                   raise exception 'revision policy archives are immutable' using errcode = '23514';
                 end if;
@@ -291,13 +295,15 @@ def _require_lossless_downgrade() -> None:
             "select exists(select 1 from review_policies where not legacy_incomplete "
             "or review_preference_window_seconds is not null "
             "or review_lease_duration_seconds is not null or configured_by_actor is not null "
-            "or configured_at is not null)"
+            "or configured_at is not null or legacy_requires_second_review is null)"
         )
     ).scalar_one()
     unsafe_revision = bind.execute(
         sa.text(
             "select exists(select 1 from revision_policies where not legacy_incomplete "
-            "or configured_by_actor is not null or configured_at is not null)"
+            "or configured_by_actor is not null or configured_at is not null "
+            "or legacy_auto_reject_after_limit is null "
+            "or legacy_allowed_resubmission_states is null)"
         )
     ).scalar_one()
     if unsafe_review or unsafe_revision:

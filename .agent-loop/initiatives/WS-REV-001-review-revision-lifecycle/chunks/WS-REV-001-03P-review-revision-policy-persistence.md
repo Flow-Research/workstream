@@ -45,8 +45,8 @@ The three cross-owner test files are proof-only exceptions:
   assertion or behavior may change.
 - `backend/tests/test_tasks.py`: update only policy fixture construction and add
   immutable-policy regression proof. No Task behavior may change, and the
-  existing stamped ReviewPolicy, RevisionPolicy, and PaymentPolicy isolation
-  regression—including every payment assertion—must remain present without
+  existing stamped review, revision, and compensation-policy isolation
+  regression—including every compensation assertion—must remain present without
   weakening.
 - `backend/tests/test_projects.py`: adapt canonical policy requests/responses
   while preserving every existing Project Guide activation outcome. Retired

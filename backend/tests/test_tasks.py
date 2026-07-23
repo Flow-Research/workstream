@@ -49,6 +49,7 @@ from app.modules.checkers.service import CheckerService
 from app.modules.projects.models import (
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
+    PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     ProjectSetupRun,
@@ -2708,6 +2709,46 @@ async def test_published_review_policy_rejects_same_version_mutation(
     assert after_response.status_code == 200, after_response.text
     after = after_response.json()
     assert after == before
+
+
+async def test_work_context_uses_stamped_policy_values_after_payment_policy_mutation(
+    task_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = await create_active_project(task_client)
+    started_task = await create_started_task(task_client, project["id"], monkeypatch)
+    before_response = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+    assert before_response.status_code == 200, before_response.text
+    before = before_response.json()
+
+    async with db_session.get_session_factory()() as session:
+        payment_policy = await session.scalar(
+            select(PaymentPolicy).where(
+                PaymentPolicy.project_id == project["id"],
+                PaymentPolicy.guide_version == "v1",
+            )
+        )
+        assert payment_policy is not None
+        payment_policy.base_amount = Decimal("999.00")
+        payment_policy.currency = "EUR"
+        payment_policy.payout_type = "manual"
+        await session.commit()
+
+    after_response = await task_client.get(
+        f"/api/v1/tasks/{started_task['id']}/work-context",
+        headers=auth_headers(),
+    )
+    assert after_response.status_code == 200, after_response.text
+    after = after_response.json()
+    assert after["review_policy"] == before["review_policy"]
+    assert after["revision_policy"] == before["revision_policy"]
+    assert after["payment_policy"] == before["payment_policy"]
+    assert after["payment_policy"]["base_amount"] == "25.00"
+    assert after["payment_policy"]["currency"] == "USD"
+    assert after["payment_policy"]["payout_type"] == "fixed"
 
 
 async def test_task_context_apis_fail_closed_when_locked_context_is_missing(
