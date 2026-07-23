@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-REV-001-03P",
+  "chunk_title": "Review And Revision Policy Persistence",
+  "initiative_id": "WS-REV-001",
+  "next_chunk_id": "WS-REV-001-03A",
+  "next_chunk_title": "Queue And Lease Base Persistence",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

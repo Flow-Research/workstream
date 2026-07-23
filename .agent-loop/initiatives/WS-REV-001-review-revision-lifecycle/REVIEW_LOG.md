@@ -1123,3 +1123,20 @@ AUTH/ART/CON owner plan, or frozen reference source changed.
 The repaired candidate requires fresh exact-SHA internal review, deterministic
 gates, evidence rebinding, push, CodeRabbit re-review, and GitHub CI before PR
 #150 is ready for the user's merge decision.
+
+## WS-REV-001-03P Internal Implementation Review - 2026-07-23
+
+Signed run `30014647556` authorized 03P on exact main `bcf1292e`. The bounded
+implementation persists immutable ReviewPolicy and RevisionPolicy facts only.
+It preserves migrated legacy facts privately, permits only an atomic legacy to
+canonical conversion, serializes policy writes with guide publication, refuses
+lossy downgrade, and exposes no retired archival fields.
+
+Review iterations repaired legacy activation compatibility, stamped Task
+compensation isolation, deterministic PostgreSQL waiter proof, all-five-field
+archival denial/non-exposure, and distinct-context direct-insert failures.
+Exact code candidate `35531df254c6b25726d666a5e89eda997b97d792`
+passes senior engineering, QA/test, security/auth, product/ops, architecture,
+docs, reuse/dedup, test-delta, CI-integrity, and circuit-breaker review. No
+finding remains. Full backend tests and coverage are intentionally deferred to
+GitHub Actions; 03A has not started.

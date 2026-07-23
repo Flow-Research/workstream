@@ -2,19 +2,18 @@
 
 ## Current status
 
-On 2026-07-22 a complete reread of the canonical Markdown and PDF specification
-identified that the 02A family crossed the REV ownership boundary. REV begins
-only when the current finalized checker result is `allow_review`; it consumes
-the existing Submission and the same submitted/verified artifact set. Project
-Guide setup, activation, Task intake, and upstream publication fencing belong to
-their owning subsystems. REV reports gaps in those handoffs and does not repair
-them. The attempted 02A1 runtime candidate was reverted in full.
+`WS-REV-001-03P` is active through signed `Loop Memory Explicit Event` run
+`30014647556` on exact trusted main
+`bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Implementation candidate
+`35531df254c6b25726d666a5e89eda997b97d792` persists only REV-owned immutable
+ReviewPolicy and RevisionPolicy facts and has passed every required internal
+review track plus focused local evidence. GitHub Actions full-suite/coverage,
+CodeRabbit, and human review remain before merge.
 
-`WS-REV-001-PLAN3` is proposed planning-only work, not canonically active. It retires
-02A/02A1/02A2/02A3/02A4/02B/02C as REV implementation authorization. The first
-future REV chunk is 03P: REV-owned ReviewPolicy/RevisionPolicy persistence.
-Canonical start requires the signed `Loop Memory Explicit Event` workflow on
-exact current main; chat and local work are not start evidence.
+The chunk does not implement Project Guide ownership, Task transitions,
+Submission or artifact behavior, review queues or leases, Review decisions,
+revision execution, FinalAcceptance, or contribution records. `03A` remains
+stopped and requires a separate signed start after 03P merges.
 
 The historical text below records the superseded PLAN2/02A state and is not
 current implementation authority. Trusted main at that time was `44f2467c`, which additionally

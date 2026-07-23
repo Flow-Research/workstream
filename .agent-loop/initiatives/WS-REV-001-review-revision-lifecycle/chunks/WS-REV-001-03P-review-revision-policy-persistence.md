@@ -3,8 +3,10 @@
 ## Status
 
 Active through signed `Loop Memory Explicit Event` run `30014647556` on exact
-trusted main `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Implementation remains
-gated on pre-implementation review of this refreshed contract.
+trusted main `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Implementation candidate
+`35531df254c6b25726d666a5e89eda997b97d792` passed every required internal
+review track and focused local gate. Publication remains gated on final evidence
+review and current-head GitHub Actions, CodeRabbit, and human review.
 
 ## Goal
 
