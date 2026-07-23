@@ -46,7 +46,11 @@ docs/template_project_guide.md
 The following cross-owner files are proof-only exceptions:
 
 - `backend/tests/conftest.py`: update only the deterministic public-schema
-  fingerprint for migration 0034.
+  fingerprint for migration 0034 and register `review_policies` plus
+  `revision_policies` in the existing `TRUNCATE_GUARDED_TABLES` reset path so
+  isolated test cleanup can temporarily disable only their user triggers before
+  truncation and restore them immediately afterward. Do not weaken the schema
+  fingerprint check or reset ownership checks.
 - `backend/tests/test_artifact_admission.py`: update ReviewPolicy and
   RevisionPolicy fixture construction for schema compatibility. Where 0034
   requires those immutable policies before publication, the owning helper may
