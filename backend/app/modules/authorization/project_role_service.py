@@ -7,6 +7,7 @@ import json
 from uuid import UUID, uuid4
 
 from sqlalchemy.sql import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit.schemas import (
@@ -36,7 +37,7 @@ from app.modules.authorization.service import AuthorityMutationService
 
 
 class ProjectRoleGrantConflict(RuntimeError):
-    def __init__(self, code: str, grant_id: UUID) -> None:
+    def __init__(self, code: str, grant_id: UUID | None) -> None:
         self.code = code
         self.grant_id = grant_id
         super().__init__(code)
@@ -54,6 +55,13 @@ def project_role_issue_lock_key(actor_id: UUID, project_id: UUID, role: str) -> 
         separators=(",", ":"),
     ).encode()
     return int.from_bytes(hashlib.sha256(encoded).digest()[:8], "big", signed=True)
+
+
+def _constraint_name(exc: IntegrityError) -> str | None:
+    original = exc.orig
+    return getattr(original, "constraint_name", None) or getattr(
+        getattr(original, "diag", None), "constraint_name", None
+    )
 
 
 def _facts(grant: ProjectRoleGrant) -> dict[str, object]:
@@ -187,21 +195,26 @@ class ProjectRoleGrantMutationService:
                 captured_by_admin_role_grant_id=decision.matched_grant_id,
             )
         )
-        grant = await self.repository.add_project_role_grant(
-            ProjectRoleGrant(
-                id=uuid4(),
-                project_id=str(request.project_id),
-                actor_profile_id=str(request.target_actor_id),
-                role=request.role.value,
-                status="active",
-                version=1,
-                grant_method="manual",
-                qualification_snapshot_id=snapshot.id,
-                granted_by_actor_profile_id=str(actor_profile_id),
-                granted_by_admin_role_grant_id=decision.matched_grant_id,
-                grant_reason=reason,
+        try:
+            grant = await self.repository.add_project_role_grant(
+                ProjectRoleGrant(
+                    id=uuid4(),
+                    project_id=str(request.project_id),
+                    actor_profile_id=str(request.target_actor_id),
+                    role=request.role.value,
+                    status="active",
+                    version=1,
+                    grant_method="manual",
+                    qualification_snapshot_id=snapshot.id,
+                    granted_by_actor_profile_id=str(actor_profile_id),
+                    granted_by_admin_role_grant_id=decision.matched_grant_id,
+                    grant_reason=reason,
+                )
             )
-        )
+        except IntegrityError as exc:
+            if _constraint_name(exc) == "uq_project_role_grants_active_exact_role":
+                raise ProjectRoleGrantConflict("project_role_grant_exists", None) from exc
+            raise
         common = dict(
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
             actor_ref=str(actor_profile_id),

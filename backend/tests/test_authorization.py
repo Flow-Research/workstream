@@ -72,6 +72,7 @@ from app.modules.authorization.lifecycle_service import (
     IdentityLinkLifecycleService,
 )
 from app.modules.authorization.models import AdminRoleGrant
+from app.modules.projects.models import Project
 from app.modules.authorization.pagination import (
     AuthorizationReadCursorCodec,
     InvalidPaginationCursor,
@@ -129,7 +130,10 @@ from app.modules.authorization.schemas import (
     parse_authority_request,
 )
 from app.modules.authorization.service import AuthorityMutationService
-from app.modules.authorization.project_role_service import project_role_issue_lock_key
+from app.modules.authorization.project_role_service import (
+    _constraint_name,
+    project_role_issue_lock_key,
+)
 from app.modules.authorization.project_role_schemas import (
     ProjectRoleGrantIssueBody,
     ProjectRoleGrantRevokeBody,
@@ -176,6 +180,7 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectRoleGrantCollectionResourceContext,
+    ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
     ServiceActorProvisionResourceContext,
     ServiceAuthorizationContext,
@@ -221,6 +226,11 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     assert project_role_issue_lock_key(actor, project, "submitter") != project_role_issue_lock_key(
         project, actor, "submitter"
     )
+    original = SimpleNamespace(
+        constraint_name="uq_project_role_grants_active_exact_role"
+    )
+    error = IntegrityError("insert", {}, original)
+    assert _constraint_name(error) == "uq_project_role_grants_active_exact_role"
 
 
 def test_project_role_public_reason_and_qualification_contract_is_strict() -> None:
@@ -1692,18 +1702,23 @@ async def test_authorization_route_database_failures_rollback_and_map_to_retryab
     async def failed_operation() -> None:
         raise SQLAlchemyError("query failed")
 
+    async def cancelled_operation() -> None:
+        raise asyncio.CancelledError
+
     session = Session()
     with pytest.raises(StructuredHTTPException) as commit_failure:
         await authorization_router._commit_or_unavailable(session)
     with pytest.raises(StructuredHTTPException) as query_failure:
         await authorization_router._database_call(session, failed_operation())
+    with pytest.raises(asyncio.CancelledError):
+        await authorization_router._database_call(session, cancelled_operation())
 
     for failure in (commit_failure.value, query_failure.value):
         assert failure.status_code == 503
         assert failure.error_code == "service_unavailable"
         assert failure.retryable is True
     assert session.commits == 1
-    assert session.rollbacks == 2
+    assert session.rollbacks == 3
 
 
 @pytest.mark.parametrize(
@@ -8358,3 +8373,40 @@ async def test_same_key_is_isolated_independently_by_actor_and_reference_kind(
         await first.rollback()
         await second.rollback()
         await third.rollback()
+
+
+@pytest.mark.asyncio
+async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
+    authorization_factory,
+) -> None:
+    caller_id, caller_link_id, target_id, target_link_id, project_id = (
+        uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
+    )
+    manager_grant_id = uuid4()
+    now = datetime.now(UTC)
+    async with authorization_factory() as session:
+        session.add_all(
+            [
+                ActorProfile(id=str(caller_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(caller_id)),
+                ActorIdentityLink(id=str(caller_link_id), actor_profile_id=str(caller_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-caller-{caller_id}", subject_kind="human", status="active", linked_by=str(caller_id), last_verified_at=now),
+                ActorProfile(id=str(target_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(target_id)),
+                ActorIdentityLink(id=str(target_link_id), actor_profile_id=str(target_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-target-{target_id}", subject_kind="human", status="active", linked_by=str(target_id), last_verified_at=now),
+                Project(id=str(project_id), name="AUTH-10C PREP proof", slug=f"auth-10c-prep-{project_id}", status="draft"),
+                AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=str(caller_id), granted_by_system_principal=None, granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL proof"),
+            ]
+        )
+        await session.commit()
+        context = HumanAuthorizationContext(actor_profile_id=caller_id, actor_kind=ActorKind.HUMAN, actor_status=ActorStatus.ACTIVE, identity_link_id=caller_link_id, identity_link_status=IdentityLinkStatus.ACTIVE, request_id=uuid4(), correlation_id=uuid4())
+        repository = AdminAuthorizationRepository(session)
+        authorization = AuthorizationService(session, context, admin_repository=repository)
+        prepared = PreparedAuthorizationService(session, context, authorization, repository)
+        await session.begin()
+        caller_input = PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={"target": str(target_id), "role": "submitter"})
+        handle = await prepared.prepare(ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER))
+        assert await repository.lock_project(project_id) is not None
+        await repository.take_project_role_issue_lock(project_role_issue_lock_key(target_id, project_id, "submitter"))
+        assert await repository.lock_eligible_human(target_id) is not None
+        decision = await prepared.consume(handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, ProjectRoleGrantIssueResourceContext(resource_type="project_role_grant_issue", resource_id=project_id, scope_project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER, project_status="draft", target_eligible=True, active_exact_role_exists=False))
+        assert decision.allowed is True
+        assert decision.matched_grant_id == manager_grant_id
+        await session.rollback()

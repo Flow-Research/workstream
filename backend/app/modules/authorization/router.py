@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable
 from typing import Annotated, Literal, TypeVar
 from uuid import UUID
@@ -272,6 +273,9 @@ def _configured_issuer(verifier: AuthVerifier) -> str:
 async def _commit_or_unavailable(session: AsyncSession) -> None:
     try:
         await session.commit()
+    except asyncio.CancelledError:
+        await session.rollback()
+        raise
     except SQLAlchemyError as exc:
         await session.rollback()
         raise service_unavailable_error() from exc
@@ -281,6 +285,9 @@ async def _database_call(session: AsyncSession, operation: Awaitable[T]) -> T:
     """Map feature-owned SQL failures without relabeling authorization evidence errors."""
     try:
         return await operation
+    except asyncio.CancelledError:
+        await session.rollback()
+        raise
     except SQLAlchemyError as exc:
         await session.rollback()
         raise service_unavailable_error() from exc
@@ -1362,12 +1369,25 @@ async def issue_project_role_grant(
         return response
     except ProjectRoleGrantConflict as exc:
         await session.rollback()
+        conflict_grant_id = exc.grant_id
+        if conflict_grant_id is None:
+            conflict = await _database_call(
+                session,
+                service.repository.find_active_project_role(
+                    project_id=project_id,
+                    actor_profile_id=payload.target_actor_profile_id,
+                    role=payload.role.value,
+                ),
+            )
+            if conflict is None:
+                raise service_unavailable_error() from exc
+            conflict_grant_id = conflict.id
         await _database_call(
             session,
             service.record_conflict(
                 actor_profile_id=actor_id,
                 project_id=project_id,
-                grant_id=exc.grant_id,
+                grant_id=conflict_grant_id,
                 decision=decision,
                 code=exc.code,
                 action_id=ActionId.PROJECT_ROLE_GRANT_ISSUE,
@@ -1498,6 +1518,8 @@ async def revoke_project_role_grant(
         return response
     except ProjectRoleGrantConflict as exc:
         await session.rollback()
+        if exc.grant_id is None:
+            raise service_unavailable_error() from exc
         await _database_call(
             session,
             service.record_conflict(
