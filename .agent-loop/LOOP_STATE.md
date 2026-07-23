@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-007-00R5.json` at blob `65ba957792207147a3b69e37bdfaebb40eee7b6f`
 - Completed chunk: `WS-ENG-007-00R5` - R4 Activation Recovery
 - Active planning chunks: none
-- Active implementation chunks: none
+- Active implementation chunks: `WS-ENG-006-01`
+- Latest authority event: `start` for `WS-ENG-006-01`
+- Authority initiative: `WS-ENG-006`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-ENG-007-01` - Reviewed Patch and Base-Delta Reconciliation; requires a separate explicit start.
 - Required check evidence: passed
