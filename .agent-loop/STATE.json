@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-ART-001-03",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-ART-001-02D",
+      "chunk_title": "Operator Artifact Operations",
+      "initiative_id": "WS-ART-001",
+      "next_chunk_id": "WS-ART-001-03",
+      "next_chunk_title": "Guide Source Artifact Cutover",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-ART-001-03",
+      "next_chunk_title": "Guide Source Artifact Cutover",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "9033a97a4be6d762cae4b210018ef81a079395c2",
+      "head_ref": "codex/ws-art-001-02d-operator-artifact-operations",
+      "head_sha": "ffabf5dc2a390047fda9709f2519920793e7d6b6",
+      "intent_blob_sha": "21aa86c433814c6cc75490495d088276ec758cd9",
+      "intent_path": ".agent-loop/merge-intents/WS-ART-001-02D.json",
+      "main_sha": "93c14181f8a14c88c2cbfb2f2ea886c8d46deec8",
+      "merged_at": "2026-07-23T04:20:23Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 177,
+      "pr_title": "WS-ART-001-02D: add operator artifact operations",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/177"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-ART-001-03",
+    "created_at": "2026-07-23T14:09:54Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:30014526846:start",
+    "initiative_id": "WS-ART-001",
+    "main_sha": "bcf1292e1a591e3e84bf8ee212ee7191d80741fa",
+    "prior_state_tip": "bb2dc7b69c8c5293fabef466b3d752a9789aeb4f",
+    "reason": "User explicitly started WS-ART-001-03",
+    "run_id": 30014526846,
+    "selection": {
+      "contract_blob_sha": "05324f147db50fccd7d82b741aa2d5487ccc5bb8",
+      "contract_path": ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/WS-ART-001-03-guide-source-cutover.md",
+      "contract_title": "Guide Source Artifact Cutover",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": null,
@@ -87,5 +147,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/193"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-23T13:34:24Z"
+  "updated_at": "2026-07-23T14:09:54Z"
 }
