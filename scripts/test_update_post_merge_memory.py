@@ -2171,3 +2171,45 @@ def test_protected_record_mutations_fail_updater_and_checker(
 def test_recovery_policy_rejects_unsupported_top_level_shapes(payload: object) -> None:
     with pytest.raises(loop.LoopMemoryError):
         loop._validate_recovery_policy(payload)
+
+
+def test_cli_plan_and_resolve_commands_cover_public_dispatch_paths(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: ["a" * 40, "b" * 40])
+    assert loop.main([
+        "plan-commits", "--repository-root", ".", "--target-sha", "b" * 40,
+        "--current-sha", "0" * 40,
+    ]) == 0
+    assert capsys.readouterr().out.splitlines() == ["a" * 40, "b" * 40]
+
+    monkeypatch.setattr(loop, "resolve_reconciliation_target", lambda *_args: "c" * 40)
+    assert loop.main([
+        "resolve-target", "--repository-root", ".", "--event-name", "push",
+        "--event-sha", "b" * 40, "--current-main-sha", "c" * 40,
+    ]) == 0
+    assert capsys.readouterr().out.strip() == "c" * 40
+
+
+def test_cli_reconcile_uses_authenticated_shared_reducer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    observed: list[tuple] = []
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda root: observed.append(("branch", root)))
+    monkeypatch.setattr(loop, "GitHubClient", lambda token, url: (token, url))
+    monkeypatch.setattr(
+        loop, "reconcile_to_main",
+        lambda client, repository, **kwargs: observed.append(("reconcile", client, repository, kwargs)),
+    )
+    target = "d" * 40
+    state_root, branch_root = tmp_path / "state", tmp_path / "branch"
+    assert loop.main([
+        "reconcile", "--repository", "Flow-Research/workstream",
+        "--repository-root", str(tmp_path), "--state-root", str(state_root),
+        "--branch-root", str(branch_root), "--target-sha", target,
+    ]) == 0
+    assert observed[0] == ("branch", branch_root)
+    assert observed[1][0:3] == ("reconcile", ("token", "https://api.github.com"), "Flow-Research/workstream")
+    assert observed[1][3]["target_sha"] == target
+    assert capsys.readouterr().out.strip() == f"Loop memory reconciled to {target}."
