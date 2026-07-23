@@ -39,7 +39,7 @@ docs/template_project_guide.md
 .agent-loop/merge-intents/WS-REV-001-03P.json
 ```
 
-The three cross-owner test files are proof-only exceptions:
+The following cross-owner files are proof-only exceptions:
 
 - `backend/tests/conftest.py`: update only the deterministic public-schema
   fingerprint for migration 0034.
