@@ -2844,3 +2844,17 @@ inline finding. Its unexplained 37.61 percent docstring warning is
 non-actionable because the unchanged repository gate independently passes the
 same head at 87.6 percent against the 80 percent floor. Human review and
 explicit approval of PR #178 remain.
+
+## 2026-07-23 - WS-AUTH-001-10C Internal Implementation Review
+
+AUTH-10C exact implementation SHA
+`0d05b7096eb7a2cf7c68a1770c0b35f07d5b55df` activates the two
+Project-Manager-only project-role mutations with PREP-bound lexical principal
+locking, deterministic absence serialization, strict replay, immutable
+qualification evidence, lifecycle-independent revoke, and typed invalidation.
+The repair loop closed real named-index fallback and residue, lifecycle
+attribution, database-observed cancellation rollback, committed same-key retry,
+and crossed-principal ordering proof. Senior engineering, architecture,
+reuse/dedup, security/auth, QA/test, test delta, product/ops, docs, and CI
+integrity all pass with no open finding. GitHub full CI/coverage, hosted API E2E,
+CodeRabbit, and human review remain.
