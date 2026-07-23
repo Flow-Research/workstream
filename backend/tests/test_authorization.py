@@ -71,7 +71,11 @@ from app.modules.authorization.lifecycle_service import (
     IdentityLinkLifecycleConflict,
     IdentityLinkLifecycleService,
 )
-from app.modules.authorization.models import AdminRoleGrant
+from app.modules.authorization.models import (
+    AdminRoleGrant,
+    ProjectRoleGrant,
+    ProjectRoleQualificationSnapshot,
+)
 from app.modules.projects.models import Project
 from app.modules.authorization.pagination import (
     AuthorizationReadCursorCodec,
@@ -233,6 +237,53 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     )
     error = IntegrityError("insert", {}, original)
     assert _constraint_name(error) == "uq_project_role_grants_active_exact_role"
+
+
+@pytest.mark.asyncio
+async def test_project_role_issue_crossed_principals_use_one_lexical_lock_order() -> None:
+    low = UUID("00000000-0000-0000-0000-000000000001")
+    high = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+    low_link, high_link = uuid4(), uuid4()
+
+    class RecordingSession:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, UUID]] = []
+
+        async def scalar(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            values = set(statement.compile().params.values())
+            actor = low if str(low) in values else high
+            if entity is ActorProfile:
+                self.calls.append(("profile", actor))
+                return SimpleNamespace(
+                    id=str(actor), actor_kind="human", status="active"
+                )
+            self.calls.append(("link", actor))
+            link_id = low_link if actor == low else high_link
+            return SimpleNamespace(id=str(link_id), actor_profile_id=str(actor))
+
+    expected = [
+        ("profile", low),
+        ("link", low),
+        ("profile", high),
+        ("link", high),
+    ]
+    for caller, caller_link, target in (
+        (low, low_link, high),
+        (high, high_link, low),
+    ):
+        session = RecordingSession()
+        repository = AdminAuthorizationRepository(session)  # type: ignore[arg-type]
+        locked_caller, target_eligible = (
+            await repository.lock_project_role_issue_principals(
+                caller_actor_profile_id=caller,
+                caller_identity_link_id=caller_link,
+                target_actor_profile_id=target,
+            )
+        )
+        assert locked_caller is not None
+        assert target_eligible is True
+        assert session.calls == expected
 
 
 def test_project_role_public_reason_and_qualification_contract_is_strict() -> None:
@@ -8379,7 +8430,9 @@ async def test_same_key_is_isolated_independently_by_actor_and_reference_kind(
 
 @pytest.mark.asyncio
 async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
+    authorization_database_env: str,
     authorization_factory,
+    monkeypatch,
 ) -> None:
     caller_id, caller_link_id, target_id, target_link_id, project_id = (
         uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
@@ -8437,12 +8490,18 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         assert issued.status == "active"
         await session.commit()
         await session.execute(
-            text("update actor_profiles set status='suspended' where id=:id"),
-            {"id": str(target_id)},
+            text(
+                "update actor_profiles set status='suspended', suspended_by=:by, "
+                "suspended_at=clock_timestamp(), suspension_reason=:reason where id=:id"
+            ),
+            {"id": str(target_id), "by": str(caller_id), "reason": "AUTH-10C proof"},
         )
         await session.execute(
-            text("update actor_identity_links set status='revoked' where id=:id"),
-            {"id": str(target_link_id)},
+            text(
+                "update actor_identity_links set status='revoked', revoked_by=:by, "
+                "revoked_at=clock_timestamp(), revoked_reason=:reason where id=:id"
+            ),
+            {"id": str(target_link_id), "by": str(caller_id), "reason": "AUTH-10C proof"},
         )
         await session.commit()
         revoke_reason = "AUTH-10C lifecycle-independent revoke proof"
@@ -8515,8 +8574,182 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             )
             == 4
         )
-        await session.rollback()
+
+        await session.execute(
+            text(
+                "update actor_profiles set status='active', suspended_by=null, "
+                "suspended_at=null, suspension_reason=null, reactivated_by=:by, "
+                "reactivated_at=clock_timestamp(), reactivation_reason=:reason where id=:id"
+            ),
+            {
+                "id": str(target_id),
+                "by": str(caller_id),
+                "reason": "AUTH-10C continuation proof",
+            },
+        )
+        await session.execute(
+            text(
+                "update actor_identity_links set status='active', revoked_by=null, "
+                "revoked_at=null, revoked_reason=null, reactivated_by=:by, "
+                "reactivated_at=clock_timestamp(), reactivation_reason=:reason where id=:id"
+            ),
+            {
+                "id": str(target_link_id),
+                "by": str(caller_id),
+                "reason": "AUTH-10C continuation proof",
+            },
+        )
+        qualification = _project_role_qualification()
+        existing_snapshot = ProjectRoleQualificationSnapshot(
+            id=uuid4(),
+            project_id=str(project_id),
+            actor_profile_id=str(target_id),
+            requested_role="reviewer",
+            skills_snapshot=qualification["skills_snapshot"],
+            reputation_snapshot=qualification["reputation_snapshot"],
+            prior_project_work_refs=[],
+            external_expertise_refs=[],
+            captured_by_actor_profile_id=str(caller_id),
+            captured_by_admin_role_grant_id=manager_grant_id,
+        )
+        session.add(existing_snapshot)
+        session.add(
+            ProjectRoleGrant(
+                id=uuid4(),
+                project_id=str(project_id),
+                actor_profile_id=str(target_id),
+                role="reviewer",
+                status="active",
+                version=1,
+                grant_method="manual",
+                qualification_snapshot_id=existing_snapshot.id,
+                granted_by_actor_profile_id=str(caller_id),
+                granted_by_admin_role_grant_id=manager_grant_id,
+                grant_reason="AUTH-10C unique-index winner",
+            )
+        )
+        await session.commit()
+
+        race_reason = "AUTH-10C real unique-index loser"
+        race_payload = ProjectRoleGrantIssueBody(
+            target_actor_profile_id=target_id,
+            role=ProjectRole.REVIEWER,
+            qualification=_project_role_qualification(),
+            reason=race_reason,
+        )
+        race_key = uuid4()
+        original_find = AdminAuthorizationRepository.find_active_project_role
+        original_reserve = ProjectRoleGrantMutationService.reserve
+        find_calls = 0
+        race_claim_ids: list[UUID] = []
+
+        async def race_find(repository, **kwargs):
+            nonlocal find_calls
+            find_calls += 1
+            if find_calls <= 2:
+                return None
+            return await original_find(repository, **kwargs)
+
+        async def capture_race_claim(service, **kwargs):
+            reservation = await original_reserve(service, **kwargs)
+            assert isinstance(reservation, ClaimedReservation)
+            race_claim_ids.append(reservation.claim.record_id)
+            return reservation
+
+        monkeypatch.setattr(
+            AdminAuthorizationRepository, "find_active_project_role", race_find
+        )
+        monkeypatch.setattr(
+            ProjectRoleGrantMutationService, "reserve", capture_race_claim
+        )
+        caller_profile = await session.get(ActorProfile, str(caller_id))
+        caller_link = await session.get(ActorIdentityLink, str(caller_link_id))
+        assert caller_profile is not None and caller_link is not None
+        with pytest.raises(StructuredHTTPException) as conflict:
+            await authorization_router.issue_project_role_grant(
+                project_id=project_id,
+                payload=race_payload,
+                idempotency_key=race_key,
+                resolved=ResolvedActor(caller_profile, caller_link),
+                prepared=prepared,
+                session=session,
+            )
+        assert conflict.value.status_code == 409
+        assert conflict.value.error_code == "project_role_grant_exists"
+        assert find_calls == 3
+        assert len(race_claim_ids) == 1
+        monkeypatch.setattr(
+            AdminAuthorizationRepository,
+            "find_active_project_role",
+            original_find,
+        )
+        monkeypatch.setattr(
+            ProjectRoleGrantMutationService,
+            "reserve",
+            original_reserve,
+        )
         prepared.close()
+
+    async with authorization_factory() as clean:
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from project_role_grants where project_id=:project "
+                    "and actor_profile_id=:actor and role='reviewer' and status='active'"
+                ),
+                {"project": str(project_id), "actor": str(target_id)},
+            )
+            == 1
+        )
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from project_role_qualification_snapshots "
+                    "where project_id=:project and actor_profile_id=:actor "
+                    "and requested_role='reviewer'"
+                ),
+                {"project": str(project_id), "actor": str(target_id)},
+            )
+            == 1
+        )
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from authority_idempotency_records "
+                    "where idempotency_key=:key"
+                ),
+                {"key": str(race_key)},
+            )
+            == 0
+        )
+        denial_rows = (
+            await clean.execute(
+                text(
+                    "select event_type, denial_code, idempotency_reference from audit_events "
+                    "where request_id=:request and correlation_id=:correlation "
+                    "and action_id='project_role_grant.issue'"
+                ),
+                {
+                    "request": str(context.request_id),
+                    "correlation": str(context.correlation_id),
+                },
+            )
+        ).all()
+        assert denial_rows.count(
+            ("SensitiveAuthorizationDenied", "project_role_grant_exists", None)
+        ) == 1
+        assert all(row[0] != "AuthorityInvalidationRequested" for row in denial_rows)
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from audit_events "
+                    "where idempotency_reference=:claim"
+                ),
+                {"claim": str(race_claim_ids[0])},
+            )
+            == 0
+        )
+        await clean.rollback()
 
     canonical = ProjectRoleGrantIssueRequest(
         operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
@@ -8562,23 +8795,100 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             actor_profile_id=caller_id,
             request=canonical,
         )
+        waiter_pid = await waiter.scalar(text("select pg_backend_pid()"))
         wait_task = asyncio.create_task(
-            waiter_prepared.prepare(
-                ActionId.PROJECT_ROLE_GRANT_ISSUE,
-                PreparedAuthorizationInput(
-                    idempotency_key=waiting_key,
-                    request_value=canonical.model_dump(mode="json"),
+            authorization_router._database_call(
+                waiter,
+                waiter_prepared.prepare(
+                    ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                    PreparedAuthorizationInput(
+                        idempotency_key=waiting_key,
+                        request_value=canonical.model_dump(mode="json"),
+                    ),
+                    scope,
                 ),
-                scope,
             )
         )
-        with pytest.raises(TimeoutError):
-            await asyncio.wait_for(asyncio.shield(wait_task), timeout=0.2)
+        observer = create_async_engine(authorization_database_env)
+        try:
+            async with observer.connect() as connection:
+                for _ in range(5000):
+                    waiting = await connection.scalar(
+                        text(
+                            "select exists(select 1 from pg_stat_activity where "
+                            "pid=:pid and wait_event_type='Lock')"
+                        ),
+                        {"pid": waiter_pid},
+                    )
+                    if waiting:
+                        break
+                    await asyncio.sleep(0)
+                else:
+                    raise AssertionError("PREP contender never waited on its database lock")
+        finally:
+            await observer.dispose()
         wait_task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await wait_task
-        await waiter.rollback()
         await locker.rollback()
+
+        retry_reservation = await ProjectRoleGrantMutationService(waiter).reserve(
+            key=waiting_key,
+            actor_profile_id=caller_id,
+            request=canonical,
+        )
+        assert isinstance(retry_reservation, ClaimedReservation)
+        retry_input = PreparedAuthorizationInput(
+            idempotency_key=waiting_key,
+            request_value=canonical.model_dump(mode="json"),
+        )
+        retry_handle = await authorization_router._database_call(
+            waiter,
+            waiter_prepared.prepare(
+                ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                retry_input,
+                scope,
+            ),
+        )
+        waiter_repository = AdminAuthorizationRepository(waiter)
+        project = await waiter_repository.lock_project(project_id)
+        assert project is not None
+        await waiter_repository.take_project_role_issue_lock(
+            project_role_issue_lock_key(target_id, project_id, "submitter")
+        )
+        assert await waiter_repository.lock_eligible_human(target_id) is not None
+        assert (
+            await waiter_repository.find_active_project_role(
+                project_id=project_id,
+                actor_profile_id=target_id,
+                role="submitter",
+            )
+            is None
+        )
+        retry_decision = await waiter_prepared.consume(
+            retry_handle,
+            ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            retry_input,
+            ProjectRoleGrantIssueResourceContext(
+                resource_type="project_role_grant_issue",
+                resource_id=project_id,
+                scope_project_id=project_id,
+                target_actor_profile_id=target_id,
+                role=ProjectRole.SUBMITTER,
+                project_status=project.status,
+                target_eligible=True,
+                active_exact_role_exists=False,
+            ),
+        )
+        retried = await ProjectRoleGrantMutationService(waiter).complete_issue(
+            claim=retry_reservation.claim,
+            request=canonical,
+            decision=retry_decision,
+            actor_profile_id=caller_id,
+            reason="AUTH-10C concurrency proof",
+        )
+        await waiter.commit()
+        assert retried.status == "active"
         waiter_prepared.close()
         locker_prepared.close()
     async with authorization_factory() as clean:
@@ -8590,6 +8900,17 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                 ),
                 {"key": str(waiting_key)},
             )
-            == 0
+            == 1
+        )
+        assert (
+            await clean.scalar(
+                text(
+                    "select count(*) from audit_events where "
+                    "idempotency_reference=(select id from authority_idempotency_records "
+                    "where idempotency_key=:key)"
+                ),
+                {"key": str(waiting_key)},
+            )
+            == 2
         )
         await clean.rollback()
