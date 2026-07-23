@@ -210,6 +210,7 @@ class Settings(BaseSettings):
     )
 
     _api_rate_limit_key_secret: SecretStr | None = PrivateAttr(default=None)
+    _pagination_cursor_hmac_secret: SecretStr | None = PrivateAttr(default=None)
     _artifact_s3_access_key_id: SecretStr | None = PrivateAttr(default=None)
     _artifact_s3_secret_access_key: SecretStr | None = PrivateAttr(default=None)
     _artifact_s3_session_token: SecretStr | None = PrivateAttr(default=None)
@@ -217,13 +218,16 @@ class Settings(BaseSettings):
     def __init__(self, **values: object) -> None:
         """Remove rate-control secret material before structured validation."""
         secret: SecretStr | None = None
+        cursor_secret: SecretStr | None = None
         s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
         try:
             _normalize_artifact_s3_endpoint_input(values)
             secret = _extract_api_rate_limit_key_secret(values)
+            cursor_secret = _extract_pagination_cursor_hmac_secret(values)
             s3_secrets = _extract_artifact_s3_static_secrets(values)
             super().__init__(**values)
             self._api_rate_limit_key_secret = secret
+            self._pagination_cursor_hmac_secret = cursor_secret
             self._set_artifact_s3_static_secrets(s3_secrets)
             if not _ALTERNATE_VALIDATION_RESTORES_SECRETS.get():
                 self._validate_artifact_s3_secret_contract()
@@ -231,6 +235,7 @@ class Settings(BaseSettings):
             _clear_settings_private_secrets(self)
             values.clear()
             secret = None
+            cursor_secret = None
             s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
             raise
 
@@ -239,6 +244,7 @@ class Settings(BaseSettings):
         """Sanitize secret-bearing mappings before Pydantic retains input."""
         if isinstance(obj, Mapping) and (
             "api_rate_limit_key_secret" in obj
+            or "pagination_cursor_hmac_secret" in obj
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(obj)
         ):
             sanitized = dict(obj)
@@ -272,6 +278,7 @@ class Settings(BaseSettings):
             raise ValueError("invalid settings JSON")
         if isinstance(parsed, Mapping) and (
             "api_rate_limit_key_secret" in parsed
+            or "pagination_cursor_hmac_secret" in parsed
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(parsed)
         ):
             try:
@@ -292,6 +299,7 @@ class Settings(BaseSettings):
         """Sanitize string-mapping secret input before structured validation."""
         if isinstance(obj, Mapping) and (
             "api_rate_limit_key_secret" in obj
+            or "pagination_cursor_hmac_secret" in obj
             or _ARTIFACT_S3_SENSITIVE_INPUT_FIELDS.intersection(obj)
         ):
             sanitized = dict(obj)
@@ -313,6 +321,7 @@ class Settings(BaseSettings):
         """Validate a mapping without retaining supplied secret material."""
         supplied_s3_fields = _ARTIFACT_S3_SECRET_FIELDS.intersection(sanitized)
         secret: SecretStr | None = None
+        cursor_secret: SecretStr | None = None
         s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
         settings: Settings | None = None
         try:
@@ -322,9 +331,16 @@ class Settings(BaseSettings):
                 if "api_rate_limit_key_secret" in sanitized
                 else None
             )
+            cursor_secret = (
+                _extract_pagination_cursor_hmac_secret(sanitized)
+                if "pagination_cursor_hmac_secret" in sanitized
+                else None
+            )
             s3_secrets = _extract_artifact_s3_static_secrets(sanitized)
             if secret is not None:
                 sanitized["api_rate_limit_key_secret"] = None
+            if cursor_secret is not None:
+                sanitized["pagination_cursor_hmac_secret"] = None
             for field_name in supplied_s3_fields:
                 sanitized[field_name] = None
             restore_token = _ALTERNATE_VALIDATION_RESTORES_SECRETS.set(True)
@@ -334,6 +350,8 @@ class Settings(BaseSettings):
                 _ALTERNATE_VALIDATION_RESTORES_SECRETS.reset(restore_token)
             if secret is not None:
                 settings._api_rate_limit_key_secret = secret
+            if cursor_secret is not None:
+                settings._pagination_cursor_hmac_secret = cursor_secret
             settings._set_artifact_s3_static_secrets(s3_secrets)
             settings._validate_artifact_s3_secret_contract()
             return settings
@@ -342,6 +360,7 @@ class Settings(BaseSettings):
                 _clear_settings_private_secrets(settings)
             sanitized.clear()
             secret = None
+            cursor_secret = None
             s3_secrets = _EMPTY_ARTIFACT_S3_SECRETS
             settings = None
             raise
@@ -358,6 +377,9 @@ class Settings(BaseSettings):
         """Keep the manually resolved rate key out of dotenv validation input."""
         if isinstance(dotenv_settings, DotEnvSettingsSource):
             dotenv_settings.env_vars.pop("workstream_api_rate_limit_key_secret", None)
+            dotenv_settings.env_vars.pop(
+                "workstream_pagination_cursor_hmac_secret", None
+            )
             for field_name in _ARTIFACT_S3_SECRET_FIELDS:
                 dotenv_settings.env_vars.pop(f"workstream_{field_name}", None)
         return init_settings, env_settings, dotenv_settings, file_secret_settings
@@ -366,6 +388,11 @@ class Settings(BaseSettings):
     def api_rate_limit_key_secret(self) -> SecretStr | None:
         """Return the validated, redacted rate-control key setting."""
         return self._api_rate_limit_key_secret
+
+    @property
+    def pagination_cursor_hmac_secret(self) -> SecretStr | None:
+        """Return the validated, redacted pagination-cursor key setting."""
+        return self._pagination_cursor_hmac_secret
 
     @property
     def artifact_s3_access_key_id(self) -> SecretStr | None:
@@ -535,6 +562,7 @@ def _clear_settings_private_secrets(settings: object) -> None:
     if not isinstance(private_values, dict):
         return
     private_values["_api_rate_limit_key_secret"] = None
+    private_values["_pagination_cursor_hmac_secret"] = None
     private_values["_artifact_s3_access_key_id"] = None
     private_values["_artifact_s3_secret_access_key"] = None
     private_values["_artifact_s3_session_token"] = None
@@ -594,6 +622,32 @@ def _extract_api_rate_limit_key_secret(values: dict[str, object]) -> SecretStr |
         raise ValueError("invalid API rate limit key secret")
     try:
         decode_api_rate_limit_key_secret(secret)
+    except ValueError:
+        del raw_value, secret
+        raise
+    return secret
+
+
+def _extract_pagination_cursor_hmac_secret(
+    values: dict[str, object],
+) -> SecretStr | None:
+    """Resolve the required cursor key without retaining structured input."""
+    raw_value = _pop_optional_secret_source(
+        values,
+        field_name="pagination_cursor_hmac_secret",
+        environment_name="WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET",
+    )
+    if raw_value is _MISSING_SECRET or raw_value is None:
+        return None
+    if isinstance(raw_value, SecretStr):
+        secret = raw_value
+    elif isinstance(raw_value, str):
+        secret = SecretStr(raw_value)
+    else:
+        del raw_value
+        raise ValueError("invalid pagination cursor HMAC secret")
+    try:
+        decode_pagination_cursor_hmac_secret(secret)
     except ValueError:
         del raw_value, secret
         raise
@@ -702,4 +756,22 @@ def decode_api_rate_limit_key_secret(value: SecretStr) -> bytes:
     if not 32 <= len(decoded) <= 64 or base64.b64encode(decoded) != encoded:
         del value, secret, encoded, decoded
         raise ValueError("invalid API rate limit key secret")
+    return decoded
+
+
+def decode_pagination_cursor_hmac_secret(value: SecretStr) -> bytes:
+    """Decode one canonical padded Base64 32-byte cursor HMAC key."""
+    secret = value.get_secret_value()
+    if not secret.isascii():
+        del value, secret
+        raise ValueError("invalid pagination cursor HMAC secret")
+    try:
+        encoded = secret.encode("ascii")
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        del value, secret
+        raise ValueError("invalid pagination cursor HMAC secret") from None
+    if len(decoded) != 32 or base64.b64encode(decoded) != encoded:
+        del value, secret, encoded, decoded
+        raise ValueError("invalid pagination cursor HMAC secret")
     return decoded

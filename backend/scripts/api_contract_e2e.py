@@ -21,13 +21,18 @@ import httpx
 from alembic import command
 from alembic.config import Config
 from pydantic import SecretStr
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.db import session as db_session
 from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
     RateControlService,
     rate_key_digest,
+)
+from app.modules.authorization.models import (
+    AdminRoleGrant,
+    ProjectRoleGrant,
+    ProjectRoleQualificationSnapshot,
 )
 from app.modules.projects.models import PostSubmitCheckerPolicy, ProjectSetupRun
 from app.modules.projects.post_submit_policy import (
@@ -228,6 +233,10 @@ def api_environment() -> dict[str, str]:
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET",
         base64.b64encode(os.urandom(32)).decode("ascii"),
     )
+    env.setdefault(
+        "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET",
+        base64.b64encode(os.urandom(32)).decode("ascii"),
+    )
     env["PYTHONPATH"] = str(project_root())
     return env
 
@@ -278,6 +287,65 @@ async def exercise_rate_control_contract(env: dict[str, str]) -> None:
             {"scope": FIRST_ACCESS_SCOPE, "digest": digest},
         )
         await session.commit()
+
+
+async def seed_project_role_read_contract(
+    *,
+    project_id: str,
+    actor_profile_id: str,
+    manager_actor_profile_id: str,
+) -> str:
+    """Seed one bounded read fixture until AUTH-10C owns public mutations."""
+    snapshot_id = uuid4()
+    grant_id = uuid4()
+    async with db_session.get_session_factory()() as session:
+        admin_grant_id = await session.scalar(
+            select(AdminRoleGrant.id).where(
+                AdminRoleGrant.target_actor_profile_id == manager_actor_profile_id,
+                AdminRoleGrant.status == "active",
+            )
+        )
+        assert admin_grant_id is not None
+        session.add(
+            ProjectRoleQualificationSnapshot(
+                id=snapshot_id,
+                project_id=project_id,
+                actor_profile_id=actor_profile_id,
+                requested_role="submitter",
+                skills_snapshot={
+                    "availability": "available",
+                    "reference_ids": ["skill:api-contract"],
+                    "unavailable_reason": None,
+                },
+                reputation_snapshot={
+                    "availability": "unavailable",
+                    "reference_ids": [],
+                    "unavailable_reason": "no_record",
+                },
+                prior_project_work_refs=[],
+                external_expertise_refs=[],
+                captured_by_actor_profile_id=manager_actor_profile_id,
+                captured_by_admin_role_grant_id=admin_grant_id,
+            )
+        )
+        await session.flush()
+        session.add(
+            ProjectRoleGrant(
+                id=grant_id,
+                project_id=project_id,
+                actor_profile_id=actor_profile_id,
+                role="submitter",
+                status="active",
+                version=1,
+                grant_method="manual",
+                qualification_snapshot_id=snapshot_id,
+                granted_by_actor_profile_id=manager_actor_profile_id,
+                granted_by_admin_role_grant_id=admin_grant_id,
+                grant_reason="API contract read fixture",
+            )
+        )
+        await session.commit()
+    return str(grant_id)
 
 
 def start_api_server(port: int, env: dict[str, str]) -> tuple[subprocess.Popen, Path]:
@@ -899,6 +967,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         audience=flow_audience,
         secret=flow_secret,
     )
+    project_reader_token = issue_flow_token(
+        f"real-api-project-reader-{run_id}",
+        [],
+        issuer=flow_issuer,
+        audience=flow_audience,
+        secret=flow_secret,
+    )
     worker_subject = f"real-api-worker-{run_id}"
     worker_token = issue_flow_token(
         worker_subject,
@@ -966,6 +1041,33 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
     async with httpx.AsyncClient(base_url=base_url, timeout=10) as client:
         await request_json(client, "GET", "/health")
         await request_json(client, "GET", "/api/v1/health")
+        openapi = await request_json(client, "GET", "/openapi.json")
+        read_actions = {
+            path: item["get"]["x-workstream-action-id"]
+            for path, item in openapi["paths"].items()
+            if path in {
+                "/api/v1/projects/{project_id}/contributor-candidates",
+                "/api/v1/projects/{project_id}/role-grants",
+                "/api/v1/projects/{project_id}/role-grants/{grant_id}",
+            }
+        }
+        assert read_actions == {
+            "/api/v1/projects/{project_id}/contributor-candidates": (
+                "project.contributor_candidate.list"
+            ),
+            "/api/v1/projects/{project_id}/role-grants": "project_role_grant.list",
+            "/api/v1/projects/{project_id}/role-grants/{grant_id}": (
+                "project_role_grant.read"
+            ),
+        }
+        assert not any("authorization-context" in path for path in openapi["paths"])
+        assert not any(
+            operation.get("x-workstream-action-id")
+            in {"project_role_grant.issue", "project_role_grant.revoke"}
+            for path_item in openapi["paths"].values()
+            for method, operation in path_item.items()
+            if method in {"get", "post", "put", "patch", "delete"}
+        )
         await request_json(client, "GET", "/api/v1/auth/me", expected_status=401)
         await request_json(client, "GET", "/api/v1/auth/me", invalid_token, expected_status=401)
         await request_json(client, "GET", "/api/v1/auth/me", wrong_issuer_token, expected_status=401)
@@ -989,6 +1091,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert bootstrap_code == 0
         assert bootstrap["result_code"] == "bootstrapped"
+        project_reader_profile = await request_json(
+            client,
+            "GET",
+            "/api/v1/actors/me",
+            project_reader_token,
+        )
         service_payload = {
             "service_identity": "workstream.artifact.verifier",
             "subject": f"real-api-artifact-verifier-{run_id}",
@@ -1200,6 +1308,48 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             201,
         )
         await request_json(client, "GET", f"/api/v1/projects/{project['id']}", manager_token)
+        project_manager_grant = await client.post(
+            "/api/v1/admin-role-grants",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={
+                "target_actor_profile_id": project_reader_profile["actor_profile_id"],
+                "role": "project_manager",
+                "scope_type": "project",
+                "scope_project_id": project["id"],
+                "reason": "Real API project-role read authority proof",
+            },
+        )
+        assert project_manager_grant.status_code == 201, project_manager_grant.text
+        candidates = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/contributor-candidates?limit=1",
+            project_reader_token,
+        )
+        assert set(candidates) == {"items", "next_cursor"}
+        grants = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/role-grants?limit=1",
+            project_reader_token,
+        )
+        assert grants == {"items": [], "next_cursor": None}
+        missing_grant = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/role-grants/{uuid4()}",
+            project_reader_token,
+            expected_status=404,
+        )
+        missing_project = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{uuid4()}/role-grants/{uuid4()}",
+            project_reader_token,
+            expected_status=404,
+        )
+        assert missing_grant["error"]["code"] == missing_project["error"]["code"]
+        assert missing_grant["error"]["message"] == missing_project["error"]["message"]
 
         guide = await request_json(
             client,
@@ -1357,6 +1507,52 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert worker_profile["external_issuer"] == flow_issuer
         assert worker_profile["status"] == "active"
         assert set(worker_profile["skill_tags"]) == {"stem", "proofs"}
+        role_grant_id = await seed_project_role_read_contract(
+            project_id=project["id"],
+            actor_profile_id=canonical_actor["actor_profile_id"],
+            manager_actor_profile_id=manager_profile["actor_profile_id"],
+        )
+        candidates = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/contributor-candidates?limit=100",
+            project_reader_token,
+        )
+        assert {"actor_profile_id", "display_name"} == set(candidates["items"][0])
+        grants = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/role-grants?status=active&role=submitter",
+            project_reader_token,
+        )
+        assert [item["id"] for item in grants["items"]] == [role_grant_id]
+        grant = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}",
+            project_reader_token,
+        )
+        assert set(grant) == {
+            "id", "project_id", "actor_profile_id", "role", "status", "version",
+            "grant_method", "qualification_snapshot", "granted_by_actor_profile_id",
+            "granted_by_admin_role_grant_id", "granted_at", "grant_reason",
+            "revoked_by_actor_profile_id", "revoked_at", "revoked_reason",
+        }
+        assert set(grant["qualification_snapshot"]) == {
+            "id", "requested_role", "skills_snapshot", "reputation_snapshot",
+            "prior_project_work_refs", "external_expertise_refs",
+            "captured_by_actor_profile_id", "captured_by_admin_role_grant_id",
+            "captured_at",
+        }
+        assert set(grant["qualification_snapshot"]["skills_snapshot"]) == {
+            "availability", "reference_ids", "unavailable_reason",
+        }
+        assert set(grant["qualification_snapshot"]["reputation_snapshot"]) == {
+            "availability", "reference_ids", "unavailable_reason",
+        }
+        assert grant["revoked_by_actor_profile_id"] is None
+        assert grant["revoked_at"] is None
+        assert grant["revoked_reason"] is None
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
         ready_work_context = await request_json(
             client,

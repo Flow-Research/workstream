@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
@@ -50,12 +50,20 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    Project,
     ProjectGuide,
     ProjectSetupRun,
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
 )
+from app.modules.authorization.models import (
+    AdminRoleGrant,
+    AuthorityControl,
+    ProjectRoleGrant,
+    ProjectRoleQualificationSnapshot,
+)
+from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.projects import service as project_service_module
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.service import (
@@ -117,6 +125,170 @@ async def project_client(project_database_env: str) -> AsyncIterator[AsyncClient
 
 def auth_headers(token: str = "project-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.asyncio
+async def test_project_role_grant_repository_filters_and_uses_strict_keyset(
+    project_database_env: str,
+) -> None:
+    project_id = uuid4()
+    actor_id = uuid4()
+    grantor_id = uuid4()
+    admin_grant_id = uuid4()
+    granted_at = datetime(2026, 7, 22, tzinfo=UTC)
+    grant_ids = sorted((uuid4(), uuid4(), uuid4()), key=str)
+    async with db_session.get_session_factory()() as session:
+        session.add(
+            Project(
+                id=str(project_id),
+                name="Authorization read project",
+                slug=f"authorization-read-{project_id}",
+                status="archived",
+            )
+        )
+        session.add_all(
+            [
+                ActorProfile(
+                    id=str(profile_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(profile_id),
+                )
+                for profile_id in (actor_id, grantor_id)
+            ]
+        )
+        session.add_all(
+            [
+                ActorIdentityLink(
+                    id=str(uuid4()),
+                    actor_profile_id=str(profile_id),
+                    issuer="https://identity.test",
+                    subject=f"project-role-read-{profile_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(profile_id),
+                    last_verified_at=granted_at,
+                )
+                for profile_id in (actor_id, grantor_id)
+            ]
+        )
+        await session.flush()
+        session.add(
+            AdminRoleGrant(
+                id=admin_grant_id,
+                target_actor_profile_id=str(grantor_id),
+                role="access_administrator",
+                scope_type="system",
+                scope_project_id=None,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="test bootstrap",
+            )
+        )
+        control = await session.get(AuthorityControl, 1)
+        assert control is not None
+        control.bootstrap_completed = True
+        control.bootstrap_grant_id = admin_grant_id
+        control.version = 1
+        snapshots = []
+        grants = []
+        for index, grant_id in enumerate(grant_ids):
+            role = ("submitter", "reviewer", "adjudicator")[index]
+            snapshot_id = uuid4()
+            snapshots.append(
+                ProjectRoleQualificationSnapshot(
+                    id=snapshot_id,
+                    project_id=str(project_id),
+                    actor_profile_id=str(actor_id),
+                    requested_role=role,
+                    skills_snapshot={
+                        "availability": "available",
+                        "reference_ids": [f"skill:{index}"],
+                        "unavailable_reason": None,
+                    },
+                    reputation_snapshot={
+                        "availability": "unavailable",
+                        "reference_ids": [],
+                        "unavailable_reason": "no_record",
+                    },
+                    prior_project_work_refs=[],
+                    external_expertise_refs=[],
+                    captured_by_actor_profile_id=str(grantor_id),
+                    captured_by_admin_role_grant_id=admin_grant_id,
+                    captured_at=granted_at,
+                )
+            )
+            revoked = index == 2
+            grants.append(
+                ProjectRoleGrant(
+                    id=grant_id,
+                    project_id=str(project_id),
+                    actor_profile_id=str(actor_id),
+                    role=role,
+                    status="revoked" if revoked else "active",
+                    version=2 if revoked else 1,
+                    grant_method="manual",
+                    qualification_snapshot_id=snapshot_id,
+                    granted_by_actor_profile_id=str(grantor_id),
+                    granted_by_admin_role_grant_id=admin_grant_id,
+                    grant_reason="qualified",
+                    granted_at=granted_at,
+                    revoked_by_actor_profile_id=(str(grantor_id) if revoked else None),
+                    revoked_by_admin_role_grant_id=(admin_grant_id if revoked else None),
+                    revoked_reason=("test revoke" if revoked else None),
+                    revoked_at=(granted_at if revoked else None),
+                )
+            )
+        session.add_all(snapshots)
+        await session.flush()
+        session.add_all(grants)
+        await session.commit()
+
+        repository = AdminAuthorizationRepository(session)
+        statements: list[str] = []
+
+        def record_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        engine = db_session.get_engine().sync_engine
+        event.listen(engine, "before_cursor_execute", record_sql)
+        try:
+            first = await repository.list_project_role_grants(
+                project_id=project_id,
+                status=None,
+                role=None,
+                cursor=None,
+                limit=1,
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", record_sql)
+        assert all("count(" not in statement.lower() for statement in statements)
+        assert [row[0].id for row in first] == grant_ids[:2]
+        second = await repository.list_project_role_grants(
+            project_id=project_id,
+            status=None,
+            role=None,
+            cursor=(first[0][0].granted_at, grant_ids[0]),
+            limit=1,
+        )
+        assert [row[0].id for row in second] == grant_ids[1:]
+        revoked = await repository.list_project_role_grants(
+            project_id=project_id,
+            status="revoked",
+            role="adjudicator",
+            cursor=None,
+            limit=10,
+        )
+        assert [row[0].id for row in revoked] == [grant_ids[2]]
+        assert (
+            await repository.get_project_role_grant(
+                project_id=uuid4(),
+                grant_id=grant_ids[0],
+            )
+            is None
+        )
 
 
 class DeterministicTestProjectGuideAgentRuntime:

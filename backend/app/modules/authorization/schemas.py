@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from enum import StrEnum
 import json
 import re
@@ -66,6 +67,66 @@ class ProjectRole(StrEnum):
     SUBMITTER = "submitter"
     REVIEWER = "reviewer"
     ADJUDICATOR = "adjudicator"
+
+
+class ContributorCandidateRead(BaseModel):
+    """Minimal contributor candidate disclosed to one authorized manager."""
+
+    model_config = _MODEL_CONFIG
+    actor_profile_id: UUID
+    display_name: str | None
+
+
+class ContributorCandidateListResponse(BaseModel):
+    """Count-free keyset page of privacy-safe candidates."""
+
+    model_config = _MODEL_CONFIG
+    items: list[ContributorCandidateRead]
+    next_cursor: str | None
+
+
+class ProjectRoleQualificationSnapshotRead(BaseModel):
+    """Strict bounded qualification evidence attached to one grant."""
+
+    model_config = _MODEL_CONFIG
+    id: UUID
+    requested_role: ProjectRole
+    skills_snapshot: QualificationAvailabilitySnapshot
+    reputation_snapshot: QualificationAvailabilitySnapshot
+    prior_project_work_refs: list[UUID]
+    external_expertise_refs: list[ReferenceToken]
+    captured_by_actor_profile_id: UUID
+    captured_by_admin_role_grant_id: UUID
+    captured_at: datetime
+
+
+class ProjectRoleGrantRead(BaseModel):
+    """Exact privacy-bounded project-role grant history shape."""
+
+    model_config = _MODEL_CONFIG
+    id: UUID
+    project_id: UUID
+    actor_profile_id: UUID
+    role: ProjectRole
+    status: Literal["active", "revoked"]
+    version: Literal[1, 2]
+    grant_method: Literal["manual"]
+    qualification_snapshot: ProjectRoleQualificationSnapshotRead
+    granted_by_actor_profile_id: UUID
+    granted_by_admin_role_grant_id: UUID
+    granted_at: datetime
+    grant_reason: str
+    revoked_by_actor_profile_id: UUID | None
+    revoked_at: datetime | None
+    revoked_reason: str | None
+
+
+class ProjectRoleGrantListResponse(BaseModel):
+    """Count-free keyset page of project-role grant history."""
+
+    model_config = _MODEL_CONFIG
+    items: list[ProjectRoleGrantRead]
+    next_cursor: str | None
 
 
 class QualificationAvailability(StrEnum):

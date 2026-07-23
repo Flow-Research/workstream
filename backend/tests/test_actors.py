@@ -9,13 +9,13 @@ import hashlib
 from pathlib import Path
 import time
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import UniqueConstraint, event, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps.auth import get_auth_verification_result
@@ -61,6 +61,111 @@ from app.schemas.auth import (
 
 ISSUER = "https://identity.test"
 RATE_SECRET = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
+
+
+def test_candidate_exists_query_is_backed_by_one_link_per_profile_constraint() -> None:
+    assert any(
+        isinstance(constraint, UniqueConstraint)
+        and {column.name for column in constraint.columns} == {"actor_profile_id"}
+        for constraint in ActorIdentityLink.__table__.constraints
+    )
+
+
+@pytest.mark.asyncio
+async def test_contributor_candidate_query_filters_and_paginates_without_gaps(
+    actor_database_env: str,
+) -> None:
+    created_at = datetime(2026, 7, 22, tzinfo=UTC)
+    caller_id = uuid4()
+    eligible_ids = sorted((uuid4(), uuid4()), key=str)
+    inactive_id = uuid4()
+    revoked_id = uuid4()
+    service_id = uuid4()
+    async with db_session.get_session_factory()() as session:
+        profiles = [
+            ActorProfile(
+                id=str(actor_id),
+                actor_kind="human",
+                status=("suspended" if actor_id == inactive_id else "active"),
+                provisioning_method="automatic_first_access",
+                created_by=str(actor_id),
+                created_at=created_at,
+                suspended_by=(str(caller_id) if actor_id == inactive_id else None),
+                suspended_at=(created_at if actor_id == inactive_id else None),
+                suspension_reason=("test hold" if actor_id == inactive_id else None),
+            )
+            for actor_id in [caller_id, *eligible_ids, inactive_id, revoked_id]
+        ]
+        session.add_all(profiles)
+        session.add(
+            ActorProfile(
+                id=str(service_id),
+                actor_kind="service",
+                status="active",
+                provisioning_method="manual_service_provisioning",
+                service_identity=ServiceIdentity.ARTIFACT_VERIFIER.value,
+                created_by=str(caller_id),
+                created_at=created_at,
+            )
+        )
+        await session.flush()
+        session.add_all(
+            [
+                ActorIdentityLink(
+                    id=str(uuid4()),
+                    actor_profile_id=str(actor_id),
+                    issuer=ISSUER,
+                    subject=f"candidate-{actor_id}",
+                    subject_kind="human",
+                    status=("revoked" if actor_id == revoked_id else "active"),
+                    linked_by=str(actor_id),
+                    last_verified_at=created_at,
+                    revoked_by=(str(caller_id) if actor_id == revoked_id else None),
+                    revoked_at=(created_at if actor_id == revoked_id else None),
+                    revoked_reason=("test revoke" if actor_id == revoked_id else None),
+                )
+                for actor_id in [caller_id, *eligible_ids, inactive_id, revoked_id]
+            ]
+        )
+        session.add(
+            ActorIdentityLink(
+                id=str(uuid4()),
+                actor_profile_id=str(service_id),
+                issuer=ISSUER,
+                subject=f"candidate-service-{service_id}",
+                subject_kind="service",
+                status="active",
+                linked_by=str(caller_id),
+                last_verified_at=None,
+            )
+        )
+        await session.commit()
+
+        repository = ActorRepository(session)
+        statements: list[str] = []
+
+        def record_sql(_conn, _cursor, statement, _parameters, _context, _executemany):
+            statements.append(statement)
+
+        engine = db_session.get_engine().sync_engine
+        event.listen(engine, "before_cursor_execute", record_sql)
+        try:
+            first = await repository.list_contributor_candidates(
+                caller_actor_profile_id=caller_id,
+                cursor=None,
+                limit=1,
+            )
+            second = await repository.list_contributor_candidates(
+                caller_actor_profile_id=caller_id,
+                cursor=(first[0].created_at, UUID(first[0].id)),
+                limit=1,
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", record_sql)
+        assert [row.id for row in first] == [str(eligible_ids[0]), str(eligible_ids[1])]
+        assert [row.id for row in second] == [str(eligible_ids[1])]
+        assert all("count(" not in statement.lower() for statement in statements)
+        assert all(str(service_id) != row.id for row in first)
 
 
 def test_actor_admin_response_requires_exact_service_identity_pair() -> None:

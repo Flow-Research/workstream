@@ -2818,3 +2818,29 @@ the independent checker against its unchanged 90 percent floor. The repair adds
 focused malformed-selection and exact-Git-identity cases; the identical command
 now passes 206 tests at 90.18 percent branch coverage. Exact-SHA internal repair
 review and fresh hosted checks remain.
+
+## 2026-07-22 - WS-AUTH-001-10B2 Internal Implementation Review
+
+AUTH-10B2 exact implementation SHA
+`6c7108251829c3c2853fc384bd8cc0668381ac7b` activates exactly three
+privacy-safe project candidate/grant reads after the durable authorization-read
+gate. Two internal repair cycles closed dependency-order, nonhuman concealment,
+cursor replay/pre-query, no-count SQL, service filtering, OpenAPI, hosted shape,
+and documentation proof gaps. Senior engineering, architecture, reuse/dedup,
+security/auth, QA/test, test delta, product/ops, docs, and CI integrity all pass
+with no open finding. Focused and isolated PostgreSQL evidence passes; GitHub
+full CI/coverage, hosted API E2E, CodeRabbit, and human review remain.
+
+## 2026-07-22 - WS-AUTH-001-10B2 External Review Reconciliation
+
+The first GitHub run found two valid integration gaps: hosted E2E used an actor
+without project-scoped Project Manager authority, and the closed audit fixture
+omitted the three activated actions. Repair SHA `95c3ecf7` provisions a
+distinct reader through the public grant API and restores exact audit parity;
+all nine internal tracks pass that repair. Fresh Backend run `29892395881`
+passes preflight, hosted E2E, all four shards, and aggregate coverage, and Agent
+Gates passes. CodeRabbit's refreshed description check passes and it has no
+inline finding. Its unexplained 37.61 percent docstring warning is
+non-actionable because the unchanged repository gate independently passes the
+same head at 87.6 percent against the 80 percent floor. Human review and
+explicit approval of PR #178 remain.

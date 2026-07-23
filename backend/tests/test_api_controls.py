@@ -439,13 +439,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 71
+    assert len(route_inventory) == 74
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "a986e2e29f87b06b47d88063a240a7ef2dfe3a9ed9457e17b1b3b945fedb42a3"
+        "f0076e4145d8fe68365912a6e5bc047dece3ae2ac1e69619018b5119a9710c09"
     )
-    assert len(protected_inventory) == 69
+    assert len(protected_inventory) == 72
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "b8574eeaf9a216b65d4c12fb470e0b5835186e0e2f16ce750f8859dd79d71de9"
+        "b05ebbca27a538958af6c122403ccf3997ab08326943150f6c763ce9c321eec5"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
@@ -495,7 +495,35 @@ def test_openapi_documents_request_error_and_response_context() -> None:
             "actor.admin_role_grant_history.read"
         ),
         "POST /api/v1/admin-role-grants/{grant_id}/revoke": "admin_role_grant.revoke",
+        "GET /api/v1/projects/{project_id}/contributor-candidates": (
+            "project.contributor_candidate.list"
+        ),
+        "GET /api/v1/projects/{project_id}/role-grants": "project_role_grant.list",
+        "GET /api/v1/projects/{project_id}/role-grants/{grant_id}": (
+            "project_role_grant.read"
+        ),
     }
+    project_read_shapes = {
+        "/api/v1/projects/{project_id}/contributor-candidates": (
+            "ContributorCandidateListResponse"
+        ),
+        "/api/v1/projects/{project_id}/role-grants": "ProjectRoleGrantListResponse",
+        "/api/v1/projects/{project_id}/role-grants/{grant_id}": "ProjectRoleGrantRead",
+    }
+    for path, schema_name in project_read_shapes.items():
+        operation = schema["paths"][path]["get"]
+        assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/{schema_name}"
+        }
+        assert schema["components"]["schemas"][schema_name]["additionalProperties"] is False
+    assert not any("authorization-context" in path for path in schema["paths"])
+    assert not any(
+        operation.get("x-workstream-action-id")
+        in {"project_role_grant.issue", "project_role_grant.revoke"}
+        for path_item in schema["paths"].values()
+        for method, operation in path_item.items()
+        if method in methods
+    )
     for path, schema_name in (
         ("/api/v1/actors/{actor_profile_id}", "ActorProfileAdminResponse"),
         (
