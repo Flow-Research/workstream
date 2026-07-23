@@ -1150,4 +1150,16 @@ lifecycle, endpoint, authorization, response, and non-policy behavior remained
 prohibited. Candidate `b68a1e22b3bf373d15479784d545fcc9b5737f64`
 removes the five retired inputs, uses canonical finding fields, and supplies the
 two reviewed durations. Ruff and diff integrity pass, and all required internal
-tracks pass on the exact candidate. Fresh GitHub proof remains required.
+tracks pass on the exact candidate.
+
+The completed Backend run then exposed shard 1's six stale 0033 head/rollback
+expectations and shard 3's ART fixture policy-after-publication ordering. The
+six assertions now name 0034 without changing historical targets. The ART
+fixture repair was reverted after an internal scope finding, prospectively
+authorized, and reapplied byte-identically: policies flush while the same guide
+is draft, then its prior active/approval/effective values are restored before
+Task, Submission, or CheckerRun setup. Final code candidate
+`b9501b31565370306aea168ff4c218a2880e6c0b` passes the four exact Alembic tests,
+the exact ART test, Ruff, diff integrity, and all internal tracks. CodeRabbit
+did not perform a review because its limit was reached. Fresh GitHub and actual
+CodeRabbit proof remain required.

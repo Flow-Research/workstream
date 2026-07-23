@@ -73,16 +73,21 @@ coverage and prove at least 90 percent for the materially changed subsystem.
 
 Senior engineering, QA/test, security/auth, product/ops, architecture, docs,
 reuse/dedup, test delta, CI integrity, and circuit breaker all PASS on code
-candidate `35531df254c6b25726d666a5e89eda997b97d792` after three repair rounds.
+candidate `b9501b31565370306aea168ff4c218a2880e6c0b`. The earlier
+`35531df254c6b25726d666a5e89eda997b97d792` candidate predates external CI
+fixture repairs.
 
 ## External review
 
-PR #195's first run passed preflight and Agent Gates. CodeRabbit returned pass
-with no actionable comment while reporting service rate limiting. API E2E found
-that its existing Project Guide fixture still sent retired policy fields. The
-prospectively reviewed repair changes only that fixture to the canonical 03P
-schema; exact-SHA internal review and Ruff pass. Fresh current-head GitHub
-Actions and CodeRabbit checks remain required before merge.
+PR #195's first run passed preflight, Agent Gates, and shards 2 and 4. It failed
+API E2E, shards 1 and 3, and therefore the aggregate test gate. Repairs align
+the API policy request fixture, six migration-head expectations, and one ART
+fixture's policy-before-publication ordering without changing assertions or
+product behavior. Focused failing tests, Ruff, diff integrity, and exact-SHA
+internal review pass. CodeRabbit's green context explicitly said it could not
+start a review because its review limit was reached; it is not review evidence.
+Fresh current-head GitHub Actions and an actual CodeRabbit review remain
+required before merge.
 
 ## Remaining risks and follow-up work
 
