@@ -465,6 +465,66 @@ def _recovery_policy() -> dict:
     }
 
 
+def _recovery_policy_v3() -> dict:
+    return {
+        "schema_version": 3,
+        "activation": {
+            "initiative_id": "WS-ENG-007",
+            "chunk_id": "WS-ENG-007-00R2",
+        },
+        "recovered_merges": [
+            {
+                "initiative_id": "WS-ENG-007",
+                "chunk_id": "WS-ENG-007-PLAN",
+                "pr_number": 187,
+                "merge_sha": "c" * 40,
+            },
+            {
+                "initiative_id": "WS-ENG-007",
+                "chunk_id": "WS-ENG-007-00R1",
+                "pr_number": 188,
+                "merge_sha": "d" * 40,
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda policy: policy.update(extra=True),
+        lambda policy: policy.pop("activation"),
+        lambda policy: policy.update(recovered_merges=[]),
+        lambda policy: policy.update(recovered_merges=[*policy["recovered_merges"], {
+            "initiative_id": "WS-ENG-008", "chunk_id": "WS-ENG-008-01",
+            "pr_number": 189, "merge_sha": "e" * 40,
+        }]),
+        lambda policy: policy["recovered_merges"][0].update(pr_number=True),
+        lambda policy: policy["recovered_merges"][0].update(merge_sha="bad"),
+        lambda policy: policy["recovered_merges"][1].update(
+            merge_sha=policy["recovered_merges"][0]["merge_sha"]
+        ),
+        lambda policy: policy["recovered_merges"][1].update(
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-PLAN", pr_number=187
+        ),
+        lambda policy: policy["recovered_merges"][1].update(
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-PLAN", pr_number=999
+        ),
+        lambda policy: policy["recovered_merges"][1].update(
+            initiative_id="WS-ENG-008", chunk_id="WS-ENG-008-01", pr_number=187
+        ),
+        lambda policy: policy.update(
+            activation={"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-PLAN"}
+        ),
+    ],
+)
+def test_recovery_policy_v3_schema_fails_closed(mutation) -> None:
+    policy = _recovery_policy_v3()
+    mutation(policy)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_recovery_policy(policy)
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -646,6 +706,105 @@ def test_prepare_recovery_binds_exact_target_and_two_merge_plan(
         {"initiative_id": "WS-ENG-002", "chunk_id": "WS-ENG-002-01", "pr_number": 166},
         {"initiative_id": "WS-ENG-003", "chunk_id": "WS-ENG-003-01", "pr_number": 167},
     ]
+
+
+def test_prepare_recovery_v3_binds_three_adjacent_merges_and_is_deterministic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = _record()
+    base["source"]["main_sha"] = "a" * 40
+    recovered_plan = _merge_record(
+        "WS-ENG-007", "WS-ENG-007-PLAN", 187, "c" * 40, "a" * 40
+    )
+    recovered_r1 = _merge_record(
+        "WS-ENG-007", "WS-ENG-007-00R1", 188, "d" * 40, "c" * 40
+    )
+    target = _merge_record(
+        "WS-ENG-007", "WS-ENG-007-00R2", 189, "e" * 40, "d" * 40
+    )
+    records = {"c" * 40: recovered_plan, "d" * 40: recovered_r1, "e" * 40: target}
+    for index, record in enumerate(records.values(), start=1):
+        record["source"]["head_sha"] = str(index) * 40
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy_v3())
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: json.loads(json.dumps(records[sha])),
+    )
+    protected_heads: list[str] = []
+    monkeypatch.setattr(
+        loop, "_validate_protected_actions_checks",
+        lambda _client, _repository, head: protected_heads.append(head),
+    )
+    roots = [tmp_path / "state-one", tmp_path / "state-two"]
+    final_trees: list[dict[str, str]] = []
+    for state_root in roots:
+        loop.apply_merge_record(state_root, json.loads(json.dumps(base)))
+        exemptions = loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="e" * 40,
+            planned_shas=["c" * 40, "d" * 40, "e" * 40],
+        )
+        assert [item["pr_number"] for item in exemptions] == [187, 188, 189]
+        serialized = json.dumps({"schema_version": 2, "exemptions": exemptions})
+        for sha in ("c" * 40, "d" * 40, "e" * 40):
+            reloaded = loop._validate_recovery_exemptions(json.loads(serialized))
+            assert loop.apply_merge_record(
+                state_root, json.loads(json.dumps(records[sha])),
+                recovery_exemptions=reloaded,
+            )
+        loop.assert_recovery_consumed(
+            state_root, "e" * 40,
+            loop._validate_recovery_exemptions(json.loads(serialized)),
+        )
+        final_trees.append({
+            path.relative_to(state_root).as_posix(): path.read_text(encoding="utf-8")
+            for path in sorted(state_root.rglob("*")) if path.is_file()
+        })
+        assert loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="e" * 40, planned_shas=[],
+        ) == []
+    assert final_trees[0] == final_trees[1]
+    assert protected_heads == ["1" * 40, "2" * 40, "3" * 40] * 2
+    four = {
+        "schema_version": 2,
+        "exemptions": [
+            {"initiative_id": f"WS-ENG-00{index}", "chunk_id": f"WS-ENG-00{index}-01", "pr_number": 180 + index}
+            for index in range(1, 5)
+        ],
+    }
+    with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
+        loop._validate_recovery_exemptions(four)
+    three = {"schema_version": 1, "exemptions": four["exemptions"][:3]}
+    with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
+        loop._validate_recovery_exemptions(three)
+    with pytest.raises(loop.LoopMemoryError, match="unsupported"):
+        loop._validate_recovery_exemptions({**three, "schema_version": 3})
+
+    for bad_plan in (
+        ["d" * 40, "c" * 40, "e" * 40],
+        ["c" * 40, "e" * 40],
+        ["c" * 40, "d" * 40, "e" * 40, "f" * 40],
+    ):
+        state_root = tmp_path / f"bad-{len(bad_plan)}-{bad_plan[0][0]}"
+        loop.apply_merge_record(state_root, json.loads(json.dumps(base)))
+        with pytest.raises(loop.LoopMemoryError, match="exact ordered"):
+            loop.prepare_recovery_exemptions(
+                object(), "Flow-Research/workstream", repository_root=tmp_path,
+                state_root=state_root, target_sha="e" * 40, planned_shas=bad_plan,
+            )
+
+    broken = json.loads(json.dumps(recovered_r1))
+    broken["source"]["first_parent_sha"] = "b" * 40
+    records["d" * 40] = broken
+    state_root = tmp_path / "bad-parent"
+    loop.apply_merge_record(state_root, json.loads(json.dumps(base)))
+    with pytest.raises(loop.LoopMemoryError, match="first-parent adjacent"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=state_root, target_sha="e" * 40,
+            planned_shas=["c" * 40, "d" * 40, "e" * 40],
+        )
 
 
 def test_prepare_recovery_rejects_non_exact_plan(
@@ -839,6 +998,7 @@ def test_recovery_cli_round_trip_consumes_inventory(
     ]) == 0
     recovery_file = tmp_path / "recovery.json"
     recovery_file.write_text(capsys.readouterr().out, encoding="utf-8")
+    assert json.loads(recovery_file.read_text())["schema_version"] == 1
     common = [
         "--repository", "Flow-Research/workstream", "--repository-root", str(tmp_path),
         "--state-root", str(state_root), "--branch-root", str(state_root),
@@ -854,6 +1014,53 @@ def test_recovery_cli_round_trip_consumes_inventory(
     assert loop.main([
         "assert-recovery-consumed", "--state-root", str(state_root),
         "--target-sha", "d" * 40, "--recovery-file", str(recovery_file),
+    ]) == 0
+
+
+def test_recovery_v3_cli_round_trip_reloads_three_entry_inventory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    state_root = tmp_path / "state-v3"
+    base = _record()
+    base["legacy_exemptions"] = []
+    loop.apply_merge_record(state_root, base)
+    records = {
+        "c" * 40: _merge_record("WS-ENG-007", "WS-ENG-007-PLAN", 187, "c" * 40, "a" * 40),
+        "d" * 40: _merge_record("WS-ENG-007", "WS-ENG-007-00R1", 188, "d" * 40, "c" * 40),
+        "e" * 40: _merge_record("WS-ENG-007", "WS-ENG-007-00R2", 189, "e" * 40, "d" * 40),
+    }
+    monkeypatch.setenv("GITHUB_TOKEN", "token")
+    monkeypatch.setattr(loop, "_assert_state_branch", lambda _root: None)
+    monkeypatch.setattr(loop, "GitHubClient", lambda _token, _url: object())
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: _recovery_policy_v3())
+    monkeypatch.setattr(loop, "collect_merge_record", lambda _client, _repository, sha: records[sha])
+    monkeypatch.setattr(loop, "_validate_protected_actions_checks", lambda *_args: None)
+    plan_file = tmp_path / "plan-v3"
+    plan_file.write_text(f"{'c' * 40}\n{'d' * 40}\n{'e' * 40}\n", encoding="utf-8")
+    assert loop.main([
+        "prepare-recovery", "--repository", "Flow-Research/workstream",
+        "--repository-root", str(tmp_path), "--state-root", str(state_root),
+        "--target-sha", "e" * 40, "--plan-file", str(plan_file),
+    ]) == 0
+    recovery_file = tmp_path / "recovery-v3.json"
+    recovery_file.write_text(capsys.readouterr().out, encoding="utf-8")
+    serialized = json.loads(recovery_file.read_text())
+    assert serialized["schema_version"] == 2
+    assert len(loop._validate_recovery_exemptions(serialized)) == 3
+    common = [
+        "--repository", "Flow-Research/workstream", "--repository-root", str(tmp_path),
+        "--state-root", str(state_root), "--branch-root", str(state_root),
+    ]
+    for sha in ("c" * 40, "d" * 40, "e" * 40):
+        assert loop.main([
+            "update", *common, "--merge-sha", sha,
+            "--recovery-file", str(recovery_file),
+        ]) == 0
+    assert loop.main([
+        "assert-recovery-consumed", "--state-root", str(state_root),
+        "--target-sha", "e" * 40, "--recovery-file", str(recovery_file),
     ]) == 0
 
 

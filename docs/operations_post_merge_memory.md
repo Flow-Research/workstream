@@ -261,6 +261,40 @@ Recovery does not start implementation. `WS-ENG-007-01` and `WS-ENG-006-01`
 remain stopped afterward; each requires its own ordinary explicit signed start
 on exact current `main`.
 
+## WS-ENG-007 Canonical Check-Evidence Recovery
+
+PR `#188` repaired tree normalization but its post-merge run failed because PR
+`#187` contains two legitimate successful `agent-gates` reruns. Protected check
+validation now treats reruns as ordered evidence versions, not a cardinality
+error. Every same-name candidate must target the exact reviewed head, come from
+the pinned GitHub Actions application, contain a strict positive unique ID and
+timezone-aware lifecycle timestamps, and be completed. Completed invocations
+are ordered by parsed `started_at` instant and ID; `completed_at` validates
+terminal consistency but never determines recency. The latest invocation must
+succeed. A later failure therefore cannot be hidden by an older run that
+finishes afterward, and any foreign, malformed, incomplete, or duplicate-ID
+candidate fails the whole protected-name set.
+
+`WS-ENG-007-00R2` uses closed recovery schema v3. The certificate permits at
+most two recovered merges and production names exactly this first-parent order:
+
+1. PR #187 / `WS-ENG-007-PLAN` /
+   `8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8`;
+2. PR #188 / `WS-ENG-007-00R1` /
+   `c65633f8f0991dbefe7b0635e053aab0df8f9af8`;
+3. the direct-next `WS-ENG-007-00R2` activation merge.
+
+Exact protected GitHub Actions provenance and aggregate required-check success
+are required for every merge. The ordered plan must begin at signed state
+`73b457925b02301587b83d01ced0adb66319d134`; any extra, missing, reordered,
+repeated, intervening, or non-adjacent merge fails. All temporary identities are
+consumed before signing, never serialize into the generated tree, and are inert
+on replay. Recovery starts no implementation: `WS-ENG-007-01` and
+`WS-ENG-006-01` each remain stopped pending their own explicit signed start.
+The ephemeral recovery-file transport preserves schema v1 at its original
+two-entry maximum; schema v2 is emitted only for this exact three-entry result
+and requires exactly three unique entries on every reload.
+
 ## Historical WS-ENG-006 Exact Root Repair
 
 `WS-ENG-006-00` uses the closed two-merge recovery certificate to reconcile

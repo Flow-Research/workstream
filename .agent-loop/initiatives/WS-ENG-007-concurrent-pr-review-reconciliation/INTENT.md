@@ -79,3 +79,34 @@ forged manifests, and merge-group combined trees.
 Approve each implementation chunk and the later repository-setting change that
 enables GitHub merge queue. No queue or automatic merge setting changes in the
 planning intake.
+
+## Recovery reliability addendum — WS-ENG-007-00R2
+
+### Problem being solved
+
+Signed reconciliation treats legitimate same-name GitHub Actions reruns as
+ambiguity. PR #187 therefore cannot enter signed history even though both
+`agent-gates` runs and its `test` run are trusted and successful.
+
+### Target behavior
+
+Rerun count is harmless. A deterministic latest trusted run controls each
+protected result, later failures cannot be hidden by older successes, and the
+exact three-merge backlog is reconciled atomically without reusable authority.
+
+### Boundaries preserved
+
+Required checks, branch protection, signing keys, permissions, human merge
+approval, coverage floors, product behavior, and successor start gates do not
+change.
+
+### Proof strategy
+
+Adversarial check histories, permutation invariance, exact production policy
+pinning, ordered recovery consumption, replay rejection, and byte-identical
+idempotency evidence.
+
+### Human decision
+
+The user's explicit `start` instruction approves planning and execution of this
+bounded reliability repair only. Successor starts remain separately gated.

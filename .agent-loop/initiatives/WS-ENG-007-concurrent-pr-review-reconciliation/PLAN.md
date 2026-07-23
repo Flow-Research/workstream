@@ -181,3 +181,28 @@ always:
 
 Stop if preservation depends on mutable PR prose, inaccessible commits, an
 unbounded semantic judgment, weakened CI, or automatic human approval.
+
+## Recovery reliability plan — WS-ENG-007-00R2
+
+1. Replace exact-cardinality protected-check validation with a deterministic
+   latest-run selector that validates all same-name candidates against exact
+   head, pinned app, structural fields, and parseable timestamps before sorting.
+2. Reject the complete name-set if any candidate is malformed, untrusted, or
+   incomplete. Order completed candidates by parsed `started_at` instant then
+   positive numeric check-run ID. `completed_at` proves terminal consistency
+   but never defines invocation recency. Require the selected run to succeed.
+3. Extend the closed recovery certificate with schema v3: an ordered
+   `recovered_merges` list plus one activation. Validate exact plan equality,
+   chronological first-parent adjacency, identities, aggregate required checks,
+   protected-check provenance on every recovered/target head, uniqueness, and
+   consumption. Schema v3 permits at most two recovered merges; production
+   requires exactly both named entries.
+4. Bind production recovery to PR #187, PR #188, and direct-next 00R2 only.
+5. Prove adversarial rerun histories, permutation invariance, exact recovery,
+   non-serialization, replay rejection, and deterministic repeated output.
+6. Preserve the existing workflow, signing, human approval, successor stops,
+   and required-check names unchanged.
+
+Rejected alternatives: ignore duplicate runs, accept any successful run, use API
+array order, use only a check name/status context, rerun until history changes,
+manually edit signed state, or add a persistent recovery bypass.

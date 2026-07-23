@@ -44,6 +44,9 @@ ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+RFC3339_PATTERN = re.compile(
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
+)
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
 REQUIRED_METADATA_KEYS = {
     "schema_version",
@@ -68,6 +71,10 @@ PLANNING_ROOT_FILES = frozenset(
 )
 GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
+CHECK_RUN_CONCLUSIONS = frozenset({
+    "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
+    "success", "timed_out",
+})
 
 
 class LoopMemoryError(RuntimeError):
@@ -813,22 +820,48 @@ def _validate_protected_actions_checks(
     total = payload.get("total_count") if isinstance(payload, dict) else None
     if not isinstance(runs, list) or type(total) is not int or total != len(runs):
         raise LoopMemoryError("planning intake check-run evidence is incomplete")
+    seen_ids: set[int] = set()
     for name in ("agent-gates", "test"):
         matches = [item for item in runs if isinstance(item, dict) and item.get("name") == name]
-        if len(matches) != 1:
-            raise LoopMemoryError(f"planning intake check {name} is missing or duplicated")
-        item = matches[0]
-        app = item.get("app")
-        if (
-            item.get("head_sha") != head_sha
-            or item.get("status") != "completed"
-            or item.get("conclusion") != "success"
-            or not item.get("completed_at")
-            or not isinstance(app, dict)
-            or app.get("id") != GITHUB_ACTIONS_APP_ID
-            or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
-        ):
+        if not matches:
+            raise LoopMemoryError(f"planning intake check {name} is missing")
+        candidates: list[tuple[datetime, int, dict[str, Any]]] = []
+        for item in matches:
+            app = item.get("app")
+            check_id = item.get("id")
+            started_at = _rfc3339_instant(item.get("started_at"))
+            completed_at = _rfc3339_instant(item.get("completed_at"))
+            if (
+                type(check_id) is not int
+                or check_id <= 0
+                or check_id in seen_ids
+                or item.get("head_sha") != head_sha
+                or item.get("status") != "completed"
+                or item.get("conclusion") not in CHECK_RUN_CONCLUSIONS
+                or completed_at < started_at
+                or not isinstance(app, dict)
+                or app.get("id") != GITHUB_ACTIONS_APP_ID
+                or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
+            ):
+                raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
+            seen_ids.add(check_id)
+            candidates.append((started_at, check_id, item))
+        item = max(candidates, key=lambda candidate: (candidate[0], candidate[1]))[2]
+        if item.get("conclusion") != "success":
             raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
+
+
+def _rfc3339_instant(value: Any) -> datetime:
+    """Return one timezone-aware RFC3339 instant or fail closed."""
+    if not isinstance(value, str) or not RFC3339_PATTERN.fullmatch(value):
+        raise LoopMemoryError("planning intake check timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise LoopMemoryError("planning intake check timestamp is invalid") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise LoopMemoryError("planning intake check timestamp is invalid")
+    return parsed
 
 
 def _tree_entries(
@@ -1996,9 +2029,12 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
         or not isinstance(payload.get("exemptions"), list)
     ):
         raise LoopMemoryError("recovery exemption inventory has an invalid schema")
+    version = payload.get("schema_version")
+    if version not in {1, 2}:
+        raise LoopMemoryError("recovery exemption inventory is unsupported")
     chronological = json.loads(_canonical_json(payload["exemptions"]))
     _validate_legacy_exemptions({
-        "schema_version": payload.get("schema_version"),
+        "schema_version": 1,
         "exemptions": sorted(
             chronological,
             key=lambda item: (
@@ -2011,7 +2047,15 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
         (item["initiative_id"], item["chunk_id"], item["pr_number"])
         for item in chronological
     ]
-    if len(chronological) > 2 or len(identities) != len(set(identities)):
+    chunk_identities = [(item[0], item[1]) for item in identities]
+    pr_numbers = [item[2] for item in identities]
+    if (
+        (version == 1 and len(chronological) > 2)
+        or (version == 2 and len(chronological) != 3)
+        or len(identities) != len(set(identities))
+        or len(chunk_identities) != len(set(chunk_identities))
+        or len(pr_numbers) != len(set(pr_numbers))
+    ):
         raise LoopMemoryError("recovery exemption inventory is not unique and bounded")
     return chronological
 
@@ -2079,15 +2123,15 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
     version = payload.get("schema_version")
     if version == 2 and "recovered_merge" in payload:
         raise LoopMemoryError("recovery policy is unsupported")
-    expected = (
-        {"schema_version", "activation", "recovered_merge"}
-        if version == 1
-        else {"schema_version", "activation", "mode"}
-    )
+    expected = {
+        1: {"schema_version", "activation", "recovered_merge"},
+        2: {"schema_version", "activation", "mode"},
+        3: {"schema_version", "activation", "recovered_merges"},
+    }.get(version, set())
     if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    if version not in {1, 2} or not isinstance(activation, dict):
+    if version not in {1, 2, 3} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
@@ -2096,6 +2140,43 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
     if version == 2:
         if payload.get("mode") != "exact_single_target":
             raise LoopMemoryError("recovery policy mode is unsupported")
+        return json.loads(_canonical_json(payload))
+    if version == 3:
+        recovered_merges = payload.get("recovered_merges")
+        if not isinstance(recovered_merges, list) or not 1 <= len(recovered_merges) <= 2:
+            raise LoopMemoryError("recovered merge inventory is invalid")
+        chunk_identities: set[tuple[str, str]] = set()
+        pr_numbers: set[int] = set()
+        merge_shas: set[str] = set()
+        for recovered in recovered_merges:
+            if not isinstance(recovered, dict) or set(recovered) != {
+                "initiative_id", "chunk_id", "pr_number", "merge_sha"
+            }:
+                raise LoopMemoryError("recovered merge identity is invalid")
+            if (
+                not _is_valid_exemption_id(
+                    recovered.get("initiative_id"), recovered.get("chunk_id")
+                )
+                or type(recovered.get("pr_number")) is not int
+                or recovered["pr_number"] <= 0
+            ):
+                raise LoopMemoryError("recovered merge identity is invalid")
+            _validate_sha(recovered.get("merge_sha"))
+            chunk_identity = (recovered["initiative_id"], recovered["chunk_id"])
+            if (
+                chunk_identity in chunk_identities
+                or recovered["pr_number"] in pr_numbers
+                or recovered["merge_sha"] in merge_shas
+            ):
+                raise LoopMemoryError("recovered merge inventory is not unique")
+            if (
+                recovered["initiative_id"] == activation["initiative_id"]
+                and recovered["chunk_id"] == activation["chunk_id"]
+            ):
+                raise LoopMemoryError("recovery activation collides with recovered merge")
+            chunk_identities.add(chunk_identity)
+            pr_numbers.add(recovered["pr_number"])
+            merge_shas.add(recovered["merge_sha"])
         return json.loads(_canonical_json(payload))
     recovered = payload.get("recovered_merge")
     if not isinstance(recovered, dict) or set(recovered) != {
@@ -2167,6 +2248,49 @@ def prepare_recovery_exemptions(
         if not isinstance(existing, list) or exemption in existing:
             raise LoopMemoryError("recovery exemption collides with signed state")
         return [exemption]
+    if policy["schema_version"] == 3:
+        recovered_policies = policy["recovered_merges"]
+        expected_shas = [item["merge_sha"] for item in recovered_policies] + [target_sha]
+        if planned_shas != expected_shas:
+            raise LoopMemoryError("recovery plan is not the exact ordered sequence")
+        recovered_records = [
+            collect_merge_record(client, repository, item["merge_sha"])
+            for item in recovered_policies
+        ]
+        for recovered_policy, recovered_record in zip(
+            recovered_policies, recovered_records, strict=True
+        ):
+            if _record_exemption(recovered_record) != {
+                "initiative_id": recovered_policy["initiative_id"],
+                "chunk_id": recovered_policy["chunk_id"],
+                "pr_number": recovered_policy["pr_number"],
+            }:
+                raise LoopMemoryError("recovered merge does not match its certificate")
+        signed_main = (
+            state.get("event", {}).get("main_sha")
+            if _event_type(state) in {"start", "cancel"}
+            else state.get("source", {}).get("main_sha")
+        )
+        records = [*recovered_records, target_record]
+        expected_parent = signed_main
+        for merge_sha, record in zip(planned_shas, records, strict=True):
+            source = record.get("source", {})
+            if (
+                source.get("main_sha") != merge_sha
+                or source.get("first_parent_sha") != expected_parent
+            ):
+                raise LoopMemoryError("recovery plan is not first-parent adjacent")
+            expected_parent = merge_sha
+            _validate_protected_actions_checks(
+                client, repository, source.get("head_sha")
+            )
+            if not record.get("checks", {}).get("all_required_passed"):
+                raise LoopMemoryError("recovery required checks did not pass")
+        exemptions = [_record_exemption(record) for record in records]
+        existing = state.get("legacy_exemptions", [])
+        if not isinstance(existing, list) or any(item in existing for item in exemptions):
+            raise LoopMemoryError("recovery exemption collides with signed state")
+        return exemptions
     recovered = policy["recovered_merge"]
     if planned_shas != [recovered["merge_sha"], target_sha]:
         raise LoopMemoryError("recovery plan is not the exact two-merge sequence")
@@ -3158,7 +3282,10 @@ def main(argv: list[str] | None = None) -> int:
                 repository_root=args.repository_root, state_root=args.state_root,
                 target_sha=args.target_sha, planned_shas=planned_shas,
             )
-            print(_canonical_json({"schema_version": 1, "exemptions": exemptions}))
+            transport_version = 2 if len(exemptions) == 3 else 1
+            print(_canonical_json({
+                "schema_version": transport_version, "exemptions": exemptions
+            }))
         elif args.command == "assert-recovery-consumed":
             exemptions = _validate_recovery_exemptions(_load_json(args.recovery_file))
             assert_recovery_consumed(args.state_root, args.target_sha, exemptions)
