@@ -4,9 +4,11 @@
 
 Active through signed `Loop Memory Explicit Event` run `30014647556` on exact
 trusted main `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Implementation candidate
-`35531df254c6b25726d666a5e89eda997b97d792` passed every required internal
-review track and focused local gate. Publication remains gated on final evidence
-review and current-head GitHub Actions, CodeRabbit, and human review.
+`b9501b31565370306aea168ff4c218a2880e6c0b` is the reviewed pre-CodeRabbit-repair
+candidate that passed every required internal review track and focused local gate.
+`35531df254c6b25726d666a5e89eda997b97d792` is historical pre-external-repair
+authorization context only. Publication remains gated on final evidence review
+and current-head GitHub Actions, CodeRabbit, and human review.
 
 ## Goal
 
@@ -139,6 +141,12 @@ The following cross-owner files are proof-only exceptions:
   guide remains an unactivated draft (`status='draft'`, `effective_at is null`,
   and `superseded_at is null`). Delete is rejected before dereferencing `NEW`
   and therefore never waits on guide state.
+- Statement-level `BEFORE TRUNCATE` triggers
+  `trg_review_policies_reject_truncate` and
+  `trg_revision_policies_reject_truncate` use those table-typed functions to
+  reject bulk erasure before dereferencing `NEW`; downgrade removes both
+  truncate triggers before dropping their functions. Direct-SQL proof must
+  exercise the rejection independently for each policy table.
 - Policy `id`, `project_id`, `guide_version`, and `created_at` are immutable from
   insert. Draft replacement updates the existing row only and may change only
   canonical policy fields plus configuring provenance. The trigger overwrites
