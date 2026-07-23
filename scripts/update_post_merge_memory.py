@@ -2291,11 +2291,12 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         2: {"schema_version", "activation", "mode"},
         3: {"schema_version", "activation", "recovered_merges"},
         4: {"schema_version", "signed_basis", "activation", "recovered_merges"},
+        5: {"schema_version", "signed_basis", "activation", "recovered_merges"},
     }.get(version, set())
     if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    if version not in {1, 2, 3, 4} or not isinstance(activation, dict):
+    if version not in {1, 2, 3, 4, 5} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
@@ -2305,12 +2306,17 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         if payload.get("mode") != "exact_single_target":
             raise LoopMemoryError("recovery policy mode is unsupported")
         return json.loads(_canonical_json(payload))
-    if version in {3, 4}:
+    if version in {3, 4, 5}:
         recovered_merges = payload.get("recovered_merges")
-        valid_length = (1 <= len(recovered_merges) <= 2) if isinstance(recovered_merges, list) and version == 3 else (isinstance(recovered_merges, list) and len(recovered_merges) == 3)
+        valid_length = (
+            1 <= len(recovered_merges) <= 2
+            if isinstance(recovered_merges, list) and version == 3
+            else isinstance(recovered_merges, list)
+            and len(recovered_merges) == (3 if version == 4 else 1)
+        )
         if not valid_length:
             raise LoopMemoryError("recovered merge inventory is invalid")
-        if version == 4:
+        if version in {4, 5}:
             _validate_sha(payload.get("signed_basis"))
         chunk_identities: set[tuple[str, str]] = set()
         pr_numbers: set[int] = set()
@@ -2424,7 +2430,7 @@ def prepare_recovery_exemptions(
         if not isinstance(existing, list) or exemption in existing:
             raise LoopMemoryError("recovery exemption collides with signed state")
         return [exemption]
-    if policy["schema_version"] in {3, 4}:
+    if policy["schema_version"] in {3, 4, 5}:
         recovered_policies = policy["recovered_merges"]
         expected_shas = [item["merge_sha"] for item in recovered_policies] + [target_sha]
         if planned_shas != expected_shas:
@@ -2451,7 +2457,7 @@ def prepare_recovery_exemptions(
             if _event_type(state) in {"start", "cancel"}
             else state.get("source", {}).get("main_sha")
         )
-        if policy["schema_version"] == 4 and signed_main != policy["signed_basis"]:
+        if policy["schema_version"] in {4, 5} and signed_main != policy["signed_basis"]:
             raise LoopMemoryError("recovery signed basis does not match canonical state")
         records = [*recovered_records, target_record]
         expected_parent = signed_main
