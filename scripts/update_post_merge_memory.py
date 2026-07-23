@@ -2029,9 +2029,12 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
         or not isinstance(payload.get("exemptions"), list)
     ):
         raise LoopMemoryError("recovery exemption inventory has an invalid schema")
+    version = payload.get("schema_version")
+    if version not in {1, 2}:
+        raise LoopMemoryError("recovery exemption inventory is unsupported")
     chronological = json.loads(_canonical_json(payload["exemptions"]))
     _validate_legacy_exemptions({
-        "schema_version": payload.get("schema_version"),
+        "schema_version": 1,
         "exemptions": sorted(
             chronological,
             key=lambda item: (
@@ -2047,7 +2050,8 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
     chunk_identities = [(item[0], item[1]) for item in identities]
     pr_numbers = [item[2] for item in identities]
     if (
-        len(chronological) > 3
+        (version == 1 and len(chronological) > 2)
+        or (version == 2 and len(chronological) != 3)
         or len(identities) != len(set(identities))
         or len(chunk_identities) != len(set(chunk_identities))
         or len(pr_numbers) != len(set(pr_numbers))
@@ -3278,7 +3282,10 @@ def main(argv: list[str] | None = None) -> int:
                 repository_root=args.repository_root, state_root=args.state_root,
                 target_sha=args.target_sha, planned_shas=planned_shas,
             )
-            print(_canonical_json({"schema_version": 1, "exemptions": exemptions}))
+            transport_version = 2 if len(exemptions) == 3 else 1
+            print(_canonical_json({
+                "schema_version": transport_version, "exemptions": exemptions
+            }))
         elif args.command == "assert-recovery-consumed":
             exemptions = _validate_recovery_exemptions(_load_json(args.recovery_file))
             assert_recovery_consumed(args.state_root, args.target_sha, exemptions)

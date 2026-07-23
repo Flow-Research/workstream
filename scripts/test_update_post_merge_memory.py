@@ -745,7 +745,7 @@ def test_prepare_recovery_v3_binds_three_adjacent_merges_and_is_deterministic(
             planned_shas=["c" * 40, "d" * 40, "e" * 40],
         )
         assert [item["pr_number"] for item in exemptions] == [187, 188, 189]
-        serialized = json.dumps({"schema_version": 1, "exemptions": exemptions})
+        serialized = json.dumps({"schema_version": 2, "exemptions": exemptions})
         for sha in ("c" * 40, "d" * 40, "e" * 40):
             reloaded = loop._validate_recovery_exemptions(json.loads(serialized))
             assert loop.apply_merge_record(
@@ -767,7 +767,7 @@ def test_prepare_recovery_v3_binds_three_adjacent_merges_and_is_deterministic(
     assert final_trees[0] == final_trees[1]
     assert protected_heads == ["1" * 40, "2" * 40, "3" * 40] * 2
     four = {
-        "schema_version": 1,
+        "schema_version": 2,
         "exemptions": [
             {"initiative_id": f"WS-ENG-00{index}", "chunk_id": f"WS-ENG-00{index}-01", "pr_number": 180 + index}
             for index in range(1, 5)
@@ -775,6 +775,11 @@ def test_prepare_recovery_v3_binds_three_adjacent_merges_and_is_deterministic(
     }
     with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
         loop._validate_recovery_exemptions(four)
+    three = {"schema_version": 1, "exemptions": four["exemptions"][:3]}
+    with pytest.raises(loop.LoopMemoryError, match="unique and bounded"):
+        loop._validate_recovery_exemptions(three)
+    with pytest.raises(loop.LoopMemoryError, match="unsupported"):
+        loop._validate_recovery_exemptions({**three, "schema_version": 3})
 
     for bad_plan in (
         ["d" * 40, "c" * 40, "e" * 40],
@@ -993,6 +998,7 @@ def test_recovery_cli_round_trip_consumes_inventory(
     ]) == 0
     recovery_file = tmp_path / "recovery.json"
     recovery_file.write_text(capsys.readouterr().out, encoding="utf-8")
+    assert json.loads(recovery_file.read_text())["schema_version"] == 1
     common = [
         "--repository", "Flow-Research/workstream", "--repository-root", str(tmp_path),
         "--state-root", str(state_root), "--branch-root", str(state_root),
@@ -1040,7 +1046,9 @@ def test_recovery_v3_cli_round_trip_reloads_three_entry_inventory(
     ]) == 0
     recovery_file = tmp_path / "recovery-v3.json"
     recovery_file.write_text(capsys.readouterr().out, encoding="utf-8")
-    assert len(loop._validate_recovery_exemptions(json.loads(recovery_file.read_text()))) == 3
+    serialized = json.loads(recovery_file.read_text())
+    assert serialized["schema_version"] == 2
+    assert len(loop._validate_recovery_exemptions(serialized)) == 3
     common = [
         "--repository", "Flow-Research/workstream", "--repository-root", str(tmp_path),
         "--state-root", str(state_root), "--branch-root", str(state_root),

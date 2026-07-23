@@ -97,6 +97,10 @@ docs/operations_post_merge_memory.md
       before signing, serializes none,
       and rejects missing, extra, reordered, repeated, intervening, wrong-parent,
       wrong-identity, check-failure, partial-consumption, and replay cases.
+- [ ] Ephemeral recovery-file schema v1 retains its original maximum of two
+      entries. Transport schema v2 is emitted only for the exact three-entry
+      schema-v3 recovery result, requires exactly three unique entries, and
+      rejects unknown versions, partial inventories, and four entries.
 - [ ] Applying the exact authenticated plan to two fresh copies of the same
       starting state produces byte-identical complete generated closed trees,
       including signing input. Replay from completed state proves no exemption

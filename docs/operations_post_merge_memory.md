@@ -291,6 +291,9 @@ repeated, intervening, or non-adjacent merge fails. All temporary identities are
 consumed before signing, never serialize into the generated tree, and are inert
 on replay. Recovery starts no implementation: `WS-ENG-007-01` and
 `WS-ENG-006-01` each remain stopped pending their own explicit signed start.
+The ephemeral recovery-file transport preserves schema v1 at its original
+two-entry maximum; schema v2 is emitted only for this exact three-entry result
+and requires exactly three unique entries on every reload.
 
 ## Historical WS-ENG-006 Exact Root Repair
 
