@@ -26,8 +26,9 @@ merge, partial consumption, or failed required checks fails closed.
 - 217 focused updater, agent-gate, and independent-checker tests passed.
 - 97 manual agent-gate tests passed.
 - Merge intent, Markdown links, stale wording, and diff checks passed.
-- All nine required internal review tracks passed exact code SHA
-  `c620610e20061b9755c825ed2dc1f89ba80bef4a` after findings were repaired.
+- All nine required internal review tracks passed exact reviewed SHA
+  `8a41b64ea8d9392d9dafea325bfa0d10d1ff46d0` after internal and CodeRabbit
+  findings were repaired.
 - No workflow, coverage threshold, dependency, secret, permission, signing key,
   branch protection, product lifecycle, or human merge authority changed.
 

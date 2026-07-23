@@ -10,9 +10,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: c620610e20061b9755c825ed2dc1f89ba80bef4a
+Reviewed code SHA: 8a41b64ea8d9392d9dafea325bfa0d10d1ff46d0
 
-Reviewed at: 2026-07-23T05:42:14Z
+Reviewed at: 2026-07-23T06:13:23Z
 
 Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/root/eng006_qa_ci_tests; security/auth=/root/eng006_security_ops_reuse; product/ops=/root/eng006_security_ops_reuse; architecture=/root/eng006_senior_arch_docs; docs=/root/eng006_senior_arch_docs; CI-integrity=/root/eng006_qa_ci_tests; reuse/dedup=/root/eng006_security_ops_reuse; test-delta=/root/eng006_qa_ci_tests
 
@@ -60,6 +60,11 @@ git diff --check origin/main...HEAD
 
 Results: 217 focused tests passed; 97 manual agent-gate tests passed; all other
 commands passed.
+
+All reviewer tracks reapproved exact head
+`8a41b64ea8d9392d9dafea325bfa0d10d1ff46d0` after the two CodeRabbit
+documentation fixes. The fixes change no executable code, tests, workflows, or
+authority behavior.
 
 ## Remaining Risk
 
