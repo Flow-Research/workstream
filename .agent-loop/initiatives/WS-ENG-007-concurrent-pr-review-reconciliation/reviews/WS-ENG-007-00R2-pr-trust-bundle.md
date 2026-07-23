@@ -30,7 +30,8 @@ reload.
 - Legacy schema-v1 and new schema-v2 CLI recovery round trips pass.
 - Merge intent, Markdown links, stale wording, and committed diff checks pass.
 - All nine internal tracks passed exact reviewed SHA
-  `bb3f03b3b9026a7eb3a9adb40e657e07c4eafac3` after findings were repaired.
+  `345c83c0393f3a2957d9d03f58b93eac39d65cb2` after internal and CodeRabbit
+  findings were repaired.
 - No workflow, required-check name, coverage, dependency, signing key, secret,
   permission, product behavior, or human merge authority changed.
 

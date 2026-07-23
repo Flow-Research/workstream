@@ -10,9 +10,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: bb3f03b3b9026a7eb3a9adb40e657e07c4eafac3
+Reviewed code SHA: 345c83c0393f3a2957d9d03f58b93eac39d65cb2
 
-Reviewed at: 2026-07-23T07:05:13Z
+Reviewed at: 2026-07-23T07:22:46Z
 
 Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/root/eng006_qa_ci_tests; security/auth=/root/eng006_security_ops_reuse; product/ops=/root/eng006_security_ops_reuse; architecture=/root/eng006_senior_arch_docs; docs=/root/eng006_senior_arch_docs; CI-integrity=/root/eng006_qa_ci_tests; reuse/dedup=/root/eng006_security_ops_reuse; test-delta=/root/eng006_qa_ci_tests
 
@@ -66,6 +66,10 @@ git diff --check origin/main...HEAD
 Results: 231 focused tests and 98 manual gate tests passed. All other commands
 passed. Live PR #187 and PR #188 protected-check responses also validated under
 the canonical selector.
+
+All reviewer tracks reapproved exact head
+`345c83c0393f3a2957d9d03f58b93eac39d65cb2` after the CodeRabbit Markdown
+repair. That repair changes no executable code, tests, workflows, or authority.
 
 ## Remaining Risk
 
