@@ -14,27 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29980536072/job/89121186155"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29998973737/job/89179341073"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29979971728/job/89120380628"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29998905015/job/89180567578"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-10B2",
-    "chunk_title": "Privacy-Safe Project Role Grant Reads",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-10C",
-    "next_chunk_title": "Project Role Grant Mutations",
+    "chunk_id": "WS-ENG-007-00R3",
+    "chunk_title": "Merge-Bound Evidence Recovery",
+    "initiative_id": "WS-ENG-007",
+    "next_chunk_id": "WS-ENG-007-01",
+    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-10C",
-    "next_chunk_title": "Project Role Grant Mutations",
+    "next_chunk_id": "WS-ENG-007-01",
+    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -45,21 +45,47 @@
       "pr_number": 149
     }
   ],
+  "protected_checks": {
+    "schema_version": 1,
+    "selected": {
+      "agent-gates": {
+        "app_id": 15368,
+        "app_slug": "github-actions",
+        "completed_at": "2026-07-23T10:21:51Z",
+        "conclusion": "success",
+        "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
+        "id": 89179341073,
+        "merge_cutoff": "2026-07-23T10:28:07Z",
+        "started_at": "2026-07-23T10:21:13Z"
+      },
+      "test": {
+        "app_id": 15368,
+        "app_slug": "github-actions",
+        "completed_at": "2026-07-23T10:27:56Z",
+        "conclusion": "success",
+        "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
+        "id": 89180567578,
+        "merge_cutoff": "2026-07-23T10:28:07Z",
+        "started_at": "2026-07-23T10:27:18Z"
+      }
+    },
+    "sha256": "25cd95219b299baef12c4d09180eb48a8e9d68089eece3b07748e3d8f8bb2c5c"
+  },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "93c14181f8a14c88c2cbfb2f2ea886c8d46deec8",
-    "head_ref": "codex/ws-auth-001-10b2-project-role-grant-reads",
-    "head_sha": "c14ba4c684a267eacc791a77fc61b2820ba6d07e",
-    "intent_blob_sha": "b72bf63bd52443c4e83a230596c2de9b147d31f0",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10B2.json",
-    "main_sha": "73b457925b02301587b83d01ced0adb66319d134",
-    "merged_at": "2026-07-23T04:54:13Z",
+    "first_parent_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
+    "head_ref": "codex/ws-eng-007-00r3-merge-bound-evidence",
+    "head_sha": "c739a00f7a8999b4e682c8c74046251f9b739d11",
+    "intent_blob_sha": "90eeaef9874f1f5965092e191e37a57ada7dfb2a",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-007-00R3.json",
+    "main_sha": "a3eecadcf847ac70fc28c58dad642f2d761015e0",
+    "merged_at": "2026-07-23T10:28:07Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 178,
-    "pr_title": "feat(auth): add privacy-safe project role reads",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/178"
+    "pr_number": 190,
+    "pr_title": "fix(loop-memory): freeze merge-bound evidence",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/190"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-23T04:54:13Z"
+  "updated_at": "2026-07-23T10:28:07Z"
 }
