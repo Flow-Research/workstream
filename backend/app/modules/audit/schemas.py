@@ -60,6 +60,9 @@ _FACT_VALUES: dict[str, frozenset[str]] = {
     "provisioning_method": frozenset({"automatic_first_access", "manual_service_provisioning"}),
     "role": _ADMIN_ROLES | _PROJECT_ROLES,
     "scope_type": frozenset({"system", "project"}),
+    "future_obligation": frozenset(
+        {"auth13_assignment", "rev_reviewer_obligation", "none"}
+    ),
 }
 
 
@@ -201,9 +204,30 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
     if event in exact:
         return (before, after) == exact[event]
     if event == AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED:
-        return (before, after) in (
+        if (before, after) in (
             ({"effective": True}, {"effective": False}),
             ({"effective": False}, {"effective": True}),
+        ):
+            return True
+        if before is None or after is None:
+            return False
+        expected_obligation = {
+            "submitter": "auth13_assignment",
+            "reviewer": "rev_reviewer_obligation",
+            "adjudicator": "none",
+        }.get(before.get("role"))
+        keys = {"effective", "role", "scope_type", "scope_id", "future_obligation"}
+        return (
+            set(before) == keys
+            and set(after) == keys
+            and before["effective"] is True
+            and after["effective"] is False
+            and before["scope_type"] == after["scope_type"] == "project"
+            and before["role"] == after["role"]
+            and before["scope_id"] == after["scope_id"]
+            and before["future_obligation"]
+            == after["future_obligation"]
+            == expected_obligation
         )
     if event == AuthorityEventType.ACTOR_IDENTITY_LINKED:
         return before is None and after in ({"status": "active", "subject_kind": "human"}, {"status": "active", "subject_kind": "service"})
@@ -404,7 +428,18 @@ class AuthorityAuditEventInput(BaseModel):
                 if restoration
                 else ({"effective": True}, {"effective": False})
             )
-            if (before, after) != expected_direction:
+            projected_project_role = (
+                self.permission_id is PermissionId.PROJECT_ROLE_GRANT_MANAGE
+                and before is not None
+                and after is not None
+                and before.get("effective") is True
+                and after.get("effective") is False
+                and before.get("role") in _PROJECT_ROLES
+                and before.get("role") == after.get("role")
+                and before.get("future_obligation")
+                == after.get("future_obligation")
+            )
+            if (before, after) != expected_direction and not projected_project_role:
                 raise ValueError("invalid authority invalidation direction")
             if self.permission_id in {
                 PermissionId.ADMIN_ROLE_GRANT,

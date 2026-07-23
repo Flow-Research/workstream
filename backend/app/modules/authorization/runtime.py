@@ -358,6 +358,7 @@ class ProjectRoleGrantIssueResourceContext(BaseModel):
     role: ProjectRole
     project_status: Literal["draft", "active", "paused", "archived"]
     target_eligible: bool
+    active_exact_role_exists: bool
 
 
 class ProjectRoleGrantRevokeResourceContext(BaseModel):

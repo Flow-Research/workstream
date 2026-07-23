@@ -1232,51 +1232,74 @@ async def issue_project_role_grant(
     )
     actor_id = UUID(resolved.profile.id)
     service = ProjectRoleGrantMutationService(session)
-    reservation = await service.reserve(
-        key=idempotency_key, actor_profile_id=actor_id, request=canonical
+    reservation = await _database_call(
+        session,
+        service.reserve(key=idempotency_key, actor_profile_id=actor_id, request=canonical),
     )
     prepared_input = PreparedAuthorizationInput(
         idempotency_key=idempotency_key,
         request_value=canonical.model_dump(mode="json"),
     )
     try:
-        handle = await prepared.prepare(
-            ActionId.PROJECT_ROLE_GRANT_ISSUE,
-            prepared_input,
-            PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT,
-                project_id=project_id,
-                target_actor_profile_id=payload.target_actor_profile_id,
-                role=payload.role,
+        handle = await _database_call(
+            session,
+            prepared.prepare(
+                ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                prepared_input,
+                PreparedAuthorityScope(
+                    kind=PreparedAuthorityScopeKind.PROJECT,
+                    project_id=project_id,
+                    target_actor_profile_id=payload.target_actor_profile_id,
+                    role=payload.role,
+                ),
             ),
         )
     except PreparedAuthorizationUnsupported as exc:
         raise _project_role_resource_not_found() from exc
-    project = await service.repository.lock_project(project_id)
+    project = await _database_call(session, service.repository.lock_project(project_id))
     if project is None:
         raise _project_role_resource_not_found()
+    await _database_call(
+        session,
+        service.repository.take_project_role_issue_lock(
+            project_role_issue_lock_key(
+                payload.target_actor_profile_id,
+                project_id,
+                payload.role.value,
+            )
+        ),
+    )
     target_eligible = (
-        await service.repository.lock_eligible_human(payload.target_actor_profile_id) is not None
-    )
-    await service.repository.take_project_role_issue_lock(
-        project_role_issue_lock_key(
-            payload.target_actor_profile_id,
-            project_id,
-            payload.role.value,
+        await _database_call(
+            session,
+            service.repository.lock_eligible_human(payload.target_actor_profile_id),
         )
+        is not None
     )
-    decision = await prepared.consume(
-        handle,
-        ActionId.PROJECT_ROLE_GRANT_ISSUE,
-        prepared_input,
-        ProjectRoleGrantIssueResourceContext(
-            resource_type="project_role_grant_issue",
-            resource_id=project_id,
-            scope_project_id=project_id,
-            target_actor_profile_id=payload.target_actor_profile_id,
-            role=payload.role,
-            project_status=project.status,
-            target_eligible=target_eligible,
+    active_exact_role = await _database_call(
+        session,
+        service.repository.find_active_project_role(
+            project_id=project_id,
+            actor_profile_id=payload.target_actor_profile_id,
+            role=payload.role.value,
+        ),
+    )
+    decision = await _database_call(
+        session,
+        prepared.consume(
+            handle,
+            ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            prepared_input,
+            ProjectRoleGrantIssueResourceContext(
+                resource_type="project_role_grant_issue",
+                resource_id=project_id,
+                scope_project_id=project_id,
+                target_actor_profile_id=payload.target_actor_profile_id,
+                role=payload.role,
+                project_status=project.status,
+                target_eligible=target_eligible,
+                active_exact_role_exists=active_exact_role is not None,
+            ),
         ),
     )
     if reservation.outcome == "mismatch":
@@ -1292,8 +1315,11 @@ async def issue_project_role_grant(
         await _commit_or_unavailable(session)
         raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
     if reservation.outcome == "replay":
-        row = await service.repository.lock_project_role_grant(
-            project_id=project_id, grant_id=reservation.response.resource_id
+        row = await _database_call(
+            session,
+            service.repository.lock_project_role_grant(
+                project_id=project_id, grant_id=reservation.response.resource_id
+            ),
         )
         if (
             reservation.response.resource_type.value != "project_role_grant"
@@ -1318,12 +1344,19 @@ async def issue_project_role_grant(
         await _commit_or_unavailable(session)
         return _project_role_response(row[0])
     try:
-        response = await service.complete_issue(
-            claim=reservation.claim,
-            request=canonical,
-            decision=decision,
-            actor_profile_id=actor_id,
-            reason=payload.reason,
+        if active_exact_role is not None:
+            raise ProjectRoleGrantConflict(
+                "project_role_grant_exists", active_exact_role.id
+            )
+        response = await _database_call(
+            session,
+            service.complete_issue(
+                claim=reservation.claim,
+                request=canonical,
+                decision=decision,
+                actor_profile_id=actor_id,
+                reason=payload.reason,
+            ),
         )
         await _commit_or_unavailable(session)
         return response
@@ -1367,43 +1400,53 @@ async def revoke_project_role_grant(
     )
     actor_id = UUID(resolved.profile.id)
     service = ProjectRoleGrantMutationService(session)
-    reservation = await service.reserve(
-        key=idempotency_key, actor_profile_id=actor_id, request=canonical
+    reservation = await _database_call(
+        session,
+        service.reserve(key=idempotency_key, actor_profile_id=actor_id, request=canonical),
     )
     prepared_input = PreparedAuthorizationInput(
         idempotency_key=idempotency_key,
         request_value=canonical.model_dump(mode="json"),
     )
     try:
-        handle = await prepared.prepare(
-            ActionId.PROJECT_ROLE_GRANT_REVOKE,
-            prepared_input,
-            PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT,
-                project_id=project_id,
-                grant_id=grant_id,
+        handle = await _database_call(
+            session,
+            prepared.prepare(
+                ActionId.PROJECT_ROLE_GRANT_REVOKE,
+                prepared_input,
+                PreparedAuthorityScope(
+                    kind=PreparedAuthorityScopeKind.PROJECT,
+                    project_id=project_id,
+                    grant_id=grant_id,
+                ),
             ),
         )
     except PreparedAuthorizationUnsupported as exc:
         raise _project_role_resource_not_found() from exc
-    project = await service.repository.lock_project(project_id)
-    row = await service.repository.lock_project_role_grant(project_id=project_id, grant_id=grant_id)
+    project = await _database_call(session, service.repository.lock_project(project_id))
+    row = await _database_call(
+        session,
+        service.repository.lock_project_role_grant(project_id=project_id, grant_id=grant_id),
+    )
     if project is None or row is None:
         raise _project_role_resource_not_found()
     grant, _snapshot = row
-    decision = await prepared.consume(
-        handle,
-        ActionId.PROJECT_ROLE_GRANT_REVOKE,
-        prepared_input,
-        ProjectRoleGrantRevokeResourceContext(
-            resource_type="project_role_grant_revoke",
-            resource_id=grant_id,
-            scope_project_id=project_id,
-            actor_profile_id=UUID(grant.actor_profile_id),
-            role=ProjectRole(grant.role),
-            project_status=project.status,
-            status=grant.status,
-            version=grant.version,
+    decision = await _database_call(
+        session,
+        prepared.consume(
+            handle,
+            ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            prepared_input,
+            ProjectRoleGrantRevokeResourceContext(
+                resource_type="project_role_grant_revoke",
+                resource_id=grant_id,
+                scope_project_id=project_id,
+                actor_profile_id=UUID(grant.actor_profile_id),
+                role=ProjectRole(grant.role),
+                project_status=project.status,
+                status=grant.status,
+                version=grant.version,
+            ),
         ),
     )
     if reservation.outcome == "mismatch":
@@ -1440,13 +1483,16 @@ async def revoke_project_role_grant(
         await _commit_or_unavailable(session)
         return _project_role_response(grant)
     try:
-        response = await service.complete_revoke(
-            claim=reservation.claim,
-            request=canonical,
-            decision=decision,
-            actor_profile_id=actor_id,
-            reason=payload.reason,
-            grant=grant,
+        response = await _database_call(
+            session,
+            service.complete_revoke(
+                claim=reservation.claim,
+                request=canonical,
+                decision=decision,
+                actor_profile_id=actor_id,
+                reason=payload.reason,
+                grant=grant,
+            ),
         )
         await _commit_or_unavailable(session)
         return response

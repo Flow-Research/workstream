@@ -257,6 +257,21 @@ class AuthorityMutationService:
         elif isinstance(mutation, ActorProfileReactivateRequest):
             before_facts = {"effective": False}
             after_facts = {"effective": True}
+        if isinstance(mutation, ProjectRoleGrantRevokeRequest):
+            if (
+                invalidation is None
+                or invalidation.project_role is None
+                or invalidation.future_obligation is None
+            ):
+                raise TypeError("project-role revoke requires invalidation projection")
+            projection = {
+                "role": invalidation.project_role.value,
+                "scope_type": "project",
+                "scope_id": str(mutation.project_id),
+                "future_obligation": invalidation.future_obligation,
+            }
+            before_facts = {"effective": True, **projection}
+            after_facts = {"effective": False, **projection}
         if invalidation is not None:
             invalidation_input = AuthorityAuditEventInput(
                 event_id=invalidation.event_id,

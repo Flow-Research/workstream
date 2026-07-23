@@ -319,6 +319,12 @@ class ProjectRoleGrantMutationService:
                 correlation_id=decision.correlation_id,
                 target_ref_kind=AuthorityResourceType.PROJECT_ROLE_GRANT,
                 target_ref_id=grant.id,
+                project_role=ProjectRole(grant.role),
+                future_obligation={
+                    ProjectRole.SUBMITTER: "auth13_assignment",
+                    ProjectRole.REVIEWER: "rev_reviewer_obligation",
+                    ProjectRole.ADJUDICATOR: "none",
+                }[ProjectRole(grant.role)],
             ),
         )
         return _response(grant)

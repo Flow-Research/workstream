@@ -37,7 +37,10 @@ from app.api.deps.authorization import (
     get_authorization_service,
     get_prepared_authorization_service,
 )
-from app.api.deps.api_controls import enforce_authorization_read_rate_limit
+from app.api.deps.api_controls import (
+    enforce_admin_mutation_rate_limit,
+    enforce_authorization_read_rate_limit,
+)
 from app.api.deps.auth import get_auth_verification_result
 from app.core.api_controls import StructuredHTTPException
 from app.core.config import Settings, get_settings
@@ -234,6 +237,64 @@ def test_project_role_public_reason_and_qualification_contract_is_strict() -> No
     for reason in (" padded", "padded ", "control\x00", "é" * 251):
         with pytest.raises(ValidationError):
             ProjectRoleGrantIssueBody.model_validate(payload | {"reason": reason})
+
+
+def test_project_role_invalidation_projection_is_closed_per_role() -> None:
+    project_id = uuid4()
+    mappings = {
+        ProjectRole.SUBMITTER: "auth13_assignment",
+        ProjectRole.REVIEWER: "rev_reviewer_obligation",
+        ProjectRole.ADJUDICATOR: "none",
+    }
+    for role, obligation in mappings.items():
+        context = AuthorityInvalidationContext(
+            event_id=uuid4(),
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+            target_ref_kind=AuthorityResourceType.PROJECT_ROLE_GRANT,
+            target_ref_id=uuid4(),
+            project_role=role,
+            future_obligation=obligation,
+        )
+        projection = {
+            "role": role.value,
+            "scope_type": "project",
+            "scope_id": str(project_id),
+            "future_obligation": obligation,
+        }
+        event_id = uuid4()
+        event = AuthorityAuditEventInput(
+            event_id=event_id,
+            event_type=AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
+            entity_type="authority_invalidation",
+            entity_id=str(event_id),
+            actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+            actor_ref=str(uuid4()),
+            request_id=context.request_id,
+            correlation_id=context.correlation_id,
+            permission_id=PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+            project_id=str(project_id),
+            resource_type="actor_profile",
+            resource_id=str(uuid4()),
+            target_ref_kind="project_role_grant",
+            target_ref_id=str(context.target_ref_id),
+            reason="authority_state_changed",
+            idempotency_reference=uuid4(),
+            invalidation_cause_event_id=uuid4(),
+            invalidation_target_kind="actor_profile",
+            invalidation_target_ref=str(uuid4()),
+            before_facts={"effective": True, **projection},
+            after_facts={"effective": False, **projection},
+        )
+        assert event.after_facts["future_obligation"] == obligation
+    with pytest.raises(ValidationError):
+        AuthorityInvalidationContext(
+            event_id=uuid4(),
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+            project_role=ProjectRole.SUBMITTER,
+            future_obligation="none",
+        )
 
 
 def test_authorization_read_cursor_round_trip_and_query_binding() -> None:
@@ -638,6 +699,60 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
         assert response.json()["error"]["code"] == ("project_authorization_resource_not_found")
         assert consumptions == 1
         assert lookups == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            lambda project, _grant: f"/api/v1/projects/{project}/role-grants",
+            lambda: {
+                "target_actor_profile_id": str(uuid4()),
+                "role": "submitter",
+                "qualification": _project_role_qualification(),
+                "reason": "Bounded assignment",
+            },
+        ),
+        (
+            lambda project, grant: f"/api/v1/projects/{project}/role-grants/{grant}/revoke",
+            lambda: {"reason": "Bounded removal"},
+        ),
+    ],
+)
+async def test_project_role_mutation_rate_failure_precedes_private_work(
+    monkeypatch: pytest.MonkeyPatch,
+    path,
+    payload,
+) -> None:
+    app = create_app(Settings(environment="test"))
+    calls = 0
+
+    async def fail_rate_first() -> None:
+        nonlocal calls
+        calls += 1
+        raise StructuredHTTPException(
+            status_code=503,
+            detail="rate persistence unavailable",
+            error_code="service_unavailable",
+            error_message="rate persistence unavailable",
+            retryable=True,
+        )
+
+    async def forbidden_project_lookup(*_args, **_kwargs):
+        raise AssertionError("private mutation work must not run")
+
+    app.dependency_overrides[enforce_admin_mutation_rate_limit] = fail_rate_first
+    monkeypatch.setattr(ProjectRepository, "get_project", forbidden_project_lookup)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.post(
+            path(uuid4(), uuid4()),
+            headers={"Idempotency-Key": str(uuid4())},
+            json=payload(),
+        )
+    assert response.status_code == 503
+    assert response.json()["error"]["retryable"] is True
+    assert calls == 1
 
 
 ART_CUSTODY_EXPECTATIONS = {
@@ -7925,6 +8040,26 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
                 event_id=uuid4(),
                 request_id=success.request_id,
                 correlation_id=success.correlation_id,
+                target_ref_kind=(
+                    AuthorityResourceType.PROJECT_ROLE_GRANT
+                    if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE
+                    else None
+                ),
+                target_ref_id=(
+                    response.resource_id
+                    if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE
+                    else None
+                ),
+                project_role=(
+                    ProjectRole.SUBMITTER
+                    if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE
+                    else None
+                ),
+                future_obligation=(
+                    "auth13_assignment"
+                    if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE
+                    else None
+                ),
             )
             if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE:
                 qualification_id = uuid4()
@@ -8011,7 +8146,17 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             }
             else {"effective": True}
         )
+        if success.event_type is AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED:
+            expected_before = {
+                "effective": True,
+                "role": "submitter",
+                "scope_type": "project",
+                "scope_id": success.project_id,
+                "future_obligation": "auth13_assignment",
+            }
         expected_after = {"effective": not expected_before["effective"]}
+        if success.event_type is AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED:
+            expected_after = expected_before | {"effective": False}
         assert invalidation_row.before_facts == expected_before
         assert invalidation_row.after_facts == expected_after
 

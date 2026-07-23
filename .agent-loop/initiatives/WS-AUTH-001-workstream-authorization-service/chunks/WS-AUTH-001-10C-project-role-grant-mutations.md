@@ -35,6 +35,7 @@ P1
 ```text
 backend/app/modules/actors/repository.py
 backend/app/modules/authorization/**
+backend/app/modules/audit/schemas.py
 backend/app/modules/projects/repository.py
 backend/app/api/router.py
 backend/tests/test_actors.py
