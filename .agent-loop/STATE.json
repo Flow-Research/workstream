@@ -5,36 +5,36 @@
   },
   "authority_state": {
     "active": {
-      "implementation_chunk": "WS-AUTH-001-10C",
+      "implementation_chunk": "WS-REV-001-03P",
       "planning_chunk": null
     },
     "completed_chunk": {
-      "chunk_id": "WS-AUTH-001-10B2",
-      "chunk_title": "Privacy-Safe Project Role Grant Reads",
-      "initiative_id": "WS-AUTH-001",
-      "next_chunk_id": "WS-AUTH-001-10C",
-      "next_chunk_title": "Project Role Grant Mutations",
+      "chunk_id": "WS-REV-001-PLAN3",
+      "chunk_title": "Allow-Review Boundary Reset",
+      "initiative_id": "WS-REV-001",
+      "next_chunk_id": "WS-REV-001-03P",
+      "next_chunk_title": "Review And Revision Policy Persistence",
       "next_requires_explicit_start": true,
       "schema_version": 2
     },
     "gate": {
-      "next_chunk_id": "WS-AUTH-001-10C",
-      "next_chunk_title": "Project Role Grant Mutations",
+      "next_chunk_id": "WS-REV-001-03P",
+      "next_chunk_title": "Review And Revision Policy Persistence",
       "next_requires_explicit_start": true,
       "status": "active"
     },
     "source": {
-      "first_parent_sha": "93c14181f8a14c88c2cbfb2f2ea886c8d46deec8",
-      "head_ref": "codex/ws-auth-001-10b2-project-role-grant-reads",
-      "head_sha": "c14ba4c684a267eacc791a77fc61b2820ba6d07e",
-      "intent_blob_sha": "b72bf63bd52443c4e83a230596c2de9b147d31f0",
-      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10B2.json",
-      "main_sha": "73b457925b02301587b83d01ced0adb66319d134",
-      "merged_at": "2026-07-23T04:54:13Z",
+      "first_parent_sha": "14fa4316f7d984f2176657bfafd2a2dae56f944e",
+      "head_ref": "codex/ws-rev-001-plan3-allow-review-boundary-reset",
+      "head_sha": "6b4ba3153acd98f744ed30b50615957ac57c12f9",
+      "intent_blob_sha": "82118122387271cd9eb06409259d9c2f5552c097",
+      "intent_path": ".agent-loop/merge-intents/WS-REV-001-PLAN3.json",
+      "main_sha": "afde967d56914cdc6a941aa17b3ff0e98b2e9c64",
+      "merged_at": "2026-07-22T05:47:35Z",
       "merged_by": "abiorh-claw",
-      "pr_number": 178,
-      "pr_title": "feat(auth): add privacy-safe project role reads",
-      "pr_url": "https://github.com/Flow-Research/workstream/pull/178"
+      "pr_number": 176,
+      "pr_title": "docs(review): reset lifecycle boundary at allow_review",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/176"
     }
   },
   "checks": {
@@ -73,19 +73,19 @@
       "schema_version": 2,
       "type": "github_repository_permission"
     },
-    "chunk_id": "WS-AUTH-001-10C",
-    "created_at": "2026-07-23T14:11:19Z",
+    "chunk_id": "WS-REV-001-03P",
+    "created_at": "2026-07-23T14:11:27Z",
     "dispatcher": "Abiorh001",
-    "event_id": "github-actions:30014637065:start",
-    "initiative_id": "WS-AUTH-001",
+    "event_id": "github-actions:30014647556:start",
+    "initiative_id": "WS-REV-001",
     "main_sha": "bcf1292e1a591e3e84bf8ee212ee7191d80741fa",
-    "prior_state_tip": "f69f08dc58128f57e7dd4dabf25929de068f9651",
-    "reason": "User explicitly authorized AUTH-10C project role grant mutation implementation",
-    "run_id": 30014637065,
+    "prior_state_tip": "f861bbdfa21031dad1f37cf0183488f11da707f8",
+    "reason": "Approved REV policy persistence implementation",
+    "run_id": 30014647556,
     "selection": {
-      "contract_blob_sha": "cbdce300127c22ac0022e0f8896766b9d8489c2b",
-      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-10C-project-role-grant-mutations.md",
-      "contract_title": "Project Role Grant Mutations",
+      "contract_blob_sha": "b1ae04b723f1950d112d75769db4a21acd2428bb",
+      "contract_path": ".agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/chunks/WS-REV-001-03P-review-revision-policy-persistence.md",
+      "contract_title": "Review And Revision Policy Persistence",
       "mode": "declared_successor",
       "phase": "implementation",
       "schema_version": 1
@@ -147,5 +147,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/193"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-23T14:11:19Z"
+  "updated_at": "2026-07-23T14:11:27Z"
 }

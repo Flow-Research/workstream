@@ -10,9 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-006-01.json` at blob `d476cdca759c374f6ca07d5f574d70a55607ec34`
 - Completed chunk: `WS-ENG-006-01` - Canonical Human And Agent Contribution Entry
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-03`, `WS-AUTH-001-10C`
-- Latest authority event: `start` for `WS-AUTH-001-10C`
-- Authority initiative: `WS-AUTH-001`
+- Active implementation chunks: `WS-ART-001-03`, `WS-AUTH-001-10C`, `WS-REV-001-03P`
+- Latest authority event: `start` for `WS-REV-001-03P`
+- Authority initiative: `WS-REV-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: none recorded.
 - Required check evidence: passed
