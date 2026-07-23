@@ -30,9 +30,9 @@ human-agent review loop.
   unchanged preserves unaffected internal reviewer tracks.
 - Findings fixed by trusted `main` are recorded as resolved upstream, not
   repeated against the PR.
-- Overlap, dependency impact, effective-diff change, ambiguity, or conflict
-  fails closed and reruns only affected tracks unless full invalidation is
-  required.
+- Deterministically known overlap, dependency impact, or effective-diff change
+  reruns the derived affected tracks. Ambiguity, conflict, or any unknown
+  impact fails closed and stales every track.
 - Human approval remains the final merge checkpoint.
 
 ## Design chosen

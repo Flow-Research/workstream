@@ -23,7 +23,8 @@ invalidate conservatively.
 
 A finding is resolved upstream only when its closed resolution predicate is
 deterministically `true` on the exact candidate tree. `false` remains
-`still_valid`; `unknown` makes the owning reviewer track stale.
+`still_valid`; `unknown` makes every reviewer track stale because the affected
+set is not proven.
 
 ## D6 - Merge queue comes last
 
@@ -42,5 +43,5 @@ classes, transitive impacts, and reviewer escalation.
 
 ## D9 - Detection and lifecycle states differ
 
-`unknown` is a reconciliation result; `track_stale` is its mandatory reviewer
-lifecycle consequence. Neither is a claimant override.
+`unknown` is a reconciliation result; `track_stale` for every track is its
+mandatory reviewer lifecycle consequence. Neither is a claimant override.

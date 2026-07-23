@@ -87,6 +87,7 @@ scripts/test_agent_gates.py
 
 ```bash
 python3 scripts/test_agent_gates.py
+python3 -c 'from scripts.test_agent_gates import test_merge_group_workflow_parity; test_merge_group_workflow_parity()'
 python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_loop_memory_state.py
 python3 scripts/check_markdown_links.py

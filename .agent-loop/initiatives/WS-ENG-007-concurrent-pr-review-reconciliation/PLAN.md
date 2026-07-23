@@ -13,8 +13,9 @@ reviewer's track. Ambiguity invalidates.
 Second, add structured reviewer-track and finding reconciliation. Findings have
 stable IDs, target evidence, owner track, and a machine disposition. Trusted
 upstream changes may resolve a finding only when a deterministic predicate
-proves the finding is absent in the combined tree. Otherwise the affected track
-reruns. Human approval is never synthesized.
+proves the finding is absent in the combined tree. A `false` result keeps the
+finding valid and reruns its owning track; `unknown` stales every track. Human
+approval is never synthesized.
 
 Third, add `merge_group` workflow support and combined-tree evidence. Only
 after repository tests prove parity will a human administrator enable GitHub's
@@ -46,9 +47,11 @@ different manifest invalidates.
 
 `.agent-loop/policies/review-boundaries.json` is the sole closed, versioned
 boundary graph. Reconciliation derives boundaries; PR evidence only records the
-derived version, digest, and result. Version drift, unknown path/class/edge,
-cycle, ambiguous traversal, or unclassified multi-boundary impact invalidates
-all potentially affected tracks.
+derived version, digest, and result. Version drift, unknown path, unknown class,
+unknown edge, cycle, ambiguous traversal, or unclassified multi-boundary impact
+makes the affected set unprovable and therefore invalidates all tracks.
+Targeted invalidation is permitted only when every path, class, edge, and
+transitive impact is known.
 
 Chunk 01 owns immutable Git evidence, boundary derivation, and the impacted
 track set. Chunk 02 alone owns structured findings, upstream predicates, rerun
@@ -74,19 +77,49 @@ Multi-class paths take the union; `unknown` routes all.
 
 ## Finding predicate grammar
 
-Finding IDs are content-derived SHA-256 values with collision rejection. Every
-predicate is a resolution predicate: `true` means the exact candidate proves
-the finding resolved; `false` means `still_valid`. `blob_equals` is true only
+Finding IDs are `SHA-256` over compact, sorted-key UTF-8 JSON with the literal
+version `workstream-review-finding-id/v1` and exactly these immutable identity
+fields: repository, initiative, chunk, canonical reviewer track, repository-
+owned rule ID, and target. Target contains the raw repository path, target kind,
+immutable original object identity or diagnostic key, predicate kind, and the
+predicate's immutable expected value. Mutable severity, message wording,
+disposition, candidate/upstream evidence, timestamps, reviewer session, and
+rerun results are excluded. A duplicate digest with non-byte-identical
+canonical identity payload rejects the complete evidence set as a collision;
+it is never silently deduplicated. An exact duplicate canonical payload/ID is
+also rejected as duplicate evidence, yielding `unknown` and all tracks stale.
+
+Every predicate is a resolution predicate: `true` means the exact candidate
+proves the finding resolved; `false` means `still_valid`. `blob_equals` is true only
 for the expected blob, `blob_absent` and `path_absent` only when the bound path
 is absent, `mode_equals` only for the expected mode, and `diagnostic_absent`
-only when a repository-owned typed checker reports the diagnostic absent.
+only when a repository-owned typed checker reports the diagnostic absent. A
+`diagnostic_absent` identity additionally binds the checker repository path,
+checker blob OID, declared checker version, diagnostic code, input-schema
+SHA-256, and output-schema SHA-256. Evaluation records the same fields from the
+checker actually loaded from the candidate tree; any identity, version, or
+schema mismatch is `unknown` and invalidates all tracks.
 Before evaluation, a renamed or recreated bound target is `unknown`; missing is
 false for equals predicates and true only for absence predicates when identity
 continuity is not ambiguous. Evaluator error, contradiction, unsupported target,
-or identity ambiguity is `unknown`; `unknown` mandates `track_stale`. A finding
+or identity ambiguity is `unknown`; every `unknown` mandates all tracks become
+`track_stale`. A finding
 fixed on main but reintroduced by the PR evaluates false and remains
 `still_valid`. Arbitrary commands, code, expressions, regexes, URLs, comments,
 and claimant-authored dispositions are forbidden.
+
+Findings are linked only when their immutable identity payloads have the same
+repository, initiative, chunk, raw target path, target kind, and original
+object identity or diagnostic code key. Unlinked findings never block
+one another. Linked findings are contradictory when their predicate kinds or
+immutable expected values assert mutually exclusive candidate facts: distinct
+`blob_equals` OIDs, distinct `mode_equals` modes, an absence predicate paired
+with an equality predicate, or distinct diagnostic checker/schema identities
+for the same diagnostic code. Linked-set evaluation is atomic: only an all-true,
+contradiction-free set resolves every member; any `false` with no unknown or
+contradiction makes every linked member `still_valid`; and any `unknown`,
+contradiction, or cross-track disagreement makes every linked member `unknown`
+and stales all tracks.
 
 ## Merge-queue activation checkpoint
 

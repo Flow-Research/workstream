@@ -69,8 +69,9 @@ scripts/test_update_post_merge_memory.py
       shared-helper failure fails closed independently in both consumers.
 - [ ] A repository-owned versioned boundary graph derives path classes and
       transitive track impacts. Unknown path/class/edge, cycle, ambiguity,
-      version drift, or omitted indirect dependency invalidates all potentially
-      affected tracks; PRs cannot narrow it.
+      version drift, or omitted indirect dependency invalidates all tracks;
+      targeted invalidation is allowed only for deterministically known impact,
+      and PRs cannot narrow it.
 - [ ] Exact three-tree reconciliation constructs the candidate without context
       fuzz. Latest-main-to-candidate records must exactly equal the original
       base-to-head records. Upstream absorption, empty patch, changed output,
@@ -95,7 +96,7 @@ scripts/test_update_post_merge_memory.py
       trees, missing object, forged identity/digest, indirect dependency,
       workflow/generated-contract/migration impact, empty/already-applied patch,
       and text-similar but tree-different output. Every case asserts exact
-      impacted tracks; unknown invalidates all potentially affected tracks.
+      impacted tracks; unknown invalidates every track.
 - [ ] No tests/checks are deleted, skipped, xfailed, deselected, weakened, or
       substituted for real Git-object proof.
 
