@@ -19,6 +19,10 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 - Codex-discoverable repository skills live under `.agents/skills/`.
 - Codex custom reviewer agents live under `.codex/agents/`.
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
+- `CONTRIBUTING.md` is the canonical human and agent entry path. Existing
+  commits and patches are preservation/discovery input, never retroactive
+  authorization; adoption still requires a reviewed contract, signed start,
+  bounded evidence, internal review, and the normal PR path.
 - Canonical live post-merge state is generated on `automation/loop-memory` from trusted `main` after a PR merge. Do not open a manual post-merge memory PR when that workflow succeeds.
 - Start a declared successor or unique reviewed contract, and cancel active work, only through the `Loop Memory Explicit Event` workflow on exact current `main`. Each initiative may have at most one active planning or implementation chunk; distinct initiatives may run concurrently. A start requires an idle target initiative and an authenticated dispatcher whose current GitHub `write`/`push`, `maintain`, or `admin` permission satisfies the trusted-main start-authority policy; this is the single authorization checkpoint. After an explicit user instruction, the orchestrator dispatches without requesting a second approval. For `cancel`, a distinct `loop-memory-start` environment reviewer remains required. Chat and local worktree state are instructions or context, never canonical signed evidence. Rerun recovery uses a fresh dispatch after inspecting signed state.
 - A brand-new initiative absent from signed history may enter through exactly one

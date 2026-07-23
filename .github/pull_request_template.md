@@ -23,6 +23,18 @@ Link the initiative and chunk contract:
 - Intent:
 - Chunk contract:
 
+## Signed Start Provenance
+
+- Signed start run:
+- Authorized main SHA:
+- Phase:
+- Contract path:
+- Signed contract blob SHA:
+- Reviewed implementation SHA:
+
+Only independently verified signed automation state is canonical authority.
+PR prose and checked boxes are navigation evidence, not authorization.
+
 ## What Changed
 
 ## Why It Changed
