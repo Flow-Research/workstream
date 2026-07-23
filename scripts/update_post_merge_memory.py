@@ -71,6 +71,8 @@ PLANNING_ROOT_FILES = frozenset(
 )
 GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
+R3_RECOVERY_CERTIFICATE_SHA256 = "4fe49b2f4a5a7ad18382a717dcc11f798c465a534066102bf9810c9ed5784f4a"
+R3_HISTORICAL_HEAD_SHA = "55a11d9e0ae356734dbcce73564f5f570220a81b"
 CHECK_RUN_CONCLUSIONS = frozenset({
     "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
     "success", "timed_out",
@@ -135,6 +137,38 @@ class GitHubClient:
             if len(payload) < 100:
                 return items
         raise LoopMemoryError("paginated GitHub response exceeded 100 pages")
+
+    def get_paginated_collection(self, path: str, key: str) -> list[Any]:
+        """Return one complete bounded collection from an envelope endpoint."""
+        items: list[Any] = []
+        seen_ids: set[int] = set()
+        expected_total: int | None = None
+        separator = "&" if "?" in path else "?"
+        for page in range(1, 101):
+            payload = self.get_json(f"{path}{separator}per_page=100&page={page}")
+            if not isinstance(payload, dict) or not isinstance(payload.get(key), list):
+                raise LoopMemoryError("paginated GitHub collection is malformed")
+            total = payload.get("total_count")
+            if type(total) is not int or total < 0:
+                raise LoopMemoryError("paginated GitHub collection total is invalid")
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                raise LoopMemoryError("paginated GitHub collection changed during read")
+            page_items = payload[key]
+            for item in page_items:
+                item_id = item.get("id") if isinstance(item, dict) else None
+                if type(item_id) is not int or item_id <= 0 or item_id in seen_ids:
+                    raise LoopMemoryError("paginated GitHub collection identity is invalid")
+                seen_ids.add(item_id)
+            items.extend(page_items)
+            if len(items) > total:
+                raise LoopMemoryError("paginated GitHub collection exceeds its total")
+            if len(items) == total:
+                return items
+            if len(page_items) != 100:
+                raise LoopMemoryError("paginated GitHub collection ended before its total")
+        raise LoopMemoryError("paginated GitHub collection exceeded 100 pages")
 
 
 def _bounded_text(value: Any, field: str, maximum: int = 160) -> str:
@@ -771,9 +805,13 @@ def _latest_named(
 
 
 def _check_evidence(
-    check_runs: list[dict[str, Any]], statuses: list[dict[str, Any]]
+    check_runs: list[dict[str, Any]], statuses: list[dict[str, Any]], merged_at: str | None = None
 ) -> dict[str, Any]:
     """Build bounded required-check evidence without treating it as merge authority."""
+    if merged_at is not None:
+        cutoff = _rfc3339_instant(merged_at)
+        check_runs = [item for item in check_runs if _rfc3339_instant(item.get("started_at")) <= cutoff]
+        statuses = [item for item in statuses if _rfc3339_instant(item.get("updated_at")) <= cutoff]
     latest_checks = _latest_named(check_runs, "name", "started_at")
     latest_statuses = _latest_named(statuses, "context", "updated_at")
     observed: dict[str, dict[str, str | None]] = {}
@@ -809,33 +847,34 @@ def _commit_tree_sha(payload: Any, label: str) -> str:
     return tree_sha
 
 
-def _validate_protected_actions_checks(
-    client: GitHubClient, repository: str, head_sha: str
-) -> None:
-    """Require exact protected GitHub Actions checks on one reviewed head."""
-    payload = client.get_json(
-        f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100"
-    )
-    runs = payload.get("check_runs") if isinstance(payload, dict) else None
-    total = payload.get("total_count") if isinstance(payload, dict) else None
-    if not isinstance(runs, list) or type(total) is not int or total != len(runs):
-        raise LoopMemoryError("planning intake check-run evidence is incomplete")
+def _protected_actions_evidence(
+    runs: list[dict[str, Any]], head_sha: str, merged_at: str
+) -> dict[str, Any]:
+    """Freeze protected GitHub Actions evidence at the immutable merge instant."""
+    cutoff = _rfc3339_instant(merged_at)
     seen_ids: set[int] = set()
+    selected: dict[str, dict[str, Any]] = {}
     for name in ("agent-gates", "test"):
         matches = [item for item in runs if isinstance(item, dict) and item.get("name") == name]
         if not matches:
             raise LoopMemoryError(f"planning intake check {name} is missing")
         candidates: list[tuple[datetime, int, dict[str, Any]]] = []
         for item in matches:
-            app = item.get("app")
             check_id = item.get("id")
             started_at = _rfc3339_instant(item.get("started_at"))
-            completed_at = _rfc3339_instant(item.get("completed_at"))
             if (
                 type(check_id) is not int
                 or check_id <= 0
                 or check_id in seen_ids
-                or item.get("head_sha") != head_sha
+            ):
+                raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
+            seen_ids.add(check_id)
+            if started_at > cutoff:
+                continue
+            app = item.get("app")
+            completed_at = _rfc3339_instant(item.get("completed_at"))
+            if (
+                item.get("head_sha") != head_sha
                 or item.get("status") != "completed"
                 or item.get("conclusion") not in CHECK_RUN_CONCLUSIONS
                 or completed_at < started_at
@@ -844,11 +883,38 @@ def _validate_protected_actions_checks(
                 or app.get("slug") != GITHUB_ACTIONS_APP_SLUG
             ):
                 raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
-            seen_ids.add(check_id)
             candidates.append((started_at, check_id, item))
+        if not candidates:
+            raise LoopMemoryError(f"planning intake check {name} is missing")
         item = max(candidates, key=lambda candidate: (candidate[0], candidate[1]))[2]
-        if item.get("conclusion") != "success":
+        completed = _rfc3339_instant(item.get("completed_at"))
+        if item.get("conclusion") != "success" or completed > cutoff:
             raise LoopMemoryError(f"planning intake check {name} has invalid provenance")
+        selected[name] = {
+            "id": item["id"], "head_sha": head_sha,
+            "app_id": GITHUB_ACTIONS_APP_ID, "app_slug": GITHUB_ACTIONS_APP_SLUG,
+            "started_at": item["started_at"], "completed_at": item["completed_at"],
+            "conclusion": "success", "merge_cutoff": merged_at,
+        }
+    digest = hashlib.sha256(_canonical_json(selected).encode("utf-8")).hexdigest()
+    return {"schema_version": 1, "selected": selected, "sha256": digest}
+
+
+def _validate_protected_actions_checks(
+    client: GitHubClient, repository: str, head_sha: str, merged_at: str | None = None
+) -> None:
+    """Compatibility validator for closed pre-v4 recovery schemas."""
+    complete_check_client = hasattr(client, "get_paginated_collection")
+    if complete_check_client:
+        runs = client.get_paginated_collection(
+            f"/repos/{repository}/commits/{head_sha}/check-runs", "check_runs"
+        )
+    else:
+        payload = client.get_json(f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100")
+        runs = payload.get("check_runs", []) if isinstance(payload, dict) else []
+    if merged_at is None:
+        merged_at = "9999-12-31T23:59:59Z"
+    _protected_actions_evidence(runs, head_sha, merged_at)
 
 
 def _rfc3339_instant(value: Any) -> datetime:
@@ -1080,7 +1146,6 @@ def _collect_planning_intake(
     delta_sha256 = hashlib.sha256(
         _canonical_json(reviewed_delta).encode("utf-8")
     ).hexdigest()
-    _validate_protected_actions_checks(client, repository, head_sha)
     return {
         "schema_version": PLANNING_INTAKE_VERSION,
         "initiative_directory": initiative_directory,
@@ -1097,6 +1162,8 @@ def collect_merge_record(
     client: GitHubClient,
     repository: str,
     merge_sha: str,
+    *,
+    historical_recovery: bool = False,
 ) -> dict[str, Any]:
     """Collect one exact merged PR and its bounded loop metadata from GitHub."""
     _validate_repository_and_sha(repository, merge_sha)
@@ -1157,14 +1224,18 @@ def collect_merge_record(
         raise LoopMemoryError("merged main commit has no canonical first parent")
     first_parent_sha = parents[0]["sha"]
 
-    check_payload = client.get_json(
-        f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100"
-    )
+    complete_check_client = hasattr(client, "get_paginated_collection")
+    if complete_check_client:
+        check_runs = client.get_paginated_collection(
+            f"/repos/{repository}/commits/{head_sha}/check-runs", "check_runs"
+        )
+    else:
+        check_payload = client.get_json(
+            f"/repos/{repository}/commits/{head_sha}/check-runs?per_page=100"
+        )
+        check_runs = check_payload.get("check_runs", []) if isinstance(check_payload, dict) else []
     status_payload = client.get_json(
         f"/repos/{repository}/commits/{head_sha}/status?per_page=100"
-    )
-    check_runs = (
-        check_payload.get("check_runs", []) if isinstance(check_payload, dict) else []
     )
     statuses = (
         status_payload.get("statuses", []) if isinstance(status_payload, dict) else []
@@ -1183,6 +1254,22 @@ def collect_merge_record(
             "merged pull request URL does not match repository and number"
         )
 
+    if historical_recovery:
+        recovery_only = {
+            "merge_sha": merge_sha, "head_sha": head_sha,
+            "chunk_id": metadata.chunk_id,
+            "pr_number": pr_number, "policy_schema": 4,
+            "signed_basis": "73b457925b02301587b83d01ced0adb66319d134",
+            "activation_chunk_id": "WS-ENG-007-00R3",
+            "certificate_sha256": R3_RECOVERY_CERTIFICATE_SHA256,
+            "reason": "no-completed-pre-merge-agent-gates",
+        }
+        protected_checks = {
+            "schema_version": 1, "recovery_only": recovery_only,
+            "sha256": hashlib.sha256(_canonical_json(recovery_only).encode("utf-8")).hexdigest(),
+        }
+    elif complete_check_client:
+        protected_checks = _protected_actions_evidence(check_runs, head_sha, merged_at)
     record = {
         "schema_version": SCHEMA_VERSION,
         "repository": repository,
@@ -1213,8 +1300,10 @@ def collect_merge_record(
             "next_chunk_title": metadata.next_chunk_title,
             "next_requires_explicit_start": metadata.next_requires_explicit_start,
         },
-        "checks": _check_evidence(check_runs, statuses),
+        "checks": _check_evidence(check_runs, statuses, merged_at),
     }
+    if historical_recovery or complete_check_client:
+        record["protected_checks"] = protected_checks
     planning_intake = _collect_planning_intake(
         client,
         repository,
@@ -1809,15 +1898,23 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         "gate",
         "checks",
     }
+    protected_record_keys = expected_record_keys | {"protected_checks"}
     allowed_record_keys = expected_record_keys | {"legacy_exemptions"}
+    protected_allowed_record_keys = protected_record_keys | {"legacy_exemptions"}
     planning_record_keys = expected_record_keys | {"planning_intake"}
+    protected_planning_record_keys = planning_record_keys | {"protected_checks"}
     planning_legacy_record_keys = planning_record_keys | {"legacy_exemptions"}
+    protected_planning_legacy_record_keys = protected_planning_record_keys | {"legacy_exemptions"}
     cutover_record_keys = allowed_record_keys | {"event"}
     if frozenset(record) not in {
         frozenset(expected_record_keys),
+        frozenset(protected_record_keys),
         frozenset(allowed_record_keys),
+        frozenset(protected_allowed_record_keys),
         frozenset(planning_record_keys),
+        frozenset(protected_planning_record_keys),
         frozenset(planning_legacy_record_keys),
+        frozenset(protected_planning_legacy_record_keys),
         frozenset(cutover_record_keys),
     } or not _is_current_schema_version(
         record.get("schema_version")
@@ -1940,8 +2037,9 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             )
         ):
             raise LoopMemoryError("planning intake lifecycle identity is invalid")
-        if not record.get("checks", {}).get("all_required_passed"):
-            raise LoopMemoryError("planning intake required checks did not pass")
+        protected = record.get("protected_checks")
+        if protected is not None and set(protected.get("selected", {})) != {"agent-gates", "test"}:
+            raise LoopMemoryError("planning intake protected checks did not pass")
 
     active = record.get("active")
     if active != {"planning_chunk": None, "implementation_chunk": None}:
@@ -1986,6 +2084,45 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
     )
     if checks.get("all_required_passed") is not all_passed:
         raise LoopMemoryError("loop-memory aggregate check evidence is inconsistent")
+    protected = record.get("protected_checks")
+    if protected is None:
+        if _rfc3339_instant(merged_at) >= _rfc3339_instant("2026-07-23T05:11:46Z"):
+            raise LoopMemoryError("merge-bound protected check evidence is required")
+        return metadata
+    if not isinstance(protected, dict) or protected.get("schema_version") != 1:
+        raise LoopMemoryError("protected check evidence has an invalid schema")
+    if set(protected) == {"schema_version", "recovery_only", "sha256"}:
+        recovery_only = protected.get("recovery_only")
+        expected = {
+            "merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
+            "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2",
+            "pr_number": 189, "policy_schema": 4,
+            "signed_basis": "73b457925b02301587b83d01ced0adb66319d134",
+            "activation_chunk_id": "WS-ENG-007-00R3",
+            "certificate_sha256": R3_RECOVERY_CERTIFICATE_SHA256,
+            "reason": "no-completed-pre-merge-agent-gates",
+        }
+        if source["head_sha"] != R3_HISTORICAL_HEAD_SHA or source["pr_number"] != 189 or recovery_only != expected or protected.get("sha256") != hashlib.sha256(_canonical_json(expected).encode("utf-8")).hexdigest():
+            raise LoopMemoryError("historical recovery evidence is invalid")
+        return metadata
+    if set(protected) != {"schema_version", "selected", "sha256"}:
+        raise LoopMemoryError("protected check evidence has an invalid schema")
+    selected = protected.get("selected")
+    if not isinstance(selected, dict) or set(selected) != {"agent-gates", "test"}:
+        raise LoopMemoryError("protected check evidence is incomplete")
+    for name, item in selected.items():
+        if not isinstance(item, dict) or set(item) != {"id", "head_sha", "app_id", "app_slug", "started_at", "completed_at", "conclusion", "merge_cutoff"}:
+            raise LoopMemoryError(f"protected check evidence is invalid for {name}")
+        if type(item["id"]) is not int or item["id"] <= 0 or item["head_sha"] != source["head_sha"] or item["app_id"] != GITHUB_ACTIONS_APP_ID or item["app_slug"] != GITHUB_ACTIONS_APP_SLUG or item["conclusion"] != "success" or item["merge_cutoff"] != merged_at:
+            raise LoopMemoryError(f"protected check provenance is invalid for {name}")
+        started = _rfc3339_instant(item["started_at"])
+        completed_at = _rfc3339_instant(item["completed_at"])
+        cutoff = _rfc3339_instant(item["merge_cutoff"])
+        if completed_at < started or completed_at > cutoff:
+            raise LoopMemoryError(f"protected check timing is invalid for {name}")
+    digest = hashlib.sha256(_canonical_json(selected).encode("utf-8")).hexdigest()
+    if protected.get("sha256") != digest:
+        raise LoopMemoryError("protected check evidence digest is invalid")
     return metadata
 
 
@@ -2030,7 +2167,7 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
     ):
         raise LoopMemoryError("recovery exemption inventory has an invalid schema")
     version = payload.get("schema_version")
-    if version not in {1, 2}:
+    if version not in {1, 2, 3}:
         raise LoopMemoryError("recovery exemption inventory is unsupported")
     chronological = json.loads(_canonical_json(payload["exemptions"]))
     _validate_legacy_exemptions({
@@ -2052,6 +2189,7 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
     if (
         (version == 1 and len(chronological) > 2)
         or (version == 2 and len(chronological) != 3)
+        or (version == 3 and len(chronological) != 4)
         or len(identities) != len(set(identities))
         or len(chunk_identities) != len(set(chunk_identities))
         or len(pr_numbers) != len(set(pr_numbers))
@@ -2127,11 +2265,12 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         1: {"schema_version", "activation", "recovered_merge"},
         2: {"schema_version", "activation", "mode"},
         3: {"schema_version", "activation", "recovered_merges"},
+        4: {"schema_version", "signed_basis", "activation", "recovered_merges"},
     }.get(version, set())
     if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    if version not in {1, 2, 3} or not isinstance(activation, dict):
+    if version not in {1, 2, 3, 4} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
@@ -2141,10 +2280,13 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         if payload.get("mode") != "exact_single_target":
             raise LoopMemoryError("recovery policy mode is unsupported")
         return json.loads(_canonical_json(payload))
-    if version == 3:
+    if version in {3, 4}:
         recovered_merges = payload.get("recovered_merges")
-        if not isinstance(recovered_merges, list) or not 1 <= len(recovered_merges) <= 2:
+        valid_length = (1 <= len(recovered_merges) <= 2) if isinstance(recovered_merges, list) and version == 3 else (isinstance(recovered_merges, list) and len(recovered_merges) == 3)
+        if not valid_length:
             raise LoopMemoryError("recovered merge inventory is invalid")
+        if version == 4:
+            _validate_sha(payload.get("signed_basis"))
         chunk_identities: set[tuple[str, str]] = set()
         pr_numbers: set[int] = set()
         merge_shas: set[str] = set()
@@ -2248,13 +2390,17 @@ def prepare_recovery_exemptions(
         if not isinstance(existing, list) or exemption in existing:
             raise LoopMemoryError("recovery exemption collides with signed state")
         return [exemption]
-    if policy["schema_version"] == 3:
+    if policy["schema_version"] in {3, 4}:
         recovered_policies = policy["recovered_merges"]
         expected_shas = [item["merge_sha"] for item in recovered_policies] + [target_sha]
         if planned_shas != expected_shas:
             raise LoopMemoryError("recovery plan is not the exact ordered sequence")
         recovered_records = [
-            collect_merge_record(client, repository, item["merge_sha"])
+            (
+                collect_merge_record(client, repository, item["merge_sha"], historical_recovery=True)
+                if policy["schema_version"] == 4 and item["chunk_id"] == "WS-ENG-007-00R2"
+                else collect_merge_record(client, repository, item["merge_sha"])
+            )
             for item in recovered_policies
         ]
         for recovered_policy, recovered_record in zip(
@@ -2271,6 +2417,8 @@ def prepare_recovery_exemptions(
             if _event_type(state) in {"start", "cancel"}
             else state.get("source", {}).get("main_sha")
         )
+        if policy["schema_version"] == 4 and signed_main != policy["signed_basis"]:
+            raise LoopMemoryError("recovery signed basis does not match canonical state")
         records = [*recovered_records, target_record]
         expected_parent = signed_main
         for merge_sha, record in zip(planned_shas, records, strict=True):
@@ -2281,11 +2429,17 @@ def prepare_recovery_exemptions(
             ):
                 raise LoopMemoryError("recovery plan is not first-parent adjacent")
             expected_parent = merge_sha
-            _validate_protected_actions_checks(
-                client, repository, source.get("head_sha")
-            )
-            if not record.get("checks", {}).get("all_required_passed"):
-                raise LoopMemoryError("recovery required checks did not pass")
+            if policy["schema_version"] == 3:
+                _validate_protected_actions_checks(client, repository, source.get("head_sha"))
+                if not record.get("checks", {}).get("all_required_passed"):
+                    raise LoopMemoryError("recovery required checks did not pass")
+            else:
+                protected = record.get("protected_checks", {})
+                if record["completed_chunk"]["chunk_id"] == "WS-ENG-007-00R2":
+                    if "recovery_only" not in protected:
+                        raise LoopMemoryError("historical recovery evidence is missing")
+                elif set(protected.get("selected", {})) != {"agent-gates", "test"}:
+                    raise LoopMemoryError("recovery protected checks did not pass")
         exemptions = [_record_exemption(record) for record in records]
         existing = state.get("legacy_exemptions", [])
         if not isinstance(existing, list) or any(item in existing for item in exemptions):
@@ -2334,6 +2488,37 @@ def assert_recovery_consumed(
         for exemption in exemptions
     ):
         raise LoopMemoryError("recovery exemption leaked into signed history")
+
+
+def reconcile_to_main(
+    client: GitHubClient, repository: str, *, repository_root: Path,
+    state_root: Path, target_sha: str,
+) -> None:
+    """Atomically reduce exact trusted main into temporary generated custody."""
+    state = _load_json(state_root / STATE_PATH)
+    if not isinstance(state, dict):
+        raise LoopMemoryError("reconciliation requires canonical state")
+    current_sha = (
+        state.get("event", {}).get("main_sha")
+        if _event_type(state) in {"start", "cancel"}
+        else state.get("source", {}).get("main_sha")
+    )
+    planned = plan_reconciliation_commits(repository_root, target_sha, current_sha)
+    exemptions = prepare_recovery_exemptions(
+        client, repository, repository_root=repository_root, state_root=state_root,
+        target_sha=target_sha, planned_shas=planned,
+    )
+    for merge_sha in planned:
+        historical = (
+            merge_sha == "d3321698fb856f3fac320cdc7bc598f813fe1953"
+            and any(item.get("chunk_id") == "WS-ENG-007-00R2" for item in exemptions)
+        )
+        record = collect_merge_record(
+            client, repository, merge_sha, historical_recovery=True
+        ) if historical else collect_merge_record(client, repository, merge_sha)
+        apply_merge_record(state_root, record, recovery_exemptions=exemptions or None)
+    assert_recovery_consumed(state_root, target_sha, exemptions)
+    validate_generated_state(state_root)
 
 
 def _validate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3145,6 +3330,15 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_recovery.add_argument("--token-env", default="GITHUB_TOKEN")
     prepare_recovery.add_argument("--api-url", default="https://api.github.com")
 
+    reconcile = subparsers.add_parser("reconcile")
+    reconcile.add_argument("--repository", required=True)
+    reconcile.add_argument("--repository-root", type=Path, default=Path("."))
+    reconcile.add_argument("--state-root", type=Path, required=True)
+    reconcile.add_argument("--branch-root", type=Path, required=True)
+    reconcile.add_argument("--target-sha", required=True)
+    reconcile.add_argument("--token-env", default="GITHUB_TOKEN")
+    reconcile.add_argument("--api-url", default="https://api.github.com")
+
     assert_recovery = subparsers.add_parser("assert-recovery-consumed")
     assert_recovery.add_argument("--state-root", type=Path, required=True)
     assert_recovery.add_argument("--target-sha", required=True)
@@ -3235,10 +3429,19 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "update":
             _assert_state_branch(args.branch_root or args.state_root)
             token = os.environ.get(args.token_env, "")
-            record = collect_merge_record(
-                GitHubClient(token, args.api_url),
-                args.repository,
-                args.merge_sha,
+            recovery_exemptions = []
+            if args.recovery_file:
+                recovery_exemptions = _validate_recovery_exemptions(
+                    _load_json(args.recovery_file)
+                )
+            client = GitHubClient(token, args.api_url)
+            historical = (
+                args.merge_sha == "d3321698fb856f3fac320cdc7bc598f813fe1953"
+                and any(item.get("chunk_id") == "WS-ENG-007-00R2" for item in recovery_exemptions)
+            )
+            record = (
+                collect_merge_record(client, args.repository, args.merge_sha, historical_recovery=True)
+                if historical else collect_merge_record(client, args.repository, args.merge_sha)
             )
             if (
                 args.cutover_chunk_id
@@ -3255,11 +3458,6 @@ def main(argv: list[str] | None = None) -> int:
                         _canonical_json(record["legacy_exemptions"])
                     ),
                 }
-            recovery_exemptions = []
-            if args.recovery_file:
-                recovery_exemptions = _validate_recovery_exemptions(
-                    _load_json(args.recovery_file)
-                )
             if recovery_exemptions:
                 changed = apply_merge_record(
                     args.state_root, record,
@@ -3282,10 +3480,18 @@ def main(argv: list[str] | None = None) -> int:
                 repository_root=args.repository_root, state_root=args.state_root,
                 target_sha=args.target_sha, planned_shas=planned_shas,
             )
-            transport_version = 2 if len(exemptions) == 3 else 1
+            transport_version = {3: 2, 4: 3}.get(len(exemptions), 1)
             print(_canonical_json({
                 "schema_version": transport_version, "exemptions": exemptions
             }))
+        elif args.command == "reconcile":
+            _assert_state_branch(args.branch_root)
+            reconcile_to_main(
+                GitHubClient(os.environ.get(args.token_env, ""), args.api_url),
+                args.repository, repository_root=args.repository_root,
+                state_root=args.state_root, target_sha=args.target_sha,
+            )
+            print(f"Loop memory reconciled to {args.target_sha}.")
         elif args.command == "assert-recovery-consumed":
             exemptions = _validate_recovery_exemptions(_load_json(args.recovery_file))
             assert_recovery_consumed(args.state_root, args.target_sha, exemptions)

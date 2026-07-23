@@ -1893,7 +1893,7 @@ def test_planning_intake_record_schema_fails_closed() -> None:
         ("planning intake", lambda item: item["planning_intake"].update(delta_sha256="bad")),
         ("intent path", lambda item: item["completed_chunk"].update(chunk_id="WS-NEW-001-01")),
         ("planning intake", lambda item: item["completed_chunk"].update(next_requires_explicit_start=False)),
-        ("planning intake", lambda item: item["checks"].update(all_required_passed=False)),
+        ("aggregate check evidence", lambda item: item["checks"].update(all_required_passed=False)),
     )
     for expected, mutate in mutations:
         record = planning_intake_record(updater)
@@ -2148,9 +2148,10 @@ def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
     policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
     assert policy == {
         "activation": {
-            "chunk_id": "WS-ENG-007-00R2",
+            "chunk_id": "WS-ENG-007-00R3",
             "initiative_id": "WS-ENG-007",
         },
+        "signed_basis": "73b457925b02301587b83d01ced0adb66319d134",
         "recovered_merges": [
             {
                 "chunk_id": "WS-ENG-007-PLAN",
@@ -2164,8 +2165,14 @@ def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
                 "merge_sha": "c65633f8f0991dbefe7b0635e053aab0df8f9af8",
                 "pr_number": 188,
             },
+            {
+                "chunk_id": "WS-ENG-007-00R2",
+                "initiative_id": "WS-ENG-007",
+                "merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
+                "pr_number": 189,
+            },
         ],
-        "schema_version": 3,
+        "schema_version": 4,
     }
 
 
@@ -2426,21 +2433,6 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         "delta_sha256": evidence["delta_sha256"],
         "changed_paths": sorted(paths),
     }
-    client.app_id = 1
-    assert_loop_error(
-        updater,
-        lambda: updater._collect_planning_intake(
-            client,
-            "Flow-Research/workstream",
-            metadata=metadata,
-            pr_number=201,
-            head_sha=head_sha,
-            base_sha=base_sha,
-            first_parent_sha=first_parent_sha,
-            merge_commit=merge_commit,
-        ),
-        "invalid provenance",
-    )
     client.app_id = updater.GITHUB_ACTIONS_APP_ID
     client.mode = "100755"
     assert_loop_error(
@@ -2459,9 +2451,6 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
     )
     client.mode = "100644"
     cases = (
-        (lambda: setattr(client, "app_slug", "foreign-app"), "invalid provenance"),
-        (lambda: setattr(client, "check_status", "queued"), "invalid provenance"),
-        (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
         (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
         (lambda: setattr(client, "file_status", "removed"), "additive files only"),
         (lambda: setattr(client, "duplicate_pr_path", True), "path set is invalid"),
@@ -4427,6 +4416,7 @@ def test_generated_loop_memory_escapes_markdown_metadata() -> None:
 def test_loop_memory_workflow_isolated_write_boundary() -> None:
     """The write-capable workflow runs on trusted main and targets only the state branch."""
     workflow = (ROOT / ".github/workflows/loop-memory.yml").read_text(encoding="utf-8")
+    start_workflow = (ROOT / ".github/workflows/loop-memory-start.yml").read_text(encoding="utf-8")
     agent_gates = (ROOT / ".github/workflows/agent-gates.yml").read_text(
         encoding="utf-8"
     )
@@ -4453,27 +4443,13 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "HEAD:refs/heads/${STATE_BRANCH}" not in workflow
     assert "HEAD:refs/heads/main" not in workflow
     assert "gh pr create" not in workflow
-    assert "plan-commits" in workflow
-    update_command = workflow.split(
-        "python3 scripts/update_post_merge_memory.py update", 1
-    )[1].split("          done", 1)[0]
-    update_lines = [line.strip() for line in update_command.splitlines()]
-    repository_root_lines = [
-        line for line in update_lines if line.startswith("--repository-root")
-    ]
-    cutover_lines = [
-        line for line in update_lines if line.startswith("--cutover-chunk-id")
-    ]
-    assert repository_root_lines == ["--repository-root . \\"]
-    assert cutover_lines == ["--cutover-chunk-id WS-ENG-001-04B \\"]
-    assert all("$" not in line for line in repository_root_lines + cutover_lines)
-    assert workflow.count("--cutover-chunk-id") == 1
-    assert workflow.count("prepare-recovery") == 1
-    assert workflow.count("assert-recovery-consumed") == 1
-    assert workflow.index("prepare-recovery") < workflow.index(
-        "python3 scripts/update_post_merge_memory.py update"
-    )
-    assert workflow.index("assert-recovery-consumed") < workflow.index("sign-state")
+    for text in (workflow, start_workflow):
+        assert text.count("update_post_merge_memory.py reconcile") == 1
+        assert "prepare-recovery" not in text
+        assert "update_post_merge_memory.py update" not in text
+        assert "assert-recovery-consumed" not in text
+    assert start_workflow.index("update_post_merge_memory.py reconcile") < start_workflow.index("apply-event")
+    assert workflow.index("update_post_merge_memory.py reconcile") < workflow.index("sign-state")
     assert '--target-sha "${TARGET_SHA}"' in workflow
     assert "resolve-target" in workflow
     assert "EVENT_SHA" in workflow
@@ -4489,14 +4465,13 @@ def test_loop_memory_workflow_isolated_write_boundary() -> None:
     assert "replay target is stale" in (
         ROOT / "scripts/update_post_merge_memory.py"
     ).read_text(encoding="utf-8")
-    assert "--current-sha" in workflow
     assert "update_post_merge_memory.py sign-state" in workflow
     assert "check_loop_memory_state.py" in workflow
     assert workflow.index("Resolve trusted protected-main target") < workflow.index(
         "Prepare generated state branch"
     )
-    assert workflow.index("prepare-state") < workflow.index("plan-commits")
-    assert workflow.index("plan-commits") < workflow.index("sign-state")
+    assert workflow.index("prepare-state") < workflow.index("update_post_merge_memory.py reconcile")
+    assert workflow.index("update_post_merge_memory.py reconcile") < workflow.index("sign-state")
     assert workflow.index("sign-state") < workflow.index("--expected-main-sha")
     assert workflow.index("--expected-main-sha") < workflow.index(
         "check_loop_memory_state.py"

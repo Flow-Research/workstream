@@ -1,5 +1,19 @@
 # Post-Merge Memory Operations
 
+## Merge-bound check evidence
+
+Protected `agent-gates` and backend `test` evidence is frozen at the immutable
+PR merge instant. Later reruns remain useful diagnostics but cannot replace or
+invalidate the selected pre-merge run in signed history. The selected run IDs,
+trusted GitHub Actions app identity, reviewed head, timestamps, conclusion,
+merge cutoff, and canonical digest are stored in generated signed memory.
+
+Both automatic merge reconciliation and an explicit start first reconcile exact
+current `main` in temporary custody through the same plan, bounded recovery,
+update, and full-consumption checks. Only after that succeeds may automation
+apply a start, sign, and publish. No partial recovery state or authority event is
+published on failure.
+
 ## Purpose
 
 Managers review and approve each implementation PR once. Workstream then

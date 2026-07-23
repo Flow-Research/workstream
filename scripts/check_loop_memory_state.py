@@ -107,9 +107,14 @@ INITIATIVE_STATE_ROOT = ".agent-loop/INITIATIVE_STATE"
 SCHEMA_VERSION = 2
 STATE_BRANCH = "automation/loop-memory"
 REQUIRED_CHECKS = ("agent-gates", "test", "CodeRabbit")
+GITHUB_ACTIONS_APP_ID = 15368
+GITHUB_ACTIONS_APP_SLUG = "github-actions"
+R3_RECOVERY_CERTIFICATE_SHA256 = "4fe49b2f4a5a7ad18382a717dcc11f798c465a534066102bf9810c9ed5784f4a"
+R3_HISTORICAL_HEAD_SHA = "55a11d9e0ae356734dbcce73564f5f570220a81b"
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+RFC3339_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$")
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 PLANNING_ROOT_FILES = {
     "INTENT.md",
@@ -588,9 +593,13 @@ def _record_failures(
     }
     if not isinstance(record, dict) or frozenset(record) not in {
         frozenset(expected),
+        frozenset(expected | {"protected_checks"}),
         frozenset(expected | {"legacy_exemptions"}),
+        frozenset(expected | {"legacy_exemptions", "protected_checks"}),
         frozenset(expected | {"planning_intake"}),
+        frozenset(expected | {"planning_intake", "protected_checks"}),
         frozenset(expected | {"planning_intake", "legacy_exemptions"}),
+        frozenset(expected | {"planning_intake", "legacy_exemptions", "protected_checks"}),
     }:
         return [f"{label}: invalid record schema"]
     failures: list[str] = []
@@ -790,8 +799,46 @@ def _record_failures(
             )
             if checks.get("all_required_passed") is not calculated:
                 failures.append(f"{label}: inconsistent aggregate check evidence")
-            if planning_intake is not None and calculated is not True:
-                failures.append(f"{label}: planning intake required checks did not pass")
+    protected = record.get("protected_checks")
+    if protected is None and isinstance(source.get("merged_at"), str):
+        try:
+            if datetime.fromisoformat(source["merged_at"].replace("Z", "+00:00")) >= datetime.fromisoformat("2026-07-23T05:11:46+00:00"):
+                failures.append(f"{label}: merge-bound protected check evidence is required")
+        except ValueError:
+            failures.append(f"{label}: invalid protected check cutoff")
+    if protected is not None:
+        if not isinstance(protected, dict) or protected.get("schema_version") != 1:
+            failures.append(f"{label}: invalid protected check evidence")
+        elif set(protected) == {"schema_version", "recovery_only", "sha256"}:
+            recovery = protected.get("recovery_only")
+            expected_recovery = {"merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953", "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2", "pr_number": 189, "policy_schema": 4, "signed_basis": "73b457925b02301587b83d01ced0adb66319d134", "activation_chunk_id": "WS-ENG-007-00R3", "certificate_sha256": R3_RECOVERY_CERTIFICATE_SHA256, "reason": "no-completed-pre-merge-agent-gates"}
+            if recovery != expected_recovery or source.get("head_sha") != R3_HISTORICAL_HEAD_SHA or source.get("pr_number") != 189 or protected.get("sha256") != hashlib.sha256(json.dumps(expected_recovery, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+                failures.append(f"{label}: invalid historical recovery evidence")
+        elif set(protected) == {"schema_version", "selected", "sha256"}:
+            selected = protected.get("selected")
+            if not isinstance(selected, dict) or set(selected) != {"agent-gates", "test"} or protected.get("sha256") != hashlib.sha256(json.dumps(selected, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+                failures.append(f"{label}: invalid protected check digest")
+            else:
+                seen_selected_ids: set[int] = set()
+                for name, item in selected.items():
+                    expected_keys = {"id", "head_sha", "app_id", "app_slug", "started_at", "completed_at", "conclusion", "merge_cutoff"}
+                    item_id = item.get("id") if isinstance(item, dict) else None
+                    if not isinstance(item, dict) or set(item) != expected_keys or type(item_id) is not int or item_id <= 0 or item_id in seen_selected_ids or item.get("head_sha") != source.get("head_sha") or item.get("app_id") != GITHUB_ACTIONS_APP_ID or item.get("app_slug") != GITHUB_ACTIONS_APP_SLUG or item.get("conclusion") != "success" or item.get("merge_cutoff") != source.get("merged_at"):
+                        failures.append(f"{label}: invalid protected check provenance for {name}")
+                        continue
+                    seen_selected_ids.add(item_id)
+                    try:
+                        if not all(isinstance(item[field], str) and RFC3339_PATTERN.fullmatch(item[field]) for field in ("started_at", "completed_at", "merge_cutoff")):
+                            raise ValueError("non-canonical timestamp")
+                        started = datetime.fromisoformat(item["started_at"].replace("Z", "+00:00"))
+                        completed = datetime.fromisoformat(item["completed_at"].replace("Z", "+00:00"))
+                        cutoff = datetime.fromisoformat(item["merge_cutoff"].replace("Z", "+00:00"))
+                        if started.tzinfo is None or completed.tzinfo is None or cutoff.tzinfo is None or not started <= completed <= cutoff:
+                            failures.append(f"{label}: invalid protected check timing for {name}")
+                    except (AttributeError, TypeError, ValueError):
+                        failures.append(f"{label}: invalid protected check timing for {name}")
+        else:
+            failures.append(f"{label}: invalid protected check evidence schema")
     return failures
 
 

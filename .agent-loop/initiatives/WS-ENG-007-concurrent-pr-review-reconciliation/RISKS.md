@@ -15,3 +15,7 @@
 | Legitimate check reruns block signed memory | Critical | Validate every same-name candidate, order completed trusted invocations by parsed start instant and positive check-run ID, then require the unique latest candidate to succeed. |
 | A stale success hides a later failure | Critical | Latest validated run wins; an in-progress, failed, cancelled, foreign-app, malformed, or timestamp-ambiguous latest run fails closed. |
 | Three-merge repair becomes general authority | Critical | Schema v3 permits at most two recovered merges and production names only PR #187, PR #188, and 00R2; require exact first-parent adjacency, unique identities, full consumption before signing, and no serialization. |
+| Mutable post-merge reruns rewrite accepted evidence | Critical | Select protected runs at immutable merge time, persist exact selected provenance and digest, and ignore only runs provably started after the cutoff. |
+| Recovery cannot cross PR #189 and its own activation | Critical | Use one schema-v4 exact four-entry bridge from signed PR #178 through PRs #187–#189 to 00R3, then consume it completely. |
+| Explicit starts reconcile differently from merge automation | High | Use one plan/prepare/update/assert implementation and prove atomic parity before applying authority. |
+| Later reruns hide evidence beyond the first API page | High | Bounded complete pagination with total, overlap, drift, and exhaustion rejection. |

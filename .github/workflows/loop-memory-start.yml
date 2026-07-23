@@ -95,18 +95,10 @@ jobs:
           python3 scripts/update_post_merge_memory.py prepare-output \
             --source-root "${branch_dir}" --output-root "${output_dir}" \
             --public-key .agent-loop/keys/loop-memory-signing-public.pem
-          current_sha=$(python3 -c \
-            'import json,sys; s=json.load(open(sys.argv[1],encoding="utf-8")); print(s.get("event",{}).get("main_sha") or s["source"]["main_sha"])' \
-            "${output_dir}/.agent-loop/STATE.json")
-          plan_file=$(mktemp)
-          python3 scripts/update_post_merge_memory.py plan-commits \
-            --repository-root . --target-sha "${TARGET_SHA}" \
-            --current-sha "${current_sha}" > "${plan_file}"
-          while IFS= read -r merge_sha; do
-            [[ -z "${merge_sha}" ]] || python3 scripts/update_post_merge_memory.py update \
-              --repository "${GITHUB_REPOSITORY}" --merge-sha "${merge_sha}" \
-              --state-root "${output_dir}" --branch-root "${branch_dir}"
-          done < "${plan_file}"
+          python3 scripts/update_post_merge_memory.py reconcile \
+            --repository "${GITHUB_REPOSITORY}" --repository-root . \
+            --state-root "${output_dir}" --branch-root "${branch_dir}" \
+            --target-sha "${TARGET_SHA}"
           echo "branch_dir=${branch_dir}" >> "${GITHUB_OUTPUT}"
           echo "output_dir=${output_dir}" >> "${GITHUB_OUTPUT}"
           echo "prior_tip=$(git -C "${branch_dir}" rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
