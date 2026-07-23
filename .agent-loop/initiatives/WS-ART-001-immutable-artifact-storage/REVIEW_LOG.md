@@ -1,5 +1,52 @@
 # Review Log: WS-ART-001 Immutable Artifact Storage
 
+## WS-ART-001-02D
+
+- Signed explicit start verified on 2026-07-22 against trusted main
+  `92b8a7aa`.
+- L1 preimplementation plan review: PASS WITH CONDITIONS. The accepted design
+  uses an artifact-owned typed activation seam with deny-only production
+  wiring, exact ActionId/PermissionId evidence validation, canonical resource
+  composition, transaction-local retry reauthorization, configuration-only
+  readiness, and the existing bounded in-process metrics convention.
+- Focused real-HTTP PostgreSQL evidence passes for binding discovery, redacted
+  replica and receipt reads, verification diagnosis, reason-bound `202` retry,
+  recovery/audit follow-through, admission usage, inactive readiness,
+  pagination, and concealed denial. Required implementation reviewer fanout is
+  pending on the candidate commit.
+- First implementation review on `6f281793`: circuit-breaker PASS with a
+  justified single-contract size exception; all nine reviewer tracks FAIL.
+  Blocking findings covered canonical product/pre-binding lineage, recovery
+  port bypass and authorization ordering, open response dictionaries, receipt
+  cursor/audit completeness, project-scoped admission redaction, proactive
+  metrics, safe quota reconciliation, CI gate activation, and missing
+  adversarial HTTP/race proofs.
+- Repair replaces page-derived scope with locked product and put-attempt
+  lineage, routes retry through `ArtifactOperatorRecoveryPort`, authorizes
+  canonical recovery facts before differentiated errors, installs strict
+  response models and composite receipt cursors, covers every receipt audit
+  lineage, requires project-scoped usage, emits all four pressure scopes from
+  admission, reconciles configured limits under locked CAS guards, activates
+  the exact API-router CI gate, and expands HTTP replay/race/concealment and
+  pagination proof.
+- Final internal review cleared every blocker. The first hosted PR #177 run
+  passed Agent Gates, preflight, API E2E, and shards 1, 2, and 4. Shard 3 found
+  one stale exact OpenAPI inventory assertion after the nine intended protected
+  Operator routes were composed. Commit `536213ff` updates the exact total and
+  protected counts/hashes; its single regression passes and all reviewer tracks
+  reapproved the repair. The rerun passed all four shards, then the unchanged
+  90 percent artifact foundation gate reported 89.50 percent. Commit
+  `f1b9480c` adds meaningful resolver/page helper tests without changing the
+  threshold or production code; 26 focused tests and all reviewer tracks pass.
+  The next hosted run improved the unchanged gate to 89.70 percent. Commit
+  `45725a85` adds exact audit-resource composition and missing-lineage tests,
+  covering 14 additional Operator statements for the remaining roughly
+  13-statement gap; 28 focused tests and all reviewer tracks pass. A final
+  binding projection/missing-resource proof closes the last statement without
+  changing production code or the threshold. Final Backend run `29894507010`
+  passes preflight, API E2E, all four shards, repository coverage, every scoped
+  coverage gate, and artifact foundation coverage at exactly 90.00 percent.
+
 ## WS-ART-001-02C3
 
 - Signed explicit start verified on 2026-07-21 against trusted main `f2aa57a4`.

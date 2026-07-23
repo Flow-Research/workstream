@@ -1235,6 +1235,10 @@ no-fallback maintenance cutover.
 
 ## Provider Contract References
 
+Operator diagnosis, admission-pressure alerts, and configuration-driven quota
+rollback are documented in the
+[artifact storage operations runbook](operations_artifact_storage.md).
+
 - [Amazon S3 conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)
 - [Amazon S3 Block Public Access](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html)
 - [Amazon S3 lifecycle management](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)

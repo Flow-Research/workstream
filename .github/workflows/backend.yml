@@ -358,6 +358,10 @@ jobs:
         working-directory: backend
         run: coverage report --include='app/modules/audit/*' --precision=2 --fail-under=90
 
+      - name: API router composition coverage
+        working-directory: backend
+        run: coverage report --include='app/api/router.py' --precision=2 --fail-under=90
+
       - name: Actor subsystem coverage
         working-directory: backend
         run: coverage report --include='app/modules/actors/*' --precision=2 --fail-under=90
