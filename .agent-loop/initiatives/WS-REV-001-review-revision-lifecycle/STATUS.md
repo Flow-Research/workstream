@@ -4,13 +4,13 @@
 
 `WS-REV-001-03P` is active through signed `Loop Memory Explicit Event` run
 `30014647556` on exact trusted main
-`bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Reviewed pre-CodeRabbit-repair
-implementation candidate `b9501b31565370306aea168ff4c218a2880e6c0b` persists
-only REV-owned immutable ReviewPolicy and RevisionPolicy facts and passed every
-required internal review track plus focused local evidence. Candidate
+`bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Reviewed CodeRabbit-repair
+implementation candidate `fe4b1447a9dc60d192308ebb3f0ed68c8832141e`
+persists only REV-owned immutable ReviewPolicy and RevisionPolicy facts and
+passed every required internal review track plus focused local evidence. Candidate
 `35531df254c6b25726d666a5e89eda997b97d792` is retained only as historical
 pre-external-repair authorization context. GitHub Actions full-suite/coverage,
-CodeRabbit, and human review remain before merge.
+incremental CodeRabbit confirmation, and human review remain before merge.
 
 The chunk does not implement Project Guide ownership, Task transitions,
 Submission or artifact behavior, review queues or leases, Review decisions,

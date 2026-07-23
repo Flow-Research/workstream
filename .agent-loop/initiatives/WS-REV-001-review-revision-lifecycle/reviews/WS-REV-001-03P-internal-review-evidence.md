@@ -3,7 +3,7 @@
 ## Candidate
 
 - Trusted base: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
-- Final reviewed code candidate: `ba9c6249c053696dc9f32bfd750a2b9bb787e4f6`
+- Final reviewed code candidate: `fe4b1447a9dc60d192308ebb3f0ed68c8832141e`
 - Pre-external-repair implementation candidate: `35531df254c6b25726d666a5e89eda997b97d792`
 - Signed start: workflow run `30014647556`
 - Risk: L1 / P2
@@ -15,11 +15,11 @@ Valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: `ba9c6249c053696dc9f32bfd750a2b9bb787e4f6`
+Reviewed code SHA: `fe4b1447a9dc60d192308ebb3f0ed68c8832141e`
 
-Reviewed at: 2026-07-23T16:51:33Z
+Reviewed at: 2026-07-23T17:19:00Z
 
-Reviewer run IDs: /root/plan_arch_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6; /root/qa_product_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6; /root/security_docs_ci_review@ba9c6249c053696dc9f32bfd750a2b9bb787e4f6
+Reviewer run IDs: /root/plan_arch_review@fe4b1447a9dc60d192308ebb3f0ed68c8832141e; /root/qa_product_review@fe4b1447a9dc60d192308ebb3f0ed68c8832141e; /root/security_docs_ci_review@fe4b1447a9dc60d192308ebb3f0ed68c8832141e
 
 ## Reviewer results
 
