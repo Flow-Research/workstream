@@ -1480,6 +1480,34 @@ def test_authority_transition_requires_prior_basis(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
+        lambda record: record["authority_state"]["source"].update(head_sha="bad"),
+        lambda record: record["authority_state"]["source"].update(pr_number=0),
+        lambda record: record["authority_state"]["source"].update(pr_url="wrong"),
+        lambda record: record["authority_state"]["source"].update(merged_at="wrong"),
+        lambda record: record["authority_state"]["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-BAD-001.json"
+        ),
+        lambda record: record["authority_state"].update(completed_chunk=[]),
+    ],
+)
+def test_authority_record_rejects_malformed_basis_source(
+    tmp_path: Path, mutation
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    authority = json.loads((state_root / loop.STATE_PATH).read_text())
+    mutation(authority)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_record(authority)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
         lambda event: event.update(event_id="wrong"),
         lambda event: event.update(run_id=0),
         lambda event: event.update(approvers=[]),
