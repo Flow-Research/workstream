@@ -154,10 +154,19 @@ def _authority_record(tmp_path: Path) -> dict:
         lambda record: record["event"].update(chunk_id="WS-ENG-001-99"),
         lambda record: record["authority_state"].update(source={}),
         lambda record: record["authority_state"]["source"].update(head_sha="bad"),
+        lambda record: record["authority_state"]["source"].update(pr_number=0),
+        lambda record: record["authority_state"]["source"].update(pr_number=True),
+        lambda record: record["authority_state"]["source"].update(pr_url="wrong"),
+        lambda record: record["authority_state"]["source"].update(pr_title=""),
+        lambda record: record["authority_state"]["source"].update(merged_at="wrong"),
+        lambda record: record["authority_state"]["source"].update(
+            merged_at="2026-07-20T10:00:00"
+        ),
         lambda record: record["authority_state"]["source"].update(
             intent_path=".agent-loop/merge-intents/WS-BAD-001.json"
         ),
         lambda record: record["authority_state"].update(completed_chunk=[]),
+        lambda record: record["authority_state"].pop("gate"),
         lambda record: record["authority_state"]["completed_chunk"].update(
             initiative_id="WS-ART-001"
         ),
