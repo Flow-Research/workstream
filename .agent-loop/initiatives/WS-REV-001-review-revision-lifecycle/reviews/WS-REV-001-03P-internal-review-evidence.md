@@ -8,13 +8,31 @@
 - Risk: L1 / P2
 - Boundary: ReviewPolicy and RevisionPolicy persistence only
 
+Open sub-agent sessions: none
+
+Valid findings addressed: yes
+
+## Reviewed Revision
+
+Reviewed code SHA: `5417578dadec3da7e424d80f4371173aec0d50b8`
+
+Reviewed at: 2026-07-23T16:21:15Z
+
+Reviewer run IDs: /root/plan_arch_review@5417578dadec3da7e424d80f4371173aec0d50b8; /root/qa_product_review@5417578dadec3da7e424d80f4371173aec0d50b8; /root/security_docs_ci_review@5417578dadec3da7e424d80f4371173aec0d50b8
+
 ## Reviewer results
 
-| Tracks | Result | Findings closed |
-|---|---:|---|
-| Senior engineering, architecture, reuse/dedup, circuit breaker | PASS | Replaced timing inference with exact-backend PostgreSQL lock-wait proof. |
-| QA/test, product/ops, test delta | PASS | Restored legacy activation and Task snapshot proof; covered every archival field and insert boundary. |
-| Security/auth, docs, CI integrity | PASS | Proved fail-closed conversion, publication races, downgrade refusal, provenance, and no gate weakening. |
+| Reviewer | Result | Blocking findings | Notes |
+|---|---:|---|---|
+| Senior engineering | PASS | None | Maintainable table-specific guards and bounded atomic L1 scope. |
+| QA/test | PASS | None | Focused migration, API, snapshot, and compatibility proof is complete. |
+| Security/auth | PASS | None | Provenance and immutability fail closed without absorbing AUTH ownership. |
+| Product/ops | PASS | None | Policy persistence remains separate from later lifecycle execution. |
+| Architecture | PASS | None | No Project Guide, Task, Submission, ART, AUTH, or CON boundary drift. |
+| CI integrity | PASS | None | No workflow, coverage floor, script, skip, or assertion was weakened. |
+| Docs | PASS | None | Active docs, schema, status, and lifecycle terminology agree. |
+| Reuse/dedup | PASS | None | Existing Project policy mapping and locking conventions are reused. |
+| Test delta | PASS | None | Compensation and ART assertions remain intact; proof only increased. |
 
 No Critical, High, Medium, or Low finding remains. All reviewer sessions
 completed before publication.

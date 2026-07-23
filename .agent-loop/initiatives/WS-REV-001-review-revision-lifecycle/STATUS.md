@@ -25,11 +25,11 @@ database/concurrency boundaries. That attempted split is now retired.
 
 ## Historical dependency snapshot
 
-Current trusted main is `14fa4316f7d984f2176657bfafd2a2dae56f944e`
+At the PLAN3 snapshot, trusted main was `14fa4316f7d984f2176657bfafd2a2dae56f944e`
 with sole Alembic head `0033_authorization_read_rate_control`. The bullets below describe the
 older PLAN2 snapshot and are not current runtime proof.
 
-Canonical signed loop memory currently remains stopped after merged 02A and
+At that snapshot, canonical signed loop memory remained stopped after merged 02A and
 names retired 02A1 as next. That projection is accurate historical automation
 state but no longer a valid REV scope choice. PLAN3 is proposed—not active—and
 its reviewed merge intent changes the same-initiative successor to 03P. No
