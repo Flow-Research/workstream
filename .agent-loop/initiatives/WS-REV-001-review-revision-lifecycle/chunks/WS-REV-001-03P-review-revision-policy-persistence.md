@@ -30,6 +30,7 @@ backend/tests/test_projects.py
 backend/tests/test_tasks.py
 backend/tests/test_artifact_admission.py
 backend/tests/conftest.py
+backend/scripts/api_contract_e2e.py
 docs/architecture_data_model.md
 docs/template_project_guide.md
 .agent-loop/initiatives/WS-REV-001-review-revision-lifecycle/{DISCOVERY,PLAN,STATUS,REVIEW_LOG}.md
@@ -54,6 +55,10 @@ The three cross-owner test files are proof-only exceptions:
   while preserving every existing Project Guide activation outcome. Retired
   request fields may become schema-denial tests, but activation denial may not
   be removed or broadened by 03P.
+- `backend/scripts/api_contract_e2e.py`: update only the existing Project Guide
+  policy request fixture for the canonical 03P schema. No API lifecycle step,
+  endpoint expectation, authorization assertion, or non-policy fixture may
+  change.
 
 ## Not allowed
 
