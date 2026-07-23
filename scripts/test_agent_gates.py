@@ -2035,6 +2035,132 @@ def test_independent_checker_accepts_and_mutates_planning_intake_state() -> None
         assert checker._record_failures(rebased_record, "rebase record", rebase_repository) == []
 
 
+def test_planning_tree_entries_canonicalize_recursive_directory_objects() -> None:
+    """Recursive API directory objects never enter the canonical leaf map."""
+    updater = load_module("planning_tree_entries", "scripts/update_post_merge_memory.py")
+    leaves = [f"root/dir/file-{index}.md" for index in range(13)]
+    directories = ["root", "root/dir", "root/other", "alpha", "beta", "gamma"]
+
+    class TreeClient:
+        def __init__(self, entries: list[dict]) -> None:
+            self.entries = entries
+
+        def get_json(self, _path: str):
+            return {"truncated": False, "tree": self.entries}
+
+    entries = [
+        *(
+            {"path": path, "type": "tree", "mode": "040000", "sha": hashlib.sha1(path.encode()).hexdigest()}
+            for path in directories
+        ),
+        *(
+            {"path": path, "type": "blob", "mode": "100644", "sha": hashlib.sha1(path.encode()).hexdigest()}
+            for path in leaves
+        ),
+    ]
+    canonical = updater._tree_entries(
+        TreeClient(entries), "Flow-Research/workstream", "a" * 40, "head"
+    )
+    assert len(entries) == 19
+    assert sorted(canonical) == sorted(leaves)
+
+    supported = [
+        {"path": "regular", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "executable", "type": "blob", "mode": "100755", "sha": "2" * 40},
+        {"path": "symlink", "type": "blob", "mode": "120000", "sha": "3" * 40},
+        {"path": "gitlink", "type": "commit", "mode": "160000", "sha": "4" * 40},
+    ]
+    assert set(updater._tree_entries(
+        TreeClient(supported), "Flow-Research/workstream", "a" * 40, "supported"
+    )) == {"regular", "executable", "symlink", "gitlink"}
+
+    hostile = (
+        ({"path": "bad", "type": "tree", "mode": "100644", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "bad", "type": "blob", "mode": "040000", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "bad", "type": "commit", "mode": "100644", "sha": "5" * 40}, "unsupported entry mode"),
+        ({"path": "../bad", "type": "blob", "mode": "100644", "sha": "5" * 40}, "malformed"),
+    )
+    for entry, message in hostile:
+        assert_loop_error(
+            updater,
+            lambda entry=entry: updater._tree_entries(
+                TreeClient([entry]), "Flow-Research/workstream", "a" * 40, "hostile"
+            ),
+            message,
+        )
+    separating_sibling = [
+        {"path": "a", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "a-b", "type": "blob", "mode": "100644", "sha": "2" * 40},
+        {"path": "a/b", "type": "blob", "mode": "100644", "sha": "3" * 40},
+    ]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(separating_sibling), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "conflicting leaf paths",
+    )
+    duplicate = [supported[0], dict(supported[0])]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(duplicate), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "malformed",
+    )
+    malformed_sha = [{**supported[0], "sha": "not-a-sha"}]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(malformed_sha), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "malformed",
+    )
+    before_file = {"node": ("100644", "blob", "1" * 40)}
+    after_directory = {
+        "node/one": ("100644", "blob", "2" * 40),
+        "node/two": ("100644", "blob", "3" * 40),
+    }
+    assert updater._tree_delta(before_file, after_directory) == {
+        "node": None,
+        **after_directory,
+    }
+    assert updater._tree_delta(after_directory, before_file) == {
+        "node": before_file["node"],
+        "node/one": None,
+        "node/two": None,
+    }
+    leaf_then_tree = [
+        {"path": "leaf", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "leaf/child", "type": "tree", "mode": "040000", "sha": "2" * 40},
+    ]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(leaf_then_tree), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "conflicting leaf paths",
+    )
+
+
+def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
+    """The temporary production recovery authority is identity-exact."""
+    policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
+    assert policy == {
+        "activation": {
+            "chunk_id": "WS-ENG-007-00R1",
+            "initiative_id": "WS-ENG-007",
+        },
+        "recovered_merge": {
+            "chunk_id": "WS-ENG-007-PLAN",
+            "initiative_id": "WS-ENG-007",
+            "merge_sha": "8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8",
+            "pr_number": 187,
+        },
+        "schema_version": 1,
+    }
+
+
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
     """Planning intake collection binds the reviewed tree and trusted checks."""
     updater = load_module("planning_intake_collection", "scripts/update_post_merge_memory.py")
@@ -2076,16 +2202,25 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             self.app_id = updater.GITHUB_ACTIONS_APP_ID
             self.app_slug = updater.GITHUB_ACTIONS_APP_SLUG
             self.mode = "100644"
+            self.kind = "blob"
             self.file_status = "added"
             self.extra_path: str | None = None
+            self.omit_pr_path = False
+            self.duplicate_pr_path = False
+            self.merge_only_path: str | None = None
             self.duplicate_run = False
             self.check_status = "completed"
             self.check_conclusion = "success"
             self.truncated_tree: str | None = None
+            self.hostile_entry: dict | None = None
 
         def get_paginated(self, path: str) -> list[dict]:
             if "/pulls/201/files" in path:
                 items = [*paths, *([self.extra_path] if self.extra_path else [])]
+                if self.omit_pr_path:
+                    items.pop()
+                if self.duplicate_pr_path:
+                    items.append(items[0])
                 return [{"filename": item, "status": self.file_status} for item in items]
             if path.endswith("/statuses"):
                 return [{
@@ -2108,17 +2243,24 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             tree_entries = {
                 base_tree: [{"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40}],
                 head_tree: [
+                    {"path": ".agent-loop", "type": "tree", "mode": "040000", "sha": "1" * 40},
+                    {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
-                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *({"path": item, "type": self.kind, "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *([self.hostile_entry] if self.hostile_entry else []),
                 ],
                 first_parent_tree: [
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
                 ],
                 merge_tree: [
+                    {"path": ".agent-loop", "type": "tree", "mode": "040000", "sha": "1" * 40},
+                    {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
-                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *({"path": item, "type": self.kind, "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *([{"path": self.merge_only_path, "type": "blob", "mode": "100644", "sha": "6" * 40}] if self.merge_only_path else []),
+                    *([self.hostile_entry] if self.hostile_entry else []),
                 ],
             }
             for tree_sha, entries in tree_entries.items():
@@ -2215,6 +2357,18 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         (lambda: setattr(client, "check_status", "queued"), "invalid provenance"),
         (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
         (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
+        (lambda: setattr(client, "file_status", "removed"), "additive files only"),
+        (lambda: setattr(client, "duplicate_pr_path", True), "path set is invalid"),
+        (lambda: setattr(client, "omit_pr_path", True), "review or contract set is invalid"),
+        (lambda: setattr(client, "merge_only_path", "merge-only.md"), "authoritative tree delta does not match"),
+        (
+            lambda: (setattr(client, "kind", "blob"), setattr(client, "mode", "120000")),
+            "file mode",
+        ),
+        (
+            lambda: (setattr(client, "kind", "commit"), setattr(client, "mode", "160000")),
+            "file mode",
+        ),
         (lambda: setattr(client, "extra_path", "backend/app/unsafe.py"), "foreign path"),
         (
             lambda: setattr(
@@ -2241,6 +2395,18 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             "foreign path",
         ),
         (lambda: setattr(client, "truncated_tree", merge_tree), "tree is incomplete"),
+        (
+            lambda: setattr(client, "hostile_entry", {
+                "path": "foreign", "type": "tag", "mode": "100644", "sha": "5" * 40,
+            }),
+            "unsupported entry mode",
+        ),
+        (
+            lambda: setattr(client, "hostile_entry", {
+                "path": "base.txt/child", "type": "blob", "mode": "100644", "sha": "5" * 40,
+            }),
+            "conflicting leaf paths",
+        ),
     )
     for mutate, expected in cases:
         client = IntakeClient()
@@ -2388,9 +2554,9 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
             updater._validate_protected_actions_checks = original_checks
 
 
-def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> None:
-    """The exact REV checkpoint may precede the ENG activation lexically."""
-    updater = load_module("eng006_two_merge_recovery", "scripts/update_post_merge_memory.py")
+def test_eng007_two_merge_recovery_binds_pr187_and_consumes_authority() -> None:
+    """The exact PR187 checkpoint precedes and authorizes only its repair."""
+    updater = load_module("eng007_two_merge_recovery", "scripts/update_post_merge_memory.py")
     with tempfile.TemporaryDirectory() as tmpdir:
         repository_root = Path(tmpdir) / "repository"
         state_root = Path(tmpdir) / "state"
@@ -2401,47 +2567,53 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
         subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
         base_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
-        (repository_root / "rev.txt").write_text("rev plan\n", encoding="utf-8")
+        (repository_root / "plan.txt").write_text("eng plan\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "rev plan"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng plan"], check=True, stdout=subprocess.PIPE)
         recovered_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
         policy = repository_root / updater.RECOVERY_POLICY_PATH
         policy.parent.mkdir(parents=True, exist_ok=True)
         policy.write_text(json.dumps({
-            "activation": {"chunk_id": "WS-ENG-006-00", "initiative_id": "WS-ENG-006"},
+            "activation": {"chunk_id": "WS-ENG-007-00R1", "initiative_id": "WS-ENG-007"},
             "recovered_merge": {
-                "chunk_id": "WS-REV-001-PLAN3",
-                "initiative_id": "WS-REV-001",
+                "chunk_id": "WS-ENG-007-PLAN",
+                "initiative_id": "WS-ENG-007",
                 "merge_sha": recovered_sha,
-                "pr_number": 176,
+                "pr_number": 187,
             },
             "schema_version": 1,
         }) + "\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng activation"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng repair"], check=True, stdout=subprocess.PIPE)
         target_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
         base = loop_record(updater, sha=base_sha)
         base["legacy_exemptions"] = []
         updater.apply_merge_record(state_root, base)
-        recovered = loop_record(updater, sha=recovered_sha, first_parent_sha=base_sha, pr_number=176)
+        recovered = loop_record(updater, sha=recovered_sha, first_parent_sha=base_sha, pr_number=187)
         recovered["completed_chunk"].update(
-            initiative_id="WS-REV-001", chunk_id="WS-REV-001-PLAN3",
-            next_chunk_id=None, next_chunk_title=None,
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-PLAN",
+            next_chunk_id="WS-ENG-007-01", next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
         )
-        recovered["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        recovered["gate"].update(
+            next_chunk_id="WS-ENG-007-01",
+            next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+        )
         recovered["source"].update(
-            intent_path=".agent-loop/merge-intents/WS-REV-001-PLAN3.json",
-            pr_url="https://github.com/Flow-Research/workstream/pull/176",
+            intent_path=".agent-loop/merge-intents/WS-ENG-007-PLAN.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/187",
         )
-        target = loop_record(updater, sha=target_sha, first_parent_sha=recovered_sha, pr_number=179)
+        target = loop_record(updater, sha=target_sha, first_parent_sha=recovered_sha, pr_number=188)
         target["completed_chunk"].update(
-            initiative_id="WS-ENG-006", chunk_id="WS-ENG-006-00",
-            next_chunk_id=None, next_chunk_title=None,
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-00R1",
+            next_chunk_id="WS-ENG-007-01", next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
         )
-        target["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        target["gate"].update(
+            next_chunk_id="WS-ENG-007-01",
+            next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+        )
         target["source"].update(
-            intent_path=".agent-loop/merge-intents/WS-ENG-006-00.json",
-            pr_url="https://github.com/Flow-Research/workstream/pull/179",
+            intent_path=".agent-loop/merge-intents/WS-ENG-007-00R1.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/188",
         )
         records = {recovered_sha: recovered, target_sha: target}
         original_collect = updater.collect_merge_record
@@ -2481,8 +2653,8 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
                 target_sha=target_sha, planned_shas=[recovered_sha, target_sha],
             )
             assert [(item["initiative_id"], item["chunk_id"]) for item in exemptions] == [
-                ("WS-REV-001", "WS-REV-001-PLAN3"),
-                ("WS-ENG-006", "WS-ENG-006-00"),
+                ("WS-ENG-007", "WS-ENG-007-PLAN"),
+                ("WS-ENG-007", "WS-ENG-007-00R1"),
             ]
             assert checked_heads == [target["source"]["head_sha"]]
             serialized = json.loads(json.dumps({"schema_version": 1, "exemptions": exemptions}))
@@ -7107,9 +7279,11 @@ def main() -> int:
         test_planning_intake_is_stopped_idempotent_and_new_initiative_only,
         test_planning_intake_record_schema_fails_closed,
         test_independent_checker_accepts_and_mutates_planning_intake_state,
+        test_planning_tree_entries_canonicalize_recursive_directory_objects,
+        test_ws_eng_007_recovery_policy_is_exactly_pinned,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
-        test_eng006_two_merge_recovery_preserves_chronological_identity_order,
+        test_eng007_two_merge_recovery_binds_pr187_and_consumes_authority,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
         test_loop_memory_target_resolution_rejects_stale_replays,
         test_post_merge_collection_binds_exact_pr_and_checks,

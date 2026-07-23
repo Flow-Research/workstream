@@ -45,3 +45,20 @@ classes, transitive impacts, and reviewer escalation.
 
 `unknown` is a reconciliation result; `track_stale` for every track is its
 mandatory reviewer lifecycle consequence. Neither is a claimant override.
+
+## D10 - Repair file/tree parity before implementation
+
+GitHub's recursive tree API returns directory entries, while PR file evidence
+and `git ls-tree -r` return non-tree entries. Canonical planning-intake delta
+identity therefore excludes only entries whose type is exactly `tree`; blobs,
+symlinks, executables, gitlinks, modes, OIDs, directory/file transitions, and
+unsupported non-tree types retain fail-closed validation.
+
+## D11 - Recover PR #187 exactly once
+
+The signed start mechanism cannot reconcile PR #187 until D10 is implemented.
+Use the existing closed schema-v1 two-merge recovery mechanism, rebound to PR
+`#187` merge `8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8` followed immediately by
+`WS-ENG-007-00R1`. Both ephemeral
+exemptions must be consumed before signing; no wildcard, manual state edit,
+force push, new secret, or persistent exemption is allowed.
