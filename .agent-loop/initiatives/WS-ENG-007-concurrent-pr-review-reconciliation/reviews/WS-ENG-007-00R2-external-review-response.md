@@ -2,7 +2,8 @@
 
 ## Comments addressed
 
-None before publication.
+- CodeRabbit minor: reflowed the PR `#187` reference in the operations runbook
+  so Markdown does not parse it as a malformed ATX heading.
 
 ## Comments deferred
 
@@ -10,13 +11,16 @@ None.
 
 ## Human decisions needed
 
-None before external review.
+None.
 
 ## Commands rerun
 
-The complete deterministic command set is recorded in the internal evidence and
-PR trust bundle.
+```bash
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+git diff --check origin/main...HEAD
+```
 
 ## Remaining risks
 
-CodeRabbit, GitHub Actions, and human review remain required external checks.
+No new risk. Exact adjacency and fresh exact-head checks remain blocking.

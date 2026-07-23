@@ -263,8 +263,8 @@ on exact current `main`.
 
 ## WS-ENG-007 Canonical Check-Evidence Recovery
 
-PR #188 repaired tree normalization but its post-merge run failed because PR
-#187 contains two legitimate successful `agent-gates` reruns. Protected check
+PR `#188` repaired tree normalization but its post-merge run failed because PR
+`#187` contains two legitimate successful `agent-gates` reruns. Protected check
 validation now treats reruns as ordered evidence versions, not a cardinality
 error. Every same-name candidate must target the exact reviewed head, come from
 the pinned GitHub Actions application, contain a strict positive unique ID and

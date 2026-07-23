@@ -34,6 +34,12 @@ reload.
 - No workflow, required-check name, coverage, dependency, signing key, secret,
   permission, product behavior, or human merge authority changed.
 
+## External Review
+
+CodeRabbit raised one valid minor Markdown finding. The PR `#187` reference in
+the operations runbook was reflowed so it cannot be parsed as a malformed
+heading. No external finding was deferred.
+
 ## Human Review Focus
 
 Confirm newer invocation failure cannot be hidden, all three merge heads receive
