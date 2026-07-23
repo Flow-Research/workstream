@@ -17,7 +17,11 @@ from app.adapters.artifacts.s3_compatible import create_minio_artifact_store_boo
 from app.adapters.auth.flow import FlowAuthVerifier
 from app.api.deps.auth import get_application_auth_verifier
 from app.core.auth import clear_auth_verifier_cache, get_auth_verifier
-from app.core.config import Settings, get_settings
+from app.core.config import (
+    Settings,
+    decode_pagination_cursor_hmac_secret,
+    get_settings,
+)
 from app.core.s3_validation import (
     canonical_minio_endpoint,
     is_canonical_s3_region,
@@ -66,6 +70,35 @@ def test_rate_limit_secret_is_canonical_and_redacted() -> None:
     assert settings.api_rate_limit_key_secret.get_secret_value() == encoded
     assert encoded not in repr(settings)
     assert "api_rate_limit_key_secret" not in settings.model_dump()
+
+
+def test_pagination_cursor_secret_is_exact_and_redacted() -> None:
+    encoded = base64.b64encode(bytes(range(32))).decode("ascii")
+    settings = Settings(pagination_cursor_hmac_secret=encoded)
+
+    assert settings.pagination_cursor_hmac_secret is not None
+    assert decode_pagination_cursor_hmac_secret(settings.pagination_cursor_hmac_secret) == bytes(
+        range(32)
+    )
+    assert encoded not in repr(settings)
+    assert "pagination_cursor_hmac_secret" not in settings.model_dump()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["not-base64", base64.b64encode(bytes(31)).decode(), base64.b64encode(bytes(33)).decode()],
+)
+def test_pagination_cursor_secret_rejects_noncanonical_lengths(value: str) -> None:
+    with pytest.raises(ValueError, match="invalid pagination cursor HMAC secret"):
+        Settings(pagination_cursor_hmac_secret=value)
+
+
+@pytest.mark.asyncio
+async def test_pagination_cursor_secret_is_required_at_startup() -> None:
+    app = create_app(Settings(environment="test", pagination_cursor_hmac_secret=None))
+    with pytest.raises(RuntimeError, match="pagination cursor HMAC secret is required"):
+        async with app.router.lifespan_context(app):
+            pass
 
 
 def test_rate_limit_secret_loads_from_environment_and_dotenv(

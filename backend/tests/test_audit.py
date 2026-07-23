@@ -177,6 +177,9 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
     }
     with pytest.raises(TypeError, match="invalid authority audit input"):
         _authority_input(

@@ -12,12 +12,15 @@ from collections.abc import Iterator, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 import inspect
+import hashlib
+import hmac
 import json
 import pickle
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+from httpx import ASGITransport, AsyncClient
 import pytest  # type: ignore[import-not-found]
 from pydantic import ValidationError  # type: ignore[import-not-found]
 from sqlalchemy import text
@@ -29,12 +32,18 @@ from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
 from starlette.requests import Request
 
 from app.api.deps.authorization import (
+    authorization_http_error,
     get_authorization_actor,
     get_authorization_service,
     get_prepared_authorization_service,
 )
+from app.api.deps.api_controls import enforce_authorization_read_rate_limit
+from app.api.deps.auth import get_auth_verification_result
 from app.core.api_controls import StructuredHTTPException
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
+from app.core.hashing import canonical_json_hash
+from app.main import create_app
+from app.modules.projects.repository import ProjectRepository
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,
@@ -60,6 +69,12 @@ from app.modules.authorization.lifecycle_service import (
     IdentityLinkLifecycleService,
 )
 from app.modules.authorization.models import AdminRoleGrant
+from app.modules.authorization.pagination import (
+    AuthorizationReadCursorCodec,
+    InvalidPaginationCursor,
+    authorization_read_query_digest,
+)
+from app.modules.authorization.read_service import ProjectRoleReadService
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     ACTION_DEFINITIONS,
@@ -151,6 +166,9 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScopeKind,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
+    ProjectContributorCandidateCollectionResourceContext,
+    ProjectRoleGrantCollectionResourceContext,
+    ProjectRoleGrantReadResourceContext,
     ServiceActorProvisionResourceContext,
     ServiceAuthorizationContext,
     SystemResourceContext,
@@ -163,6 +181,402 @@ from app.modules.authorization.service_actor_service import (
 )
 
 DIGEST = "sha256:" + "a" * 64
+
+
+def test_authorization_read_cursor_round_trip_and_query_binding() -> None:
+    codec = AuthorizationReadCursorCodec(bytes(range(32)))
+    project_id = UUID("00000000-0000-4000-8000-000000000001")
+    resource_id = UUID("00000000-0000-4000-8000-000000000002")
+    boundary = datetime(2026, 7, 22, 1, 2, 3, 456789, tzinfo=UTC)
+    digest = authorization_read_query_digest(
+        action_id=ActionId.PROJECT_ROLE_GRANT_LIST,
+        project_id=project_id,
+        status="active",
+        role=ProjectRole.REVIEWER,
+        limit=50,
+    )
+
+    cursor = codec.encode(query_digest=digest, timestamp=boundary, resource_id=resource_id)
+
+    assert len(cursor) <= 512
+    assert codec.decode(cursor, query_digest=digest) == (boundary, resource_id)
+    replay_digest = authorization_read_query_digest(
+        action_id=ActionId.PROJECT_ROLE_GRANT_LIST,
+        project_id=project_id,
+        status="revoked",
+        role=ProjectRole.REVIEWER,
+        limit=50,
+    )
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        codec.decode(cursor, query_digest=replay_digest)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "=", "a===", "*", "a" * 513],
+)
+def test_authorization_read_cursor_rejects_malformed_encoding(value: str) -> None:
+    codec = AuthorizationReadCursorCodec(bytes(range(32)))
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        codec.decode(value, query_digest=DIGEST)
+
+
+def test_authorization_read_cursor_rejects_tampering_and_wrong_key() -> None:
+    digest = authorization_read_query_digest(
+        action_id=ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        project_id=UUID("00000000-0000-4000-8000-000000000001"),
+        limit=10,
+    )
+    codec = AuthorizationReadCursorCodec(bytes(range(32)))
+    cursor = codec.encode(
+        query_digest=digest,
+        timestamp=datetime(2026, 7, 22, tzinfo=UTC),
+        resource_id=UUID("00000000-0000-4000-8000-000000000002"),
+    )
+    tampered = cursor[:-1] + ("A" if cursor[-1] != "A" else "B")
+
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        codec.decode(tampered, query_digest=digest)
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(reversed(range(32)))).decode(
+            cursor,
+            query_digest=digest,
+        )
+
+
+def _signed_cursor_envelope(envelope: dict, *, secret: bytes = bytes(range(32))) -> str:
+    payload = envelope["p"]
+    payload_bytes = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    envelope["s"] = base64.urlsafe_b64encode(
+        hmac.new(secret, payload_bytes, hashlib.sha256).digest()
+    ).decode().rstrip("=")
+    return base64.urlsafe_b64encode(
+        json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+
+
+@pytest.mark.parametrize(
+    "payload_update,envelope_update",
+    [
+        ({"v": 2}, {}),
+        ({"v": "1"}, {}),
+        ({"extra": True}, {}),
+        ({"ts": "2026-07-22T00:00:00Z"}, {}),
+        ({"ts": "2026-07-22T00:00:00.000000+00:00"}, {}),
+        ({"id": "ABCDEF00-0000-4000-8000-000000000002"}, {}),
+        ({"id": 2}, {}),
+        ({}, {"extra": True}),
+    ],
+)
+def test_authorization_read_cursor_rejects_strict_payload_variants(
+    payload_update: dict,
+    envelope_update: dict,
+) -> None:
+    payload = {
+        "v": 1,
+        "q": DIGEST,
+        "ts": "2026-07-22T00:00:00.000000Z",
+        "id": "00000000-0000-4000-8000-000000000002",
+    }
+    payload.update(payload_update)
+    envelope = {"p": payload, "s": ""}
+    envelope.update(envelope_update)
+    cursor = _signed_cursor_envelope(envelope)
+
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(range(32))).decode(
+            cursor,
+            query_digest=DIGEST,
+        )
+
+
+@pytest.mark.parametrize("missing_key", ["v", "q", "ts", "id"])
+def test_authorization_read_cursor_rejects_missing_payload_keys(missing_key: str) -> None:
+    payload = {
+        "v": 1,
+        "q": DIGEST,
+        "ts": "2026-07-22T00:00:00.000000Z",
+        "id": "00000000-0000-4000-8000-000000000002",
+    }
+    del payload[missing_key]
+    cursor = _signed_cursor_envelope({"p": payload, "s": ""})
+
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(range(32))).decode(
+            cursor,
+            query_digest=DIGEST,
+        )
+
+
+def test_authorization_read_cursor_rejects_oversized_decoded_value() -> None:
+    value = base64.urlsafe_b64encode(b"{" + b" " * 383 + b"}").decode().rstrip("=")
+    assert len(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))) > 384
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(range(32))).decode(
+            value,
+            query_digest=DIGEST,
+        )
+
+
+def test_authorization_read_cursor_rejects_missing_envelope_and_duplicate_keys() -> None:
+    missing_signature = base64.urlsafe_b64encode(
+        json.dumps(
+            {
+                "p": {
+                    "v": 1,
+                    "q": DIGEST,
+                    "ts": "2026-07-22T00:00:00.000000Z",
+                    "id": "00000000-0000-4000-8000-000000000002",
+                }
+            },
+            separators=(",", ":"),
+        ).encode()
+    ).decode().rstrip("=")
+    duplicate = base64.urlsafe_b64encode(b'{"p":{},"p":{},"s":"x"}').decode().rstrip("=")
+    codec = AuthorizationReadCursorCodec(bytes(range(32)))
+    for value in (missing_signature, duplicate):
+        with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+            codec.decode(value, query_digest=DIGEST)
+
+
+@pytest.mark.parametrize(
+    "digest_kwargs",
+    [
+        {"action_id": ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST},
+        {"project_id": UUID("00000000-0000-4000-8000-000000000099")},
+        {"status": "revoked"},
+        {"role": ProjectRole.ADJUDICATOR},
+        {"limit": 51},
+    ],
+)
+def test_authorization_read_cursor_rejects_cross_query_replay(
+    digest_kwargs: dict,
+) -> None:
+    project_id = UUID("00000000-0000-4000-8000-000000000001")
+    baseline = {
+        "action_id": ActionId.PROJECT_ROLE_GRANT_LIST,
+        "project_id": project_id,
+        "status": "active",
+        "role": ProjectRole.REVIEWER,
+        "limit": 50,
+    }
+    digest = authorization_read_query_digest(**baseline)
+    cursor = AuthorizationReadCursorCodec(bytes(range(32))).encode(
+        query_digest=digest,
+        timestamp=datetime(2026, 7, 22, tzinfo=UTC),
+        resource_id=UUID("00000000-0000-4000-8000-000000000002"),
+    )
+    baseline.update(digest_kwargs)
+
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(range(32))).decode(
+            cursor,
+            query_digest=authorization_read_query_digest(**baseline),
+        )
+
+
+def test_authorization_read_cursor_rejects_cross_order_replay() -> None:
+    project_id = UUID("00000000-0000-4000-8000-000000000001")
+    alternate_order_digest = canonical_json_hash(
+        {
+            "action_id": ActionId.PROJECT_ROLE_GRANT_LIST.value,
+            "limit": 50,
+            "order": "timestamp_uuid_desc",
+            "project_id": str(project_id),
+            "role": None,
+            "status": None,
+        }
+    )
+    cursor = AuthorizationReadCursorCodec(bytes(range(32))).encode(
+        query_digest=alternate_order_digest,
+        timestamp=datetime(2026, 7, 22, tzinfo=UTC),
+        resource_id=UUID("00000000-0000-4000-8000-000000000002"),
+    )
+    canonical_digest = authorization_read_query_digest(
+        action_id=ActionId.PROJECT_ROLE_GRANT_LIST,
+        project_id=project_id,
+        limit=50,
+    )
+
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        AuthorizationReadCursorCodec(bytes(range(32))).decode(
+            cursor,
+            query_digest=canonical_digest,
+        )
+
+
+@pytest.mark.asyncio
+async def test_invalid_cursor_is_rejected_after_authorization_before_grant_sql() -> None:
+    calls: list[str] = []
+
+    class Authorization:
+        async def require(self, *_args) -> SimpleNamespace:
+            calls.append("authorization")
+            return SimpleNamespace(allowed=True)
+
+    class Grants:
+        async def list_project_role_grants(self, **_kwargs):
+            calls.append("grant_sql")
+            raise AssertionError("grant SQL must not run")
+
+    service = ProjectRoleReadService(
+        Authorization(),  # type: ignore[arg-type]
+        SimpleNamespace(),  # type: ignore[arg-type]
+        Grants(),  # type: ignore[arg-type]
+        AuthorizationReadCursorCodec(bytes(range(32))),
+    )
+    with pytest.raises(InvalidPaginationCursor, match="invalid cursor"):
+        await service.list_project_role_grants(
+            project=SimpleNamespace(
+                id="00000000-0000-4000-8000-000000000001",
+                status="active",
+            ),
+            status=None,
+            role=None,
+            limit=50,
+            cursor="forged",
+        )
+    assert calls == ["authorization"]
+
+
+@pytest.mark.asyncio
+async def test_candidate_service_cursor_uses_last_visible_equal_timestamp_boundary() -> None:
+    created_at = datetime(2026, 7, 22, tzinfo=UTC)
+    ids = [UUID(f"00000000-0000-4000-8000-{index:012d}") for index in range(1, 4)]
+    observed: list[tuple[datetime, UUID] | None] = []
+
+    class Authorization:
+        async def require(self, *_args) -> SimpleNamespace:
+            return SimpleNamespace(allowed=True)
+
+    class Actors:
+        async def list_contributor_candidates(self, *, cursor, **_kwargs):
+            observed.append(cursor)
+            start = 0 if cursor is None else ids.index(cursor[1]) + 1
+            return [
+                SimpleNamespace(id=str(value), display_name=None, created_at=created_at)
+                for value in ids[start : start + 3]
+            ]
+
+    codec = AuthorizationReadCursorCodec(bytes(range(32)))
+    service = ProjectRoleReadService(
+        Authorization(),  # type: ignore[arg-type]
+        Actors(),  # type: ignore[arg-type]
+        SimpleNamespace(),  # type: ignore[arg-type]
+        codec,
+    )
+    project = SimpleNamespace(id=str(uuid4()), status="active")
+    first = await service.list_contributor_candidates(
+        project=project,
+        caller_actor_profile_id=uuid4(),
+        limit=2,
+        cursor=None,
+    )
+    assert [item.actor_profile_id for item in first.items] == ids[:2]
+    assert first.next_cursor is not None
+    second = await service.list_contributor_candidates(
+        project=project,
+        caller_actor_profile_id=uuid4(),
+        limit=2,
+        cursor=first.next_cursor,
+    )
+    assert [item.actor_profile_id for item in second.items] == ids[2:]
+    assert second.next_cursor is None
+    assert observed == [None, (created_at, ids[1])]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [429, 503])
+async def test_authorization_read_rate_failure_precedes_project_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+    status_code: int,
+) -> None:
+    app = create_app(Settings(environment="test"))
+    lookups = 0
+
+    consumptions = 0
+
+    async def fail_rate_first() -> None:
+        nonlocal consumptions
+        consumptions += 1
+        raise StructuredHTTPException(
+            status_code=status_code,
+            detail="rate gate failed",
+            error_code=("rate_limit_exceeded" if status_code == 429 else "service_unavailable"),
+            error_message="rate gate failed",
+            retryable=True,
+            headers=({"Retry-After": "1"} if status_code == 429 else None),
+        )
+
+    async def forbidden_project_lookup(*_args, **_kwargs):
+        nonlocal lookups
+        lookups += 1
+        raise AssertionError("project lookup must not run")
+
+    async def verified_human():
+        return SimpleNamespace(token=SimpleNamespace(subject_kind="human"))
+
+    app.dependency_overrides[enforce_authorization_read_rate_limit] = fail_rate_first
+    app.dependency_overrides[get_auth_verification_result] = verified_human
+    monkeypatch.setattr(ProjectRepository, "get_project", forbidden_project_lookup)
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://testserver",
+    ) as client:
+        response = await client.get(
+            f"/api/v1/projects/{uuid4()}/role-grants",
+            headers={"Authorization": "Bearer test"},
+        )
+
+    assert response.status_code == status_code
+    if status_code == 429:
+        assert response.headers["Retry-After"] == "1"
+    else:
+        assert response.json()["error"]["retryable"] is True
+    assert consumptions == 1
+    assert lookups == 0
+
+
+@pytest.mark.asyncio
+async def test_human_read_admission_conceals_every_nonhuman_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for subject_kind in ("service", "agent", "space"):
+        app = create_app(Settings(environment="test"))
+        consumptions = 0
+        lookups = 0
+
+        async def consume_once() -> None:
+            nonlocal consumptions
+            consumptions += 1
+
+        async def verified_nonhuman():
+            return SimpleNamespace(token=SimpleNamespace(subject_kind=subject_kind))
+
+        async def forbidden_project_lookup(*_args, **_kwargs):
+            nonlocal lookups
+            lookups += 1
+            raise AssertionError("project lookup must not run")
+
+        app.dependency_overrides[enforce_authorization_read_rate_limit] = consume_once
+        app.dependency_overrides[get_auth_verification_result] = verified_nonhuman
+        monkeypatch.setattr(ProjectRepository, "get_project", forbidden_project_lookup)
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get(f"/api/v1/projects/{uuid4()}/role-grants")
+
+        assert response.status_code == 404
+        assert response.json()["error"]["code"] == (
+            "project_authorization_resource_not_found"
+        )
+        assert consumptions == 1
+        assert lookups == 0
 
 ART_CUSTODY_EXPECTATIONS = {
     "artifact.binding.read": (
@@ -486,6 +900,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
     }
     assert {
         definition.action_id.value: (
@@ -563,11 +980,11 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert sum(
         definition.availability is ActionAvailability.ACTIVE
         for definition in ACTION_DEFINITIONS
-    ) == 17
+    ) == 20
     assert sum(
         definition.availability is ActionAvailability.PLANNED
         for definition in ACTION_DEFINITIONS
-    ) == 53
+    ) == 50
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
     )
@@ -696,7 +1113,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "The ART transfer adds no migration" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
-    assert "74 PermissionIds, 70 ActionIds, 17 active actions, and\n53 planned actions" in operations
+    assert "74 PermissionIds, 70 ActionIds, 20 active actions, and\n50 planned actions" in operations
 
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -1558,6 +1975,132 @@ class _PreparedAdminFacts(_PreparedActorFacts):
 
     async def lock_identity_link_lifecycle_target(self, identity_link_id):
         return SimpleNamespace(id=identity_link_id)
+
+
+@pytest.mark.asyncio
+async def test_project_role_reads_use_exact_scope_and_candidate_kernel_guard() -> None:
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    facts = _PreparedAdminFacts(context)
+    project_id = uuid4()
+    service, evidence = _runtime_service(context, admin_repository=facts)
+
+    decision = await service.require(
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ProjectRoleGrantCollectionResourceContext(
+            resource_type="project_role_grant_collection",
+            resource_id=project_id,
+            scope_project_id=project_id,
+            project_status="archived",
+        ),
+    )
+    assert decision.allowed is True
+    assert decision.matched_scope_project_id == project_id
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+
+    detail = await service.require(
+        ActionId.PROJECT_ROLE_GRANT_READ,
+        ProjectRoleGrantReadResourceContext(
+            resource_type="project_role_grant",
+            resource_id=uuid4(),
+            scope_project_id=project_id,
+            project_status="archived",
+        ),
+    )
+    assert detail.allowed is True
+
+    for project_status in ("draft", "active", "paused"):
+        candidate = await service.require(
+            ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+            ProjectContributorCandidateCollectionResourceContext(
+                resource_type="project_contributor_candidate_collection",
+                resource_id=project_id,
+                scope_project_id=project_id,
+                project_status=project_status,
+            ),
+        )
+        assert candidate.allowed is True
+
+    for project_status in ("draft", "active", "paused", "archived"):
+        history = await service.require(
+            ActionId.PROJECT_ROLE_GRANT_LIST,
+            ProjectRoleGrantCollectionResourceContext(
+                resource_type="project_role_grant_collection",
+                resource_id=project_id,
+                scope_project_id=project_id,
+                project_status=project_status,
+            ),
+        )
+        assert history.allowed is True
+
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(
+            ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+            ProjectContributorCandidateCollectionResourceContext(
+                resource_type="project_contributor_candidate_collection",
+                resource_id=project_id,
+                scope_project_id=project_id,
+                project_status="archived",
+            ),
+        )
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+    assert evidence.events[-1].denial_code == "resource_guard_denied"
+
+
+@pytest.mark.parametrize(
+    "action_id",
+    [
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
+    ],
+)
+@pytest.mark.parametrize(
+    "denial_code",
+    [
+        AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+        AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED,
+        AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+    ],
+)
+def test_project_role_read_denials_share_one_public_concealment(
+    action_id: ActionId,
+    denial_code: AuthorizationDenialCode,
+) -> None:
+    decision = AuthorizationDecision(
+        decision_id=uuid4(),
+        allowed=False,
+        action_id=action_id,
+        permission_id=ACTION_BY_ID[action_id].permission_id,
+        resource_type="project_role_grant_collection",
+        resource_id=uuid4(),
+        resource_context_digest=DIGEST,
+        denial_code=denial_code,
+        matched_authority_kind=None,
+        matched_grant_id=None,
+        matched_scope_project_id=None,
+        revalidated=False,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    translated = authorization_http_error(AuthorizationDenied(decision))
+    assert translated.status_code == 404
+    assert translated.error_code == "project_authorization_resource_not_found"
+
+
+def test_project_role_read_permissions_separate_manager_and_auditor_authority() -> None:
+    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[
+        AdminRole.PROJECT_MANAGER
+    ]
+    assert PermissionId.PROJECT_ROLE_GRANT_MANAGE in ADMIN_ROLE_PERMISSIONS[
+        AdminRole.PROJECT_MANAGER
+    ]
+    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[
+        AdminRole.AUDIT_AUTHORITY
+    ]
+    assert PermissionId.PROJECT_ROLE_GRANT_MANAGE not in ADMIN_ROLE_PERMISSIONS[
+        AdminRole.AUDIT_AUTHORITY
+    ]
 
 
 @pytest.mark.asyncio

@@ -287,6 +287,48 @@ class ServiceActorProvisionResourceContext(BaseModel):
     resource_id: ServiceIdentity
 
 
+class ProjectContributorCandidateCollectionResourceContext(BaseModel):
+    """Canonical project facts for privacy-safe candidate discovery."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project_contributor_candidate_collection"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_status: Literal["draft", "active", "paused", "archived"]
+
+    @model_validator(mode="after")
+    def bind_project(self):
+        if self.resource_id != self.scope_project_id:
+            raise ValueError("invalid candidate project scope")
+        return self
+
+
+class ProjectRoleGrantCollectionResourceContext(BaseModel):
+    """Canonical project facts for one grant-history collection."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project_role_grant_collection"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_status: Literal["draft", "active", "paused", "archived"]
+
+    @model_validator(mode="after")
+    def bind_project(self):
+        if self.resource_id != self.scope_project_id:
+            raise ValueError("invalid project-role grant scope")
+        return self
+
+
+class ProjectRoleGrantReadResourceContext(BaseModel):
+    """Canonical project and grant identifiers for one history read."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project_role_grant"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_status: Literal["draft", "active", "paused", "archived"]
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ActorProfileAdminReadResourceContext
@@ -301,6 +343,9 @@ AuthorizationResourceContext = (
     | AdminRoleGrantIssueResourceContext
     | AdminRoleGrantResourceContext
     | ServiceActorProvisionResourceContext
+    | ProjectContributorCandidateCollectionResourceContext
+    | ProjectRoleGrantCollectionResourceContext
+    | ProjectRoleGrantReadResourceContext
 )
 
 
@@ -357,6 +402,9 @@ class AuthorizationDecision(BaseModel):
         "admin_role_grant_issue",
         "admin_role_grant",
         "service_actor_provisioning",
+        "project_contributor_candidate_collection",
+        "project_role_grant_collection",
+        "project_role_grant",
     ]
     resource_id: (
         UUID

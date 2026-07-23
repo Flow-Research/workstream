@@ -45,6 +45,9 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
+    ProjectContributorCandidateCollectionResourceContext,
+    ProjectRoleGrantCollectionResourceContext,
+    ProjectRoleGrantReadResourceContext,
     PreparedAuthorizationUnsupported,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
@@ -78,6 +81,9 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
@@ -688,6 +694,9 @@ class AuthorizationService:
                 resource, ActorAdminRoleGrantHistoryResourceContext
             ) and not await self._admin.actor_exists(resource.resource_id):
                 return AuthorizationDenialCode.ACTOR_NOT_FOUND
+        elif isinstance(resource, ProjectContributorCandidateCollectionResourceContext):
+            if resource.project_status not in {"draft", "active", "paused"}:
+                return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         return None
 
     @staticmethod
@@ -710,6 +719,11 @@ class AuthorizationService:
             ActionId.ACTOR_PROFILE_DEACTIVATE: ActorProfileLifecycleResourceContext,
             ActionId.ACTOR_IDENTITY_LINK_REVOKE: ActorIdentityLinkLifecycleResourceContext,
             ActionId.ACTOR_IDENTITY_LINK_REACTIVATE: ActorIdentityLinkLifecycleResourceContext,
+            ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST: (
+                ProjectContributorCandidateCollectionResourceContext
+            ),
+            ActionId.PROJECT_ROLE_GRANT_LIST: ProjectRoleGrantCollectionResourceContext,
+            ActionId.PROJECT_ROLE_GRANT_READ: ProjectRoleGrantReadResourceContext,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False

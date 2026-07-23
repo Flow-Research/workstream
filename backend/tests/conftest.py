@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 import asyncio
+import base64
 import fcntl
 from functools import partial
 import hashlib
@@ -87,6 +88,19 @@ TRUNCATE_GUARDED_TABLES = (
 TestDatabaseReset = Callable[..., Awaitable[None]]
 DatabaseLock = Callable[[], AbstractContextManager[None]]
 ResetHook = Callable[[], Awaitable[None]]
+PAGINATION_CURSOR_HMAC_SECRET = base64.b64encode(bytes(range(32))).decode("ascii")
+
+
+@pytest.fixture(autouse=True)
+def pagination_cursor_hmac_secret(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Provision the required cursor key explicitly for isolated test apps."""
+    monkeypatch.setenv(
+        "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET",
+        PAGINATION_CURSOR_HMAC_SECRET,
+    )
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 async def _assert_owned_test_database(
