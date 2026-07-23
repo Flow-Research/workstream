@@ -15,5 +15,6 @@
   `9bf16d478f669d48172810c83cdf6a7d2b8992ed`, but post-merge memory rejected it
   because recovery chunk R4 had no signed start. Signed state remains at PR #190;
   no successor is active.
-- Review gate: exact two-merge recovery certificate and internal review in
-  progress.
+- Review gate: all nine internal tracks passed exact implementation head
+  `10159497b3f3ca3464cbbbfd10f16945ade1879a`; awaiting external checks and the
+  user-owned merge decision.
