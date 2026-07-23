@@ -31,10 +31,13 @@ loop-memory generator, or authorization behavior.
 ## Reviewer Results
 
 All nine required internal tracks passed exact planning commit
-`806b14d9fefd10a52752c6775d5f9554263eb8cc` after the latest trusted-main merge
-and all valid internal and CodeRabbit findings were repaired. The only changes
-after that reviewed commit are this trust bundle and the adjacent internal-
-review record. No reviewer session remains open.
+`da29deafd13b1f7fdacaf5aa32af2c26adeef0d0` after trusted AUTH-10B2 main head
+`73b45792` was merged and all valid internal and CodeRabbit findings were
+repaired. The only changes after that reviewed combined head are this trust
+bundle and the adjacent internal-review record. No reviewer session remains
+open. PR #187 itself changes no backend, test, workflow, or coverage file; the
+combined tree contains already-merged AUTH tests that fresh exact-head Backend
+CI must revalidate.
 
 ## External Review
 
