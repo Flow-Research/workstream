@@ -9,6 +9,9 @@
   schema shape.
 - The exact failing GitHub command now passes 296 tests with 90.40 percent
   checker branch coverage.
+- CodeRabbit identified a stale chunk-map dependency that still named `00R3`.
+  The `WS-ENG-007-01` row now names `00R4` and successful reconciliation as its
+  prerequisites.
 
 ## Comments deferred
 
@@ -16,8 +19,8 @@ None.
 
 ## Human decisions needed
 
-None. This response changes tests only and does not alter CI, thresholds,
-workflow behavior, permissions, or authority semantics.
+None. This response changes tests and process documentation only; it does not
+alter CI, thresholds, workflow behavior, permissions, or authority semantics.
 
 ## Commands rerun
 
