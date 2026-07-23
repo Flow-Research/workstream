@@ -71,6 +71,10 @@ PLANNING_ROOT_FILES = frozenset(
 )
 GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
+CHECK_RUN_CONCLUSIONS = frozenset({
+    "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
+    "success", "timed_out",
+})
 
 
 class LoopMemoryError(RuntimeError):
@@ -816,12 +820,12 @@ def _validate_protected_actions_checks(
     total = payload.get("total_count") if isinstance(payload, dict) else None
     if not isinstance(runs, list) or type(total) is not int or total != len(runs):
         raise LoopMemoryError("planning intake check-run evidence is incomplete")
+    seen_ids: set[int] = set()
     for name in ("agent-gates", "test"):
         matches = [item for item in runs if isinstance(item, dict) and item.get("name") == name]
         if not matches:
             raise LoopMemoryError(f"planning intake check {name} is missing")
         candidates: list[tuple[datetime, int, dict[str, Any]]] = []
-        seen_ids: set[int] = set()
         for item in matches:
             app = item.get("app")
             check_id = item.get("id")
@@ -833,7 +837,7 @@ def _validate_protected_actions_checks(
                 or check_id in seen_ids
                 or item.get("head_sha") != head_sha
                 or item.get("status") != "completed"
-                or not isinstance(item.get("conclusion"), str)
+                or item.get("conclusion") not in CHECK_RUN_CONCLUSIONS
                 or completed_at < started_at
                 or not isinstance(app, dict)
                 or app.get("id") != GITHUB_ACTIONS_APP_ID
@@ -2040,7 +2044,14 @@ def _validate_recovery_exemptions(payload: Any) -> list[dict[str, Any]]:
         (item["initiative_id"], item["chunk_id"], item["pr_number"])
         for item in chronological
     ]
-    if len(chronological) > 2 or len(identities) != len(set(identities)):
+    chunk_identities = [(item[0], item[1]) for item in identities]
+    pr_numbers = [item[2] for item in identities]
+    if (
+        len(chronological) > 3
+        or len(identities) != len(set(identities))
+        or len(chunk_identities) != len(set(chunk_identities))
+        or len(pr_numbers) != len(set(pr_numbers))
+    ):
         raise LoopMemoryError("recovery exemption inventory is not unique and bounded")
     return chronological
 
@@ -2130,7 +2141,8 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         recovered_merges = payload.get("recovered_merges")
         if not isinstance(recovered_merges, list) or not 1 <= len(recovered_merges) <= 2:
             raise LoopMemoryError("recovered merge inventory is invalid")
-        identities: set[tuple[str, str, int]] = set()
+        chunk_identities: set[tuple[str, str]] = set()
+        pr_numbers: set[int] = set()
         merge_shas: set[str] = set()
         for recovered in recovered_merges:
             if not isinstance(recovered, dict) or set(recovered) != {
@@ -2146,17 +2158,20 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
             ):
                 raise LoopMemoryError("recovered merge identity is invalid")
             _validate_sha(recovered.get("merge_sha"))
-            identity = (
-                recovered["initiative_id"], recovered["chunk_id"], recovered["pr_number"]
-            )
-            if identity in identities or recovered["merge_sha"] in merge_shas:
+            chunk_identity = (recovered["initiative_id"], recovered["chunk_id"])
+            if (
+                chunk_identity in chunk_identities
+                or recovered["pr_number"] in pr_numbers
+                or recovered["merge_sha"] in merge_shas
+            ):
                 raise LoopMemoryError("recovered merge inventory is not unique")
             if (
                 recovered["initiative_id"] == activation["initiative_id"]
                 and recovered["chunk_id"] == activation["chunk_id"]
             ):
                 raise LoopMemoryError("recovery activation collides with recovered merge")
-            identities.add(identity)
+            chunk_identities.add(chunk_identity)
+            pr_numbers.add(recovered["pr_number"])
             merge_shas.add(recovered["merge_sha"])
         return json.loads(_canonical_json(payload))
     recovered = payload.get("recovered_merge")

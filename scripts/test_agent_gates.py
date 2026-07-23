@@ -2233,6 +2233,7 @@ def test_planning_checks_canonicalize_trusted_reruns_and_fail_closed() -> None:
         {**older, "status": "queued", "completed_at": None},
         {**older, "id": True},
         {**older, "started_at": "2026-07-23 05:00:00"},
+        {**older, "conclusion": "forged"},
     )
     for bad in poisoned:
         for ordered in ([bad, newer, test_run], [test_run, newer, bad]):
@@ -2247,6 +2248,14 @@ def test_planning_checks_canonicalize_trusted_reruns_and_fail_closed() -> None:
         updater,
         lambda: updater._validate_protected_actions_checks(
             CheckClient([older, dict(older), newer, test_run]),
+            "Flow-Research/workstream", head_sha,
+        ),
+        "invalid provenance",
+    )
+    assert_loop_error(
+        updater,
+        lambda: updater._validate_protected_actions_checks(
+            CheckClient([older, newer, {**test_run, "id": newer["id"]}]),
             "Flow-Research/workstream", head_sha,
         ),
         "invalid provenance",
