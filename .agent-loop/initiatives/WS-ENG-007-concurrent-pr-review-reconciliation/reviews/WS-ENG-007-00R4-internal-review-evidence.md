@@ -10,7 +10,7 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 145c1f92f13ad3467ce89fac6895828ef9d01f24
+Reviewed code SHA: bc38c8d326431af3f29aa29e339988c5c504c8bf
 
 Reviewed at: 2026-07-23T10:50:17Z
 
@@ -30,7 +30,7 @@ Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/roo
 | security/auth | PASS | None | Start authority, permissions, and signed-basis binding are unchanged. |
 | product/ops | PASS | None | Per-initiative concurrency remains isolated; no product lifecycle change. |
 | architecture | PASS AFTER FIXES | None | Removed invalid synthetic record composition without adding a parallel path. |
-| CI integrity | PASS AFTER FIXES | None | 289 tests pass and literal updater branch coverage is 90.18 percent. |
+| CI integrity | PASS AFTER FIXES | None | 296 tests pass; updater and checker retain literal protected coverage floors. |
 | docs | PASS | None | Contract, chunk map, and status describe the bounded recovery. |
 | reuse/dedup | PASS | None | Existing transition validators remain the single ledger-binding path. |
 | test delta | PASS AFTER FIXES | None | Additive adversarial tests; no skips, removals, or weakened assertions. |
@@ -46,6 +46,9 @@ Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/roo
   metadata.
 - Raised exact updater branch coverage from 89.96 percent to 90.18 percent
   without rounding, threshold changes, exclusions, or test weakening.
+- Responded to the external Agent Gates failure by raising independent checker
+  branch coverage from 89.13 percent to 90.40 percent with seven adversarial
+  cases and no threshold or workflow change.
 
 ## Commands Run
 
@@ -58,8 +61,9 @@ python3 scripts/update_post_merge_memory.py validate-merge-intent --repository-r
 git diff --check
 ```
 
-The combined gate passed 289 tests. Exact updater branch coverage is 90.18
-percent against a literal 90.00 percent blocking floor.
+The exact updater gate passed 289 tests at 90.18 percent branch coverage. The
+exact independent-checker gate passed 296 tests at 90.40 percent branch
+coverage. Both retain the literal 90.00 percent blocking floor.
 
 ## Remaining Risks
 

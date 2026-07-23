@@ -15,14 +15,15 @@ initiative's lifecycle.
 
 ## Reviewed Revision
 
-`145c1f92f13ad3467ce89fac6895828ef9d01f24`
+`bc38c8d326431af3f29aa29e339988c5c504c8bf`
 
 ## CI Integrity
 
 - No workflow, permission, required check, coverage floor, test, reviewer, signed
   start, or human merge checkpoint was removed or weakened.
-- All 289 focused tests pass.
-- Exact updater branch coverage is 90.18 percent with two-decimal enforcement.
+- The exact updater gate passes 289 tests at 90.18 percent branch coverage.
+- The exact independent-checker gate passes 296 tests at 90.40 percent branch
+  coverage.
 
 ## Reviewer Result
 

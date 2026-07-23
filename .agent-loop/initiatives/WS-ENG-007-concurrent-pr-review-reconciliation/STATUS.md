@@ -15,5 +15,5 @@
   because authority validation mixed ENG-006 lifecycle identity with ENG-007
   protected-check evidence. No successor is active.
 - Review gate: all nine internal tracks passed exact implementation head
-  `145c1f92f13ad3467ce89fac6895828ef9d01f24`; awaiting external checks and the
+  `bc38c8d326431af3f29aa29e339988c5c504c8bf`; awaiting external checks and the
   user-owned merge decision.
