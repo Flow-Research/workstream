@@ -3,16 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#186](https://github.com/Flow-Research/workstream/pull/186) - ci(backend): adopt safe migrate-once database reset
-- Merge commit: `9033a97a4be6d762cae4b210018ef81a079395c2`
-- Final PR head: `fcf72ae11c873ad1466e745c94183042192717a7`
-- Merged at: `2026-07-22T14:43:11Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-CI-001-02A.json` at blob `5e173e1b48714d30680cc8b1c3361faa9d205755`
-- Completed chunk: `WS-CI-001-02A` - Safe Migrate-Once Database Reset
+- Last merged PR: [#177](https://github.com/Flow-Research/workstream/pull/177) - WS-ART-001-02D: add operator artifact operations
+- Merge commit: `93c14181f8a14c88c2cbfb2f2ea886c8d46deec8`
+- Final PR head: `ffabf5dc2a390047fda9709f2519920793e7d6b6`
+- Merged at: `2026-07-23T04:20:23Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ART-001-02D.json` at blob `21aa86c433814c6cc75490495d088276ec758cd9`
+- Completed chunk: `WS-ART-001-02D` - Operator Artifact Operations
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-02D`, `WS-AUTH-001-10B2`
+- Active implementation chunks: `WS-AUTH-001-10B2`
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-CI-001-02B` - Exact-Custody Semantic Test Lanes; requires a separate explicit start.
+- Next chunk: `WS-ART-001-03` - Guide Source Artifact Cutover; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`

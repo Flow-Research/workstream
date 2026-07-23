@@ -14,27 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29929099159/job/88953779029"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29933818094/job/88970068463"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/29928413521/job/88953367658"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/29933818181/job/88972099539"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-CI-001-02A",
-    "chunk_title": "Safe Migrate-Once Database Reset",
-    "initiative_id": "WS-CI-001",
-    "next_chunk_id": "WS-CI-001-02B",
-    "next_chunk_title": "Exact-Custody Semantic Test Lanes",
+    "chunk_id": "WS-ART-001-02D",
+    "chunk_title": "Operator Artifact Operations",
+    "initiative_id": "WS-ART-001",
+    "next_chunk_id": "WS-ART-001-03",
+    "next_chunk_title": "Guide Source Artifact Cutover",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-CI-001-02B",
-    "next_chunk_title": "Exact-Custody Semantic Test Lanes",
+    "next_chunk_id": "WS-ART-001-03",
+    "next_chunk_title": "Guide Source Artifact Cutover",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -48,18 +48,18 @@
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "196e7f65268bcc6d12fa95387551827f8385fbea",
-    "head_ref": "codex/ws-ci-001-02a-safe-reset",
-    "head_sha": "fcf72ae11c873ad1466e745c94183042192717a7",
-    "intent_blob_sha": "5e173e1b48714d30680cc8b1c3361faa9d205755",
-    "intent_path": ".agent-loop/merge-intents/WS-CI-001-02A.json",
-    "main_sha": "9033a97a4be6d762cae4b210018ef81a079395c2",
-    "merged_at": "2026-07-22T14:43:11Z",
+    "first_parent_sha": "9033a97a4be6d762cae4b210018ef81a079395c2",
+    "head_ref": "codex/ws-art-001-02d-operator-artifact-operations",
+    "head_sha": "ffabf5dc2a390047fda9709f2519920793e7d6b6",
+    "intent_blob_sha": "21aa86c433814c6cc75490495d088276ec758cd9",
+    "intent_path": ".agent-loop/merge-intents/WS-ART-001-02D.json",
+    "main_sha": "93c14181f8a14c88c2cbfb2f2ea886c8d46deec8",
+    "merged_at": "2026-07-23T04:20:23Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 186,
-    "pr_title": "ci(backend): adopt safe migrate-once database reset",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/186"
+    "pr_number": 177,
+    "pr_title": "WS-ART-001-02D: add operator artifact operations",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/177"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-22T14:43:11Z"
+  "updated_at": "2026-07-23T04:20:23Z"
 }

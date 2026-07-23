@@ -4,7 +4,7 @@
 
 | Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |
 |---|---|---|---|---|
-| `WS-ART-001` | `WS-ART-001-02C3` | `active` | `WS-ART-001-02D` | yes |
+| `WS-ART-001` | `WS-ART-001-02D` | `stopped_after_merge` | `WS-ART-001-03` | yes |
 | `WS-AUTH-001` | `WS-AUTH-001-10B1` | `active` | `WS-AUTH-001-10B2` | yes |
 | `WS-CI-001` | `WS-CI-001-02A` | `stopped_after_merge` | `WS-CI-001-02B` | yes |
 | `WS-CON-001` | `WS-CON-001-02A` | `stopped_after_merge` | `WS-CON-001-02B` | yes |
@@ -17,4 +17,4 @@
 | `WS-REV-001` | `WS-REV-001-PLAN3` | `stopped_after_merge` | `WS-REV-001-03P` | yes |
 | `WS-XINT-001` | `WS-XINT-001-PLAN` | `stopped_after_merge` | `none` | yes |
 
-Latest global merge: `9033a97a4be6d762cae4b210018ef81a079395c2`
+Latest global merge: `93c14181f8a14c88c2cbfb2f2ea886c8d46deec8`
