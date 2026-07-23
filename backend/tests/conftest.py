@@ -84,6 +84,8 @@ TRUNCATE_GUARDED_TABLES = (
     "outbox_events",
     "project_role_grants",
     "project_role_qualification_snapshots",
+    "review_policies",
+    "revision_policies",
 )
 TestDatabaseReset = Callable[..., Awaitable[None]]
 DatabaseLock = Callable[[], AbstractContextManager[None]]

@@ -26,10 +26,13 @@
   triggers that downgrade removes explicitly. The migration regression test
   exercises both rejection paths.
 - Backend run `30029324884`, shard 4, rejected the intentionally changed public
-  schema fingerprint after the two authorized trigger objects were added. The
+  schema fingerprint after the authorized truncate triggers and their reused
+  guard-function definitions changed. The
   proof-only `tests/conftest.py` constant now binds the observed deterministic
   fingerprint `756d2c281c873d5b61e96d89e1f855d8e63fc8ed70380bf231c0325d437d7fe7`;
-  no reset behavior or table ownership changed.
+  both policy tables use the existing guarded-reset path so test cleanup can
+  temporarily disable and immediately restore their user triggers. No reset
+  ownership check changed.
 
 ## Comments deferred
 
