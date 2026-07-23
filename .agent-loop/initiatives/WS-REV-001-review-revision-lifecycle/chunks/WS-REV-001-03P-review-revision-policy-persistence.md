@@ -43,9 +43,13 @@ The following cross-owner files are proof-only exceptions:
 
 - `backend/tests/conftest.py`: update only the deterministic public-schema
   fingerprint for migration 0034.
-- `backend/tests/test_artifact_admission.py`: update only ReviewPolicy and
-  RevisionPolicy fixture construction for schema compatibility; no ART
-  assertion or behavior may change.
+- `backend/tests/test_artifact_admission.py`: update ReviewPolicy and
+  RevisionPolicy fixture construction for schema compatibility. Where 0034
+  requires those immutable policies before publication, the owning helper may
+  construct the same guide as draft, flush the policies, and then assign its
+  previously existing active/approval/effective values before Task, Submission,
+  or CheckerRun setup. The final fixture state and every ART assertion and
+  behavior must remain unchanged.
 - `backend/tests/test_tasks.py`: update only policy fixture construction and add
   immutable-policy regression proof. No Task behavior may change, and the
   existing stamped review, revision, and compensation-policy isolation
