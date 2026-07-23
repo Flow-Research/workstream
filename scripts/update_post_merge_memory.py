@@ -2343,6 +2343,15 @@ def _record_exemption(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _is_r3_historical_recovery(
+    merge_sha: str, exemptions: list[dict[str, Any]]
+) -> bool:
+    """Identify the exact one-time PR #189 recovery-only merge."""
+    return merge_sha == "d3321698fb856f3fac320cdc7bc598f813fe1953" and any(
+        item.get("chunk_id") == "WS-ENG-007-00R2" for item in exemptions
+    )
+
+
 def prepare_recovery_exemptions(
     client: GitHubClient,
     repository: str,
@@ -2511,10 +2520,7 @@ def reconcile_to_main(
         target_sha=target_sha, planned_shas=planned,
     )
     for merge_sha in planned:
-        historical = (
-            merge_sha == "d3321698fb856f3fac320cdc7bc598f813fe1953"
-            and any(item.get("chunk_id") == "WS-ENG-007-00R2" for item in exemptions)
-        )
+        historical = _is_r3_historical_recovery(merge_sha, exemptions)
         record = collect_merge_record(
             client, repository, merge_sha, historical_recovery=True
         ) if historical else collect_merge_record(client, repository, merge_sha)
@@ -3437,9 +3443,8 @@ def main(argv: list[str] | None = None) -> int:
                     _load_json(args.recovery_file)
                 )
             client = GitHubClient(token, args.api_url)
-            historical = (
-                args.merge_sha == "d3321698fb856f3fac320cdc7bc598f813fe1953"
-                and any(item.get("chunk_id") == "WS-ENG-007-00R2" for item in recovery_exemptions)
+            historical = _is_r3_historical_recovery(
+                args.merge_sha, recovery_exemptions
             )
             record = (
                 collect_merge_record(client, args.repository, args.merge_sha, historical_recovery=True)

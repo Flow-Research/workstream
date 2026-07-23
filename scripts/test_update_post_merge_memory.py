@@ -1950,23 +1950,32 @@ def test_shared_reconcile_orders_recovery_and_validates_atomically(
 ) -> None:
     state_root = tmp_path / "state"
     loop.apply_merge_record(state_root, _record())
-    planned = ["b" * 40, "c" * 40]
+    normal_sha = "b" * 40
+    recovery_sha = "d3321698fb856f3fac320cdc7bc598f813fe1953"
+    planned = [normal_sha, recovery_sha]
     exemptions = [
         {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R2", "pr_number": 189},
         {"initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R3", "pr_number": 190},
     ]
     events: list[str] = []
+    collection_calls: list[tuple[str, bool]] = []
     monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: events.append("plan") or planned)
     monkeypatch.setattr(loop, "prepare_recovery_exemptions", lambda *_args, **_kwargs: events.append("prepare") or exemptions)
-    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args, **_kwargs: events.append("collect") or _record())
+    def collect(_client, _repository, sha, *, historical_recovery=False):
+        collection_calls.append((sha, historical_recovery))
+        events.append("collect")
+        return _record()
+
+    monkeypatch.setattr(loop, "collect_merge_record", collect)
     monkeypatch.setattr(loop, "apply_merge_record", lambda *_args, **_kwargs: events.append("apply") or True)
     monkeypatch.setattr(loop, "assert_recovery_consumed", lambda *_args: events.append("assert"))
     monkeypatch.setattr(loop, "validate_generated_state", lambda *_args: events.append("validate"))
     loop.reconcile_to_main(
         object(), "Flow-Research/workstream", repository_root=tmp_path,
-        state_root=state_root, target_sha="c" * 40,
+        state_root=state_root, target_sha=recovery_sha,
     )
     assert events == ["plan", "prepare", "collect", "apply", "collect", "apply", "assert", "validate"]
+    assert collection_calls == [(normal_sha, False), (recovery_sha, True)]
 
 
 def test_merge_bound_evidence_is_mandatory_after_cutover_in_both_validators() -> None:
