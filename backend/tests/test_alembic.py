@@ -2832,6 +2832,43 @@ def test_review_revision_policy_migration_is_lossless_and_guarded(
             assert migrated_revision["legacy_incomplete"] is True
             assert migrated_revision["legacy_auto_reject_after_limit"] is True
 
+            forbidden_inserts = (
+                (
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,allowed_decisions,minimum_finding_fields,"
+                    "legacy_incomplete) values "
+                    "(:id,:project_id,'v1','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "'[\"description\",\"severity\"]'::json,true)"
+                ),
+                (
+                    "insert into review_policies "
+                    "(id,project_id,guide_version,allowed_decisions,minimum_finding_fields,"
+                    "legacy_incomplete) values "
+                    "(:id,:project_id,'v1','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "'[\"description\",\"severity\"]'::json,false)"
+                ),
+                (
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,max_revision_rounds,"
+                    "revision_deadline_hours,legacy_incomplete) "
+                    "values (:id,:project_id,'v1',7,48,true)"
+                ),
+                (
+                    "insert into revision_policies "
+                    "(id,project_id,guide_version,max_revision_rounds,"
+                    "revision_deadline_hours,legacy_incomplete) "
+                    "values (:id,:project_id,'v1',7,48,false)"
+                ),
+            )
+            for statement in forbidden_inserts:
+                with pytest.raises(IntegrityError):
+                    asyncio.run(
+                        execute(
+                            statement,
+                            {"id": str(uuid4()), "project_id": project_id},
+                        )
+                    )
+
             command.downgrade(config, "0033_authorization_read_rate")
             assert asyncio.run(row("review_policies", review_id)) == old_review
             assert asyncio.run(row("revision_policies", revision_id)) == old_revision
@@ -3057,9 +3094,34 @@ def test_review_revision_policy_writes_serialize_with_publication(
             create_policy=operation == "update",
         )
         engine = create_async_engine(isolated_database_env)
+        policy_connection = None
+        publication_connection = None
+        monitor_connection = None
         try:
             policy_connection = await engine.connect()
             publication_connection = await engine.connect()
+            monitor_connection = await engine.connect()
+            policy_pid = await policy_connection.scalar(text("select pg_backend_pid()"))
+            publication_pid = await publication_connection.scalar(
+                text("select pg_backend_pid()")
+            )
+            await policy_connection.commit()
+            await publication_connection.commit()
+
+            async def require_lock_wait(pid: int) -> None:
+                for _ in range(100):
+                    waiting = await monitor_connection.scalar(
+                        text(
+                            "select exists(select 1 from pg_stat_activity "
+                            "where pid=:pid and state='active' and wait_event_type='Lock')"
+                        ),
+                        {"pid": pid},
+                    )
+                    if waiting:
+                        return
+                    await asyncio.sleep(0.01)
+                pytest.fail(f"backend {pid} never entered a database lock wait")
+
             publication_sql = text(
                 "update project_guides set status='active',effective_at=statement_timestamp() "
                 "where project_id=:project_id and version='v1'"
@@ -3077,7 +3139,7 @@ def test_review_revision_policy_writes_serialize_with_publication(
                         )
 
                 second = asyncio.create_task(publish())
-                await asyncio.sleep(0.1)
+                await require_lock_wait(publication_pid)
                 assert not second.done()
                 await first_tx.commit()
                 await second
@@ -3092,14 +3154,19 @@ def test_review_revision_policy_writes_serialize_with_publication(
                         await policy_connection.execute(policy_sql, parameters)
 
                 second = asyncio.create_task(write_policy())
-                await asyncio.sleep(0.1)
+                await require_lock_wait(policy_pid)
                 assert not second.done()
                 await first_tx.commit()
                 with pytest.raises(DBAPIError, match="published review and revision policies"):
                     await second
-            await publication_connection.close()
-            await policy_connection.close()
         finally:
+            for connection in (
+                monitor_connection,
+                publication_connection,
+                policy_connection,
+            ):
+                if connection is not None:
+                    await connection.close()
             await engine.dispose()
 
     for policy_kind in ("review", "revision"):

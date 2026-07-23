@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event, select, update
+from sqlalchemy import event, select, text, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateIndex
@@ -7205,12 +7205,25 @@ async def test_activation_requires_complete_payment_policy(project_client: Async
     assert "payment policy is incomplete" in response.json()["detail"]
 
 
-async def test_revision_policy_rejects_retired_resubmission_state_input(
+@pytest.mark.parametrize(
+    ("policy_name", "field_name", "field_value"),
+    (
+        ("review_policy", "requires_second_review", False),
+        ("review_policy", "sla_hours", 24),
+        ("revision_policy", "auto_reject_after_limit", True),
+        ("revision_policy", "allowed_resubmission_states", ["needs_revision"]),
+        ("revision_policy", "reviewer_reassignment_rule", "same reviewer preferred"),
+    ),
+)
+async def test_policy_schema_rejects_retired_archival_inputs(
     project_client: AsyncClient,
+    policy_name: str,
+    field_name: str,
+    field_value: object,
 ) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
-    payload["revision_policy"]["allowed_resubmission_states"] = []
+    payload[policy_name][field_name] = field_value
     response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides",
         headers=auth_headers(),
@@ -7218,7 +7231,7 @@ async def test_revision_policy_rejects_retired_resubmission_state_input(
     )
 
     assert response.status_code == 422
-    assert "allowed_resubmission_states" in response.text
+    assert field_name in response.text
 
 
 async def test_revision_policy_requires_deadline(project_client: AsyncClient) -> None:
@@ -7258,21 +7271,65 @@ async def test_guide_update_rejects_manual_post_submit_checker_policy(
     assert "post_submit_checker_policy" in response.text
 
 
-async def test_revision_policy_rejects_retired_reassignment_input(
+@pytest.mark.parametrize(
+    ("legacy_states", "expected_status", "expected_detail"),
+    (
+        (None, 422, "revision policy is incomplete"),
+        ([], 422, "revision policy is incomplete"),
+        (["submitted"], 422, "revision policy contains invalid resubmission states"),
+        (["needs_revision"], 200, None),
+    ),
+)
+async def test_activation_preserves_migrated_revision_policy_state_rules(
     project_client: AsyncClient,
+    legacy_states: list[str] | None,
+    expected_status: int,
+    expected_detail: str | None,
 ) -> None:
     project = await create_project(project_client)
-    payload = complete_guide_payload()
-    payload["revision_policy"]["reviewer_reassignment_rule"] = "same reviewer preferred"
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+
+    async with db_session.get_session_factory()() as session:
+        await session.execute(
+            text("alter table revision_policies disable trigger trg_revision_policies_guard_write")
+        )
+        await session.execute(
+            text(
+                "update revision_policies set legacy_incomplete=true,"
+                "configured_by_actor=null,configured_at=null,"
+                "legacy_auto_reject_after_limit=true,"
+                "legacy_allowed_resubmission_states=cast(:states as json),"
+                "legacy_reviewer_reassignment_rule='same reviewer preferred' "
+                "where project_id=:project_id and guide_version='v1'"
+            ),
+            {
+                "project_id": project["id"],
+                "states": json.dumps(legacy_states) if legacy_states is not None else None,
+            },
+        )
+        await session.execute(
+            text("alter table revision_policies enable trigger trg_revision_policies_guard_write")
+        )
+        await session.commit()
 
     response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides",
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
         headers=auth_headers(),
-        json=payload,
     )
 
-    assert response.status_code == 422
-    assert "reviewer_reassignment_rule" in response.text
+    assert response.status_code == expected_status, response.text
+    if expected_detail is not None:
+        assert expected_detail in response.json()["detail"]
+    else:
+        revision_policy = response.json()["revision_policy"]
+        assert revision_policy["legacy_incomplete"] is True
+        for archival_field in (
+            "auto_reject_after_limit",
+            "allowed_resubmission_states",
+            "reviewer_reassignment_rule",
+        ):
+            assert archival_field not in revision_policy
 
 
 async def test_activation_rejects_pending_pre_submit_checker_policy(
@@ -7484,10 +7541,13 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.json()["review_policy"]["review_lease_duration_seconds"] == 1800
     assert active.json()["review_policy"]["finding_evidence_requirement"] == "optional"
     assert active.json()["review_policy"]["legacy_incomplete"] is False
+    assert "requires_second_review" not in active.json()["review_policy"]
     assert "sla_hours" not in active.json()["review_policy"]
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["legacy_incomplete"] is False
     assert "auto_reject_after_limit" not in active.json()["revision_policy"]
+    assert "allowed_resubmission_states" not in active.json()["revision_policy"]
+    assert "reviewer_reassignment_rule" not in active.json()["revision_policy"]
     assert active.json()["payment_policy"]["base_amount"] == "25.00"
 
 
