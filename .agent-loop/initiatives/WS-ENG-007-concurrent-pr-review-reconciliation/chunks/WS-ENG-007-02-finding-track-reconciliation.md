@@ -47,7 +47,7 @@ scripts/test_agent_gates.py
 - [ ] Each finding has a stable ID, reviewer track, severity, immutable target
       evidence, closed predicate enum, and computed disposition. The ID is
       SHA-256 over compact sorted-key UTF-8 JSON with version
-      `workstream-review-finding-id/v1` and exactly repository, initiative,
+      `workstream-review-finding-id-v1` and exactly repository, initiative,
       chunk, canonical reviewer track, repository-owned rule ID, and target.
       Target binds raw path, target kind, immutable original object or
       diagnostic key, predicate kind, and immutable expected value. Severity,

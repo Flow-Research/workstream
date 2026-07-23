@@ -78,7 +78,7 @@ Multi-class paths take the union; `unknown` routes all.
 ## Finding predicate grammar
 
 Finding IDs are `SHA-256` over compact, sorted-key UTF-8 JSON with the literal
-version `workstream-review-finding-id/v1` and exactly these immutable identity
+version `workstream-review-finding-id-v1` and exactly these immutable identity
 fields: repository, initiative, chunk, canonical reviewer track, repository-
 owned rule ID, and target. Target contains the raw repository path, target kind,
 immutable original object identity or diagnostic key, predicate kind, and the
