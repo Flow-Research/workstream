@@ -14,4 +14,6 @@
   `a3eecadcf847ac70fc28c58dad642f2d761015e0`, but the first ENG-006 start failed
   because authority validation mixed ENG-006 lifecycle identity with ENG-007
   protected-check evidence. No successor is active.
-- Review gate: deterministic repair and internal review in progress.
+- Review gate: all nine internal tracks passed exact implementation head
+  `145c1f92f13ad3467ce89fac6895828ef9d01f24`; awaiting external checks and the
+  user-owned merge decision.
