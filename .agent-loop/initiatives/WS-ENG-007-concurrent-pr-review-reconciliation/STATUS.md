@@ -1,19 +1,19 @@
 # STATUS: WS-ENG-007 - Concurrent PR Review Reconciliation
 
-- Phase: cross-initiative authority-projection recovery
+- Phase: R4 activation recovery
 - Gate: fail-closed automation repair
 - Active planning chunk: none
 - Active implementation chunk: none
-- Completed but unreconciled recovery chunk: `WS-ENG-007-00R1`
-- Merged but unreconciled recovery chunk: `WS-ENG-007-00R2`
+- Reconciled recovery history: `WS-ENG-007-00R1`, `WS-ENG-007-00R2`,
+  `WS-ENG-007-00R3`
 - Completed recovery chunk: `WS-ENG-007-00R3`
-- Active recovery chunk: `WS-ENG-007-00R4`
+- Merged recovery chunk: `WS-ENG-007-00R4`
+- Active recovery chunk: `WS-ENG-007-00R5`
 - Proposed implementation successor after recovery: `WS-ENG-007-01`
 - Separate explicit start required: true
-- Current gate: PR #190 reconciled signed memory through
-  `a3eecadcf847ac70fc28c58dad642f2d761015e0`, but the first ENG-006 start failed
-  because authority validation mixed ENG-006 lifecycle identity with ENG-007
-  protected-check evidence. No successor is active.
-- Review gate: all nine internal tracks passed exact implementation head
-  `c59bff278945c3d8e63a6ea776a6bf6206df8af8`; awaiting external checks and the
-  user-owned merge decision.
+- Current gate: PR #191 merged as
+  `9bf16d478f669d48172810c83cdf6a7d2b8992ed`, but post-merge memory rejected it
+  because recovery chunk R4 had no signed start. Signed state remains at PR #190;
+  no successor is active.
+- Review gate: exact two-merge recovery certificate and internal review in
+  progress.

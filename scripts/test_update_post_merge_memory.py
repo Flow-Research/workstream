@@ -2038,6 +2038,109 @@ def _merge_bound_record() -> dict:
     return record
 
 
+def _set_merge_identity(
+    record: dict, *, chunk_id: str, pr_number: int, main_sha: str,
+    first_parent_sha: str, head_sha: str,
+) -> None:
+    record["source"].update(
+        main_sha=main_sha,
+        first_parent_sha=first_parent_sha,
+        head_sha=head_sha,
+        pr_number=pr_number,
+        pr_url=f"https://github.com/Flow-Research/workstream/pull/{pr_number}",
+        intent_path=f".agent-loop/merge-intents/{chunk_id}.json",
+    )
+    record["completed_chunk"].update(
+        initiative_id="WS-ENG-007",
+        chunk_id=chunk_id,
+        chunk_title=chunk_id,
+        next_chunk_id="WS-ENG-007-01",
+        next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+    )
+    record["gate"].update(
+        next_chunk_id="WS-ENG-007-01",
+        next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+    )
+    selected = record["protected_checks"]["selected"]
+    for item in selected.values():
+        item["head_sha"] = head_sha
+    record["protected_checks"]["sha256"] = loop.hashlib.sha256(
+        loop._canonical_json(selected).encode()
+    ).hexdigest()
+    record["checks"]["required"]["CodeRabbit"] = {
+        "kind": "missing", "conclusion": None, "url": None,
+    }
+    record["checks"]["all_required_passed"] = False
+
+
+def test_prepare_recovery_v5_uses_merge_bound_evidence_and_consumes_exact_r4(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["source"]["main_sha"] = "a" * 40
+    loop.apply_merge_record(state_root, base)
+    recovered = _merge_bound_record()
+    target = _merge_bound_record()
+    _set_merge_identity(
+        recovered, chunk_id="WS-ENG-007-00R4", pr_number=191,
+        main_sha="c" * 40, first_parent_sha="a" * 40, head_sha="4" * 40,
+    )
+    _set_merge_identity(
+        target, chunk_id="WS-ENG-007-00R5", pr_number=192,
+        main_sha="d" * 40, first_parent_sha="c" * 40, head_sha="5" * 40,
+    )
+    policy = {
+        "schema_version": 5,
+        "signed_basis": "a" * 40,
+        "activation": {
+            "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R5",
+        },
+        "recovered_merges": [{
+            "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R4",
+            "pr_number": 191, "merge_sha": "c" * 40,
+        }],
+    }
+    records = {"c" * 40: recovered, "d" * 40: target}
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: json.loads(json.dumps(records[sha])),
+    )
+    monkeypatch.setattr(
+        loop, "_validate_protected_actions_checks",
+        lambda *_args: pytest.fail("schema-v5 must not query mutable check authority"),
+    )
+
+    exemptions = loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="d" * 40,
+        planned_shas=["c" * 40, "d" * 40],
+    )
+    assert [item["chunk_id"] for item in exemptions] == [
+        "WS-ENG-007-00R4", "WS-ENG-007-00R5",
+    ]
+    assert loop.apply_merge_record(state_root, recovered, exemptions)
+    assert loop.apply_merge_record(state_root, target, exemptions)
+    loop.assert_recovery_consumed(state_root, "d" * 40, exemptions)
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="d" * 40, planned_shas=[],
+    ) == []
+
+    wrong_basis = json.loads(json.dumps(policy))
+    wrong_basis["signed_basis"] = "b" * 40
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: wrong_basis)
+    fresh = tmp_path / "wrong-basis"
+    loop.apply_merge_record(fresh, base)
+    with pytest.raises(loop.LoopMemoryError, match="signed basis"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=fresh, target_sha="d" * 40,
+            planned_shas=["c" * 40, "d" * 40],
+        )
+
+
 def _cross_initiative_merge_bound_state(tmp_path: Path) -> tuple[Path, Path]:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)
@@ -2195,7 +2298,20 @@ def test_protected_selector_rejects_eligible_provenance_mutations(mutation, mess
 
 
 def test_recovery_policy_v4_rejects_closed_schema_mutations() -> None:
-    policy = json.loads((Path(__file__).parents[1] / ".agent-loop/policies/loop-memory-recovery.json").read_text())
+    policy = {
+        "schema_version": 4,
+        "signed_basis": "a" * 40,
+        "activation": {
+            "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R5",
+        },
+        "recovered_merges": [
+            {
+                "initiative_id": "WS-ENG-007", "chunk_id": f"WS-ENG-007-00R{index}",
+                "pr_number": 186 + index, "merge_sha": str(index) * 40,
+            }
+            for index in range(1, 4)
+        ],
+    }
     assert loop._validate_recovery_policy(policy) == policy
     mutations = []
     bad = json.loads(json.dumps(policy)); bad["signed_basis"] = "bad"; mutations.append(bad)
