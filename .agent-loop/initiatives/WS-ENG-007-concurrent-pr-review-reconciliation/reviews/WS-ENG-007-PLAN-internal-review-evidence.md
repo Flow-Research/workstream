@@ -10,11 +10,17 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: fd153b0ee7c62d3b6fe1ad157f243cc34aadacbe
+Reviewed code SHA: 32f5a87a3f8a06d15b8bd976b74b1530d1f1001a
 
-Reviewed at: 2026-07-22T15:40:04Z
+Reviewed at: 2026-07-23T04:40:46Z
 
 Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/root/eng006_qa_ci_tests; security/auth=/root/eng006_security_ops_reuse; product/ops=/root/eng006_security_ops_reuse; architecture=/root/eng006_senior_arch_docs; docs=/root/eng006_senior_arch_docs; CI-integrity=/root/eng006_qa_ci_tests; reuse/dedup=/root/eng006_security_ops_reuse; test-delta=/root/eng006_qa_ci_tests
+
+The `/root/eng006_*` values are durable runtime session identifiers inherited
+from the available reviewer pool; they are not claims that WS-ENG-006 evidence
+was reused. Each session was explicitly reassigned to review
+`WS-ENG-007-PLAN`, and the mapping above records every track covered by that
+exact initiative-specific task and reviewed SHA.
 
 ## Reviewed Change
 
@@ -23,7 +29,9 @@ Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/roo
 - Defined a closed repository-owned boundary graph and canonical reviewer-track
   vocabulary for targeted invalidation.
 - Defined structured finding predicates where `true` means resolved, `false`
-  means still valid, and `unknown` stales the owning track.
+  means still valid, and `unknown` stales every track.
+- Defined a versioned canonical finding-ID payload, immutable diagnostic-checker
+  identity, atomic linked-finding outcomes, and injected collision proof.
 - Required byte-for-byte preservation of existing signed loop-memory behavior
   while extracting one shared Git-evidence authority.
 - Planned merge-group workflow parity without granting workflow code repository
@@ -60,6 +68,11 @@ Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/roo
 - Added explicit byte-for-byte signed loop-memory parity and independent
   fail-closed consumer requirements.
 - Narrowed every chunk to exact allowed paths and single ownership boundaries.
+- Addressed all six CodeRabbit findings: canonical IDs, linked contradiction
+  outcomes, explicit merge-group synthetic verification, universal unknown
+  invalidation, immutable checker identity, and reviewer-session provenance.
+- Reconciled the branch with trusted `main` at `93c14181` before final review;
+  the upstream ART delta does not modify WS-ENG-007 planning paths.
 
 ## Commands Run
 

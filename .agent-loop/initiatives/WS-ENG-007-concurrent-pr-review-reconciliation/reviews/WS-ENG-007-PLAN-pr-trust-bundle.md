@@ -31,9 +31,21 @@ loop-memory generator, or authorization behavior.
 ## Reviewer Results
 
 All nine required internal tracks passed exact planning commit
-`fd153b0ee7c62d3b6fe1ad157f243cc34aadacbe` after valid findings were repaired.
-The evidence-only files added afterward are this trust bundle and the adjacent
-internal-review record. No reviewer session remains open.
+`32f5a87a3f8a06d15b8bd976b74b1530d1f1001a` after the latest trusted-main merge
+and all valid internal and CodeRabbit findings were repaired. The only changes
+after that reviewed commit are this trust bundle and the adjacent internal-
+review record. No reviewer session remains open.
+
+## External Review
+
+CodeRabbit raised six actionable planning findings. All were accepted and
+closed: versioned canonical finding identity, deterministic linked/contradiction
+outcomes, an explicit merge-group synthetic test command, universal all-track
+invalidation for unknown impact, immutable diagnostic-checker identity, and
+initiative-specific explanation of inherited reviewer session IDs. Its PR-
+description warning is addressed in the complete trust-bundle PR body. The
+reported Checkov import failure is CodeRabbit tool-environment output, not a
+repository check failure and not a reason to weaken or add repository CI.
 
 ## CI Integrity And Test Delta
 
