@@ -2088,6 +2088,77 @@ def test_planning_tree_entries_canonicalize_recursive_directory_objects() -> Non
             ),
             message,
         )
+    separating_sibling = [
+        {"path": "a", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "a-b", "type": "blob", "mode": "100644", "sha": "2" * 40},
+        {"path": "a/b", "type": "blob", "mode": "100644", "sha": "3" * 40},
+    ]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(separating_sibling), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "conflicting leaf paths",
+    )
+    duplicate = [supported[0], dict(supported[0])]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(duplicate), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "malformed",
+    )
+    malformed_sha = [{**supported[0], "sha": "not-a-sha"}]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(malformed_sha), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "malformed",
+    )
+    before_file = {"node": ("100644", "blob", "1" * 40)}
+    after_directory = {
+        "node/one": ("100644", "blob", "2" * 40),
+        "node/two": ("100644", "blob", "3" * 40),
+    }
+    assert updater._tree_delta(before_file, after_directory) == {
+        "node": None,
+        **after_directory,
+    }
+    assert updater._tree_delta(after_directory, before_file) == {
+        "node": before_file["node"],
+        "node/one": None,
+        "node/two": None,
+    }
+    leaf_then_tree = [
+        {"path": "leaf", "type": "blob", "mode": "100644", "sha": "1" * 40},
+        {"path": "leaf/child", "type": "tree", "mode": "040000", "sha": "2" * 40},
+    ]
+    assert_loop_error(
+        updater,
+        lambda: updater._tree_entries(
+            TreeClient(leaf_then_tree), "Flow-Research/workstream", "a" * 40, "hostile"
+        ),
+        "conflicting leaf paths",
+    )
+
+
+def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
+    """The temporary production recovery authority is identity-exact."""
+    policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
+    assert policy == {
+        "activation": {
+            "chunk_id": "WS-ENG-007-00R1",
+            "initiative_id": "WS-ENG-007",
+        },
+        "recovered_merge": {
+            "chunk_id": "WS-ENG-007-PLAN",
+            "initiative_id": "WS-ENG-007",
+            "merge_sha": "8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8",
+            "pr_number": 187,
+        },
+        "schema_version": 1,
+    }
 
 
 def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> None:
@@ -2462,9 +2533,9 @@ def test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay() -> 
             updater._validate_protected_actions_checks = original_checks
 
 
-def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> None:
-    """The exact REV checkpoint may precede the ENG activation lexically."""
-    updater = load_module("eng006_two_merge_recovery", "scripts/update_post_merge_memory.py")
+def test_eng007_two_merge_recovery_binds_pr187_and_consumes_authority() -> None:
+    """The exact PR187 checkpoint precedes and authorizes only its repair."""
+    updater = load_module("eng007_two_merge_recovery", "scripts/update_post_merge_memory.py")
     with tempfile.TemporaryDirectory() as tmpdir:
         repository_root = Path(tmpdir) / "repository"
         state_root = Path(tmpdir) / "state"
@@ -2475,47 +2546,53 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
         subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "base"], check=True, stdout=subprocess.PIPE)
         base_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
-        (repository_root / "rev.txt").write_text("rev plan\n", encoding="utf-8")
+        (repository_root / "plan.txt").write_text("eng plan\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "rev plan"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng plan"], check=True, stdout=subprocess.PIPE)
         recovered_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
         policy = repository_root / updater.RECOVERY_POLICY_PATH
         policy.parent.mkdir(parents=True, exist_ok=True)
         policy.write_text(json.dumps({
-            "activation": {"chunk_id": "WS-ENG-006-00", "initiative_id": "WS-ENG-006"},
+            "activation": {"chunk_id": "WS-ENG-007-00R1", "initiative_id": "WS-ENG-007"},
             "recovered_merge": {
-                "chunk_id": "WS-REV-001-PLAN3",
-                "initiative_id": "WS-REV-001",
+                "chunk_id": "WS-ENG-007-PLAN",
+                "initiative_id": "WS-ENG-007",
                 "merge_sha": recovered_sha,
-                "pr_number": 176,
+                "pr_number": 187,
             },
             "schema_version": 1,
         }) + "\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(repository_root), "add", "."], check=True)
-        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng activation"], check=True, stdout=subprocess.PIPE)
+        subprocess.run(["git", "-C", str(repository_root), "commit", "-m", "eng repair"], check=True, stdout=subprocess.PIPE)
         target_sha = subprocess.check_output(["git", "-C", str(repository_root), "rev-parse", "HEAD"], text=True).strip()
         base = loop_record(updater, sha=base_sha)
         base["legacy_exemptions"] = []
         updater.apply_merge_record(state_root, base)
-        recovered = loop_record(updater, sha=recovered_sha, first_parent_sha=base_sha, pr_number=176)
+        recovered = loop_record(updater, sha=recovered_sha, first_parent_sha=base_sha, pr_number=187)
         recovered["completed_chunk"].update(
-            initiative_id="WS-REV-001", chunk_id="WS-REV-001-PLAN3",
-            next_chunk_id=None, next_chunk_title=None,
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-PLAN",
+            next_chunk_id="WS-ENG-007-01", next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
         )
-        recovered["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        recovered["gate"].update(
+            next_chunk_id="WS-ENG-007-01",
+            next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+        )
         recovered["source"].update(
-            intent_path=".agent-loop/merge-intents/WS-REV-001-PLAN3.json",
-            pr_url="https://github.com/Flow-Research/workstream/pull/176",
+            intent_path=".agent-loop/merge-intents/WS-ENG-007-PLAN.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/187",
         )
-        target = loop_record(updater, sha=target_sha, first_parent_sha=recovered_sha, pr_number=179)
+        target = loop_record(updater, sha=target_sha, first_parent_sha=recovered_sha, pr_number=188)
         target["completed_chunk"].update(
-            initiative_id="WS-ENG-006", chunk_id="WS-ENG-006-00",
-            next_chunk_id=None, next_chunk_title=None,
+            initiative_id="WS-ENG-007", chunk_id="WS-ENG-007-00R1",
+            next_chunk_id="WS-ENG-007-01", next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
         )
-        target["gate"].update(next_chunk_id=None, next_chunk_title=None)
+        target["gate"].update(
+            next_chunk_id="WS-ENG-007-01",
+            next_chunk_title="Reviewed Patch and Base-Delta Reconciliation",
+        )
         target["source"].update(
-            intent_path=".agent-loop/merge-intents/WS-ENG-006-00.json",
-            pr_url="https://github.com/Flow-Research/workstream/pull/179",
+            intent_path=".agent-loop/merge-intents/WS-ENG-007-00R1.json",
+            pr_url="https://github.com/Flow-Research/workstream/pull/188",
         )
         records = {recovered_sha: recovered, target_sha: target}
         original_collect = updater.collect_merge_record
@@ -2555,8 +2632,8 @@ def test_eng006_two_merge_recovery_preserves_chronological_identity_order() -> N
                 target_sha=target_sha, planned_shas=[recovered_sha, target_sha],
             )
             assert [(item["initiative_id"], item["chunk_id"]) for item in exemptions] == [
-                ("WS-REV-001", "WS-REV-001-PLAN3"),
-                ("WS-ENG-006", "WS-ENG-006-00"),
+                ("WS-ENG-007", "WS-ENG-007-PLAN"),
+                ("WS-ENG-007", "WS-ENG-007-00R1"),
             ]
             assert checked_heads == [target["source"]["head_sha"]]
             serialized = json.loads(json.dumps({"schema_version": 1, "exemptions": exemptions}))
@@ -7181,9 +7258,11 @@ def main() -> int:
         test_planning_intake_is_stopped_idempotent_and_new_initiative_only,
         test_planning_intake_record_schema_fails_closed,
         test_independent_checker_accepts_and_mutates_planning_intake_state,
+        test_planning_tree_entries_canonicalize_recursive_directory_objects,
+        test_ws_eng_007_recovery_policy_is_exactly_pinned,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,
-        test_eng006_two_merge_recovery_preserves_chronological_identity_order,
+        test_eng007_two_merge_recovery_binds_pr187_and_consumes_authority,
         test_post_merge_reconciliation_bootstraps_and_recovers_every_commit,
         test_loop_memory_target_resolution_rejects_stale_replays,
         test_post_merge_collection_binds_exact_pr_and_checks,

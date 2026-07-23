@@ -876,9 +876,10 @@ def _tree_entries(
         raise LoopMemoryError(
             f"planning intake {label} tree has unsupported entry mode"
         )
-    ordered_paths = sorted(result)
-    for index, path in enumerate(ordered_paths[:-1]):
-        if ordered_paths[index + 1].startswith(f"{path}/"):
+    retained_paths = set(result)
+    for path in seen_paths:
+        parts = path.split("/")
+        if any("/".join(parts[:index]) in retained_paths for index in range(1, len(parts))):
             raise LoopMemoryError(
                 f"planning intake {label} tree has conflicting leaf paths"
             )

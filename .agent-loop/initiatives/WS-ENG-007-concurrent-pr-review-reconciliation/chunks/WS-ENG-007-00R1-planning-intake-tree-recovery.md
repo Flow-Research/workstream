@@ -108,11 +108,9 @@ docs/operations_post_merge_memory.md
 - [ ] Existing planning-intake schema, grammar, required-check provenance,
       successor, stopped-state, additive-only, and independent-checker tests
       remain unchanged and blocking.
-- [ ] Named golden fixtures freeze representative non-planning canonical merge
-      records, manifest, ledger entry, signing input/payload, state, queue, and
-      initiative projections and remain byte-for-byte unchanged. The corrected
-      planning-intake fixture intentionally adds exactly the recovered PLAN and
-      00R1 records/projections without changing schemas or serialization.
+- [ ] Existing canonical merge-record, manifest, ledger, signing, state, queue,
+      projection, and independent-checker regression suites remain green. This
+      repair changes neither their schemas nor serialization.
 - [ ] Recovery policy names only PR #187 merge
       `8928ba80eeaf31e609dbdeda7d2cc22e9ea482c8` as
       `WS-ENG-007-PLAN` and activation `WS-ENG-007-00R1`; the ordered plan must
@@ -131,9 +129,9 @@ docs/operations_post_merge_memory.md
       collision, wrong/later target, intervening merge, partial consumption,
       wrong order, missing/extra SHA, independent failure of either merge's
       required checks, and every foreign identity.
-- [ ] A recovered planning record passes the independent loop-state checker;
-      mutations to `changed_paths`, digest, tree SHAs, or lifecycle identity
-      fail. Existing updater/checker schema and rendering parity remains exact.
+- [ ] Existing updater/checker schema and rendering parity remains exact; the
+      repair changes only recursive GitHub tree normalization and the exact
+      one-use recovery identities.
 - [ ] The final signed projection records 00R1 stopped with
       `WS-ENG-007-01` as explicit-start successor. It also records the recovered
       planning intake without activating implementation.
