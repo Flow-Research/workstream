@@ -21,7 +21,7 @@ Each session was explicitly reassigned to this exact WS-ENG-007 recovery head.
 
 ## Reviewer Results
 
-| Reviewer track | Result | Blocking findings |
+| Reviewer | Result | Blocking findings |
 |---|---:|---|
 | senior engineering | PASS AFTER FIXES | None |
 | QA/test | PASS AFTER FIXES | None |
