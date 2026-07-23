@@ -1,5 +1,9 @@
 # PR Trust Bundle: WS-AUTH-001-10C
 
+> Pending replacement after migration 0034. This bundle describes the reviewed
+> pre-migration runtime; GitHub exposed the predecessor evidence-guard mismatch,
+> and final publication requires a fresh exact-SHA trust bundle.
+
 ## Chunk And Goal
 
 `WS-AUTH-001-10C` adds PREP-bound, idempotent, auditable issue and revoke
@@ -21,8 +25,9 @@ authorization, concurrency, and audit integrity.
 - Hosted E2E uses only public APIs for issue, active read, revoke, history,
   replay/state-change conflicts, lifecycle-independent revoke, and authority loss.
 
-All changed files are contract-allowed. There is no migration, durable schema
-change, frontend work, automated role conversion, task assignment, review
+All pre-migration runtime files were contract-allowed. The user subsequently
+authorized exact migration 0034; no other durable schema change, frontend work,
+automated role conversion, task assignment, review
 reconciliation, or successor implementation.
 
 ## Proof And Review

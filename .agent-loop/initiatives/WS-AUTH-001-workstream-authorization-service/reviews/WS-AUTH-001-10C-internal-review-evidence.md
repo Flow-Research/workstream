@@ -1,5 +1,10 @@
 # Internal Review Evidence: WS-AUTH-001-10C
 
+> Superseded for final completion: this evidence covers the pre-migration
+> runtime through the recorded reviewed SHA. GitHub exposed an incompatible
+> predecessor idempotency guard, and the user authorized exact migration 0034.
+> Final completion requires fresh exact-SHA review and replacement evidence.
+
 ## Chunk And Reviewed Code
 
 `WS-AUTH-001-10C` — Project Role Grant Mutations. Risk: L1 authorization,
@@ -21,7 +26,7 @@ Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /
   remains possible after target suspension or identity-link revocation.
 - Appends ordered typed success evidence and the revoke-only future-obligation
   invalidation projection through the shared authority mutation completion path.
-- Adds no migration, schema revision, worker, assignment, review-reconciliation,
+- At this historical reviewed SHA, adds no migration or schema revision, worker, assignment, review-reconciliation,
   automated grant, replacement-role, or authority-substitution behavior.
 
 ## Deterministic Evidence

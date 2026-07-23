@@ -37,6 +37,9 @@ backend/app/modules/actors/repository.py
 backend/app/modules/authorization/**
 backend/app/modules/audit/schemas.py
 backend/alembic/versions/0034_project_role_issue_evidence.py
+backend/tests/conftest.py
+backend/tests/test_alembic.py
+backend/tests/test_audit.py
 backend/app/modules/projects/repository.py
 backend/app/api/router.py
 backend/tests/test_actors.py
@@ -204,18 +207,50 @@ The existing database idempotency completion guard predates the 10A evidence
 shape and requires one success plus one invalidation for every operation. That
 would either reject 10C issue or force a false invalidation. Migration 0034 is
 therefore the sole permitted durable change in this chunk. It replaces only the
-idempotency completion guard so `project_role_grant.issue` requires exactly two
-ordered non-invalidation events —
+exact bodies of `guard_authority_idempotency_record()` and
+`validate_linked_authority_event()`, and extends only the existing audit privacy
+check constraint's resource registry with `qualification_snapshot`, so
+`project_role_grant.issue` requires exactly two non-invalidation events —
 `ProjectRoleQualificationSnapshotCaptured` followed by
 `ProjectRoleGrantIssued` — with the qualification event bound to the same
-idempotency record, request/correlation pair, actor, permission, project, and
-issued-grant resource. It requires zero invalidations for issue. Every other
-operation retains the existing exactly-one-success plus exactly-one-invalidation
-rule. Upgrade refuses unexpected installed function/trigger definitions and
-pre-existing incompatible pending/committed project-role issue evidence without
-changing data. Downgrade refuses any committed 10C issue record or new evidence
-shape that the prior guard cannot represent, then restores the exact prior
-function. No table, column, index, enum, or product row changes are permitted.
+idempotency record, request/correlation pair, actor, permission, project, target
+actor, and matched Project Manager grant. The qualification event's
+entity/resource/target kind and ID are exactly its snapshot ID. The issued event's
+entity/resource/target are exactly the response grant ID. The linked-event guard
+admits qualification capture only for a pending issue record with no prior linked
+event, and admits grant-issued only after exactly one matching qualification
+event exists; it rejects reversed, duplicate, extra, cross-record, cross-request,
+cross-correlation, cross-actor, cross-permission, cross-project, cross-target,
+cross-manager, or false-invalidation shapes. Application tests prove writer call
+order; the durable schema claims exact cardinality and predecessor presence, not
+a total order derived from timestamp or UUID. Completion additionally requires
+the persisted grant's qualification snapshot, project, actor, and role tuple to
+match the persisted snapshot and request tuple. It requires zero invalidations
+for issue.
+
+Every other operation retains the exact existing success-event allowlist,
+response resource/type/status/version binding, one success plus one invalidation,
+invalidation cause pointing to that success, actor/project/permission/request/
+correlation/idempotency linkage, target projection, and before/after predicates.
+
+Migration 0034 has `down_revision = "0033_authorization_read_rate"`. Upgrade and
+downgrade lock `authority_idempotency_records` then `audit_events`, both in
+`ACCESS EXCLUSIVE` mode, before definition or row inspection and retain those
+locks through replacement. They require frozen predecessor/forward hashes for
+both functions, the `authority_idempotency_guard` and
+`audit_events_validate_idempotency` trigger names, enabled state, timing, event,
+table, function attachment, non-deferrability, and the exact privacy constraint
+definition. Upgrade permits a pending project-role issue only when it has zero
+linked evidence and all response fields are null. It refuses every committed
+issue record, every other pending issue shape, linked orphan/mixed/cross-record
+issue evidence, and any definition/binding drift. Downgrade refuses every
+committed issue record, any linked qualification event, any zero-invalidation
+issue shape, and any pending evidence/response shape the predecessor cannot
+represent. Each refusal is transactional and leaves Alembic head, both function
+and trigger hashes/bindings, the privacy constraint, and all rows unchanged.
+Empty safe downgrade restores the exact predecessor definitions; re-upgrade is
+deterministic. No table, column, index, enum, trigger identity, or product row
+change is permitted beyond those two function bodies and one registry member.
 
 ## Acceptance criteria
 
@@ -250,10 +285,15 @@ function. No table, column, index, enum, or product row changes are permitted.
   concurrently.
 - Cancellation and injected failure at snapshot, grant, idempotency, audit,
   invalidation, flush, and commit leave no orphan row or partial evidence.
-- Migration 0034 proves exact upgrade/downgrade function replacement, strict
+- Migration 0034 proves exact upgrade/downgrade function/constraint replacement, strict
   refusal/no-mutation on unexpected definitions and incompatible evidence,
-  two linked issue events with zero invalidation, and unchanged one-success/
-  one-invalidation enforcement for every other authority operation.
+  two linked issue events with zero invalidation, and unchanged per-operation
+  success/invalidation enforcement for every other authority operation. Focused
+  Alembic tests cover prior-head upgrade, fresh head, safe downgrade/re-upgrade,
+  each definition/trigger/constraint drift, each incompatible evidence predicate
+  alone and combined, transactional no-mutation snapshots, concurrent writer
+  races, wrong/reversed/extra/cross-linked issue events, false invalidation, and
+  a parameterized regression over every non-issue authority operation.
 - PostgreSQL tests cover identical-role issue, different-role issue, crossed
   managers, revoke versus regrant, revoke versus authorization, replay after
   authority loss, timeout, and cancellation. PostgreSQL and API tests also
@@ -299,7 +339,8 @@ function. No table, column, index, enum, or product row changes are permitted.
   remains complementary local proof, not a substitute for the hosted drill.
 - Regenerate exact combined route/protected-operation counts and SHA-256
   inventories from current main after adding the two routes; never guess or
-  replace exact hashes with count-only assertions. No migration, configuration,
+  replace exact hashes with count-only assertions. No migration other than exact
+  0034, configuration,
   workflow, pytest marker, skip/xfail, command, or coverage-threshold change is
   allowed. GitHub must pass all shards, hosted E2E, Agent Gates, the 78 percent
   repository floor, and the 90 percent authorization-subsystem floor.
