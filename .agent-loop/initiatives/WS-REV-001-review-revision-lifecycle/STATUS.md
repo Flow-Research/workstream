@@ -5,7 +5,7 @@
 `WS-REV-001-03P` is active through signed `Loop Memory Explicit Event` run
 `30014647556` on exact trusted main
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Reviewed CodeRabbit-repair
-implementation candidate `fe4b1447a9dc60d192308ebb3f0ed68c8832141e`
+implementation candidate `58a7335dcc754c21779ede5656929775476bbf1f`
 persists only REV-owned immutable ReviewPolicy and RevisionPolicy facts and
 passed every required internal review track plus focused local evidence. Candidate
 `35531df254c6b25726d666a5e89eda997b97d792` is retained only as historical
