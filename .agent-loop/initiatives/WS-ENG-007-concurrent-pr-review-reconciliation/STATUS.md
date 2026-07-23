@@ -14,5 +14,5 @@
   start workflow lacks the merge workflow's recovery path. Signed state remains
   at `73b457925b02301587b83d01ced0adb66319d134`; no successor is active.
 - Review gate: all required internal tracks passed reviewed implementation
-  `3f7264516c4bdf8e0baa163ebd19a358e2f0512f`; awaiting external checks and the
+  `4a3eee7fdd80970675ae2574542073b8a92e1ef9`; awaiting external checks and the
   user-owned merge decision.

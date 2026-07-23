@@ -10,9 +10,14 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 3f7264516c4bdf8e0baa163ebd19a358e2f0512f
+Reviewed code SHA: 4a3eee7fdd80970675ae2574542073b8a92e1ef9
 
 Reviewed at: 2026-07-23T10:30:00Z
+
+The `/root/eng006_*` sessions were inherited from the ENG-006 reviewer pool and
+explicitly reassigned to this WS-ENG-007-00R3 review. Every track is rebound to
+the exact reviewed implementation SHA below; the session name grants no
+cross-initiative authority.
 
 Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/root/eng006_qa_ci_tests; security/auth=/root/eng006_security_ops_reuse; product/ops=/root/eng006_security_ops_reuse; architecture=/root/eng006_senior_arch_docs; docs=/root/eng006_senior_arch_docs; CI-integrity=/root/eng006_qa_ci_tests; reuse/dedup=/root/eng006_security_ops_reuse; test-delta=/root/eng006_qa_ci_tests
 
@@ -58,10 +63,10 @@ git diff --check origin/main...HEAD
 python3 -m py_compile scripts/update_post_merge_memory.py scripts/check_loop_memory_state.py
 ```
 
-Final exact-head verification passed 278 updater-gate tests at 90.09 percent
+Final exact-head verification passed 278 updater-gate tests at 90.10 percent
 branch coverage and the independent checker at 90.41 percent. Agent Gates
 passed all 98 standalone scenarios. All reviewer tracks reapproved exact head
-`3f7264516c4bdf8e0baa163ebd19a358e2f0512f` after the additive coverage repairs.
+`4a3eee7fdd80970675ae2574542073b8a92e1ef9` after the CodeRabbit repairs.
 
 ## Remaining Risks
 
