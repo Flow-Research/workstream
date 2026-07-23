@@ -7292,7 +7292,20 @@ async def test_activation_preserves_migrated_revision_policy_state_rules(
 
     async with db_session.get_session_factory()() as session:
         await session.execute(
+            text("alter table review_policies disable trigger trg_review_policies_guard_write")
+        )
+        await session.execute(
             text("alter table revision_policies disable trigger trg_revision_policies_guard_write")
+        )
+        await session.execute(
+            text(
+                "update review_policies set legacy_incomplete=true,"
+                "review_preference_window_seconds=null,review_lease_duration_seconds=null,"
+                "configured_by_actor=null,configured_at=null,"
+                "legacy_requires_second_review=false,legacy_sla_hours=24 "
+                "where project_id=:project_id and guide_version='v1'"
+            ),
+            {"project_id": project["id"]},
         )
         await session.execute(
             text(
@@ -7309,6 +7322,9 @@ async def test_activation_preserves_migrated_revision_policy_state_rules(
             },
         )
         await session.execute(
+            text("alter table review_policies enable trigger trg_review_policies_guard_write")
+        )
+        await session.execute(
             text("alter table revision_policies enable trigger trg_revision_policies_guard_write")
         )
         await session.commit()
@@ -7322,6 +7338,10 @@ async def test_activation_preserves_migrated_revision_policy_state_rules(
     if expected_detail is not None:
         assert expected_detail in response.json()["detail"]
     else:
+        review_policy = response.json()["review_policy"]
+        assert review_policy["legacy_incomplete"] is True
+        for archival_field in ("requires_second_review", "sla_hours"):
+            assert archival_field not in review_policy
         revision_policy = response.json()["revision_policy"]
         assert revision_policy["legacy_incomplete"] is True
         for archival_field in (

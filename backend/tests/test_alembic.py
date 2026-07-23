@@ -2832,36 +2832,53 @@ def test_review_revision_policy_migration_is_lossless_and_guarded(
             assert migrated_revision["legacy_incomplete"] is True
             assert migrated_revision["legacy_auto_reject_after_limit"] is True
 
+            for version in ("v2", "v3", "v4", "v5"):
+                asyncio.run(
+                    execute(
+                        "insert into project_guides "
+                        "(id,project_id,version,status,content_markdown,created_by) "
+                        "values (:id,:project_id,:version,'draft','# Guide','actor-old')",
+                        {
+                            "id": str(uuid4()),
+                            "project_id": project_id,
+                            "version": version,
+                        },
+                    )
+                )
             forbidden_inserts = (
                 (
                     "insert into review_policies "
                     "(id,project_id,guide_version,allowed_decisions,minimum_finding_fields,"
                     "legacy_incomplete) values "
-                    "(:id,:project_id,'v1','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
-                    "'[\"description\",\"severity\"]'::json,true)"
+                    "(:id,:project_id,'v2','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "'[\"description\",\"severity\"]'::json,true)",
+                    "new policies cannot claim legacy state",
                 ),
                 (
                     "insert into review_policies "
                     "(id,project_id,guide_version,allowed_decisions,minimum_finding_fields,"
                     "legacy_incomplete) values "
-                    "(:id,:project_id,'v1','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
-                    "'[\"description\",\"severity\"]'::json,false)"
+                    "(:id,:project_id,'v3','[\"accept\",\"needs_revision\",\"reject\"]'::json,"
+                    "'[\"description\",\"severity\"]'::json,false)",
+                    "ck_review_policies_complete_or_legacy",
                 ),
                 (
                     "insert into revision_policies "
                     "(id,project_id,guide_version,max_revision_rounds,"
                     "revision_deadline_hours,legacy_incomplete) "
-                    "values (:id,:project_id,'v1',7,48,true)"
+                    "values (:id,:project_id,'v4',7,48,true)",
+                    "new policies cannot claim legacy state",
                 ),
                 (
                     "insert into revision_policies "
                     "(id,project_id,guide_version,max_revision_rounds,"
                     "revision_deadline_hours,legacy_incomplete) "
-                    "values (:id,:project_id,'v1',7,48,false)"
+                    "values (:id,:project_id,'v5',7,48,false)",
+                    "ck_revision_policies_complete_or_legacy",
                 ),
             )
-            for statement in forbidden_inserts:
-                with pytest.raises(IntegrityError):
+            for statement, expected_error in forbidden_inserts:
+                with pytest.raises(IntegrityError, match=expected_error):
                     asyncio.run(
                         execute(
                             statement,
