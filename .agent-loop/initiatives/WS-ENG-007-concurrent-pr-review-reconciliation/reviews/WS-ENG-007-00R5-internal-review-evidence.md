@@ -66,5 +66,5 @@ publish signed state before ENG-006 can start.
 
 ## Stop Condition
 
-Neither ENG-006 nor ENG-007 is active. R5 stops at `WS-ENG-007-01`, which still
-requires a separate explicit start.
+ENG-006 and `WS-ENG-007-01` are not active. R5 recovery is active and stops at
+`WS-ENG-007-01`, which still requires a separate explicit start.
