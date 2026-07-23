@@ -186,6 +186,10 @@ class ArtifactRecoveryIneligibleError(ArtifactRecoveryError):
     """Raised when the source job is not exhausted provider-unavailable work."""
 
 
+class ArtifactRecoveryNotFoundError(ArtifactRecoveryError):
+    """Conceal a missing recovery lineage before an exact authority decision."""
+
+
 @final
 @dataclass(frozen=True, slots=True)
 class ArtifactRecoveryAuthorityFacts:
@@ -230,3 +234,60 @@ class DenyArtifactRecoveryAuthority:
     ) -> ArtifactRecoveryAuthorizationEvidence:
         del authorization_context, facts
         raise ArtifactAuthorityDeniedError("artifact recovery action is unavailable")
+
+
+class ArtifactOperatorResourceType(StrEnum):
+    """Closed resource vocabulary exposed to the AUTH activation adapter."""
+
+    BINDING_SCOPE = "artifact_binding_scope"
+    CONTENT = "artifact_content"
+    REPLICA = "artifact_replica"
+    VERIFICATION_JOB = "artifact_verification_job"
+    RECOVERY_ATTEMPT = "artifact_recovery_attempt"
+    AUDIT_RESOURCE = "artifact_audit_resource"
+    ADMISSION_SCOPE = "artifact_admission_scope"
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactOperatorAuthorityFacts:
+    """Canonical, provider-neutral facts for one exact Operator decision."""
+
+    resource_type: ArtifactOperatorResourceType
+    resource_id: str
+    project_ids: tuple[UUID, ...]
+    action_id: ActionId
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class ArtifactOperatorAuthorizationEvidence:
+    """Bounded evidence returned by the later AUTH activation adapter."""
+
+    action_id: ActionId
+    permission_id: str
+    decision_id: UUID
+
+
+class ArtifactOperatorAuthority(Protocol):
+    """Exact Operator read authority seam; it never evaluates roles or grants."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactOperatorAuthorityFacts,
+    ) -> ArtifactOperatorAuthorizationEvidence: ...
+
+
+class DenyArtifactOperatorAuthority:
+    """Production-safe authority while the Operator actions remain planned."""
+
+    async def authorize(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        facts: ArtifactOperatorAuthorityFacts,
+    ) -> ArtifactOperatorAuthorizationEvidence:
+        del authorization_context, facts
+        raise ArtifactAuthorityDeniedError("artifact Operator action is unavailable")

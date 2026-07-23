@@ -36,7 +36,6 @@ ArtifactBindingResourceType = Literal[
     "task",
     "submission",
     "checker_run",
-    "review",
 ]
 ArtifactAuditResourceType = Literal[
     "artifact_binding",

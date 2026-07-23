@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-03 Guide Source Artifact Cutover
+# Chunk Contract: WS-ART-001-03 - Guide Source Artifact Cutover
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02D
 
