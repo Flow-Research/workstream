@@ -3,7 +3,7 @@
 ## Candidate
 
 - Trusted base: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
-- Final reviewed code candidate: `b9501b31565370306aea168ff4c218a2880e6c0b`
+- Final reviewed code candidate: `ba9c6249c053696dc9f32bfd750a2b9bb787e4f6`
 - Pre-external-repair implementation candidate: `35531df254c6b25726d666a5e89eda997b97d792`
 - Signed start: workflow run `30014647556`
 - Risk: L1 / P2

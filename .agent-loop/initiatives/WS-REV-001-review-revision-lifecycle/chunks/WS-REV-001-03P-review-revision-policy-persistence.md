@@ -3,9 +3,11 @@
 ## Status
 
 Active through signed `Loop Memory Explicit Event` run `30014647556` on exact
-trusted main `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Implementation candidate
-`b9501b31565370306aea168ff4c218a2880e6c0b` is the reviewed pre-CodeRabbit-repair
-candidate that passed every required internal review track and focused local gate.
+trusted main `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`. Superseded history SHA
+`94702ae492341402b725ffd6751f8f81ac68100b`
+records the content-equivalent CodeRabbit-repair tree that passed every required
+internal review track and focused local gate; canonical exact-SHA binding lives
+in the internal review evidence after the prospective commit sequence is final.
 `35531df254c6b25726d666a5e89eda997b97d792` is historical pre-external-repair
 authorization context only. Publication remains gated on final evidence review
 and current-head GitHub Actions, CodeRabbit, and human review.

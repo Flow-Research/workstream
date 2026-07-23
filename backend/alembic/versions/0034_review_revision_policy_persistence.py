@@ -169,6 +169,10 @@ def _create_write_guards() -> None:
               guide_effective_at timestamptz;
               guide_superseded_at timestamptz;
             begin
+              if tg_op = 'TRUNCATE' then
+                raise exception 'review and revision policies cannot be truncated'
+                  using errcode = '23514';
+              end if;
               if tg_op = 'DELETE' then
                 raise exception 'review and revision policies cannot be deleted'
                   using errcode = '23514';
@@ -277,6 +281,20 @@ def _create_write_guards() -> None:
             "guard_revision_policy_write()"
         )
     )
+    op.execute(
+        sa.text(
+            "create trigger trg_review_policies_reject_truncate before truncate "
+            "on review_policies for each statement execute function "
+            "guard_review_policy_write()"
+        )
+    )
+    op.execute(
+        sa.text(
+            "create trigger trg_revision_policies_reject_truncate before truncate "
+            "on revision_policies for each statement execute function "
+            "guard_revision_policy_write()"
+        )
+    )
 
 
 def upgrade() -> None:
@@ -314,6 +332,10 @@ def downgrade() -> None:
     """Restore 0033 only when every policy is an untouched migrated legacy row."""
     _lock_policy_context()
     _require_lossless_downgrade()
+    op.execute(
+        sa.text("drop trigger trg_revision_policies_reject_truncate on revision_policies")
+    )
+    op.execute(sa.text("drop trigger trg_review_policies_reject_truncate on review_policies"))
     op.execute(sa.text("drop trigger trg_revision_policies_guard_write on revision_policies"))
     op.execute(sa.text("drop trigger trg_review_policies_guard_write on review_policies"))
     op.execute(sa.text("drop function guard_revision_policy_write()"))

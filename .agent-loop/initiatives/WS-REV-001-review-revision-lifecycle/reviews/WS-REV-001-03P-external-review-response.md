@@ -19,6 +19,12 @@
   CheckerRun setup. Every ART assertion and final fixture fact is unchanged.
 - Aggregate `test` failed only because API E2E and shards 1 and 3 failed.
   Shards 2 and 4 passed.
+- CodeRabbit run `9747dead-4c6c-4474-a989-4035a1292ec3` found three valid
+  current-head issues. The evidence and status artifacts now bind their
+  reviewed and post-repair candidates consistently, and migration 0034 now
+  rejects `TRUNCATE` on both immutable policy tables with statement-level
+  triggers that downgrade removes explicitly. The migration regression test
+  exercises both rejection paths.
 
 ## Comments deferred
 
@@ -39,10 +45,13 @@ external check passes. The repair does not start 03A.
   exact-SHA review: PASS.
 - Fresh API E2E, all shards, aggregate test, and coverage evidence: pending
   GitHub Actions after push.
+- Ruff and `git diff --check` for the CodeRabbit repair: PASS. The exact
+  database-backed migration test could not start locally because
+  `WORKSTREAM_TEST_DATABASE_URL` is unset; it remains required in GitHub
+  Actions rather than substituting a weaker local database.
 
 ## Remaining risks
 
-CodeRabbit did not perform a review: its green status explicitly reported that
-the review limit was reached and it could not start. An actual current-head
-CodeRabbit review remains required. No lifecycle, authorization, or ART
+The CodeRabbit repair requires current-head GitHub Actions and incremental
+CodeRabbit confirmation after push. No lifecycle, authorization, or ART
 assertion was changed to obtain the repairs.

@@ -3039,6 +3039,9 @@ def test_review_revision_policy_migration_is_lossless_and_guarded(
                 asyncio.run(
                     execute("delete from revision_policies where id=:id", {"id": revision_id})
                 )
+            for table in ("review_policies", "revision_policies"):
+                with pytest.raises(IntegrityError, match="cannot be truncated"):
+                    asyncio.run(execute(f"truncate table {table}"))
         finally:
             command.upgrade(config, "head")
 
