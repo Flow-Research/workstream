@@ -75,16 +75,17 @@ _EVIDENCE = {
     ),
     AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE: _OperationEvidence(
         "project.role_grant.manage",
-        None,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
         AuthorityResourceType.PROJECT_ROLE_GRANT,
         201,
         (
+            AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
             AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
         ),
     ),
     AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE: _OperationEvidence(
         "project.role_grant.manage",
-        None,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
         AuthorityResourceType.PROJECT_ROLE_GRANT,
         200,
         (AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,),
@@ -174,37 +175,52 @@ class AuthorityMutationService:
         claim: AuthorityClaimHandle,
         request: object,
         response: AuthorityResponseReference,
-        success: AuthorityAuditEventInput,
-        invalidation: AuthorityInvalidationContext,
+        success: AuthorityAuditEventInput | tuple[AuthorityAuditEventInput, ...],
+        invalidation: AuthorityInvalidationContext | None,
     ) -> AuthorityCompletionResult:
         """Flush one mapped success/invalidation pair, then complete its claim."""
         mutation = parse_authority_request(request)
         spec = _EVIDENCE[claim.operation]
         expected_digest = canonical_json_hash(mutation.model_dump(mode="json", exclude_none=True))
+        successes = success if isinstance(success, tuple) else (success,)
+        if not successes:
+            raise TypeError("invalid authority completion input")
+        primary = successes[-1]
         allowed_events = spec.events
         valid = (
             mutation.operation == claim.operation
             and expected_digest == claim.request_digest
-            and success.event_type in allowed_events
-            and success.actor_ref_kind == claim.actor_ref_kind
-            and success.actor_ref == claim.actor_ref
-            and success.idempotency_reference == claim.record_id
-            and success.permission_id == spec.permission
-            and success.entity_type == spec.resource_type.value
-            and success.entity_id == str(response.resource_id)
-            and success.resource_type == spec.resource_type.value
-            and success.resource_id == str(response.resource_id)
-            and success.target_ref_kind == spec.resource_type.value
-            and success.target_ref_id == str(response.resource_id)
+            and tuple(item.event_type for item in successes) == allowed_events
+            and all(item.actor_ref_kind == claim.actor_ref_kind for item in successes)
+            and all(item.actor_ref == claim.actor_ref for item in successes)
+            and all(item.idempotency_reference == claim.record_id for item in successes)
+            and all(item.permission_id == spec.permission for item in successes)
+            and primary.entity_type == spec.resource_type.value
+            and primary.entity_id == str(response.resource_id)
+            and primary.resource_type == spec.resource_type.value
+            and primary.resource_id == str(response.resource_id)
+            and primary.target_ref_kind == spec.resource_type.value
+            and primary.target_ref_id == str(response.resource_id)
             and response.resource_type == spec.resource_type
             and response.http_status == spec.http_status
-            and _request_matches_success(mutation, response, success)
-            and success.request_id == invalidation.request_id
-            and success.correlation_id == invalidation.correlation_id
+            and _request_matches_success(mutation, response, primary)
+            and all(item.request_id == primary.request_id for item in successes)
+            and all(item.correlation_id == primary.correlation_id for item in successes)
+            and (
+                invalidation is None
+                or (
+                    primary.request_id == invalidation.request_id
+                    and primary.correlation_id == invalidation.correlation_id
+                )
+            )
         )
         if not valid:
             raise TypeError("invalid authority completion input")
-        stored_success = await self._audit.add_authority_event(success)
+        stored_success = None
+        for success_event in successes:
+            stored_success = await self._audit.add_authority_event(success_event)
+        if stored_success is None:
+            raise TypeError("invalid authority completion input")
         admin_mutation = isinstance(
             mutation,
             (AdminRoleGrantIssueRequest, AdminRoleGrantRevokeRequest),
@@ -214,18 +230,22 @@ class AuthorityMutationService:
             (ActorIdentityLinkRevokeRequest, ActorIdentityLinkReactivateRequest),
         )
         invalidation_target_kind = spec.resource_type.value
-        invalidation_target_ref = success.resource_id
-        invalidation_resource_type = success.resource_type
-        invalidation_resource_id = success.resource_id
+        invalidation_target_ref = primary.resource_id
+        invalidation_resource_type = primary.resource_type
+        invalidation_resource_id = primary.resource_id
         before_facts = {"effective": True}
         after_facts = {"effective": False}
-        if admin_mutation or identity_link_mutation:
-            if success.target_actor_ref is None:
+        if (
+            admin_mutation
+            or identity_link_mutation
+            or isinstance(mutation, ProjectRoleGrantRevokeRequest)
+        ):
+            if primary.target_actor_ref is None:
                 raise TypeError("projected authority success requires target actor")
             invalidation_target_kind = AuthorityResourceType.ACTOR_PROFILE.value
-            invalidation_target_ref = success.target_actor_ref
+            invalidation_target_ref = primary.target_actor_ref
             invalidation_resource_type = AuthorityResourceType.ACTOR_PROFILE.value
-            invalidation_resource_id = success.target_actor_ref
+            invalidation_resource_id = primary.target_actor_ref
             if isinstance(
                 mutation,
                 (AdminRoleGrantIssueRequest, ActorIdentityLinkReactivateRequest),
@@ -235,33 +255,34 @@ class AuthorityMutationService:
         elif isinstance(mutation, ActorProfileReactivateRequest):
             before_facts = {"effective": False}
             after_facts = {"effective": True}
-        invalidation_input = AuthorityAuditEventInput(
-            event_id=invalidation.event_id,
-            event_type=AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
-            entity_type="authority_invalidation",
-            entity_id=str(invalidation.event_id),
-            actor_ref_kind=claim.actor_ref_kind,
-            actor_ref=claim.actor_ref,
-            request_id=invalidation.request_id,
-            correlation_id=invalidation.correlation_id,
-            permission_id=spec.permission,
-            project_id=success.project_id,
-            resource_type=invalidation_resource_type,
-            resource_id=invalidation_resource_id,
-            reason="authority_state_changed",
-            idempotency_reference=claim.record_id,
-            invalidation_cause_event_id=UUID(stored_success.id),
-            invalidation_target_kind=invalidation_target_kind,
-            invalidation_target_ref=invalidation_target_ref,
-            before_facts=before_facts,
-            after_facts=after_facts,
-        )
-        await self._audit.add_authority_event(invalidation_input)
+        if invalidation is not None:
+            invalidation_input = AuthorityAuditEventInput(
+                event_id=invalidation.event_id,
+                event_type=AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
+                entity_type="authority_invalidation",
+                entity_id=str(invalidation.event_id),
+                actor_ref_kind=claim.actor_ref_kind,
+                actor_ref=claim.actor_ref,
+                request_id=invalidation.request_id,
+                correlation_id=invalidation.correlation_id,
+                permission_id=spec.permission,
+                project_id=primary.project_id,
+                resource_type=invalidation_resource_type,
+                resource_id=invalidation_resource_id,
+                reason="authority_state_changed",
+                idempotency_reference=claim.record_id,
+                invalidation_cause_event_id=UUID(stored_success.id),
+                invalidation_target_kind=invalidation_target_kind,
+                invalidation_target_ref=invalidation_target_ref,
+                before_facts=before_facts,
+                after_facts=after_facts,
+            )
+            await self._audit.add_authority_event(invalidation_input)
         await self._repository.complete(claim, response)
         return AuthorityCompletionResult(
             response=response,
-            success_event_id=success.event_id,
-            invalidation_event_id=invalidation.event_id,
+            success_event_id=primary.event_id,
+            invalidation_event_id=invalidation.event_id if invalidation is not None else None,
         )
 
     async def record_mismatch_denial(
@@ -285,9 +306,7 @@ class AuthorityMutationService:
             actor_ref=actor_ref,
             request_id=context.request_id,
             correlation_id=context.correlation_id,
-            matched_grant_id=(
-                str(context.matched_grant_id) if context.matched_grant_id else None
-            ),
+            matched_grant_id=(str(context.matched_grant_id) if context.matched_grant_id else None),
             permission_id=spec.permission,
             action_id=spec.action,
             project_id=_request_project_id(mutation),

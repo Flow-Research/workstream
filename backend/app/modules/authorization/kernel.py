@@ -47,7 +47,9 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectRoleGrantCollectionResourceContext,
+    ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
+    ProjectRoleGrantRevokeResourceContext,
     PreparedAuthorizationUnsupported,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
@@ -81,6 +83,8 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
@@ -263,16 +267,13 @@ class AuthorizationService:
                 PreparedAuthorityScopeKind.SYSTEM,
                 PreparedAuthorityScopeKind.PROJECT,
             }:
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
-                )
-            if (
-                scope.kind is PreparedAuthorityScopeKind.PROJECT
-                and action_id is not ActionId.ADMIN_ROLE_GRANT_ISSUE
-            ):
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
-                )
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
+            if scope.kind is PreparedAuthorityScopeKind.PROJECT and action_id not in {
+                ActionId.ADMIN_ROLE_GRANT_ISSUE,
+                ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            }:
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
             await self._admin.lock_control()
             locked = await self._admin.lock_request_actor(
                 context.identity_link_id, context.actor_profile_id
@@ -313,18 +314,14 @@ class AuthorizationService:
     @staticmethod
     def _locked_human_context(locked, original) -> HumanAuthorizationContext:
         if locked is None:
-            raise PreparedAuthorizationUnsupported(
-                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
-            )
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.IDENTITY_LINK_REVOKED)
         link, profile = locked
         if (
             profile.id != str(original.actor_profile_id)
             or link.id != str(original.identity_link_id)
             or link.actor_profile_id != profile.id
         ):
-            raise PreparedAuthorizationUnsupported(
-                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            )
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
         return HumanAuthorizationContext(
             actor_profile_id=UUID(profile.id),
             actor_kind=ActorKind(profile.actor_kind),
@@ -338,9 +335,7 @@ class AuthorizationService:
     @staticmethod
     def _locked_service_context(locked, original) -> ServiceAuthorizationContext:
         if locked is None:
-            raise PreparedAuthorizationUnsupported(
-                AuthorizationDenialCode.IDENTITY_LINK_REVOKED
-            )
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.IDENTITY_LINK_REVOKED)
         link, profile = locked
         if (
             profile.id != str(original.actor_profile_id)
@@ -349,9 +344,7 @@ class AuthorizationService:
             or profile.actor_kind != ActorKind.SERVICE.value
             or profile.service_identity != original.service_identity.value
         ):
-            raise PreparedAuthorizationUnsupported(
-                AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            )
+            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.PERMISSION_NOT_GRANTED)
         return ServiceAuthorizationContext(
             actor_profile_id=UUID(profile.id),
             actor_kind=ActorKind.SERVICE,
@@ -469,8 +462,7 @@ class AuthorizationService:
             if denial is None and final_scope != authority.scope_project_id:
                 denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
             if denial is None and (
-                authority.matched_grant_id is None
-                or authority.matched_grant_status != "active"
+                authority.matched_grant_id is None or authority.matched_grant_status != "active"
             ):
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if denial is None:
@@ -553,8 +545,7 @@ class AuthorizationService:
             return lifecycle, refreshed, True
         if (
             refreshed.service_identity is not context.service_identity
-            or action.action_id
-            not in SERVICE_ACTIONS_BY_IDENTITY[refreshed.service_identity]
+            or action.action_id not in SERVICE_ACTIONS_BY_IDENTITY[refreshed.service_identity]
             or ACTION_BY_ID[action.action_id].availability is not ActionAvailability.ACTIVE
         ):
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED, refreshed, True
@@ -663,24 +654,28 @@ class AuthorizationService:
                 return AuthorizationDenialCode.GRANT_NOT_FOUND
             if grant.target_actor_profile_id == str(context.actor_profile_id):
                 return AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN
+        elif isinstance(resource, ProjectRoleGrantIssueResourceContext):
+            if resource.target_actor_profile_id == context.actor_profile_id:
+                return AuthorizationDenialCode.SELF_GRANT_FORBIDDEN
+            if resource.project_status not in {"draft", "active", "paused"}:
+                return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if not resource.target_eligible:
+                return AuthorizationDenialCode.ACTOR_NOT_FOUND
+        elif isinstance(resource, ProjectRoleGrantRevokeResourceContext):
+            if resource.actor_profile_id == context.actor_profile_id:
+                return AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN
         elif isinstance(resource, ActorProfileLifecycleResourceContext):
-            if (
-                resource.resource_id == context.actor_profile_id
-                and resource.transition in {"suspend", "deactivate"}
-            ):
+            if resource.resource_id == context.actor_profile_id and resource.transition in {
+                "suspend",
+                "deactivate",
+            }:
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if await self._admin.lock_actor_lifecycle_target(resource.resource_id) is None:
                 return AuthorizationDenialCode.ACTOR_NOT_FOUND
         elif isinstance(resource, ActorIdentityLinkLifecycleResourceContext):
-            if (
-                resource.resource_id == context.identity_link_id
-                and resource.transition == "revoke"
-            ):
+            if resource.resource_id == context.identity_link_id and resource.transition == "revoke":
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-            if (
-                await self._admin.lock_identity_link_lifecycle_target(resource.resource_id)
-                is None
-            ):
+            if await self._admin.lock_identity_link_lifecycle_target(resource.resource_id) is None:
                 return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         elif isinstance(
             resource,
@@ -724,6 +719,8 @@ class AuthorizationService:
             ),
             ActionId.PROJECT_ROLE_GRANT_LIST: ProjectRoleGrantCollectionResourceContext,
             ActionId.PROJECT_ROLE_GRANT_READ: ProjectRoleGrantReadResourceContext,
+            ActionId.PROJECT_ROLE_GRANT_ISSUE: ProjectRoleGrantIssueResourceContext,
+            ActionId.PROJECT_ROLE_GRANT_REVOKE: ProjectRoleGrantRevokeResourceContext,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
@@ -801,10 +798,14 @@ class AuthorizationService:
             return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         if context.actor_kind is not ActorKind.HUMAN:
             return AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-        if action.action_id in {
-            ActionId.ACTOR_PROFILE_READ_SELF,
-            ActionId.ACTOR_PROFILE_UPDATE_SELF,
-        } and not revalidated:
+        if (
+            action.action_id
+            in {
+                ActionId.ACTOR_PROFILE_READ_SELF,
+                ActionId.ACTOR_PROFILE_UPDATE_SELF,
+            }
+            and not revalidated
+        ):
             return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         return None
 

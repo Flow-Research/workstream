@@ -126,6 +126,7 @@ from app.modules.authorization.schemas import (
     parse_authority_request,
 )
 from app.modules.authorization.service import AuthorityMutationService
+from app.modules.authorization.project_role_service import project_role_issue_lock_key
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
@@ -181,6 +182,38 @@ from app.modules.authorization.service_actor_service import (
 )
 
 DIGEST = "sha256:" + "a" * 64
+
+
+def _project_role_qualification() -> dict[str, object]:
+    return {
+        "skills_snapshot": {
+            "availability": "available",
+            "reference_ids": ["skill:opaque"],
+            "unavailable_reason": None,
+        },
+        "reputation_snapshot": {
+            "availability": "unavailable",
+            "reference_ids": [],
+            "unavailable_reason": "no_record",
+        },
+        "prior_project_work_refs": [],
+        "external_expertise_refs": [],
+    }
+
+
+def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> None:
+    actor = UUID("00000000-0000-0000-0000-000000000001")
+    project = UUID("00000000-0000-0000-0000-000000000002")
+    assert project_role_issue_lock_key(actor, project, "submitter") == -7801444014257588548
+    values = {
+        project_role_issue_lock_key(actor, project, role)
+        for role in ("submitter", "reviewer", "adjudicator")
+    }
+    assert len(values) == 3
+    assert all(-(2**63) <= value < 2**63 for value in values)
+    assert project_role_issue_lock_key(actor, project, "submitter") != project_role_issue_lock_key(
+        project, actor, "submitter"
+    )
 
 
 def test_authorization_read_cursor_round_trip_and_query_binding() -> None:
@@ -251,12 +284,18 @@ def _signed_cursor_envelope(envelope: dict, *, secret: bytes = bytes(range(32)))
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
-    envelope["s"] = base64.urlsafe_b64encode(
-        hmac.new(secret, payload_bytes, hashlib.sha256).digest()
-    ).decode().rstrip("=")
-    return base64.urlsafe_b64encode(
-        json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode()
-    ).decode().rstrip("=")
+    envelope["s"] = (
+        base64.urlsafe_b64encode(hmac.new(secret, payload_bytes, hashlib.sha256).digest())
+        .decode()
+        .rstrip("=")
+    )
+    return (
+        base64.urlsafe_b64encode(
+            json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
 
 
 @pytest.mark.parametrize(
@@ -323,19 +362,23 @@ def test_authorization_read_cursor_rejects_oversized_decoded_value() -> None:
 
 
 def test_authorization_read_cursor_rejects_missing_envelope_and_duplicate_keys() -> None:
-    missing_signature = base64.urlsafe_b64encode(
-        json.dumps(
-            {
-                "p": {
-                    "v": 1,
-                    "q": DIGEST,
-                    "ts": "2026-07-22T00:00:00.000000Z",
-                    "id": "00000000-0000-4000-8000-000000000002",
-                }
-            },
-            separators=(",", ":"),
-        ).encode()
-    ).decode().rstrip("=")
+    missing_signature = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {
+                    "p": {
+                        "v": 1,
+                        "q": DIGEST,
+                        "ts": "2026-07-22T00:00:00.000000Z",
+                        "id": "00000000-0000-4000-8000-000000000002",
+                    }
+                },
+                separators=(",", ":"),
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
     duplicate = base64.urlsafe_b64encode(b'{"p":{},"p":{},"s":"x"}').decode().rstrip("=")
     codec = AuthorizationReadCursorCodec(bytes(range(32)))
     for value in (missing_signature, duplicate):
@@ -572,11 +615,10 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
             response = await client.get(f"/api/v1/projects/{uuid4()}/role-grants")
 
         assert response.status_code == 404
-        assert response.json()["error"]["code"] == (
-            "project_authorization_resource_not_found"
-        )
+        assert response.json()["error"]["code"] == ("project_authorization_resource_not_found")
         assert consumptions == 1
         assert lookups == 0
+
 
 ART_CUSTODY_EXPECTATIONS = {
     "artifact.binding.read": (
@@ -903,6 +945,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
     assert {
         definition.action_id.value: (
@@ -977,14 +1021,20 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         "review.revision_obligation.close",
         "review.lifecycle.activation.manage",
     }.isdisjoint(action.value for action in ACTION_IDS)
-    assert sum(
-        definition.availability is ActionAvailability.ACTIVE
-        for definition in ACTION_DEFINITIONS
-    ) == 20
-    assert sum(
-        definition.availability is ActionAvailability.PLANNED
-        for definition in ACTION_DEFINITIONS
-    ) == 50
+    assert (
+        sum(
+            definition.availability is ActionAvailability.ACTIVE
+            for definition in ACTION_DEFINITIONS
+        )
+        == 22
+    )
+    assert (
+        sum(
+            definition.availability is ActionAvailability.PLANNED
+            for definition in ACTION_DEFINITIONS
+        )
+        == 48
+    )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
     )
@@ -1113,7 +1163,9 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "The ART transfer adds no migration" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
-    assert "74 PermissionIds, 70 ActionIds, 20 active actions, and\n50 planned actions" in operations
+    assert (
+        "74 PermissionIds, 70 ActionIds, 22 active actions, and\n48 planned actions" in operations
+    )
 
 
 def test_rev_custody_documentation_matches_the_independent_catalogue_fixture() -> None:
@@ -2089,18 +2141,15 @@ def test_project_role_read_denials_share_one_public_concealment(
 
 
 def test_project_role_read_permissions_separate_manager_and_auditor_authority() -> None:
-    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[
-        AdminRole.PROJECT_MANAGER
-    ]
-    assert PermissionId.PROJECT_ROLE_GRANT_MANAGE in ADMIN_ROLE_PERMISSIONS[
-        AdminRole.PROJECT_MANAGER
-    ]
-    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[
-        AdminRole.AUDIT_AUTHORITY
-    ]
-    assert PermissionId.PROJECT_ROLE_GRANT_MANAGE not in ADMIN_ROLE_PERMISSIONS[
-        AdminRole.AUDIT_AUTHORITY
-    ]
+    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[AdminRole.PROJECT_MANAGER]
+    assert (
+        PermissionId.PROJECT_ROLE_GRANT_MANAGE in ADMIN_ROLE_PERMISSIONS[AdminRole.PROJECT_MANAGER]
+    )
+    assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[AdminRole.AUDIT_AUTHORITY]
+    assert (
+        PermissionId.PROJECT_ROLE_GRANT_MANAGE
+        not in ADMIN_ROLE_PERMISSIONS[AdminRole.AUDIT_AUTHORITY]
+    )
 
 
 @pytest.mark.asyncio
@@ -6767,6 +6816,7 @@ def _operation_success(
         }
     elif isinstance(request, ProjectRoleGrantRevokeRequest):
         project_id = request.project_id
+        target_actor = response.resource_id
         before_facts = {
             "status": "active",
             "role": "submitter",
@@ -6988,6 +7038,7 @@ async def test_completion_rejects_resource_and_project_not_bound_to_request(
         project_id=uuid4(),
         target_actor_id=uuid4(),
         role=ProjectRole.SUBMITTER,
+        qualification=_project_role_qualification(),
         reason_digest=DIGEST,
     )
     wrong_project = project_request.model_copy(update={"project_id": uuid4()})
@@ -7575,6 +7626,7 @@ def test_every_operation_has_one_strict_canonical_request_variant() -> None:
             project_id=project,
             target_actor_id=actor,
             role=ProjectRole.ADJUDICATOR,
+            qualification=_project_role_qualification(),
             reason_digest=DIGEST,
         ),
         ProjectRoleGrantRevokeRequest(
@@ -7735,6 +7787,7 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             project_id=project,
             target_actor_id=actor,
             role=ProjectRole.SUBMITTER,
+            qualification=_project_role_qualification(),
             reason_digest=DIGEST,
         ),
         ProjectRoleGrantRevokeRequest(
@@ -7839,16 +7892,36 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             if request.operation in admin_operations:
                 assert success.matched_grant_id == str(admin_authorizer_grant_id)
                 assert success.matched_grant_id != str(response.resource_id)
+            success_input = success
+            invalidation = AuthorityInvalidationContext(
+                event_id=uuid4(),
+                request_id=success.request_id,
+                correlation_id=success.correlation_id,
+            )
+            if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE:
+                qualification_id = uuid4()
+                qualification_event = success.model_copy(
+                    update={
+                        "event_id": uuid4(),
+                        "event_type": AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
+                        "entity_type": "qualification_snapshot",
+                        "entity_id": str(qualification_id),
+                        "resource_type": "qualification_snapshot",
+                        "resource_id": str(qualification_id),
+                        "target_ref_kind": "qualification_snapshot",
+                        "target_ref_id": str(qualification_id),
+                        "reason": "qualification_evidence_captured",
+                        "after_facts": {"status": "captured"},
+                    }
+                )
+                success_input = (qualification_event, success)
+                invalidation = None
             completed = await service.complete(
                 claim=claim,
                 request=request.model_dump(),
                 response=response,
-                success=success,
-                invalidation=AuthorityInvalidationContext(
-                    event_id=uuid4(),
-                    request_id=success.request_id,
-                    correlation_id=success.correlation_id,
-                ),
+                success=success_input,
+                invalidation=invalidation,
             )
             assert completed.response == response
             expected_pairs[claim.record_id] = success
@@ -7871,6 +7944,15 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
         pair = [row for row in rows if row.idempotency_reference == record_id]
         assert len(pair) == 2
         success_row = next(row for row in pair if row.event_type == success.event_type.value)
+        if success.event_type is AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED:
+            qualification_row = next(
+                row
+                for row in pair
+                if row.event_type
+                == AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED.value
+            )
+            assert qualification_row.invalidation_cause_event_id is None
+            continue
         invalidation_row = next(
             row for row in pair if row.event_type == "AuthorityInvalidationRequested"
         )
@@ -7886,6 +7968,7 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
                 AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED,
                 AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED,
                 AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED,
+                AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
             }
             else success.resource_id
         )
@@ -7915,6 +7998,7 @@ async def test_issue_mismatch_derives_project_and_omits_nonexistent_grant_resour
         project_id=project,
         target_actor_id=uuid4(),
         role=ProjectRole.REVIEWER,
+        qualification=_project_role_qualification(),
         reason_digest=DIGEST,
     )
     context = AuthorityMismatchContext(event_id=uuid4(), request_id=uuid4(), correlation_id=uuid4())

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from app.core.hashing import canonical_json_hash
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
-from app.modules.authorization.schemas import AdminRole, AdminScope
+from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -91,17 +91,21 @@ class PreparedAuthorityScope(BaseModel):
     def validate_selector(self):
         """Require exactly the identifier owned by the selected scope kind."""
         valid = (
-            self.kind is PreparedAuthorityScopeKind.ACTOR_SELF
-            and self.actor_profile_id is not None
-            and self.project_id is None
-        ) or (
-            self.kind is PreparedAuthorityScopeKind.SYSTEM
-            and self.actor_profile_id is None
-            and self.project_id is None
-        ) or (
-            self.kind is PreparedAuthorityScopeKind.PROJECT
-            and self.actor_profile_id is None
-            and self.project_id is not None
+            (
+                self.kind is PreparedAuthorityScopeKind.ACTOR_SELF
+                and self.actor_profile_id is not None
+                and self.project_id is None
+            )
+            or (
+                self.kind is PreparedAuthorityScopeKind.SYSTEM
+                and self.actor_profile_id is None
+                and self.project_id is None
+            )
+            or (
+                self.kind is PreparedAuthorityScopeKind.PROJECT
+                and self.actor_profile_id is None
+                and self.project_id is not None
+            )
         )
         if not valid:
             raise ValueError("invalid prepared authority scope")
@@ -329,6 +333,33 @@ class ProjectRoleGrantReadResourceContext(BaseModel):
     project_status: Literal["draft", "active", "paused", "archived"]
 
 
+class ProjectRoleGrantIssueResourceContext(BaseModel):
+    """Server-composed facts for issuing one exact independent role."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project_role_grant_issue"]
+    resource_id: UUID
+    scope_project_id: UUID
+    target_actor_profile_id: UUID
+    role: ProjectRole
+    project_status: Literal["draft", "active", "paused", "archived"]
+    target_eligible: bool
+
+
+class ProjectRoleGrantRevokeResourceContext(BaseModel):
+    """Locked exact-project grant facts used for revocation."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project_role_grant_revoke"]
+    resource_id: UUID
+    scope_project_id: UUID
+    actor_profile_id: UUID
+    role: ProjectRole
+    project_status: Literal["draft", "active", "paused", "archived"]
+    status: Literal["active", "revoked"]
+    version: Literal[1, 2]
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ActorProfileAdminReadResourceContext
@@ -346,6 +377,8 @@ AuthorizationResourceContext = (
     | ProjectContributorCandidateCollectionResourceContext
     | ProjectRoleGrantCollectionResourceContext
     | ProjectRoleGrantReadResourceContext
+    | ProjectRoleGrantIssueResourceContext
+    | ProjectRoleGrantRevokeResourceContext
 )
 
 

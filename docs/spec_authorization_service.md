@@ -238,9 +238,10 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 70 rows after AUTH-10B2: 20 active actions
-and 50 planned rows. AUTH-10A added five project-role read/manage rows,
-owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 70 rows after AUTH-10C: 22 active actions
+and 48 planned rows. AUTH-10A added five project-role read/manage rows;
+AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
+the two reason-bound, idempotent project-role mutations. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only

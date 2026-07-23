@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, case, exists, func, or_, select, update
+from sqlalchemy import and_, case, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,8 +58,7 @@ class AdminAuthorizationRepository:
             select(ProjectRoleGrant, ProjectRoleQualificationSnapshot)
             .join(
                 ProjectRoleQualificationSnapshot,
-                ProjectRoleQualificationSnapshot.id
-                == ProjectRoleGrant.qualification_snapshot_id,
+                ProjectRoleQualificationSnapshot.id == ProjectRoleGrant.qualification_snapshot_id,
             )
             .where(ProjectRoleGrant.project_id == str(project_id))
         )
@@ -107,6 +106,60 @@ class AdminAuthorizationRepository:
             )
         ).one_or_none()
         return tuple(row) if row is not None else None
+
+    async def lock_project_role_grant(
+        self, *, project_id: UUID, grant_id: UUID
+    ) -> tuple[ProjectRoleGrant, ProjectRoleQualificationSnapshot] | None:
+        """Lock one grant and snapshot only through the exact path project."""
+        row = (
+            await self._session.execute(
+                select(ProjectRoleGrant, ProjectRoleQualificationSnapshot)
+                .join(
+                    ProjectRoleQualificationSnapshot,
+                    ProjectRoleQualificationSnapshot.id
+                    == ProjectRoleGrant.qualification_snapshot_id,
+                )
+                .where(
+                    ProjectRoleGrant.project_id == str(project_id),
+                    ProjectRoleGrant.id == grant_id,
+                )
+                .with_for_update(of=(ProjectRoleGrant, ProjectRoleQualificationSnapshot))
+                .execution_options(populate_existing=True)
+            )
+        ).one_or_none()
+        return tuple(row) if row is not None else None
+
+    async def lock_project(self, project_id: UUID):
+        return await self._projects.get_project(str(project_id), for_update=True)
+
+    async def take_project_role_issue_lock(self, key: int) -> None:
+        await self._session.execute(text("select pg_advisory_xact_lock(:key)"), {"key": key})
+
+    async def find_active_project_role(
+        self, *, project_id: UUID, actor_profile_id: UUID, role: str
+    ) -> ProjectRoleGrant | None:
+        return await self._session.scalar(
+            select(ProjectRoleGrant).where(
+                ProjectRoleGrant.project_id == str(project_id),
+                ProjectRoleGrant.actor_profile_id == str(actor_profile_id),
+                ProjectRoleGrant.role == role,
+                ProjectRoleGrant.status == "active",
+            )
+        )
+
+    async def add_project_role_snapshot(
+        self, snapshot: ProjectRoleQualificationSnapshot
+    ) -> ProjectRoleQualificationSnapshot:
+        self._session.add(snapshot)
+        await self._session.flush()
+        await self._session.refresh(snapshot)
+        return snapshot
+
+    async def add_project_role_grant(self, grant: ProjectRoleGrant) -> ProjectRoleGrant:
+        self._session.add(grant)
+        await self._session.flush()
+        await self._session.refresh(grant)
+        return grant
 
     async def lock_control(self) -> AuthorityControl:
         """Lock the irreversible singleton before any administrative mutation."""
@@ -370,10 +423,7 @@ class AdminAuthorizationRepository:
 
     async def project_exists(self, project_id: UUID, *, for_update: bool = False) -> bool:
         """Resolve an exact project from Workstream-owned records."""
-        return (
-            await self._projects.get_project(str(project_id), for_update=for_update)
-            is not None
-        )
+        return await self._projects.get_project(str(project_id), for_update=for_update) is not None
 
     async def get_grant(
         self,

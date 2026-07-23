@@ -17,6 +17,7 @@ from app.api.deps.authorization import (
     enforce_human_authorization_read,
     get_authorization_actor,
     get_authorization_service,
+    get_prepared_authorization_service,
 )
 from app.core.api_controls import ApiErrorResponse, StructuredHTTPException
 from app.core.config import decode_pagination_cursor_hmac_secret
@@ -50,6 +51,16 @@ from app.modules.authorization.read_service import (
     ProjectRoleReadResourceNotFound,
     ProjectRoleReadService,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationService
+from app.modules.authorization.project_role_schemas import (
+    ProjectRoleGrantIssueBody,
+    ProjectRoleGrantMutationResponse,
+    ProjectRoleGrantRevokeBody,
+)
+from app.modules.authorization.project_role_service import (
+    ProjectRoleGrantConflict,
+    ProjectRoleGrantMutationService,
+)
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.lifecycle_schemas import (
     ActorLifecycleBody,
@@ -75,6 +86,12 @@ from app.modules.authorization.runtime import (
     AdminRoleGrantIssueResourceContext,
     AdminRoleGrantResourceContext,
     PermissionCatalogueResourceContext,
+    PreparedAuthorizationInput,
+    PreparedAuthorizationUnsupported,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
+    ProjectRoleGrantIssueResourceContext,
+    ProjectRoleGrantRevokeResourceContext,
     ServiceActorProvisionResourceContext,
 )
 from app.modules.authorization.schemas import (
@@ -93,6 +110,8 @@ from app.modules.authorization.schemas import (
     ProjectRole,
     ProjectRoleGrantListResponse,
     ProjectRoleGrantRead,
+    ProjectRoleGrantIssueRequest,
+    ProjectRoleGrantRevokeRequest,
     derive_reason_digest,
     derive_service_identity_digest,
 )
@@ -707,9 +726,7 @@ async def revoke_actor_identity_link(
     response_model=IdentityLinkLifecycleMutationResponse,
     dependencies=[Depends(enforce_admin_mutation_rate_limit)],
     responses=_LIFECYCLE_CONFLICT_RESPONSE,
-    openapi_extra={
-        "x-workstream-action-id": ActionId.ACTOR_IDENTITY_LINK_REACTIVATE.value
-    },
+    openapi_extra={"x-workstream-action-id": ActionId.ACTOR_IDENTITY_LINK_REACTIVATE.value},
 )
 async def reactivate_actor_identity_link(
     identity_link_id: UUID,
@@ -1177,13 +1194,197 @@ async def _canonical_project(session: AsyncSession, project_id: UUID):
     return project
 
 
+def _project_role_response(grant) -> ProjectRoleGrantMutationResponse:
+    return ProjectRoleGrantMutationResponse(
+        id=grant.id,
+        qualification_snapshot_id=grant.qualification_snapshot_id,
+        project_id=UUID(grant.project_id),
+        actor_profile_id=UUID(grant.actor_profile_id),
+        role=grant.role,
+        status=grant.status,
+        version=grant.version,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/role-grants",
+    response_model=ProjectRoleGrantMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_ROLE_GRANT_ISSUE.value},
+)
+async def issue_project_role_grant(
+    project_id: UUID,
+    payload: ProjectRoleGrantIssueBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    prepared: Annotated[PreparedAuthorizationService, Depends(get_prepared_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ProjectRoleGrantMutationResponse:
+    canonical = ProjectRoleGrantIssueRequest(
+        operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
+        project_id=project_id,
+        target_actor_id=payload.target_actor_profile_id,
+        role=payload.role,
+        qualification=payload.qualification,
+        reason_digest=derive_reason_digest(payload.reason),
+    )
+    actor_id = UUID(resolved.profile.id)
+    service = ProjectRoleGrantMutationService(session)
+    reservation = await service.reserve(
+        key=idempotency_key, actor_profile_id=actor_id, request=canonical
+    )
+    prepared_input = PreparedAuthorizationInput(
+        idempotency_key=idempotency_key,
+        request_value=canonical.model_dump(mode="json"),
+    )
+    try:
+        handle = await prepared.prepare(
+            ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            prepared_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+        )
+    except PreparedAuthorizationUnsupported as exc:
+        raise _project_role_resource_not_found() from exc
+    project = await service.repository.lock_project(project_id)
+    if project is None:
+        raise _project_role_resource_not_found()
+    target_eligible = (
+        await service.repository.lock_eligible_human(payload.target_actor_profile_id) is not None
+    )
+    decision = await prepared.consume(
+        handle,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        prepared_input,
+        ProjectRoleGrantIssueResourceContext(
+            resource_type="project_role_grant_issue",
+            resource_id=project_id,
+            scope_project_id=project_id,
+            target_actor_profile_id=payload.target_actor_profile_id,
+            role=payload.role,
+            project_status=project.status,
+            target_eligible=target_eligible,
+        ),
+    )
+    if reservation.outcome == "mismatch":
+        raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
+    if reservation.outcome == "replay":
+        row = await service.repository.lock_project_role_grant(
+            project_id=project_id, grant_id=reservation.response.resource_id
+        )
+        if row is None or row[0].status != "active" or row[0].version != 1:
+            raise _domain_error(
+                409,
+                "project_role_grant_replay_state_changed",
+                "Project role grant replay state changed",
+            )
+        await session.commit()
+        return _project_role_response(row[0])
+    try:
+        response = await service.complete_issue(
+            claim=reservation.claim,
+            request=canonical,
+            decision=decision,
+            actor_profile_id=actor_id,
+            reason=payload.reason,
+        )
+        await session.commit()
+        return response
+    except ProjectRoleGrantConflict as exc:
+        await session.rollback()
+        raise _domain_error(409, str(exc), "Project role grant already exists") from exc
+
+
+@router.post(
+    "/projects/{project_id}/role-grants/{grant_id}/revoke",
+    response_model=ProjectRoleGrantMutationResponse,
+    dependencies=[Depends(enforce_admin_mutation_rate_limit)],
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_ROLE_GRANT_REVOKE.value},
+)
+async def revoke_project_role_grant(
+    project_id: UUID,
+    grant_id: UUID,
+    payload: ProjectRoleGrantRevokeBody,
+    idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    prepared: Annotated[PreparedAuthorizationService, Depends(get_prepared_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ProjectRoleGrantMutationResponse:
+    canonical = ProjectRoleGrantRevokeRequest(
+        operation=AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE,
+        project_id=project_id,
+        grant_id=grant_id,
+        reason_digest=derive_reason_digest(payload.reason),
+    )
+    actor_id = UUID(resolved.profile.id)
+    service = ProjectRoleGrantMutationService(session)
+    reservation = await service.reserve(
+        key=idempotency_key, actor_profile_id=actor_id, request=canonical
+    )
+    prepared_input = PreparedAuthorizationInput(
+        idempotency_key=idempotency_key,
+        request_value=canonical.model_dump(mode="json"),
+    )
+    try:
+        handle = await prepared.prepare(
+            ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            prepared_input,
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+        )
+    except PreparedAuthorizationUnsupported as exc:
+        raise _project_role_resource_not_found() from exc
+    project = await service.repository.lock_project(project_id)
+    row = await service.repository.lock_project_role_grant(project_id=project_id, grant_id=grant_id)
+    if project is None or row is None:
+        raise _project_role_resource_not_found()
+    grant, _snapshot = row
+    decision = await prepared.consume(
+        handle,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        prepared_input,
+        ProjectRoleGrantRevokeResourceContext(
+            resource_type="project_role_grant_revoke",
+            resource_id=grant_id,
+            scope_project_id=project_id,
+            actor_profile_id=UUID(grant.actor_profile_id),
+            role=ProjectRole(grant.role),
+            project_status=project.status,
+            status=grant.status,
+            version=grant.version,
+        ),
+    )
+    if reservation.outcome == "mismatch":
+        raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
+    if reservation.outcome == "replay":
+        if grant.status != "revoked" or grant.version != 2:
+            raise _domain_error(
+                409,
+                "project_role_grant_replay_state_changed",
+                "Project role grant replay state changed",
+            )
+        await session.commit()
+        return _project_role_response(grant)
+    try:
+        response = await service.complete_revoke(
+            claim=reservation.claim,
+            request=canonical,
+            decision=decision,
+            actor_profile_id=actor_id,
+            reason=payload.reason,
+            grant=grant,
+        )
+        await session.commit()
+        return response
+    except ProjectRoleGrantConflict as exc:
+        await session.rollback()
+        raise _domain_error(409, str(exc), "Project role grant is already revoked") from exc
+
+
 @router.get(
     "/projects/{project_id}/contributor-candidates",
     response_model=ContributorCandidateListResponse,
     dependencies=[Depends(enforce_human_authorization_read)],
-    openapi_extra={
-        "x-workstream-action-id": ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST.value
-    },
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST.value},
 )
 async def list_project_contributor_candidates(
     project_id: UUID,

@@ -193,6 +193,23 @@ class ProjectRoleQualificationSnapshotInput(BaseModel):
         return self
 
 
+class ProjectRoleQualificationEvidence(BaseModel):
+    """Identifier-free qualification facts supplied for one role decision."""
+
+    model_config = _MODEL_CONFIG
+
+    skills_snapshot: QualificationAvailabilitySnapshot
+    reputation_snapshot: QualificationAvailabilitySnapshot
+    prior_project_work_refs: Annotated[list[UUID], Field(max_length=20)]
+    external_expertise_refs: Annotated[list[ReferenceToken], Field(max_length=20)]
+
+    @model_validator(mode="after")
+    def reject_url_references(self) -> Self:
+        if any("://" in reference for reference in self.external_expertise_refs):
+            raise ValueError("invalid qualification reference")
+        return self
+
+
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
@@ -284,6 +301,7 @@ class ProjectRoleGrantIssueRequest(CanonicalAuthorityRequest):
     project_id: UUID
     target_actor_id: UUID
     role: ProjectRole
+    qualification: ProjectRoleQualificationEvidence
     reason_digest: Digest
 
 
@@ -481,7 +499,7 @@ class AuthorityCompletionResult(BaseModel):
 
     response: AuthorityResponseReference
     success_event_id: UUID
-    invalidation_event_id: UUID
+    invalidation_event_id: UUID | None = None
 
 
 class PendingAuthorityReservationError(RuntimeError):

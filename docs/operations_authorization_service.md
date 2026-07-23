@@ -703,8 +703,8 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 74 PermissionIds, 70 ActionIds, 20 active actions, and
-50 planned actions after AUTH-10B2 activates the three project-role read rows.
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 22 active actions, and
+48 planned actions after AUTH-10C activates the two project-role mutation rows.
 Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
