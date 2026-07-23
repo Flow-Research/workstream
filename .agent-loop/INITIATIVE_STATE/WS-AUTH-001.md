@@ -4,9 +4,9 @@
 
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-10B2` - Privacy-Safe Project Role Grant Reads
-- Gate: `stopped_after_merge`
+- Gate: `active`
 - Active planning chunk: `none`
-- Active implementation chunk: `none`
+- Active implementation chunk: `WS-AUTH-001-10C`
 - Next chunk: `WS-AUTH-001-10C`
 - Separate explicit start required: `true`
 - Source PR: [#178](https://github.com/Flow-Research/workstream/pull/178)
