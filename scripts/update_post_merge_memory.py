@@ -1838,18 +1838,41 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             "source", "completed_chunk", "active", "gate"
         }:
             raise LoopMemoryError("authority lifecycle state has an invalid schema")
-        lifecycle = json.loads(_canonical_json(base))
-        lifecycle.update(authority)
-        lifecycle["updated_at"] = lifecycle["source"]["merged_at"]
-        metadata = parse_loop_metadata(_canonical_json(lifecycle["completed_chunk"]))
-        lifecycle["active"] = {"planning_chunk": None, "implementation_chunk": None}
-        lifecycle["gate"] = {
-            "status": "stopped_after_merge",
-            "next_chunk_id": metadata.next_chunk_id,
-            "next_chunk_title": metadata.next_chunk_title,
-            "next_requires_explicit_start": metadata.next_requires_explicit_start,
-        }
-        _validate_record(lifecycle)
+        authority_source = authority["source"]
+        if not isinstance(authority_source, dict) or set(authority_source) != {
+            "main_sha", "first_parent_sha", "pr_number", "pr_url", "pr_title",
+            "head_sha", "head_ref", "merged_at", "merged_by", "intent_path",
+            "intent_blob_sha",
+        }:
+            raise LoopMemoryError("authority lifecycle source has an invalid schema")
+        _validate_repository_and_sha(record.get("repository"), authority_source["main_sha"])
+        for field in ("first_parent_sha", "head_sha", "intent_blob_sha"):
+            _validate_sha(authority_source[field])
+        authority_pr = authority_source["pr_number"]
+        if (
+            not isinstance(authority_pr, int)
+            or isinstance(authority_pr, bool)
+            or authority_pr <= 0
+        ):
+            raise LoopMemoryError("authority lifecycle source has no positive PR number")
+        if authority_source["pr_url"] != (
+            f"https://github.com/{record['repository']}/pull/{authority_pr}"
+        ):
+            raise LoopMemoryError("authority lifecycle source has an invalid PR URL")
+        for field, maximum in (
+            ("pr_title", 240), ("head_ref", 240), ("merged_by", 160)
+        ):
+            _bounded_text(authority_source[field], field, maximum=maximum)
+        _parse_timestamp(authority_source["merged_at"], "authority merged_at")
+        # The authority lifecycle is a projection of an earlier signed record
+        # for the selected initiative.  Its source and completed chunk are
+        # bound to that ledger record by _validate_authority_transition.  Do
+        # not combine them with the latest global merge's checks or
+        # protected-check evidence: those belong to a different PR and would
+        # make a valid cross-initiative start fail provenance validation.
+        metadata = parse_loop_metadata(_canonical_json(authority["completed_chunk"]))
+        if authority_source["intent_path"] != _intent_path(metadata):
+            raise LoopMemoryError("authority lifecycle intent path is inconsistent")
         if metadata.initiative_id != event["initiative_id"]:
             raise LoopMemoryError("authority lifecycle initiative does not match event")
         selection = event.get("selection")

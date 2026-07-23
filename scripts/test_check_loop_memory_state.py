@@ -153,6 +153,11 @@ def _authority_record(tmp_path: Path) -> dict:
         lambda record: record["event"].update(initiative_id="WS-ART-001"),
         lambda record: record["event"].update(chunk_id="WS-ENG-001-99"),
         lambda record: record["authority_state"].update(source={}),
+        lambda record: record["authority_state"]["source"].update(head_sha="bad"),
+        lambda record: record["authority_state"]["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-BAD-001.json"
+        ),
+        lambda record: record["authority_state"].update(completed_chunk=[]),
         lambda record: record["authority_state"]["completed_chunk"].update(
             initiative_id="WS-ART-001"
         ),
@@ -167,6 +172,15 @@ def test_checker_rejects_malformed_authority_records(
     record = _authority_record(tmp_path)
     mutation(record)
     assert checker._record_failures(record, "fixture")
+
+
+def test_checker_accepts_cross_initiative_start_without_borrowed_evidence(
+    tmp_path: Path,
+) -> None:
+    state_root, repository_root = fixtures._cross_initiative_merge_bound_state(
+        tmp_path
+    )
+    assert checker.generated_state_failures(state_root, repository_root) == []
 
 
 def test_checker_rejects_invalid_legacy_exemption(tmp_path: Path) -> None:

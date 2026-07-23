@@ -2010,6 +2010,45 @@ def _merge_bound_record() -> dict:
     return record
 
 
+def _cross_initiative_merge_bound_state(tmp_path: Path) -> tuple[Path, Path]:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    later = _merge_bound_record()
+    later["source"].update(
+        main_sha="c" * 40,
+        first_parent_sha="a" * 40,
+        pr_number=190,
+        pr_url="https://github.com/Flow-Research/workstream/pull/190",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-02.json",
+    )
+    later["completed_chunk"].update(
+        initiative_id="WS-ART-001",
+        chunk_id="WS-ART-001-02",
+        chunk_title="Artifact Custody",
+        next_chunk_id="WS-ART-001-03",
+        next_chunk_title="Artifact Recovery",
+    )
+    later["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    loop.apply_merge_record(state_root, later)
+    event = _event("start")
+    event["main_sha"] = later["source"]["main_sha"]
+
+    assert loop.apply_authority_event(
+        state_root, event, repository_root=repository_root
+    )
+    return state_root, repository_root
+
+
+def test_cross_initiative_start_does_not_borrow_latest_merge_evidence(
+    tmp_path: Path,
+) -> None:
+    state_root, _repository_root = _cross_initiative_merge_bound_state(tmp_path)
+    loop.validate_generated_state(state_root)
+
+
 @pytest.mark.parametrize("bad_value", ["2026-07-23 05:01:00Z", "not-a-time"])
 def test_independent_checker_rejects_noncanonical_protected_timestamps(bad_value: str) -> None:
     record = _merge_bound_record()
