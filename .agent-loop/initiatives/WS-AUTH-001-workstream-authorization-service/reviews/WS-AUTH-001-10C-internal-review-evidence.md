@@ -66,4 +66,3 @@ No workflow, dependency, shard, command, threshold, or coverage setting changed.
 The repair loop closed lifecycle attribution, real unique-index fallback,
 complete residue, database-observed cancellation, committed retry, and lexical
 crossed-principal proof gaps. Open reviewer and sub-agent sessions: none.
-

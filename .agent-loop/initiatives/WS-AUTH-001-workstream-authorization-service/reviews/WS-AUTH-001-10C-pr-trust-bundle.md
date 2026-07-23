@@ -46,4 +46,3 @@ revocation availability after lifecycle loss, and audit/invalidation atomicity.
 The user retains merge ownership; do not merge without explicit approval of the
 specific PR. The declared successor `WS-AUTH-001-11` requires a separate signed
 explicit start and must not begin automatically.
-
