@@ -3,12 +3,12 @@
 > Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.
 
 - Initiative: `WS-ENG-006`
-- Latest completed chunk: `WS-ENG-006-00` - First-New-Initiative Planning Intake
-- Gate: `active`
+- Latest completed chunk: `WS-ENG-006-01` - Canonical Human And Agent Contribution Entry
+- Gate: `stopped_after_merge`
 - Active planning chunk: `none`
-- Active implementation chunk: `WS-ENG-006-01`
-- Next chunk: `WS-ENG-006-01`
+- Active implementation chunk: `none`
+- Next chunk: `none`
 - Separate explicit start required: `true`
-- Source PR: [#179](https://github.com/Flow-Research/workstream/pull/179)
-- Source merge: `d7dfd73b640456bf500b8c4c969a20df1197fe6c`
-- Source event time: `2026-07-22T10:47:47Z`
+- Source PR: [#193](https://github.com/Flow-Research/workstream/pull/193)
+- Source merge: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+- Source event time: `2026-07-23T13:34:24Z`

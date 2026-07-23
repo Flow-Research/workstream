@@ -38,7 +38,7 @@
     },
     {
       "path": ".agent-loop/INITIATIVE_STATE/WS-ENG-006.md",
-      "sha256": "269b9d59052b38b26c988801041840ac2b8ba39ba7f208626d17df4b31370294"
+      "sha256": "fe86730323245232c2d933d29345101677c24bd493ac849627b1114f737fec49"
     },
     {
       "path": ".agent-loop/INITIATIVE_STATE/WS-ENG-007.md",
@@ -54,19 +54,19 @@
     },
     {
       "path": ".agent-loop/LOOP_STATE.md",
-      "sha256": "d0d85d1ad72521bddd97048e6d1c3768f0b2d2ec43eeedcdce94969b52257246"
+      "sha256": "28c8b94594ab3e139d91c712d97f2cbeccb119e565d32ad11f982414aa4398ee"
     },
     {
       "path": ".agent-loop/MERGE_LOG.jsonl",
-      "sha256": "67441dd67d90f2a8a284adb7eb88cd586a7822704856354d41dc6ee440b005dd"
+      "sha256": "8755197fbedd08d471be1093e3b17dcdfc324f301e397b836000ec9723b0fd66"
     },
     {
       "path": ".agent-loop/STATE.json",
-      "sha256": "6c34afa87eb1055de652d46c37683cf9ac291146a8b5486b768d8d44681861b1"
+      "sha256": "381a58677172323b6c4c1642a6976f1752f57aa1bf2a75dd162900d70701e449"
     },
     {
       "path": ".agent-loop/WORK_QUEUE.md",
-      "sha256": "00c38e3ed5a41086c2f5fbe98b474021cd07477b2ab3a2cab0d4de72300e1eef"
+      "sha256": "b87f81062c914f1cfce7c37740025c1d3ba4ae96f809a2e686ae859db5891fa2"
     }
   ],
   "schema_version": 2

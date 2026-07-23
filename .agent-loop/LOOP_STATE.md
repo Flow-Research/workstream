@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#192](https://github.com/Flow-Research/workstream/pull/192) - fix(loop-memory): recover exact R4 activation
-- Merge commit: `9c3ea09f32dc1217dcaaf68cbfcf5ac71aad8805`
-- Final PR head: `2d47a5b3f22167fa8d2762414024b97bbdf3db83`
-- Merged at: `2026-07-23T12:29:44Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ENG-007-00R5.json` at blob `65ba957792207147a3b69e37bdfaebb40eee7b6f`
-- Completed chunk: `WS-ENG-007-00R5` - R4 Activation Recovery
+- Last merged PR: [#193](https://github.com/Flow-Research/workstream/pull/193) - docs(contributing): establish canonical engineering entry
+- Merge commit: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+- Final PR head: `79b7aaa20bfe3f6af79b7f269e3226becf6c95c9`
+- Merged at: `2026-07-23T13:34:24Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-006-01.json` at blob `d476cdca759c374f6ca07d5f574d70a55607ec34`
+- Completed chunk: `WS-ENG-006-01` - Canonical Human And Agent Contribution Entry
 - Active planning chunks: none
-- Active implementation chunks: `WS-ENG-006-01`
-- Latest authority event: `start` for `WS-ENG-006-01`
-- Authority initiative: `WS-ENG-006`
+- Active implementation chunks: none
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-ENG-007-01` - Reviewed Patch and Base-Delta Reconciliation; requires a separate explicit start.
+- Next chunk: none recorded.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
