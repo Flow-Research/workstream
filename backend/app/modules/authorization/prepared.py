@@ -222,6 +222,14 @@ class PreparedAuthorizationService:
             action_id, resource
         ):
             project_id = AuthorizationService._resource_project_id(resource)
+            target_actor_profile_id = None
+            role = None
+            grant_id = None
+            if action_id is ActionId.PROJECT_ROLE_GRANT_ISSUE:
+                target_actor_profile_id = resource.target_actor_profile_id
+                role = resource.role
+            elif action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE:
+                grant_id = resource.resource_id
             return PreparedAuthorityScope(
                 kind=(
                     PreparedAuthorityScopeKind.PROJECT
@@ -229,5 +237,8 @@ class PreparedAuthorizationService:
                     else PreparedAuthorityScopeKind.SYSTEM
                 ),
                 project_id=project_id,
+                target_actor_profile_id=target_actor_profile_id,
+                role=role,
+                grant_id=grant_id,
             )
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")

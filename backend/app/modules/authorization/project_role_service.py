@@ -14,7 +14,8 @@ from app.modules.audit.schemas import (
     AuthorityAuditEventInput,
     AuthorityEventType,
 )
-from app.modules.authorization.catalogue import PermissionId
+from app.modules.audit.service import AuditService
+from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.models import ProjectRoleGrant, ProjectRoleQualificationSnapshot
 from app.modules.authorization.project_role_schemas import ProjectRoleGrantMutationResponse
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -22,6 +23,7 @@ from app.modules.authorization.runtime import AuthorizationDecision
 from app.modules.authorization.schemas import (
     AuthorityClaimHandle,
     AuthorityInvalidationContext,
+    AuthorityMismatchContext,
     AuthorityReservationResult,
     AuthorityResourceType,
     AuthorityResponseReference,
@@ -34,7 +36,10 @@ from app.modules.authorization.service import AuthorityMutationService
 
 
 class ProjectRoleGrantConflict(RuntimeError):
-    pass
+    def __init__(self, code: str, grant_id: UUID) -> None:
+        self.code = code
+        self.grant_id = grant_id
+        super().__init__(code)
 
 
 def project_role_issue_lock_key(actor_id: UUID, project_id: UUID, role: str) -> int:
@@ -78,6 +83,7 @@ class ProjectRoleGrantMutationService:
         self._session = session
         self.repository = AdminAuthorizationRepository(session)
         self._mutation = AuthorityMutationService(session)
+        self._audit = AuditService(session)
 
     async def reserve(
         self,
@@ -91,6 +97,58 @@ class ProjectRoleGrantMutationService:
             actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
             actor_ref=str(actor_profile_id),
             request=request.model_dump(),
+        )
+
+    async def record_mismatch(
+        self,
+        *,
+        actor_profile_id: UUID,
+        request: ProjectRoleGrantIssueRequest | ProjectRoleGrantRevokeRequest,
+        decision: AuthorizationDecision,
+    ) -> None:
+        await self._mutation.record_mismatch_denial(
+            actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+            actor_ref=str(actor_profile_id),
+            request=request.model_dump(),
+            context=AuthorityMismatchContext(
+                event_id=uuid4(),
+                request_id=decision.request_id,
+                correlation_id=decision.correlation_id,
+                matched_grant_id=decision.matched_grant_id,
+            ),
+        )
+
+    async def record_conflict(
+        self,
+        *,
+        actor_profile_id: UUID,
+        project_id: UUID,
+        grant_id: UUID,
+        decision: AuthorizationDecision,
+        code: str,
+        action_id: ActionId,
+    ) -> None:
+        event_id = uuid4()
+        await self._audit.add_authority_event(
+            AuthorityAuditEventInput(
+                event_id=event_id,
+                event_type=AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
+                entity_type="authorization_decision",
+                entity_id=str(event_id),
+                actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+                actor_ref=str(actor_profile_id),
+                request_id=decision.request_id,
+                correlation_id=decision.correlation_id,
+                matched_grant_id=str(decision.matched_grant_id),
+                permission_id=PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+                action_id=action_id,
+                project_id=str(project_id),
+                resource_type="project_role_grant",
+                resource_id=str(grant_id),
+                reason="authorization_evaluation",
+                denial_code=code,
+                after_facts={"allowed": False},
+            )
         )
 
     async def complete_issue(
@@ -107,20 +165,13 @@ class ProjectRoleGrantMutationService:
             or decision.matched_grant_id is None
         ):
             raise TypeError("project-role issue requires exact matched authority")
-        await self.repository.take_project_role_issue_lock(
-            project_role_issue_lock_key(
-                request.target_actor_id, request.project_id, request.role.value
-            )
+        duplicate = await self.repository.find_active_project_role(
+            project_id=request.project_id,
+            actor_profile_id=request.target_actor_id,
+            role=request.role.value,
         )
-        if (
-            await self.repository.find_active_project_role(
-                project_id=request.project_id,
-                actor_profile_id=request.target_actor_id,
-                role=request.role.value,
-            )
-            is not None
-        ):
-            raise ProjectRoleGrantConflict("project_role_grant_exists")
+        if duplicate is not None:
+            raise ProjectRoleGrantConflict("project_role_grant_exists", duplicate.id)
         evidence = request.qualification
         snapshot = await self.repository.add_project_role_snapshot(
             ProjectRoleQualificationSnapshot(
@@ -220,7 +271,7 @@ class ProjectRoleGrantMutationService:
         ):
             raise TypeError("project-role revoke requires exact matched authority")
         if grant.status != "active":
-            raise ProjectRoleGrantConflict("project_role_grant_already_revoked")
+            raise ProjectRoleGrantConflict("project_role_grant_already_revoked", grant.id)
         before = _facts(grant)
         grant.status = "revoked"
         grant.version = 2
@@ -266,6 +317,8 @@ class ProjectRoleGrantMutationService:
                 event_id=uuid4(),
                 request_id=decision.request_id,
                 correlation_id=decision.correlation_id,
+                target_ref_kind=AuthorityResourceType.PROJECT_ROLE_GRANT,
+                target_ref_id=grant.id,
             ),
         )
         return _response(grant)

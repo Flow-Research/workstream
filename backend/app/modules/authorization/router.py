@@ -60,6 +60,7 @@ from app.modules.authorization.project_role_schemas import (
 from app.modules.authorization.project_role_service import (
     ProjectRoleGrantConflict,
     ProjectRoleGrantMutationService,
+    project_role_issue_lock_key,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.lifecycle_schemas import (
@@ -1242,7 +1243,12 @@ async def issue_project_role_grant(
         handle = await prepared.prepare(
             ActionId.PROJECT_ROLE_GRANT_ISSUE,
             prepared_input,
-            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=project_id,
+                target_actor_profile_id=payload.target_actor_profile_id,
+                role=payload.role,
+            ),
         )
     except PreparedAuthorizationUnsupported as exc:
         raise _project_role_resource_not_found() from exc
@@ -1251,6 +1257,13 @@ async def issue_project_role_grant(
         raise _project_role_resource_not_found()
     target_eligible = (
         await service.repository.lock_eligible_human(payload.target_actor_profile_id) is not None
+    )
+    await service.repository.take_project_role_issue_lock(
+        project_role_issue_lock_key(
+            payload.target_actor_profile_id,
+            project_id,
+            payload.role.value,
+        )
     )
     decision = await prepared.consume(
         handle,
@@ -1267,18 +1280,42 @@ async def issue_project_role_grant(
         ),
     )
     if reservation.outcome == "mismatch":
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_mismatch(
+                actor_profile_id=actor_id,
+                request=canonical,
+                decision=decision,
+            ),
+        )
+        await _commit_or_unavailable(session)
         raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
     if reservation.outcome == "replay":
         row = await service.repository.lock_project_role_grant(
             project_id=project_id, grant_id=reservation.response.resource_id
         )
-        if row is None or row[0].status != "active" or row[0].version != 1:
+        if (
+            reservation.response.resource_type.value != "project_role_grant"
+            or reservation.response.http_status != 201
+            or reservation.response.version != 1
+            or row is None
+            or row[0].status != "active"
+            or row[0].version != 1
+            or row[0].project_id != str(project_id)
+            or row[0].actor_profile_id != str(payload.target_actor_profile_id)
+            or row[0].role != payload.role.value
+            or row[1].id != row[0].qualification_snapshot_id
+            or row[1].project_id != row[0].project_id
+            or row[1].actor_profile_id != row[0].actor_profile_id
+            or row[1].requested_role != row[0].role
+        ):
             raise _domain_error(
                 409,
                 "project_role_grant_replay_state_changed",
                 "Project role grant replay state changed",
             )
-        await session.commit()
+        await _commit_or_unavailable(session)
         return _project_role_response(row[0])
     try:
         response = await service.complete_issue(
@@ -1288,11 +1325,23 @@ async def issue_project_role_grant(
             actor_profile_id=actor_id,
             reason=payload.reason,
         )
-        await session.commit()
+        await _commit_or_unavailable(session)
         return response
     except ProjectRoleGrantConflict as exc:
         await session.rollback()
-        raise _domain_error(409, str(exc), "Project role grant already exists") from exc
+        await _database_call(
+            session,
+            service.record_conflict(
+                actor_profile_id=actor_id,
+                project_id=project_id,
+                grant_id=exc.grant_id,
+                decision=decision,
+                code=exc.code,
+                action_id=ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        raise _domain_error(409, exc.code, "Project role grant already exists") from exc
 
 
 @router.post(
@@ -1329,7 +1378,11 @@ async def revoke_project_role_grant(
         handle = await prepared.prepare(
             ActionId.PROJECT_ROLE_GRANT_REVOKE,
             prepared_input,
-            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id),
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=project_id,
+                grant_id=grant_id,
+            ),
         )
     except PreparedAuthorizationUnsupported as exc:
         raise _project_role_resource_not_found() from exc
@@ -1354,15 +1407,37 @@ async def revoke_project_role_grant(
         ),
     )
     if reservation.outcome == "mismatch":
+        await session.rollback()
+        await _database_call(
+            session,
+            service.record_mismatch(
+                actor_profile_id=actor_id,
+                request=canonical,
+                decision=decision,
+            ),
+        )
+        await _commit_or_unavailable(session)
         raise _domain_error(409, "idempotency_mismatch", "Idempotency key does not match")
     if reservation.outcome == "replay":
-        if grant.status != "revoked" or grant.version != 2:
+        if (
+            reservation.response.resource_type.value != "project_role_grant"
+            or reservation.response.resource_id != grant_id
+            or reservation.response.http_status != 200
+            or reservation.response.version != 2
+            or grant.status != "revoked"
+            or grant.version != 2
+            or grant.project_id != str(project_id)
+            or _snapshot.id != grant.qualification_snapshot_id
+            or _snapshot.project_id != grant.project_id
+            or _snapshot.actor_profile_id != grant.actor_profile_id
+            or _snapshot.requested_role != grant.role
+        ):
             raise _domain_error(
                 409,
                 "project_role_grant_replay_state_changed",
                 "Project role grant replay state changed",
             )
-        await session.commit()
+        await _commit_or_unavailable(session)
         return _project_role_response(grant)
     try:
         response = await service.complete_revoke(
@@ -1373,11 +1448,23 @@ async def revoke_project_role_grant(
             reason=payload.reason,
             grant=grant,
         )
-        await session.commit()
+        await _commit_or_unavailable(session)
         return response
     except ProjectRoleGrantConflict as exc:
         await session.rollback()
-        raise _domain_error(409, str(exc), "Project role grant is already revoked") from exc
+        await _database_call(
+            session,
+            service.record_conflict(
+                actor_profile_id=actor_id,
+                project_id=project_id,
+                grant_id=exc.grant_id,
+                decision=decision,
+                code=exc.code,
+                action_id=ActionId.PROJECT_ROLE_GRANT_REVOKE,
+            ),
+        )
+        await _commit_or_unavailable(session)
+        raise _domain_error(409, exc.code, "Project role grant is already revoked") from exc
 
 
 @router.get(

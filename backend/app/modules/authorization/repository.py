@@ -194,6 +194,57 @@ class AdminAuthorizationRepository:
             return None
         return link, profile
 
+    async def lock_project_role_issue_principals(
+        self,
+        *,
+        caller_actor_profile_id: UUID,
+        caller_identity_link_id: UUID,
+        target_actor_profile_id: UUID,
+    ) -> tuple[tuple[ActorIdentityLink, ActorProfile] | None, bool]:
+        """Lock caller and issue target in one lexical profile/link order."""
+        caller = None
+        target_eligible = False
+        for actor_profile_id in sorted(
+            {caller_actor_profile_id, target_actor_profile_id}, key=str
+        ):
+            profile = await self._session.scalar(
+                select(ActorProfile)
+                .where(ActorProfile.id == str(actor_profile_id))
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if profile is None:
+                continue
+            if actor_profile_id == caller_actor_profile_id:
+                link = await self._session.scalar(
+                    select(ActorIdentityLink)
+                    .where(
+                        ActorIdentityLink.id == str(caller_identity_link_id),
+                        ActorIdentityLink.actor_profile_id == str(actor_profile_id),
+                    )
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+                caller = (link, profile) if link is not None else None
+            else:
+                link = await self._session.scalar(
+                    select(ActorIdentityLink)
+                    .where(
+                        ActorIdentityLink.actor_profile_id == str(actor_profile_id),
+                        ActorIdentityLink.status == "active",
+                    )
+                    .order_by(ActorIdentityLink.id)
+                    .limit(1)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+                target_eligible = (
+                    profile.actor_kind == "human"
+                    and profile.status == "active"
+                    and link is not None
+                )
+        return caller, target_eligible
+
     async def lock_actor_self(
         self,
         actor_profile_id: UUID,

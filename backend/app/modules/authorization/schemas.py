@@ -153,7 +153,7 @@ ReferenceToken = Annotated[
 class QualificationAvailabilitySnapshot(BaseModel):
     """Privacy-bounded availability and opaque-reference evidence."""
 
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
 
     availability: QualificationAvailability
     reference_ids: Annotated[list[ReferenceToken], Field(max_length=20)]
@@ -196,7 +196,7 @@ class ProjectRoleQualificationSnapshotInput(BaseModel):
 class ProjectRoleQualificationEvidence(BaseModel):
     """Identifier-free qualification facts supplied for one role decision."""
 
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
 
     skills_snapshot: QualificationAvailabilitySnapshot
     reputation_snapshot: QualificationAvailabilitySnapshot
@@ -479,6 +479,14 @@ class AuthorityInvalidationContext(BaseModel):
     event_id: UUID
     request_id: UUID
     correlation_id: UUID
+    target_ref_kind: AuthorityResourceType | None = None
+    target_ref_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if (self.target_ref_kind is None) != (self.target_ref_id is None):
+            raise ValueError("invalid authority invalidation target")
+        return self
 
 
 class AuthorityMismatchContext(BaseModel):

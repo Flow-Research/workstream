@@ -206,6 +206,8 @@ class AuthorityMutationService:
             and _request_matches_success(mutation, response, primary)
             and all(item.request_id == primary.request_id for item in successes)
             and all(item.correlation_id == primary.correlation_id for item in successes)
+            and (invalidation is None)
+            == isinstance(mutation, ProjectRoleGrantIssueRequest)
             and (
                 invalidation is None
                 or (
@@ -268,12 +270,22 @@ class AuthorityMutationService:
                 permission_id=spec.permission,
                 project_id=primary.project_id,
                 resource_type=invalidation_resource_type,
-                resource_id=invalidation_resource_id,
+            resource_id=invalidation_resource_id,
+            target_ref_kind=(
+                invalidation.target_ref_kind.value
+                if invalidation.target_ref_kind is not None
+                else None
+            ),
+            target_ref_id=(
+                str(invalidation.target_ref_id)
+                if invalidation.target_ref_id is not None
+                else None
+            ),
                 reason="authority_state_changed",
                 idempotency_reference=claim.record_id,
                 invalidation_cause_event_id=UUID(stored_success.id),
                 invalidation_target_kind=invalidation_target_kind,
-                invalidation_target_ref=invalidation_target_ref,
+            invalidation_target_ref=invalidation_target_ref,
                 before_facts=before_facts,
                 after_facts=after_facts,
             )
@@ -373,13 +385,19 @@ def _request_matches_success(
             success.target_actor_ref_kind == ActorReferenceKind.ACTOR_PROFILE
             and success.target_actor_ref == str(request.target_actor_id)
             and success.project_id == str(request.project_id)
-            and success.matched_grant_id is None
+            and success.matched_grant_id is not None
             and facts.get("role") == request.role.value
             and facts.get("scope_type") == "project"
             and facts.get("scope_id") == str(request.project_id)
         )
     if isinstance(request, ProjectRoleGrantRevokeRequest):
-        return resource_id == request.grant_id and success.project_id == str(request.project_id)
+        return (
+            resource_id == request.grant_id
+            and success.project_id == str(request.project_id)
+            and success.matched_grant_id is not None
+            and success.target_actor_ref_kind == ActorReferenceKind.ACTOR_PROFILE
+            and success.target_actor_ref is not None
+        )
     if isinstance(
         request,
         (ActorProfileSuspendRequest, ActorProfileReactivateRequest, ActorProfileDeactivateRequest),

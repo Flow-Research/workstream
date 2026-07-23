@@ -809,9 +809,15 @@ issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
 and identity-link reads for effective system Access Administrator or Audit
 Authority grants. AUTH-09D-A activates the three profile lifecycle routes for
 effective system Access Administrators only. AUTH-09D-B activates exact
-identity-link revoke and reactivate for the same authority; the project-role
-route family remains planned. Project-scoped
-`GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
+identity-link revoke and reactivate for the same authority. AUTH-10B activates
+the concealed project-role reads, and AUTH-10C activates exact-role issue and
+revoke mutations for covered Project Managers. Those mutations use
+`Idempotency-Key`, transaction-bound PREP, immutable qualification snapshots,
+canonical replay validation, and one route-owned commit. Issue requires a
+different active human with an active identity link; revoke remains available
+after target suspension or identity-link revocation so authority cannot become
+irremovable. Project-scoped
+`GET /api/v1/actors/me/authorization-context` begins in AUTH-11 after
 exact-project grant and canonical project capability composition exists.
 
 `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.

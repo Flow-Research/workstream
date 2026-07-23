@@ -86,6 +86,9 @@ class PreparedAuthorityScope(BaseModel):
     kind: PreparedAuthorityScopeKind
     actor_profile_id: UUID | None = None
     project_id: UUID | None = None
+    target_actor_profile_id: UUID | None = None
+    role: ProjectRole | None = None
+    grant_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_selector(self):
@@ -95,16 +98,27 @@ class PreparedAuthorityScope(BaseModel):
                 self.kind is PreparedAuthorityScopeKind.ACTOR_SELF
                 and self.actor_profile_id is not None
                 and self.project_id is None
+                and self.target_actor_profile_id is None
+                and self.role is None
+                and self.grant_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.SYSTEM
                 and self.actor_profile_id is None
                 and self.project_id is None
+                and self.target_actor_profile_id is None
+                and self.role is None
+                and self.grant_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.PROJECT
                 and self.actor_profile_id is None
                 and self.project_id is not None
+                and not (
+                    self.target_actor_profile_id is not None
+                    and self.grant_id is not None
+                )
+                and ((self.target_actor_profile_id is None) == (self.role is None))
             )
         )
         if not valid:

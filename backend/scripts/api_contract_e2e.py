@@ -1464,7 +1464,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         }
         issued_role = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants",
-            headers=auth_headers(manager_token) | {"Idempotency-Key": role_issue_key},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_issue_key},
             json=role_issue_body,
         )
         assert issued_role.status_code == 201, issued_role.text
@@ -1510,15 +1510,27 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert grant["revoked_by_actor_profile_id"] is None
         assert grant["revoked_at"] is None
         assert grant["revoked_reason"] is None
+        suspended_role_target = await client.post(
+            f"/api/v1/actors/{canonical_actor['actor_profile_id']}/suspend",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Prove suspended targets cannot retain irremovable authority"},
+        )
+        assert suspended_role_target.status_code == 200, suspended_role_target.text
         role_revoke_key = str(uuid4())
         role_revoke_body = {"reason": "Real API submitter authority removal"}
         revoked_role = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}/revoke",
-            headers=auth_headers(manager_token) | {"Idempotency-Key": role_revoke_key},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_revoke_key},
             json=role_revoke_body,
         )
         assert revoked_role.status_code == 200, revoked_role.text
         assert revoked_role.json()["status"] == "revoked"
+        reactivated_role_target = await client.post(
+            f"/api/v1/actors/{canonical_actor['actor_profile_id']}/reactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Restore API contract contributor after revocation proof"},
+        )
+        assert reactivated_role_target.status_code == 200, reactivated_role_target.text
         historical_role = await request_json(
             client,
             "GET",
@@ -1528,20 +1540,20 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert historical_role["status"] == "revoked"
         revoke_replay = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}/revoke",
-            headers=auth_headers(manager_token) | {"Idempotency-Key": role_revoke_key},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_revoke_key},
             json=role_revoke_body,
         )
         assert revoke_replay.status_code == 200, revoke_replay.text
         second_revoke = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}/revoke",
-            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
             json=role_revoke_body,
         )
         assert second_revoke.status_code == 409, second_revoke.text
         assert second_revoke.json()["error"]["code"] == "project_role_grant_already_revoked"
         issue_after_revoke = await client.post(
             f"/api/v1/projects/{project['id']}/role-grants",
-            headers=auth_headers(manager_token) | {"Idempotency-Key": role_issue_key},
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_issue_key},
             json=role_issue_body,
         )
         assert issue_after_revoke.status_code == 409, issue_after_revoke.text
@@ -1549,6 +1561,47 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             issue_after_revoke.json()["error"]["code"]
             == "project_role_grant_replay_state_changed"
         )
+        link_case_body = role_issue_body | {
+            "role": "reviewer",
+            "reason": "Prove link lifecycle cannot make authority irremovable",
+        }
+        link_case_issue = await client.post(
+            f"/api/v1/projects/{project['id']}/role-grants",
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
+            json=link_case_body,
+        )
+        assert link_case_issue.status_code == 201, link_case_issue.text
+        revoked_target_link = await client.post(
+            f"/api/v1/actor-identity-links/{worker_admin_link['id']}/revoke",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Prove revoked-link grant removal"},
+        )
+        assert revoked_target_link.status_code == 200, revoked_target_link.text
+        link_case_revoke = await client.post(
+            f"/api/v1/projects/{project['id']}/role-grants/"
+            f"{link_case_issue.json()['id']}/revoke",
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Remove reviewer authority after target link revocation"},
+        )
+        assert link_case_revoke.status_code == 200, link_case_revoke.text
+        repaired_target_link = await client.post(
+            f"/api/v1/actor-identity-links/{worker_admin_link['id']}/reactivate",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Restore API contract contributor identity link"},
+        )
+        assert repaired_target_link.status_code == 200, repaired_target_link.text
+        removed_project_manager = await client.post(
+            f"/api/v1/admin-role-grants/{project_manager_grant.json()['resource_id']}/revoke",
+            headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
+            json={"reason": "Prove mutation replay reauthorizes current project authority"},
+        )
+        assert removed_project_manager.status_code == 200, removed_project_manager.text
+        concealed_replay = await client.post(
+            f"/api/v1/projects/{project['id']}/role-grants/{role_grant_id}/revoke",
+            headers=auth_headers(project_reader_token) | {"Idempotency-Key": role_revoke_key},
+            json=role_revoke_body,
+        )
+        assert concealed_replay.status_code == 404, concealed_replay.text
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
         ready_work_context = await request_json(
             client,

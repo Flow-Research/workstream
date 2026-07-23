@@ -127,6 +127,10 @@ from app.modules.authorization.schemas import (
 )
 from app.modules.authorization.service import AuthorityMutationService
 from app.modules.authorization.project_role_service import project_role_issue_lock_key
+from app.modules.authorization.project_role_schemas import (
+    ProjectRoleGrantIssueBody,
+    ProjectRoleGrantRevokeBody,
+)
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
@@ -214,6 +218,22 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     assert project_role_issue_lock_key(actor, project, "submitter") != project_role_issue_lock_key(
         project, actor, "submitter"
     )
+
+
+def test_project_role_public_reason_and_qualification_contract_is_strict() -> None:
+    payload = {
+        "target_actor_profile_id": str(uuid4()),
+        "role": "submitter",
+        "qualification": _project_role_qualification(),
+        "reason": "Bounded authority assignment",
+    }
+    assert ProjectRoleGrantIssueBody.model_validate(payload).role is ProjectRole.SUBMITTER
+    assert ProjectRoleGrantRevokeBody.model_validate({"reason": "Bounded removal"}).reason == (
+        "Bounded removal"
+    )
+    for reason in (" padded", "padded ", "control\x00", "é" * 251):
+        with pytest.raises(ValidationError):
+            ProjectRoleGrantIssueBody.model_validate(payload | {"reason": reason})
 
 
 def test_authorization_read_cursor_round_trip_and_query_binding() -> None:
@@ -6805,8 +6825,11 @@ def _operation_success(
         }
         after_facts = before_facts | {"status": "revoked", "effective": False}
     elif isinstance(request, ProjectRoleGrantIssueRequest):
+        if admin_authorizer_grant_id is None:
+            raise AssertionError("project role issue proof requires authorizing manager grant")
         project_id = request.project_id
         target_actor = request.target_actor_id
+        matched_grant = admin_authorizer_grant_id
         after_facts = {
             "status": "active",
             "role": request.role.value,
@@ -6815,8 +6838,11 @@ def _operation_success(
             "effective": True,
         }
     elif isinstance(request, ProjectRoleGrantRevokeRequest):
+        if admin_authorizer_grant_id is None:
+            raise AssertionError("project role revoke proof requires authorizing manager grant")
         project_id = request.project_id
         target_actor = response.resource_id
+        matched_grant = admin_authorizer_grant_id
         before_facts = {
             "status": "active",
             "role": "submitter",
@@ -7842,6 +7868,8 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
     admin_operations = {
         AuthorityOperation.ADMIN_ROLE_GRANT_ISSUE,
         AuthorityOperation.ADMIN_ROLE_GRANT_REVOKE,
+        AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
+        AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE,
     }
     expected_pairs = {}
     async with authorization_factory() as session:

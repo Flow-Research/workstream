@@ -106,6 +106,8 @@ _ADMIN_MUTATIONS = frozenset(
         ActionId.ACTOR_PROFILE_DEACTIVATE,
         ActionId.ACTOR_IDENTITY_LINK_REVOKE,
         ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
 )
 
@@ -275,10 +277,27 @@ class AuthorizationService:
             }:
                 raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
             await self._admin.lock_control()
-            locked = await self._admin.lock_request_actor(
-                context.identity_link_id, context.actor_profile_id
-            )
+            if action_id is ActionId.PROJECT_ROLE_GRANT_ISSUE:
+                if scope.target_actor_profile_id is None or scope.role is None:
+                    raise PreparedAuthorizationUnsupported(
+                        AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                    )
+                locked, _target_eligible = (
+                    await self._admin.lock_project_role_issue_principals(
+                        caller_actor_profile_id=context.actor_profile_id,
+                        caller_identity_link_id=context.identity_link_id,
+                        target_actor_profile_id=scope.target_actor_profile_id,
+                    )
+                )
+            else:
+                locked = await self._admin.lock_request_actor(
+                    context.identity_link_id, context.actor_profile_id
+                )
             context = self._locked_human_context(locked, context)
+            if action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE and scope.grant_id is None:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                )
             grant = await self._admin.find_effective_grant(
                 context.actor_profile_id,
                 action.permission_id,
