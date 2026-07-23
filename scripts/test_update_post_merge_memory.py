@@ -2213,3 +2213,20 @@ def test_cli_reconcile_uses_authenticated_shared_reducer(
     assert observed[1][0:3] == ("reconcile", ("token", "https://api.github.com"), "Flow-Research/workstream")
     assert observed[1][3]["target_sha"] == target
     assert capsys.readouterr().out.strip() == f"Loop memory reconciled to {target}."
+
+
+def test_shared_reconcile_rejects_missing_canonical_state(tmp_path: Path) -> None:
+    with pytest.raises(loop.LoopMemoryError, match="requires canonical state"):
+        loop.reconcile_to_main(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=tmp_path / "missing", target_sha="a" * 40,
+        )
+
+
+def test_protected_selector_rejects_names_seen_only_after_merge() -> None:
+    head, runs = _protected_runs_for_mutation()
+    for item in runs:
+        item["started_at"] = "2026-07-23T07:01:00Z"
+        item["completed_at"] = None
+    with pytest.raises(loop.LoopMemoryError, match="missing"):
+        loop._protected_actions_evidence(runs, head, "2026-07-23T06:00:00Z")
