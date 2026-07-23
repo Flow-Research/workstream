@@ -135,7 +135,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0033_authorization_read_rate",
+                "revision": "0034_review_revision_policy",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -201,7 +201,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0033_authorization_read_rate",
+                "revision": "0034_review_revision_policy",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -409,7 +409,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0033_authorization_read_rate",
+                    "0034_review_revision_policy",
                     True,
                     True,
                 )
@@ -436,7 +436,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0033_authorization_read_rate",
+                    "0034_review_revision_policy",
                     True,
                     True,
                 )
@@ -464,7 +464,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0033_authorization_read_rate",
+                "revision": "0034_review_revision_policy",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -524,7 +524,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0033_authorization_read_rate"
+                "0034_review_revision_policy"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
