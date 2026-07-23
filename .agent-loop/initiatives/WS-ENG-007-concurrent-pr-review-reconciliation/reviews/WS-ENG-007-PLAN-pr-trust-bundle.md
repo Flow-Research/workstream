@@ -31,7 +31,7 @@ loop-memory generator, or authorization behavior.
 ## Reviewer Results
 
 All nine required internal tracks passed exact planning commit
-`32f5a87a3f8a06d15b8bd976b74b1530d1f1001a` after the latest trusted-main merge
+`806b14d9fefd10a52752c6775d5f9554263eb8cc` after the latest trusted-main merge
 and all valid internal and CodeRabbit findings were repaired. The only changes
 after that reviewed commit are this trust bundle and the adjacent internal-
 review record. No reviewer session remains open.
@@ -46,6 +46,10 @@ initiative-specific explanation of inherited reviewer session IDs. Its PR-
 description warning is addressed in the complete trust-bundle PR body. The
 reported Checkov import failure is CodeRabbit tool-environment output, not a
 repository check failure and not a reason to weaken or add repository CI.
+The first repaired exact-head Agent Gates run then identified the slash-form
+schema marker as a noncanonical API prefix. The marker is now route-neutral,
+the stale authorization documentation scan passes, and all internal tracks
+reapproved the exact repair.
 
 ## CI Integrity And Test Delta
 

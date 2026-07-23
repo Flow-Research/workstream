@@ -10,9 +10,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 32f5a87a3f8a06d15b8bd976b74b1530d1f1001a
+Reviewed code SHA: 806b14d9fefd10a52752c6775d5f9554263eb8cc
 
-Reviewed at: 2026-07-23T04:40:46Z
+Reviewed at: 2026-07-23T04:47:29Z
 
 Reviewer run IDs: senior-engineering=/root/eng006_senior_arch_docs; QA/test=/root/eng006_qa_ci_tests; security/auth=/root/eng006_security_ops_reuse; product/ops=/root/eng006_security_ops_reuse; architecture=/root/eng006_senior_arch_docs; docs=/root/eng006_senior_arch_docs; CI-integrity=/root/eng006_qa_ci_tests; reuse/dedup=/root/eng006_security_ops_reuse; test-delta=/root/eng006_qa_ci_tests
 
@@ -73,6 +73,10 @@ exact initiative-specific task and reviewed SHA.
   invalidation, immutable checker identity, and reviewer-session provenance.
 - Reconciled the branch with trusted `main` at `93c14181` before final review;
   the upstream ART delta does not modify WS-ENG-007 planning paths.
+- Replaced the slash-form finding schema version with the non-route literal
+  `workstream-review-finding-id-v1` after exact-head CI correctly rejected the
+  former text as a noncanonical API prefix; all reviewers reapproved the
+  mechanical change and the authorization documentation scan passes locally.
 
 ## Commands Run
 
