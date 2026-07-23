@@ -257,6 +257,10 @@ aggregate required-check evidence. Temporary recovery authorization is consumed
 before signing, is never serialized, and is inert on replay. Any intervening
 main merge requires a new reviewed recovery plan.
 
+Recovery does not start implementation. `WS-ENG-007-01` and `WS-ENG-006-01`
+remain stopped afterward; each requires its own ordinary explicit signed start
+on exact current `main`.
+
 ## Historical WS-ENG-006 Exact Root Repair
 
 `WS-ENG-006-00` uses the closed two-merge recovery certificate to reconcile

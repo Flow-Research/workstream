@@ -2202,8 +2202,12 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
             self.app_id = updater.GITHUB_ACTIONS_APP_ID
             self.app_slug = updater.GITHUB_ACTIONS_APP_SLUG
             self.mode = "100644"
+            self.kind = "blob"
             self.file_status = "added"
             self.extra_path: str | None = None
+            self.omit_pr_path = False
+            self.duplicate_pr_path = False
+            self.merge_only_path: str | None = None
             self.duplicate_run = False
             self.check_status = "completed"
             self.check_conclusion = "success"
@@ -2213,6 +2217,10 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         def get_paginated(self, path: str) -> list[dict]:
             if "/pulls/201/files" in path:
                 items = [*paths, *([self.extra_path] if self.extra_path else [])]
+                if self.omit_pr_path:
+                    items.pop()
+                if self.duplicate_pr_path:
+                    items.append(items[0])
                 return [{"filename": item, "status": self.file_status} for item in items]
             if path.endswith("/statuses"):
                 return [{
@@ -2238,7 +2246,7 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
                     {"path": ".agent-loop", "type": "tree", "mode": "040000", "sha": "1" * 40},
                     {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
-                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *({"path": item, "type": self.kind, "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
                     *([self.hostile_entry] if self.hostile_entry else []),
                 ],
                 first_parent_tree: [
@@ -2250,7 +2258,8 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
                     {"path": ".agent-loop/initiatives", "type": "tree", "mode": "040000", "sha": "2" * 40},
                     {"path": "base.txt", "type": "blob", "mode": "100644", "sha": "a" * 40},
                     {"path": "main.txt", "type": "blob", "mode": "100644", "sha": "b" * 40},
-                    *({"path": item, "type": "blob", "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *({"path": item, "type": self.kind, "mode": self.mode, "sha": hashlib.sha1(item.encode()).hexdigest()} for item in paths),
+                    *([{"path": self.merge_only_path, "type": "blob", "mode": "100644", "sha": "6" * 40}] if self.merge_only_path else []),
                     *([self.hostile_entry] if self.hostile_entry else []),
                 ],
             }
@@ -2348,6 +2357,18 @@ def test_planning_intake_collection_binds_paths_trees_and_check_sources() -> Non
         (lambda: setattr(client, "check_status", "queued"), "invalid provenance"),
         (lambda: setattr(client, "check_conclusion", "cancelled"), "invalid provenance"),
         (lambda: setattr(client, "file_status", "renamed"), "additive files only"),
+        (lambda: setattr(client, "file_status", "removed"), "additive files only"),
+        (lambda: setattr(client, "duplicate_pr_path", True), "path set is invalid"),
+        (lambda: setattr(client, "omit_pr_path", True), "review or contract set is invalid"),
+        (lambda: setattr(client, "merge_only_path", "merge-only.md"), "authoritative tree delta does not match"),
+        (
+            lambda: (setattr(client, "kind", "blob"), setattr(client, "mode", "120000")),
+            "file mode",
+        ),
+        (
+            lambda: (setattr(client, "kind", "commit"), setattr(client, "mode", "160000")),
+            "file mode",
+        ),
         (lambda: setattr(client, "extra_path", "backend/app/unsafe.py"), "foreign path"),
         (
             lambda: setattr(
