@@ -7,8 +7,8 @@ concurrency, and audit. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `0d05b7096eb7a2cf7c68a1770c0b35f07d5b55df`
-Reviewed at: 2026-07-23T16:55:00+01:00
+Reviewed code SHA: `833dd6e5352e1774ffd8c669346c65e61e3e7ac1`
+Reviewed at: 2026-07-23T16:05:00Z
 Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /root/auth10b1_final_ops_docs_ci
 
 ## Implemented Contract
@@ -65,4 +65,7 @@ No workflow, dependency, shard, command, threshold, or coverage setting changed.
 
 The repair loop closed lifecycle attribution, real unique-index fallback,
 complete residue, database-observed cancellation, committed retry, and lexical
-crossed-principal proof gaps. Open reviewer and sub-agent sessions: none.
+crossed-principal proof gaps.
+
+Open sub-agent sessions: none
+Valid findings addressed: yes
