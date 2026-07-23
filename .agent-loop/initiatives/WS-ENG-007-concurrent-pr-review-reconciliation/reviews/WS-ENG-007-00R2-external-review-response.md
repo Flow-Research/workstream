@@ -3,7 +3,8 @@
 ## Comments addressed
 
 - CodeRabbit minor: reflowed the PR `#187` reference in the operations runbook
-  so Markdown does not parse it as a malformed ATX heading.
+  so Markdown does not parse it as a malformed ATX heading. The review thread
+  is resolved on PR #189.
 
 ## Comments deferred
 
