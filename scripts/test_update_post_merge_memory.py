@@ -1480,6 +1480,34 @@ def test_authority_transition_requires_prior_basis(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
+        lambda record: record["authority_state"]["source"].update(head_sha="bad"),
+        lambda record: record["authority_state"]["source"].update(pr_number=0),
+        lambda record: record["authority_state"]["source"].update(pr_url="wrong"),
+        lambda record: record["authority_state"]["source"].update(merged_at="wrong"),
+        lambda record: record["authority_state"]["source"].update(
+            intent_path=".agent-loop/merge-intents/WS-BAD-001.json"
+        ),
+        lambda record: record["authority_state"].update(completed_chunk=[]),
+    ],
+)
+def test_authority_record_rejects_malformed_basis_source(
+    tmp_path: Path, mutation
+) -> None:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    loop.apply_authority_event(
+        state_root, _event("start"), repository_root=repository_root
+    )
+    authority = json.loads((state_root / loop.STATE_PATH).read_text())
+    mutation(authority)
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_record(authority)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
         lambda event: event.update(event_id="wrong"),
         lambda event: event.update(run_id=0),
         lambda event: event.update(approvers=[]),
@@ -2008,6 +2036,45 @@ def _merge_bound_record() -> dict:
         "sha256": loop.hashlib.sha256(loop._canonical_json(selected).encode()).hexdigest(),
     }
     return record
+
+
+def _cross_initiative_merge_bound_state(tmp_path: Path) -> tuple[Path, Path]:
+    state_root, repository_root = tmp_path / "state", tmp_path / "repo"
+    _contract(repository_root)
+    loop.apply_merge_record(state_root, _record())
+    later = _merge_bound_record()
+    later["source"].update(
+        main_sha="c" * 40,
+        first_parent_sha="a" * 40,
+        pr_number=190,
+        pr_url="https://github.com/Flow-Research/workstream/pull/190",
+        intent_path=".agent-loop/merge-intents/WS-ART-001-02.json",
+    )
+    later["completed_chunk"].update(
+        initiative_id="WS-ART-001",
+        chunk_id="WS-ART-001-02",
+        chunk_title="Artifact Custody",
+        next_chunk_id="WS-ART-001-03",
+        next_chunk_title="Artifact Recovery",
+    )
+    later["gate"].update(
+        next_chunk_id="WS-ART-001-03", next_chunk_title="Artifact Recovery"
+    )
+    loop.apply_merge_record(state_root, later)
+    event = _event("start")
+    event["main_sha"] = later["source"]["main_sha"]
+
+    assert loop.apply_authority_event(
+        state_root, event, repository_root=repository_root
+    )
+    return state_root, repository_root
+
+
+def test_cross_initiative_start_does_not_borrow_latest_merge_evidence(
+    tmp_path: Path,
+) -> None:
+    state_root, _repository_root = _cross_initiative_merge_bound_state(tmp_path)
+    loop.validate_generated_state(state_root)
 
 
 @pytest.mark.parametrize("bad_value", ["2026-07-23 05:01:00Z", "not-a-time"])

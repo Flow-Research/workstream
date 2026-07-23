@@ -465,6 +465,7 @@ def _record_failures(
         authority = base.pop("authority_state", None)
         metadata = base.get("completed_chunk", {})
         source = base.get("source", {})
+        repository = base.get("repository")
         base["updated_at"] = source.get("merged_at")
         failures = _record_failures(base, label, repository_root)
         if not isinstance(authority, dict) or set(authority) != {
@@ -472,24 +473,56 @@ def _record_failures(
         }:
             failures.append(f"{label}: invalid authority lifecycle state")
             return failures
+        authority_source = authority["source"]
+        if not isinstance(authority_source, dict) or set(authority_source) != {
+            "main_sha", "first_parent_sha", "pr_number", "pr_url", "pr_title",
+            "head_sha", "head_ref", "merged_at", "merged_by", "intent_path",
+            "intent_blob_sha",
+        }:
+            failures.append(f"{label}: invalid authority lifecycle source")
+            return failures
+        for field in ("main_sha", "first_parent_sha", "head_sha", "intent_blob_sha"):
+            value = authority_source.get(field)
+            if not isinstance(value, str) or not SHA_PATTERN.fullmatch(value):
+                failures.append(f"{label}: invalid authority source {field}")
+        authority_pr = authority_source.get("pr_number")
+        if (
+            not isinstance(authority_pr, int)
+            or isinstance(authority_pr, bool)
+            or authority_pr <= 0
+        ):
+            failures.append(f"{label}: invalid authority source pr_number")
+        elif authority_source.get("pr_url") != (
+            f"https://github.com/{repository}/pull/{authority_pr}"
+        ):
+            failures.append(f"{label}: invalid authority source pr_url")
+        for field, maximum in (
+            ("pr_title", 240), ("head_ref", 240), ("merged_by", 160)
+        ):
+            if not _is_bounded_single_line(authority_source.get(field), maximum):
+                failures.append(f"{label}: invalid authority source {field}")
+        try:
+            authority_time = datetime.fromisoformat(
+                authority_source["merged_at"].replace("Z", "+00:00")
+            )
+        except (AttributeError, ValueError):
+            failures.append(f"{label}: invalid authority source merged_at")
+        else:
+            if authority_time.tzinfo is None:
+                failures.append(f"{label}: authority source merged_at has no timezone")
         metadata = authority["completed_chunk"]
-        lifecycle = json.loads(json.dumps(base))
-        lifecycle.update(authority)
-        lifecycle_source = lifecycle.get("source", {})
-        lifecycle["updated_at"] = lifecycle_source.get("merged_at")
-        lifecycle_metadata = lifecycle.get("completed_chunk", {})
-        lifecycle["active"] = {"planning_chunk": None, "implementation_chunk": None}
-        lifecycle["gate"] = {
-            "status": "stopped_after_merge",
-            "next_chunk_id": lifecycle_metadata.get("next_chunk_id"),
-            "next_chunk_title": lifecycle_metadata.get("next_chunk_title"),
-            "next_requires_explicit_start": lifecycle_metadata.get(
-                "next_requires_explicit_start"
-            ),
-        }
-        failures.extend(
-            _record_failures(lifecycle, f"{label} authority basis", repository_root)
-        )
+        metadata_failures = _metadata_failures(metadata, f"{label} authority basis")
+        failures.extend(metadata_failures)
+        if not isinstance(metadata, dict):
+            return failures
+        if authority_source.get("intent_path") != (
+            f".agent-loop/merge-intents/{metadata.get('chunk_id')}.json"
+        ):
+            failures.append(f"{label}: authority intent path does not match completed chunk")
+        # The authority projection is bound independently to its exact prior
+        # initiative record by _authority_transition_failures.  Rebuilding a
+        # synthetic merge record here would incorrectly attach the latest
+        # global PR's protected-check evidence to that older initiative basis.
         historical_event_keys = {
             "type", "event_id", "run_id", "created_at", "dispatcher",
             "approvers", "reason", "main_sha", "prior_state_tip",
