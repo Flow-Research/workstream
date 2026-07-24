@@ -38,7 +38,7 @@ State what was checked before review.
 - package hash:
 - artifact count:
 - required files present:
-- artifact hash manifest:
+- server-generated submission-bundle manifest reference/hash:
 - evidence ids bound to artifact hashes:
 
 ## Review Readiness

@@ -80,13 +80,15 @@ Define prohibited behavior, tools, copied material, generated artifacts, confide
 ## Required Submission Fields
 
 - summary
-- output files or package
+- exactly one outer ZIP containing every required output/evidence file
 - evidence
 - revision replay when applicable
 - contributor attestation
-- artifact hash manifest
 
-Workstream assigns submission version server-side after blocking pre-submit checks pass. The contributor does not provide a submission version or any guide/policy version.
+Workstream generates the archive commitment and semantic submission-bundle
+manifest, then assigns the submission version server-side after blocking
+pre-submit checks pass. The contributor does not provide a manifest, submission
+version, or guide/policy version.
 
 ## Submission Expectations Summary
 

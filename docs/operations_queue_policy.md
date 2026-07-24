@@ -254,7 +254,7 @@ Every operating day starts with:
 | `DRAFT -> SCREENING` | project id, locked guide candidate, task source/description fields, acceptance and rejection criteria |
 | `SCREENING -> READY` | screening decision, guide version lock, guide source snapshot id/hash lock, acceptance criteria, effective project submission artifact policy hash lock, project `PreSubmitCheckerPolicy` compiled bundle hash lock, approved generated project `PostSubmitCheckerPolicy` with matching provenance, review policy, revision policy |
 | `READY -> CLAIMED` | active published ContributionPolicyVersion whose `accepted_submission` rule is explicit; TaskAssignment freezes that version |
-| `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed, submission packet, artifact hash manifest, evidence references, contributor attestation |
+| `IN_PROGRESS -> SUBMITTED` | blocking pre-submit checks passed against the exact outer ZIP, submission packet, server-generated submission-bundle manifest and verified admission binding, evidence references, contributor attestation |
 | `SUBMITTED -> EVALUATION_PENDING` | immutable submission version, locked post-submit checker policy id/version/hash/body copied from the task context |
 | `EVALUATION_PENDING -> REVIEW_PENDING` | durable, final, current CheckerRun for the exact Submission with outcome exactly `allow_review`, verified artifact bindings, no blocking failures |
 | `EVALUATION_PENDING -> NEEDS_REVISION` | durable, final, current CheckerRun for the exact Submission with outcome exactly `needs_revision`, verified artifact bindings, outcome source `auto_checker`, contributor-visible checker failures with severity, message, suggested fix |
