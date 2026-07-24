@@ -72,13 +72,19 @@ digest-pinned PostgreSQL service, one digest-pinned MinIO service, and four
 concurrent dependency lanes. This avoids arbitrary shard fan-out and artifact
 fan-in while retaining exact node and coverage custody.
 
+The lanes are balanced by measured dependency ownership: `project_lifecycle`
+owns project tests, `task_lifecycle` owns task and checker tests,
+`schema_contracts` owns migrations and reset contracts, and
+`shared_foundations` owns the remaining authorization, artifact, API, and
+infrastructure tests. Every discovered module must belong to exactly one lane.
+
 The job binds the checkout to `GITHUB_SHA`, installs and asserts exact Ruff
 `0.15.22`, runs lint and docstrings, starts MinIO, then collects every canonical
 pytest node. The independent evidence validator must
 accept the collection before execution begins. Each lane receives a distinct
 runner-created database and role plus a distinct MinIO bucket/prefix custody
-record. The S3 lane owns the actual `workstream-artifacts` test bucket and a
-unique run prefix; other lanes create, probe, and remove distinct buckets.
+record. `shared_foundations` owns the actual `workstream-artifacts` test bucket
+and a unique run prefix; other lanes create, probe, and remove distinct buckets.
 The isolated-runner self-tests remain in the canonical manifest as the explicit
 `admin_runner_self_test` execution kind. The lane orchestrator runs only those
 nodes directly with the admin URL while stripping application database URLs;

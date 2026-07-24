@@ -20,7 +20,12 @@ validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
 REAL_COLLECT_CURRENT_NODES = validator._collect_current_nodes
 HEAD = "a" * 40
-LANES = ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
+LANES = (
+    "shared_foundations",
+    "schema_contracts",
+    "project_lifecycle",
+    "task_lifecycle",
+)
 
 
 def _write(path: Path, value: object) -> str:

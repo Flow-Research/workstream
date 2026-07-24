@@ -72,7 +72,7 @@ class TestLane:
 
 LANES = (
     TestLane(
-        "no_postgres",
+        "shared_foundations",
         (
             "tests/test_actor_legacy_classification.py",
             "tests/test_actor_migration_tools.py",
@@ -96,6 +96,16 @@ LANES = (
             "tests/test_local_artifact_store.py",
             "tests/test_s3_artifact_store.py",
             "tests/test_test_lane_evidence.py",
+            "tests/test_actors.py",
+            "tests/test_api_rate_controls.py",
+            "tests/test_audit.py",
+            "tests/test_auth.py",
+            "tests/test_authorization.py",
+            "tests/test_artifact_admission.py",
+            "tests/test_artifact_operator_api.py",
+            "tests/test_artifact_recovery.py",
+            "tests/test_db_session.py",
+            "tests/test_outbox.py",
         ),
     ),
     TestLane(
@@ -107,25 +117,15 @@ LANES = (
         ),
     ),
     TestLane(
-        "control_plane",
+        "project_lifecycle",
         (
-            "tests/test_actors.py",
-            "tests/test_api_rate_controls.py",
-            "tests/test_audit.py",
-            "tests/test_auth.py",
-            "tests/test_authorization.py",
             "tests/test_projects.py",
         ),
     ),
     TestLane(
-        "execution_plane",
+        "task_lifecycle",
         (
-            "tests/test_artifact_admission.py",
-            "tests/test_artifact_operator_api.py",
-            "tests/test_artifact_recovery.py",
             "tests/test_checkers.py",
-            "tests/test_db_session.py",
-            "tests/test_outbox.py",
             "tests/test_tasks.py",
         ),
     ),

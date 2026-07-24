@@ -65,16 +65,16 @@ def _mock_successful_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drop)
 
 def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None:
     """Only the S3 lane receives the application's hardcoded integration bucket."""
-    s3_bucket, s3_prefix = runner._minio_namespace("no_postgres", "012345abcdef")
+    s3_bucket, s3_prefix = runner._minio_namespace("shared_foundations", "012345abcdef")
     control_bucket, control_prefix = runner._minio_namespace(
-        "control_plane", "012345abcdef"
+        "project_lifecycle", "012345abcdef"
     )
     execution_bucket, execution_prefix = runner._minio_namespace(
-        "execution_plane", "fedcba543210"
+        "task_lifecycle", "fedcba543210"
     )
     assert (s3_bucket, s3_prefix) == (
         "workstream-artifacts",
-        "ci/no_postgres/012345abcdef",
+        "ci/shared_foundations/012345abcdef",
     )
     assert len({s3_bucket, control_bucket, execution_bucket}) == 3
     assert len({s3_prefix, control_prefix, execution_prefix}) == 3
@@ -85,10 +85,10 @@ def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None
 @pytest.mark.parametrize(
     ("lane", "expected_bucket"),
     [
-        ("no_postgres", "workstream-artifacts"),
+        ("shared_foundations", "workstream-artifacts"),
         ("schema_contracts", "workstream-ci-schema-contracts-012345abcdef"),
-        ("control_plane", "workstream-ci-control-plane-012345abcdef"),
-        ("execution_plane", "workstream-ci-execution-plane-012345abcdef"),
+        ("project_lifecycle", "workstream-ci-project-lifecycle-012345abcdef"),
+        ("task_lifecycle", "workstream-ci-task-lifecycle-012345abcdef"),
     ],
 )
 def test_committed_lane_buckets_use_validator_compatible_s3_grammar(
@@ -107,12 +107,17 @@ def test_lane_namespaces_do_not_collide_across_lanes_or_runner_suffixes() -> Non
     """Separate lane identities and runner invocations cannot share custody."""
     namespaces = {
         runner._minio_namespace(lane, suffix)
-        for lane in ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
+        for lane in (
+            "shared_foundations",
+            "schema_contracts",
+            "project_lifecycle",
+            "task_lifecycle",
+        )
         for suffix in ("012345abcdef", "fedcba543210")
     }
     assert len(namespaces) == 8
     with pytest.raises(runner.RunnerError, match="invalid_lane"):
-        runner._minio_namespace("control_plane", "not-hex")
+        runner._minio_namespace("project_lifecycle", "not-hex")
     with pytest.raises(runner.RunnerError, match="invalid_minio_namespace"):
         runner._minio_namespace("a" * 63, "012345abcdef")
 
@@ -122,10 +127,10 @@ def test_child_environment_binds_lane_namespace_without_admin_custody() -> None:
     env = runner._child_env(
         "postgresql+asyncpg://role:password@localhost/database",
         minio_bucket="workstream-artifacts",
-        minio_prefix="ci/no_postgres/012345abcdef",
+        minio_prefix="ci/shared_foundations/012345abcdef",
     )
     assert env["WORKSTREAM_TEST_MINIO_BUCKET"] == "workstream-artifacts"
-    assert env["WORKSTREAM_TEST_MINIO_PREFIX"] == "ci/no_postgres/012345abcdef"
+    assert env["WORKSTREAM_TEST_MINIO_PREFIX"] == "ci/shared_foundations/012345abcdef"
     assert runner.ADMIN_ENV not in env
     assert runner.OVERRIDE_ENV not in env
 

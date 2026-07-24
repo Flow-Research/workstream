@@ -31,6 +31,27 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     )
 
 
+def test_measured_hotspots_have_explicit_semantic_owners() -> None:
+    """Keep the four-lane balance tied to subsystem ownership, not test counts."""
+    modules_by_lane = {lane.name: set(lane.modules) for lane in LANES}
+
+    assert modules_by_lane["project_lifecycle"] == {"tests/test_projects.py"}
+    assert modules_by_lane["task_lifecycle"] == {
+        "tests/test_checkers.py",
+        "tests/test_tasks.py",
+    }
+    assert {
+        "tests/test_alembic.py",
+        "tests/test_database_reset.py",
+        runner.ADMIN_RUNNER_MODULE,
+    } == modules_by_lane["schema_contracts"]
+    assert {
+        "tests/test_actors.py",
+        "tests/test_artifact_admission.py",
+        "tests/test_authorization.py",
+    } <= modules_by_lane["shared_foundations"]
+
+
 def test_discovery_is_recursive_and_lexically_canonical(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     nested = tests / "nested"
@@ -209,7 +230,7 @@ def test_lane_command_uses_exact_nodes_and_isolation_contract(tmp_path: Path) ->
 
 
 def test_lane_environment_uses_private_evidence_and_coverage(tmp_path: Path) -> None:
-    coverage = tmp_path / ".coverage.no_postgres"
+    coverage = tmp_path / ".coverage.shared_foundations"
     env = runner.lane_environment(LANES[0], tmp_path, coverage)
 
     assert env["COVERAGE_FILE"] == str(coverage.resolve())
