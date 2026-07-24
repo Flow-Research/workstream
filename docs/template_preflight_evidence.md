@@ -32,14 +32,15 @@ State what was checked before review.
 | --- | --- | --- | --- | --- |
 | `<checker>` | `<passed/warning/failed>` | `<checker run id>` | `<evidence id>` | `<log/hash/reference>` |
 
-## Package Evidence
+## Submission Bundle Evidence
 
-- package path or URI:
-- package hash:
-- artifact count:
+- server-generated outer-ZIP SHA-256:
+- server-generated outer-ZIP byte count:
+- inspected entry count:
 - required files present:
 - server-generated submission-bundle manifest reference/hash:
-- evidence ids bound to artifact hashes:
+- verified admission/binding IDs:
+- evidence IDs bound to the verified admission and manifest:
 
 ## Review Readiness
 
