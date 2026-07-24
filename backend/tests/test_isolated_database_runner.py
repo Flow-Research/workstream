@@ -154,10 +154,10 @@ def test_minio_boundary_rejects_nonlocal_or_credentialed_endpoints(endpoint: str
 def test_metadata_is_private_deterministic_and_refuses_symlinks(tmp_path: Path) -> None:
     """Custody evidence is stable, mode 0600, and never follows an output symlink."""
     path = tmp_path / "runner.json"
-    runner._write_metadata(path, {"tree_sha": "1" * 40, "lane": "control_plane"})
+    runner._write_metadata(path, {"tree_sha": "1" * 40, "lane": "project_lifecycle"})
     assert path.stat().st_mode & 0o777 == 0o600
     assert path.read_text(encoding="utf-8") == (
-        '{\n  "lane": "control_plane",\n  "tree_sha": "' + "1" * 40 + '"\n}\n'
+        '{\n  "lane": "project_lifecycle",\n  "tree_sha": "' + "1" * 40 + '"\n}\n'
     )
     path.unlink()
     path.symlink_to(tmp_path / "outside.json")
@@ -212,7 +212,7 @@ def test_tree_binding_rejects_foreign_expected_head(
             "--metadata-json",
             str(tmp_path / "db.json"),
             "--lane",
-            "control_plane",
+            "project_lifecycle",
             "--tree-sha",
             "2" * 40,
             "--",
