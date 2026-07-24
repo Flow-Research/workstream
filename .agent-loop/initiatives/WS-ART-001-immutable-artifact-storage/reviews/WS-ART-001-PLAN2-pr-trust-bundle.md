@@ -37,6 +37,8 @@ successor `WS-ART-001-03A` with a separate explicit start.
 
 - diff, stale-contract, markdown-link, and 100 agent-gate tests pass;
 - all nine required reviewer tracks pass after repair;
+- the stale-authorization documentation gate and its technical-module
+  regression repair pass without reopening deprecated product-role vocabulary;
 - detailed findings and resolutions are recorded in
   `WS-ART-001-PLAN2-internal-review-evidence.md`.
 
