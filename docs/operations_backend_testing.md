@@ -73,8 +73,8 @@ concurrent dependency lanes. This avoids arbitrary shard fan-out and artifact
 fan-in while retaining exact node and coverage custody.
 
 The job binds the checkout to `GITHUB_SHA`, installs and asserts exact Ruff
-`0.15.22`, runs lint, docstrings, and the isolated-resource runner tests, then
-collects every canonical pytest node. The independent evidence validator must
+`0.15.22`, runs lint and docstrings, starts MinIO, then collects every canonical
+pytest node. The independent evidence validator must
 accept the collection before execution begins. Each lane receives a distinct
 runner-created database and role plus a distinct MinIO bucket/prefix custody
 record. The S3 lane owns the actual `workstream-artifacts` test bucket and a
