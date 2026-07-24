@@ -27,6 +27,19 @@ ISOLATION_LANES = {
     "control_plane": ("control_plane_authority", "control_plane_projects"),
     "execution_plane": ("execution_plane_artifacts", "execution_plane_tasks_checkers"),
 }
+RESOURCE_NODE_MODULES = {
+    "no_postgres": "tests/test_0.py",
+    "schema_contracts": "tests/test_1.py",
+    "control_plane_authority": "tests/test_actors.py",
+    "control_plane_projects": "tests/test_projects.py",
+    "execution_plane_artifacts": "tests/test_outbox.py",
+    "execution_plane_tasks_checkers": "tests/test_tasks.py",
+}
+PUBLIC_LANES = {
+    resource_lane: public_lane
+    for public_lane, resource_lanes in ISOLATION_LANES.items()
+    for resource_lane in resource_lanes
+}
 
 
 def _write(path: Path, value: object) -> str:
@@ -41,11 +54,11 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
     nodes = [
         {
             "execution_kind": "ordinary_isolated",
-            "lane": lane,
-            "module": f"tests/test_{index}.py",
-            "nodeid": f"tests/test_{index}.py::test_ok",
+            "lane": PUBLIC_LANES[resource_lane],
+            "module": module,
+            "nodeid": f"{module}::test_ok",
         }
-        for index, lane in enumerate(LANES)
+        for resource_lane, module in RESOURCE_NODE_MODULES.items()
     ]
     nodes.append(
         {
@@ -105,6 +118,28 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
                 "deselected_nodes": [],
                 "isolation_metadata_files": isolation_files,
                 "isolation_metadata_sha256s": isolation_digests,
+                "isolation_unit_collected_nodes": {
+                    resource_lane: [
+                        row["nodeid"]
+                        for row in nodes
+                        if row["execution_kind"] == "ordinary_isolated"
+                        and row["module"] == RESOURCE_NODE_MODULES[resource_lane]
+                    ]
+                    for resource_lane in ISOLATION_LANES[lane]
+                }
+                if mode == "run"
+                else {},
+                "isolation_unit_completed_nodes": {
+                    resource_lane: [
+                        row["nodeid"]
+                        for row in nodes
+                        if row["execution_kind"] == "ordinary_isolated"
+                        and row["module"] == RESOURCE_NODE_MODULES[resource_lane]
+                    ]
+                    for resource_lane in ISOLATION_LANES[lane]
+                }
+                if mode == "run"
+                else {},
                 "skipped_nodes": [],
             },
         )
@@ -123,7 +158,7 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
         )
     summary = {
         "aggregate_runner_seconds": 4.0,
-        "canonical_node_count": 5,
+        "canonical_node_count": len(nodes),
         "elapsed_seconds": 2.0,
         "head_sha": HEAD,
         "lanes": lane_rows,
@@ -146,7 +181,7 @@ def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
         "_collect_current_nodes",
         lambda _root, _head: sorted(
             [
-                *(f"tests/test_{index}.py::test_ok" for index in range(4)),
+                *(f"{module}::test_ok" for module in RESOURCE_NODE_MODULES.values()),
                 "tests/test_isolated_database_runner.py::test_admin_custody",
             ]
         ),
@@ -280,11 +315,15 @@ def test_rejects_wrong_lane_count_zero_nodes_and_unknown_keys(tmp_path: Path) ->
             "missing_admin_runner_self_tests",
         ),
         (
-            lambda rows: rows[-1].__setitem__("execution_kind", validator.ORDINARY_KIND),
+            lambda rows: next(
+                row for row in rows if row["module"] == validator.ADMIN_RUNNER_MODULE
+            ).__setitem__("execution_kind", validator.ORDINARY_KIND),
             "invalid_manifest_node",
         ),
         (
-            lambda rows: rows[0].__setitem__("execution_kind", validator.ADMIN_KIND),
+            lambda rows: next(
+                row for row in rows if row["module"] != validator.ADMIN_RUNNER_MODULE
+            ).__setitem__("execution_kind", validator.ADMIN_KIND),
             "invalid_manifest_node",
         ),
         (lambda rows: rows.append(dict(rows[-1])), "noncanonical_or_duplicate"),
@@ -389,8 +428,10 @@ def test_real_collection_rejects_missing_or_foreign_manifest_node(
 ) -> None:
     tests = tmp_path / "backend/tests"
     tests.mkdir(parents=True)
-    for index in range(4):
-        (tests / f"test_{index}.py").write_text("def test_ok():\n    pass\n", encoding="utf-8")
+    for module in RESOURCE_NODE_MODULES.values():
+        (tmp_path / "backend" / module).write_text(
+            "def test_ok():\n    pass\n", encoding="utf-8"
+        )
     (tests / "test_isolated_database_runner.py").write_text(
         "def test_admin_custody():\n    pass\n", encoding="utf-8"
     )

@@ -571,6 +571,7 @@ def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str
         "execution_exit_code": exit_code,
         "interrupted": active.interrupted_at is not None or active.timed_out,
         "isolation_path": active.isolation_path,
+        "resource_lane": active.key,
         "skipped_nodes": skipped,
     }
 
@@ -647,6 +648,16 @@ def _finalize_lane(
             for unit in ordered_units
             if unit["execution_kind"] == ORDINARY_KIND
         ],
+        "isolation_unit_collected_nodes": {
+            unit["resource_lane"]: sorted(unit["collected_nodes"])
+            for unit in ordered_units
+            if unit["execution_kind"] == ORDINARY_KIND
+        },
+        "isolation_unit_completed_nodes": {
+            unit["resource_lane"]: sorted(unit["completed_nodes"])
+            for unit in ordered_units
+            if unit["execution_kind"] == ORDINARY_KIND
+        },
         "skipped_nodes": sorted(
             set(node for unit in ordered_units for node in unit["skipped_nodes"])
         ),
@@ -753,6 +764,8 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
             evidence_path.write_bytes(_json_bytes({
                 "collected_nodes": lane_nodes, "completed_nodes": [], "deselected_nodes": [],
                 "isolation_metadata_files": [], "isolation_metadata_sha256s": [],
+                "isolation_unit_collected_nodes": {},
+                "isolation_unit_completed_nodes": {},
                 "skipped_nodes": [],
             }))
             lane_rows.append({

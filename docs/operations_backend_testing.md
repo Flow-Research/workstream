@@ -67,6 +67,12 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 
 ## Hosted semantic-lane full-suite proof
 
+A local full semantic-lane diagnostic requires both
+`WORKSTREAM_TEST_ADMIN_DATABASE_URL` and a live loopback
+`WORKSTREAM_TEST_MINIO_ENDPOINT`. The signed contract's command block assumes
+those prerequisites; without either one, use collect-only validation and rely
+on the hosted job for complete service and timing proof.
+
 The required GitHub check remains `Backend / test`. One job owns one
 digest-pinned PostgreSQL service, one digest-pinned MinIO service, and four
 public dependency lanes. The two slow database-heavy lanes each use two fixed
