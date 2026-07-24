@@ -28,7 +28,12 @@ AUTH, task, checker, review, contribution, or delivery behavior.
 - `scripts/test_agent_gates.py` only to replace stale ART status/chunk-map
   assertions with the exact merged/cancelled planning projection, bind new
   successor phases/coverage contracts, and preserve the signed-automation-only
-  authority warning instead of treating copied root projections as live state;
+  authority warning instead of treating copied root projections as live state,
+  plus focused regression assertions required by an in-scope documentation
+  gate repair;
+- `scripts/check_stale_authorization_docs.py` only for the narrow technical
+  `app.workers` module/path recognition repair required to scan the changed
+  contracts without re-admitting human/product worker-authority vocabulary;
 - cross-initiative handoff prose that names dependencies without modifying
   another initiative's owned runtime contract;
 - exactly one merge intent for this planning chunk.
