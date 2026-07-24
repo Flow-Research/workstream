@@ -16,9 +16,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 85bd98d6c55b066c9f1a44bc8aa83514911f4ea0
+Reviewed code SHA: 9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65
 
-Reviewed at: 2026-07-24T12:51:59Z
+Reviewed at: 2026-07-24T13:12:00Z
 
 Reviewer run IDs: eng008_plan_senior_arch_docs, eng008_plan_qa_ci_tests, eng008_plan_security_ops_reuse
 
@@ -56,6 +56,11 @@ After the reviewed SHA, only evidence and status files changed.
 - Required complete transitive hash locks and `--require-hashes` installation
   for assurance tools.
 - Removed trailing blank lines and unified the cutover rule across every artifact.
+- Replaced broad initiative allowlists with explicit per-chunk contract, status,
+  internal evidence, trust-bundle, external-response, and specialized proof paths.
+- Required duplicate JSON object-key rejection, exact signed discovery
+  provenance, and a deterministic lossless review-log migration snapshot and
+  32,768-byte UTF-8 index ceiling.
 
 ## Concurrent Initiative Reconciliation
 
@@ -91,3 +96,7 @@ git diff --check origin/main...HEAD
   the reviewed dependency, evidence, and timeout boundaries.
 - Planning merge grants no implementation authority. Chunk 01 still requires a
   separate signed start after canonical post-merge reconciliation.
+- Backend CI on the published PR installed unbounded `ruff 0.16.0` and exposed
+  374 pre-existing lint findings although Agent Gates passed. This planning-only
+  intake cannot repair that unrelated current-main dependency drift; a separate
+  authorized CI repair must restore the Backend gate before merge.

@@ -31,7 +31,7 @@ mutation evidence, and lossless review-memory indexing.
   `../chunks/WS-ENG-008-06-changed-module-mutation-pilot.md`, and
   `../chunks/WS-ENG-008-07-lossless-review-memory-index.md`
 - Signed contract blob SHA: N/A until post-merge explicit start selects chunk 01
-- Reviewed planning SHA: `85bd98d6c55b066c9f1a44bc8aa83514911f4ea0`
+- Reviewed planning SHA: `9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65`
 
 Only independently verified signed automation state is canonical authority.
 Planning intake records stopped state and cannot authorize implementation.
@@ -112,20 +112,21 @@ Result: all passed; 100 Agent Gate tests and 14 planning Markdown link checks.
 
 ## Reviewer results
 
-Reviewed planning SHA: `85bd98d6c55b066c9f1a44bc8aa83514911f4ea0`
+Reviewed planning SHA: `9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65`
 
 Reviewer run IDs: `eng008_plan_senior_arch_docs`,
 `eng008_plan_qa_ci_tests`, `eng008_plan_security_ops_reuse`
 
-All nine tracks pass after two bounded repair cycles. See
+All nine tracks pass after the bounded internal and external repair cycles. See
 `WS-ENG-008-PLAN-internal-review-evidence.md`.
 
 ## External review
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | Review after publication; supplementary only. |
-| GitHub checks | Pending | Exact final PR head must pass. |
+| CodeRabbit | Repairs addressed; rerun pending | Nine comments were verified and repaired; the exact final head still needs its follow-up audit. |
+| GitHub Agent Gates | Passed on prior published head | Must pass again on the exact final PR head. |
+| GitHub Backend | Blocked by current-main dependency drift | Runner resolved unbounded `ruff 0.16.0`, exposing 374 existing lint findings; repair belongs to a separate authorized CI chunk. |
 
 ## Remaining risks
 
