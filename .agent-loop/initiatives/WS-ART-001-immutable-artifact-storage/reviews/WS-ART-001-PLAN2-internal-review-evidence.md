@@ -1,5 +1,16 @@
 # Internal Review Evidence: WS-ART-001-PLAN2
 
+Reviewed code SHA: `12d326869608e5d55cab3da5766c00fff8719803`
+
+Reviewed against trusted main: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+
+Reviewed at: `2026-07-24T16:48:03Z`
+
+Reviewer run IDs: `art_plan2_ext_senior`, `art_plan2_ext_arch`,
+`art_plan2_ext_qa`, `art_plan2_ext_security`, `art_plan2_ext_product`,
+`art_plan2_ext_docs`, `art_plan2_ext_reuse`, `art_plan2_ext_ci`,
+`art_plan2_ext_test_delta`
+
 ## Candidate
 
 Planning-only reconciliation after signed cancellation of `WS-ART-001-03`.
@@ -18,17 +29,17 @@ implemented or activated.
 
 ## Reviewer Results
 
-| Track | Result | Resolved findings |
-|---|---|---|
-| Senior engineering | PASS after repair | Reconciled status/map history, completed 03A-C contracts, made 04A-C internal composition executable, restored isolated coverage/e2e proof. |
-| Architecture | PASS after repair | Removed duplicate session/candidate paths, reused existing scratch/admission/recovery, and made cross-subsystem ownership explicit. |
-| QA/test | PASS after repair | Added exact verification commands, 78/90 percent gates, nested-archive closure, process-loss behavior, and migration/history proof. |
-| Security/auth | PASS after repair | Added exact AUTH handoff, fixed-service separation, pre-submit evidence privacy, and fail-closed scratch/provider boundaries. |
-| Product/ops | PASS after repair | Corrected merged lineage, reviewer note/findings semantics, and Submission/revision/downstream ownership. |
-| Reuse/dedup | PASS after repair | Reused `ArtifactScratchManager`, `PreparedArtifact`, `CommittedArtifactSource`, and existing admission/put/verification/recovery paths. |
-| CI integrity | PASS | No workflow weakening; cumulative scoped 90 percent and repository 78 percent contracts remain enforced. |
-| Test delta | PASS after repair | Replaced stale authored-state assertions without treating root projections as canonical; new phases and e2e ownership remain guarded. |
-| Docs | PASS after repair | Reconciled storage/auth specs, glossary, artifact-policy template, and submission-packet template. |
+| Reviewer | Result | Blocking findings | Notes |
+|---|---|---|---|
+| senior engineering | PASS AFTER FIXES | none | Reconciled status, state vocabulary, outage behavior, route ownership, and evidence accuracy. |
+| architecture | PASS AFTER FIXES | none | Removed duplicate session/candidate paths, reused existing scratch/admission/recovery, and separated generic attempt from legacy item state. |
+| QA/test | PASS AFTER FIXES | none | Proved exact verification commands, 78/90 percent gates, nested-archive closure, process-loss behavior, and governance parsing. |
+| security/auth | PASS AFTER FIXES | none | Kept 04A non-routable, removed the unmapped GET, preserved AUTH activation custody, and closed canonical-path collisions. |
+| product/ops | PASS AFTER FIXES | none | Corrected reviewer/revision semantics and separated pre-intent reupload from durable ART/checker recovery. |
+| reuse/dedup | PASS | none | Reused `ArtifactScratchManager`, `PreparedArtifact`, `CommittedArtifactSource`, and existing admission/put/verification/recovery paths. |
+| CI integrity | PASS AFTER FIXES | none | Canonical headings/merge intent parse; cumulative 90 percent and repository 78 percent gates remain enforced. |
+| test delta | PASS | none | No removed/skipped tests or weakened assertions; 100 agent-gate tests pass. |
+| docs | PASS AFTER FIXES | none | Reconciled storage/auth specs and all live submission/manifest templates. |
 
 ## Material Repairs
 
@@ -53,3 +64,7 @@ implemented or activated.
   block ART-04A until reconciled.
 - Process loss before durable artifact intent requires contributor reupload in
   v0.1; no temporary provider custody is introduced to mask that tradeoff.
+
+Valid findings addressed: yes
+
+Open sub-agent sessions: none
