@@ -6,7 +6,7 @@
 mutations for independent exact-project contributor roles. Risk is L1
 authorization, concurrency, migration, and audit integrity.
 
-Reviewed code SHA: `3d53cc30020ec379088a1637bd8db68183f0ce46`
+Reviewed code SHA: `477b105520ee019497a520b87e259ff469d0ffa4`
 
 ## Change, Design, And Scope
 
@@ -38,7 +38,9 @@ checks pass. The isolated database proof includes exact schema teardown and
 no-mutation assertions for rejected evidence.
 
 All nine internal tracks pass the reviewed implementation SHA with no blocking
-finding and no open sub-agent session. No test or CI gate was weakened.
+finding and no open sub-agent session. No test or CI gate was weakened. Ruff is
+bounded below 0.16 after GitHub resolved the open range to incompatible 0.16.0;
+the existing full-repository lint command passes on the retained 0.15 line.
 
 GitHub Backend must run the full shards, hosted API E2E, repository-wide
 78 percent coverage floor, and authorization-subsystem 90 percent floor.

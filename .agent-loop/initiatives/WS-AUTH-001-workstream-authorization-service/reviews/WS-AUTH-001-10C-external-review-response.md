@@ -16,6 +16,11 @@ PR: #194
   current migration-aware AUTH-10C trust bundle.
 - The internal evidence now uses the checker-required provenance labels, a UTC
   timestamp, fresh AUTH-10C reviewer sessions, and a complete nine-track map.
+- GitHub Backend passed the repaired evidence gate but resolved the repository's
+  open Ruff range to newly released 0.16.0, producing 381 unrelated lint
+  findings. The bounded repair caps Ruff below 0.16 without changing the lint
+  command, rules, ignores, tests, or coverage. Full repository lint passes with
+  Ruff 0.15.22; adoption of 0.16 rules remains a dedicated repository change.
 
 ## Comments Deferred
 

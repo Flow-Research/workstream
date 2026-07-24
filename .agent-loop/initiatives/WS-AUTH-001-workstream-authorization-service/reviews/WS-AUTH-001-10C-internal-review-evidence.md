@@ -7,8 +7,8 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `3d53cc30020ec379088a1637bd8db68183f0ce46`
-Reviewed at: 2026-07-24T17:49:45Z
+Reviewed code SHA: `477b105520ee019497a520b87e259ff469d0ffa4`
+Reviewed at: 2026-07-24T18:34:06Z
 Reviewer run IDs: senior-engineering=/root/auth10c_impl_senior; QA/test=/root/auth10c_impl_qa_retry; security/auth=/root/auth10c_impl_security; product/ops=/root/auth10c_impl_product; architecture=/root/auth10c_arch_exact; docs=/root/auth10c_docs_exact; CI-integrity=/root/auth10c_impl_ci_retry; reuse/dedup=/root/auth10c_reuse_exact; test-delta=/root/auth10c_impl_testdelta
 
 ## Implemented Contract
@@ -59,7 +59,10 @@ repository-wide 78 percent floor and authorization-subsystem 90 percent floor.
 ## Integrity And Review
 
 No test was deleted, skipped, xfailed, or weakened. No workflow, dependency,
-shard, command, threshold, package script, or coverage configuration changed.
+shard, command, threshold, package script, or coverage configuration was
+weakened. The development dependency now caps Ruff below 0.16 after the newly
+released 0.16.0 introduced 381 repository-wide findings; the unchanged full
+`ruff check app tests scripts` command passes with Ruff 0.15.22.
 Migration `0034` is tracked and follows `0033_authorization_read_rate`.
 
 | Reviewer | Result | Blocking findings |
