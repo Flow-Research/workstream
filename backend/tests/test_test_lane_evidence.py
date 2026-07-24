@@ -21,12 +21,6 @@ SPEC.loader.exec_module(validator)
 REAL_COLLECT_CURRENT_NODES = validator._collect_current_nodes
 HEAD = "a" * 40
 LANES = ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
-ISOLATION_LANES = {
-    "no_postgres": ("no_postgres",),
-    "schema_contracts": ("schema_contracts",),
-    "control_plane": ("control_plane_authority", "control_plane_projects"),
-    "execution_plane": ("execution_plane_artifacts", "execution_plane_tasks_checkers"),
-}
 
 
 def _write(path: Path, value: object) -> str:
@@ -64,35 +58,31 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
     lane_rows = []
     for lane in LANES:
         nodeids = [row["nodeid"] for row in nodes if row["lane"] == lane]
-        isolation_files = []
-        isolation_digests = []
+        isolation_file = None
+        isolation_digest = None
         coverage_file = None
         coverage_digest = None
         if mode == "run":
-            for resource_lane in ISOLATION_LANES[lane]:
-                isolation_file = f"{resource_lane}.isolation.json"
-                isolation_files.append(isolation_file)
-                isolation_digests.append(
-                    _write(
-                        metadata / isolation_file,
-                        {
-                            "alembic_head": "head",
-                            "cleanup_complete": True,
-                            "database_cleanup_complete": True,
-                            "database_name": f"database_{resource_lane}",
-                            "database_provisioned": True,
-                            "database_role": f"role_{resource_lane}",
-                            "lane": resource_lane,
-                            "minio_bucket": f"bucket-{resource_lane.replace('_', '-')}",
-                            "minio_cleanup_complete": True,
-                            "minio_prefix": f"prefix/{resource_lane}",
-                            "minio_probe_complete": True,
-                            "minio_provisioned": True,
-                            "schema_version": 2,
-                            "tree_sha": HEAD,
-                        },
-                    )
-                )
+            isolation_file = f"{lane}.isolation.json"
+            isolation_digest = _write(
+                metadata / isolation_file,
+                {
+                    "alembic_head": "head",
+                    "cleanup_complete": True,
+                    "database_cleanup_complete": True,
+                    "database_name": f"database_{lane}",
+                    "database_provisioned": True,
+                    "database_role": f"role_{lane}",
+                    "lane": lane,
+                    "minio_bucket": f"bucket-{lane.replace('_', '-')}",
+                    "minio_cleanup_complete": True,
+                    "minio_prefix": f"prefix/{lane}",
+                    "minio_probe_complete": True,
+                    "minio_provisioned": True,
+                    "schema_version": 2,
+                    "tree_sha": HEAD,
+                },
+            )
             coverage_file = f"coverage.{lane}"
             (metadata / coverage_file).write_bytes(f"coverage:{lane}".encode())
             coverage_digest = hashlib.sha256((metadata / coverage_file).read_bytes()).hexdigest()
@@ -103,8 +93,8 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
                 "collected_nodes": nodeids,
                 "completed_nodes": nodeids if mode == "run" else [],
                 "deselected_nodes": [],
-                "isolation_metadata_files": isolation_files,
-                "isolation_metadata_sha256s": isolation_digests,
+                "isolation_metadata_file": isolation_file,
+                "isolation_metadata_sha256": isolation_digest,
                 "skipped_nodes": [],
             },
         )
@@ -309,10 +299,10 @@ def test_rejects_recorded_database_environment_or_shared_coverage(tmp_path: Path
     metadata, summary_path, summary = _bundle(tmp_path)
     lane = summary["lanes"][0]
     evidence = json.loads((metadata / lane["evidence_file"]).read_text())
-    isolation_path = metadata / evidence["isolation_metadata_files"][0]
+    isolation_path = metadata / evidence["isolation_metadata_file"]
     isolation = json.loads(isolation_path.read_text())
     isolation["admin_database_url"] = "postgresql://admin:secret@example.invalid/db"
-    evidence["isolation_metadata_sha256s"][0] = _write(isolation_path, isolation)
+    evidence["isolation_metadata_sha256"] = _write(isolation_path, isolation)
     lane["evidence_sha256"] = _write(metadata / lane["evidence_file"], evidence)
     _write(summary_path, summary)
     with pytest.raises(validator.EvidenceError, match="invalid_isolation_metadata"):
@@ -323,34 +313,6 @@ def test_rejects_recorded_database_environment_or_shared_coverage(tmp_path: Path
     summary["lanes"][1]["coverage_sha256"] = summary["lanes"][0]["coverage_sha256"]
     _write(summary_path, summary)
     with pytest.raises(validator.EvidenceError, match="shared_lane_artifact"):
-        validator.validate_evidence(metadata, summary_path, tmp_path)
-
-
-def test_rejects_missing_or_foreign_semantic_isolation_unit(tmp_path: Path) -> None:
-    metadata, summary_path, summary = _bundle(tmp_path)
-    lane = next(row for row in summary["lanes"] if row["name"] == "control_plane")
-    evidence_path = metadata / lane["evidence_file"]
-    evidence = json.loads(evidence_path.read_text())
-    evidence["isolation_metadata_files"].pop()
-    evidence["isolation_metadata_sha256s"].pop()
-    lane["evidence_sha256"] = _write(evidence_path, evidence)
-    _write(summary_path, summary)
-
-    with pytest.raises(validator.EvidenceError, match="invalid_isolation_inventory"):
-        validator.validate_evidence(metadata, summary_path, tmp_path)
-
-    metadata, summary_path, summary = _bundle(tmp_path / "foreign")
-    lane = next(row for row in summary["lanes"] if row["name"] == "control_plane")
-    evidence_path = metadata / lane["evidence_file"]
-    evidence = json.loads(evidence_path.read_text())
-    isolation_path = metadata / evidence["isolation_metadata_files"][0]
-    isolation = json.loads(isolation_path.read_text())
-    isolation["lane"] = "control_plane_foreign"
-    evidence["isolation_metadata_sha256s"][0] = _write(isolation_path, isolation)
-    lane["evidence_sha256"] = _write(evidence_path, evidence)
-    _write(summary_path, summary)
-
-    with pytest.raises(validator.EvidenceError, match="invalid_isolation_metadata"):
         validator.validate_evidence(metadata, summary_path, tmp_path)
 
 

@@ -21,12 +21,6 @@ import uuid
 
 SCHEMA_VERSION = 1
 LANE_COUNT = 4
-ISOLATION_LANES = {
-    "no_postgres": {"no_postgres"},
-    "schema_contracts": {"schema_contracts"},
-    "control_plane": {"control_plane_authority", "control_plane_projects"},
-    "execution_plane": {"execution_plane_artifacts", "execution_plane_tasks_checkers"},
-}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LANE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -476,8 +470,8 @@ def validate_evidence(
                 "collected_nodes",
                 "completed_nodes",
                 "deselected_nodes",
-                "isolation_metadata_files",
-                "isolation_metadata_sha256s",
+                "isolation_metadata_file",
+                "isolation_metadata_sha256",
                 "skipped_nodes",
             },
             "invalid_lane_evidence",
@@ -502,8 +496,8 @@ def validate_evidence(
             ):
                 raise EvidenceError("invalid_collect_mode_artifacts")
             if (
-                evidence["isolation_metadata_files"] != []
-                or evidence["isolation_metadata_sha256s"] != []
+                evidence["isolation_metadata_file"] is not None
+                or evidence["isolation_metadata_sha256"] is not None
             ):
                 raise EvidenceError("invalid_collect_mode_artifacts")
         else:
@@ -511,82 +505,64 @@ def validate_evidence(
                 raise EvidenceError("partial_or_duplicate_completion")
             _bound_bytes(metadata_dir, lane["coverage_file"], lane["coverage_sha256"])
             coverage_files.append(lane["coverage_file"])
-            metadata_files = evidence["isolation_metadata_files"]
-            metadata_digests = evidence["isolation_metadata_sha256s"]
-            if (
-                not isinstance(metadata_files, list)
-                or not isinstance(metadata_digests, list)
-                or len(metadata_files) != len(metadata_digests)
-                or len(set(metadata_files)) != len(metadata_files)
-                or any(not isinstance(value, str) for value in metadata_files)
-                or any(not isinstance(value, str) for value in metadata_digests)
-            ):
-                raise EvidenceError("invalid_isolation_inventory")
-            observed_resource_lanes: set[str] = set()
-            for metadata_file, metadata_digest in zip(
-                metadata_files, metadata_digests, strict=True
-            ):
-                isolation_files.append(metadata_file)
-                isolation = _object(
-                    _json_bytes(
-                        _bound_bytes(metadata_dir, metadata_file, metadata_digest),
-                        "invalid_isolation_metadata",
+            isolation_files.append(evidence["isolation_metadata_file"])
+            isolation = _object(
+                _json_bytes(
+                    _bound_bytes(
+                        metadata_dir,
+                        evidence["isolation_metadata_file"],
+                        evidence["isolation_metadata_sha256"],
                     ),
-                    {
-                        "alembic_head",
-                        "cleanup_complete",
-                        "database_name",
-                        "database_cleanup_complete",
-                        "database_provisioned",
-                        "database_role",
-                        "lane",
-                        "minio_bucket",
-                        "minio_cleanup_complete",
-                        "minio_prefix",
-                        "minio_probe_complete",
-                        "minio_provisioned",
-                        "schema_version",
-                        "tree_sha",
-                    },
                     "invalid_isolation_metadata",
-                )
-                namespace_fields = (
+                ),
+                {
+                    "alembic_head",
+                    "cleanup_complete",
                     "database_name",
+                    "database_cleanup_complete",
+                    "database_provisioned",
                     "database_role",
+                    "lane",
                     "minio_bucket",
+                    "minio_cleanup_complete",
                     "minio_prefix",
+                    "minio_probe_complete",
+                    "minio_provisioned",
+                    "schema_version",
+                    "tree_sha",
+                },
+                "invalid_isolation_metadata",
+            )
+            namespace_fields = (
+                "database_name",
+                "database_role",
+                "minio_bucket",
+                "minio_prefix",
+            )
+            if (
+                isolation["schema_version"] != 2
+                or isolation["tree_sha"] != head
+                or isolation["lane"] != name
+                or isolation["database_provisioned"] is not True
+                or isolation["minio_provisioned"] is not True
+                or isolation["database_cleanup_complete"] is not True
+                or isolation["minio_probe_complete"] is not True
+                or isolation["minio_cleanup_complete"] is not True
+                or isolation["cleanup_complete"] is not True
+                or not isinstance(isolation["alembic_head"], str)
+                or not isolation["alembic_head"]
+                or any(
+                    not isinstance(isolation[field], str) or not isolation[field]
+                    for field in namespace_fields
                 )
-                resource_lane = isolation["lane"]
-                if (
-                    isolation["schema_version"] != 2
-                    or isolation["tree_sha"] != head
-                    or not isinstance(resource_lane, str)
-                    or resource_lane not in ISOLATION_LANES.get(name, set())
-                    or isolation["database_provisioned"] is not True
-                    or isolation["minio_provisioned"] is not True
-                    or isolation["database_cleanup_complete"] is not True
-                    or isolation["minio_probe_complete"] is not True
-                    or isolation["minio_cleanup_complete"] is not True
-                    or isolation["cleanup_complete"] is not True
-                    or not isinstance(isolation["alembic_head"], str)
-                    or not isolation["alembic_head"]
-                    or any(
-                        not isinstance(isolation[field], str) or not isolation[field]
-                        for field in namespace_fields
-                    )
-                    or DATABASE_IDENTIFIER_RE.fullmatch(isolation["database_name"]) is None
-                    or DATABASE_IDENTIFIER_RE.fullmatch(isolation["database_role"]) is None
-                    or BUCKET_RE.fullmatch(isolation["minio_bucket"]) is None
-                    or PurePosixPath(isolation["minio_prefix"]).is_absolute()
-                    or ".." in PurePosixPath(isolation["minio_prefix"]).parts
-                ):
-                    raise EvidenceError("invalid_isolation_metadata")
-                observed_resource_lanes.add(resource_lane)
-                isolation_namespaces.append(
-                    tuple(isolation[field] for field in namespace_fields)
-                )
-            if observed_resource_lanes != ISOLATION_LANES.get(name):
-                raise EvidenceError("invalid_isolation_inventory")
+                or DATABASE_IDENTIFIER_RE.fullmatch(isolation["database_name"]) is None
+                or DATABASE_IDENTIFIER_RE.fullmatch(isolation["database_role"]) is None
+                or BUCKET_RE.fullmatch(isolation["minio_bucket"]) is None
+                or PurePosixPath(isolation["minio_prefix"]).is_absolute()
+                or ".." in PurePosixPath(isolation["minio_prefix"]).parts
+            ):
+                raise EvidenceError("invalid_isolation_metadata")
+            isolation_namespaces.append(tuple(isolation[field] for field in namespace_fields))
         all_collected.extend(collected)
         all_completed.extend(completed)
 
@@ -595,14 +571,12 @@ def validate_evidence(
     if mode == "run" and Counter(all_completed) != Counter(canonical_ids):
         raise EvidenceError("global_completion_reconciliation_failed")
     if mode == "run" and any(
-        len({namespace[index] for namespace in isolation_namespaces})
-        != len(isolation_namespaces)
+        len({namespace[index] for namespace in isolation_namespaces}) != LANE_COUNT
         for index in range(4)
     ):
         raise EvidenceError("shared_isolation_namespace")
     if mode == "run" and (
-        len(set(coverage_files)) != LANE_COUNT
-        or len(set(isolation_files)) != sum(len(value) for value in ISOLATION_LANES.values())
+        len(set(coverage_files)) != LANE_COUNT or len(set(isolation_files)) != LANE_COUNT
     ):
         raise EvidenceError("shared_lane_artifact")
     aggregate = summary["aggregate_runner_seconds"]
