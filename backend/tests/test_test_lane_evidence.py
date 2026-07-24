@@ -1,0 +1,296 @@
+"""Tests for independent semantic test-lane evidence validation."""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/validate_test_lane_evidence.py"
+SPEC = importlib.util.spec_from_file_location("validate_test_lane_evidence", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+validator = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(validator)
+HEAD = "a" * 40
+LANES = ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
+
+
+def _write(path: Path, value: object) -> str:
+    data = json.dumps(value, sort_keys=True).encode()
+    path.write_bytes(data)
+    return hashlib.sha256(data).hexdigest()
+
+
+def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
+    metadata = tmp_path / "metadata"
+    metadata.mkdir(parents=True)
+    nodes = [
+        {
+            "execution_kind": "ordinary_isolated",
+            "lane": lane,
+            "module": f"tests/test_{index}.py",
+            "nodeid": f"tests/test_{index}.py::test_ok",
+        }
+        for index, lane in enumerate(LANES)
+    ]
+    nodes.append(
+        {
+            "execution_kind": "admin_runner_self_test",
+            "lane": "schema_contracts",
+            "module": "tests/test_isolated_database_runner.py",
+            "nodeid": "tests/test_isolated_database_runner.py::test_admin_custody",
+        }
+    )
+    nodes.sort(key=lambda row: row["nodeid"])
+    manifest_name = "manifest.json"
+    manifest_digest = _write(
+        metadata / manifest_name,
+        {"head_sha": HEAD, "nodes": nodes, "schema_version": 1},
+    )
+    lane_rows = []
+    for lane in LANES:
+        nodeids = [row["nodeid"] for row in nodes if row["lane"] == lane]
+        isolation_file = None
+        isolation_digest = None
+        coverage_file = None
+        coverage_digest = None
+        if mode == "run":
+            isolation_file = f"{lane}.isolation.json"
+            isolation_digest = _write(
+                metadata / isolation_file,
+                {
+                    "alembic_head": "head",
+                    "cleanup_complete": True,
+                    "database_cleanup_complete": True,
+                    "database_name": f"database_{lane}",
+                    "database_provisioned": True,
+                    "database_role": f"role_{lane}",
+                    "lane": lane,
+                    "minio_bucket": f"bucket-{lane.replace('_', '-')}",
+                    "minio_cleanup_complete": True,
+                    "minio_prefix": f"prefix/{lane}",
+                    "minio_probe_complete": True,
+                    "minio_provisioned": True,
+                    "schema_version": 2,
+                    "tree_sha": HEAD,
+                },
+            )
+            coverage_file = f"coverage.{lane}"
+            (metadata / coverage_file).write_bytes(f"coverage:{lane}".encode())
+            coverage_digest = hashlib.sha256((metadata / coverage_file).read_bytes()).hexdigest()
+        evidence_file = f"{lane}.evidence.json"
+        evidence_digest = _write(
+            metadata / evidence_file,
+            {
+                "collected_nodes": nodeids,
+                "completed_nodes": nodeids if mode == "run" else [],
+                "deselected_nodes": [],
+                "isolation_metadata_file": isolation_file,
+                "isolation_metadata_sha256": isolation_digest,
+                "skipped_nodes": [],
+            },
+        )
+        lane_rows.append(
+            {
+                "collection_exit_code": 0,
+                "coverage_file": coverage_file,
+                "coverage_sha256": coverage_digest,
+                "elapsed_seconds": 1.0,
+                "evidence_file": evidence_file,
+                "evidence_sha256": evidence_digest,
+                "execution_exit_code": 0 if mode == "run" else None,
+                "interrupted": False,
+                "name": lane,
+            }
+        )
+    summary = {
+        "canonical_node_count": 5,
+        "elapsed_seconds": 2.0,
+        "head_sha": HEAD,
+        "lanes": lane_rows,
+        "manifest_file": manifest_name,
+        "manifest_sha256": manifest_digest,
+        "mode": mode,
+        "schema_version": 1,
+    }
+    summary_path = tmp_path / "summary.json"
+    _write(summary_path, summary)
+    return metadata, summary_path, summary
+
+
+@pytest.fixture(autouse=True)
+def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(validator, "_current_head", lambda _root: HEAD)
+
+
+@pytest.mark.parametrize("mode", ["collect", "run"])
+def test_validates_complete_exact_custody(tmp_path: Path, mode: str) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path, mode)
+    assert validator.validate_evidence(metadata, summary_path, tmp_path) == summary
+
+
+def test_rejects_wrong_head_and_noncanonical_manifest(tmp_path: Path) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    summary["head_sha"] = "b" * 40
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="head_sha_mismatch"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+    metadata, summary_path, summary = _bundle(tmp_path / "second")
+    manifest = json.loads((metadata / "manifest.json").read_text())
+    manifest["nodes"].reverse()
+    summary["manifest_sha256"] = _write(metadata / "manifest.json", manifest)
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="noncanonical"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda evidence: evidence["collected_nodes"].clear(), "collected_node_reconciliation"),
+        (
+            lambda evidence: evidence["collected_nodes"].append("tests/test_0.py::test_ok"),
+            "collected_node_reconciliation",
+        ),
+        (
+            lambda evidence: evidence["collected_nodes"].append("tests/test_foreign.py::test_bad"),
+            "collected_node_reconciliation",
+        ),
+        (lambda evidence: evidence["completed_nodes"].clear(), "partial_or_duplicate_completion"),
+        (
+            lambda evidence: evidence["skipped_nodes"].append(evidence["collected_nodes"][0]),
+            "unexpected_skipped",
+        ),
+        (
+            lambda evidence: evidence["deselected_nodes"].append(evidence["collected_nodes"][0]),
+            "unexpected_deselected",
+        ),
+    ],
+)
+def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    lane = summary["lanes"][0]
+    evidence_path = metadata / lane["evidence_file"]
+    evidence = json.loads(evidence_path.read_text())
+    mutation(evidence)
+    lane["evidence_sha256"] = _write(evidence_path, evidence)
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match=message):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("collection_exit_code", 1, "collection_failed"),
+        ("execution_exit_code", None, "execution_incomplete"),
+        ("interrupted", True, "lane_interrupted"),
+    ],
+)
+def test_rejects_failed_or_partial_lane(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    summary["lanes"][0][field] = value
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match=message):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+def test_rejects_digest_tampering_and_unsafe_paths(tmp_path: Path) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    (metadata / summary["lanes"][0]["coverage_file"]).write_bytes(b"tampered")
+    with pytest.raises(validator.EvidenceError, match="evidence_digest_mismatch"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+    metadata, summary_path, summary = _bundle(tmp_path / "link-case")
+    target = metadata / summary["lanes"][0]["evidence_file"]
+    real = metadata / "real.json"
+    target.rename(real)
+    target.symlink_to(real)
+    with pytest.raises(validator.EvidenceError, match="unsafe_evidence_path"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+def test_rejects_wrong_lane_count_zero_nodes_and_unknown_keys(tmp_path: Path) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    summary["lanes"].pop()
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="invalid_lane_count"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+    metadata, summary_path, summary = _bundle(tmp_path / "zero")
+    manifest = {"head_sha": HEAD, "nodes": [], "schema_version": 1}
+    summary["manifest_sha256"] = _write(metadata / "manifest.json", manifest)
+    summary["canonical_node_count"] = 0
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="zero_canonical_nodes"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+    metadata, summary_path, summary = _bundle(tmp_path / "keys")
+    summary["unexpected"] = True
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="invalid_summary"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (
+            lambda rows: rows.__setitem__(
+                slice(None),
+                [row for row in rows if row["module"] != validator.ADMIN_RUNNER_MODULE],
+            ),
+            "missing_admin_runner_self_tests",
+        ),
+        (
+            lambda rows: rows[-1].__setitem__("execution_kind", validator.ORDINARY_KIND),
+            "invalid_manifest_node",
+        ),
+        (
+            lambda rows: rows[0].__setitem__("execution_kind", validator.ADMIN_KIND),
+            "invalid_manifest_node",
+        ),
+        (lambda rows: rows.append(dict(rows[-1])), "noncanonical_or_duplicate"),
+    ],
+)
+def test_rejects_missing_duplicate_or_wrong_kind_admin_custody(
+    tmp_path: Path, mutate, message: str
+) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    manifest_path = metadata / summary["manifest_file"]
+    manifest = json.loads(manifest_path.read_text())
+    mutate(manifest["nodes"])
+    manifest["nodes"].sort(key=lambda row: row["nodeid"])
+    summary["canonical_node_count"] = len(manifest["nodes"])
+    summary["manifest_sha256"] = _write(manifest_path, manifest)
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match=message):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+def test_rejects_recorded_database_environment_or_shared_coverage(tmp_path: Path) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    lane = summary["lanes"][0]
+    evidence = json.loads((metadata / lane["evidence_file"]).read_text())
+    isolation_path = metadata / evidence["isolation_metadata_file"]
+    isolation = json.loads(isolation_path.read_text())
+    isolation["admin_database_url"] = "postgresql://admin:secret@example.invalid/db"
+    evidence["isolation_metadata_sha256"] = _write(isolation_path, isolation)
+    lane["evidence_sha256"] = _write(metadata / lane["evidence_file"], evidence)
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="invalid_isolation_metadata"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+    metadata, summary_path, summary = _bundle(tmp_path / "shared")
+    summary["lanes"][1]["coverage_file"] = summary["lanes"][0]["coverage_file"]
+    summary["lanes"][1]["coverage_sha256"] = summary["lanes"][0]["coverage_sha256"]
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="shared_lane_artifact"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
