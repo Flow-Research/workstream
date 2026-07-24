@@ -1572,7 +1572,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert link_case_issue.status_code == 201, link_case_issue.text
         revoked_target_link = await client.post(
-            f"/api/v1/actor-identity-links/{worker_admin_link['id']}/revoke",
+            f"/api/v1/actor-identity-links/{worker_admin_link['identity_link_id']}/revoke",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Prove revoked-link grant removal"},
         )
@@ -1585,7 +1585,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert link_case_revoke.status_code == 200, link_case_revoke.text
         repaired_target_link = await client.post(
-            f"/api/v1/actor-identity-links/{worker_admin_link['id']}/reactivate",
+            f"/api/v1/actor-identity-links/{worker_admin_link['identity_link_id']}/reactivate",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
             json={"reason": "Restore API contract contributor identity link"},
         )
