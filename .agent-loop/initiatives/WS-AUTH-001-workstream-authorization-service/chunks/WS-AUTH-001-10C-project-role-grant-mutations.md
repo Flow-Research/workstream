@@ -47,12 +47,20 @@ backend/tests/test_authorization.py
 backend/tests/test_api_controls.py
 backend/tests/test_projects.py
 backend/scripts/api_contract_e2e.py
+backend/pyproject.toml
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/merge-intents/WS-AUTH-001-10C.json
 .agent-loop/REVIEW_LOG.md
 ```
+
+`backend/pyproject.toml` is allowed only for the bounded integration repair
+that caps Ruff below 0.16. GitHub resolved the previously open `<1.0` range to
+Ruff 0.16.0 on 2026-07-24, which introduced 381 repository-wide lint findings
+outside AUTH-10C. This chunk must not mass-rewrite unrelated subsystems; it
+retains the last repository-compatible minor line until a dedicated lint
+adoption change reviews the new rules.
 
 ## Not allowed changes
 
