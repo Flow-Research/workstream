@@ -283,7 +283,6 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
             "execution_exit_code": 0,
             "interrupted": False,
             "isolation_path": isolation,
-            "resource_lane": lane.name,
             "skipped_nodes": [],
         },
         {
@@ -297,7 +296,6 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
             "execution_exit_code": 0,
             "interrupted": False,
             "isolation_path": tmp_path / "unused-admin.database.json",
-            "resource_lane": f"{lane.name}.admin",
             "skipped_nodes": [],
         },
     ]
@@ -325,7 +323,6 @@ def test_finalize_lane_rejects_missing_ordinary_coverage(tmp_path: Path) -> None
             "execution_exit_code": 0,
             "interrupted": False,
             "isolation_path": isolation,
-            "resource_lane": lane.name,
             "skipped_nodes": [],
         }
     ]
@@ -480,7 +477,6 @@ def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path
                 "execution_exit_code": 0,
             "isolation_path": isolation,
             "interrupted": False,
-            "resource_lane": lane.name,
             "skipped_nodes": [],
         }
         rows.append(runner._finalize_lane(lane, [unit], tmp_path))

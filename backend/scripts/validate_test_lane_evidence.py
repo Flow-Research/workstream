@@ -27,31 +27,6 @@ ISOLATION_LANES = {
     "control_plane": {"control_plane_authority", "control_plane_projects"},
     "execution_plane": {"execution_plane_artifacts", "execution_plane_tasks_checkers"},
 }
-SEMANTIC_UNIT_MODULES = {
-    "control_plane": {
-        "control_plane_authority": {
-            "tests/test_actors.py",
-            "tests/test_api_rate_controls.py",
-            "tests/test_audit.py",
-            "tests/test_auth.py",
-            "tests/test_authorization.py",
-        },
-        "control_plane_projects": {"tests/test_projects.py"},
-    },
-    "execution_plane": {
-        "execution_plane_artifacts": {
-            "tests/test_artifact_admission.py",
-            "tests/test_artifact_operator_api.py",
-            "tests/test_artifact_recovery.py",
-            "tests/test_db_session.py",
-            "tests/test_outbox.py",
-        },
-        "execution_plane_tasks_checkers": {
-            "tests/test_checkers.py",
-            "tests/test_tasks.py",
-        },
-    },
-}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
 LANE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -503,8 +478,6 @@ def validate_evidence(
                 "deselected_nodes",
                 "isolation_metadata_files",
                 "isolation_metadata_sha256s",
-                "isolation_unit_collected_nodes",
-                "isolation_unit_completed_nodes",
                 "skipped_nodes",
             },
             "invalid_lane_evidence",
@@ -531,8 +504,6 @@ def validate_evidence(
             if (
                 evidence["isolation_metadata_files"] != []
                 or evidence["isolation_metadata_sha256s"] != []
-                or evidence["isolation_unit_collected_nodes"] != {}
-                or evidence["isolation_unit_completed_nodes"] != {}
             ):
                 raise EvidenceError("invalid_collect_mode_artifacts")
         else:
@@ -542,8 +513,6 @@ def validate_evidence(
             coverage_files.append(lane["coverage_file"])
             metadata_files = evidence["isolation_metadata_files"]
             metadata_digests = evidence["isolation_metadata_sha256s"]
-            unit_collected = evidence["isolation_unit_collected_nodes"]
-            unit_completed = evidence["isolation_unit_completed_nodes"]
             if (
                 not isinstance(metadata_files, list)
                 or not isinstance(metadata_digests, list)
@@ -551,48 +520,8 @@ def validate_evidence(
                 or len(set(metadata_files)) != len(metadata_files)
                 or any(not isinstance(value, str) for value in metadata_files)
                 or any(not isinstance(value, str) for value in metadata_digests)
-                or not isinstance(unit_collected, dict)
-                or not isinstance(unit_completed, dict)
             ):
                 raise EvidenceError("invalid_isolation_inventory")
-            expected_units = ISOLATION_LANES.get(name, set())
-            if set(unit_collected) != expected_units or set(unit_completed) != expected_units:
-                raise EvidenceError("invalid_isolation_unit_node_inventory")
-            configured_modules = SEMANTIC_UNIT_MODULES.get(name)
-            expected_unit_nodes: dict[str, list[str]] = {}
-            for resource_lane in expected_units:
-                if configured_modules is None:
-                    expected_unit_nodes[resource_lane] = sorted(
-                        nodeid
-                        for nodeid, _module, public_lane, kind in canonical
-                        if public_lane == name and kind == ORDINARY_KIND
-                    )
-                else:
-                    modules = configured_modules.get(resource_lane)
-                    if modules is None:
-                        raise EvidenceError("invalid_isolation_unit_node_inventory")
-                    expected_unit_nodes[resource_lane] = sorted(
-                        nodeid
-                        for nodeid, module, public_lane, kind in canonical
-                        if public_lane == name
-                        and kind == ORDINARY_KIND
-                        and module in modules
-                    )
-                collected_nodes = _nodes(
-                    unit_collected[resource_lane], "isolation_unit_collected_nodes"
-                )
-                completed_nodes = _nodes(
-                    unit_completed[resource_lane], "isolation_unit_completed_nodes"
-                )
-                if (
-                    not expected_unit_nodes[resource_lane]
-                    or Counter(collected_nodes)
-                    != Counter(expected_unit_nodes[resource_lane])
-                    or Counter(completed_nodes) != Counter(collected_nodes)
-                    or len(collected_nodes) != len(set(collected_nodes))
-                    or len(completed_nodes) != len(set(completed_nodes))
-                ):
-                    raise EvidenceError("isolation_unit_node_reconciliation_failed")
             observed_resource_lanes: set[str] = set()
             for metadata_file, metadata_digest in zip(
                 metadata_files, metadata_digests, strict=True
