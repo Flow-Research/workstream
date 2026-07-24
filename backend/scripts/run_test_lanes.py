@@ -130,6 +130,36 @@ LANES = (
         ),
     ),
 )
+SEMANTIC_UNITS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
+    "control_plane": (
+        (
+            "authority",
+            (
+                "tests/test_actors.py",
+                "tests/test_api_rate_controls.py",
+                "tests/test_audit.py",
+                "tests/test_auth.py",
+                "tests/test_authorization.py",
+            ),
+        ),
+        ("projects", ("tests/test_projects.py",)),
+    ),
+    "execution_plane": (
+        (
+            "artifacts",
+            (
+                "tests/test_artifact_admission.py",
+                "tests/test_artifact_operator_api.py",
+                "tests/test_artifact_recovery.py",
+                "tests/test_db_session.py",
+                "tests/test_outbox.py",
+            ),
+        ),
+        ("tasks_checkers", ("tests/test_checkers.py", "tests/test_tasks.py")),
+    ),
+}
+
+
 @dataclass
 class ActiveLane:
     key: str
@@ -140,6 +170,7 @@ class ActiveLane:
     log: TextIO
     log_path: Path
     evidence_path: Path
+    isolation_path: Path
     coverage_path: Path
     started_at: float
     interrupted_at: float | None = None
@@ -472,6 +503,7 @@ def admin_runner_environment(
 
 def lane_command(
     lane: TestLane,
+    resource_lane: str,
     nodes: list[str],
     metadata_dir: Path,
     timeout_seconds: float,
@@ -483,7 +515,7 @@ def lane_command(
     ]
     return [
         sys.executable, str(ISOLATED_RUNNER), "--metadata-json",
-        str(metadata_dir / f"{lane.name}.database.json"), "--lane", lane.name,
+        str(metadata_dir / f"{resource_lane}.database.json"), "--lane", resource_lane,
         "--tree-sha", tree_sha, "--timeout-seconds", f"{timeout_seconds:g}",
         "--", *pytest_command,
     ]
@@ -538,6 +570,7 @@ def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str
         "execution_kind": active.execution_kind,
         "execution_exit_code": exit_code,
         "interrupted": active.interrupted_at is not None or active.timed_out,
+        "isolation_path": active.isolation_path,
         "skipped_nodes": skipped,
     }
 
@@ -561,22 +594,28 @@ def _combine_coverage(sources: list[Path], destination: Path) -> None:
 def _finalize_lane(
     lane: TestLane, units: list[dict[str, Any]], metadata_dir: Path
 ) -> dict[str, Any]:
+    ordered_units = sorted(
+        units,
+        key=lambda unit: (
+            str(unit["execution_kind"]),
+            unit["isolation_path"].name,
+        ),
+    )
     evidence_path = metadata_dir / f"{lane.name}.json"
-    isolation_path = metadata_dir / f"{lane.name}.database.json"
     coverage_path = metadata_dir / f".coverage.{lane.name}"
     execution_exit_code = _aggregate_exit_codes(
-        [unit["execution_exit_code"] for unit in units]
+        [unit["execution_exit_code"] for unit in ordered_units]
     )
     ordinary_coverage = [
         unit["coverage_path"]
-        for unit in units
+        for unit in ordered_units
         if unit["execution_kind"] == ORDINARY_KIND
     ]
     if execution_exit_code == 0 and not ordinary_coverage:
         raise LaneError("missing_ordinary_lane_coverage")
     optional_admin_coverage = [
         unit["coverage_path"]
-        for unit in units
+        for unit in ordered_units
         if unit["execution_kind"] == ADMIN_KIND
         and unit["coverage_path"].is_file()
         and not unit["coverage_path"].is_symlink()
@@ -589,31 +628,49 @@ def _finalize_lane(
     ):
         _combine_coverage(selected_coverage, coverage_path)
     evidence = {
-        "collected_nodes": sorted(node for unit in units for node in unit["collected_nodes"]),
-        "completed_nodes": sorted(node for unit in units for node in unit["completed_nodes"]),
-        "deselected_nodes": sorted(set(node for unit in units for node in unit["deselected_nodes"])),
-        "isolation_metadata_file": isolation_path.name,
-        "isolation_metadata_sha256": _sha256(isolation_path.read_bytes()),
-        "skipped_nodes": sorted(set(node for unit in units for node in unit["skipped_nodes"])),
+        "collected_nodes": sorted(
+            node for unit in ordered_units for node in unit["collected_nodes"]
+        ),
+        "completed_nodes": sorted(
+            node for unit in ordered_units for node in unit["completed_nodes"]
+        ),
+        "deselected_nodes": sorted(
+            set(node for unit in ordered_units for node in unit["deselected_nodes"])
+        ),
+        "isolation_metadata_files": [
+            unit["isolation_path"].name
+            for unit in ordered_units
+            if unit["execution_kind"] == ORDINARY_KIND
+        ],
+        "isolation_metadata_sha256s": [
+            _sha256(unit["isolation_path"].read_bytes())
+            for unit in ordered_units
+            if unit["execution_kind"] == ORDINARY_KIND
+        ],
+        "skipped_nodes": sorted(
+            set(node for unit in ordered_units for node in unit["skipped_nodes"])
+        ),
     }
     evidence_path.write_bytes(_json_bytes(evidence))
     if coverage_path.is_file() and not coverage_path.is_symlink():
-        for unit in units:
+        for unit in ordered_units:
             source = unit["coverage_path"]
             if source != coverage_path and source.is_file() and not source.is_symlink():
                 source.unlink()
     return {
         "collection_exit_code": _aggregate_exit_codes(
-            [unit["collection_exit_code"] for unit in units]
+            [unit["collection_exit_code"] for unit in ordered_units]
         ),
         "coverage_file": coverage_path.name,
         "coverage_sha256": _sha256(coverage_path.read_bytes())
         if coverage_path.is_file() and not coverage_path.is_symlink() else None,
-        "elapsed_seconds": round(max(unit["elapsed_seconds"] for unit in units), 3),
+        "elapsed_seconds": round(
+            max(unit["elapsed_seconds"] for unit in ordered_units), 3
+        ),
         "evidence_file": evidence_path.name,
         "evidence_sha256": _sha256(evidence_path.read_bytes()),
         "execution_exit_code": execution_exit_code,
-        "interrupted": any(unit["interrupted"] for unit in units),
+        "interrupted": any(unit["interrupted"] for unit in ordered_units),
         "name": lane.name,
     }
 
@@ -643,6 +700,34 @@ def _timing_summary(lanes: list[dict[str, Any]]) -> dict[str, float]:
     }
 
 
+def _ordinary_units(
+    lane: TestLane, ordinary_rows: list[dict[str, str]]
+) -> list[tuple[str, list[dict[str, str]]]]:
+    """Partition one public lane into fixed dependency-owned execution units."""
+    configured_units = SEMANTIC_UNITS.get(lane.name)
+    if configured_units is None:
+        return [(lane.name, ordinary_rows)]
+    configured_modules = [
+        module for _suffix, modules in configured_units for module in modules
+    ]
+    observed_modules = {row["module"] for row in ordinary_rows}
+    if (
+        len(configured_modules) != len(set(configured_modules))
+        or set(configured_modules) != observed_modules
+    ):
+        raise LaneError("invalid_semantic_unit_inventory")
+    units = [
+        (
+            f"{lane.name}_{suffix}",
+            [row for row in ordinary_rows if row["module"] in modules],
+        )
+        for suffix, modules in configured_units
+    ]
+    if any(not rows for _key, rows in units):
+        raise LaneError("empty_semantic_unit")
+    return units
+
+
 def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *, collect_only: bool = False) -> int:
     """Collect canonical nodes and optionally execute all lanes concurrently."""
     global INTERRUPTED
@@ -667,7 +752,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
             evidence_path = metadata_dir / f"{lane.name}.json"
             evidence_path.write_bytes(_json_bytes({
                 "collected_nodes": lane_nodes, "completed_nodes": [], "deselected_nodes": [],
-                "isolation_metadata_file": None, "isolation_metadata_sha256": None,
+                "isolation_metadata_files": [], "isolation_metadata_sha256s": [],
                 "skipped_nodes": [],
             }))
             lane_rows.append({
@@ -694,14 +779,22 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     try:
         for lane in LANES:
             lane_rows = [row for row in manifest["nodes"] if row["lane"] == lane.name]
-            kinds = [ORDINARY_KIND]
-            if any(row["execution_kind"] == ADMIN_KIND for row in lane_rows):
-                kinds.append(ADMIN_KIND)
-            for kind in kinds:
-                unit_nodes = [row["nodeid"] for row in lane_rows if row["execution_kind"] == kind]
+            ordinary_rows = [
+                row for row in lane_rows if row["execution_kind"] == ORDINARY_KIND
+            ]
+            units = [
+                (key, ORDINARY_KIND, rows)
+                for key, rows in _ordinary_units(lane, ordinary_rows)
+            ]
+            admin_rows = [
+                row for row in lane_rows if row["execution_kind"] == ADMIN_KIND
+            ]
+            if admin_rows:
+                units.append((f"{lane.name}.admin", ADMIN_KIND, admin_rows))
+            for key, kind, unit_rows in units:
+                unit_nodes = [row["nodeid"] for row in unit_rows]
                 if not unit_nodes:
-                    continue
-                key = lane.name if kind == ORDINARY_KIND else f"{lane.name}.admin"
+                    raise LaneError("empty_semantic_unit")
                 for suffix in ("collected", "completed", "skipped", "deselected"):
                     _exclusive_file(metadata_dir / f"{key}.{suffix}.jsonl")
                 log_path = metadata_dir / f"{key}.log"
@@ -713,7 +806,9 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                         lane, metadata_dir, coverage_path, key, tree_sha
                     )
                 else:
-                    command = lane_command(lane, unit_nodes, metadata_dir, timeout_seconds, tree_sha)
+                    command = lane_command(
+                        lane, key, unit_nodes, metadata_dir, timeout_seconds, tree_sha
+                    )
                     env = lane_environment(lane, metadata_dir, coverage_path, key, tree_sha)
                 process = subprocess.Popen(
                     command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -722,6 +817,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                 active[key] = ActiveLane(
                     key, lane, kind, tuple(unit_nodes), process, log, log_path,
                     metadata_dir / f"{key}.json",
+                    metadata_dir / f"{key}.database.json",
                     coverage_path, time.monotonic(),
                 )
         while active:

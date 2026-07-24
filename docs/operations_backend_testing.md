@@ -69,16 +69,21 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 
 The required GitHub check remains `Backend / test`. One job owns one
 digest-pinned PostgreSQL service, one digest-pinned MinIO service, and four
-concurrent dependency lanes. This avoids arbitrary shard fan-out and artifact
-fan-in while retaining exact node and coverage custody.
+public dependency lanes. The two slow database-heavy lanes each use two fixed
+semantic execution units, so six ordinary units run concurrently without
+reintroducing arbitrary shards or artifact fan-in.
 
 The job binds the checkout to `GITHUB_SHA`, installs and asserts exact Ruff
 `0.15.22`, runs lint and docstrings, starts MinIO, then collects every canonical
 pytest node. The independent evidence validator must
-accept the collection before execution begins. Each lane receives a distinct
-runner-created database and role plus a distinct MinIO bucket/prefix custody
-record. The S3 lane owns the actual `workstream-artifacts` test bucket and a
-unique run prefix; other lanes create, probe, and remove distinct buckets.
+accept the collection before execution begins. Each ordinary execution unit
+receives a distinct runner-created database and role plus a distinct MinIO
+bucket/prefix custody record. The no-PostgreSQL lane owns the actual
+`workstream-artifacts` test bucket and a unique run prefix; the other five units
+create, probe, and remove distinct buckets. The public `control_plane` lane is
+split into authority and project units; `execution_plane` is split into
+artifact/outbox and task/checker units. Their node sets and coverage are
+reconciled back into their public lanes.
 The isolated-runner self-tests remain in the canonical manifest as the explicit
 `admin_runner_self_test` execution kind. The lane orchestrator runs only those
 nodes directly with the admin URL while stripping application database URLs;
@@ -97,11 +102,12 @@ isolated invocation inside the same required job.
 ### Evidence bundle
 
 The workflow uploads the `.ci/test-lanes` tree even on failure. Its summary
-records the exact head, canonical node count, four lane results, elapsed time,
-and raw-file digests. Per-lane evidence records collected, completed, skipped,
-and deselected exact node IDs plus the bound resource-isolation metadata and
-coverage digest. Resource metadata is mode `0600`, omits credentials, and proves
-database, role, bucket, prefix, probe, and cleanup custody.
+records the exact head, canonical node count, four public lane results, elapsed
+time, and raw-file digests. Per-lane evidence records collected, completed,
+skipped, and deselected exact node IDs plus every bound execution-unit resource
+record and the public lane coverage digest. The six resource records are mode
+`0600`, omit credentials, and prove database, role, bucket, prefix, probe, and
+cleanup custody.
 
 The validator accepts only safe repository-local regular files and exact schema
 keys. It rejects symlinks, traversal, stale heads, digest drift, unexpected

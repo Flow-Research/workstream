@@ -6514,6 +6514,15 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert "run_isolated_tests.py" in lane_runner
     assert "admin_runner_self_test" in lane_validator
     assert "execution_kind" in lane_validator
+    assert "SEMANTIC_UNITS" in lane_runner
+    assert '"control_plane"' in lane_runner
+    assert '"execution_plane"' in lane_runner
+    assert '"control_plane_authority"' in lane_validator
+    assert '"control_plane_projects"' in lane_validator
+    assert '"execution_plane_artifacts"' in lane_validator
+    assert '"execution_plane_tasks_checkers"' in lane_validator
+    assert "ISOLATION_LANES" in lane_validator
+    assert "invalid_isolation_inventory" in lane_validator
 
     api_e2e_steps = [
         step for step in steps if step.get("name") == "API contract real API e2e"

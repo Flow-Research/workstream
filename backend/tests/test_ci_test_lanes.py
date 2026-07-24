@@ -12,6 +12,7 @@ import types
 import uuid
 
 import pytest  # type: ignore[import-not-found]
+from coverage import CoverageData
 
 import scripts.run_test_lanes as runner
 from scripts.run_test_lanes import LANES, LaneError, TestLane as LaneDefinition
@@ -198,7 +199,9 @@ def test_uuid4_and_repository_import_alias_are_restored_before_test_body(
 def test_lane_command_uses_exact_nodes_and_isolation_contract(tmp_path: Path) -> None:
     lane = LANES[0]
     nodes = [f"{lane.modules[0]}::test_exact[param]"]
-    command = runner.lane_command(lane, nodes, tmp_path, 1200, "b" * 40)
+    command = runner.lane_command(
+        lane, lane.name, nodes, tmp_path, 1200, "b" * 40
+    )
 
     assert command[1].endswith("scripts/run_isolated_tests.py")
     assert command[command.index("--lane") + 1] == lane.name
@@ -279,6 +282,7 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
             "execution_kind": runner.ORDINARY_KIND,
             "execution_exit_code": 0,
             "interrupted": False,
+            "isolation_path": isolation,
             "skipped_nodes": [],
         },
         {
@@ -291,6 +295,7 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
             "execution_kind": runner.ADMIN_KIND,
             "execution_exit_code": 0,
             "interrupted": False,
+            "isolation_path": tmp_path / "unused-admin.database.json",
             "skipped_nodes": [],
         },
     ]
@@ -304,7 +309,8 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
 
 def test_finalize_lane_rejects_missing_ordinary_coverage(tmp_path: Path) -> None:
     lane = LANES[0]
-    tmp_path.joinpath(f"{lane.name}.database.json").write_text("{}\n", encoding="utf-8")
+    isolation = tmp_path / f"{lane.name}.database.json"
+    isolation.write_text("{}\n", encoding="utf-8")
     units = [
         {
             "collection_exit_code": 0,
@@ -316,12 +322,33 @@ def test_finalize_lane_rejects_missing_ordinary_coverage(tmp_path: Path) -> None
             "execution_kind": runner.ORDINARY_KIND,
             "execution_exit_code": 0,
             "interrupted": False,
+            "isolation_path": isolation,
             "skipped_nodes": [],
         }
     ]
 
     with pytest.raises(LaneError, match="missing_lane_coverage"):
         runner._finalize_lane(lane, units, tmp_path)
+
+
+def test_combine_coverage_merges_multiple_semantic_unit_files(tmp_path: Path) -> None:
+    sources = []
+    for index in range(2):
+        source = tmp_path / f".coverage.unit.{index}"
+        data = CoverageData(basename=str(source))
+        data.add_lines({str(tmp_path / f"module_{index}.py"): {index + 1}})
+        data.write()
+        sources.append(source)
+    destination = tmp_path / ".coverage.public_lane"
+
+    runner._combine_coverage(sources, destination)
+
+    combined = CoverageData(basename=str(destination))
+    combined.read()
+    assert set(combined.measured_files()) == {
+        str(tmp_path / "module_0.py"),
+        str(tmp_path / "module_1.py"),
+    }
 
 
 def test_collect_only_writes_raw_digest_bound_validator_schema(
@@ -392,6 +419,38 @@ def test_timing_summary_is_derived_from_exact_four_lanes() -> None:
         runner._timing_summary([*lanes[:3], {"elapsed_seconds": -1.0}])
 
 
+def test_slow_lanes_use_exact_dependency_owned_execution_units() -> None:
+    for lane_name, expected_keys in {
+        "control_plane": {"control_plane_authority", "control_plane_projects"},
+        "execution_plane": {
+            "execution_plane_artifacts",
+            "execution_plane_tasks_checkers",
+        },
+    }.items():
+        lane = next(item for item in LANES if item.name == lane_name)
+        rows = [
+            {"module": module, "nodeid": f"{module}::test_one"}
+            for module in lane.modules
+        ]
+        units = runner._ordinary_units(lane, rows)
+
+        assert {key for key, _rows in units} == expected_keys
+        assert sorted(row["nodeid"] for _key, unit_rows in units for row in unit_rows) == sorted(
+            row["nodeid"] for row in rows
+        )
+
+
+def test_semantic_execution_units_reject_module_drift() -> None:
+    lane = next(item for item in LANES if item.name == "control_plane")
+    rows = [
+        {"module": module, "nodeid": f"{module}::test_one"}
+        for module in lane.modules[:-1]
+    ]
+
+    with pytest.raises(LaneError, match="invalid_semantic_unit_inventory"):
+        runner._ordinary_units(lane, rows)
+
+
 def test_exit_aggregation_cannot_hide_signal_failure() -> None:
     assert runner._aggregate_exit_codes([0, 0]) == 0
     assert runner._aggregate_exit_codes([0, 3]) == 1
@@ -405,7 +464,8 @@ def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path
     for index, lane in enumerate(LANES):
         source = tmp_path / f".coverage.unit.{lane.name}"
         source.write_bytes(f"coverage-{lane.name}".encode())
-        (tmp_path / f"{lane.name}.database.json").write_text("{}\n", encoding="utf-8")
+        isolation = tmp_path / f"{lane.name}.database.json"
+        isolation.write_text("{}\n", encoding="utf-8")
         unit = {
             "collected_nodes": [f"{lane.modules[0]}::test_one"],
             "collection_exit_code": 0,
@@ -415,6 +475,7 @@ def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path
                 "elapsed_seconds": float(index + 1),
                 "execution_kind": runner.ORDINARY_KIND,
                 "execution_exit_code": 0,
+            "isolation_path": isolation,
             "interrupted": False,
             "skipped_nodes": [],
         }
@@ -442,10 +503,10 @@ def test_failure_interrupts_sibling_process_groups_and_records_all_lanes(
     monkeypatch.setenv(runner.ADMIN_ENV, "postgresql+asyncpg://admin@localhost/postgres")
     monkeypatch.setattr(runner, "CLEANUP_GRACE_SECONDS", 0.2)
 
-    def fake_command(lane, _nodes, metadata, _timeout, _sha):
-        database = metadata / f"{lane.name}.database.json"
+    def fake_command(lane, resource_lane, _nodes, metadata, _timeout, _sha):
+        database = metadata / f"{resource_lane}.database.json"
         database.write_text("{}\n", encoding="utf-8")
-        coverage = metadata / f".coverage.{lane.name}"
+        coverage = metadata / f".coverage.unit.{resource_lane}"
         coverage.write_bytes(b"coverage")
         if lane.name == "lane_0":
             return [sys.executable, "-c", "raise SystemExit(1)"]
