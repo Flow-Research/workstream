@@ -1,0 +1,113 @@
+# Chunk Contract: WS-ENG-008-06 — Changed-Module Mutation Pilot
+
+## Parent initiative
+
+`WS-ENG-008` — Repository-Native SDLC Assurance
+
+## Goal
+
+Measure whether tests detect plausible faults in eligible changed pure-logic
+modules without immediately imposing an uncalibrated global merge threshold.
+
+## Why this chunk exists
+
+Coverage proves execution but not assertion sensitivity. Workstream has no
+mutation-testing engine or authenticated mutation evidence.
+
+## Approved plan reference
+
+- INTENT: `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/INTENT.md`
+- PLAN: `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/PLAN.md`
+- CHUNK_MAP: `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/CHUNK_MAP.md`
+
+## Risk class
+
+L1
+
+## SLA
+
+P2
+
+## Start phase
+
+`implementation`
+
+## Allowed files
+
+```text
+backend/pyproject.toml
+backend/scripts/mutation_policy.py
+backend/tests/test_mutation_policy.py
+.github/workflows/backend.yml
+scripts/test_agent_gates.py
+docs/operations_backend_testing.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/merge-intents/WS-ENG-008-06.json
+```
+
+## Not allowed
+
+```text
+application behavior or production dependency changes
+global or blocking mutation percentage
+replacement, reduction, or bypass of coverage, shards, API E2E, or full-suite aggregation
+mutation of migrations, generated code, schemas/declarations, adapters, or unowned modules without explicit eligibility
+use of stale QUALITY branches as implementation authority
+unbounded runtime, silent timeout exclusion, or “one mutant killed” success rule
+```
+
+## Acceptance criteria
+
+- [ ] Discovery reconciles current Backend workflow and records which dormant
+      QUALITY ideas, if any, are recreated rather than cherry-picked as authority.
+- [ ] One exactly pinned mutation engine runs only eligible changed pure-logic
+      modules under a deterministic bounded selection and timeout policy.
+- [ ] Authenticated evidence reports eligible, generated, killed, survived,
+      timeout, suspicious, excluded, and error counts plus module/test identity.
+- [ ] Every survivor and non-killed category requires explicit classification;
+      missing or malformed evidence fails the pilot job.
+- [ ] Pilot is non-blocking only with respect to score; infrastructure errors,
+      malformed evidence, scope escape, or weakened coverage remain blocking.
+- [ ] Existing full suite, API E2E, shards, 78 percent global floor, and protected
+      90 percent floors remain exact and authoritative.
+- [ ] Hosted duration is measured. A later blocking threshold requires a separate
+      reviewed plan and explicit human decision.
+- [ ] Exactly one schema-v2 merge intent names `WS-ENG-008-07` and requires a
+      separate explicit start.
+
+## Verification commands
+
+```bash
+cd backend
+python -m pytest -q tests/test_mutation_policy.py
+ruff check scripts/mutation_policy.py tests/test_mutation_policy.py
+cd ..
+python3 scripts/test_agent_gates.py
+python3 scripts/check_markdown_links.py
+python3 scripts/check_stale_workstream_wording.py
+git diff --check origin/main...HEAD
+```
+
+## Required reviewers
+
+- [ ] senior engineering
+- [ ] QA/test
+- [ ] security/auth
+- [ ] product/ops
+- [ ] architecture
+- [ ] CI integrity
+- [ ] docs
+- [ ] reuse/dedup
+- [ ] test delta
+
+## Human review focus
+
+- Is the pilot genuinely bounded and non-gamable?
+- Are coverage and full-suite gates unchanged?
+- Is all dormant QUALITY work treated only as discovery input?
+
+## Stop conditions
+
+Stop if the engine cannot be pinned, hosted runtime is unbounded, evidence is
+not complete, or any existing required test/coverage lane must weaken.
+
