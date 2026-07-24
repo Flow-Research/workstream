@@ -6,8 +6,9 @@
 
 ## Goal
 
-Make the allowed and forbidden path scope of new or materially changed chunks a
-versioned, deterministic Agent Gate rather than reviewer-only prose.
+Make the allowed and forbidden path scope of every implementation/specification
+contract changed after the exact 01 cutover a versioned, deterministic Agent
+Gate, while grandfathering only unchanged pre-cutover contracts.
 
 ## Why this chunk exists
 

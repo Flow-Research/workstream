@@ -31,8 +31,9 @@ unbounded tests or creating a second authority path.
 
 ## Target behavior
 
-- New or materially changed chunk contracts carry a strict versioned scope block
-  that Agent Gates compare to the exact PR delta.
+- Every implementation/specification contract changed in a PR whose base
+  contains the `WS-ENG-008-01` merge intent carries a strict versioned scope
+  block; only unchanged pre-cutover contracts are grandfathered.
 - A read-only schedule verifies signed-state custody, ancestry, ledger,
   projections, active contracts, and closed-tree integrity without repairing.
 - High-risk work records attacks attempted, observed denials, findings, and
