@@ -3,7 +3,13 @@ Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
 phase receives only a strict `workstream_test_<12 lowercase hex>` database and an ephemeral login without elevated authority.
 
-## Local full suite
+## Local PostgreSQL diagnostic
+
+This legacy sequential command checks PostgreSQL provisioning and cleanup. It
+is not complete full-suite proof because it does not start or bind a MinIO
+provider. Use the hosted semantic-lane workflow below for authoritative
+PostgreSQL, MinIO, exact-node, timing, API, and coverage custody.
+
 Keep the admin URL in the environment with `postgresql+asyncpg` and a loopback host.
 Never put real or shared credentials in arguments, logs, evidence, or configuration.
 
