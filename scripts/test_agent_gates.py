@@ -5452,6 +5452,7 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "See app/workers/tasks.py.",
         "coverage report --include='app/workers/*' --precision=2 --fail-under=90",
         "ruff check app/workers/reviews.py",
+        "pytest --cov=app.workers --cov-report=term-missing",
         "review_lifecycle_live_drill.py --start-api-worker-beat --require-workers",
     )
     for sample in technical_worker_statements:

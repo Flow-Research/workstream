@@ -385,7 +385,7 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
         )
         or (
             re.search(r"(?:^|[^A-Za-z0-9_.-])app\.$", prefix) is not None
-            and suffix.startswith(".")
+            and (suffix.startswith(".") or not suffix or suffix[0] in " '`,)")
         )
     )
     exact_technical_cli_flag = (

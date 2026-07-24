@@ -14,7 +14,7 @@ adding a Project Manager resume command.
 
 - guide-source/snapshot models, one clean-cut migration, repository, schemas,
   service, and router;
-- exact same-generation setup continuation record/worker and affected setup tasks;
+- exact same-generation setup continuation record/service and affected setup tasks;
 - `backend/scripts/api_contract_e2e.py` only for the guide clean cut;
 - focused refusal, continuation, recovery, API, and real-flow tests;
 - stale-contract/agent-gate/backend workflow files only for the exact phase and

@@ -64,7 +64,7 @@ artifact content, provider object, or Submission.
   contributor route; 04C composes the one continuous same-process endpoint;
 - the complete operation remains process-local through 04C; process loss or
   scratch loss invalidates the result and requires reupload rather than routing
-  a later distributed worker to a local path;
+  a later distributed service to a local path;
 - completion, failure, cancellation, deadline, and abandoned-work cleanup are
   bounded and idempotent;
 - the continuous contributor surface remains hidden; this chunk does not
@@ -109,5 +109,5 @@ reuse/dedup, CI integrity, test delta, and docs.
 ## Human Review Focus
 
 - Can a failed or unchecked bundle reach object storage?
-- Can an async/distributed worker receive an unusable local scratch path?
+- Can an async/distributed service receive an unusable local scratch path?
 - Are checker findings separate from reviewer decisions?
