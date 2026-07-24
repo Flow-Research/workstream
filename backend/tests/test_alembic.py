@@ -1767,8 +1767,10 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
             command.downgrade(config, "base")
             command.upgrade(config, "0030_artifact_verification")
             for patch in cases:
-                event_id, constraints = asyncio.run(
-                    _install_legacy_project_role_blocker(isolated_database_env, patch)
+                event_id, constraints, triggers = asyncio.run(
+                    _install_legacy_project_role_blocker(
+                        isolated_database_env, patch, bypass_constraints=True
+                    )
                 )
                 before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
                 with pytest.raises(
@@ -1788,7 +1790,7 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
                 )
                 asyncio.run(
                     _remove_legacy_project_role_blocker(
-                        isolated_database_env, event_id, constraints
+                        isolated_database_env, event_id, constraints, triggers
                     )
                 )
 
@@ -1817,9 +1819,11 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
                     _remove_project_role_idempotency_blocker(isolated_database_env, record_id)
                 )
 
-            event_id, constraints = asyncio.run(
+            event_id, constraints, triggers = asyncio.run(
                 _install_legacy_project_role_blocker(
-                    isolated_database_env, {"after_facts": {"role": "both"}}
+                    isolated_database_env,
+                    {"after_facts": {"role": "both"}},
+                    bypass_constraints=True,
                 )
             )
             record_id = asyncio.run(
@@ -1841,7 +1845,9 @@ def test_project_role_upgrade_refuses_each_legacy_predicate_before_ddl(
             )
             asyncio.run(_remove_project_role_idempotency_blocker(isolated_database_env, record_id))
             asyncio.run(
-                _remove_legacy_project_role_blocker(isolated_database_env, event_id, constraints)
+                _remove_legacy_project_role_blocker(
+                    isolated_database_env, event_id, constraints, triggers
+                )
             )
             unrelated_event_id = asyncio.run(
                 _insert_authorization_action_event(isolated_database_env)
@@ -1865,11 +1871,9 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
     isolated_database_env: str,
     migration_lock,
 ) -> None:
-    """Every 10A audit predicate leaves the head schema and row untouched."""
+    """Every representable 10A audit predicate leaves head and row untouched."""
     config = _alembic_config()
     cases = (
-        {"before_facts": {"role": "adjudicator"}},
-        {"after_facts": {"role": "adjudicator"}},
         *(
             {"action_id": action}
             for action in (
@@ -1883,8 +1887,6 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
         {"denial_code": "project_role_grant_already_revoked"},
         {"denial_code": "project_role_grant_replay_state_changed"},
         {
-            "before_facts": {"role": "adjudicator"},
-            "after_facts": {"role": "adjudicator"},
             "action_id": "project_role_grant.issue",
             "denial_code": "project_role_grant_replay_state_changed",
         },
@@ -1894,8 +1896,10 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             for patch in cases:
-                event_id, constraints = asyncio.run(
-                    _install_legacy_project_role_blocker(isolated_database_env, patch)
+                event_id, constraints, triggers = asyncio.run(
+                    _install_legacy_project_role_blocker(
+                        isolated_database_env, patch, bypass_constraints=False
+                    )
                 )
                 before_event = asyncio.run(_project_role_audit_row(isolated_database_env, event_id))
                 with pytest.raises(
@@ -1913,7 +1917,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 )
                 asyncio.run(
                     _remove_legacy_project_role_blocker(
-                        isolated_database_env, event_id, constraints
+                        isolated_database_env, event_id, constraints, triggers
                     )
                 )
             for include_grant in (False, True):
@@ -9568,29 +9572,62 @@ async def _exercise_project_role_migration(database_url: str) -> dict[str, objec
 
 
 async def _install_legacy_project_role_blocker(
-    database_url: str, patch: dict[str, object]
-) -> tuple[str, list[tuple[str, str]]]:
+    database_url: str,
+    patch: dict[str, object],
+    *,
+    bypass_constraints: bool,
+) -> tuple[str, list[tuple[str, str]], tuple[tuple[object, ...], ...]]:
     event_id = await _insert_authorization_action_event(database_url)
     engine = create_async_engine(database_url)
     try:
         async with engine.begin() as connection:
-            constraints = [
+            triggers = tuple(
                 tuple(row)
                 for row in (
                     await connection.execute(
                         text(
-                            "select conname,pg_get_constraintdef(oid) from pg_constraint "
-                            "where conrelid='audit_events'::regclass and contype='c' order by conname"
+                            "select tgrelid::regclass::text,tgname,tgenabled "
+                            "from pg_trigger where tgrelid='audit_events'::regclass "
+                            "and not tgisinternal order by tgname"
                         )
                     )
                 ).all()
-            ]
-            await connection.execute(text("alter table audit_events disable trigger user"))
-            for name, _definition in constraints:
-                await connection.execute(text(f'alter table audit_events drop constraint "{name}"'))
+            )
+            constraints: list[tuple[str, str]] = []
+            if bypass_constraints:
+                constraints = [
+                    tuple(row)
+                    for row in (
+                        await connection.execute(
+                            text(
+                                "select conname,pg_get_constraintdef(oid) from pg_constraint "
+                                "where conrelid='audit_events'::regclass and contype='c' "
+                                "order by conname"
+                            )
+                        )
+                    ).all()
+                ]
+                await connection.execute(text("alter table audit_events disable trigger user"))
+                for name, _definition in constraints:
+                    await connection.execute(
+                        text(f'alter table audit_events drop constraint "{name}"')
+                    )
+            else:
+                await connection.execute(
+                    text(
+                        "alter table audit_events disable trigger "
+                        "audit_events_reject_update_delete"
+                    )
+                )
             assignments = []
             values: dict[str, object] = {"id": event_id}
             for key, value in patch.items():
+                if key == "action_id":
+                    definition = next(
+                        item for item in ACTION_DEFINITIONS if item.action_id.value == value
+                    )
+                    assignments.append("permission_id=:permission_id")
+                    values["permission_id"] = definition.permission_id.value
                 if key in {"before_facts", "after_facts"}:
                     assignments.append(f"{key}=cast(:{key} as json)")
                     values[key] = json.dumps(value)
@@ -9600,7 +9637,9 @@ async def _install_legacy_project_role_blocker(
             await connection.execute(
                 text(f"update audit_events set {','.join(assignments)} where id=:id"), values
             )
-        return event_id, constraints
+            if not bypass_constraints:
+                await _restore_0034_trigger_states(connection, triggers)
+        return event_id, constraints, triggers
     finally:
         await engine.dispose()
 
@@ -9609,18 +9648,35 @@ async def _remove_legacy_project_role_blocker(
     database_url: str,
     event_id: str,
     constraints: list[tuple[str, str]],
+    triggers: tuple[tuple[object, ...], ...],
 ) -> None:
     engine = create_async_engine(database_url)
     try:
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("delete from audit_events where id=:id"), {"id": event_id}
-            )
-            for name, definition in constraints:
+        try:
+            async with engine.begin() as connection:
                 await connection.execute(
-                    text(f'alter table audit_events add constraint "{name}" {definition}')
+                    text(
+                        "alter table audit_events disable trigger "
+                        "audit_events_reject_update_delete"
+                    )
                 )
-            await connection.execute(text("alter table audit_events enable trigger user"))
+                await connection.execute(
+                    text("delete from audit_events where id=:id"), {"id": event_id}
+                )
+                for name, definition in constraints:
+                    if name == "ck_audit_events_authority_privacy_bounds":
+                        await _restore_0034_privacy_constraint(
+                            connection,
+                            definition,
+                            not definition.endswith(" NOT VALID"),
+                        )
+                    else:
+                        await connection.execute(
+                            text(f'alter table audit_events add constraint "{name}" {definition}')
+                        )
+        finally:
+            async with engine.begin() as connection:
+                await _restore_0034_trigger_states(connection, triggers)
     finally:
         await engine.dispose()
 

@@ -775,6 +775,7 @@ async def test_authority_event_matrix_preserves_shapes_and_requires_idempotency_
         AuthorityEventType.SERVICE_ACTOR_PROVISIONED,
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUED,
         AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED,
+        AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
         AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
         AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
         AuthorityEventType.ACTOR_PROFILE_SUSPENDED,
