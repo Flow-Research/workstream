@@ -1129,14 +1129,19 @@ log the key, a cursor, or distinctions hidden by the shared 404. Authorization
 read exhaustion returns 429 with `Retry-After`, and unavailable rate/evidence
 persistence returns retryable 503 before private row lookup.
 
-AUTH-10C adds no migration. Its project-role mutations use the admin-mutation
-rate control, exact-project PREP, UUID idempotency keys, stable replay/conflict
-responses, and fail-closed retryable 503 handling for persistence failures.
+AUTH-10C adds migration `0034_project_role_issue_evidence`. It performs no
+product-row rewrite: it replaces only the three frozen authority evidence
+function bodies, adds `qualification_snapshot` to the existing privacy resource
+registry, and leaves the existing fact constraint and trigger identities in
+place. Its project-role mutations use the admin-mutation rate control,
+exact-project PREP, UUID idempotency keys, stable replay/conflict responses, and
+fail-closed retryable 503 handling for persistence failures.
 Operators may retry the same key and body after a 503; they must not invent a
 new key until the committed state is known. A revoked or suspended target may
 still have an active grant revoked. Issue writes snapshot-captured then
 grant-issued evidence without invalidation; revoke writes grant-revoked then a
-linked authority invalidation targeting the affected actor and exact grant.
+linked authority invalidation bound to the affected actor, exact grant, role,
+project, and closed future-obligation token.
 
 ## Authority Audit Custody
 

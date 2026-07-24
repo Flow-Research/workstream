@@ -32,7 +32,7 @@ _ENTITY_TYPES = frozenset(
     }
 )
 _RESOURCE_TYPES = frozenset(
-    """actor_profile actor_identity_link admin_role_grant project project_role_grant task
+    """actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
     submission review contribution compensation_award compensation_delivery operations
     audit_event""".split()
 )

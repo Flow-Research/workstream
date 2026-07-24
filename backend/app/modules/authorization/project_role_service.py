@@ -20,7 +20,13 @@ from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.authorization.models import ProjectRoleGrant, ProjectRoleQualificationSnapshot
 from app.modules.authorization.project_role_schemas import ProjectRoleGrantMutationResponse
 from app.modules.authorization.repository import AdminAuthorizationRepository
-from app.modules.authorization.runtime import AuthorizationDecision
+from app.modules.authorization.runtime import (
+    AuthorizationDecision,
+    MatchedAuthorityKind,
+    ProjectRoleGrantIssueResourceContext,
+    ProjectRoleGrantRevokeResourceContext,
+    authorization_resource_digest,
+)
 from app.modules.authorization.schemas import (
     AuthorityClaimHandle,
     AuthorityInvalidationContext,
@@ -165,12 +171,13 @@ class ProjectRoleGrantMutationService:
         claim: AuthorityClaimHandle,
         request: ProjectRoleGrantIssueRequest,
         decision: AuthorizationDecision,
+        resource: ProjectRoleGrantIssueResourceContext,
         actor_profile_id: UUID,
         reason: str,
     ) -> ProjectRoleGrantMutationResponse:
         if (
             request.reason_digest != derive_reason_digest(reason)
-            or decision.matched_grant_id is None
+            or not _issue_decision_matches(decision, request, resource)
         ):
             raise TypeError("project-role issue requires exact matched authority")
         duplicate = await self.repository.find_active_project_role(
@@ -274,13 +281,14 @@ class ProjectRoleGrantMutationService:
         claim: AuthorityClaimHandle,
         request: ProjectRoleGrantRevokeRequest,
         decision: AuthorizationDecision,
+        resource: ProjectRoleGrantRevokeResourceContext,
         actor_profile_id: UUID,
         reason: str,
         grant: ProjectRoleGrant,
     ) -> ProjectRoleGrantMutationResponse:
         if (
             request.reason_digest != derive_reason_digest(reason)
-            or decision.matched_grant_id is None
+            or not _revoke_decision_matches(decision, request, grant, resource)
         ):
             raise TypeError("project-role revoke requires exact matched authority")
         if grant.status != "active":
@@ -341,3 +349,54 @@ class ProjectRoleGrantMutationService:
             ),
         )
         return _response(grant)
+
+
+def _issue_decision_matches(
+    decision: AuthorizationDecision,
+    request: ProjectRoleGrantIssueRequest,
+    resource: ProjectRoleGrantIssueResourceContext,
+) -> bool:
+    return (
+        decision.allowed
+        and decision.revalidated
+        and decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+        and decision.action_id is ActionId.PROJECT_ROLE_GRANT_ISSUE
+        and decision.permission_id is PermissionId.PROJECT_ROLE_GRANT_MANAGE
+        and resource.resource_id == request.project_id
+        and resource.scope_project_id == request.project_id
+        and resource.target_actor_profile_id == request.target_actor_id
+        and resource.role is request.role
+        and resource.target_eligible
+        and not resource.active_exact_role_exists
+        and decision.resource_type == resource.resource_type
+        and decision.resource_id == resource.resource_id
+        and decision.resource_context_digest == authorization_resource_digest(resource)
+        and decision.matched_grant_id is not None
+        and decision.matched_scope_project_id == request.project_id
+    )
+
+
+def _revoke_decision_matches(
+    decision: AuthorizationDecision,
+    request: ProjectRoleGrantRevokeRequest,
+    grant: ProjectRoleGrant,
+    resource: ProjectRoleGrantRevokeResourceContext,
+) -> bool:
+    return (
+        decision.allowed
+        and decision.revalidated
+        and decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+        and decision.action_id is ActionId.PROJECT_ROLE_GRANT_REVOKE
+        and decision.permission_id is PermissionId.PROJECT_ROLE_GRANT_MANAGE
+        and resource.resource_id == request.grant_id == grant.id
+        and resource.scope_project_id == request.project_id == UUID(grant.project_id)
+        and resource.actor_profile_id == UUID(grant.actor_profile_id)
+        and resource.role.value == grant.role
+        and resource.status == grant.status
+        and resource.version == grant.version
+        and decision.resource_type == resource.resource_type
+        and decision.resource_id == resource.resource_id
+        and decision.resource_context_digest == authorization_resource_digest(resource)
+        and decision.matched_grant_id is not None
+        and decision.matched_scope_project_id == request.project_id
+    )

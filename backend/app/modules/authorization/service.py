@@ -235,13 +235,11 @@ class AuthorityMutationService:
         invalidation_target_ref = primary.resource_id
         invalidation_resource_type = primary.resource_type
         invalidation_resource_id = primary.resource_id
+        invalidation_target_actor_kind = None
+        invalidation_target_actor_ref = None
         before_facts = {"effective": True}
         after_facts = {"effective": False}
-        if (
-            admin_mutation
-            or identity_link_mutation
-            or isinstance(mutation, ProjectRoleGrantRevokeRequest)
-        ):
+        if admin_mutation or identity_link_mutation:
             if primary.target_actor_ref is None:
                 raise TypeError("projected authority success requires target actor")
             invalidation_target_kind = AuthorityResourceType.ACTOR_PROFILE.value
@@ -262,8 +260,12 @@ class AuthorityMutationService:
                 invalidation is None
                 or invalidation.project_role is None
                 or invalidation.future_obligation is None
+                or primary.target_actor_ref_kind is None
+                or primary.target_actor_ref is None
             ):
                 raise TypeError("project-role revoke requires invalidation projection")
+            invalidation_target_actor_kind = primary.target_actor_ref_kind
+            invalidation_target_actor_ref = primary.target_actor_ref
             projection = {
                 "role": invalidation.project_role.value,
                 "scope_type": "project",
@@ -284,23 +286,25 @@ class AuthorityMutationService:
                 correlation_id=invalidation.correlation_id,
                 permission_id=spec.permission,
                 project_id=primary.project_id,
+                target_actor_ref_kind=invalidation_target_actor_kind,
+                target_actor_ref=invalidation_target_actor_ref,
                 resource_type=invalidation_resource_type,
-            resource_id=invalidation_resource_id,
-            target_ref_kind=(
-                invalidation.target_ref_kind.value
-                if invalidation.target_ref_kind is not None
-                else None
-            ),
-            target_ref_id=(
-                str(invalidation.target_ref_id)
-                if invalidation.target_ref_id is not None
-                else None
-            ),
+                resource_id=invalidation_resource_id,
+                target_ref_kind=(
+                    invalidation.target_ref_kind.value
+                    if invalidation.target_ref_kind is not None
+                    else None
+                ),
+                target_ref_id=(
+                    str(invalidation.target_ref_id)
+                    if invalidation.target_ref_id is not None
+                    else None
+                ),
                 reason="authority_state_changed",
                 idempotency_reference=claim.record_id,
                 invalidation_cause_event_id=UUID(stored_success.id),
                 invalidation_target_kind=invalidation_target_kind,
-            invalidation_target_ref=invalidation_target_ref,
+                invalidation_target_ref=invalidation_target_ref,
                 before_facts=before_facts,
                 after_facts=after_facts,
             )

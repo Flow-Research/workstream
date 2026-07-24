@@ -47,7 +47,6 @@ backend/tests/test_authorization.py
 backend/tests/test_api_controls.py
 backend/tests/test_projects.py
 backend/scripts/api_contract_e2e.py
-backend/scripts/auth_api_e2e.py
 docs/operations_authorization_service.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
@@ -58,7 +57,7 @@ docs/spec_authorization_service.md
 ## Not allowed changes
 
 ```text
-durable schema changes other than the exact 0034 idempotency-evidence trigger repair below
+durable schema changes other than the exact 0034 idempotency/evidence/fact-validator repair below
 read/candidate surface redesign
 task assignment or review reconciliation implementation
 admin/service/project-role authority substitution
@@ -207,9 +206,10 @@ The existing database idempotency completion guard predates the 10A evidence
 shape and requires one success plus one invalidation for every operation. That
 would either reject 10C issue or force a false invalidation. Migration 0034 is
 therefore the sole permitted durable change in this chunk. It replaces only the
-exact bodies of `guard_authority_idempotency_record()` and
-`validate_linked_authority_event()`, and extends only the existing audit privacy
-check constraint's resource registry with `qualification_snapshot`, so
+exact bodies of `guard_authority_idempotency_record()`,
+`validate_linked_authority_event()`, and `authority_event_facts_are_safe()`, and
+extends only the existing audit privacy check constraint's resource registry
+with `qualification_snapshot`, so
 `project_role_grant.issue` requires exactly two non-invalidation events —
 `ProjectRoleQualificationSnapshotCaptured` followed by
 `ProjectRoleGrantIssued` — with the qualification event bound to the same
@@ -231,6 +231,29 @@ correlation ID linkage. The application `AuthorityMutationService` remains
 solely responsible for proving those envelopes against the canonical request
 digest stored by idempotency. Issue requires zero invalidations.
 
+The predecessor `authority_event_facts_are_safe()` admits only the two-key
+`{"effective": true}` to `{"effective": false}` invalidation shape. That shape
+cannot carry AUTH-10C's required role-specific future-obligation projection.
+Migration 0034 therefore changes only its
+`AuthorityInvalidationRequested` branch: non-project-role-revoke operations
+retain the exact predecessor two-key shape, while a linked
+`project_role_grant.revoke` event admits exactly five keys — `effective`,
+`role`, `scope_type`, `scope_id`, and `future_obligation`. Before and after must
+match on every value except `effective`; `scope_type` is exactly `project`,
+`scope_id` equals the envelope project ID, and the closed mapping is submitter
+to `auth13_assignment`, reviewer to `rev_reviewer_obligation`, and adjudicator
+to `none`. `effective` values are JSON booleans and every other value is a JSON
+string; nulls, coercion, arrays, objects, missing keys, and extra keys reject.
+Because this fact validator receives no operation or idempotency context, it
+only admits the exact richer JSON shape. The linked-event validator exclusively
+restricts that shape to a linked `project_role_grant.revoke` and preserves all
+existing cause, request/correlation, actor, permission, project, target,
+matched-grant, idempotency, and resource linkage. No generic additional fact
+key or obligation value is admitted. The existing
+`ck_audit_events_fact_bounds` constraint remains in place and continues to call
+this validator; it is not dropped or recreated. Migration custody does not
+extend to `authority_facts_are_safe()`.
+
 Every other operation retains the exact existing success-event allowlist,
 response resource/type/status/version binding, one success plus one invalidation,
 invalidation cause pointing to that success, actor/project/permission/request/
@@ -240,20 +263,26 @@ Migration 0034 has `down_revision = "0033_authorization_read_rate"`. Upgrade and
 downgrade lock `authority_idempotency_records` then `audit_events`, both in
 `ACCESS EXCLUSIVE` mode, before definition or row inspection and retain those
 locks through replacement. They require frozen predecessor/forward hashes for
-both functions, the `authority_idempotency_guard` and
+all three functions, the `authority_idempotency_guard` and
 `audit_events_validate_idempotency` trigger names, enabled state, timing, event,
-table, function attachment, non-deferrability, and the exact privacy constraint
-definition. Upgrade permits a pending project-role issue only when it has zero
+table, function attachment, non-deferrability, the exact privacy constraint
+definition, and the exact definition, table attachment, validated state, and
+`authority_event_facts_are_safe()` call of `ck_audit_events_fact_bounds`.
+Upgrade permits a pending project-role issue only when it has zero
 linked evidence and all response fields are null. It refuses every committed
 issue record, every other pending issue shape, linked orphan/mixed/cross-record
 issue evidence, and any definition/binding drift. Downgrade refuses every
 committed issue record, any linked qualification event, any zero-invalidation
-issue shape, and any pending evidence/response shape the predecessor cannot
-represent. Each refusal is transactional and leaves Alembic head, both function
-and trigger hashes/bindings, the privacy constraint, and all rows unchanged.
+issue shape, every five-key project-role revoke invalidation including orphan,
+mixed, or cross-record shapes, and any pending or committed evidence/response
+shape the predecessor cannot represent. Predecessor-compatible two-key revoke
+invalidation evidence may remain when otherwise valid. Each refusal is
+transactional and leaves Alembic head, all three function and trigger
+hashes/bindings, both frozen constraint definitions/states, and all rows
+unchanged.
 Empty safe downgrade restores the exact predecessor definitions; re-upgrade is
 deterministic. No table, column, index, enum, trigger identity, or product row
-change is permitted beyond those two function bodies and one registry member.
+change is permitted beyond those three function bodies and one registry member.
 
 ## Acceptance criteria
 
@@ -291,7 +320,14 @@ change is permitted beyond those two function bodies and one registry member.
 - Migration 0034 proves exact upgrade/downgrade function/constraint replacement, strict
   refusal/no-mutation on unexpected definitions and incompatible evidence,
   two linked issue events with zero invalidation, and unchanged per-operation
-  success/invalidation enforcement for every other authority operation. Focused
+  success/invalidation enforcement for every other authority operation. It also
+  proves the exact five-key project-role revoke invalidation fact shape, all
+  three closed role-to-obligation mappings, rejection of missing/extra/wrong
+  fact keys and values, and unchanged two-key invalidation facts for every
+  non-project-role-revoke operation. It independently tests missing, changed,
+  detached, unvalidated, or differently bound `ck_audit_events_fact_bounds`
+  and proves every refusal leaves the revision, three functions, constraints,
+  triggers, and product/evidence rows unchanged. Focused
   Alembic tests cover prior-head upgrade, fresh head, safe downgrade/re-upgrade,
   each definition/trigger/constraint drift, each incompatible evidence predicate
   alone and combined, transactional no-mutation snapshots, concurrent writer
@@ -338,8 +374,7 @@ change is permitted beyond those two function bodies and one registry member.
   public APIs with unexpired tokens and no direct database edits. The same
   manager token proves issue -> 10B active read -> revoke -> 10B historical
   read -> same-key revoke replay 200 -> new-key revoke 409 -> old issue replay
-  409, plus concealed denial after manager authority loss. `auth_api_e2e.py`
-  remains complementary local proof, not a substitute for the hosted drill.
+  409, plus concealed denial after manager authority loss.
 - Regenerate exact combined route/protected-operation counts and SHA-256
   inventories from current main after adding the two routes; never guess or
   replace exact hashes with count-only assertions. No migration other than exact
@@ -351,10 +386,9 @@ change is permitted beyond those two function bodies and one registry member.
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check alembic/versions/0034_project_role_issue_evidence.py app/modules/actors app/modules/authorization app/modules/projects tests/conftest.py tests/test_actors.py tests/test_alembic.py tests/test_audit.py tests/test_authorization.py tests/test_api_controls.py tests/test_projects.py scripts/auth_api_e2e.py scripts/api_contract_e2e.py)
+(cd backend && .venv/bin/python -m ruff check alembic/versions/0034_project_role_issue_evidence.py app/modules/actors app/modules/authorization app/modules/projects tests/conftest.py tests/test_actors.py tests/test_alembic.py tests/test_audit.py tests/test_authorization.py tests/test_api_controls.py tests/test_projects.py scripts/api_contract_e2e.py)
 (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 600 -- .venv/bin/python -m pytest -q tests/test_alembic.py tests/test_audit.py -k '0034 or project_role_issue_evidence or action_aware_audit')
-(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_projects.py -k 'project_role_grant')
-(cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/auth_api_e2e.py)
+(cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-db> .venv/bin/python scripts/run_isolated_tests.py --metadata-json <path> --timeout-seconds 300 -- .venv/bin/python -m pytest -q tests/test_actors.py tests/test_authorization.py tests/test_api_controls.py tests/test_projects.py -k 'project_role or auth10c')
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
@@ -362,6 +396,10 @@ git diff --check
 
 GitHub owns the full sharded suite, aggregate and authorization coverage, API
 E2E, and Agent Gates before PR readiness.
+
+Every new migration, fact-validator, constraint-drift, and refusal test in this
+chunk must include `0034` or `project_role_issue_evidence` in its test name so
+the focused selector above cannot omit required proof.
 
 ## Required reviewers
 

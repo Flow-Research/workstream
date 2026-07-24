@@ -351,7 +351,7 @@ class ProjectRoleGrantIssueResourceContext(BaseModel):
     """Server-composed facts for issuing one exact independent role."""
 
     model_config = _STRICT_FROZEN
-    resource_type: Literal["project_role_grant_issue"]
+    resource_type: Literal["project_role_grant"]
     resource_id: UUID
     scope_project_id: UUID
     target_actor_profile_id: UUID
@@ -365,7 +365,7 @@ class ProjectRoleGrantRevokeResourceContext(BaseModel):
     """Locked exact-project grant facts used for revocation."""
 
     model_config = _STRICT_FROZEN
-    resource_type: Literal["project_role_grant_revoke"]
+    resource_type: Literal["project_role_grant"]
     resource_id: UUID
     scope_project_id: UUID
     actor_profile_id: UUID

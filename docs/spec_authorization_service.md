@@ -744,11 +744,13 @@ chunk. A `needs_revision` task retains a durable revision obligation and cannot
 be returned as ordinary ready work.
 
 Project-role invalidation is exact-role-specific. Submitter revocation alone can
-enter task-assignment reconciliation. Reviewer revocation creates only the
-REV-owned review obligation; adjudicator invalidation remains dormant until its
-lifecycle is enabled. Revoking any one project role leaves the other roles and
-all AdminRoleGrants unchanged. Consumers verify the cause event, grant ID,
-actor, project, and role before changing product state.
+enter task-assignment reconciliation and persists `auth13_assignment`. Reviewer
+revocation creates only the REV-owned review obligation and persists
+`rev_reviewer_obligation`; adjudicator invalidation persists `none` and remains
+dormant until its lifecycle is enabled. Revoking any one project role leaves the
+other roles and all AdminRoleGrants unchanged. Consumers verify the cause event,
+grant ID, actor, project, role, and closed future-obligation token before
+changing product state.
 
 ## Idempotency And Authority Evidence
 

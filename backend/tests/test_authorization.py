@@ -45,6 +45,7 @@ from app.api.deps.auth import get_auth_verification_result
 from app.core.api_controls import StructuredHTTPException
 from app.core.config import Settings, get_settings
 from app.core.hashing import canonical_json_hash
+from app.db.session import get_db_session
 from app.main import create_app
 from app.modules.projects.repository import ProjectRepository
 from app.modules.audit.schemas import (
@@ -141,6 +142,7 @@ from app.modules.authorization.project_role_service import (
 )
 from app.modules.authorization.project_role_schemas import (
     ProjectRoleGrantIssueBody,
+    ProjectRoleGrantMutationResponse,
     ProjectRoleGrantRevokeBody,
 )
 from app.modules.authorization.kernel import AuthorizationService
@@ -816,6 +818,529 @@ async def test_project_role_mutation_rate_failure_precedes_private_work(
     assert response.status_code == 503
     assert response.json()["error"]["retryable"] is True
     assert calls == 1
+
+
+def _project_role_denial_decision(
+    action_id: ActionId,
+    resource_id: UUID,
+    denial_code: AuthorizationDenialCode,
+) -> AuthorizationDecision:
+    return AuthorizationDecision(
+        decision_id=uuid4(),
+        allowed=False,
+        action_id=action_id,
+        permission_id=PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+        resource_type="project_role_grant",
+        resource_id=resource_id,
+        resource_context_digest=DIGEST,
+        denial_code=denial_code,
+        matched_authority_kind=None,
+        matched_grant_id=None,
+        matched_scope_project_id=None,
+        revalidated=False,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invocation", ["http_route", "direct_route"])
+@pytest.mark.parametrize(
+    ("operation", "hidden_case", "denial_code", "expected_status", "expected_code", "message"),
+    [
+        ("issue", "valid_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "missing_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "inactive_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "nonhuman_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "valid_target_cross_project_manager", AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "missing_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "inactive_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "nonhuman_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "unauthorized_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
+        ("issue", "self_target_manager", AuthorizationDenialCode.SELF_GRANT_FORBIDDEN, 403, "self_grant_forbidden", "Self grant is forbidden"),
+        ("revoke", "nonexistent_grant", AuthorizationDenialCode.GRANT_NOT_FOUND, 404, "resource_not_found", "Resource not found"),
+        ("revoke", "cross_project_grant", AuthorizationDenialCode.GRANT_NOT_FOUND, 404, "resource_not_found", "Resource not found"),
+        ("revoke", "self_owned_grant_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
+        ("revoke", "self_owned_grant_manager", AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN, 403, "self_role_revoke_forbidden", "Self role revocation is forbidden"),
+    ],
+)
+async def test_project_role_mutation_routes_conceal_denials_and_preserve_self_guards_atomically(
+    monkeypatch: pytest.MonkeyPatch,
+    invocation: str,
+    operation: str,
+    hidden_case: str,
+    denial_code: AuthorizationDenialCode,
+    expected_status: int,
+    expected_code: str,
+    message: str,
+) -> None:
+    project_id, grant_id, caller_id, target_id = uuid4(), uuid4(), uuid4(), uuid4()
+    if hidden_case == "self_target_manager":
+        target_id = caller_id
+    persisted = {
+        "idempotency": 0,
+        "qualification_snapshot": 0,
+        "project_role_grant": 0,
+        "audit": 0,
+        "invalidation": 0,
+    }
+    staged = persisted.copy()
+    calls = {"reserve": 0, "complete_issue": 0, "complete_revoke": 0}
+
+    class Session:
+        rollback_count = 0
+        commit_count = 0
+
+        async def rollback(self) -> None:
+            self.rollback_count += 1
+            staged.update(dict.fromkeys(staged, 0))
+
+        async def commit(self) -> None:
+            self.commit_count += 1
+            persisted.update(staged)
+
+        def in_transaction(self) -> bool:
+            return any(staged.values())
+
+    class Repository:
+        async def lock_project(self, selected_project_id):
+            assert selected_project_id == project_id
+            return SimpleNamespace(id=str(project_id), status="active")
+
+        async def take_project_role_issue_lock(self, _key):
+            return None
+
+        async def lock_eligible_human(self, selected_target_id):
+            assert selected_target_id == target_id
+            if hidden_case in {
+                "missing_target_no_manager",
+                "inactive_target_no_manager",
+                "nonhuman_target_no_manager",
+                "missing_target_manager",
+                "inactive_target_manager",
+                "nonhuman_target_manager",
+                "unauthorized_target_manager",
+            }:
+                return None
+            return (SimpleNamespace(id=str(target_id)), SimpleNamespace(id=str(uuid4())))
+
+        async def find_active_project_role(self, **_kwargs):
+            return None
+
+        async def lock_project_role_grant(self, **values):
+            assert values["project_id"] == project_id
+            assert values["grant_id"] == grant_id_value
+            if hidden_case in {"nonexistent_grant", "cross_project_grant"}:
+                return None
+            grant = SimpleNamespace(
+                id=values["grant_id"],
+                project_id=str(project_id),
+                actor_profile_id=str(caller_id),
+                role="submitter",
+                status="active",
+                version=1,
+                qualification_snapshot_id=uuid4(),
+            )
+            return grant, SimpleNamespace(id=grant.qualification_snapshot_id)
+
+    class MutationService:
+        def __init__(self, _session) -> None:
+            self.repository = Repository()
+
+        async def reserve(self, **_kwargs):
+            calls["reserve"] += 1
+            staged["idempotency"] += 1
+            return SimpleNamespace(outcome="fresh", claim=object())
+
+        async def complete_issue(self, **_kwargs):
+            calls["complete_issue"] += 1
+            for key in ("qualification_snapshot", "project_role_grant", "audit"):
+                staged[key] += 1
+            raise AssertionError("concealed issue must not reach completion")
+
+        async def complete_revoke(self, **_kwargs):
+            calls["complete_revoke"] += 1
+            for key in ("project_role_grant", "audit", "invalidation"):
+                staged[key] += 1
+            raise AssertionError("concealed revoke must not reach completion")
+
+    class Prepared:
+        async def prepare(self, *_args):
+            return object()
+
+        async def consume(self, _handle, action_id, _prepared_input, resource):
+            raise AuthorizationDenied(
+                _project_role_denial_decision(action_id, resource.resource_id, denial_code)
+            )
+
+    session = Session()
+    prepared = Prepared()
+    resolved = SimpleNamespace(profile=SimpleNamespace(id=str(caller_id)))
+    grant_id_value = grant_id
+    monkeypatch.setattr(
+        authorization_router,
+        "ProjectRoleGrantMutationService",
+        MutationService,
+    )
+    issue_payload = ProjectRoleGrantIssueBody(
+        target_actor_profile_id=target_id,
+        role=ProjectRole.SUBMITTER,
+        qualification=_project_role_qualification(),
+        reason="Bounded assignment",
+    )
+    revoke_payload = ProjectRoleGrantRevokeBody(reason="Bounded removal")
+
+    if invocation == "http_route":
+        app = create_app(Settings(environment="test"))
+
+        async def session_dependency():
+            try:
+                yield session
+            finally:
+                await session.rollback()
+
+        async def resolved_dependency():
+            return resolved
+
+        async def prepared_dependency():
+            return prepared
+
+        async def consume_rate() -> None:
+            return None
+
+        app.dependency_overrides[get_db_session] = session_dependency
+        app.dependency_overrides[get_authorization_actor] = resolved_dependency
+        app.dependency_overrides[get_prepared_authorization_service] = prepared_dependency
+        app.dependency_overrides[enforce_admin_mutation_rate_limit] = consume_rate
+        path = (
+            f"/api/v1/projects/{project_id}/role-grants"
+            if operation == "issue"
+            else f"/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke"
+        )
+        body = (
+            issue_payload.model_dump(mode="json")
+            if operation == "issue"
+            else revoke_payload.model_dump(mode="json")
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                path,
+                headers={"Idempotency-Key": str(uuid4())},
+                json=body,
+            )
+        error = response.json()["error"]
+        assert error["details"] == {}
+        assert error["retryable"] is False
+        assert UUID(error["correlation_id"])
+        public_result = (
+            response.status_code,
+            {"code": error["code"], "message": error["message"]},
+        )
+    else:
+        try:
+            if operation == "issue":
+                await authorization_router.issue_project_role_grant(
+                    project_id=project_id,
+                    payload=issue_payload,
+                    idempotency_key=uuid4(),
+                    resolved=resolved,  # type: ignore[arg-type]
+                    prepared=prepared,  # type: ignore[arg-type]
+                    session=session,  # type: ignore[arg-type]
+                )
+            else:
+                await authorization_router.revoke_project_role_grant(
+                    project_id=project_id,
+                    grant_id=grant_id,
+                    payload=revoke_payload,
+                    idempotency_key=uuid4(),
+                    resolved=resolved,  # type: ignore[arg-type]
+                    prepared=prepared,  # type: ignore[arg-type]
+                    session=session,  # type: ignore[arg-type]
+                )
+        except StructuredHTTPException as exc:
+            public_result = (
+                exc.status_code,
+                {"code": exc.error_code, "message": exc.error_message},
+            )
+        else:
+            raise AssertionError("concealed mutation unexpectedly succeeded")
+        finally:
+            await session.rollback()
+
+    assert public_result == (
+        expected_status,
+        {"code": expected_code, "message": message},
+    )
+    assert calls == {"reserve": 1, "complete_issue": 0, "complete_revoke": 0}
+    assert staged == dict.fromkeys(staged, 0)
+    assert persisted == dict.fromkeys(persisted, 0)
+    assert session.commit_count == 0
+    assert session.rollback_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invocation", ["http_route", "direct_route"])
+@pytest.mark.parametrize(
+    ("operation", "project_state", "project_exists", "expected_status"),
+    [
+        ("issue", "draft", True, 201),
+        ("issue", "active", True, 201),
+        ("issue", "paused", True, 201),
+        ("issue", "archived", True, 404),
+        ("issue", "active", False, 404),
+        ("revoke", "draft", True, 200),
+        ("revoke", "active", True, 200),
+        ("revoke", "paused", True, 200),
+        ("revoke", "archived", True, 200),
+    ],
+)
+async def test_project_role_mutation_routes_enforce_project_lifecycle_without_disclosure(
+    monkeypatch: pytest.MonkeyPatch,
+    invocation: str,
+    operation: str,
+    project_state: str,
+    project_exists: bool,
+    expected_status: int,
+) -> None:
+    project_id, grant_id, caller_id, target_id, snapshot_id = (
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
+    staged = {
+        "idempotency": 0,
+        "qualification_snapshot": 0,
+        "project_role_grant": 0,
+        "audit": 0,
+        "invalidation": 0,
+    }
+    persisted = staged.copy()
+    calls = {"target_lookup": 0, "consume": 0, "complete": 0}
+
+    class Session:
+        commit_count = 0
+        rollback_count = 0
+
+        async def commit(self) -> None:
+            self.commit_count += 1
+            persisted.update(staged)
+            staged.update(dict.fromkeys(staged, 0))
+
+        async def rollback(self) -> None:
+            self.rollback_count += 1
+            staged.update(dict.fromkeys(staged, 0))
+
+        def in_transaction(self) -> bool:
+            return any(staged.values())
+
+    class Repository:
+        async def lock_project(self, selected_project_id):
+            assert selected_project_id == project_id
+            if not project_exists:
+                return None
+            return SimpleNamespace(id=str(project_id), status=project_state)
+
+        async def take_project_role_issue_lock(self, _key):
+            return None
+
+        async def lock_eligible_human(self, selected_target_id):
+            calls["target_lookup"] += 1
+            assert selected_target_id == target_id
+            return SimpleNamespace(id=str(target_id)), SimpleNamespace(id=str(uuid4()))
+
+        async def find_active_project_role(self, **_kwargs):
+            return None
+
+        async def lock_project_role_grant(self, **values):
+            assert values == {"project_id": project_id, "grant_id": grant_id}
+            grant = SimpleNamespace(
+                id=grant_id,
+                qualification_snapshot_id=snapshot_id,
+                project_id=str(project_id),
+                actor_profile_id=str(target_id),
+                role="submitter",
+                status="active",
+                version=1,
+            )
+            return grant, SimpleNamespace(id=snapshot_id)
+
+    class MutationService:
+        def __init__(self, _session) -> None:
+            self.repository = Repository()
+
+        async def reserve(self, **_kwargs):
+            staged["idempotency"] += 1
+            return SimpleNamespace(outcome="fresh", claim=object())
+
+        async def complete_issue(self, **_kwargs):
+            calls["complete"] += 1
+            staged.update(
+                {
+                    "qualification_snapshot": 1,
+                    "project_role_grant": 1,
+                    "audit": 2,
+                }
+            )
+            return ProjectRoleGrantMutationResponse(
+                id=grant_id,
+                qualification_snapshot_id=snapshot_id,
+                project_id=project_id,
+                actor_profile_id=target_id,
+                role=ProjectRole.SUBMITTER,
+                status="active",
+                version=1,
+            )
+
+        async def complete_revoke(self, **_kwargs):
+            calls["complete"] += 1
+            staged.update({"project_role_grant": 1, "audit": 2, "invalidation": 1})
+            return ProjectRoleGrantMutationResponse(
+                id=grant_id,
+                qualification_snapshot_id=snapshot_id,
+                project_id=project_id,
+                actor_profile_id=target_id,
+                role=ProjectRole.SUBMITTER,
+                status="revoked",
+                version=2,
+            )
+
+    class Prepared:
+        async def prepare(self, *_args):
+            return object()
+
+        async def consume(self, _handle, action_id, _prepared_input, resource):
+            calls["consume"] += 1
+            assert resource.project_status == project_state
+            if operation == "issue" and project_state == "archived":
+                raise AuthorizationDenied(
+                    _project_role_denial_decision(
+                        action_id,
+                        resource.resource_id,
+                        AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+                    )
+                )
+            return SimpleNamespace(allowed=True)
+
+    session = Session()
+    prepared = Prepared()
+    resolved = SimpleNamespace(profile=SimpleNamespace(id=str(caller_id)))
+    monkeypatch.setattr(
+        authorization_router,
+        "ProjectRoleGrantMutationService",
+        MutationService,
+    )
+    issue_payload = ProjectRoleGrantIssueBody(
+        target_actor_profile_id=target_id,
+        role=ProjectRole.SUBMITTER,
+        qualification=_project_role_qualification(),
+        reason="Lifecycle assignment",
+    )
+    revoke_payload = ProjectRoleGrantRevokeBody(reason="Lifecycle removal")
+
+    async def invoke_direct():
+        if operation == "issue":
+            return await authorization_router.issue_project_role_grant(
+                project_id=project_id,
+                payload=issue_payload,
+                idempotency_key=uuid4(),
+                resolved=resolved,  # type: ignore[arg-type]
+                prepared=prepared,  # type: ignore[arg-type]
+                session=session,  # type: ignore[arg-type]
+            )
+        return await authorization_router.revoke_project_role_grant(
+            project_id=project_id,
+            grant_id=grant_id,
+            payload=revoke_payload,
+            idempotency_key=uuid4(),
+            resolved=resolved,  # type: ignore[arg-type]
+            prepared=prepared,  # type: ignore[arg-type]
+            session=session,  # type: ignore[arg-type]
+        )
+
+    if invocation == "http_route":
+        app = create_app(Settings(environment="test"))
+
+        async def session_dependency():
+            try:
+                yield session
+            finally:
+                if session.in_transaction():
+                    await session.rollback()
+
+        async def resolved_dependency():
+            return resolved
+
+        async def prepared_dependency():
+            return prepared
+
+        async def consume_rate() -> None:
+            return None
+
+        app.dependency_overrides[get_db_session] = session_dependency
+        app.dependency_overrides[get_authorization_actor] = resolved_dependency
+        app.dependency_overrides[get_prepared_authorization_service] = prepared_dependency
+        app.dependency_overrides[enforce_admin_mutation_rate_limit] = consume_rate
+        path = (
+            f"/api/v1/projects/{project_id}/role-grants"
+            if operation == "issue"
+            else f"/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke"
+        )
+        payload = issue_payload if operation == "issue" else revoke_payload
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://testserver"
+        ) as client:
+            response = await client.post(
+                path,
+                headers={"Idempotency-Key": str(uuid4())},
+                json=payload.model_dump(mode="json"),
+            )
+        observed_status = response.status_code
+        observed_body = response.json()
+    else:
+        try:
+            result = await invoke_direct()
+        except StructuredHTTPException as exc:
+            observed_status = exc.status_code
+            observed_body = {"error": {"code": exc.error_code, "message": exc.error_message}}
+        else:
+            observed_status = 201 if operation == "issue" else 200
+            observed_body = result.model_dump(mode="json")
+        finally:
+            if session.in_transaction():
+                await session.rollback()
+
+    assert observed_status == expected_status
+    if expected_status == 404:
+        assert observed_body["error"]["code"] == "resource_not_found"
+        assert observed_body["error"]["message"] == "Resource not found"
+        assert persisted == dict.fromkeys(persisted, 0)
+        assert calls["complete"] == 0
+        assert session.commit_count == 0
+        if not project_exists:
+            assert calls == {"target_lookup": 0, "consume": 0, "complete": 0}
+    else:
+        expected_body = {
+            "id": str(grant_id),
+            "qualification_snapshot_id": str(snapshot_id),
+            "project_id": str(project_id),
+            "actor_profile_id": str(target_id),
+            "role": "submitter",
+            "status": "active" if operation == "issue" else "revoked",
+            "version": 1 if operation == "issue" else 2,
+        }
+        assert observed_body == expected_body
+        assert calls["consume"] == 1
+        assert calls["complete"] == 1
+        assert session.commit_count == 1
+        assert persisted["idempotency"] == 1
+        assert persisted["project_role_grant"] == 1
+        assert persisted["audit"] == 2
+        assert persisted["qualification_snapshot"] == (operation == "issue")
+        assert persisted["invalidation"] == (operation == "revoke")
 
 
 ART_CUSTODY_EXPECTATIONS = {
@@ -2341,6 +2866,43 @@ def test_project_role_read_denials_share_one_public_concealment(
     translated = authorization_http_error(AuthorizationDenied(decision))
     assert translated.status_code == 404
     assert translated.error_code == "project_authorization_resource_not_found"
+
+
+@pytest.mark.parametrize(
+    "denial_code",
+    [
+        AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+        AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED,
+        AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+        AuthorizationDenialCode.ACTOR_NOT_FOUND,
+        AuthorizationDenialCode.GRANT_NOT_FOUND,
+    ],
+)
+def test_project_role_mutation_denials_share_resource_not_found_concealment(
+    denial_code: AuthorizationDenialCode,
+) -> None:
+    decision = AuthorizationDecision(
+        decision_id=uuid4(),
+        allowed=False,
+        action_id=ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        permission_id=PermissionId.PROJECT_ROLE_GRANT_MANAGE,
+        resource_type="project_role_grant",
+        resource_id=uuid4(),
+        resource_context_digest=DIGEST,
+        denial_code=denial_code,
+        matched_authority_kind=None,
+        matched_grant_id=None,
+        matched_scope_project_id=None,
+        revalidated=False,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    translated = authorization_router._project_role_mutation_denial(
+        AuthorizationDenied(decision)
+    )
+    assert translated.status_code == 404
+    assert translated.error_code == "resource_not_found"
+    assert translated.error_message == "Resource not found"
 
 
 def test_project_role_read_permissions_separate_manager_and_auditor_authority() -> None:
@@ -7259,7 +7821,12 @@ async def test_completion_rejects_resource_and_project_not_bound_to_request(
             resource_id=uuid4(),
             http_status=201,
         )
-        success = _operation_success(claim, wrong_project, response)
+        success = _operation_success(
+            claim,
+            wrong_project,
+            response,
+            admin_authorizer_grant_id=uuid4(),
+        )
         with pytest.raises(TypeError, match="invalid authority completion input"):
             await service.complete(
                 claim=claim,
@@ -7991,14 +8558,6 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             grant_id=resource,
             reason_digest=DIGEST,
         ),
-        ProjectRoleGrantIssueRequest(
-            operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
-            project_id=project,
-            target_actor_id=actor,
-            role=ProjectRole.SUBMITTER,
-            qualification=_project_role_qualification(),
-            reason_digest=DIGEST,
-        ),
         ProjectRoleGrantRevokeRequest(
             operation=AuthorityOperation.PROJECT_ROLE_GRANT_REVOKE,
             project_id=project,
@@ -8046,7 +8605,6 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
     create_operations = {
         AuthorityOperation.SERVICE_ACTOR_CREATE,
         AuthorityOperation.ADMIN_ROLE_GRANT_ISSUE,
-        AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
     }
     admin_operations = {
         AuthorityOperation.ADMIN_ROLE_GRANT_ISSUE,
@@ -8129,24 +8687,6 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
                     else None
                 ),
             )
-            if request.operation is AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE:
-                qualification_id = uuid4()
-                qualification_event = success.model_copy(
-                    update={
-                        "event_id": uuid4(),
-                        "event_type": AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
-                        "entity_type": "qualification_snapshot",
-                        "entity_id": str(qualification_id),
-                        "resource_type": "qualification_snapshot",
-                        "resource_id": str(qualification_id),
-                        "target_ref_kind": "qualification_snapshot",
-                        "target_ref_id": str(qualification_id),
-                        "reason": "qualification_evidence_captured",
-                        "after_facts": {"status": "captured"},
-                    }
-                )
-                success_input = (qualification_event, success)
-                invalidation = None
             completed = await service.complete(
                 claim=claim,
                 request=request.model_dump(),
@@ -8162,7 +8702,8 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
                 text(
                     "select id, event_type, idempotency_reference, "
                     "invalidation_cause_event_id, request_id, correlation_id, "
-                    "invalidation_target_ref, before_facts, after_facts "
+                    "target_actor_ref_kind,target_actor_ref,target_ref_kind,target_ref_id,"
+                    "invalidation_target_ref,before_facts,after_facts "
                     "from audit_events "
                     "where idempotency_reference = any(:records) "
                     "order by idempotency_reference, event_type"
@@ -8175,15 +8716,6 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
         pair = [row for row in rows if row.idempotency_reference == record_id]
         assert len(pair) == 2
         success_row = next(row for row in pair if row.event_type == success.event_type.value)
-        if success.event_type is AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED:
-            qualification_row = next(
-                row
-                for row in pair
-                if row.event_type
-                == AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED.value
-            )
-            assert qualification_row.invalidation_cause_event_id is None
-            continue
         invalidation_row = next(
             row for row in pair if row.event_type == "AuthorityInvalidationRequested"
         )
@@ -8199,11 +8731,15 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
                 AuthorityEventType.ADMIN_ROLE_GRANT_REVOKED,
                 AuthorityEventType.ACTOR_IDENTITY_LINK_REVOKED,
                 AuthorityEventType.ACTOR_IDENTITY_LINK_REACTIVATED,
-                AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED,
             }
             else success.resource_id
         )
         assert invalidation_row.invalidation_target_ref == expected_target
+        if success.event_type is AuthorityEventType.PROJECT_ROLE_GRANT_REVOKED:
+            assert invalidation_row.target_actor_ref_kind == "actor_profile"
+            assert invalidation_row.target_actor_ref == success.target_actor_ref
+            assert invalidation_row.target_ref_kind == "project_role_grant"
+            assert invalidation_row.target_ref_id == success.resource_id
         expected_before = (
             {"effective": False}
             if success.event_type
@@ -8227,6 +8763,94 @@ async def test_project_role_and_all_operation_mappings_commit_one_linked_pair(
             expected_after = expected_before | {"effective": False}
         assert invalidation_row.before_facts == expected_before
         assert invalidation_row.after_facts == expected_after
+
+
+async def test_project_role_issue_shared_completion_writes_ordered_zero_invalidation_pair() -> None:
+    project_id, actor_id, target_id, grant_id, snapshot_id = (
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
+    request = ProjectRoleGrantIssueRequest(
+        operation=AuthorityOperation.PROJECT_ROLE_GRANT_ISSUE,
+        project_id=project_id,
+        target_actor_id=target_id,
+        role=ProjectRole.SUBMITTER,
+        qualification=_project_role_qualification(),
+        reason_digest=DIGEST,
+    )
+    claim = AuthorityClaimHandle(
+        record_id=uuid4(),
+        idempotency_key=uuid4(),
+        actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+        actor_ref=str(actor_id),
+        operation=request.operation,
+        request_digest=canonical_json_hash(
+            request.model_dump(mode="json", exclude_none=True)
+        ),
+    )
+    response = AuthorityResponseReference(
+        resource_type=AuthorityResourceType.PROJECT_ROLE_GRANT,
+        resource_id=grant_id,
+        version=1,
+        http_status=201,
+    )
+    issued = _operation_success(
+        claim,
+        request,
+        response,
+        admin_authorizer_grant_id=uuid4(),
+    )
+    qualification = issued.model_copy(
+        update={
+            "event_id": uuid4(),
+            "event_type": AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
+            "entity_type": "qualification_snapshot",
+            "entity_id": str(snapshot_id),
+            "resource_type": "qualification_snapshot",
+            "resource_id": str(snapshot_id),
+            "target_ref_kind": "qualification_snapshot",
+            "target_ref_id": str(snapshot_id),
+            "reason": "qualification_evidence_captured",
+            "after_facts": {"status": "captured"},
+        }
+    )
+
+    class Audit:
+        events = []
+
+        async def add_authority_event(self, event):
+            self.events.append(event)
+            return SimpleNamespace(id=str(event.event_id))
+
+    class Repository:
+        completed = None
+
+        async def complete(self, completed_claim, completed_response):
+            self.completed = (completed_claim, completed_response)
+
+    service = AuthorityMutationService(object())  # type: ignore[arg-type]
+    audit = Audit()
+    repository = Repository()
+    service._audit = audit  # type: ignore[assignment]
+    service._repository = repository  # type: ignore[assignment]
+
+    result = await service.complete(
+        claim=claim,
+        request=request.model_dump(),
+        response=response,
+        success=(qualification, issued),
+        invalidation=None,
+    )
+
+    assert [event.event_type for event in audit.events] == [
+        AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
+        AuthorityEventType.PROJECT_ROLE_GRANT_ISSUED,
+    ]
+    assert repository.completed == (claim, response)
+    assert result.invalidation_event_id is None
 
 
 @pytest.mark.asyncio
@@ -8438,6 +9062,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
     )
     manager_grant_id = uuid4()
+    bootstrap_grant_id = uuid4()
     now = datetime.now(UTC)
     async with authorization_factory() as session:
         session.add_all(
@@ -8447,8 +9072,20 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                 ActorProfile(id=str(target_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(target_id)),
                 ActorIdentityLink(id=str(target_link_id), actor_profile_id=str(target_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-target-{target_id}", subject_kind="human", status="active", linked_by=str(target_id), last_verified_at=now),
                 Project(id=str(project_id), name="AUTH-10C PREP proof", slug=f"auth-10c-prep-{project_id}", status="draft"),
-                AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=None, granted_by_system_principal="workstream:system:bootstrap", granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL proof"),
+                AdminRoleGrant(id=bootstrap_grant_id, target_actor_profile_id=str(caller_id), role="access_administrator", scope_type="system", scope_project_id=None, status="active", version=1, granted_by_actor_profile_id=None, granted_by_system_principal="workstream:system:bootstrap", granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL bootstrap proof"),
             ]
+        )
+        await session.flush()
+        await session.execute(
+            text(
+                "update authority_control set bootstrap_completed=true, version=1, "
+                "bootstrap_grant_id=:grant_id, updated_at=clock_timestamp() where id=1"
+            ),
+            {"grant_id": str(bootstrap_grant_id)},
+        )
+        await session.commit()
+        session.add(
+            AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=str(caller_id), granted_by_system_principal=None, granted_by_admin_role_grant_id=bootstrap_grant_id, grant_reason="AUTH-10C PostgreSQL project-manager proof")
         )
         await session.commit()
         context = HumanAuthorizationContext(actor_profile_id=caller_id, actor_kind=ActorKind.HUMAN, actor_status=ActorStatus.ACTIVE, identity_link_id=caller_link_id, identity_link_status=IdentityLinkStatus.ACTIVE, request_id=uuid4(), correlation_id=uuid4())
@@ -8477,13 +9114,32 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         assert await repository.lock_project(project_id) is not None
         await repository.take_project_role_issue_lock(project_role_issue_lock_key(target_id, project_id, "submitter"))
         assert await repository.lock_eligible_human(target_id) is not None
-        decision = await prepared.consume(handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, ProjectRoleGrantIssueResourceContext(resource_type="project_role_grant_issue", resource_id=project_id, scope_project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER, project_status="draft", target_eligible=True, active_exact_role_exists=False))
+        issue_resource = ProjectRoleGrantIssueResourceContext(resource_type="project_role_grant", resource_id=project_id, scope_project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER, project_status="draft", target_eligible=True, active_exact_role_exists=False)
+        decision = await prepared.consume(handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, issue_resource)
         assert decision.allowed is True
         assert decision.matched_grant_id == manager_grant_id
-        issued = await ProjectRoleGrantMutationService(session).complete_issue(
+        issue_service = ProjectRoleGrantMutationService(session)
+        for substituted in (
+            decision.model_copy(update={"action_id": ActionId.PROJECT_ROLE_GRANT_REVOKE}),
+            decision.model_copy(update={"permission_id": PermissionId.PROJECT_READ}),
+            decision.model_copy(update={"revalidated": False}),
+            decision.model_copy(update={"matched_scope_project_id": uuid4()}),
+            decision.model_copy(update={"resource_context_digest": f"sha256:{'0' * 64}"}),
+        ):
+            with pytest.raises(TypeError, match="requires exact matched authority"):
+                await issue_service.complete_issue(
+                    claim=issue_reservation.claim,
+                    request=canonical_issue,
+                    decision=substituted,
+                    resource=issue_resource,
+                    actor_profile_id=caller_id,
+                    reason=issue_reason,
+                )
+        issued = await issue_service.complete_issue(
             claim=issue_reservation.claim,
             request=canonical_issue,
             decision=decision,
+            resource=issue_resource,
             actor_profile_id=caller_id,
             reason=issue_reason,
         )
@@ -8537,25 +9193,77 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         )
         assert project is not None and row is not None
         grant, _snapshot = row
+        revoke_resource = ProjectRoleGrantRevokeResourceContext(
+            resource_type="project_role_grant",
+            resource_id=issued.id,
+            scope_project_id=project_id,
+            actor_profile_id=target_id,
+            role=ProjectRole.SUBMITTER,
+            project_status="draft",
+            status="active",
+            version=1,
+        )
         revoke_decision = await prepared.consume(
             revoke_handle,
             ActionId.PROJECT_ROLE_GRANT_REVOKE,
             revoke_input,
-            ProjectRoleGrantRevokeResourceContext(
-                resource_type="project_role_grant_revoke",
-                resource_id=issued.id,
-                scope_project_id=project_id,
-                actor_profile_id=target_id,
-                role=ProjectRole.SUBMITTER,
-                project_status="draft",
-                status="active",
-                version=1,
-            ),
+            revoke_resource,
         )
-        revoked = await ProjectRoleGrantMutationService(session).complete_revoke(
+        revoke_service = ProjectRoleGrantMutationService(session)
+        for substituted_decision, substituted_resource in (
+            (
+                revoke_decision.model_copy(
+                    update={"action_id": ActionId.PROJECT_ROLE_GRANT_ISSUE}
+                ),
+                revoke_resource,
+            ),
+            (
+                revoke_decision.model_copy(
+                    update={"permission_id": PermissionId.PROJECT_READ}
+                ),
+                revoke_resource,
+            ),
+            (revoke_decision.model_copy(update={"revalidated": False}), revoke_resource),
+            (
+                revoke_decision.model_copy(update={"matched_scope_project_id": uuid4()}),
+                revoke_resource,
+            ),
+            (
+                revoke_decision.model_copy(
+                    update={"resource_context_digest": f"sha256:{'0' * 64}"}
+                ),
+                revoke_resource,
+            ),
+            (
+                revoke_decision,
+                revoke_resource.model_copy(update={"actor_profile_id": uuid4()}),
+            ),
+            (
+                revoke_decision,
+                revoke_resource.model_copy(update={"role": ProjectRole.REVIEWER}),
+            ),
+            (
+                revoke_decision,
+                revoke_resource.model_copy(update={"version": 2, "status": "revoked"}),
+            ),
+        ):
+            with pytest.raises(TypeError, match="requires exact matched authority"):
+                await revoke_service.complete_revoke(
+                    claim=revoke_reservation.claim,
+                    request=canonical_revoke,
+                    decision=substituted_decision,
+                    resource=substituted_resource,
+                    actor_profile_id=caller_id,
+                    reason=revoke_reason,
+                    grant=grant,
+                )
+        assert grant.status == "active"
+        assert grant.version == 1
+        revoked = await revoke_service.complete_revoke(
             claim=revoke_reservation.claim,
             request=canonical_revoke,
             decision=revoke_decision,
+            resource=revoke_resource,
             actor_profile_id=caller_id,
             reason=revoke_reason,
             grant=grant,
@@ -8574,6 +9282,39 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             )
             == 4
         )
+        revoke_invalidation = (
+            await session.execute(
+                text(
+                    "select target_actor_ref_kind,target_actor_ref,resource_type,resource_id,"
+                    "target_ref_kind,target_ref_id,invalidation_target_kind,"
+                    "invalidation_target_ref,before_facts,after_facts "
+                    "from audit_events where idempotency_reference=:revoke "
+                    "and event_type='AuthorityInvalidationRequested'"
+                ),
+                {"revoke": str(revoke_reservation.claim.record_id)},
+            )
+        ).one()
+        assert tuple(revoke_invalidation[:8]) == (
+            "actor_profile",
+            str(target_id),
+            "project_role_grant",
+            str(issued.id),
+            "project_role_grant",
+            str(issued.id),
+            "project_role_grant",
+            str(issued.id),
+        )
+        assert revoke_invalidation.before_facts == {
+            "effective": True,
+            "role": "submitter",
+            "scope_type": "project",
+            "scope_id": str(project_id),
+            "future_obligation": "auth13_assignment",
+        }
+        assert revoke_invalidation.after_facts == {
+            **revoke_invalidation.before_facts,
+            "effective": False,
+        }
 
         await session.execute(
             text(
@@ -8613,6 +9354,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             captured_by_admin_role_grant_id=manager_grant_id,
         )
         session.add(existing_snapshot)
+        await session.flush()
         session.add(
             ProjectRoleGrant(
                 id=uuid4(),
@@ -8646,7 +9388,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         async def race_find(repository, **kwargs):
             nonlocal find_calls
             find_calls += 1
-            if find_calls <= 2:
+            if find_calls == 1:
                 return None
             return await original_find(repository, **kwargs)
 
@@ -8676,7 +9418,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             )
         assert conflict.value.status_code == 409
         assert conflict.value.error_code == "project_role_grant_exists"
-        assert find_calls == 3
+        assert find_calls == 2
         assert len(race_claim_ids) == 1
         monkeypatch.setattr(
             AdminAuthorizationRepository,
@@ -8865,25 +9607,27 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             )
             is None
         )
+        retry_resource = ProjectRoleGrantIssueResourceContext(
+            resource_type="project_role_grant",
+            resource_id=project_id,
+            scope_project_id=project_id,
+            target_actor_profile_id=target_id,
+            role=ProjectRole.SUBMITTER,
+            project_status=project.status,
+            target_eligible=True,
+            active_exact_role_exists=False,
+        )
         retry_decision = await waiter_prepared.consume(
             retry_handle,
             ActionId.PROJECT_ROLE_GRANT_ISSUE,
             retry_input,
-            ProjectRoleGrantIssueResourceContext(
-                resource_type="project_role_grant_issue",
-                resource_id=project_id,
-                scope_project_id=project_id,
-                target_actor_profile_id=target_id,
-                role=ProjectRole.SUBMITTER,
-                project_status=project.status,
-                target_eligible=True,
-                active_exact_role_exists=False,
-            ),
+            retry_resource,
         )
         retried = await ProjectRoleGrantMutationService(waiter).complete_issue(
             claim=retry_reservation.claim,
             request=canonical,
             decision=retry_decision,
+            resource=retry_resource,
             actor_profile_id=caller_id,
             reason="AUTH-10C concurrency proof",
         )

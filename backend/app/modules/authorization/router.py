@@ -79,6 +79,7 @@ from app.modules.authorization.lifecycle_service import (
 )
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
+    AuthorizationDenied,
     ActorIdentityLinkAdminReadResourceContext,
     ActorIdentityLinkLifecycleResourceContext,
     ActorProfileAdminReadResourceContext,
@@ -146,11 +147,19 @@ def _actor_resource_not_found() -> StructuredHTTPException:
 
 
 def _project_role_resource_not_found() -> StructuredHTTPException:
-    return _domain_error(
-        404,
-        "project_authorization_resource_not_found",
-        "Project authorization resource not found",
-    )
+    return _domain_error(404, "resource_not_found", "Resource not found")
+
+
+def _project_role_mutation_denial(exc: AuthorizationDenied) -> StructuredHTTPException:
+    if exc.public_code == "self_grant_forbidden":
+        return _domain_error(403, "self_grant_forbidden", "Self grant is forbidden")
+    if exc.public_code == "self_role_revoke_forbidden":
+        return _domain_error(
+            403,
+            "self_role_revoke_forbidden",
+            "Self role revocation is forbidden",
+        )
+    return _project_role_resource_not_found()
 
 
 def _project_role_read_service(
@@ -1291,24 +1300,28 @@ async def issue_project_role_grant(
             role=payload.role.value,
         ),
     )
-    decision = await _database_call(
-        session,
-        prepared.consume(
-            handle,
-            ActionId.PROJECT_ROLE_GRANT_ISSUE,
-            prepared_input,
-            ProjectRoleGrantIssueResourceContext(
-                resource_type="project_role_grant_issue",
-                resource_id=project_id,
-                scope_project_id=project_id,
-                target_actor_profile_id=payload.target_actor_profile_id,
-                role=payload.role,
-                project_status=project.status,
-                target_eligible=target_eligible,
-                active_exact_role_exists=active_exact_role is not None,
-            ),
-        ),
+    resource = ProjectRoleGrantIssueResourceContext(
+        resource_type="project_role_grant",
+        resource_id=project_id,
+        scope_project_id=project_id,
+        target_actor_profile_id=payload.target_actor_profile_id,
+        role=payload.role,
+        project_status=project.status,
+        target_eligible=target_eligible,
+        active_exact_role_exists=active_exact_role is not None,
     )
+    try:
+        decision = await _database_call(
+            session,
+            prepared.consume(
+                handle,
+                ActionId.PROJECT_ROLE_GRANT_ISSUE,
+                prepared_input,
+                resource,
+            ),
+        )
+    except AuthorizationDenied as exc:
+        raise _project_role_mutation_denial(exc) from exc
     if reservation.outcome == "mismatch":
         await session.rollback()
         await _database_call(
@@ -1361,6 +1374,7 @@ async def issue_project_role_grant(
                 claim=reservation.claim,
                 request=canonical,
                 decision=decision,
+                resource=resource,
                 actor_profile_id=actor_id,
                 reason=payload.reason,
             ),
@@ -1451,24 +1465,28 @@ async def revoke_project_role_grant(
     if project is None or row is None:
         raise _project_role_resource_not_found()
     grant, _snapshot = row
-    decision = await _database_call(
-        session,
-        prepared.consume(
-            handle,
-            ActionId.PROJECT_ROLE_GRANT_REVOKE,
-            prepared_input,
-            ProjectRoleGrantRevokeResourceContext(
-                resource_type="project_role_grant_revoke",
-                resource_id=grant_id,
-                scope_project_id=project_id,
-                actor_profile_id=UUID(grant.actor_profile_id),
-                role=ProjectRole(grant.role),
-                project_status=project.status,
-                status=grant.status,
-                version=grant.version,
-            ),
-        ),
+    resource = ProjectRoleGrantRevokeResourceContext(
+        resource_type="project_role_grant",
+        resource_id=grant_id,
+        scope_project_id=project_id,
+        actor_profile_id=UUID(grant.actor_profile_id),
+        role=ProjectRole(grant.role),
+        project_status=project.status,
+        status=grant.status,
+        version=grant.version,
     )
+    try:
+        decision = await _database_call(
+            session,
+            prepared.consume(
+                handle,
+                ActionId.PROJECT_ROLE_GRANT_REVOKE,
+                prepared_input,
+                resource,
+            ),
+        )
+    except AuthorizationDenied as exc:
+        raise _project_role_mutation_denial(exc) from exc
     if reservation.outcome == "mismatch":
         await session.rollback()
         await _database_call(
@@ -1509,6 +1527,7 @@ async def revoke_project_role_grant(
                 claim=reservation.claim,
                 request=canonical,
                 decision=decision,
+                resource=resource,
                 actor_profile_id=actor_id,
                 reason=payload.reason,
                 grant=grant,
