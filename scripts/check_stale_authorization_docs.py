@@ -397,12 +397,22 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     after_code_reference = re.sub(
         r"^(?:[/.][A-Za-z0-9_.-]+)+", "", authority_suffix
     )
-    code_path_claims_product_authority = exact_code_path and re.search(
-        r"\b(?:claims?|submits?|reviews?|approves?|grants?|revokes?|manages?|accepts?|"
-        r"rejects?|requests?\s+revision)\b",
-        after_code_reference,
-        re.IGNORECASE,
-    ) is not None
+    exact_coverage_path = bool(
+        exact_code_path
+        and re.search(r"coverage\s+report\s+--include=['\"]app/$", prefix)
+        and re.match(r"/\*['\"](?:\s|$)", suffix)
+    )
+    exact_celery_module_path = bool(
+        exact_code_path
+        and re.search(r"(?:^|\n)[^;\n]*\bcelery\s+-A\s+app\.$", prefix)
+        and re.match(r"\s+worker\s+--", after_code_reference)
+    )
+    code_path_has_prose = bool(
+        exact_code_path
+        and not exact_coverage_path
+        and not exact_celery_module_path
+        and re.search(r"[A-Za-z]", after_code_reference)
+    )
     exact_technical_cli_flag = (
         token.group(0).lower() == "worker"
         and prefix.endswith("--start-api-")
@@ -422,7 +432,7 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     )
     return bool(
         TECHNICAL_WORKER_PREFIX.search(prefix)
-        or (exact_code_path and not code_path_claims_product_authority)
+        or (exact_code_path and not code_path_has_prose)
         or exact_coverage_module
         or exact_celery_cli
         or exact_technical_cli_flag

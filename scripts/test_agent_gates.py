@@ -5505,6 +5505,11 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "backend/app/workers/reviews.py may review a contributor submission.",
         "backend/app/workers/reviews.py claims a task.",
         "backend/app/workers/tasks.py can claim a task.",
+        "backend/app/workers/tasks.py creates a project.",
+        "backend/app/workers/tasks.py can create a project.",
+        "app/workers/tasks.py creates a project.",
+        "backend/app/workers/tasks.py uses submitter authority.",
+        "backend/app/workers/tasks.py is a human product role.",
     )
     for sample in human_worker_statements:
         assert gate.scan_text("docs/new_active_doc.md", sample), sample
