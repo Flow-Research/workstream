@@ -97,11 +97,14 @@ jobs:
         working-directory: backend
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: >-
-          python scripts/run_test_lanes.py
-          --collect-only
-          --metadata-dir .ci/test-lanes/collect
-          --summary-json .ci/test-lanes/collect-summary.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 .ci/test-lanes
+          python scripts/run_test_lanes.py \
+            --collect-only \
+            --metadata-dir .ci/test-lanes/collect \
+            --summary-json .ci/test-lanes/collect-summary.json
 
       - name: Validate canonical semantic-lane inventory
         working-directory: backend
