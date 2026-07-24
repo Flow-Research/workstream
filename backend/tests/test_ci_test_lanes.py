@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import time
 
@@ -162,6 +164,29 @@ def test_admin_runner_environment_retains_only_admin_database_url(
     assert "run_isolated_tests.py" not in " ".join(command)
 
 
+def test_admin_wrapper_redacts_admin_url_before_persisted_output() -> None:
+    secret = "postgresql+asyncpg://admin:secret@localhost/postgres"
+    env = os.environ.copy()
+    env[runner.ADMIN_ENV] = secret
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            runner.ADMIN_REDACTING_WRAPPER,
+            sys.executable,
+            "-c",
+            f"import os; print(os.environ[{runner.ADMIN_ENV!r}])",
+        ],
+        env=env,
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+
+    assert secret not in result.stdout
+    assert result.stdout.strip() == "[REDACTED_ADMIN_DATABASE_URL]"
+
+
 def test_collect_only_writes_raw_digest_bound_validator_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -177,13 +202,20 @@ def test_collect_only_writes_raw_digest_bound_validator_schema(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     manifest_bytes = (metadata / summary["manifest_file"]).read_bytes()
     assert set(summary) == {
-        "canonical_node_count", "elapsed_seconds", "head_sha", "lanes", "manifest_file",
-        "manifest_sha256", "mode", "schema_version",
+        "aggregate_runner_seconds", "canonical_node_count", "elapsed_seconds", "head_sha",
+        "lanes", "manifest_file", "manifest_sha256", "mode", "schema_version",
+        "slowest_lane_seconds",
     }
     assert summary["mode"] == "collect"
     assert summary["canonical_node_count"] == len(nodes)
     assert summary["manifest_sha256"] == hashlib.sha256(manifest_bytes).hexdigest()
     assert len(summary["lanes"]) == 4
+    assert summary["slowest_lane_seconds"] == max(
+        lane["elapsed_seconds"] for lane in summary["lanes"]
+    )
+    assert summary["aggregate_runner_seconds"] == sum(
+        lane["elapsed_seconds"] for lane in summary["lanes"]
+    )
     for lane in summary["lanes"]:
         assert lane["coverage_file"] is None
         assert lane["execution_exit_code"] is None
@@ -208,6 +240,53 @@ def test_collection_rejects_duplicate_or_foreign_nodes(
     monkeypatch.setattr(runner.subprocess, "run", fake_run)
     with pytest.raises(LaneError, match="invalid_collected_nodes"):
         runner.collect_nodes((module,), tmp_path / "metadata")
+
+
+def test_timing_summary_is_derived_from_exact_four_lanes() -> None:
+    lanes = [{"elapsed_seconds": value} for value in (1.125, 2.25, 0.5, 3.75)]
+
+    assert runner._timing_summary(lanes) == {
+        "aggregate_runner_seconds": 7.625,
+        "slowest_lane_seconds": 3.75,
+    }
+    with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):
+        runner._timing_summary(lanes[:3])
+    with pytest.raises(LaneError, match="invalid_lane_timing"):
+        runner._timing_summary([*lanes[:3], {"elapsed_seconds": -1.0}])
+
+
+def test_exit_aggregation_cannot_hide_signal_failure() -> None:
+    assert runner._aggregate_exit_codes([0, 0]) == 0
+    assert runner._aggregate_exit_codes([0, 3]) == 1
+    assert runner._aggregate_exit_codes([0, -15]) == 1
+    with pytest.raises(LaneError, match="invalid_lane_exit_codes"):
+        runner._aggregate_exit_codes([])
+
+
+def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path) -> None:
+    rows = []
+    for index, lane in enumerate(LANES):
+        source = tmp_path / f".coverage.unit.{lane.name}"
+        source.write_bytes(f"coverage-{lane.name}".encode())
+        (tmp_path / f"{lane.name}.database.json").write_text("{}\n", encoding="utf-8")
+        unit = {
+            "collected_nodes": [f"{lane.modules[0]}::test_one"],
+            "collection_exit_code": 0,
+            "completed_nodes": [f"{lane.modules[0]}::test_one"],
+            "coverage_path": source,
+            "deselected_nodes": [],
+            "elapsed_seconds": float(index + 1),
+            "execution_exit_code": 0,
+            "interrupted": False,
+            "skipped_nodes": [],
+        }
+        rows.append(runner._finalize_lane(lane, [unit], tmp_path))
+
+    assert [row["name"] for row in rows] == [lane.name for lane in LANES]
+    assert sorted(path.name for path in tmp_path.glob(".coverage.*")) == sorted(
+        f".coverage.{lane.name}" for lane in LANES
+    )
+    assert not list(tmp_path.glob(".coverage.unit.*"))
 
 
 def test_failure_interrupts_sibling_process_groups_and_records_all_lanes(
@@ -246,3 +325,9 @@ def test_failure_interrupts_sibling_process_groups_and_records_all_lanes(
     assert len(summary["lanes"]) == 4
     assert summary["lanes"][0]["execution_exit_code"] == 1
     assert all(row["interrupted"] for row in summary["lanes"][1:])
+    assert summary["slowest_lane_seconds"] == max(
+        row["elapsed_seconds"] for row in summary["lanes"]
+    )
+    assert summary["aggregate_runner_seconds"] == round(
+        sum(row["elapsed_seconds"] for row in summary["lanes"]), 3
+    )

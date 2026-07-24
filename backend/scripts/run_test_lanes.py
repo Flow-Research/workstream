@@ -30,6 +30,19 @@ SCHEMA_VERSION = 1
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
 ORDINARY_KIND = "ordinary_isolated"
 ADMIN_KIND = "admin_runner_self_test"
+ADMIN_REDACTING_WRAPPER = """
+import os
+import subprocess
+import sys
+
+result = subprocess.run(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+data = result.stdout
+secret = os.environ.get('WORKSTREAM_TEST_ADMIN_DATABASE_URL', '').encode()
+if secret:
+    data = data.replace(secret, b'[REDACTED_ADMIN_DATABASE_URL]')
+sys.stdout.buffer.write(data)
+raise SystemExit(result.returncode)
+""".strip()
 HEARTBEAT_SECONDS = 60.0
 CLEANUP_GRACE_SECONDS = 10.0
 POLL_SECONDS = 0.05
@@ -383,10 +396,11 @@ def lane_command(
 
 def admin_runner_command(nodes: list[str]) -> list[str]:
     """Run isolation-runner self-tests directly, never inside an owned database."""
-    return [
+    pytest_command = [
         sys.executable, "-m", "pytest", "-q", *_plugin_args(), "--cov=app",
         "--cov-report=", "--durations=25", *nodes,
     ]
+    return [sys.executable, "-c", ADMIN_REDACTING_WRAPPER, *pytest_command]
 
 
 def _prepare_outputs(metadata_dir: Path, summary_json: Path) -> None:
@@ -464,17 +478,51 @@ def _finalize_lane(
         "skipped_nodes": sorted(set(node for unit in units for node in unit["skipped_nodes"])),
     }
     evidence_path.write_bytes(_json_bytes(evidence))
+    if coverage_path.is_file() and not coverage_path.is_symlink():
+        for unit in units:
+            source = unit["coverage_path"]
+            if source != coverage_path and source.is_file() and not source.is_symlink():
+                source.unlink()
     return {
-        "collection_exit_code": max(unit["collection_exit_code"] for unit in units),
+        "collection_exit_code": _aggregate_exit_codes(
+            [unit["collection_exit_code"] for unit in units]
+        ),
         "coverage_file": coverage_path.name,
         "coverage_sha256": _sha256(coverage_path.read_bytes())
         if coverage_path.is_file() and not coverage_path.is_symlink() else None,
         "elapsed_seconds": round(max(unit["elapsed_seconds"] for unit in units), 3),
         "evidence_file": evidence_path.name,
         "evidence_sha256": _sha256(evidence_path.read_bytes()),
-        "execution_exit_code": max(unit["execution_exit_code"] for unit in units),
+        "execution_exit_code": _aggregate_exit_codes(
+            [unit["execution_exit_code"] for unit in units]
+        ),
         "interrupted": any(unit["interrupted"] for unit in units),
         "name": lane.name,
+    }
+
+
+def _aggregate_exit_codes(codes: list[int]) -> int:
+    """Return success only when every subprocess exited successfully."""
+    if not codes or any(not isinstance(code, int) or isinstance(code, bool) for code in codes):
+        raise LaneError("invalid_lane_exit_codes")
+    return 0 if all(code == 0 for code in codes) else 1
+
+
+def _timing_summary(lanes: list[dict[str, Any]]) -> dict[str, float]:
+    """Derive aggregate timing only from the exact four emitted lane rows."""
+    if len(lanes) != 4:
+        raise LaneError("invalid_lane_timing_inventory")
+    elapsed = [row["elapsed_seconds"] for row in lanes]
+    if any(
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or value < 0
+        for value in elapsed
+    ):
+        raise LaneError("invalid_lane_timing")
+    return {
+        "aggregate_runner_seconds": round(sum(elapsed), 3),
+        "slowest_lane_seconds": round(max(elapsed), 3),
     }
 
 
@@ -513,7 +561,8 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
             })
         summary = {"canonical_node_count": len(nodes), "elapsed_seconds": 0.0,
                    "head_sha": tree_sha, "lanes": lane_rows, "manifest_file": manifest_path.name,
-                   "manifest_sha256": manifest_digest, "mode": "collect", "schema_version": SCHEMA_VERSION}
+                   "manifest_sha256": manifest_digest, "mode": "collect", "schema_version": SCHEMA_VERSION,
+                   **_timing_summary(lane_rows)}
         summary_json.write_bytes(_json_bytes(summary))
         return 0
     if any(lane.requires_postgres for lane in LANES) and not os.environ.get(ADMIN_ENV):
@@ -601,6 +650,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
         "manifest_file": manifest_path.name, "manifest_sha256": manifest_digest,
         "mode": "run", "schema_version": SCHEMA_VERSION,
     }
+    summary.update(_timing_summary(summary["lanes"]))
     summary_json.write_bytes(_json_bytes(summary))
     return 0 if len(results) == 4 and all(row["execution_exit_code"] == 0 for row in results.values()) else 1
 

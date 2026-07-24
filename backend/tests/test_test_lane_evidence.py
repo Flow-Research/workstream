@@ -15,6 +15,7 @@ SPEC = importlib.util.spec_from_file_location("validate_test_lane_evidence", SCR
 assert SPEC is not None and SPEC.loader is not None
 validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
+REAL_COLLECT_CURRENT_NODES = validator._collect_current_nodes
 HEAD = "a" * 40
 LANES = ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
 
@@ -108,6 +109,7 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
             }
         )
     summary = {
+        "aggregate_runner_seconds": 4.0,
         "canonical_node_count": 5,
         "elapsed_seconds": 2.0,
         "head_sha": HEAD,
@@ -116,6 +118,7 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
         "manifest_sha256": manifest_digest,
         "mode": mode,
         "schema_version": 1,
+        "slowest_lane_seconds": 1.0,
     }
     summary_path = tmp_path / "summary.json"
     _write(summary_path, summary)
@@ -125,6 +128,16 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
 @pytest.fixture(autouse=True)
 def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(validator, "_current_head", lambda _root: HEAD)
+    monkeypatch.setattr(
+        validator,
+        "_collect_current_nodes",
+        lambda _root: sorted(
+            [
+                *(f"tests/test_{index}.py::test_ok" for index in range(4)),
+                "tests/test_isolated_database_runner.py::test_admin_custody",
+            ]
+        ),
+    )
 
 
 @pytest.mark.parametrize("mode", ["collect", "run"])
@@ -188,7 +201,11 @@ def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str) -
     ("field", "value", "message"),
     [
         ("collection_exit_code", 1, "collection_failed"),
+        ("collection_exit_code", -9, "collection_failed"),
+        ("collection_exit_code", False, "collection_failed"),
         ("execution_exit_code", None, "execution_incomplete"),
+        ("execution_exit_code", -15, "execution_incomplete"),
+        ("execution_exit_code", False, "execution_incomplete"),
         ("interrupted", True, "lane_interrupted"),
     ],
 )
@@ -293,4 +310,61 @@ def test_rejects_recorded_database_environment_or_shared_coverage(tmp_path: Path
     summary["lanes"][1]["coverage_sha256"] = summary["lanes"][0]["coverage_sha256"]
     _write(summary_path, summary)
     with pytest.raises(validator.EvidenceError, match="shared_lane_artifact"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("aggregate_runner_seconds", 4.01, "summary_timing_mismatch"),
+        ("slowest_lane_seconds", 0.99, "summary_timing_mismatch"),
+        ("aggregate_runner_seconds", float("nan"), "invalid_summary_timing"),
+        ("slowest_lane_seconds", float("inf"), "invalid_summary_timing"),
+        ("elapsed_seconds", -1.0, "invalid_summary_timing"),
+    ],
+)
+def test_rejects_invalid_or_drifted_summary_timing(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    summary[field] = value
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match=message):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize("value", [-0.001, float("nan"), float("inf"), True])
+def test_rejects_invalid_lane_timing(tmp_path: Path, value: object) -> None:
+    metadata, summary_path, summary = _bundle(tmp_path)
+    summary["lanes"][0]["elapsed_seconds"] = value
+    _write(summary_path, summary)
+    with pytest.raises(validator.EvidenceError, match="invalid_lane_elapsed_seconds"):
+        validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "foreign"])
+def test_real_collection_rejects_missing_or_foreign_manifest_node(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    for index in range(4):
+        (tests / f"test_{index}.py").write_text("def test_ok():\n    pass\n", encoding="utf-8")
+    (tests / "test_isolated_database_runner.py").write_text(
+        "def test_admin_custody():\n    pass\n", encoding="utf-8"
+    )
+    metadata, summary_path, summary = _bundle(tmp_path)
+    manifest_path = metadata / summary["manifest_file"]
+    manifest = json.loads(manifest_path.read_text())
+    if mutation == "missing":
+        manifest["nodes"].pop(0)
+    else:
+        manifest["nodes"][0]["module"] = "tests/test_foreign.py"
+        manifest["nodes"][0]["nodeid"] = "tests/test_foreign.py::test_ok"
+    manifest["nodes"].sort(key=lambda row: row["nodeid"])
+    summary["canonical_node_count"] = len(manifest["nodes"])
+    summary["manifest_sha256"] = _write(manifest_path, manifest)
+    _write(summary_path, summary)
+    monkeypatch.setattr(validator, "_collect_current_nodes", REAL_COLLECT_CURRENT_NODES)
+    with pytest.raises(validator.EvidenceError, match="current_node_inventory_mismatch"):
         validator.validate_evidence(metadata, summary_path, tmp_path)

@@ -47,10 +47,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          job_start_epoch="$(date +%s)"
           tree_sha="$(git rev-parse HEAD)"
           test "${tree_sha}" = "${GITHUB_SHA}"
           test -z "$(git status --porcelain)"
           test "$(git rev-parse "${tree_sha}^{tree}")" = "$(git rev-parse HEAD^{tree})"
+          echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
           echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Internal review evidence gate
@@ -238,6 +240,154 @@ jobs:
           --include='app/interfaces/auth.py,app/core/auth.py,app/adapters/auth/dev.py,app/adapters/auth/flow.py'
           --precision=2
           --fail-under=90
+
+      - name: Record fail-closed hosted timing and coverage evidence
+        working-directory: backend
+        env:
+          EXPECTED_HEAD_SHA: ${{ steps.identity.outputs.tree_sha }}
+          JOB_START_EPOCH: ${{ steps.identity.outputs.job_start_epoch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          coverage json -o .ci/test-lanes/coverage.json
+          python - <<'PY'
+          from __future__ import annotations
+
+          from collections import Counter
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import subprocess
+          import time
+
+          evidence_root = Path(".ci/test-lanes")
+          run_root = evidence_root / "run"
+          summary_path = evidence_root / "run-summary.json"
+          coverage_path = evidence_root / "coverage.json"
+          output_path = Path(".ci/test-lanes/hosted-evidence.json")
+
+          def read_json(path: Path) -> dict[str, object]:
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(f"invalid hosted evidence input: {path}")
+              value = json.loads(path.read_text(encoding="utf-8"))
+              if not isinstance(value, dict):
+                  raise SystemExit(f"invalid hosted evidence object: {path}")
+              return value
+
+          def digest(path: Path) -> str:
+              if not path.is_file() or path.is_symlink():
+                  raise SystemExit(f"invalid hosted digest input: {path}")
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+
+          expected_head = os.environ["EXPECTED_HEAD_SHA"]
+          actual_head = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], text=True
+          ).strip()
+          summary = read_json(summary_path)
+          coverage = read_json(coverage_path)
+          if actual_head != expected_head or summary.get("head_sha") != expected_head:
+              raise SystemExit("hosted evidence head drift")
+
+          lanes = summary.get("lanes")
+          if not isinstance(lanes, list) or len(lanes) != 4:
+              raise SystemExit("invalid hosted lane inventory")
+          collected: list[str] = []
+          completed: list[str] = []
+          lane_elapsed: list[float] = []
+          for lane in lanes:
+              if not isinstance(lane, dict):
+                  raise SystemExit("invalid hosted lane row")
+              elapsed = lane.get("elapsed_seconds")
+              if (
+                  isinstance(elapsed, bool)
+                  or not isinstance(elapsed, (int, float))
+                  or not math.isfinite(elapsed)
+                  or elapsed < 0
+              ):
+                  raise SystemExit("invalid hosted lane timing")
+              lane_elapsed.append(float(elapsed))
+              for file_key, digest_key in (
+                  ("evidence_file", "evidence_sha256"),
+                  ("coverage_file", "coverage_sha256"),
+              ):
+                  name = lane.get(file_key)
+                  expected_digest = lane.get(digest_key)
+                  if not isinstance(name, str) or not isinstance(expected_digest, str):
+                      raise SystemExit("invalid hosted lane digest binding")
+                  path = run_root / name
+                  if path.parent != run_root or digest(path) != expected_digest:
+                      raise SystemExit("hosted lane digest drift")
+              lane_evidence = read_json(run_root / str(lane["evidence_file"]))
+              lane_collected = lane_evidence.get("collected_nodes")
+              lane_completed = lane_evidence.get("completed_nodes")
+              if not isinstance(lane_collected, list) or not isinstance(lane_completed, list):
+                  raise SystemExit("invalid hosted node custody")
+              collected.extend(lane_collected)
+              completed.extend(lane_completed)
+
+          canonical_count = summary.get("canonical_node_count")
+          if (
+              isinstance(canonical_count, bool)
+              or not isinstance(canonical_count, int)
+              or canonical_count <= 0
+              or len(collected) != canonical_count
+              or len(completed) != canonical_count
+              or Counter(collected) != Counter(completed)
+              or len(set(collected)) != canonical_count
+          ):
+              raise SystemExit("hosted node count mismatch")
+
+          aggregate = summary.get("aggregate_runner_seconds")
+          slowest = summary.get("slowest_lane_seconds")
+          for value in (aggregate, slowest):
+              if (
+                  isinstance(value, bool)
+                  or not isinstance(value, (int, float))
+                  or not math.isfinite(value)
+                  or value < 0
+              ):
+                  raise SystemExit("invalid hosted summary timing")
+          if not math.isclose(
+              float(aggregate), math.fsum(lane_elapsed), rel_tol=0.0, abs_tol=1e-9
+          ):
+              raise SystemExit("aggregate runner timing drift")
+          if not math.isclose(
+              float(slowest), max(lane_elapsed), rel_tol=0.0, abs_tol=1e-9
+          ):
+              raise SystemExit("slowest lane timing drift")
+
+          start_epoch = int(os.environ["JOB_START_EPOCH"])
+          total_wall = time.time() - start_epoch
+          if not math.isfinite(total_wall) or total_wall < 0 or total_wall > 480:
+              raise SystemExit("Backend hosted wall time exceeds 480 seconds")
+          totals = coverage.get("totals")
+          percent = totals.get("percent_covered") if isinstance(totals, dict) else None
+          if (
+              isinstance(percent, bool)
+              or not isinstance(percent, (int, float))
+              or not math.isfinite(percent)
+              or percent < 78
+              or percent > 100
+          ):
+              raise SystemExit("invalid hosted global coverage")
+
+          hosted = {
+              "aggregate_runner_seconds": float(aggregate),
+              "canonical_collected_count": len(collected),
+              "completed_count": len(completed),
+              "global_coverage_percent": float(percent),
+              "global_coverage_sha256": digest(coverage_path),
+              "head_sha": expected_head,
+              "run_summary_sha256": digest(summary_path),
+              "slowest_lane_seconds": float(slowest),
+              "total_backend_wall_seconds": round(total_wall, 3),
+          }
+          output_path.write_text(
+              json.dumps(hosted, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
 
       - name: Reassert exact tree custody
         if: ${{ always() }}

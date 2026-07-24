@@ -82,6 +82,41 @@ def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None
         runner._minio_namespace("../foreign", "012345abcdef")
 
 
+@pytest.mark.parametrize(
+    ("lane", "expected_bucket"),
+    [
+        ("no_postgres", "workstream-artifacts"),
+        ("schema_contracts", "workstream-ci-schema-contracts-012345abcdef"),
+        ("control_plane", "workstream-ci-control-plane-012345abcdef"),
+        ("execution_plane", "workstream-ci-execution-plane-012345abcdef"),
+    ],
+)
+def test_committed_lane_buckets_use_validator_compatible_s3_grammar(
+    lane: str, expected_bucket: str
+) -> None:
+    """Every committed lane maps deterministically to a valid S3 bucket name."""
+    bucket, prefix = runner._minio_namespace(lane, "012345abcdef")
+    assert bucket == expected_bucket
+    assert 3 <= len(bucket) <= 63
+    assert runner.BUCKET_RE.fullmatch(bucket)
+    assert "_" not in bucket
+    assert prefix == f"ci/{lane}/012345abcdef"
+
+
+def test_lane_namespaces_do_not_collide_across_lanes_or_runner_suffixes() -> None:
+    """Separate lane identities and runner invocations cannot share custody."""
+    namespaces = {
+        runner._minio_namespace(lane, suffix)
+        for lane in ("no_postgres", "schema_contracts", "control_plane", "execution_plane")
+        for suffix in ("012345abcdef", "fedcba543210")
+    }
+    assert len(namespaces) == 8
+    with pytest.raises(runner.RunnerError, match="invalid_lane"):
+        runner._minio_namespace("control_plane", "not-hex")
+    with pytest.raises(runner.RunnerError, match="invalid_minio_namespace"):
+        runner._minio_namespace("a" * 63, "012345abcdef")
+
+
 def test_child_environment_binds_lane_namespace_without_admin_custody() -> None:
     """Children receive resource targets but never the destructive admin authority."""
     env = runner._child_env(

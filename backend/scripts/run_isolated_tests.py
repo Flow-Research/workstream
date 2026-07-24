@@ -37,6 +37,7 @@ MINIO_SECRET_KEY = "workstream-minio-secret-key"
 S3_TRAFFIC_LANE = "no_postgres"
 S3_TRAFFIC_BUCKET = "workstream-artifacts"
 LANE_RE = re.compile(r"[a-z][a-z0-9_]{0,62}")
+BUCKET_RE = re.compile(r"[a-z0-9](?:[a-z0-9.-]{1,61}[a-z0-9])?")
 
 
 class RunnerError(RuntimeError):
@@ -189,9 +190,16 @@ def _tree_sha() -> str:
 
 def _minio_namespace(lane: str, suffix: str) -> tuple[str, str]:
     """Return a lane-bound bucket and prefix without accepting arbitrary names."""
-    if LANE_RE.fullmatch(lane) is None:
+    if LANE_RE.fullmatch(lane) is None or re.fullmatch(r"[a-f0-9]{12}", suffix) is None:
         raise RunnerError("invalid_lane")
-    bucket = S3_TRAFFIC_BUCKET if lane == S3_TRAFFIC_LANE else f"workstream-ci-{lane}-{suffix}"
+    lane_component = lane.replace("_", "-")
+    bucket = (
+        S3_TRAFFIC_BUCKET
+        if lane == S3_TRAFFIC_LANE
+        else f"workstream-ci-{lane_component}-{suffix}"
+    )
+    if len(bucket) > 63 or BUCKET_RE.fullmatch(bucket) is None:
+        raise RunnerError("invalid_minio_namespace")
     return bucket, f"ci/{lane}/{suffix}"
 
 

@@ -6459,6 +6459,11 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert len(identity) == 1
     assert '${tree_sha}' in str(identity[0]["run"])
     assert '${GITHUB_SHA}' in str(identity[0]["run"])
+    identity_command = str(identity[0]["run"])
+    assert identity_command.index('job_start_epoch="$(date +%s)"') < (
+        identity_command.index('tree_sha="$(git rev-parse HEAD)"')
+    )
+    assert 'job_start_epoch=${job_start_epoch}' in identity_command
 
     install = [step for step in steps if step.get("name") == "Install backend and exact Ruff"]
     assert len(install) == 1
@@ -6564,6 +6569,38 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         assert coverage_step.get("working-directory") == "backend"
         for forbidden_key in ("if", "continue-on-error", "shell", "env"):
             assert forbidden_key not in coverage_step
+    hosted_steps = [
+        step for step in steps
+        if step.get("name") == "Record fail-closed hosted timing and coverage evidence"
+    ]
+    assert len(hosted_steps) == 1
+    hosted_step = hosted_steps[0]
+    hosted_command = str(hosted_step["run"])
+    assert steps.index(hosted_step) > max(steps.index(step) for step in auth_coverage_steps)
+    assert "coverage json -o .ci/test-lanes/coverage.json" in hosted_command
+    assert ".ci/test-lanes/hosted-evidence.json" in hosted_command
+    assert 'summary.get("head_sha") != expected_head' in hosted_command
+    assert 'summary.get("canonical_node_count")' in hosted_command
+    assert 'summary.get("aggregate_runner_seconds")' in hosted_command
+    assert 'summary.get("slowest_lane_seconds")' in hosted_command
+    assert 'total_wall > 480' in hosted_command
+    assert 'percent < 78' in hosted_command
+    assert "math.isfinite" in hosted_command
+    assert "Counter(collected) != Counter(completed)" in hosted_command
+    assert "hosted lane digest drift" in hosted_command
+    for required_field in (
+        "head_sha",
+        "total_backend_wall_seconds",
+        "slowest_lane_seconds",
+        "aggregate_runner_seconds",
+        "canonical_collected_count",
+        "completed_count",
+        "global_coverage_percent",
+        "global_coverage_sha256",
+        "run_summary_sha256",
+    ):
+        assert f'"{required_field}"' in hosted_command
+    assert "waiver" not in hosted_command.lower()
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
     actual_coverage = tuple(
