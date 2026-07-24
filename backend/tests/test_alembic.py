@@ -221,6 +221,7 @@ def test_0034_project_role_issue_evidence_fact_shape_is_closed(
                     "future_obligation": obligation,
                 }
                 after = {**before, "effective": False}
+                mismatched_role = "reviewer" if role != "reviewer" else "submitter"
                 assert asyncio.run(
                     _facts_are_safe_0034(isolated_database_env, before, after, project_id)
                 )
@@ -230,17 +231,26 @@ def test_0034_project_role_issue_evidence_fact_shape_is_closed(
                     ({**before, "effective": "true"}, after),
                     ({**before, "scope_id": str(uuid4())}, after),
                     ({**before, "future_obligation": "wrong"}, after),
-                    (before, {**after, "role": "adjudicator"}),
+                    (before, {**after, "role": mismatched_role}),
                 )
                 for invalid_before, invalid_after in invalid:
-                    assert not asyncio.run(
+                    assert asyncio.run(
                         _facts_are_safe_0034(
                             isolated_database_env,
                             invalid_before,
                             invalid_after,
                             project_id,
                         )
-                    )
+                    ) is False
+                for null_before, null_after in ((None, after), (before, None)):
+                    assert asyncio.run(
+                        _facts_are_safe_0034(
+                            isolated_database_env,
+                            null_before,
+                            null_after,
+                            project_id,
+                        )
+                    ) is False
             assert asyncio.run(
                 _facts_are_safe_0034(
                     isolated_database_env,
@@ -662,7 +672,8 @@ async def _install_definition_drift_0034(database_url: str, drift: str) -> None:
                 await connection.execute(
                     text(
                         "create or replace function authority_event_facts_are_safe("
-                        "text,json,json,text) returns boolean language sql immutable "
+                        "event_name text,before_state json,after_state json,"
+                        "envelope_project_id text) returns boolean language sql immutable "
                         "as $$ select true $$"
                     )
                 )
@@ -833,6 +844,8 @@ async def _restore_0034_privacy_constraint(
     assert backward_matches
     old, new = max(backward_matches, key=lambda item: len(item[1]))
     predecessor_source = forward_definition.removesuffix(" NOT VALID").replace(new, old)
+    # Keep this normalization independent of the migration under test. Sharing its
+    # implementation would let the repair helper reproduce the same defect and mask drift.
     predecessor_source = re.sub(
         r"\('([^']+)'::character varying\)::text",
         r"'\1'",
@@ -897,26 +910,24 @@ async def _restore_0034_trigger_states(
 
 async def _facts_are_safe_0034(
     database_url: str,
-    before: dict[str, object],
-    after: dict[str, object],
+    before: dict[str, object] | None,
+    after: dict[str, object] | None,
     project_id: str,
-) -> bool:
+) -> bool | None:
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
-            return bool(
-                await connection.scalar(
-                    text(
-                        "select authority_event_facts_are_safe("
-                        "'AuthorityInvalidationRequested',cast(:before as json),"
-                        "cast(:after as json),:project)"
-                    ),
-                    {
-                        "before": json.dumps(before),
-                        "after": json.dumps(after),
-                        "project": project_id,
-                    },
-                )
+            return await connection.scalar(
+                text(
+                    "select authority_event_facts_are_safe("
+                    "'AuthorityInvalidationRequested',cast(:before as json),"
+                    "cast(:after as json),:project)"
+                ),
+                {
+                    "before": None if before is None else json.dumps(before),
+                    "after": None if after is None else json.dumps(after),
+                    "project": project_id,
+                },
             )
     finally:
         await engine.dispose()
@@ -935,8 +946,26 @@ async def _seed_pending_issue_cause_0034(database_url: str) -> dict[str, str]:
         "correlation": str(uuid4()),
     }
     engine = create_async_engine(database_url)
+    trigger_states = None
     try:
         async with engine.begin() as connection:
+            trigger_states = tuple(
+                tuple(row)
+                for row in (
+                    await connection.execute(
+                        text(
+                            "select tgrelid::regclass::text,tgname,tgenabled "
+                            "from pg_trigger where "
+                            "(tgrelid='authority_idempotency_records'::regclass and "
+                            "tgname='authority_idempotency_pending_guard') or "
+                            "(tgrelid='audit_events'::regclass and "
+                            "tgname='audit_events_validate_idempotency') "
+                            "order by tgrelid::regclass::text,tgname"
+                        )
+                    )
+                ).all()
+            )
+            assert len(trigger_states) == 2
             await connection.execute(
                 text(
                     "alter table authority_idempotency_records disable trigger "
@@ -984,18 +1013,11 @@ async def _seed_pending_issue_cause_0034(database_url: str) -> dict[str, str]:
                     )
                 },
             )
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("alter table audit_events enable trigger audit_events_validate_idempotency")
-            )
-            await connection.execute(
-                text(
-                    "alter table authority_idempotency_records enable trigger "
-                    "authority_idempotency_pending_guard"
-                )
-            )
         return values
     finally:
+        if trigger_states is not None:
+            async with engine.begin() as connection:
+                await _restore_0034_trigger_states(connection, trigger_states)
         await engine.dispose()
 
 
@@ -1342,8 +1364,21 @@ async def _clear_0034_issue_fixture(database_url: str) -> None:
 
 async def _insert_empty_pending_0034_issue(database_url: str) -> None:
     engine = create_async_engine(database_url)
+    pending_guard = None
     try:
         async with engine.begin() as connection:
+            pending_guard = tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select tgrelid::regclass::text,tgname,tgenabled "
+                            "from pg_trigger where tgrelid="
+                            "'authority_idempotency_records'::regclass and tgname="
+                            "'authority_idempotency_pending_guard'"
+                        )
+                    )
+                ).one()
+            )
             await connection.execute(
                 text(
                     "alter table authority_idempotency_records disable trigger "
@@ -1365,14 +1400,10 @@ async def _insert_empty_pending_0034_issue(database_url: str) -> None:
                     "digest": f"sha256:{'0' * 64}",
                 },
             )
-        async with engine.begin() as connection:
-            await connection.execute(
-                text(
-                    "alter table authority_idempotency_records enable trigger "
-                    "authority_idempotency_pending_guard"
-                )
-            )
     finally:
+        if pending_guard is not None:
+            async with engine.begin() as connection:
+                await _restore_0034_trigger_states(connection, (pending_guard,))
         await engine.dispose()
 
 
@@ -6795,7 +6826,8 @@ async def _wait_for_rate_control_table_lock(database_url: str) -> None:
     """Wait until downgrade is queued for the table's access-exclusive lock."""
     engine = create_async_engine(database_url)
     try:
-        for _ in range(100):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
             async with engine.connect() as connection:
                 waiting = await connection.scalar(
                     text(
@@ -6806,7 +6838,7 @@ async def _wait_for_rate_control_table_lock(database_url: str) -> None:
                 )
             if waiting:
                 return
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
         raise AssertionError("downgrade did not request the table lock")
     finally:
         await engine.dispose()

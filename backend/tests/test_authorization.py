@@ -17,6 +17,7 @@ import hmac
 import json
 import pickle
 from pathlib import Path
+from time import monotonic
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -7825,23 +7826,34 @@ async def test_completion_rejects_resource_and_project_not_bound_to_request(
             resource_id=uuid4(),
             http_status=201,
         )
-        success = _operation_success(
+        issued = _operation_success(
             claim,
             wrong_project,
             response,
             admin_authorizer_grant_id=uuid4(),
+        )
+        qualification_snapshot_id = uuid4()
+        qualification = issued.model_copy(
+            update={
+                "event_id": uuid4(),
+                "event_type": AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED,
+                "entity_type": "qualification_snapshot",
+                "entity_id": str(qualification_snapshot_id),
+                "resource_type": "qualification_snapshot",
+                "resource_id": str(qualification_snapshot_id),
+                "target_ref_kind": "qualification_snapshot",
+                "target_ref_id": str(qualification_snapshot_id),
+                "reason": "qualification_evidence_captured",
+                "after_facts": {"status": "captured"},
+            }
         )
         with pytest.raises(TypeError, match="invalid authority completion input"):
             await service.complete(
                 claim=claim,
                 request=project_request.model_dump(),
                 response=response,
-                success=success,
-                invalidation=AuthorityInvalidationContext(
-                    event_id=uuid4(),
-                    request_id=success.request_id,
-                    correlation_id=success.correlation_id,
-                ),
+                success=(qualification, issued),
+                invalidation=None,
             )
         await session.rollback()
 
@@ -8855,7 +8867,8 @@ async def test_project_role_issue_shared_completion_writes_ordered_zero_invalida
     )
 
     class Audit:
-        events = []
+        def __init__(self) -> None:
+            self.events = []
 
         async def add_authority_event(self, event):
             self.events.append(event)
@@ -8978,7 +8991,8 @@ async def _wait_for_database_lock(database_url: str, application_name: str) -> N
     engine = create_async_engine(database_url)
     try:
         async with engine.connect() as connection:
-            for _ in range(5000):
+            deadline = monotonic() + 5.0
+            while monotonic() < deadline:
                 waiting = await connection.scalar(
                     text(
                         "select exists(select 1 from pg_stat_activity where "
@@ -8988,7 +9002,7 @@ async def _wait_for_database_lock(database_url: str, application_name: str) -> N
                 )
                 if waiting:
                     return
-                await asyncio.sleep(0)
+                await asyncio.sleep(0.01)
     finally:
         await engine.dispose()
     raise AssertionError("concurrent reservation never reached the database lock")
@@ -9590,7 +9604,8 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         observer = create_async_engine(authorization_database_env)
         try:
             async with observer.connect() as connection:
-                for _ in range(5000):
+                deadline = monotonic() + 5.0
+                while monotonic() < deadline:
                     waiting = await connection.scalar(
                         text(
                             "select exists(select 1 from pg_stat_activity where "
@@ -9600,7 +9615,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                     )
                     if waiting:
                         break
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.01)
                 else:
                     raise AssertionError("PREP contender never waited on its database lock")
         finally:

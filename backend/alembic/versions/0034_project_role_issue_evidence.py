@@ -23,7 +23,7 @@ _PREDECESSOR_LINKED_SHA256 = "a05288dc0192e2f984a6e1592d086879bbe32c20cfba0d284a
 _PREDECESSOR_FACTS_SHA256 = "ee5e1bd8d2958ff60238e9200acd7ba226bf64f191f515881dc5741c7f36d9bb"
 _FORWARD_GUARD_SHA256 = "4ff567e26aa28be36f28e4908039d0d4c0e9d1d8e6226dfb4d28c8b0f1523a56"
 _FORWARD_LINKED_SHA256 = "e5d9dc01a65c3865267c89e79e6eedcf270ab5c559d424a593c939e3693f154e"
-_FORWARD_FACTS_SHA256 = "c316b21fd97ffab22f7e5b48b4ed43b786efeab5cba6591de368f2f5777eccda"
+_FORWARD_FACTS_SHA256 = "202354d75f8fc6b60e8f3bedfd8eafcf75aa24f682c1ef4762abf81fa74a1e5d"
 _FACT_CONSTRAINT_SHA256 = "c6f99a1a9ef6cc59fe52af6a117a5265cda8daa9c7fa084ed2ff8bdad851ae2f"
 _PREDECESSOR_PRIVACY_SHA256 = "b76a5df89d66215f6aaba6d03ee0322497cfba99c3072404d7b06f742e71b56e"
 _FORWARD_PRIVACY_SHA256 = "c02c0edccf921bbacbeff81524deb6d57cad6273784029d647c1df02ab18ed26"
@@ -131,8 +131,10 @@ _FACTS_TOP = """          if (before_state is not null and not authority_facts_a
             return false;
           end if;"""
 _FACTS_TOP_FORWARD = """          if not (event_name='AuthorityInvalidationRequested'
-                  and before_state::jsonb ? 'future_obligation'
-                  and after_state::jsonb ? 'future_obligation')
+                  and before_state is not null
+                  and after_state is not null
+                  and coalesce(before_state::jsonb ? 'future_obligation', false)
+                  and coalesce(after_state::jsonb ? 'future_obligation', false))
              and ((before_state is not null and not authority_facts_are_safe(before_state))
                or (after_state is not null and not authority_facts_are_safe(after_state))) then
             return false;
@@ -369,7 +371,10 @@ def _privacy(*, add: bool) -> None:
             r"\1 not in (\2)",
             definition,
         )
-    op.drop_constraint("authority_privacy_bounds", "audit_events", type_="check")
+    op.execute(
+        "alter table audit_events drop constraint "
+        "ck_audit_events_authority_privacy_bounds"
+    )
     op.execute(f"alter table audit_events add constraint ck_audit_events_authority_privacy_bounds {definition}")
     installed = bind.execute(sa.text("""
         select pg_get_constraintdef(oid) from pg_constraint
