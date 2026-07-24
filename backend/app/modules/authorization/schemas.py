@@ -10,7 +10,15 @@ import re
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    Strict,
+    TypeAdapter,
+    model_validator,
+)
 
 from app.core.hashing import canonical_json_hash
 from app.modules.audit.schemas import ActorReferenceKind
@@ -146,8 +154,19 @@ class QualificationUnavailableReason(StrEnum):
 
 ReferenceToken = Annotated[
     str,
+    Strict(),
     Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"),
 ]
+
+
+def _canonical_uuid_input(value: object) -> object:
+    """Admit only the two representations UUID references can have at this boundary."""
+    if not isinstance(value, (str, UUID)):
+        raise ValueError("invalid UUID reference")
+    return value
+
+
+CanonicalUUID = Annotated[UUID, BeforeValidator(_canonical_uuid_input)]
 
 
 class QualificationAvailabilitySnapshot(BaseModel):
@@ -200,7 +219,7 @@ class ProjectRoleQualificationEvidence(BaseModel):
 
     skills_snapshot: QualificationAvailabilitySnapshot
     reputation_snapshot: QualificationAvailabilitySnapshot
-    prior_project_work_refs: Annotated[list[UUID], Field(max_length=20)]
+    prior_project_work_refs: Annotated[list[CanonicalUUID], Field(max_length=20)]
     external_expertise_refs: Annotated[list[ReferenceToken], Field(max_length=20)]
 
     @model_validator(mode="after")

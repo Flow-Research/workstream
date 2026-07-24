@@ -122,6 +122,7 @@ from app.modules.authorization.schemas import (
     MismatchedReservation,
     PendingAuthorityReservationError,
     ProjectRole,
+    ProjectRoleQualificationEvidence,
     ProjectRoleQualificationSnapshotInput,
     ProjectRoleGrantIssueRequest,
     ProjectRoleGrantRevokeRequest,
@@ -207,14 +208,14 @@ DIGEST = "sha256:" + "a" * 64
 def _project_role_qualification() -> dict[str, object]:
     return {
         "skills_snapshot": {
-            "availability": "available",
+            "availability": QualificationAvailability.AVAILABLE,
             "reference_ids": ["skill:opaque"],
             "unavailable_reason": None,
         },
         "reputation_snapshot": {
-            "availability": "unavailable",
+            "availability": QualificationAvailability.UNAVAILABLE,
             "reference_ids": [],
-            "unavailable_reason": "no_record",
+            "unavailable_reason": QualificationUnavailableReason.NO_RECORD,
         },
         "prior_project_work_refs": [],
         "external_expertise_refs": [],
@@ -295,7 +296,10 @@ def test_project_role_public_reason_and_qualification_contract_is_strict() -> No
         "qualification": _project_role_qualification(),
         "reason": "Bounded authority assignment",
     }
-    assert ProjectRoleGrantIssueBody.model_validate(payload).role is ProjectRole.SUBMITTER
+    assert (
+        ProjectRoleGrantIssueBody.model_validate_json(json.dumps(payload)).role
+        is ProjectRole.SUBMITTER
+    )
     assert ProjectRoleGrantRevokeBody.model_validate({"reason": "Bounded removal"}).reason == (
         "Bounded removal"
     )
@@ -8492,6 +8496,38 @@ def test_project_role_contract_rejects_replacement_and_bounds_qualification_refe
     ):
         with pytest.raises(ValidationError):
             QualificationAvailabilitySnapshot.model_validate(invalid)
+
+
+def test_project_role_qualification_evidence_rejects_coerced_values() -> None:
+    available = QualificationAvailabilitySnapshot(
+        availability=QualificationAvailability.AVAILABLE,
+        reference_ids=["work:opaque-1"],
+        unavailable_reason=None,
+    )
+    unavailable = QualificationAvailabilitySnapshot(
+        availability=QualificationAvailability.UNAVAILABLE,
+        reference_ids=[],
+        unavailable_reason=QualificationUnavailableReason.NO_RECORD,
+    )
+    base = {
+        "skills_snapshot": available,
+        "reputation_snapshot": unavailable,
+        "prior_project_work_refs": [uuid4()],
+        "external_expertise_refs": ["expertise:opaque-1"],
+    }
+    assert ProjectRoleQualificationEvidence.model_validate(base).prior_project_work_refs
+    canonical_string = str(uuid4())
+    assert ProjectRoleQualificationEvidence.model_validate(
+        base | {"prior_project_work_refs": [canonical_string]}
+    ).prior_project_work_refs == [UUID(canonical_string)]
+    for invalid in (
+        base | {"prior_project_work_refs": [1]},
+        base | {"prior_project_work_refs": [uuid4().bytes]},
+        base | {"external_expertise_refs": [1]},
+        base | {"external_expertise_refs": [b"expertise:opaque-1"]},
+    ):
+        with pytest.raises(ValidationError):
+            ProjectRoleQualificationEvidence.model_validate(invalid)
 
 
 def test_actor_profile_lifecycle_public_schemas_are_strict_bounded_and_typed() -> None:
