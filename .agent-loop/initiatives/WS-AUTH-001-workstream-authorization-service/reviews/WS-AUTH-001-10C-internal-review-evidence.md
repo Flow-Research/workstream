@@ -7,9 +7,9 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `477b105520ee019497a520b87e259ff469d0ffa4`
-Reviewed at: 2026-07-24T18:34:06Z
-Reviewer run IDs: senior-engineering=/root/auth10c_impl_senior; QA/test=/root/auth10c_impl_qa_retry; security/auth=/root/auth10c_impl_security; product/ops=/root/auth10c_impl_product; architecture=/root/auth10c_arch_exact; docs=/root/auth10c_docs_exact; CI-integrity=/root/auth10c_impl_ci_retry; reuse/dedup=/root/auth10c_reuse_exact; test-delta=/root/auth10c_impl_testdelta
+Reviewed code SHA: `d2a311434dd1b15c256899b11ae4326f258ef9e0`
+Reviewed at: 2026-07-24T20:00:36Z
+Reviewer run IDs: senior-engineering=/root/auth10c_cr_senior; QA/test=/root/auth10c_cr_qa; security/auth=/root/auth10c_cr_security; product/ops=/root/auth10c_cr_product; architecture=/root/auth10c_cr_arch; docs=/root/auth10c_cr_docs; CI-integrity=/root/auth10c_cr_ci; reuse/dedup=/root/auth10c_cr_reuse; test-delta=/root/auth10c_cr_testdelta
 
 ## Implemented Contract
 
@@ -40,9 +40,10 @@ Markdown link scan — passed
 Authorization stale-wording scan — passed
 Route concealment and self-guard matrix — 33 passed
 Project lifecycle HTTP/direct-route matrix — 18 passed
-Incompatible pending response migration refusal — 1 passed
-Privacy definition drift refusal/restoration — 1 passed
-Function and disabled-trigger drift refusal/restoration — 2 passed
+Migration refusal aggregate — 11 passed: 2 incompatible pending, 5 frozen
+  definition drift, and 4 fact constraint drift
+SQL-NULL facts regression — 1 passed
+Rate-control lock-wait regression — 1 passed
 Revoke linkage malformed/valid PostgreSQL evidence — 1 passed
 Five-key revoke downgrade refusal/no-mutation — passed
 ```
@@ -78,8 +79,9 @@ Migration `0034` is tracked and follows `0033_authorization_read_rate`.
 | CI integrity | PASS | none |
 
 The repair loop closed migration fixture restoration, frozen definition drift,
-decision substitution, route concealment and zero-mutation, project lifecycle,
-revoke target linkage, non-revoke five-key evidence, and downgrade proof gaps.
+SQL-NULL three-valued facts bypass, decision substitution, route concealment
+and zero-mutation, project lifecycle, revoke target linkage, non-revoke
+five-key evidence, downgrade proof gaps, and bounded lock observation.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes

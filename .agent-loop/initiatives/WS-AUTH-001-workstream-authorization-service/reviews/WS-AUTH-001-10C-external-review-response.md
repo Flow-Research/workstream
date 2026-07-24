@@ -1,6 +1,6 @@
 # External Review Response: WS-AUTH-001-10C
 
-Reviewed at: 2026-07-24T17:37:35Z
+Reviewed at: 2026-07-24T19:57:03Z
 PR: #194
 
 ## Comments Addressed
@@ -21,12 +21,27 @@ PR: #194
   findings. The bounded repair caps Ruff below 0.16 without changing the lint
   command, rules, ignores, tests, or coverage. Full repository lint passes with
   Ruff 0.15.22; adoption of 0.16 rules remains a dedicated repository change.
+- CodeRabbit's SQL-NULL facts finding was valid. The special five-key
+  invalidation envelope now requires non-null facts on both sides and uses
+  coalesced key-existence checks; raw SQL-NULL regression coverage proves that
+  neither missing side can bypass counterpart validation.
+- Trigger-disabling migration fixtures now snapshot exact trigger modes and
+  restore them in `finally`. Migration and authorization lock observers use
+  monotonic five-second deadlines with nonzero polling intervals.
+- The wrong-project completion test now supplies the valid ordered
+  qualification/issued pair, so rejection reaches the intended project binding
+  rather than failing earlier on event cardinality. Audit fakes are
+  instance-isolated.
+- The migration drops the privacy constraint with exact literal raw DDL because
+  Alembic's naming convention would otherwise double-prefix the name. The test
+  normalization remains deliberately independent so it can serve as an oracle
+  instead of importing the implementation under test.
+- CodeRabbit's evidence-count and review-log provenance findings were valid.
+  Evidence now records the exact 11-case aggregate and the log begins with the
+  repaired implementation SHA.
 
 ## Comments Deferred
 
-- CodeRabbit's refreshed review is temporarily rate-limited. A fresh review
-  will be requested when the service makes it available; no finding is being
-  treated as resolved merely because the bot could not run.
 - CodeRabbit's generic docstring percentage warning is not used as proof. The
   repository's own Agent Gates docstring check remains authoritative.
 
@@ -38,10 +53,16 @@ PR: #194
 
 ```text
 ruff check app/modules/authorization/schemas.py tests/test_authorization.py
+ruff check alembic/versions/0034_project_role_issue_evidence.py
+  tests/conftest.py tests/test_alembic.py tests/test_authorization.py
 pytest -q tests/test_authorization.py -k
   'qualification_evidence_rejects_coerced_values or
    public_reason_and_qualification_contract_is_strict or
    project_role_mutation_routes'
+isolated pytest migration refusal aggregate — 11 passed, 44 deselected
+isolated pytest SQL-NULL fact-shape regression — 1 passed
+isolated pytest rate-control lock-wait regression — 1 passed
+isolated pytest corrected authorization regressions — 2 passed
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
@@ -51,4 +72,4 @@ git diff --check
 
 - GitHub Backend full shards, hosted API E2E, and coverage are pending the
   corrected evidence push.
-- CodeRabbit's refreshed review is pending its rate-limit window.
+- A fresh CodeRabbit pass is required on the pushed repair commit.

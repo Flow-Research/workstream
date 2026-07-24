@@ -6,7 +6,7 @@
 mutations for independent exact-project contributor roles. Risk is L1
 authorization, concurrency, migration, and audit integrity.
 
-Reviewed code SHA: `477b105520ee019497a520b87e259ff469d0ffa4`
+Reviewed code SHA: `d2a311434dd1b15c256899b11ae4326f258ef9e0`
 
 ## Change, Design, And Scope
 
@@ -35,7 +35,10 @@ conversion, and unrelated migrations remain out of scope.
 Focused lint, route, lifecycle, decision-binding, audit, PostgreSQL linkage,
 migration drift/refusal, downgrade, stale-wording, markdown-link, and diff
 checks pass. The isolated database proof includes exact schema teardown and
-no-mutation assertions for rejected evidence.
+no-mutation assertions for rejected evidence. The exact migration refusal
+aggregate passes all 11 variants: 2 incompatible pending states, 5 frozen
+definition drifts, and 4 fact-constraint drifts. Focused SQL-NULL facts and
+bounded lock-wait regressions also pass.
 
 All nine internal tracks pass the reviewed implementation SHA with no blocking
 finding and no open sub-agent session. No test or CI gate was weakened. Ruff is
