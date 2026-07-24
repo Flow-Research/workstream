@@ -6,7 +6,7 @@
 mutations for independent exact-project contributor roles. Risk is L1
 authorization, concurrency, migration, and audit integrity.
 
-Reviewed implementation SHA: `2e2969fe712f361ff14b1c90bca439d16777d255`
+Reviewed code SHA: `3d53cc30020ec379088a1637bd8db68183f0ce46`
 
 ## Change, Design, And Scope
 

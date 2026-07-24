@@ -7,8 +7,9 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed implementation SHA: `2e2969fe712f361ff14b1c90bca439d16777d255`
-Reviewed at: 2026-07-24
+Reviewed code SHA: `3d53cc30020ec379088a1637bd8db68183f0ce46`
+Reviewed at: 2026-07-24T17:49:45Z
+Reviewer run IDs: senior-engineering=/root/auth10c_impl_senior; QA/test=/root/auth10c_impl_qa_retry; security/auth=/root/auth10c_impl_security; product/ops=/root/auth10c_impl_product; architecture=/root/auth10c_arch_exact; docs=/root/auth10c_docs_exact; CI-integrity=/root/auth10c_impl_ci_retry; reuse/dedup=/root/auth10c_reuse_exact; test-delta=/root/auth10c_impl_testdelta
 
 ## Implemented Contract
 
