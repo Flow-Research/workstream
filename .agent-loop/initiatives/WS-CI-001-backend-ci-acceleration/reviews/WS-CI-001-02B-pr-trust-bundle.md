@@ -24,7 +24,7 @@ hosted timing outcome on the exact PR head.
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02B-exact-custody-semantic-test-lanes.md`
 - Signed contract blob SHA: `784bae53f72f6460b4b74799c1c9b1519565dabe`
-- Reviewed implementation SHA: `cc8ee4f1a03305e8c6e5830cff012effa210959b`
+- Reviewed implementation SHA: `239adb178229c72951862780e5ce237f73113400`
 
 Only independently verified signed automation state is canonical authority.
 PR prose and checked boxes are navigation evidence, not authorization.
@@ -42,6 +42,9 @@ PR prose and checked boxes are navigation evidence, not authorization.
   a blocking 480-second wall-time ceiling.
 - Initialized the fixed `.ci/test-lanes` evidence root with mode 700 before the
   first collection, closing the hosted `invalid_lane_outputs` bootstrap failure.
+- Preserved schema-lane ordinary coverage when its direct admin self-test unit
+  legitimately emits no `app` coverage; missing ordinary coverage remains a
+  hard failure.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
@@ -128,7 +131,7 @@ python3 scripts/check_markdown_links.py docs/operations_backend_testing.md .agen
 git diff --check origin/main...HEAD
 ```
 
-Result summary: Ruff passed; 60 focused tests passed; 100 Agent Gates passed;
+Result summary: Ruff passed; 62 focused tests passed; 100 Agent Gates passed;
 two independent full collections agreed on 2,046 exact nodes; merge intent,
 links, stale wording, and diff integrity passed.
 
@@ -172,9 +175,9 @@ External review response file, if findings are posted:
 
 ## Reviewer results
 
-Reviewed code SHA: `cc8ee4f1a03305e8c6e5830cff012effa210959b`
+Reviewed code SHA: `239adb178229c72951862780e5ce237f73113400`
 
-Reviewed at: `2026-07-24T16:30:32Z`
+Reviewed at: `2026-07-24T16:55:21Z`
 
 Reviewer run IDs: `ci02b_senior_review`, `ci02b_qa_review`,
 `ci02b_security_review`, `ci02b_product_ops_review`,

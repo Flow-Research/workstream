@@ -12,9 +12,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: cc8ee4f1a03305e8c6e5830cff012effa210959b
+Reviewed code SHA: 239adb178229c72951862780e5ce237f73113400
 
-Reviewed at: 2026-07-24T16:30:32Z
+Reviewed at: 2026-07-24T16:55:21Z
 
 Reviewer run IDs: ci02b_senior_review, ci02b_qa_review,
 ci02b_security_review, ci02b_product_ops_review,
@@ -44,6 +44,14 @@ SHA was stale and this file had an extra blank line at EOF. Both evidence
 defects are corrected here. All six repair reviewers accepted the fixed-path,
 mode-700 evidence-root initialization; CI integrity found no weakened gate.
 
+The exact-head coverage repair review found no code blocker. Successful lanes
+still require non-symlink ordinary coverage; an admin runner self-test coverage
+file is combined only when it exists because that direct self-test process can
+legitimately collect no `app` data. Failed lanes retain nonzero exit evidence
+instead of allowing missing coverage to mask the original failure. Optional
+admin coverage absence remains a documented low diagnostic risk, not a product
+coverage or exact-node custody bypass.
+
 ## Valid Findings Addressed
 
 - Replaced invalid underscore-bearing MinIO bucket names with S3-valid,
@@ -70,6 +78,10 @@ mode-700 evidence-root initialization; CI integrity found no weakened gate.
 - Added explicit fixed-path initialization of `.ci/test-lanes` before the first
   hosted collection. This closes the observed `invalid_lane_outputs` bootstrap
   failure without allowing the runner to create an unowned parent directory.
+- Repaired schema-lane coverage finalization after hosted run `30109561363`
+  proved that its ordinary unit emitted coverage while the direct admin
+  self-test unit legitimately emitted none. Missing ordinary coverage still
+  fails closed, and regression tests cover both paths.
 
 ## Commands Run
 
@@ -89,7 +101,7 @@ git diff --check origin/main...HEAD
 ## Results
 
 - Ruff passed with exact local `ruff 0.15.22`.
-- 60 focused lane-runner and independent-validator tests passed.
+- 62 focused lane-runner and independent-validator tests passed.
 - 100 Agent Gate tests passed.
 - Two independent full collections agreed on 2,046 exact pytest nodes at the
   reviewed head; independent evidence validation passed.
