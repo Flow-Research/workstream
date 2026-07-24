@@ -8,6 +8,8 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import types
+import uuid
 
 import pytest  # type: ignore[import-not-found]
 
@@ -157,6 +159,40 @@ def test_deterministic_uuid_nodeids_match_across_full_subset_and_repeat(
         generated = __import__("uuid").UUID(value)
         assert generated.version == 4
         assert generated.variant == __import__("uuid").RFC_4122
+
+
+def test_uuid4_and_repository_import_alias_are_restored_before_test_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(runner.HEAD_ENV, "f" * 40)
+    monkeypatch.delenv(runner.COLLECTED_ENV, raising=False)
+    original = uuid.uuid4
+    module_name = "tests.test_collection_uuid_alias"
+    module = types.ModuleType(module_name)
+    module.__file__ = str(runner.ROOT / "tests" / "test_collection_uuid_alias.py")
+    sys.modules[module_name] = module
+    runner.pytest_sessionstart(object())
+    try:
+        exec(
+            compile(
+                "from uuid import uuid4\nCOLLECTED_VALUE = uuid4()\n",
+                module.__file__,
+                "exec",
+            ),
+            module.__dict__,
+        )
+        collected_value = module.COLLECTED_VALUE
+        assert module.uuid4 is runner._deterministic_uuid4
+        runner.pytest_collection_finish(type("Session", (), {"items": []})())
+
+        assert uuid.uuid4 is original
+        assert module.uuid4 is original
+        assert module.COLLECTED_VALUE is collected_value
+        assert module.uuid4() != module.uuid4()
+    finally:
+        runner.pytest_sessionfinish(object(), 0)
+        sys.modules.pop(module_name, None)
+    assert uuid.uuid4 is original
 
 
 def test_lane_command_uses_exact_nodes_and_isolation_contract(tmp_path: Path) -> None:

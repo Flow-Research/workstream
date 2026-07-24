@@ -32,7 +32,7 @@ BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*[a-z0-9]$")
 VALIDATOR_COLLECTION_ENV = "WORKSTREAM_VALIDATOR_COLLECTION_FILE"
 VALIDATOR_HEAD_ENV = "WORKSTREAM_VALIDATOR_HEAD_SHA"
 VALIDATOR_ROOT_ENV = "WORKSTREAM_VALIDATOR_BACKEND_ROOT"
-_ORIGINAL_UUID4 = uuid.uuid4
+_UUID_ORIGINAL: Any = None
 _UUID_CALLSITE_COUNTS: dict[tuple[str, int], int] = {}
 _UUID_ROOT: Path | None = None
 _UUID_HEAD: str | None = None
@@ -47,12 +47,12 @@ def _deterministic_uuid4() -> uuid.UUID:
     frame = inspect.currentframe()
     caller = frame.f_back if frame is not None else None
     try:
-        if caller is None or _UUID_ROOT is None or _UUID_HEAD is None:
-            return _ORIGINAL_UUID4()
+        if caller is None or _UUID_ROOT is None or _UUID_HEAD is None or _UUID_ORIGINAL is None:
+            return uuid.UUID(bytes=os.urandom(16), version=4)
         try:
             relative = Path(caller.f_code.co_filename).resolve().relative_to(_UUID_ROOT)
         except (OSError, ValueError):
-            return _ORIGINAL_UUID4()
+            return _UUID_ORIGINAL()
         relative_file = relative.as_posix()
         callsite = (relative_file, caller.f_lineno)
         ordinal = _UUID_CALLSITE_COUNTS.get(callsite, 0)
@@ -67,13 +67,15 @@ def _deterministic_uuid4() -> uuid.UUID:
 def pytest_sessionstart(session: Any) -> None:
     """Install deterministic UUIDv4 generation before test-module collection."""
     del session
-    global _UUID_ROOT, _UUID_HEAD
+    global _UUID_ROOT, _UUID_HEAD, _UUID_ORIGINAL
+    _restore_uuid4()
     root = os.environ.get(VALIDATOR_ROOT_ENV)
     head = os.environ.get(VALIDATOR_HEAD_ENV)
     if root is None or head is None or SHA_RE.fullmatch(head) is None:
         return
     _UUID_ROOT = Path(root).resolve(strict=True)
     _UUID_HEAD = head
+    _UUID_ORIGINAL = uuid.uuid4
     _UUID_CALLSITE_COUNTS.clear()
     uuid.uuid4 = _deterministic_uuid4
 
@@ -81,30 +83,58 @@ def pytest_sessionstart(session: Any) -> None:
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
     """Restore process UUID behavior after validator-owned collection."""
     del session, exitstatus
-    global _UUID_ROOT, _UUID_HEAD
-    uuid.uuid4 = _ORIGINAL_UUID4
-    _UUID_CALLSITE_COUNTS.clear()
-    _UUID_ROOT = None
-    _UUID_HEAD = None
+    _restore_uuid4()
 
 
 def pytest_collection_finish(session: Any) -> None:
     """Record exact node IDs for the validator-owned collection subprocess."""
-    destination = os.environ.get(VALIDATOR_COLLECTION_ENV)
-    if destination is None:
-        return
-    path = Path(destination)
-    data = b"".join(
-        json.dumps(item.nodeid).encode("utf-8") + b"\n"
-        for item in sorted(session.items, key=lambda item: item.nodeid)
-    )
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
-        view = memoryview(data)
-        while view:
-            view = view[os.write(descriptor, view) :]
+        destination = os.environ.get(VALIDATOR_COLLECTION_ENV)
+        if destination is None:
+            return
+        path = Path(destination)
+        data = b"".join(
+            json.dumps(item.nodeid).encode("utf-8") + b"\n"
+            for item in sorted(session.items, key=lambda item: item.nodeid)
+        )
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            view = memoryview(data)
+            while view:
+                view = view[os.write(descriptor, view) :]
+        finally:
+            os.close(descriptor)
     finally:
-        os.close(descriptor)
+        _restore_uuid4()
+
+
+def _restore_uuid4() -> None:
+    """Restore uuid4 and repository aliases captured during collection."""
+    global _UUID_ROOT, _UUID_HEAD, _UUID_ORIGINAL
+    original = _UUID_ORIGINAL
+    root = _UUID_ROOT
+    if original is None:
+        _UUID_CALLSITE_COUNTS.clear()
+        _UUID_ROOT = None
+        _UUID_HEAD = None
+        return
+    uuid.uuid4 = original
+    if root is not None:
+        for module in tuple(sys.modules.values()):
+            module_file = getattr(module, "__file__", None)
+            if not isinstance(module_file, str):
+                continue
+            try:
+                Path(module_file).resolve().relative_to(root)
+            except (OSError, ValueError):
+                continue
+            for name, value in tuple(vars(module).items()):
+                if value is _deterministic_uuid4:
+                    setattr(module, name, original)
+    _UUID_ORIGINAL = None
+    _UUID_CALLSITE_COUNTS.clear()
+    _UUID_ROOT = None
+    _UUID_HEAD = None
 
 
 def pytest_make_parametrize_id(config: Any, val: Any, argname: str) -> str | None:

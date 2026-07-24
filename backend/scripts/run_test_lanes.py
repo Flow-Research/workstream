@@ -174,11 +174,14 @@ def _append_node(destination: str, node_id: str) -> None:
 
 
 def pytest_collection_finish(session: Any) -> None:
-    """Record exact selected node IDs in the collecting pytest process."""
-    destination = os.environ.get(COLLECTED_ENV)
-    if destination:
-        for item in session.items:
-            _append_node(destination, item.nodeid)
+    """Record exact node IDs, then end deterministic UUID collection scope."""
+    try:
+        destination = os.environ.get(COLLECTED_ENV)
+        if destination:
+            for item in session.items:
+                _append_node(destination, item.nodeid)
+    finally:
+        _restore_uuid4()
 
 
 def pytest_runtest_logfinish(nodeid: str, location: tuple[str, int | None, str]) -> None:
@@ -249,9 +252,32 @@ def pytest_sessionstart(session: Any) -> None:
 def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
     """Restore process-global UUID behavior after pytest completes."""
     del session, exitstatus
+    _restore_uuid4()
+
+
+def _restore_uuid4() -> None:
+    """Restore uuid4 and repository aliases captured during collection."""
     global _ORIGINAL_UUID4, _UUID4_HEAD
-    if _ORIGINAL_UUID4 is not None:
-        uuid.uuid4 = _ORIGINAL_UUID4
+    original = _ORIGINAL_UUID4
+    if original is None:
+        _UUID4_HEAD = ""
+        _UUID4_ORDINALS.clear()
+        return
+    uuid.uuid4 = original
+    for module in tuple(sys.modules.values()):
+        module_file = getattr(module, "__file__", None)
+        if not isinstance(module_file, str):
+            continue
+        try:
+            Path(module_file).resolve().relative_to(ROOT)
+        except (OSError, ValueError):
+            continue
+        for name, value in tuple(vars(module).items()):
+            if (
+                value is _deterministic_uuid4
+                and not (module is sys.modules.get(__name__) and name == "_deterministic_uuid4")
+            ):
+                setattr(module, name, original)
     _ORIGINAL_UUID4 = None
     _UUID4_HEAD = ""
     _UUID4_ORDINALS.clear()
