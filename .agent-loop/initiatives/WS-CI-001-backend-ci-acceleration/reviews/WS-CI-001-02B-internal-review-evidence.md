@@ -12,32 +12,30 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 239adb178229c72951862780e5ce237f73113400
+Reviewed code SHA: bf16f1a6d01f270e8d25d3deee037431a8cb8676
 
-Reviewed at: 2026-07-24T16:55:21Z
+Reviewed at: 2026-07-24T19:35:11Z
 
-Reviewer run IDs: ci02b_senior_review, ci02b_qa_review,
-ci02b_security_review, ci02b_product_ops_review,
-ci02b_restart_arch_review, ci02b_restart_ci_review, ci02b_contract_gap,
-ci02b_source_audit, ci02b_test_delta_review, ci02b_bootstrap_senior,
-ci02b_bootstrap_qa, ci02b_bootstrap_security, ci02b_bootstrap_ops,
-ci02b_bootstrap_arch, ci02b_bootstrap_ci
+Reviewer run IDs: ci02b_rebalance_senior, ci02b_rebalance_qa,
+ci02b_rebalance_security, ci02b_rebalance_ops, ci02b_rebalance_arch,
+ci02b_rebalance_ci, ci02b_rebalance_docs, ci02b_units_reuse,
+ci02b_units_test_delta
 
-After the reviewed SHA, only evidence and status files changed.
+After the reviewed SHA, only evidence files changed.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS WITH LOW RISKS | None | Independent UUID implementations must remain behavior-compatible. |
-| QA/test | PASS | None | Exact inventory, failure custody, resource isolation, and timing evidence pass. |
-| security/auth | PASS WITH LOW RISKS | None | A force-kill after bounded cleanup can leave local resources; hosted CI fails closed. |
-| product/ops | PASS | None | Hosted operator evidence and Konan attribution are explicit; product behavior is unchanged. |
-| architecture | PASS | None | Collection-only UUID stabilization restores runtime aliases before test bodies. |
-| CI integrity | PASS | None | Ruff, API E2E, exact-node validation, coverage floors, and timing remain blocking. |
-| docs | PASS | None | Operations and status documentation match the final workflow sequence. |
-| reuse/dedup | PASS | None | Canonical isolation runner is reused; independent validator duplication is intentional. |
-| test delta | PASS | None | Deleted shard tests are replaced without product-test weakening or deselection. |
+| senior engineering | PASS | None | Four explicit semantic lanes remain simple; final hosted timing proof is pending. |
+| QA/test | PASS | None | Exact inventory, current names, failure custody, and resource isolation remain enforced. |
+| security/auth | PASS | None | Admin authority stays out of ordinary children; DB and MinIO custody remain lane-owned. |
+| product/ops | PASS | None | Product, compensation, review-decision, and reputation behavior are unchanged. |
+| architecture | PASS | None | Lane ownership changes only CI execution topology, not product architecture. |
+| CI integrity | PASS | None | Four coverage files, 78/90 floors, exact custody, and the 480-second gate remain blocking. |
+| docs | PASS | None | Runbook and status match the final four-lane implementation. |
+| reuse/dedup | PASS WITH LOW RISKS | None | A future S3-lane rename should retain a focused drift assertion. |
+| test delta | PASS | None | No product test was removed, skipped, deselected, or weakened. |
 
 The bootstrap repair review initially blocked publication because the reviewed
 SHA was stale and this file had an extra blank line at EOF. Both evidence
@@ -82,6 +80,13 @@ coverage or exact-node custody bypass.
   proved that its ordinary unit emitted coverage while the direct admin
   self-test unit legitimately emitted none. Missing ordinary coverage still
   fails closed, and regression tests cover both paths.
+- Rejected the six-process execution-unit experiment after hosted run
+  `30118538144` proved it increased CPU contention. The experiment and its
+  temporary tests were reverted without weakening the four-lane contract.
+- Rebalanced the four isolated processes around measured hotspots:
+  `project_lifecycle`, `task_lifecycle`, `schema_contracts`, and
+  `shared_foundations`. Retired lane names were removed from the runner,
+  focused tests, runbook, and current status.
 
 ## Commands Run
 
@@ -101,10 +106,12 @@ git diff --check origin/main...HEAD
 ## Results
 
 - Ruff passed with exact local `ruff 0.15.22`.
-- 62 focused lane-runner and independent-validator tests passed.
+- 83 focused lane-runner, isolated-runner, and independent-validator tests
+  passed without local service authority; 11 service-backed cases remain
+  mandatory in hosted CI and are not skipped by the workflow.
 - 100 Agent Gate tests passed.
-- Two independent full collections agreed on 2,046 exact pytest nodes at the
-  reviewed head; independent evidence validation passed.
+- Exact collection and independent recollection agreed on 2,049 pytest nodes
+  at reviewed code SHA `bf16f1a6`; independent evidence validation passed.
 - Merge intent, Markdown links, stale wording, and diff integrity passed.
 - Local full service execution was not used as hosted performance evidence.
 
@@ -112,7 +119,9 @@ git diff --check origin/main...HEAD
 
 - The exact GitHub Backend job must still prove real PostgreSQL and MinIO
   concurrency, API E2E, 78/90 coverage gates, and total wall time at or below
-  480 seconds on the final PR head.
+  480 seconds on the final PR head. Prior run `30118538144` passed functional
+  and coverage custody but failed timing for the now-reverted six-process
+  experiment; it is diagnostic evidence, not completion proof.
 - A force-kill after the bounded cleanup grace can leave runner-owned resources
   on persistent local services. Evidence fails closed; operators must inspect
   and remove only exact recorded resources.
