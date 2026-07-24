@@ -2,7 +2,8 @@
 
 Discovery was performed read-only against trusted `main`
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa` and signed
-`automation/loop-memory` on 2026-07-24.
+`automation/loop-memory` tip
+`8affe98a0b877ba79abf9d23f86013f838985dcf` on 2026-07-24.
 
 ## Current behavior
 

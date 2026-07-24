@@ -40,7 +40,11 @@ backend/tests/test_authorization_properties.py
 .github/workflows/backend.yml
 scripts/assurance-requirements.txt
 docs/operations_authorization_service.md
-.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-05-authorization-property-invariants.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-internal-review-evidence.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-adversarial-proof.md
 .agent-loop/merge-intents/WS-ENG-008-05.json
 ```
 

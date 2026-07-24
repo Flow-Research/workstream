@@ -42,7 +42,11 @@ backend/tests/test_mutation_policy.py
 scripts/assurance-requirements.txt
 scripts/test_agent_gates.py
 docs/operations_backend_testing.md
-.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-06-changed-module-mutation-pilot.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-internal-review-evidence.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-adversarial-proof.md
 .agent-loop/merge-intents/WS-ENG-008-06.json
 ```
 

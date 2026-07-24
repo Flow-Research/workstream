@@ -17,8 +17,10 @@ is no subjective “material” exception. Chunk 01 also upgrades the already-ad
 ENG-008 contracts 02–07 before it may name 02 as successor. Contracts unchanged
 since a pre-cutover base form the immutable grandfather set and are never
 inferred or mass-rewritten. A dedicated parser validates exact keys, canonical
-repository-relative patterns, reviewer names, and verification commands. Agent
-Gates compare the PR's status-aware diff to this block and fail closed on
+repository-relative patterns, reviewer names, and verification commands. JSON
+decoding uses an object-pairs hook (or equivalent) that rejects duplicate object
+keys before exact-key and scope validation. Agent Gates compare the PR's
+status-aware diff to this block and fail closed on
 unmatched, forbidden, renamed, symlinked, submodule, or ambiguous paths.
 
 ### Read-only drift audit

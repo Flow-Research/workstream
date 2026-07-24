@@ -49,7 +49,16 @@ scripts/check_chunk_contract.py
 scripts/check_internal_review_evidence.py
 scripts/test_check_chunk_contract.py
 scripts/test_agent_gates.py
-.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-02-scheduled-signed-state-drift-audit.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-03-risk-routed-adversarial-proof.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-04-loop-memory-property-invariants.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-05-authorization-property-invariants.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-06-changed-module-mutation-pilot.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-internal-review-evidence.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-pr-trust-bundle.md
 .agent-loop/merge-intents/WS-ENG-008-01.json
 ```
 

@@ -48,7 +48,11 @@ scripts/check_internal_review_evidence.py
 scripts/test_agent_gates.py
 CONTRIBUTING.md
 AGENTS.md
-.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-03-risk-routed-adversarial-proof.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-internal-review-evidence.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-adversarial-proof.md
 .agent-loop/merge-intents/WS-ENG-008-03.json
 ```
 

@@ -23,7 +23,13 @@ mutation evidence, and lossless review-memory indexing.
 - Signed start run: N/A — first-new-initiative planning intake
 - Authorized main SHA: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
 - Phase: planning intake; no active planning or implementation chunk
-- Contract path: reviewed contracts `../chunks/WS-ENG-008-01-*.md` through `07`
+- Contract paths: `../chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md`,
+  `../chunks/WS-ENG-008-02-scheduled-signed-state-drift-audit.md`,
+  `../chunks/WS-ENG-008-03-risk-routed-adversarial-proof.md`,
+  `../chunks/WS-ENG-008-04-loop-memory-property-invariants.md`,
+  `../chunks/WS-ENG-008-05-authorization-property-invariants.md`,
+  `../chunks/WS-ENG-008-06-changed-module-mutation-pilot.md`, and
+  `../chunks/WS-ENG-008-07-lossless-review-memory-index.md`
 - Signed contract blob SHA: N/A until post-merge explicit start selects chunk 01
 - Reviewed planning SHA: `85bd98d6c55b066c9f1a44bc8aa83514911f4ea0`
 

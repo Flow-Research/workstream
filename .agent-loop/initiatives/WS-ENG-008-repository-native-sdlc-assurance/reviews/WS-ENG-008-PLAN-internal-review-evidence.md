@@ -48,8 +48,9 @@ After the reviewed SHA, only evidence and status files changed.
 - Required byte-preserving NUL-delimited Git parsing, strict UTF-8 and NFC,
   control-character rejection, normalization/casefold collision rejection, and
   adversarial path fixtures.
-- Added canonical terminology reconciliation to README, glossary, and
-  architecture lockdown while retaining zero-trust loop terminology.
+- Assigned canonical terminology reconciliation to chunk 01 for README,
+  glossary, and architecture lockdown while retaining zero-trust loop
+  terminology; this additive planning intake does not edit those files.
 - Set 120-second hosted limits for each property suite and a 12-minute command/
   15-minute job budget plus two-minute critical-path cap for mutation testing.
 - Required complete transitive hash locks and `--require-hashes` installation

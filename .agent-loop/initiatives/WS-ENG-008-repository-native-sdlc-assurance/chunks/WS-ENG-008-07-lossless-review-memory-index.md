@@ -32,6 +32,10 @@ P2
 
 `implementation`
 
+Execution remains blocked until this planning intake is merged, chunks 01–06
+are completed in order, and the explicit post-merge signed start selects this
+exact contract from current trusted `main`.
+
 ## Allowed files
 
 ```text
@@ -43,10 +47,16 @@ scripts/check_review_log_archive.py
 scripts/test_check_review_log_archive.py
 scripts/check_loop_memory_state.py
 scripts/check_stale_artifact_contracts.py
+scripts/check_markdown_links.py
+scripts/check_stale_workstream_wording.py
 scripts/test_agent_gates.py
 AGENTS.md
 CONTRIBUTING.md
-.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-internal-review-evidence.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pre-migration-reconciliation.json
 .agent-loop/merge-intents/WS-ENG-008-07.json
 ```
 
@@ -63,18 +73,25 @@ automatic successor declaration
 ## Acceptance criteria
 
 - [ ] Discovery re-fetches all open PRs and current main immediately before the
-      migration; every root-log delta is reconciled or the chunk stops.
+      migration; every root-log delta is reconciled or the chunk stops. A
+      durable pre-migration JSON snapshot records the fetch timestamp, exact
+      main SHA, every open PR number and head SHA, root-log SHA-256 digest, and
+      explicit reconciliation result.
 - [ ] Versioned archive files preserve the complete pre-migration root narrative
       byte-for-byte in one documented concatenation order with stored SHA-256
       digests and deterministic reconstruction.
 - [ ] Root `REVIEW_LOG.md` becomes a bounded index linking archive periods,
-      initiative review directories, current conventions, and reconstruction proof.
+      initiative review directories, current conventions, and reconstruction
+      proof. Its complete UTF-8 encoding, including every newline byte, is at
+      most 32,768 bytes.
 - [ ] Historical repository links remain valid or receive an explicit lossless
       mapping; no initiative evidence file is rewritten merely for relocation.
 - [ ] New detailed review evidence remains initiative-owned; root additions are
       compact navigation rather than duplicate narrative.
 - [ ] Checker rejects missing/extra/reordered bytes, digest mismatch, broken
-      links, duplicate periods, path traversal, symlink, and oversized index.
+      links, duplicate periods, path traversal, symlink, an index over 32,768
+      UTF-8 bytes including newline bytes, or a reconciliation snapshot whose
+      main/PR heads/root digest do not bind the migrated input.
 - [ ] Existing stale-contract and authored-memory checks understand the index
       without weakening their semantic rules.
 - [ ] Exactly one schema-v2 merge intent declares no successor.
@@ -86,6 +103,7 @@ python3 scripts/test_check_review_log_archive.py
 python3 scripts/check_review_log_archive.py
 python3 scripts/test_agent_gates.py
 python3 scripts/check_loop_memory_state.py
+python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
 git diff --check origin/main...HEAD
