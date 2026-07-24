@@ -7,8 +7,8 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `5ba2a84dec202a806af589c905bb27ef6a654235`
-Reviewed at: 2026-07-24T20:30:41Z
+Reviewed code SHA: `3323184ef4010bba590908bbb6da9cd8e82bc407`
+Reviewed at: 2026-07-24T21:08:04Z
 Reviewer run IDs: senior-engineering=/root/auth10c_cr_senior; QA/test=/root/auth10c_cr_qa; security/auth=/root/auth10c_cr_security; product/ops=/root/auth10c_cr_product; architecture=/root/auth10c_cr_arch; docs=/root/auth10c_cr_docs; CI-integrity=/root/auth10c_cr_ci; reuse/dedup=/root/auth10c_cr_reuse; test-delta=/root/auth10c_cr_testdelta
 
 ## Implemented Contract
@@ -45,6 +45,8 @@ Migration refusal aggregate — 11 passed: 2 incompatible pending, 5 frozen
 SQL-NULL facts regression — 1 passed
 Rate-control lock-wait regression — 1 passed
 API contract helper tests — 15 passed
+Linked authority-event audit matrix — 1 passed
+Sequential project-role upgrade/downgrade refusal matrices — 2 passed
 Revoke linkage malformed/valid PostgreSQL evidence — 1 passed
 Five-key revoke downgrade refusal/no-mutation — passed
 ```
@@ -88,6 +90,12 @@ hosted E2E identity-link response-field reference.
 The E2E concealment comparison excludes only request-scoped `correlation_id`;
 code, message, details, and retryability remain equal to the missing-resource
 envelope.
+
+The full-shard repair classifies qualification capture as idempotency-linked
+and makes legacy-fixture cleanup restore exact trigger modes plus the canonical
+privacy constraint. Head-schema downgrade cases contain only representable
+action/permission and denial predicates; dedicated 0034 fact-shape and real
+project-role evidence tests retain role coverage.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes

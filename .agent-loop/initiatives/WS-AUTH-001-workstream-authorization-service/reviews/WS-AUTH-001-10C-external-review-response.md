@@ -1,6 +1,6 @@
 # External Review Response: WS-AUTH-001-10C
 
-Reviewed at: 2026-07-24T20:30:41Z
+Reviewed at: 2026-07-24T21:08:04Z
 PR: #194
 
 ## Comments Addressed
@@ -48,6 +48,12 @@ PR: #194
   excludes only `correlation_id` and retains equality for stable code, message,
   details, and retryability. Internal senior/security review rejected the
   weaker code/message-only intermediate repair before publication.
+- Full shard 3 exposed a stale exhaustive audit classification: qualification
+  capture is idempotency-linked and now fails closed without a claim. Full
+  shard 4 exposed legacy migration-fixture residue; cleanup now snapshots and
+  restores exact trigger modes in `finally` and canonicalizes privacy
+  restoration. The exact audit case passes, and the upgrade/downgrade matrices
+  pass sequentially in one isolated database.
 
 ## Comments Deferred
 
@@ -73,6 +79,8 @@ isolated pytest SQL-NULL fact-shape regression — 1 passed
 isolated pytest rate-control lock-wait regression — 1 passed
 isolated pytest corrected authorization regressions — 2 passed
 pytest -q tests/test_api_contract_e2e.py — 15 passed
+isolated pytest linked authority-event matrix — 1 passed
+isolated pytest sequential upgrade/downgrade refusal matrices — 2 passed
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
