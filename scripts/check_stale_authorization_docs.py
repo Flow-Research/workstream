@@ -377,6 +377,7 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     prefix = text[max(0, worker_offset - 120) : worker_offset]
     token_end = worker_offset + len(token.group(0))
     suffix = text[token_end : token_end + 20]
+    authority_suffix = text[token_end : token_end + 120]
     exact_code_path = token.group(0).lower() == "workers" and (
         (
             re.search(r"(?:^|[^A-Za-z0-9_.-])(?:backend/)?app/$", prefix)
@@ -385,9 +386,23 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
         )
         or (
             re.search(r"(?:^|[^A-Za-z0-9_.-])app\.$", prefix) is not None
-            and (suffix.startswith(".") or not suffix or suffix[0] in " '`,)")
+            and suffix.startswith(".")
         )
     )
+    exact_coverage_module = (
+        token.group(0).lower() == "workers"
+        and re.search(r"(?:^|\s)--cov=app\.$", prefix) is not None
+        and (not suffix or suffix[0].isspace())
+    )
+    after_code_reference = re.sub(
+        r"^(?:[/.][A-Za-z0-9_.-]+)+", "", authority_suffix
+    )
+    code_path_claims_product_authority = exact_code_path and re.search(
+        r"\b(?:submits?|reviews?|approves?|grants?|revokes?|manages?|accepts?|"
+        r"rejects?|requests?\s+revision)\b",
+        after_code_reference,
+        re.IGNORECASE,
+    ) is not None
     exact_technical_cli_flag = (
         token.group(0).lower() == "worker"
         and prefix.endswith("--start-api-")
@@ -407,7 +422,8 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     )
     return bool(
         TECHNICAL_WORKER_PREFIX.search(prefix)
-        or exact_code_path
+        or (exact_code_path and not code_path_claims_product_authority)
+        or exact_coverage_module
         or exact_celery_cli
         or exact_technical_cli_flag
     )

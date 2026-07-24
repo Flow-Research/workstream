@@ -5496,6 +5496,13 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "review_lifecycle_live_drill.py --require-workers-extra",
         "maliciousapp/workers/reviews.py",
         "maliciousapp.workers.reviews",
+        "app.workers submit task packets.",
+        "app.workers approves project work.",
+        "The app.workers module submits contributor packets.",
+        "app.workers may review a contributor submission.",
+        "app.workers approves project guides.",
+        "app.workers manages contributor grants.",
+        "backend/app/workers/reviews.py may review a contributor submission.",
     )
     for sample in human_worker_statements:
         assert gate.scan_text("docs/new_active_doc.md", sample), sample
