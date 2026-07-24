@@ -1,6 +1,6 @@
 # External Review Response: WS-AUTH-001-10C
 
-Reviewed at: 2026-07-24T20:14:46Z
+Reviewed at: 2026-07-24T20:30:41Z
 PR: #194
 
 ## Comments Addressed
@@ -43,6 +43,11 @@ PR: #194
   stale script key: the administrative response publishes `identity_link_id`,
   not `id`. Both revoke/reactivate references now use the canonical field; Ruff,
   compilation, and all 15 API-contract helper tests pass.
+- The next hosted E2E attempt reached replay reauthorization and exposed a
+  comparison against the whole per-request error envelope. The proof now
+  excludes only `correlation_id` and retains equality for stable code, message,
+  details, and retryability. Internal senior/security review rejected the
+  weaker code/message-only intermediate repair before publication.
 
 ## Comments Deferred
 

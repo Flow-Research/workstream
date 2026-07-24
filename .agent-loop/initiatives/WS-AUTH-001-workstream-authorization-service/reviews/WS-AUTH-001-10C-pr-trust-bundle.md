@@ -6,7 +6,7 @@
 mutations for independent exact-project contributor roles. Risk is L1
 authorization, concurrency, migration, and audit integrity.
 
-Reviewed code SHA: `33f8c7ccd80c89d09584d2959ff1581f80e6bd03`
+Reviewed code SHA: `5ba2a84dec202a806af589c905bb27ef6a654235`
 
 ## Change, Design, And Scope
 
@@ -40,7 +40,8 @@ aggregate passes all 11 variants: 2 incompatible pending states, 5 frozen
 definition drifts, and 4 fact-constraint drifts. Focused SQL-NULL facts and
 bounded lock-wait regressions also pass. The hosted API E2E identity-link
 lifecycle path uses the canonical `identity_link_id` response field; its 15
-helper tests pass.
+helper tests pass. Replay concealment compares the complete stable error body
+while excluding only per-request `correlation_id`.
 
 All nine internal tracks pass the reviewed implementation SHA with no blocking
 finding and no open sub-agent session. No test or CI gate was weakened. Ruff is

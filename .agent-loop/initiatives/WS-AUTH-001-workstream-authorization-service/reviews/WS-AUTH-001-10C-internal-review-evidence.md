@@ -7,8 +7,8 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `33f8c7ccd80c89d09584d2959ff1581f80e6bd03`
-Reviewed at: 2026-07-24T20:14:46Z
+Reviewed code SHA: `5ba2a84dec202a806af589c905bb27ef6a654235`
+Reviewed at: 2026-07-24T20:30:41Z
 Reviewer run IDs: senior-engineering=/root/auth10c_cr_senior; QA/test=/root/auth10c_cr_qa; security/auth=/root/auth10c_cr_security; product/ops=/root/auth10c_cr_product; architecture=/root/auth10c_cr_arch; docs=/root/auth10c_cr_docs; CI-integrity=/root/auth10c_cr_ci; reuse/dedup=/root/auth10c_cr_reuse; test-delta=/root/auth10c_cr_testdelta
 
 ## Implemented Contract
@@ -84,6 +84,10 @@ SQL-NULL three-valued facts bypass, decision substitution, route concealment
 and zero-mutation, project lifecycle, revoke target linkage, non-revoke
 five-key evidence, downgrade proof gaps, bounded lock observation, and the
 hosted E2E identity-link response-field reference.
+
+The E2E concealment comparison excludes only request-scoped `correlation_id`;
+code, message, details, and retryability remain equal to the missing-resource
+envelope.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes
