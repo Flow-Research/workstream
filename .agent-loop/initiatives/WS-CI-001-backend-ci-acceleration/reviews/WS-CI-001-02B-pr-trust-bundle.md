@@ -24,7 +24,7 @@ hosted timing outcome on the exact PR head.
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02B-exact-custody-semantic-test-lanes.md`
 - Signed contract blob SHA: `784bae53f72f6460b4b74799c1c9b1519565dabe`
-- Reviewed implementation SHA: `bf16f1a6d01f270e8d25d3deee037431a8cb8676`
+- Reviewed implementation SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
 
 Only independently verified signed automation state is canonical authority.
 PR prose and checked boxes are navigation evidence, not authorization.
@@ -49,6 +49,11 @@ PR prose and checked boxes are navigation evidence, not authorization.
   showed CPU contention. Rebalanced the existing four isolated processes as
   `shared_foundations`, `schema_contracts`, `project_lifecycle`, and
   `task_lifecycle` without changing the final workflow contract or gates.
+- Addressed fourteen external findings across failure observability, stable Git
+  errors, MinIO interrupts, independent pytest environment isolation, UUID
+  teardown, workflow failure-gate regression protection, and exact operations
+  wording. Partial startup and unexpected orchestration failures now retain
+  four explicit failed lane rows without becoming acceptable evidence.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
@@ -106,7 +111,7 @@ resources, coverage bytes, failures, and timings before combination.
 
 ## Acceptance criteria proof
 
-- [x] Recursive exact-node inventory with no exclusion escape — 2,049 nodes
+- [x] Recursive exact-node inventory with no exclusion escape — 2,056 nodes
   independently recollected and validated at the reviewed head.
 - [x] Four concurrent dependency lanes with distinct database/role and MinIO
   bucket/prefix custody — implementation and adversarial tests pass; hosted
@@ -138,7 +143,7 @@ git diff --check origin/main...HEAD
 
 Result summary: Ruff passed; 83 focused non-service tests passed and all 11
 service-backed runner tests remain mandatory in hosted CI; 100 Agent Gates
-passed; exact collection and independent recollection agreed on 2,049 nodes;
+passed; exact collection and independent recollection agreed on 2,056 nodes;
 merge intent,
 links, stale wording, and diff integrity passed.
 
@@ -177,38 +182,38 @@ External review response file, if findings are posted:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Pending | Supplementary external review after publication. |
+| CodeRabbit | Addressed | Fourteen inline findings reconciled; refreshed review remains pending. |
 | GitHub checks | Pending | Exact final head must pass Agent Gates and Backend. |
 
 ## Reviewer results
 
-Reviewed code SHA: `bf16f1a6d01f270e8d25d3deee037431a8cb8676`
+Reviewed code SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
 
-Reviewed at: `2026-07-24T19:35:11Z`
+Reviewed at: `2026-07-24T20:18:04Z`
 
-Reviewer run IDs: `ci02b_rebalance_senior`, `ci02b_rebalance_qa`,
-`ci02b_rebalance_security`, `ci02b_rebalance_ops`, `ci02b_rebalance_arch`,
-`ci02b_rebalance_ci`, `ci02b_rebalance_docs`, `ci02b_units_reuse`,
-`ci02b_units_test_delta`.
+Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
+`ci02b_cr_ops`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`,
+`ci02b_cr_reuse`, `ci02b_cr_test_delta`.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | None | The four-lane rebalance is simple and maintainable. |
-| QA/test | PASS | None | Exact inventory and current semantic ownership are covered. |
-| security/auth | PASS | None | Admin and resource custody boundaries remain intact. |
-| product/ops | PASS | None | No product or contribution lifecycle behavior changed. |
-| architecture | PASS | None | CI execution ownership does not redefine product architecture. |
-| CI integrity | PASS | None | Exact custody, coverage floors, and timing remain blocking. |
-| docs | PASS | None | Runbook and status match the final implementation. |
-| reuse/dedup | PASS WITH LOW RISKS | None | Preserve an S3-lane drift assertion on any future rename. |
-| test delta | PASS | None | No test removal, skip, deselection, or weakening found. |
+| senior engineering | PASS WITH LOW RISKS | None | Failure evidence remains simple and deterministic. |
+| QA/test | PASS | None | All reported failure modes have regression coverage. |
+| security/auth | PASS | None | Environment, database, and MinIO custody remain isolated. |
+| product/ops | PASS | None | Product and contribution workflows are unchanged. |
+| architecture | PASS WITH LOW RISKS | None | Existing runner/provisioner/validator boundaries remain intact. |
+| CI integrity | PASS | None | Failure, coverage, and timing gates remain blocking. |
+| docs | PASS WITH LOW RISKS | None | Operations wording matches the final failure semantics. |
+| reuse/dedup | PASS WITH LOW RISKS | None | Synthetic failures reuse canonical finalization. |
+| test delta | PASS | None | No removed, skipped, deselected, or weakened tests. |
 
 ## Remaining risks
 
 - Hosted PostgreSQL/MinIO execution, API E2E, complete coverage, and the
-  480-second target remain unproven until GitHub runs the exact final PR head.
-  Run `30118538144` is diagnostic evidence for a reverted experiment and is
-  not completion proof for `bf16f1a6`.
+  480-second outcome remain unproven until GitHub runs repair SHA `24f3b638`.
+  Prior run `30121249272` passed all functional and coverage gates at
+  `f5d2abd7` but failed the hard timing check; it is not completion proof for
+  the repair head.
 - Persistent local services can retain exact runner-owned resources if forced
   cleanup exceeds its bounded grace; evidence fails and operators must inspect
   only the recorded resource identities.

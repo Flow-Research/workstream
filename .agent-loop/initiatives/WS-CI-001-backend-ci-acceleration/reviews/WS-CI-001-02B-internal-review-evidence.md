@@ -12,14 +12,13 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: bf16f1a6d01f270e8d25d3deee037431a8cb8676
+Reviewed code SHA: 24f3b638b175352ddce3548d8c247b65c3328087
 
-Reviewed at: 2026-07-24T19:35:11Z
+Reviewed at: 2026-07-24T20:18:04Z
 
-Reviewer run IDs: ci02b_rebalance_senior, ci02b_rebalance_qa,
-ci02b_rebalance_security, ci02b_rebalance_ops, ci02b_rebalance_arch,
-ci02b_rebalance_ci, ci02b_rebalance_docs, ci02b_units_reuse,
-ci02b_units_test_delta
+Reviewer run IDs: ci02b_cr_senior, ci02b_cr_qa, ci02b_cr_security,
+ci02b_cr_ops, ci02b_cr_arch, ci02b_cr_ci, ci02b_cr_docs,
+ci02b_cr_reuse, ci02b_cr_test_delta
 
 After the reviewed SHA, only evidence files changed.
 
@@ -27,15 +26,15 @@ After the reviewed SHA, only evidence files changed.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | None | Four explicit semantic lanes remain simple; final hosted timing proof is pending. |
-| QA/test | PASS | None | Exact inventory, current names, failure custody, and resource isolation remain enforced. |
-| security/auth | PASS | None | Admin authority stays out of ordinary children; DB and MinIO custody remain lane-owned. |
-| product/ops | PASS | None | Product, compensation, review-decision, and reputation behavior are unchanged. |
-| architecture | PASS | None | Lane ownership changes only CI execution topology, not product architecture. |
-| CI integrity | PASS | None | Four coverage files, 78/90 floors, exact custody, and the 480-second gate remain blocking. |
-| docs | PASS | None | Runbook and status match the final four-lane implementation. |
-| reuse/dedup | PASS WITH LOW RISKS | None | A future S3-lane rename should retain a focused drift assertion. |
-| test delta | PASS | None | No product test was removed, skipped, deselected, or weakened. |
+| senior engineering | PASS WITH LOW RISKS | None | Failure rows remain simple; root-cause details stay in job logs. |
+| QA/test | PASS | None | Startup, provisioning, collection, interruption, and teardown failures are covered. |
+| security/auth | PASS | None | Environment isolation and admin/MinIO custody remain fail closed. |
+| product/ops | PASS | None | No product, compensation, review-decision, or reputation behavior changed. |
+| architecture | PASS WITH LOW RISKS | None | Runner, provisioner, and independent validator boundaries remain separate. |
+| CI integrity | PASS | None | Four-lane failure custody and every coverage/timing gate remain blocking. |
+| docs | PASS WITH LOW RISKS | None | Runbook distinguishes prior hosted evidence, hard timing failure, and null failed metadata. |
+| reuse/dedup | PASS WITH LOW RISKS | None | The single synthetic-row path reuses canonical lane finalization. |
+| test delta | PASS | None | Repair adds regression coverage without skips or weakened assertions. |
 
 The bootstrap repair review initially blocked publication because the reviewed
 SHA was stale and this file had an extra blank line at EOF. Both evidence
@@ -87,6 +86,12 @@ coverage or exact-node custody bypass.
   `project_lifecycle`, `task_lifecycle`, `schema_contracts`, and
   `shared_foundations`. Retired lane names were removed from the runner,
   focused tests, runbook, and current status.
+- Reconciled all fourteen CodeRabbit findings. Failure paths now preserve a
+  stable Git error, process interrupts, missing isolation metadata, collection
+  precedence, and exactly four failed lane rows across runtime and partial
+  startup failures. Independent recollection clears inherited pytest injection,
+  UUID teardown is unconditional, and Agent Gates bind the explicit `run.exit`
+  failure step.
 
 ## Commands Run
 
@@ -106,12 +111,12 @@ git diff --check origin/main...HEAD
 ## Results
 
 - Ruff passed with exact local `ruff 0.15.22`.
-- 83 focused lane-runner, isolated-runner, and independent-validator tests
+- 89 focused lane-runner, isolated-runner, and independent-validator tests
   passed without local service authority; 11 service-backed cases remain
   mandatory in hosted CI and are not skipped by the workflow.
 - 100 Agent Gate tests passed.
-- Exact collection and independent recollection agreed on 2,049 pytest nodes
-  at reviewed code SHA `bf16f1a6`; independent evidence validation passed.
+- Exact collection and independent recollection agreed on 2,056 pytest nodes
+  at reviewed code SHA `24f3b638`; independent evidence validation passed.
 - Merge intent, Markdown links, stale wording, and diff integrity passed.
 - Local full-service execution was not used as hosted performance evidence.
 
