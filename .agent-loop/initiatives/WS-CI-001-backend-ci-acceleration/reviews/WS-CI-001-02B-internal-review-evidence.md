@@ -12,17 +12,16 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 46616819879fe2afb772eb0515f5de6afefc4777
+Reviewed code SHA: 239adb178229c72951862780e5ce237f73113400
 
-Reviewed at: 2026-07-24T18:47:56Z
+Reviewed at: 2026-07-24T16:55:21Z
 
 Reviewer run IDs: ci02b_senior_review, ci02b_qa_review,
 ci02b_security_review, ci02b_product_ops_review,
 ci02b_restart_arch_review, ci02b_restart_ci_review, ci02b_contract_gap,
 ci02b_source_audit, ci02b_test_delta_review, ci02b_bootstrap_senior,
 ci02b_bootstrap_qa, ci02b_bootstrap_security, ci02b_bootstrap_ops,
-ci02b_bootstrap_arch, ci02b_bootstrap_ci, ci02b_units_docs,
-ci02b_units_reuse, ci02b_units_test_delta
+ci02b_bootstrap_arch, ci02b_bootstrap_ci
 
 After the reviewed SHA, only evidence and status files changed.
 
@@ -52,15 +51,6 @@ legitimately collect no `app` data. Failed lanes retain nonzero exit evidence
 instead of allowing missing coverage to mask the original failure. Optional
 admin coverage absence remains a documented low diagnostic risk, not a product
 coverage or exact-node custody bypass.
-
-The performance repair retains four public dependency lanes and four public
-coverage files while splitting the two slow database-heavy lanes into fixed
-semantic units. Six ordinary units each own a private database, role, MinIO
-bucket/prefix, digest-bound resource record, and exact collected/completed node
-set. The validator independently duplicates the expected unit/module map and
-rejects missing, foreign, partial, duplicate, or shared custody. Reviewer
-findings for per-unit node binding, local MinIO prerequisites, and direct
-database/role/bucket/prefix collision tests are resolved.
 
 ## Valid Findings Addressed
 
@@ -92,13 +82,6 @@ database/role/bucket/prefix collision tests are resolved.
   proved that its ordinary unit emitted coverage while the direct admin
   self-test unit legitimately emitted none. Missing ordinary coverage still
   fails closed, and regression tests cover both paths.
-- Recorded the exact 533.218-second result from hosted run `30111028221`, then
-  added bounded semantic execution units for `control_plane` and
-  `execution_plane` without changing the four public lanes or the 480-second
-  gate.
-- Bound all six resource units to independently reconstructed exact node sets
-  and added direct collision tests for database, role, bucket, and prefix
-  namespaces.
 
 ## Commands Run
 
@@ -118,11 +101,10 @@ git diff --check origin/main...HEAD
 ## Results
 
 - Ruff passed with exact local `ruff 0.15.22`.
-- 70 focused lane-runner and independent-validator tests passed.
+- 62 focused lane-runner and independent-validator tests passed.
 - 100 Agent Gate tests passed.
-- Prior hosted head `80dd8c87` completed and reconciled 2,048 exact nodes before
-  failing only the 480-second timing gate. Exact final-head hosted collection
-  and execution remain required.
+- Two independent full collections agreed on 2,046 exact pytest nodes at the
+  reviewed head; independent evidence validation passed.
 - Merge intent, Markdown links, stale wording, and diff integrity passed.
 - Local full service execution was not used as hosted performance evidence.
 
