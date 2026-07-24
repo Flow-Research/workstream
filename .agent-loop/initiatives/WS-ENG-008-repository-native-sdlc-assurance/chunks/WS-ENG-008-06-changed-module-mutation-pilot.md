@@ -47,6 +47,7 @@ docs/operations_backend_testing.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-internal-review-evidence.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-pr-trust-bundle.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-adversarial-proof.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-06-external-review-response.md
 .agent-loop/merge-intents/WS-ENG-008-06.json
 ```
 

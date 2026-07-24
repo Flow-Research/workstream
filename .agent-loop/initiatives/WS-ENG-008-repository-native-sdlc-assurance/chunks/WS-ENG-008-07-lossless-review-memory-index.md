@@ -56,6 +56,7 @@ CONTRIBUTING.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-internal-review-evidence.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-external-review-response.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pre-migration-reconciliation.json
 .agent-loop/merge-intents/WS-ENG-008-07.json
 ```

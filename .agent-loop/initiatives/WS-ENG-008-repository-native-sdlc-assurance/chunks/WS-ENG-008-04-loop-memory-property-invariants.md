@@ -45,6 +45,7 @@ docs/operations_post_merge_memory.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-04-loop-memory-property-invariants.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-internal-review-evidence.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-external-review-response.md
 .agent-loop/merge-intents/WS-ENG-008-04.json
 ```
 

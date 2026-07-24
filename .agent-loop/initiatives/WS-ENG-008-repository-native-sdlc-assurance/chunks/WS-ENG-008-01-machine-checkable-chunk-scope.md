@@ -59,6 +59,7 @@ scripts/test_agent_gates.py
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-internal-review-evidence.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-pr-trust-bundle.md
+.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-external-review-response.md
 .agent-loop/merge-intents/WS-ENG-008-01.json
 ```
 
