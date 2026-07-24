@@ -1,76 +1,81 @@
 # Internal Review Evidence: WS-AUTH-001-10C
 
-> Superseded for final completion: this evidence covers the pre-migration
-> runtime through the recorded reviewed SHA. GitHub exposed an incompatible
-> predecessor idempotency guard, and the user authorized exact migration 0034.
-> Final completion requires fresh exact-SHA review and replacement evidence.
-
 ## Chunk And Reviewed Code
 
 `WS-AUTH-001-10C` — Project Role Grant Mutations. Risk: L1 authorization,
-concurrency, and audit. Trusted-main start base is
+concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `833dd6e5352e1774ffd8c669346c65e61e3e7ac1`
-Reviewed at: 2026-07-23T16:05:00Z
-Reviewer run IDs: /root/auth10b1_final_core, /root/auth10b1_final_security_qa, /root/auth10b1_final_ops_docs_ci
+Reviewed implementation SHA: `2e2969fe712f361ff14b1c90bca439d16777d255`
+Reviewed at: 2026-07-24
 
 ## Implemented Contract
 
-- Activates exactly the covered-Project-Manager issue and revoke actions and
-  their two strict `/api/v1/projects/.../role-grants` mutation routes.
-- Binds idempotency, PREP, current caller/target/project/grant facts, lexical
-  principal locks, deterministic absence serialization, and one route commit.
-- Persists one immutable qualification snapshot per issued exact role; revoke
-  remains possible after target suspension or identity-link revocation.
-- Appends ordered typed success evidence and the revoke-only future-obligation
-  invalidation projection through the shared authority mutation completion path.
-- At this historical reviewed SHA, adds no migration or schema revision, worker, assignment, review-reconciliation,
-  automated grant, replacement-role, or authority-substitution behavior.
+- Activates covered-Project-Manager issue and revoke actions and their strict
+  project-role mutation routes.
+- Binds idempotency, PREP, current caller/target/project/grant facts, resource
+  context digest, lexical locks, final authorization consume, evidence, and one
+  route commit.
+- Persists one immutable qualification snapshot before an issued grant; issue
+  emits no invalidation. Revoke remains available for every existing project
+  lifecycle state and after target lifecycle or identity-link loss.
+- Conceals missing, inactive, nonhuman, unauthorized, cross-project, and absent
+  resources as the same `404 resource_not_found`, while preserving explicit
+  self-grant and self-revoke guards.
+- Adds migration `0034_project_role_issue_evidence`, frozen predecessor and
+  forward definition hashes, exact trigger and constraint checks, strict
+  two-event issue evidence, and actor/grant/role/project/future-obligation
+  linkage for revoke invalidation evidence.
+- Keeps AUTH-11, assignment, review reconciliation, automated role conversion,
+  frontend work, and unrelated schema changes out of scope.
 
 ## Deterministic Evidence
 
 ```text
-Focused project-role schema/advisory/rate/invalidation/cancellation tests — passed
-Crossed-principal lexical profile/link order in both directions — passed
-Python compile of authorization tests — passed
-Ruff on changed authorization tests and implementation — passed
+Ruff on changed authorization, audit, migration, and test files — passed
 git diff --check — passed
-Markdown links and stale wording scans — passed
+Markdown link scan — passed
+Authorization stale-wording scan — passed
+Route concealment and self-guard matrix — 33 passed
+Project lifecycle HTTP/direct-route matrix — 18 passed
+Incompatible pending response migration refusal — 1 passed
+Privacy definition drift refusal/restoration — 1 passed
+Function and disabled-trigger drift refusal/restoration — 2 passed
+Revoke linkage malformed/valid PostgreSQL evidence — 1 passed
+Five-key revoke downgrade refusal/no-mutation — passed
 ```
 
-The PostgreSQL proof covers durable issue/revoke evidence, revocation after
-target lifecycle loss, the real named partial-unique-index fallback through the
-public route, loser residue, observed database lock waiting, production
-cancellation rollback, and a completed same-key retry. It runs in GitHub with
-the repository database fixture. The repository-wide suite and coverage remain
-GitHub-owned because this workstation's full run takes approximately four hours.
+The PostgreSQL proof uses the repository-owned isolated database runner. It
+covers frozen function/trigger/constraint drift, pending incompatible state,
+false issue invalidation, strict five-key revoke facts, null/wrong/orphan/mixed/
+cross-record linkage, exact teardown, and downgrade refusal without mutation.
+
+The repository-wide suite and coverage remain GitHub Actions-owned because the
+local full run takes approximately four hours. Required GitHub gates retain the
+repository-wide 78 percent floor and authorization-subsystem 90 percent floor.
 
 ## Integrity And Review
 
-No test was deleted, skipped, xfailed, or weakened. The exact OpenAPI inventory
-is 76 routes with hash
-`c8f9852035446ea59b0e929b1bd8c8cfc7df5bf838ceb544c04e899f90169318`
-and 74 protected operations with hash
-`9278d0183ffb87947ee4857e0325483ba7bf07feac0c38a88432840b10c2b0c3`.
-No workflow, dependency, shard, command, threshold, or coverage setting changed.
+No test was deleted, skipped, xfailed, or weakened. No workflow, dependency,
+shard, command, threshold, package script, or coverage configuration changed.
+Migration `0034` is tracked and follows `0033_authorization_read_rate`.
 
 | Reviewer | Result | Blocking findings |
 |---|---|---|
 | Senior engineering | PASS | none |
 | Architecture | PASS | none |
-| Reuse/dedup | PASS | none |
+| Reuse/dedup | PASS with low risks | none |
 | Security/auth | PASS | none |
-| QA/test | PASS | none |
+| QA/test | PASS with low risks | none |
 | Test delta | PASS | none |
 | Product/ops | PASS | none |
 | Docs | PASS | none |
 | CI integrity | PASS | none |
 
-The repair loop closed lifecycle attribution, real unique-index fallback,
-complete residue, database-observed cancellation, committed retry, and lexical
-crossed-principal proof gaps.
+The repair loop closed migration fixture restoration, frozen definition drift,
+decision substitution, route concealment and zero-mutation, project lifecycle,
+revoke target linkage, non-revoke five-key evidence, and downgrade proof gaps.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes
