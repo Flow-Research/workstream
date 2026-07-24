@@ -4,9 +4,9 @@
 
 - Initiative: `WS-CI-001`
 - Latest completed chunk: `WS-CI-001-02A` - Safe Migrate-Once Database Reset
-- Gate: `active`
+- Gate: `stopped_after_cancel`
 - Active planning chunk: `none`
-- Active implementation chunk: `WS-CI-001-02B`
+- Active implementation chunk: `none`
 - Next chunk: `WS-CI-001-02B`
 - Separate explicit start required: `true`
 - Source PR: [#186](https://github.com/Flow-Research/workstream/pull/186)
