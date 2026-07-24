@@ -588,12 +588,15 @@ def _finalize_lane(
         path.is_file() and not path.is_symlink() for path in selected_coverage
     ):
         _combine_coverage(selected_coverage, coverage_path)
+    isolation_is_regular = isolation_path.is_file() and not isolation_path.is_symlink()
     evidence = {
         "collected_nodes": sorted(node for unit in units for node in unit["collected_nodes"]),
         "completed_nodes": sorted(node for unit in units for node in unit["completed_nodes"]),
         "deselected_nodes": sorted(set(node for unit in units for node in unit["deselected_nodes"])),
-        "isolation_metadata_file": isolation_path.name,
-        "isolation_metadata_sha256": _sha256(isolation_path.read_bytes()),
+        "isolation_metadata_file": isolation_path.name if isolation_is_regular else None,
+        "isolation_metadata_sha256": (
+            _sha256(isolation_path.read_bytes()) if isolation_is_regular else None
+        ),
         "skipped_nodes": sorted(set(node for unit in units for node in unit["skipped_nodes"])),
     }
     evidence_path.write_bytes(_json_bytes(evidence))
@@ -654,12 +657,12 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     _prepare_outputs(metadata_dir, summary_json)
     tree_sha = _tree_sha()
     collection_exit, nodes, deselected = collect_nodes(modules, metadata_dir, tree_sha)
+    if collection_exit != 0 or deselected:
+        raise LaneError("pytest_collection_failed")
     manifest = build_manifest(tree_sha, nodes)
     manifest_path = metadata_dir / "manifest.json"
     manifest_path.write_bytes(_json_bytes(manifest))
     manifest_digest = _sha256(manifest_path.read_bytes())
-    if collection_exit != 0 or deselected:
-        raise LaneError("pytest_collection_failed")
     if collect_only:
         lane_rows = []
         for lane in LANES:
@@ -689,6 +692,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     unit_results: dict[str, list[dict[str, Any]]] = {lane.name: [] for lane in LANES}
     started = time.monotonic()
     stopping = False
+    run_error: BaseException | None = None
     old_int = signal.signal(signal.SIGINT, _handle_interrupt)
     old_term = signal.signal(signal.SIGTERM, _handle_interrupt)
     try:
@@ -751,13 +755,37 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                         _signal_lane(other, signal.SIGINT)
             if active:
                 time.sleep(POLL_SECONDS)
+    except BaseException as exc:
+        run_error = exc
     finally:
-        for item in active.values():
+        now = time.monotonic()
+        for key, item in list(active.items()):
+            if item.interrupted_at is None:
+                item.interrupted_at = now
             _signal_lane(item, signal.SIGKILL)
-            item.process.wait()
-            item.log.close()
+            code = item.process.wait()
+            unit_results[item.lane.name].append(
+                _finish_unit(item, code, now - item.started_at)
+            )
+            del active[key]
         signal.signal(signal.SIGINT, old_int)
         signal.signal(signal.SIGTERM, old_term)
+    if run_error is not None:
+        for lane in LANES:
+            if unit_results[lane.name]:
+                continue
+            unit_results[lane.name].append({
+                "collection_exit_code": 1,
+                "collected_nodes": [],
+                "completed_nodes": [],
+                "coverage_path": metadata_dir / f".coverage.unit.{lane.name}",
+                "deselected_nodes": [],
+                "elapsed_seconds": 0.0,
+                "execution_kind": ORDINARY_KIND,
+                "execution_exit_code": 1,
+                "interrupted": True,
+                "skipped_nodes": [],
+            })
     results = {
         lane.name: _finalize_lane(lane, unit_results[lane.name], metadata_dir)
         for lane in LANES
@@ -771,7 +799,11 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     }
     summary.update(_timing_summary(summary["lanes"]))
     summary_json.write_bytes(_json_bytes(summary))
-    return 0 if len(results) == 4 and all(row["execution_exit_code"] == 0 for row in results.values()) else 1
+    return 0 if (
+        run_error is None
+        and len(results) == 4
+        and all(row["execution_exit_code"] == 0 for row in results.values())
+    ) else 1
 
 
 def main() -> int:

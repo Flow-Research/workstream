@@ -6499,6 +6499,14 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert "--timeout-seconds 1200" in str(run_lane_steps[0]["run"])
     assert ".ci/test-lanes/run.exit" in str(run_lane_steps[0]["run"])
     assert "--cov-fail-under" not in str(run_lane_steps[0]["run"])
+    require_success = [
+        step for step in steps
+        if step.get("name") == "Require semantic-lane execution success"
+    ]
+    assert len(require_success) == 1
+    assert 'cat .ci/test-lanes/run.exit' in str(require_success[0]["run"])
+    assert "if" not in require_success[0]
+    assert steps.index(run_lane_steps[0]) < steps.index(require_success[0])
     assert run_lane_steps[0]["env"]["WORKSTREAM_TEST_ADMIN_DATABASE_URL"] == (
         "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
     )

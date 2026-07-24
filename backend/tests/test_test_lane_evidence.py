@@ -403,6 +403,34 @@ def test_independent_collections_preserve_full_deterministic_uuid_nodeid(
     assert first == [f"tests/test_uuid_nodes.py::test_value[{expected_uuid}]"]
 
 
+def test_independent_collection_clears_inherited_pytest_injection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """External pytest flags and plugins cannot alter canonical recollection."""
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    (tests / "test_one.py").write_text("def test_one():\n    pass\n", encoding="utf-8")
+    monkeypatch.setenv("PYTEST_ADDOPTS", "--cov=foreign")
+    monkeypatch.setenv("PYTEST_PLUGINS", "foreign.plugin")
+
+    class Result:
+        returncode = 0
+
+    def fake_run(*_args, **kwargs):
+        environment = kwargs["env"]
+        assert "PYTEST_ADDOPTS" not in environment
+        assert "PYTEST_PLUGINS" not in environment
+        Path(environment[validator.VALIDATOR_COLLECTION_ENV]).write_text(
+            '"tests/test_one.py::test_one"\n', encoding="utf-8"
+        )
+        return Result()
+
+    monkeypatch.setattr(validator.subprocess, "run", fake_run)
+    assert REAL_COLLECT_CURRENT_NODES(tmp_path, HEAD) == [
+        "tests/test_one.py::test_one"
+    ]
+
+
 def test_collection_finish_restores_uuid4_and_repository_aliases(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -413,18 +441,21 @@ def test_collection_finish_restores_uuid4_and_repository_aliases(
     monkeypatch.setenv(validator.VALIDATOR_HEAD_ENV, HEAD)
     monkeypatch.setenv(validator.VALIDATOR_COLLECTION_ENV, str(destination))
     original = uuid.uuid4
-    validator.pytest_sessionstart(object())
-    wrapper = uuid.uuid4
-    assert wrapper is validator._deterministic_uuid4
+    try:
+        validator.pytest_sessionstart(object())
+        wrapper = uuid.uuid4
+        assert wrapper is validator._deterministic_uuid4
 
-    repository_module = types.ModuleType("validator_alias_fixture")
-    repository_module.__file__ = str(backend / "tests/test_alias.py")
-    repository_module.imported_uuid4 = wrapper
-    monkeypatch.setitem(sys.modules, repository_module.__name__, repository_module)
-    session = types.SimpleNamespace(
-        items=[types.SimpleNamespace(nodeid="tests/test_alias.py::test_value[full-uuid]")]
-    )
-    validator.pytest_collection_finish(session)
+        repository_module = types.ModuleType("validator_alias_fixture")
+        repository_module.__file__ = str(backend / "tests/test_alias.py")
+        repository_module.imported_uuid4 = wrapper
+        monkeypatch.setitem(sys.modules, repository_module.__name__, repository_module)
+        session = types.SimpleNamespace(
+            items=[types.SimpleNamespace(nodeid="tests/test_alias.py::test_value[full-uuid]")]
+        )
+        validator.pytest_collection_finish(session)
+    finally:
+        validator._restore_uuid4()
 
     assert destination.read_text(encoding="utf-8").splitlines() == [
         '"tests/test_alias.py::test_value[full-uuid]"'

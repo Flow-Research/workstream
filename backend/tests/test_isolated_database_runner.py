@@ -82,6 +82,41 @@ def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None
         runner._minio_namespace("../foreign", "012345abcdef")
 
 
+def test_tree_sha_maps_git_failure_to_stable_runner_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Broken Git custody cannot escape as a traceback."""
+    def fail(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"])
+
+    monkeypatch.setattr(runner.subprocess, "check_output", fail)
+    with pytest.raises(runner.RunnerError, match="invalid_tree_sha"):
+        runner._tree_sha()
+
+
+def test_minio_creation_preserves_process_interrupts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bucket creation cannot translate shutdown signals into collisions."""
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(KeyboardInterrupt):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+
+
 @pytest.mark.parametrize(
     ("lane", "expected_bucket"),
     [

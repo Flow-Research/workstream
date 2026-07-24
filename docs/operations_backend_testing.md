@@ -68,9 +68,11 @@ If provisioning fails, confirm the local PostgreSQL provisioning credential can 
 ## Hosted semantic-lane full-suite proof
 
 The required GitHub check remains `Backend / test`. One job owns one
-digest-pinned PostgreSQL service, one digest-pinned MinIO service, and four
-concurrent dependency lanes. This avoids arbitrary shard fan-out and artifact
-fan-in while retaining exact node and coverage custody.
+digest-pinned PostgreSQL service container, one digest-pinned MinIO container
+started in-step and published on `127.0.0.1:9000`, and four concurrent
+dependency lanes. A step-level curl health loop admits MinIO before collection.
+This avoids arbitrary shard fan-out and artifact fan-in while retaining exact
+node and coverage custody.
 
 The lanes are balanced by measured dependency ownership: `project_lifecycle`
 owns project tests, `task_lifecycle` owns task and checker tests,
@@ -108,6 +110,9 @@ and raw-file digests. Per-lane evidence records collected, completed, skipped,
 and deselected exact node IDs plus the bound resource-isolation metadata and
 coverage digest. Resource metadata is mode `0600`, omits credentials, and proves
 database, role, bucket, prefix, probe, and cleanup custody.
+If startup or provisioning fails before isolation metadata exists, the failed
+lane records null metadata fields, a nonzero exit, and interrupted custody; it
+cannot satisfy independent validation or be mistaken for successful proof.
 
 The validator accepts only safe repository-local regular files and exact schema
 keys. It rejects symlinks, traversal, stale heads, digest drift, unexpected
@@ -127,6 +132,7 @@ coverage tampering before coverage combination.
 
 Rerun the complete job on the same exact head. Never edit or upload evidence
 manually. Every new commit requires a complete new run because its head and
-digests differ. More than eight minutes remains a blocking measured outcome
-unless the user explicitly accepts that exact-head timing risk; never lower
+digests differ. More than eight minutes makes the required check fail outright.
+An explicit repository-owner acceptance is a human merge-checkpoint decision;
+it does not turn the workflow green or change its evidence. Never lower
 coverage, skip nodes, or add a silent fallback to meet the target.

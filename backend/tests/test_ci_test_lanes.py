@@ -345,6 +345,45 @@ def test_finalize_lane_rejects_missing_ordinary_coverage(tmp_path: Path) -> None
         runner._finalize_lane(lane, units, tmp_path)
 
 
+def test_failed_lane_preserves_evidence_without_isolation_metadata(
+    tmp_path: Path,
+) -> None:
+    """A provisioning failure remains observable before metadata exists."""
+    lane = LANES[0]
+    units = [{
+        "collection_exit_code": 1,
+        "collected_nodes": [],
+        "completed_nodes": [],
+        "coverage_path": tmp_path / ".coverage.unit.missing",
+        "deselected_nodes": [],
+        "elapsed_seconds": 1.0,
+        "execution_kind": runner.ORDINARY_KIND,
+        "execution_exit_code": 2,
+        "interrupted": False,
+        "skipped_nodes": [],
+    }]
+
+    row = runner._finalize_lane(lane, units, tmp_path)
+    evidence = json.loads((tmp_path / row["evidence_file"]).read_text())
+
+    assert row["execution_exit_code"] == 1
+    assert evidence["isolation_metadata_file"] is None
+    assert evidence["isolation_metadata_sha256"] is None
+
+
+def test_run_lanes_reports_collection_failure_before_manifest_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed pytest collection keeps its stable top-level error."""
+    modules = tuple(module for lane in LANES for module in lane.modules)
+    monkeypatch.setattr(runner, "discover_test_modules", lambda: modules)
+    monkeypatch.setattr(runner, "_tree_sha", lambda: "c" * 40)
+    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (2, [], []))
+
+    with pytest.raises(LaneError, match="pytest_collection_failed"):
+        runner.run_lanes(tmp_path / "metadata", tmp_path / "summary.json", 10)
+
+
 def test_collect_only_writes_raw_digest_bound_validator_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -490,3 +529,76 @@ def test_failure_interrupts_sibling_process_groups_and_records_all_lanes(
     assert summary["aggregate_runner_seconds"] == round(
         sum(row["elapsed_seconds"] for row in summary["lanes"]), 3
     )
+
+
+def test_unexpected_runner_failure_force_kills_and_records_every_lane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cleanup after an orchestration failure still emits four-lane evidence."""
+    lanes = tuple(
+        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",))
+        for index in range(4)
+    )
+    modules = tuple(lane.modules[0] for lane in lanes)
+    nodes = [f"{module}::test_one" for module in modules]
+    monkeypatch.setattr(runner, "LANES", lanes)
+    monkeypatch.setattr(runner, "discover_test_modules", lambda: modules)
+    monkeypatch.setattr(runner, "_tree_sha", lambda: "e" * 40)
+    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (0, nodes, []))
+    monkeypatch.setenv(runner.ADMIN_ENV, "postgresql+asyncpg://admin@localhost/postgres")
+
+    def fake_command(lane, _nodes, metadata, _timeout, _sha):
+        return [sys.executable, "-c", "import time; time.sleep(30)"]
+
+    monkeypatch.setattr(runner, "lane_command", fake_command)
+    monkeypatch.setattr(
+        runner.time, "sleep", lambda _seconds: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    metadata = tmp_path / "metadata"
+    summary_path = tmp_path / "summary.json"
+
+    assert runner.run_lanes(metadata, summary_path, 5) == 1
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert len(summary["lanes"]) == 4
+    assert all(row["interrupted"] for row in summary["lanes"])
+    assert all(row["execution_exit_code"] != 0 for row in summary["lanes"])
+
+
+def test_partial_startup_failure_records_exactly_four_failed_lanes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A process-launch failure cannot erase lanes that never started."""
+    lanes = tuple(
+        LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",))
+        for index in range(4)
+    )
+    modules = tuple(lane.modules[0] for lane in lanes)
+    nodes = [f"{module}::test_one" for module in modules]
+    monkeypatch.setattr(runner, "LANES", lanes)
+    monkeypatch.setattr(runner, "discover_test_modules", lambda: modules)
+    monkeypatch.setattr(runner, "_tree_sha", lambda: "f" * 40)
+    monkeypatch.setattr(runner, "collect_nodes", lambda *_args: (0, nodes, []))
+    monkeypatch.setenv(runner.ADMIN_ENV, "postgresql+asyncpg://admin@localhost/postgres")
+    monkeypatch.setattr(
+        runner,
+        "lane_command",
+        lambda *_args: [sys.executable, "-c", "import time; time.sleep(30)"],
+    )
+    real_popen = subprocess.Popen
+    launches = 0
+
+    def fail_second_launch(*args, **kwargs):
+        nonlocal launches
+        launches += 1
+        if launches == 2:
+            raise OSError("launch failed")
+        return real_popen(*args, **kwargs)
+
+    monkeypatch.setattr(runner.subprocess, "Popen", fail_second_launch)
+    metadata = tmp_path / "metadata"
+    summary_path = tmp_path / "summary.json"
+
+    assert runner.run_lanes(metadata, summary_path, 5) == 1
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert len(summary["lanes"]) == 4
+    assert all(row["execution_exit_code"] != 0 for row in summary["lanes"])

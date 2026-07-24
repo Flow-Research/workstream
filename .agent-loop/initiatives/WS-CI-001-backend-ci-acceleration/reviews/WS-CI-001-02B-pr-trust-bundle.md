@@ -48,13 +48,14 @@ PR prose and checked boxes are navigation evidence, not authorization.
 - Rejected and reverted a six-process experiment after exact hosted evidence
   showed CPU contention. Rebalanced the existing four isolated processes as
   `shared_foundations`, `schema_contracts`, `project_lifecycle`, and
-  `task_lifecycle` without changing the workflow or its gates.
+  `task_lifecycle` without changing the final workflow contract or gates.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
 
 The prior shard topology duplicated services and artifact fan-in while Backend
-CI remained slow. A newly released unbounded Ruff version also broke every PR.
+CI remained slow. An unbounded Ruff resolver update produced observed lint
+drift across the required Backend check until this chunk pinned `0.15.22`.
 The replacement must improve critical-path time without hiding tests, sharing
 mutable resources, weakening coverage, or trusting self-authored evidence.
 
@@ -75,7 +76,7 @@ resources, coverage bytes, failures, and timings before combination.
   artifact fan-in rather than dependency ownership.
 - Trust the runner manifest: rejected because one writer could omit nodes while
   producing self-consistent evidence.
-- Strip parametrized IDs: rejected because it loses exact node identity.
+- Strip parameterized IDs: rejected because it loses exact node identity.
 - Ignore new Ruff findings or loosen lint: rejected as CI weakening.
 
 ## Scope control

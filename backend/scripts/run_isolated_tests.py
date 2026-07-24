@@ -180,9 +180,13 @@ def _child_env(
 
 def _tree_sha() -> str:
     """Return the immutable commit checked out under the runner's exact tree."""
-    value = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL
-    ).strip()
+    try:
+        value = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except subprocess.SubprocessError as exc:
+        raise RunnerError("invalid_tree_sha") from exc
     if re.fullmatch(r"[a-f0-9]{40}", value) is None:
         raise RunnerError("invalid_tree_sha")
     return value
@@ -238,6 +242,8 @@ async def _create_minio(endpoint: str, bucket: str, prefix: str) -> None:
     async with _minio_client(endpoint) as client:
         try:
             await client.create_bucket(Bucket=bucket)
+        except (KeyboardInterrupt, SystemExit):
+            raise
         except BaseException as exc:
             raise RunnerError("minio_namespace_collision") from exc
         try:

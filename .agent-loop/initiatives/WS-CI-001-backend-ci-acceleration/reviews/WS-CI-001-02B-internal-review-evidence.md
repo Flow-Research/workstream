@@ -60,7 +60,7 @@ coverage or exact-node custody bypass.
   ordinary children never receive the admin database URL.
 - Added an independent recursive pytest collection that rejects a
   self-consistent but missing or foreign runner manifest.
-- Preserved full parametrized node IDs while stabilizing import-time UUIDv4
+- Preserved full parameterized node IDs while stabilizing import-time UUIDv4
   parameters by exact head, callsite, line, and ordinal. Both plugins restore
   `uuid.uuid4` and repository import aliases before test bodies execute.
 - Made negative process exits, skip, deselection, interruption, partial
@@ -113,7 +113,7 @@ git diff --check origin/main...HEAD
 - Exact collection and independent recollection agreed on 2,049 pytest nodes
   at reviewed code SHA `bf16f1a6`; independent evidence validation passed.
 - Merge intent, Markdown links, stale wording, and diff integrity passed.
-- Local full service execution was not used as hosted performance evidence.
+- Local full-service execution was not used as hosted performance evidence.
 
 ## Remaining Risks
 

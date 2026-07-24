@@ -213,6 +213,8 @@ def _collect_current_nodes(repository_root: Path, head_sha: str | None = None) -
     with tempfile.TemporaryDirectory(prefix="workstream-validator-") as temporary:
         output = Path(temporary) / "nodes.jsonl"
         environment = os.environ.copy()
+        environment.pop("PYTEST_ADDOPTS", None)
+        environment.pop("PYTEST_PLUGINS", None)
         environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         environment[VALIDATOR_COLLECTION_ENV] = str(output)
         validated_head = head_sha or _current_head(repository_root)
