@@ -1603,8 +1603,15 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         )
         assert concealed_replay.status_code == 404, concealed_replay.text
         concealed_replay_error = concealed_replay.json()["error"]
-        assert concealed_replay_error["code"] == missing_grant["error"]["code"]
-        assert concealed_replay_error["message"] == missing_grant["error"]["message"]
+        assert {
+            key: value
+            for key, value in concealed_replay_error.items()
+            if key != "correlation_id"
+        } == {
+            key: value
+            for key, value in missing_grant["error"].items()
+            if key != "correlation_id"
+        }
         await request_json(client, "GET", f"/api/v1/tasks/{task['id']}", worker_token)
         ready_work_context = await request_json(
             client,
