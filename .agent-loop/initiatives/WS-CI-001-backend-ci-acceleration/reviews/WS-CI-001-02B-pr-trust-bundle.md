@@ -24,7 +24,7 @@ hosted timing outcome on the exact PR head.
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02B-exact-custody-semantic-test-lanes.md`
 - Signed contract blob SHA: `784bae53f72f6460b4b74799c1c9b1519565dabe`
-- Reviewed implementation SHA: `2dfcf06f21e4dac843c768f5c7fce85d2a8e2a89`
+- Reviewed implementation SHA: `cc8ee4f1a03305e8c6e5830cff012effa210959b`
 
 Only independently verified signed automation state is canonical authority.
 PR prose and checked boxes are navigation evidence, not authorization.
@@ -40,6 +40,8 @@ PR prose and checked boxes are navigation evidence, not authorization.
 - Pinned and asserted Ruff `0.15.22` in the workflow to remove resolver drift.
 - Added hosted exact-head timing, node-count, coverage, and digest evidence with
   a blocking 480-second wall-time ceiling.
+- Initialized the fixed `.ci/test-lanes` evidence root with mode 700 before the
+  first collection, closing the hosted `invalid_lane_outputs` bootstrap failure.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
@@ -170,14 +172,18 @@ External review response file, if findings are posted:
 
 ## Reviewer results
 
-Reviewed code SHA: `2dfcf06f21e4dac843c768f5c7fce85d2a8e2a89`
+Reviewed code SHA: `cc8ee4f1a03305e8c6e5830cff012effa210959b`
 
-Reviewed at: `2026-07-24T16:03:45Z`
+Reviewed at: `2026-07-24T16:30:32Z`
 
 Reviewer run IDs: `ci02b_senior_review`, `ci02b_qa_review`,
 `ci02b_security_review`, `ci02b_product_ops_review`,
 `ci02b_restart_arch_review`, `ci02b_restart_ci_review`,
 `ci02b_contract_gap`, `ci02b_source_audit`, `ci02b_test_delta_review`
+
+Bootstrap repair reviewer run IDs: `ci02b_bootstrap_senior`,
+`ci02b_bootstrap_qa`, `ci02b_bootstrap_security`, `ci02b_bootstrap_ops`,
+`ci02b_bootstrap_arch`, `ci02b_bootstrap_ci`.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|

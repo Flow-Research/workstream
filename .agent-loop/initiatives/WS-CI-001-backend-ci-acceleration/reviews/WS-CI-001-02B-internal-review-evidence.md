@@ -12,14 +12,16 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 2dfcf06f21e4dac843c768f5c7fce85d2a8e2a89
+Reviewed code SHA: cc8ee4f1a03305e8c6e5830cff012effa210959b
 
-Reviewed at: 2026-07-24T16:03:45Z
+Reviewed at: 2026-07-24T16:30:32Z
 
 Reviewer run IDs: ci02b_senior_review, ci02b_qa_review,
 ci02b_security_review, ci02b_product_ops_review,
 ci02b_restart_arch_review, ci02b_restart_ci_review, ci02b_contract_gap,
-ci02b_source_audit, ci02b_test_delta_review
+ci02b_source_audit, ci02b_test_delta_review, ci02b_bootstrap_senior,
+ci02b_bootstrap_qa, ci02b_bootstrap_security, ci02b_bootstrap_ops,
+ci02b_bootstrap_arch, ci02b_bootstrap_ci
 
 After the reviewed SHA, only evidence and status files changed.
 
@@ -36,6 +38,11 @@ After the reviewed SHA, only evidence and status files changed.
 | docs | PASS | None | Operations and status documentation match the final workflow sequence. |
 | reuse/dedup | PASS | None | Canonical isolation runner is reused; independent validator duplication is intentional. |
 | test delta | PASS | None | Deleted shard tests are replaced without product-test weakening or deselection. |
+
+The bootstrap repair review initially blocked publication because the reviewed
+SHA was stale and this file had an extra blank line at EOF. Both evidence
+defects are corrected here. All six repair reviewers accepted the fixed-path,
+mode-700 evidence-root initialization; CI integrity found no weakened gate.
 
 ## Valid Findings Addressed
 
@@ -60,6 +67,9 @@ After the reviewed SHA, only evidence and status files changed.
   digests; total wall time above 480 seconds fails with no silent waiver.
 - Redacted direct admin-runner logs and aligned the operations runbook with the
   actual hosted sequence and local diagnostic boundary.
+- Added explicit fixed-path initialization of `.ci/test-lanes` before the first
+  hosted collection. This closes the observed `invalid_lane_outputs` bootstrap
+  failure without allowing the runner to create an unowned parent directory.
 
 ## Commands Run
 
@@ -96,4 +106,3 @@ git diff --check origin/main...HEAD
   and remove only exact recorded resources.
 - The runner and independent validator intentionally duplicate the stable UUID
   collection specification. Their separate tests must prevent common-mode drift.
-
