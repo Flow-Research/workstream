@@ -1,6 +1,6 @@
 # External Review Response: WS-AUTH-001-10C
 
-Reviewed at: 2026-07-24T19:57:03Z
+Reviewed at: 2026-07-24T20:14:46Z
 PR: #194
 
 ## Comments Addressed
@@ -39,6 +39,10 @@ PR: #194
 - CodeRabbit's evidence-count and review-log provenance findings were valid.
   Evidence now records the exact 11-case aggregate and the log begins with the
   repaired implementation SHA.
+- Fresh hosted API E2E reached the new link-lifecycle scenario and exposed a
+  stale script key: the administrative response publishes `identity_link_id`,
+  not `id`. Both revoke/reactivate references now use the canonical field; Ruff,
+  compilation, and all 15 API-contract helper tests pass.
 
 ## Comments Deferred
 
@@ -63,6 +67,7 @@ isolated pytest migration refusal aggregate — 11 passed, 44 deselected
 isolated pytest SQL-NULL fact-shape regression — 1 passed
 isolated pytest rate-control lock-wait regression — 1 passed
 isolated pytest corrected authorization regressions — 2 passed
+pytest -q tests/test_api_contract_e2e.py — 15 passed
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_markdown_links.py
 git diff --check
@@ -70,6 +75,6 @@ git diff --check
 
 ## Remaining Risks
 
-- GitHub Backend full shards, hosted API E2E, and coverage are pending the
-  corrected evidence push.
+- GitHub Backend full shards, hosted API E2E, and coverage require a fresh run
+  on the canonical identity-link E2E repair.
 - A fresh CodeRabbit pass is required on the pushed repair commit.

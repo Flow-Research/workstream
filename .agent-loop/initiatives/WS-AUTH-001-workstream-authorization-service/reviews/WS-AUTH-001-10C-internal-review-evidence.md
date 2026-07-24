@@ -7,8 +7,8 @@ concurrency, migration, and audit integrity. Trusted-main start base is
 `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`; signed start run is
 `30014637065`.
 
-Reviewed code SHA: `d2a311434dd1b15c256899b11ae4326f258ef9e0`
-Reviewed at: 2026-07-24T20:00:36Z
+Reviewed code SHA: `33f8c7ccd80c89d09584d2959ff1581f80e6bd03`
+Reviewed at: 2026-07-24T20:14:46Z
 Reviewer run IDs: senior-engineering=/root/auth10c_cr_senior; QA/test=/root/auth10c_cr_qa; security/auth=/root/auth10c_cr_security; product/ops=/root/auth10c_cr_product; architecture=/root/auth10c_cr_arch; docs=/root/auth10c_cr_docs; CI-integrity=/root/auth10c_cr_ci; reuse/dedup=/root/auth10c_cr_reuse; test-delta=/root/auth10c_cr_testdelta
 
 ## Implemented Contract
@@ -44,6 +44,7 @@ Migration refusal aggregate — 11 passed: 2 incompatible pending, 5 frozen
   definition drift, and 4 fact constraint drift
 SQL-NULL facts regression — 1 passed
 Rate-control lock-wait regression — 1 passed
+API contract helper tests — 15 passed
 Revoke linkage malformed/valid PostgreSQL evidence — 1 passed
 Five-key revoke downgrade refusal/no-mutation — passed
 ```
@@ -81,7 +82,8 @@ Migration `0034` is tracked and follows `0033_authorization_read_rate`.
 The repair loop closed migration fixture restoration, frozen definition drift,
 SQL-NULL three-valued facts bypass, decision substitution, route concealment
 and zero-mutation, project lifecycle, revoke target linkage, non-revoke
-five-key evidence, downgrade proof gaps, and bounded lock observation.
+five-key evidence, downgrade proof gaps, bounded lock observation, and the
+hosted E2E identity-link response-field reference.
 
 Open sub-agent sessions: none
 Valid findings addressed: yes

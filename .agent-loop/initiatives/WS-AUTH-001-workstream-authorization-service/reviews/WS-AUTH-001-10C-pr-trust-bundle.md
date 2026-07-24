@@ -6,7 +6,7 @@
 mutations for independent exact-project contributor roles. Risk is L1
 authorization, concurrency, migration, and audit integrity.
 
-Reviewed code SHA: `d2a311434dd1b15c256899b11ae4326f258ef9e0`
+Reviewed code SHA: `33f8c7ccd80c89d09584d2959ff1581f80e6bd03`
 
 ## Change, Design, And Scope
 
@@ -38,7 +38,9 @@ checks pass. The isolated database proof includes exact schema teardown and
 no-mutation assertions for rejected evidence. The exact migration refusal
 aggregate passes all 11 variants: 2 incompatible pending states, 5 frozen
 definition drifts, and 4 fact-constraint drifts. Focused SQL-NULL facts and
-bounded lock-wait regressions also pass.
+bounded lock-wait regressions also pass. The hosted API E2E identity-link
+lifecycle path uses the canonical `identity_link_id` response field; its 15
+helper tests pass.
 
 All nine internal tracks pass the reviewed implementation SHA with no blocking
 finding and no open sub-agent session. No test or CI gate was weakened. Ruff is
