@@ -7,6 +7,7 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -17,6 +18,7 @@ import subprocess
 import sys
 import time
 from typing import Any, TextIO
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = ROOT / "tests"
@@ -26,6 +28,7 @@ COLLECTED_ENV = "WORKSTREAM_LANE_COLLECTED_NODES"
 COMPLETED_ENV = "WORKSTREAM_LANE_COMPLETED_NODES"
 SKIPPED_ENV = "WORKSTREAM_LANE_SKIPPED_NODES"
 DESELECTED_ENV = "WORKSTREAM_LANE_DESELECTED_NODES"
+HEAD_ENV = "WORKSTREAM_LANE_HEAD_SHA"
 SCHEMA_VERSION = 1
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
 ORDINARY_KIND = "ordinary_isolated"
@@ -49,6 +52,9 @@ POLL_SECONDS = 0.05
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 LANE_RE = re.compile(r"[a-z][a-z0-9_]*")
 INTERRUPTED = False
+_ORIGINAL_UUID4: Any = None
+_UUID4_ORDINALS: dict[tuple[str, int], int] = {}
+_UUID4_HEAD = ""
 
 
 class LaneError(RuntimeError):
@@ -198,6 +204,59 @@ def pytest_deselected(items: list[Any]) -> None:
             _append_node(destination, item.nodeid)
 
 
+def _deterministic_uuid4() -> uuid.UUID:
+    """Return a stable UUIDv4 for one repository callsite and ordinal."""
+    frame = inspect.currentframe()
+    caller = frame.f_back if frame is not None else None
+    try:
+        if caller is None or _ORIGINAL_UUID4 is None:
+            return uuid.UUID(bytes=os.urandom(16), version=4)
+        try:
+            relative = Path(caller.f_code.co_filename).resolve().relative_to(ROOT).as_posix()
+        except (OSError, ValueError):
+            return _ORIGINAL_UUID4()
+        callsite = (relative, caller.f_lineno)
+        ordinal = _UUID4_ORDINALS.get(callsite, 0)
+        _UUID4_ORDINALS[callsite] = ordinal + 1
+        key = f"{_UUID4_HEAD}\0{relative}\0{caller.f_lineno}\0{ordinal}".encode()
+        return uuid.UUID(bytes=hashlib.sha256(key).digest()[:16], version=4)
+    finally:
+        del frame
+        del caller
+
+
+def pytest_make_parametrize_id(config: Any, val: Any, argname: str) -> str | None:
+    """Keep deterministic UUID parameter bytes visible in the exact node ID."""
+    del config, argname
+    return str(val) if isinstance(val, uuid.UUID) else None
+
+
+def pytest_sessionstart(session: Any) -> None:
+    """Stabilize UUID-backed parameter values before test-module imports."""
+    del session
+    global _ORIGINAL_UUID4, _UUID4_HEAD
+    if _ORIGINAL_UUID4 is not None:
+        uuid.uuid4 = _ORIGINAL_UUID4
+    head = os.environ.get(HEAD_ENV, "")
+    if SHA_RE.fullmatch(head) is None:
+        head = _tree_sha()
+    _ORIGINAL_UUID4 = uuid.uuid4
+    _UUID4_HEAD = head
+    _UUID4_ORDINALS.clear()
+    uuid.uuid4 = _deterministic_uuid4
+
+
+def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
+    """Restore process-global UUID behavior after pytest completes."""
+    del session, exitstatus
+    global _ORIGINAL_UUID4, _UUID4_HEAD
+    if _ORIGINAL_UUID4 is not None:
+        uuid.uuid4 = _ORIGINAL_UUID4
+    _ORIGINAL_UUID4 = None
+    _UUID4_HEAD = ""
+    _UUID4_ORDINALS.clear()
+
+
 def discover_test_modules(tests_dir: Path = TESTS_DIR, root: Path = ROOT) -> tuple[str, ...]:
     """Recursively discover regular test modules without following symlinks."""
     if tests_dir.is_symlink() or not tests_dir.is_dir():
@@ -291,7 +350,7 @@ def _plugin_args() -> list[str]:
     return ["-p", "pytest_asyncio.plugin", "-p", "pytest_cov.plugin", "-p", "scripts.run_test_lanes"]
 
 
-def _collection_environment(collected: Path, deselected: Path) -> dict[str, str]:
+def _collection_environment(collected: Path, deselected: Path, tree_sha: str) -> dict[str, str]:
     env = os.environ.copy()
     env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     env["PYTHONPATH"] = os.pathsep.join(
@@ -299,17 +358,20 @@ def _collection_environment(collected: Path, deselected: Path) -> dict[str, str]
     )
     env[COLLECTED_ENV] = str(collected.resolve())
     env[DESELECTED_ENV] = str(deselected.resolve())
+    env[HEAD_ENV] = tree_sha
     return env
 
 
-def collect_nodes(modules: tuple[str, ...], metadata_dir: Path) -> tuple[int, list[str], list[str]]:
+def collect_nodes(
+    modules: tuple[str, ...], metadata_dir: Path, tree_sha: str
+) -> tuple[int, list[str], list[str]]:
     collected = metadata_dir / "collection.nodes.jsonl"
     deselected = metadata_dir / "collection.deselected.jsonl"
     _exclusive_file(collected)
     _exclusive_file(deselected)
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", *_plugin_args(), *modules],
-        cwd=ROOT, env=_collection_environment(collected, deselected), check=False,
+        cwd=ROOT, env=_collection_environment(collected, deselected, tree_sha), check=False,
     )
     nodes = _read_nodes(collected) if result.returncode == 0 else []
     deselected_nodes = _read_nodes(deselected, allow_empty=True)
@@ -350,6 +412,7 @@ def lane_environment(
     metadata_dir: Path,
     coverage_path: Path,
     evidence_stem: str | None = None,
+    tree_sha: str | None = None,
 ) -> dict[str, str]:
     env = os.environ.copy()
     env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
@@ -362,14 +425,20 @@ def lane_environment(
     env[COMPLETED_ENV] = str((metadata_dir / f"{stem}.completed.jsonl").resolve())
     env[SKIPPED_ENV] = str((metadata_dir / f"{stem}.skipped.jsonl").resolve())
     env[DESELECTED_ENV] = str((metadata_dir / f"{stem}.deselected.jsonl").resolve())
+    if tree_sha is not None:
+        env[HEAD_ENV] = tree_sha
     return env
 
 
 def admin_runner_environment(
-    lane: TestLane, metadata_dir: Path, coverage_path: Path, evidence_stem: str
+    lane: TestLane,
+    metadata_dir: Path,
+    coverage_path: Path,
+    evidence_stem: str,
+    tree_sha: str | None = None,
 ) -> dict[str, str]:
     """Retain only the admin URL needed to test the isolation owner itself."""
-    env = lane_environment(lane, metadata_dir, coverage_path, evidence_stem)
+    env = lane_environment(lane, metadata_dir, coverage_path, evidence_stem, tree_sha)
     env.pop("WORKSTREAM_DATABASE_URL", None)
     env.pop("WORKSTREAM_TEST_DATABASE_URL", None)
     return env
@@ -536,7 +605,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
     validate_lane_inventory(modules)
     _prepare_outputs(metadata_dir, summary_json)
     tree_sha = _tree_sha()
-    collection_exit, nodes, deselected = collect_nodes(modules, metadata_dir)
+    collection_exit, nodes, deselected = collect_nodes(modules, metadata_dir, tree_sha)
     manifest = build_manifest(tree_sha, nodes)
     manifest_path = metadata_dir / "manifest.json"
     manifest_path.write_bytes(_json_bytes(manifest))
@@ -592,10 +661,12 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                 coverage_path = metadata_dir / f".coverage.unit.{key}"
                 if kind == ADMIN_KIND:
                     command = admin_runner_command(unit_nodes)
-                    env = admin_runner_environment(lane, metadata_dir, coverage_path, key)
+                    env = admin_runner_environment(
+                        lane, metadata_dir, coverage_path, key, tree_sha
+                    )
                 else:
                     command = lane_command(lane, unit_nodes, metadata_dir, timeout_seconds, tree_sha)
-                    env = lane_environment(lane, metadata_dir, coverage_path, key)
+                    env = lane_environment(lane, metadata_dir, coverage_path, key, tree_sha)
                 process = subprocess.Popen(
                     command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                     start_new_session=True,

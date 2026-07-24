@@ -122,6 +122,43 @@ def test_manifest_has_no_exclusion_escape_hatch() -> None:
     }]
 
 
+def test_deterministic_uuid_nodeids_match_across_full_subset_and_repeat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(runner.HEAD_ENV, "e" * 40)
+
+    def collect(module_names: tuple[str, ...]) -> dict[str, list[str]]:
+        runner.pytest_sessionstart(object())
+        try:
+            result: dict[str, list[str]] = {}
+            for module_name in module_names:
+                namespace: dict[str, object] = {}
+                source = "import uuid\nvalues = [uuid.uuid4(), uuid.uuid4()]\n"
+                filename = runner.ROOT / "tests" / f"test_{module_name}.py"
+                exec(compile(source, str(filename), "exec"), namespace)
+                values = namespace["values"]
+                assert isinstance(values, list)
+                result[module_name] = [
+                    f"tests/test_{module_name}.py::test_value[{value}]" for value in values
+                ]
+            return result
+        finally:
+            runner.pytest_sessionfinish(object(), 0)
+
+    first_full = collect(("alpha", "beta"))
+    second_full = collect(("alpha", "beta"))
+    subset = collect(("beta",))
+
+    assert first_full == second_full
+    assert subset["beta"] == first_full["beta"]
+    assert len(set(first_full["alpha"] + first_full["beta"])) == 4
+    for nodeid in first_full["alpha"] + first_full["beta"]:
+        value = nodeid.rsplit("[", 1)[1][:-1]
+        generated = __import__("uuid").UUID(value)
+        assert generated.version == 4
+        assert generated.variant == __import__("uuid").RFC_4122
+
+
 def test_lane_command_uses_exact_nodes_and_isolation_contract(tmp_path: Path) -> None:
     lane = LANES[0]
     nodes = [f"{lane.modules[0]}::test_exact[param]"]
@@ -239,7 +276,7 @@ def test_collection_rejects_duplicate_or_foreign_nodes(
     tmp_path.joinpath("metadata").mkdir()
     monkeypatch.setattr(runner.subprocess, "run", fake_run)
     with pytest.raises(LaneError, match="invalid_collected_nodes"):
-        runner.collect_nodes((module,), tmp_path / "metadata")
+        runner.collect_nodes((module,), tmp_path / "metadata", "a" * 40)
 
 
 def test_timing_summary_is_derived_from_exact_four_lanes() -> None:

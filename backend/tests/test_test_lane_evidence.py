@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import uuid
 
 import pytest
 
@@ -131,7 +132,7 @@ def exact_head(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         validator,
         "_collect_current_nodes",
-        lambda _root: sorted(
+        lambda _root, _head: sorted(
             [
                 *(f"tests/test_{index}.py::test_ok" for index in range(4)),
                 "tests/test_isolated_database_runner.py::test_admin_custody",
@@ -368,3 +369,28 @@ def test_real_collection_rejects_missing_or_foreign_manifest_node(
     monkeypatch.setattr(validator, "_collect_current_nodes", REAL_COLLECT_CURRENT_NODES)
     with pytest.raises(validator.EvidenceError, match="current_node_inventory_mismatch"):
         validator.validate_evidence(metadata, summary_path, tmp_path)
+
+
+def test_independent_collections_preserve_full_deterministic_uuid_nodeid(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "backend/tests"
+    tests.mkdir(parents=True)
+    (tests / "test_uuid_nodes.py").write_text(
+        "import pytest\n"
+        "import uuid\n"
+        "\n"
+        "VALUE = uuid.uuid4()\n"
+        "\n"
+        "@pytest.mark.parametrize('value', [VALUE])\n"
+        "def test_value(value):\n"
+        "    assert value == VALUE\n",
+        encoding="utf-8",
+    )
+    first = REAL_COLLECT_CURRENT_NODES(tmp_path, HEAD)
+    second = REAL_COLLECT_CURRENT_NODES(tmp_path, HEAD)
+    expected_key = "\0".join((HEAD, "tests/test_uuid_nodes.py", "4", "0")).encode()
+    expected_uuid = uuid.UUID(bytes=hashlib.sha256(expected_key).digest()[:16], version=4)
+
+    assert first == second
+    assert first == [f"tests/test_uuid_nodes.py::test_value[{expected_uuid}]"]

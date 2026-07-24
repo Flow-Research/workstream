@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -15,6 +16,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Any
+import uuid
 
 
 SCHEMA_VERSION = 1
@@ -28,10 +30,62 @@ ADMIN_KIND = "admin_runner_self_test"
 DATABASE_IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 BUCKET_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*[a-z0-9]$")
 VALIDATOR_COLLECTION_ENV = "WORKSTREAM_VALIDATOR_COLLECTION_FILE"
+VALIDATOR_HEAD_ENV = "WORKSTREAM_VALIDATOR_HEAD_SHA"
+VALIDATOR_ROOT_ENV = "WORKSTREAM_VALIDATOR_BACKEND_ROOT"
+_ORIGINAL_UUID4 = uuid.uuid4
+_UUID_CALLSITE_COUNTS: dict[tuple[str, int], int] = {}
+_UUID_ROOT: Path | None = None
+_UUID_HEAD: str | None = None
 
 
 class EvidenceError(RuntimeError):
     """Test-lane evidence is incomplete, unsafe, or inconsistent."""
+
+
+def _deterministic_uuid4() -> uuid.UUID:
+    """Return a caller-stable UUIDv4 for repository import-time parameters."""
+    frame = inspect.currentframe()
+    caller = frame.f_back if frame is not None else None
+    try:
+        if caller is None or _UUID_ROOT is None or _UUID_HEAD is None:
+            return _ORIGINAL_UUID4()
+        try:
+            relative = Path(caller.f_code.co_filename).resolve().relative_to(_UUID_ROOT)
+        except (OSError, ValueError):
+            return _ORIGINAL_UUID4()
+        relative_file = relative.as_posix()
+        callsite = (relative_file, caller.f_lineno)
+        ordinal = _UUID_CALLSITE_COUNTS.get(callsite, 0)
+        _UUID_CALLSITE_COUNTS[callsite] = ordinal + 1
+        key = (f"{_UUID_HEAD}\0{relative_file}\0{caller.f_lineno}\0{ordinal}").encode("utf-8")
+        return uuid.UUID(bytes=hashlib.sha256(key).digest()[:16], version=4)
+    finally:
+        del frame
+        del caller
+
+
+def pytest_sessionstart(session: Any) -> None:
+    """Install deterministic UUIDv4 generation before test-module collection."""
+    del session
+    global _UUID_ROOT, _UUID_HEAD
+    root = os.environ.get(VALIDATOR_ROOT_ENV)
+    head = os.environ.get(VALIDATOR_HEAD_ENV)
+    if root is None or head is None or SHA_RE.fullmatch(head) is None:
+        return
+    _UUID_ROOT = Path(root).resolve(strict=True)
+    _UUID_HEAD = head
+    _UUID_CALLSITE_COUNTS.clear()
+    uuid.uuid4 = _deterministic_uuid4
+
+
+def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
+    """Restore process UUID behavior after validator-owned collection."""
+    del session, exitstatus
+    global _UUID_ROOT, _UUID_HEAD
+    uuid.uuid4 = _ORIGINAL_UUID4
+    _UUID_CALLSITE_COUNTS.clear()
+    _UUID_ROOT = None
+    _UUID_HEAD = None
 
 
 def pytest_collection_finish(session: Any) -> None:
@@ -51,6 +105,12 @@ def pytest_collection_finish(session: Any) -> None:
             view = view[os.write(descriptor, view) :]
     finally:
         os.close(descriptor)
+
+
+def pytest_make_parametrize_id(config: Any, val: Any, argname: str) -> str | None:
+    """Keep deterministic UUID parameter values in full raw pytest node IDs."""
+    del config, argname
+    return str(val) if isinstance(val, uuid.UUID) else None
 
 
 def _object(value: Any, keys: set[str], error: str) -> dict[str, Any]:
@@ -117,7 +177,7 @@ def _discover_current_modules(backend_root: Path) -> list[str]:
     return modules
 
 
-def _collect_current_nodes(repository_root: Path) -> list[str]:
+def _collect_current_nodes(repository_root: Path, head_sha: str | None = None) -> list[str]:
     backend_root = repository_root / "backend"
     modules = _discover_current_modules(backend_root)
     with tempfile.TemporaryDirectory(prefix="workstream-validator-") as temporary:
@@ -125,6 +185,11 @@ def _collect_current_nodes(repository_root: Path) -> list[str]:
         environment = os.environ.copy()
         environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
         environment[VALIDATOR_COLLECTION_ENV] = str(output)
+        validated_head = head_sha or _current_head(repository_root)
+        if SHA_RE.fullmatch(validated_head) is None:
+            raise EvidenceError("invalid_git_head")
+        environment[VALIDATOR_HEAD_ENV] = validated_head
+        environment[VALIDATOR_ROOT_ENV] = str(backend_root.resolve(strict=True))
         validator_backend = str(Path(__file__).resolve().parents[1])
         existing_pythonpath = environment.get("PYTHONPATH")
         environment["PYTHONPATH"] = (
@@ -154,10 +219,7 @@ def _collect_current_nodes(repository_root: Path) -> list[str]:
         if result.returncode != 0:
             raise EvidenceError("independent_pytest_collection_failed")
         try:
-            nodes = [
-                json.loads(line)
-                for line in output.read_text(encoding="utf-8").splitlines()
-            ]
+            nodes = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise EvidenceError("invalid_independent_collection") from exc
     if not nodes or any(not isinstance(node, str) or "::" not in node for node in nodes):
@@ -297,7 +359,7 @@ def validate_evidence(
         raise EvidenceError("noncanonical_or_duplicate_manifest_nodes")
     if not any(module == ADMIN_RUNNER_MODULE for _node, module, _lane, _kind in canonical):
         raise EvidenceError("missing_admin_runner_self_tests")
-    independently_collected = _collect_current_nodes(root)
+    independently_collected = _collect_current_nodes(root, head)
     canonical_ids = [nodeid for nodeid, _module, _lane, _kind in canonical]
     if Counter(independently_collected) != Counter(canonical_ids):
         raise EvidenceError("current_node_inventory_mismatch")
