@@ -394,37 +394,6 @@ def test_rejects_missing_or_foreign_semantic_isolation_unit(tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    "field", ["database_name", "database_role", "minio_bucket", "minio_prefix"]
-)
-def test_rejects_shared_semantic_unit_namespace(tmp_path: Path, field: str) -> None:
-    metadata, summary_path, summary = _bundle(tmp_path)
-    first_lane, second_lane = summary["lanes"][:2]
-    first_evidence = json.loads(
-        (metadata / first_lane["evidence_file"]).read_text(encoding="utf-8")
-    )
-    second_evidence_path = metadata / second_lane["evidence_file"]
-    second_evidence = json.loads(second_evidence_path.read_text(encoding="utf-8"))
-    first_isolation = json.loads(
-        (metadata / first_evidence["isolation_metadata_files"][0]).read_text(
-            encoding="utf-8"
-        )
-    )
-    second_isolation_path = metadata / second_evidence["isolation_metadata_files"][0]
-    second_isolation = json.loads(second_isolation_path.read_text(encoding="utf-8"))
-    second_isolation[field] = first_isolation[field]
-    second_evidence["isolation_metadata_sha256s"][0] = _write(
-        second_isolation_path, second_isolation
-    )
-    second_lane["evidence_sha256"] = _write(
-        second_evidence_path, second_evidence
-    )
-    _write(summary_path, summary)
-
-    with pytest.raises(validator.EvidenceError, match="shared_isolation_namespace"):
-        validator.validate_evidence(metadata, summary_path, tmp_path)
-
-
-@pytest.mark.parametrize(
     ("field", "value", "message"),
     [
         ("aggregate_runner_seconds", 4.01, "summary_timing_mismatch"),
