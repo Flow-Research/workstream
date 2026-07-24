@@ -1,72 +1,60 @@
 # Status: WS-ART-001 Immutable Artifact Storage
 
-## Current State
+## Completed Foundation
 
-Original planning merged through PR #97, artifact/LocalStorage foundation
-merged through PR #101, the AWS-first object-storage amendment merged through
-PR #120 as `4408256`, the external-service adapter foundation merged through
-PR #127 as `f64a8e5`, committed-source preparation merged through PR #129 as
-`9a04434`, the ArtifactStore v2 Local clean cut merged through PR #141 as
-`a10d901`, and S3-compatible MinIO/AWS preparation merged through PR #151 as
-`1b5422fc` on 2026-07-19. ART admission and the put-attempt foundation then
-merged through PR #154 as `44f2467c`, and the user explicitly started
-`WS-ART-001-02C2` on 2026-07-19.
+Planning and the artifact foundation merged through PR #97 and PR #101. The
+AWS-first object-storage amendment and typed adapter clean cut merged through
+PRs #120, #127, #129, #141, and #151. Durable admission, put attempts,
+verification/publication, recovery idempotency, and hidden Operator operations
+merged through PRs #154, #159, #174, and #177 (`WS-ART-001-02D`).
 
-The planning-only cross-initiative boundary reconciliation merged through
-PR #139 as `5d353b6`, and AUTH's owner reconciliation merged through PR #140 as
-`d541521`. ART now consumes AUTH's canonical activation-custody and prepared
-mutation contracts without editing or activating AUTH runtime behavior.
-AUTH-09D-A merged through PR #148 as `99ae4c9`, AUTH-09D-B merged through PR
-#152 as `93dd392`, the contributor foundation merged through PR #153 as
-`8d5eb15b`, AUTH-09E merged through PR #157 as `42a89b2d`, and the
-availability-neutral ART custody transfer merged through PR #158 as
-`be2a79a2`, and the unrelated availability-neutral REV custody transfer merged
-through PR #160 as `fe0e4492`. Backend CI sharding and timeout repair merged
-through PRs #163 and #164 as `b0f9ad64` and `61bc0390`; signed-start loop-memory
-planning merged through PR #165 as `58d0514a`; and AUTH-PREP merged through PR
-#162 as `c559d556`. All are integrated into the ART candidate. AUTH-PREP adds no
-ART consumer or activation. The three ART internal feature actions remain
-assigned to future
-`WS-AUTH-001-ART-02D-INTERNAL` activation custody, but remain planned and
-inactive.
+The current v0.1 provider direction remains AWS S3 in production, MinIO for
+local/CI protocol proof, and LocalStorage for development/focused tests. Flow
+Node and R2 remain deferred. Completed objects have no physical deletion path.
+AUTH's owner reconciliation merged through PR #140 as
+`d541521`; PLAN2 preserves AUTH ownership and proposes no availability edit.
 
-The Flow Node-focused amendment candidate `6cc422d` passed deterministic checks
-but failed internal review on recovery/API completeness. Before repair, the user
-approved a first-principle change on 2026-07-14:
+## Cancelled Work
+
+`WS-ART-001-03` received a signed implementation start on current history, but
+mandatory preimplementation review rejected the combined contract before any
+runtime edit. The user authorized cancellation, and signed automation run
+`30100940860` recorded `stopped_after_cancel` on 2026-07-24. The rejected
+contract combined guide byte ingest, binding, materialization, setup recovery,
+migration, and inactive AUTH dependencies without a safe executable boundary.
+
+## Current Planning Reconciliation
+
+`WS-ART-001-PLAN2` is planning-only. It incorporates the human-approved
+submission invariant:
 
 ```text
-v0.1 production bytes -> S3CompatibleArtifactStore -> AWS S3
-local/CI proof bytes   -> S3CompatibleArtifactStore -> MinIO
-development bytes     -> LocalStorageAdapter
-future optional bytes -> Flow Node adapter initiative
+one outer ZIP
+-> bounded private scratch inspection and canonical manifest
+-> exact/semantic unchanged rejection
+-> mandatory platform and locked Project Guide prechecks
+-> one existing ArtifactStore admission and complete read-back verification
+-> one immutable Submission binding
+-> the same bytes checked, reviewed, accepted, recorded, and delivered
 ```
 
-The failed Flow Node candidate and every reviewer session are closed. It is not
-approval or reusable evidence. Its source remains on branch
-`codex/ws-art-001-fn01-isolation-amendment` for the deferred Flow Node plan.
-
-## Current Work
-
-`WS-ART-001-02C2` is active after the user's explicit start on 2026-07-19. It
-adds caller-only committed put execution, read-only ambiguous-put resolution,
-durable verification jobs and typed receipts, PostgreSQL executor/generation
-fencing, bounded publication scanning, and complete-read deadlines. Production
-composition remains deny-only: the three internal artifact actions stay
-planned, no 02C2 Beat schedule is active, and AUTH retains sole activation
-custody. Recovery attempts, Operator routes, product cutovers, deletion, and
-background write replay remain out of scope.
+There is no candidate store, temporary provider retention, promotion copy,
+physical deletion, second recovery aggregate, speculative capacity increase, or
+competing `SubmissionVersion` table. Reviewers attach a decision plus
+note/findings to the
+exact `Submission`; contributors answer `needs_revision` with another complete
+ZIP and immutable Submission.
 
 ## Next Proposed Chunk
 
-`02C3` may add the recovery-attempt and idempotency chain only after 02C2 merges
-and receives a separate explicit start. No deferred provider has a v0.1 chunk.
+After this planning package merges, `WS-ART-001-03A` is the only declared ART
+successor. It adds hidden guide-source byte ingest through the existing artifact
+preparation/admission/verification path. It requires a separate signed start and
+does not activate its own AUTH action.
 
 ## Gate
 
-The candidate integrates trusted main `c559d556`, the sharded Backend workflow,
-and merged AUTH-PREP without activating ART. Exact-SHA internal evidence is
-complete for reviewed code `59fbab56`; hosted checks must rerun on the published
-evidence head. The current gate is external CI/review followed by explicit human
-merge approval.
-Production activation and recovery remain in later owning chunks. No later
-artifact chunk starts automatically, and only the user may approve merge.
+Planning evidence and all required internal reviewer tracks must pass before a
+PR. The planning merge starts no successor. Every implementation chunk retains
+its separate signed start, exact AUTH activation sequence, internal review, CI,
+CodeRabbit, human checkpoint, and automated merge-memory stop.

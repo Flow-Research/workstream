@@ -36,9 +36,12 @@ ARTIFACT_COVERAGE_ORDER = (
     "02C2",
     "02C3",
     "02D",
-    "03",
+    "03A",
+    "03B",
+    "03C",
     "04A",
     "04B",
+    "04C",
     "05",
     "06A",
     "06B",
@@ -77,19 +80,23 @@ ARTIFACT_COVERAGE_COMMAND_OWNERS = {
     "02D": (
         "coverage report --include='app/api/router.py' --precision=2 --fail-under=90",
     ),
-    "03": (
+    "03A": (
         "coverage report --include='app/modules/projects/*' "
         "--precision=2 --fail-under=90",
+    ),
+    "03B": (
         "coverage report "
         "--include='app/adapters/project_agents/*,app/interfaces/project_agents.py' "
         "--precision=2 --fail-under=90",
     ),
+    "03C": (),
     "04A": (),
     "04B": (
         "coverage report --include='app/modules/tasks/*' --precision=2 --fail-under=90",
         "coverage report --include='app/modules/checkers/*' "
         "--precision=2 --fail-under=90",
     ),
+    "04C": (),
     "05": (),
     "06A": (),
     "06B": (),
@@ -163,7 +170,7 @@ def artifact_contract_phase_for(coverage_phase: str) -> str:
     phase = "foundation"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("02A3"):
         phase = "artifact_store_cutover"
-    if active_index >= ARTIFACT_COVERAGE_ORDER.index("03"):
+    if active_index >= ARTIFACT_COVERAGE_ORDER.index("03A"):
         phase = "guide_source_cutover"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("04B"):
         phase = "upload_admission"
@@ -5658,7 +5665,7 @@ def test_auth_spec_orders_service_admission_before_project_roles() -> None:
 
 
 def test_parallel_initiative_status_matches_trusted_main() -> None:
-    """Auth prerequisites and the current ART gate remain internally consistent."""
+    """Auth history and authored ART planning remain internally consistent."""
     auth_map = Path(
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
         "CHUNK_MAP.md"
@@ -5678,6 +5685,18 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     ).read_text(encoding="utf-8")
     work_queue = Path(".agent-loop/WORK_QUEUE.md").read_text(encoding="utf-8")
     loop_state = Path(".agent-loop/LOOP_STATE.md").read_text(encoding="utf-8")
+    contribution_guide = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+    loop_guide = Path(".agent-loop/README.md").read_text(encoding="utf-8")
+
+    # Authored main snapshots below remain historical discovery input. Live
+    # active/cancel state is read only from independently verified signed
+    # automation, so ART assertions use its initiative status/map rather than
+    # pretending copied root projections are current authority.
+    canonical_warning = (
+        "Only independently verified signed automation state is canonical authority"
+    )
+    assert canonical_warning in " ".join(contribution_guide.split())
+    assert canonical_warning in " ".join(loop_guide.split())
 
     assert "Merged through PR #131 as `aa0fdcd`" in auth_map
     assert "Merged through PR #143 as `053242b`" in auth_map
@@ -5711,7 +5730,6 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "as `8d5eb15` on 2026-07-19" in work_queue
     )
     assert "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in loop_state
-    assert "Active ART implementation chunk: `WS-ART-001-02C2`" in loop_state
     assert "Merged through PR #157 as `42a89b2d`" in work_queue
     assert "ActionIds, with 17 active actions" in loop_state
     assert "candidate total of 17" not in loop_state
@@ -5742,27 +5760,19 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "Merged through PR #141 as `a10d901`" in artifact_map
     assert "Merged through PR #151 as `1b5422fc`" in artifact_map
     assert "Merged through PR #154 as `44f2467c`" in artifact_map
-    assert "Active after PR #154 and explicit user start" in artifact_map
-    assert "Status: Active after explicit start on 2026-07-19" in artifact_contract
+    assert "Merged through PR #159 as `bc5e6a42`" in artifact_map
+    assert "Merged through PR #174 as `92b8a7aa`" in artifact_map
+    assert "Merged through PR #177 as `93c14181`" in artifact_map
     assert (
         "AUTH's owner reconciliation merged through PR #140 as\n"
         "`d541521`" in artifact_status
     )
-    assert "`WS-ART-001-02C2` is active" in artifact_status
-    assert "The current gate is external CI/review followed by explicit human" in (
-        artifact_status.replace("\n", " ")
-    )
-    assert "No later artifact chunk starts automatically" in artifact_status.replace(
-        "\n", " "
-    )
+    assert "`WS-ART-001-03` received a signed implementation start" in artifact_status
+    assert "recorded `stopped_after_cancel`" in artifact_status
+    assert "The planning merge starts no successor" in artifact_status
     assert (
         "| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | "
         "Merged through PR #146 as `0ffdabf`" in work_queue
-    )
-    assert (
-        "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | "
-        "Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete"
-        in work_queue
     )
     assert (
         "| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | "
@@ -5779,12 +5789,9 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "Merged through PR #162 as `c559d556`" in work_queue
     )
     assert "no feature consumer or activation" in work_queue
-    assert "Current ART gate: latest-main integration" in loop_state
-    assert "hosted checks, and explicit human merge approval remain" in " ".join(
-        loop_state.split()
-    )
-    assert "hosted reruns, and explicit human merge approval remain" in work_queue
-    assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
+    assert "| `WS-ART-001-PLAN2` |" in artifact_map
+    assert "Planning-only successor proposed after cancellation" in artifact_map
+    assert "`WS-ART-001-03A` is the only declared ART" in artifact_status
 
 
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:
@@ -7161,7 +7168,7 @@ def test_artifact_chunk_verification_commands_are_isolated_and_rerunnable() -> N
         assert "run_isolated_tests.py" in metadata_command
         assert metadata_command.endswith("))")
         assert "alembic upgrade head" not in verification
-        if phase in {"03", "05"}:
+        if phase in {"03C", "05"}:
             assert "backend/scripts/api_contract_e2e.py" in contract
             assert "scripts/api_contract_e2e.py" in verification
         expected_contract_phase = artifact_contract_phase_for(phase)

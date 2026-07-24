@@ -29,7 +29,7 @@ Those product capabilities are closed and operation-specific:
 
 ```text
 GuideArtifactIngestPort
-ContributorArtifactUploadPort
+SubmissionBundlePreparationPort
 ArtifactBindingPort
 ArtifactMaterializationPort
 CheckerArtifactOutputPort
@@ -184,15 +184,16 @@ durable acknowledgement-unknown attempt rather than committing a terminal fact.
    computes digest and size, and rejects a mismatched client commitment before
    provider I/O.
 3. PostgreSQL atomically reserves unique-byte charges at every applicable task,
-   producer, project, and deployment scope. Contributor upload-session slots
-   are a separate 04A reservation. Any exceeded scope fails before provider
-   I/O. Provisional and completed byte charges count; exact replay and
+   producer, project, and deployment scope. For contributor submissions this
+   durable reservation occurs only after all scratch-bound pre-submit gates
+   pass. Any exceeded scope fails before provider I/O. Provisional and
+   completed byte charges count; exact replay and
    concurrent same-content reservations cannot double-charge or oversubscribe.
    Product callers do not assemble this set; artifact orchestration derives it
-   from authoritative actor/service, project, task, upload-session or
+   from authoritative actor/service, project, task, submission-bundle operation or
    checker-run, and deployment records. A missing required relationship fails
    before provider I/O.
-4. Transaction A reserves the upload item and commits the server-computed
+4. Transaction A reserves the producer-specific admission and commits the server-computed
    digest, size, media type, operation identity, request digest, and CAS values.
 5. Workstream passes the sealed `CommittedArtifactSource` to the injected
    adapter outside the transaction.
@@ -201,7 +202,7 @@ durable acknowledgement-unknown attempt rather than committing a terminal fact.
    the adapter conditionally stores under the content-addressed key or resolves
    an exact replay candidate.
 7. Transaction B records provider acknowledgement, completes the provisional
-   admission charges, sets the item to `stored_pending_verification`, and
+   admission charges, sets the producer attempt to `stored_pending_verification`, and
    creates the replica with pending verification and unknown
    availability/integrity; no binding exists.
 8. A durable verification job is committed in PostgreSQL and published to
@@ -221,8 +222,8 @@ resolver repeats a provider write. Exact replay after absence must atomically
 reacquire capacity before another provider call.
 Workstream never stores upload bytes in Postgres, Redis, or Celery payloads.
 
-Before binding, an object confirmed missing returns its reserved upload item to
-`replay_required`, and only the original authorized uploader may replay the
+Before binding, an object confirmed missing returns its reserved producer attempt to
+`replay_required`, and only the original authorized producer may replay the
 same bytes under the same operation identity. That pre-binding replay resets
 the same replica from `missing/unavailable/unknown` to
 `pending/unknown/unknown`, appends a receipt, and creates a new verification
@@ -233,9 +234,9 @@ replaces or rebinds the bytes. A digest/size mismatch on an existing key is
 also unrecoverable in v0.1 and becomes a security incident; Workstream never
 overwrites that key.
 
-Contributor uploads, authorized caller-supplied guide bytes, and generated
-checker logs/outputs
-all use the same bounded two-pass `PreparedArtifact` scratch boundary. The first
+Contributor submission ZIPs, authorized caller-supplied guide bytes, and
+generated checker logs/outputs all use the same bounded two-pass
+`PreparedArtifact` scratch boundary. The first
 pass uses private ephemeral local scratch to hash/count; the second pass exposes
 a sealed `CommittedArtifactSource` to ArtifactStore. No caller can pass an
 arbitrary expected digest beside an arbitrary stream. Scratch is never
@@ -274,30 +275,41 @@ Physical deletion, garbage collection, legal hold, and retention windows are a
 later explicit initiative. This removes destructive storage behavior from the
 first production cutover.
 
-## Server-Generated Artifact Set
+## Server-Generated Submission Bundle Identity
 
-The server seals an upload session before authoritative pre-submit execution.
-Trusted inspection derives normalized display names, logical roles, media
-types, archive members, path safety, individual sizes, total size, and
-Workstream SHA-256 values. Canonical ordering and JSON produce
-`artifact_set_hash`.
+Every Submission version has exactly one outer ZIP. Workstream keeps that ZIP
+only in bounded private scratch while it walks the complete normalized
+file/directory tree, enforces archive-safety/resource limits, hashes each file,
+and derives two identities:
 
-The pre-submit admission record binds actor, task, sealed session, artifact-set
-hash, locked guide/policy/checker context, result, expiry, and canonical
-submission input hash. Submission creation row-locks and consumes that exact
-admission and session. No checked-versus-submitted byte swap is possible.
+```text
+archive identity  = SHA-256 and byte count of the exact outer ZIP
+semantic identity = canonical hash of normalized path, entry type,
+                    file SHA-256, and file byte count
+```
 
-Pre-submit artifact reads use a bounded Workstream-owned transient retry budget.
-If it is exhausted, the API returns HTTP 503 with
-`pre_submission_infrastructure_unavailable`; this is neither a checker failure
-nor a product review decision. The exact precheck attempt, sealed upload
-session, and artifact set remain unconsumed and reusable until normal expiry.
-Only infrastructure-attempt and audit facts are written. Idempotency binds
-actor, task, session/artifact set, locked context, client key, and canonical
-request digest: exact replay continues or returns the same attempt, changed
-replay conflicts, and concurrent replay creates no duplicate. After retry-after
-or infrastructure recovery, the contributor continues the same exact attempt
-without Project Manager or Operator approval.
+ZIP timestamps, compression settings, comments, ownership, and platform
+permission metadata do not change semantic identity. Explicit empty directories
+and synthetic parents use one documented canonical representation. Symlinks and
+special entries are rejected. A ZIP entry within the outer archive is opaque
+in v0.1; recursive inspection means walking the outer archive tree, not opening
+nested archives. A later capability requires separate cumulative safety proof.
+
+Both identities are compared with the immediate prior immutable `Submission`.
+Exact archive equality or semantic equality rejects before checker and provider
+I/O. Mandatory Workstream gates and the task's locked Project Guide checker then
+consume the same read-only scratch tree. A project may narrow platform limits
+but cannot disable gates or raise limits. Checker failure creates findings only
+and destroys scratch without durable artifact, Submission, or review state.
+
+A passing result stays bound to the same process-local scratch generation and is
+consumed immediately by the normal durable admission path. It is never a
+provider object or reusable candidate. Process/scratch loss requires reupload.
+The durable path writes the outer ZIP once, independently reads it completely,
+and publishes a bindable admission only after the observed archive identity
+matches. Existing put-attempt, observation, verification, receipt, scanner, and
+recovery behavior resolves ambiguity. No candidate namespace, promotion copy,
+retention window, physical deletion, or second recovery aggregate exists.
 
 ## Durable Verification And Recovery
 
@@ -394,20 +406,29 @@ exact resource/content/job/attempt filters.
 
 ## Product Cutover
 
-1. Guide source capture stores exact bytes and binds the immutable source
-   snapshot to content.
-2. Task-scoped upload sessions accept contributor artifacts and seal one exact
-   server artifact set.
-3. Authoritative pre-submit executes against sealed verified bytes.
-   One authorized artifact materializer allocates through the canonical scratch
-   manager, recomputes every digest and byte count from the provider read, seals
-   the verified workspace read-only, and is reused unchanged by post-submit.
-4. Submission creation consumes the same admission and creates immutable
-   bindings; contributor finalization is not a manager action.
-5. Post-submit dispatch reads the same content commitment and stores checker
-   inputs, logs, and outputs as artifacts.
-6. Review packet/evidence integration remains WS-REV, but it consumes the same
-   `ArtifactBinding` model.
+1. Guide-source delivery is split into hidden byte ingest, AUTH activation,
+   verified snapshot binding/materialization, AUTH activation, and the legacy
+   identity/continuation clean cut.
+2. Contributor intake accepts one outer ZIP, inspects and manifests its complete
+   tree in bounded private scratch, and rejects exact or semantic unchanged work.
+3. Mandatory platform gates and locked Project Guide pre-submit checks execute
+   against that same scratch tree. Failure produces no durable bytes.
+4. Passing bytes enter the existing immutable store once. Complete read-back
+   verification publishes one bindable admission; ambiguity uses existing ART
+   recovery.
+5. Submission creation consumes that exact admission and creates one immutable
+   `Submission` version and binding; contributor finalization is not a manager
+   action and no competing `SubmissionVersion` table is introduced.
+6. Post-submit dispatch materializes the same binding, recomputes integrity, and
+   stores checker logs/outputs as separately bound artifacts.
+7. Review packet/evidence integration remains WS-REV. REV attaches a decision
+   (`accept`, `needs_revision`, or `reject`) and note/findings to the exact
+   Submission; the reviewer uploads no revision artifact.
+8. A contributor response to `needs_revision` is another complete ZIP and
+   immutable Submission linked to the prior Submission and exact Review.
+9. CON and future delivery own their lifecycle records but reference the same
+   accepted Submission/binding. Full-byte streams recompute SHA-256 and byte
+   count and fail closed on mismatch.
 
 The existing misleading `/submissions/{id}/finalize` endpoint is not retained
 as a normal handoff. Its genuine exceptional behavior moves to

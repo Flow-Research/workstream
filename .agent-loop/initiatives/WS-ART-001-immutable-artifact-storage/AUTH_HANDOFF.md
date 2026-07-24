@@ -1,0 +1,66 @@
+# WS-ART-001 Authorization Handoff
+
+ART owns hidden artifact behavior, canonical product resource facts, lifecycle
+guards, surface manifests, and feature tests. AUTH owns ActionId/PermissionId
+catalogues, service identities, fixed matrices, evaluator integration, grants,
+activation custody, and availability.
+
+## Guide Source Sequence
+
+1. Existing guide-source actions remain planned and unavailable.
+2. ART-03A implements hidden `artifact.guide_source.ingest` behavior and its
+   exact resource/guard/surface manifest.
+3. AUTH activates only that exact action through a separately reviewed AUTH
+   contract after consuming ART evidence.
+4. ART-03B implements hidden `artifact.guide_source.read` and
+   `artifact.guide_source.binding.create` behavior; binding maps to fixed
+   permission `artifact.binding.create`.
+5. AUTH activates only those exact actions after consuming 03B evidence.
+6. ART-03C performs the legacy clean cut. No ART chunk writes availability.
+
+## Submission Bundle Sequence
+
+Before ART-04A starts, AUTH must merge a separately reviewed registration
+contract, provisionally named
+`WS-AUTH-001-ART-SUBMISSION-BUNDLE-REGISTRATION`, that:
+
+- registers planned ActionId `artifact.submission_bundle.prepare`;
+- maps it only to existing human PermissionId `submission.create`;
+- limits candidates to the assigned contributor for the exact task/project;
+- names ART-owned canonical facts for actor, identity link, project, task,
+  active assignment, locked policy context, and operation generation;
+- keeps the action unavailable and adds no grant or evaluator activation;
+- records parity evidence in AUTH's closed catalogue/constraint/owner manifests;
+- explicitly retires the unused planned multi-step upload-session ActionIds or
+  proves they are unavailable and have no route/command manifest entry.
+
+Until that AUTH contract merges, current agent-gate catalogue assertions retain
+those strings only as an exact planned/unavailable discovery baseline. Their
+presence in the closed catalogue is not an active design, grant, route, or
+permission to implement a second intake path, and PLAN2 does not edit AUTH-owned
+catalogue or parity assertions.
+
+ART-04A through 04C then implement one hidden continuous surface and publish
+its exact route/resource/guard manifest. After 04C, a separate reviewed AUTH
+activation contract may integrate the evaluator and change only
+`artifact.submission_bundle.prepare` to active. ART-05 cannot start until that
+activation merges.
+
+The continuous contributor action never implies the fixed service actions:
+
+- `artifact.checker_input.materialize`;
+- `artifact.verification.execute`;
+- `artifact.pending_work.scan`;
+- `artifact.put_attempt.resolve`;
+- `artifact.binding.create`.
+
+Each fixed service action retains its canonical provisioned service identity,
+matrix row, resource facts, terminal reauthorization, and separate activation
+evidence. No human grant supplies fixed service authority.
+
+## Fail-Closed Rule
+
+An ART implementation contract stops if its required AUTH registration or
+activation contract is absent, unmerged, inactive, differently mapped, or
+targets a different resource fact shape. Planned catalogue presence, a local
+action string, or hidden feature code is never executable authority.

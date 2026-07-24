@@ -37,14 +37,15 @@ bounded isolated checker workspaces.
 
 ## Acceptance Criteria
 
-- `CheckerInputSnapshot` commits to submission version, artifact set, exact
-  binding/content IDs, hashes/sizes, locked policy/checker versions, and checker
+- `CheckerInputSnapshot` commits to submission version, submission-bundle
+  manifest, exact binding/content IDs, hashes/sizes, locked policy/checker versions, and checker
   implementation identity;
-- pre-submit and post-submit input prove the same artifact-set hash;
+- pre-submit evidence and post-submit input prove the same archive commitment,
+  semantic-manifest hash, and exact binding;
 - the post-submit runner receives only authorized immutable Workstream binding
-  IDs and reuses the canonical materializer that pre-submit invoked with a
-  sealed-ready upload-set source; both are closed forms of the same typed
-  materialization request;
+  IDs and reuses the same scratch-manager/materialization primitives without
+  accepting a pre-submit scratch handle; pre-submit was process-local and
+  post-submit is binding-only;
 - the fixed checker service principal declares
   `artifact.post_submit.checker_input.materialize`, mapped to
   `artifact.checker_input.materialize`; it does not authorize any binding-create

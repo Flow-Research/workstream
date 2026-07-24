@@ -16,15 +16,19 @@ Assigned by Workstream after blocking pre-submit checks pass. The contributor do
 
 Briefly describe what was completed.
 
-## Output
+## Submission Bundle
 
-List files, links, packages, or deliverables.
+Upload exactly one outer ZIP. Its internal files and directories must satisfy
+the locked Project Guide. Workstream safely inspects that tree and computes all
+artifact identity; the contributor does not submit links or storage references.
 
 ## Provenance
 
-- package hash:
-- artifact hash manifest:
 - generated at:
+
+Workstream records the server-computed outer-ZIP SHA-256/byte count, canonical
+semantic manifest, verified admission, and immutable binding. Those values are
+server output, not contributor input.
 
 Workstream derives the locked project guide version, locked guide-source
 snapshot id/hash, effective project submission artifact policy id/hash,
@@ -46,11 +50,10 @@ submission row, no submission version, and no submission-created audit event,
 and do not return review decision values: `accept`, `needs_revision`, or
 `reject`.
 
-## Artifact Hash Manifest
+## Submission Bundle Manifest
 
-| Artifact | Hash | Size | Notes |
-| --- | --- | ---: | --- |
-| `<relative-artifact-path>` | `sha256:<64 lowercase hex>` | `<bytes>` | `<notes>` |
+Workstream generates this manifest from normalized directory/file paths, entry
+type, and each file's SHA-256/byte count. Nested archives remain opaque in v0.1.
 
 ## Evidence
 

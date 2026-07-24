@@ -2844,7 +2844,6 @@ inline finding. Its unexplained 37.61 percent docstring warning is
 non-actionable because the unchanged repository gate independently passes the
 same head at 87.6 percent against the 80 percent floor. Human review and
 explicit approval of PR #178 remain.
-
 ## 2026-07-23 - WS-AUTH-001-10C Internal Implementation Review
 
 AUTH-10C exact implementation SHA
@@ -2883,3 +2882,21 @@ retryability. Full GitHub shards then exposed and closed a stale linked-event
 matrix classification plus legacy-fixture trigger/constraint cleanup residue;
 the exact isolated audit case and sequential upgrade/downgrade matrices pass.
 fresh GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
+
+# WS-ART-001-PLAN2 Submission Bundle Reconciliation
+
+- Signed automation run `30100940860` cancelled the rejected combined
+  `WS-ART-001-03` implementation before runtime edits.
+- Human intent locks one outer ZIP, bounded process-local scratch through every
+  pre-submit gate, no candidate retention/provider namespace, conservative
+  existing limits, existing recovery reuse, and full integrity recomputation on
+  downstream byte streams.
+- Initial planning review failed on stale ART history, incomplete guide chunks,
+  duplicate upload-session/artifact-set contracts, partial scratch surfaces,
+  pre-submit evidence privacy, nested-archive ambiguity, AUTH sequencing, and
+  failing governance/coverage/e2e gates.
+- The repaired candidate splits 03A-C and 04A-C/05, reconciles canonical specs
+  and templates, defines the exact AUTH handoff, preserves existing
+  scratch/admission/recovery abstractions, and passes all deterministic gates.
+- Final senior, architecture, QA/test, security/auth, product/ops, reuse/dedup,
+  CI integrity, test-delta, and docs reviews pass with no open finding.

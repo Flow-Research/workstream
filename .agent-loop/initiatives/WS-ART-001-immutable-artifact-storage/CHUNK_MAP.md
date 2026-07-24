@@ -12,13 +12,18 @@ Each chunk is one PR. No later chunk starts automatically.
 | `WS-ART-001-02A3` | Replace ArtifactStore v1 with byte-only v2, activate API-startup and Celery Beat scratch cleanup, migrate schema/callers/factory, and remove `flow_node` in one atomic clean cut. | L1 | Merged through PR #141 as `a10d901` on 2026-07-18 |
 | `WS-ART-001-02B1` | Implement the S3-compatible adapter, MinIO integration, and AWS S3 production profile. | L1 | Merged through PR #151 as `1b5422fc` on 2026-07-19 |
 | `WS-ART-001-02C1` | Add the generic durable-byte admission ledger and durable put-attempt state foundation without provider execution. | L1 | Merged through PR #154 as `44f2467c` on 2026-07-19 |
-| `WS-ART-001-02C2` | Add put resolution, verification publication, complete-object observation, immutable receipts, and PostgreSQL execution fencing without recovery attempts or routes. | L1 | Active after PR #154 and explicit user start on 2026-07-19 |
-| `WS-ART-001-02C3` | Add the recovery-attempt model and exact idempotent source-job to retry-job chain without public or Operator routes. | L1 | Proposed after 02C2 |
-| `WS-ART-001-02D` | Add hidden Operator content/job/retry/recovery/audit APIs, canonical resource composition, and production-readiness checks while actions and provider profiles remain inactive. | L1 | Proposed after 02C3, AUTH-09E, and `WS-AUTH-001-ART-CUSTODY` |
-| `WS-ART-001-03` | Store and bind guide-source bytes; add same-snapshot setup recovery through the authorized artifact reader. | L1 | Proposed after 02D |
-| `WS-ART-001-04A` | Add task-scoped upload sessions/items, trusted archive inspection, independent verification, immutable sealing, and artifact-set manifests. | L1 | Proposed after 03 |
-| `WS-ART-001-04B` | Execute authoritative pre-submit against sealed artifact sets and persist exact admissions with bounded infrastructure continuation. | L1 | Proposed after 04A |
-| `WS-ART-001-05` | Atomically bind admitted artifact sets to submissions and remove legacy URI/hash/finalization contracts. | L1 | Proposed after 04B |
+| `WS-ART-001-02C2` | Add put resolution, verification publication, complete-object observation, immutable receipts, and PostgreSQL execution fencing without recovery attempts or routes. | L1 | Merged through PR #159 as `bc5e6a42` |
+| `WS-ART-001-02C3` | Add the recovery-attempt model and exact idempotent source-job to retry-job chain without public or Operator routes. | L1 | Merged through PR #174 as `92b8a7aa` |
+| `WS-ART-001-02D` | Add hidden Operator content/job/retry/recovery/audit APIs, canonical resource composition, and production-readiness checks while actions and provider profiles remain inactive. | L1 | Merged through PR #177 as `93c14181` |
+| `WS-ART-001-03` | Original combined guide-source cutover. | L1 | Cancelled before implementation; no runtime changes |
+| `WS-ART-001-PLAN2` | Reconcile guide and one-ZIP submission planning with bounded scratch, existing immutable admission/recovery, exact AUTH sequencing, and downstream ownership. | L1 | Planning-only successor proposed after cancellation |
+| `WS-ART-001-03A` | Add hidden guide-source byte ingest through existing preparation, admission, verification, and publication. | L1 | Proposed after PLAN2 |
+| `WS-ART-001-03B` | Bind verified guide-source content and provide authorized integrity-checking setup materialization. | L1 | Proposed after 03A and exact AUTH activation |
+| `WS-ART-001-03C` | Remove legacy guide-source identity and add exact same-generation setup continuation. | L1 | Proposed after 03B and exact AUTH activation |
+| `WS-ART-001-04A` | Accept one outer ZIP in bounded scratch, safely inspect its tree, produce canonical identities, and reject unchanged work before provider I/O. | L1 | Proposed after 03C and AUTH planned action registration |
+| `WS-ART-001-04B` | Run mandatory platform and locked Project Guide pre-submit checks against the same scratch-bound tree without durable storage. | L1 | Proposed after 04A |
+| `WS-ART-001-04C` | Admit the passing ZIP once through existing ArtifactStore, independently verify it, and publish one bindable admission. | L1 | Proposed after 04B; AUTH activation follows hidden completion |
+| `WS-ART-001-05` | Atomically bind one verified admission to one immutable Submission and remove legacy caller transport authority. | L1 | Proposed after 04C and exact AUTH activation |
 | `WS-ART-001-06A` | Persist checker input snapshots and materialize authorized immutable bytes into bounded checker workspaces. | L1 | Proposed after 05 |
 | `WS-ART-001-06B` | Ingest checker logs/outputs as artifacts, persist checker completion facts, and preserve existing checker-owned routing without creating review aggregates. | L1 | Proposed after 06A |
 | `WS-ART-001-07` | Prove Local/MinIO plus AWS S3 readiness, Operator recovery, and exact-byte guide/pre/post-submit behavior through real APIs. | L1 | Proposed after 06B |
@@ -35,9 +40,17 @@ OBJECT-STORAGE-AMENDMENT
 -> 02C2 put resolution, verification publication, and fencing
 -> 02C3 recovery attempt and idempotency chain
 -> 02D Operator and production readiness
--> 03 guide source cutover
--> 04A upload/inspection/sealing
--> 04B pre-submit admission and outage continuation
+-> PLAN2 planning reconciliation
+-> 03A guide-source byte ingest
+-> AUTH activation for exact 03A actions
+-> 03B guide-source binding/materialization
+-> AUTH activation for exact 03B actions
+-> 03C guide-source clean cut/continuation
+-> AUTH planned registration of `artifact.submission_bundle.prepare`
+-> 04A one-ZIP scratch intake/inspection/manifest/change gate
+-> 04B scratch-bound platform/project pre-submit checks
+-> 04C one-time immutable admission/verification
+-> AUTH activation of exact complete contributor surface
 -> 05 submission cutover
 -> 06A checker input/materialization
 -> 06B checker output/post-submit routing
@@ -48,9 +61,13 @@ OBJECT-STORAGE-AMENDMENT
 deferred. It has no active chunk, runtime profile, credential service, or
 configuration value in v0.1.
 `ReviewPacketManifest` and `ReviewEvidenceArtifact` remain owned by WS-REV.
-Physical deletion and semantic search require separate approved initiatives.
+Physical deletion, temporary provider retention, candidate object storage, and
+semantic search require separate approved initiatives.
 
 ## Cross-Initiative Handoffs
+
+The exact authorization sequence and stop conditions are recorded in
+`AUTH_HANDOFF.md`.
 
 - Artifact actions follow AUTH planned registration -> hidden ART behavior and
   canonical resource composition -> AUTH evaluator integration and activation.
@@ -64,7 +81,10 @@ Physical deletion and semantic search require separate approved initiatives.
 - WS-REV owns `ReviewPacketManifest` and `ReviewEvidenceArtifact`. Review code
   receives verified Workstream `ArtifactBinding` IDs through a narrow
   review-facing capability; it must not receive provider references, scratch
-  paths, or concrete adapters.
+  paths, or concrete adapters. REV also owns reviewer decisions and
+  note/findings for
+  the exact `Submission`; `needs_revision` authorizes a later contributor ZIP
+  but contains no reviewer-uploaded artifact.
 - A future optional contribution-evidence projection requires separately
   approved ART-owned read/write capabilities and AUTH action activation. Core
   ContributionRecord creation makes no ART capability/provider call and is not
@@ -73,8 +93,17 @@ Physical deletion and semantic search require separate approved initiatives.
 - Cross-initiative terminology must use ART's canonical `resource_type`,
   `resource_id`, and `logical_role`, or define an explicit integration mapping;
   product initiatives must not create a second binding vocabulary implicitly.
+- The existing immutable `Submission` row is the version aggregate. TASK/REV
+  jointly own the exact `needs_revision` response relation and indexed
+  latest/current/accepted access; no initiative creates a competing
+  `SubmissionVersion` table.
+- Reviewer and delivery streams consume an ART-owned integrity-checking read
+  capability that recomputes full SHA-256 and byte count. ART does not own the
+  review decision, ContributionRecord, compensation, reputation, or delivery
+  lifecycle that consumes that capability.
 
 ## Checkpoint Before Checker Expansion
 
 Do not resume checker feature expansion until `WS-ART-001-06B` proves pre-submit
-and post-submit consume the same immutable artifact-set commitment.
+evidence and post-submit execution name the same archive identity,
+semantic-manifest hash, verified admission, and exact binding.

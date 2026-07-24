@@ -1,0 +1,56 @@
+# PR Trust Bundle: WS-ART-001-PLAN2
+
+## Intent
+
+Replace the rejected combined ART-03/future upload design with a bounded plan
+that proves the same contributor ZIP is safely checked, immutably stored,
+reviewed, accepted, recorded, and delivered.
+
+## Design
+
+```text
+one outer ZIP
+-> bounded process-local scratch
+-> safe outer-tree inspection and canonical manifest
+-> exact/semantic unchanged rejection
+-> mandatory platform and locked-guide checks
+-> one existing ArtifactStore admission
+-> complete read-back verification
+-> one immutable Submission binding
+```
+
+Nested archives remain opaque in v0.1. Failed or unchecked bytes never enter
+object storage. Existing admission, put-attempt, verification, receipt, scanner,
+and recovery abstractions are reused.
+
+## Scope
+
+Planning, successor contracts, canonical artifact documentation/templates, and
+the exact agent-gate assertions required by the new phase map. No runtime code,
+migration, provider, workflow, or authorization availability changes.
+
+Exactly one merge intent is added:
+`.agent-loop/merge-intents/WS-ART-001-PLAN2.json`, naming only same-initiative
+successor `WS-ART-001-03A` with a separate explicit start.
+
+## Evidence
+
+- diff, stale-contract, markdown-link, and 100 agent-gate tests pass;
+- all nine required reviewer tracks pass after repair;
+- detailed findings and resolutions are recorded in
+  `WS-ART-001-PLAN2-internal-review-evidence.md`.
+
+## Human Review Focus
+
+- Confirm one outer ZIP and no candidate retention are the intended v0.1 UX.
+- Confirm process loss before durable intent requiring reupload is acceptable.
+- Confirm AUTH must retire planned session actions and register/activate the
+  exact bundle action before ART-04A/05 can proceed.
+- Confirm ART owns bytes/identity/access capabilities while REV, CON, and
+  delivery retain their lifecycle decisions.
+
+## Gate
+
+This planning merge starts no implementation. `WS-ART-001-03A` requires a
+fresh signed explicit start after human merge approval and automated merge
+memory reconciliation.

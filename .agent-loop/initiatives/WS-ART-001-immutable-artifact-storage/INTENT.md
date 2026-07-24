@@ -36,12 +36,30 @@ authorized bytes
 -> content-addressed S3-compatible object key
 -> independent complete-object verification
 -> immutable ArtifactContent and ArtifactReplica facts
--> sealed artifact-set commitment
+-> verified archive identity and canonical semantic-manifest commitment
 -> ArtifactBinding to guide, submission, checker input, log, or output
 ```
 
 PostgreSQL stores metadata, bindings, operation receipts, lifecycle state,
 audit, and recovery coordination. The object provider stores bytes only.
+
+For contributor work, the mandatory v0.1 invariant is:
+
+```text
+one immutable Submission row/version
+-> one uploaded outer ZIP
+-> one safely inspected internal file/directory tree
+-> one canonical semantic manifest
+-> mandatory platform and locked Project Guide prechecks
+-> one ArtifactStore admission and complete read-back verification
+-> one exact ArtifactBinding
+-> the same bytes checked, reviewed, accepted, recorded, and delivered
+```
+
+The outer ZIP may contain one file, a codebase, evidence, datasets, nested
+directories, or any other content allowed by the locked Project Guide. A ZIP
+entry inside the outer archive remains an ordinary file. Nested archive
+unpacking is outside v0.1 even when a guide would otherwise request it.
 
 ## First-Principle Constraints
 
@@ -59,6 +77,13 @@ audit, and recovery coordination. The object provider stores bytes only.
   retention references, or object metadata.
 - v0.1 performs no physical object deletion. Release and garbage collection
   require a later approved deletion-policy initiative.
+- v0.1 has no candidate/quarantine object store or temporary provider
+  retention. Unchecked contributor bytes remain only in bounded private scratch
+  and enter the existing immutable store once, after every pre-submit check
+  passes.
+- The existing `Submission` row is the immutable version aggregate. Reviewers
+  attach only a decision and note/findings to that exact version; a contributor
+  response to `needs_revision` is another complete ZIP and immutable Submission.
 - Local storage is forbidden in staging and production.
 - No compatibility alias or dual provider-construction path is retained.
 
@@ -83,6 +108,9 @@ v0.1 contribution lifecycle.
 - no provider-side legal hold, pin, retain, or release API;
 - no physical deletion or garbage collection;
 - no semantic search;
+- no candidate storage namespace, promotion copy, or temporary provider
+  retention window;
+- no second artifact recovery aggregate;
 - no review packet or reviewer evidence implementation, which remains WS-REV;
 - no payment, reputation, blockchain, or marketplace expansion.
 
@@ -101,6 +129,10 @@ v0.1 contribution lifecycle.
   Celery under PostgreSQL generation fencing;
 - guide, pre-submit, post-submit, and reviewer-facing records resolve the same
   immutable content commitment;
+- exact-archive and semantic-manifest equality reject unchanged resubmissions
+  before provider I/O;
+- checker, reviewer, and delivery reads recompute SHA-256 and byte count while
+  streaming the exact bound bytes;
 - the final real API drill runs without direct database inspection.
 
 ## Human Decisions

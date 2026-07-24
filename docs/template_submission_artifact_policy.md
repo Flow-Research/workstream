@@ -98,8 +98,8 @@ Default artifact rules:
 
 Default storage rules:
 
-- clients submit bytes through Workstream upload sessions and receive only
-  Workstream artifact IDs
+- clients submit exactly one outer ZIP through Workstream submission-bundle
+  preparation and receive only Workstream operation/admission IDs
 - persisted product references are immutable Workstream artifact bindings
 - signed URLs, raw local filesystem paths, provider references, credentials,
   query strings, bucket secrets, and token-bearing references are rejected
