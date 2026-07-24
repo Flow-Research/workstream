@@ -4,9 +4,9 @@
 
 - Initiative: `WS-ART-001`
 - Latest completed chunk: `WS-ART-001-02D` - Operator Artifact Operations
-- Gate: `active`
+- Gate: `stopped_after_cancel`
 - Active planning chunk: `none`
-- Active implementation chunk: `WS-ART-001-03`
+- Active implementation chunk: `none`
 - Next chunk: `WS-ART-001-03`
 - Separate explicit start required: `true`
 - Source PR: [#177](https://github.com/Flow-Research/workstream/pull/177)
