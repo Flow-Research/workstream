@@ -535,6 +535,7 @@ def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str
         "coverage_path": active.coverage_path,
         "deselected_nodes": deselected,
         "elapsed_seconds": round(elapsed, 3),
+        "execution_kind": active.execution_kind,
         "execution_exit_code": exit_code,
         "interrupted": active.interrupted_at is not None or active.timed_out,
         "skipped_nodes": skipped,
@@ -544,7 +545,7 @@ def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str
 def _combine_coverage(sources: list[Path], destination: Path) -> None:
     regular = [path for path in sources if path.is_file() and not path.is_symlink()]
     if len(regular) != len(sources):
-        return
+        raise LaneError("missing_lane_coverage")
     if len(regular) == 1:
         shutil.copyfile(regular[0], destination)
         return
@@ -563,7 +564,30 @@ def _finalize_lane(
     evidence_path = metadata_dir / f"{lane.name}.json"
     isolation_path = metadata_dir / f"{lane.name}.database.json"
     coverage_path = metadata_dir / f".coverage.{lane.name}"
-    _combine_coverage([unit["coverage_path"] for unit in units], coverage_path)
+    execution_exit_code = _aggregate_exit_codes(
+        [unit["execution_exit_code"] for unit in units]
+    )
+    ordinary_coverage = [
+        unit["coverage_path"]
+        for unit in units
+        if unit["execution_kind"] == ORDINARY_KIND
+    ]
+    if execution_exit_code == 0 and not ordinary_coverage:
+        raise LaneError("missing_ordinary_lane_coverage")
+    optional_admin_coverage = [
+        unit["coverage_path"]
+        for unit in units
+        if unit["execution_kind"] == ADMIN_KIND
+        and unit["coverage_path"].is_file()
+        and not unit["coverage_path"].is_symlink()
+    ]
+    selected_coverage = [*ordinary_coverage, *optional_admin_coverage]
+    if execution_exit_code == 0:
+        _combine_coverage(selected_coverage, coverage_path)
+    elif selected_coverage and all(
+        path.is_file() and not path.is_symlink() for path in selected_coverage
+    ):
+        _combine_coverage(selected_coverage, coverage_path)
     evidence = {
         "collected_nodes": sorted(node for unit in units for node in unit["collected_nodes"]),
         "completed_nodes": sorted(node for unit in units for node in unit["completed_nodes"]),
@@ -588,9 +612,7 @@ def _finalize_lane(
         "elapsed_seconds": round(max(unit["elapsed_seconds"] for unit in units), 3),
         "evidence_file": evidence_path.name,
         "evidence_sha256": _sha256(evidence_path.read_bytes()),
-        "execution_exit_code": _aggregate_exit_codes(
-            [unit["execution_exit_code"] for unit in units]
-        ),
+        "execution_exit_code": execution_exit_code,
         "interrupted": any(unit["interrupted"] for unit in units),
         "name": lane.name,
     }

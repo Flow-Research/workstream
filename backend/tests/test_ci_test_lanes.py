@@ -260,6 +260,70 @@ def test_admin_wrapper_redacts_admin_url_before_persisted_output() -> None:
     assert result.stdout.strip() == "[REDACTED_ADMIN_DATABASE_URL]"
 
 
+def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverage(
+    tmp_path: Path,
+) -> None:
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
+    isolation = tmp_path / f"{lane.name}.database.json"
+    isolation.write_text("{}\n", encoding="utf-8")
+    ordinary_coverage = tmp_path / ".coverage.unit.schema_contracts"
+    ordinary_coverage.write_bytes(b"ordinary coverage")
+    units = [
+        {
+            "collection_exit_code": 0,
+            "collected_nodes": ["tests/test_alembic.py::test_one"],
+            "completed_nodes": ["tests/test_alembic.py::test_one"],
+            "coverage_path": ordinary_coverage,
+            "deselected_nodes": [],
+            "elapsed_seconds": 1.0,
+            "execution_kind": runner.ORDINARY_KIND,
+            "execution_exit_code": 0,
+            "interrupted": False,
+            "skipped_nodes": [],
+        },
+        {
+            "collection_exit_code": 0,
+            "collected_nodes": [f"{runner.ADMIN_RUNNER_MODULE}::test_one"],
+            "completed_nodes": [f"{runner.ADMIN_RUNNER_MODULE}::test_one"],
+            "coverage_path": tmp_path / ".coverage.unit.schema_contracts.admin",
+            "deselected_nodes": [],
+            "elapsed_seconds": 2.0,
+            "execution_kind": runner.ADMIN_KIND,
+            "execution_exit_code": 0,
+            "interrupted": False,
+            "skipped_nodes": [],
+        },
+    ]
+
+    row = runner._finalize_lane(lane, units, tmp_path)
+
+    combined = tmp_path / row["coverage_file"]
+    assert combined.read_bytes() == b"ordinary coverage"
+    assert row["coverage_sha256"] == hashlib.sha256(b"ordinary coverage").hexdigest()
+
+
+def test_finalize_lane_rejects_missing_ordinary_coverage(tmp_path: Path) -> None:
+    lane = LANES[0]
+    tmp_path.joinpath(f"{lane.name}.database.json").write_text("{}\n", encoding="utf-8")
+    units = [
+        {
+            "collection_exit_code": 0,
+            "collected_nodes": [f"{lane.modules[0]}::test_one"],
+            "completed_nodes": [f"{lane.modules[0]}::test_one"],
+            "coverage_path": tmp_path / ".coverage.unit.missing",
+            "deselected_nodes": [],
+            "elapsed_seconds": 1.0,
+            "execution_kind": runner.ORDINARY_KIND,
+            "execution_exit_code": 0,
+            "interrupted": False,
+            "skipped_nodes": [],
+        }
+    ]
+
+    with pytest.raises(LaneError, match="missing_lane_coverage"):
+        runner._finalize_lane(lane, units, tmp_path)
+
+
 def test_collect_only_writes_raw_digest_bound_validator_schema(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -347,9 +411,10 @@ def test_finalized_lanes_leave_exactly_four_public_coverage_files(tmp_path: Path
             "collection_exit_code": 0,
             "completed_nodes": [f"{lane.modules[0]}::test_one"],
             "coverage_path": source,
-            "deselected_nodes": [],
-            "elapsed_seconds": float(index + 1),
-            "execution_exit_code": 0,
+                "deselected_nodes": [],
+                "elapsed_seconds": float(index + 1),
+                "execution_kind": runner.ORDINARY_KIND,
+                "execution_exit_code": 0,
             "interrupted": False,
             "skipped_nodes": [],
         }
