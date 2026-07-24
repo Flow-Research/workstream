@@ -2862,7 +2862,7 @@ CodeRabbit, and human review remain.
 ## 2026-07-24 - WS-AUTH-001-10C Migration And External Review Repair
 
 Repaired implementation SHA:
-`bb08fc8f2fba902b926c2ce7feff8369b1c2f80d`.
+`c90e660f23097cb5016001ba779b0ebeb3faf0aa`.
 
 AUTH-10C now includes migration 0034 with frozen predecessor/forward evidence
 definitions, exact issue-event ordering, and actor/grant/target-bound revoke
@@ -2874,5 +2874,7 @@ valid FastAPI JSON while rejecting numeric and byte coercion. The PR body and
 review provenance were refreshed. The final CodeRabbit repair also closed the
 SQL-NULL facts bypass, made trigger-fixture restoration exception-safe, bounded
 lock polling, corrected the exact constraint drop, and repaired the intended
-request-binding test path. All nine internal tracks pass the repaired tree;
+request-binding test path. Hosted API E2E then exposed and closed a stale
+`id`/`identity_link_id` script reference before publication. All nine internal
+tracks pass the repaired tree;
 fresh GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
