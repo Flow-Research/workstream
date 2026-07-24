@@ -24,7 +24,7 @@ hosted timing outcome on the exact PR head.
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02B-exact-custody-semantic-test-lanes.md`
 - Signed contract blob SHA: `784bae53f72f6460b4b74799c1c9b1519565dabe`
-- Reviewed implementation SHA: `239adb178229c72951862780e5ce237f73113400`
+- Reviewed implementation SHA: `46616819879fe2afb772eb0515f5de6afefc4777`
 
 Only independently verified signed automation state is canonical authority.
 PR prose and checked boxes are navigation evidence, not authorization.
@@ -45,6 +45,11 @@ PR prose and checked boxes are navigation evidence, not authorization.
 - Preserved schema-lane ordinary coverage when its direct admin self-test unit
   legitimately emits no `app` coverage; missing ordinary coverage remains a
   hard failure.
+- Split the slow control and execution planes into four fixed semantic units.
+  Together with the two unsplit ordinary lanes, six isolated resource units
+  reconcile back into four public lanes and four final coverage files.
+- Bound every resource unit to its exact collected/completed node set and made
+  the independent validator reject unit/module drift and shared namespaces.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
@@ -101,11 +106,11 @@ resources, coverage bytes, failures, and timings before combination.
 
 ## Acceptance criteria proof
 
-- [x] Recursive exact-node inventory with no exclusion escape — 2,046 nodes
-  independently recollected and validated at the reviewed head.
-- [x] Four concurrent dependency lanes with distinct database/role and MinIO
-  bucket/prefix custody — implementation and adversarial tests pass; hosted
-  service proof remains required.
+- [ ] Recursive exact-node inventory with no exclusion escape — prior hosted
+  head reconciled 2,048 nodes; exact final-head hosted proof is pending.
+- [ ] Four public dependency lanes with six distinct database/role and MinIO
+  execution-unit custody records — implementation and adversarial tests pass;
+  exact final-head hosted service proof remains required.
 - [x] Missing, duplicate, foreign, skipped, deselected, interrupted, partial,
   digest-drifted, and shared-custody evidence fails in focused tests.
 - [x] Exactly four authenticated coverage artifacts precede one literal
@@ -131,7 +136,7 @@ python3 scripts/check_markdown_links.py docs/operations_backend_testing.md .agen
 git diff --check origin/main...HEAD
 ```
 
-Result summary: Ruff passed; 62 focused tests passed; 100 Agent Gates passed;
+Result summary: Ruff passed; 70 focused tests passed; 100 Agent Gates passed;
 two independent full collections agreed on 2,046 exact nodes; merge intent,
 links, stale wording, and diff integrity passed.
 
@@ -175,9 +180,9 @@ External review response file, if findings are posted:
 
 ## Reviewer results
 
-Reviewed code SHA: `239adb178229c72951862780e5ce237f73113400`
+Reviewed code SHA: `46616819879fe2afb772eb0515f5de6afefc4777`
 
-Reviewed at: `2026-07-24T16:55:21Z`
+Reviewed at: `2026-07-24T18:47:56Z`
 
 Reviewer run IDs: `ci02b_senior_review`, `ci02b_qa_review`,
 `ci02b_security_review`, `ci02b_product_ops_review`,
@@ -187,6 +192,10 @@ Reviewer run IDs: `ci02b_senior_review`, `ci02b_qa_review`,
 Bootstrap repair reviewer run IDs: `ci02b_bootstrap_senior`,
 `ci02b_bootstrap_qa`, `ci02b_bootstrap_security`, `ci02b_bootstrap_ops`,
 `ci02b_bootstrap_arch`, `ci02b_bootstrap_ci`.
+
+Semantic-unit reviewer run IDs: `ci02b_units_docs`, `ci02b_units_reuse`,
+`ci02b_units_test_delta`; the required senior, QA, security, product/ops,
+architecture, and CI tracks reran through their `ci02b_bootstrap_*` sessions.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
