@@ -202,9 +202,10 @@ durable acknowledgement-unknown attempt rather than committing a terminal fact.
    the adapter conditionally stores under the content-addressed key or resolves
    an exact replay candidate.
 7. Transaction B records provider acknowledgement, completes the provisional
-   admission charges, sets the producer attempt to `stored_pending_verification`, and
+   admission charges, sets the `ArtifactPutAttempt` to `object_confirmed`, and
    creates the replica with pending verification and unknown
-   availability/integrity; no binding exists.
+   availability/integrity; while a legacy contributor upload item exists, it
+   alone moves to `stored_pending_verification`. No binding exists.
 8. A durable verification job is committed in PostgreSQL and published to
    Celery after commit. A periodic scanner republishes pending work within the
    configured SLA.
@@ -216,14 +217,15 @@ Provider acknowledgement loss keeps the durable put attempt and admission
 charges provisional. A PostgreSQL scanner publishes ambiguous and expired
 in-flight attempts; a fixed service principal runs read-only
 `observe_put_result` plus a complete hash. Matching bytes complete Transaction B
-once, authoritative absence releases charges and makes the item
-`replay_required`, and mismatched bytes quarantine the key. No background
+once, authoritative absence releases charges and moves the put attempt to
+`absent_replay_required`; while a legacy contributor upload item exists, it
+alone moves to `replay_required`. Mismatched bytes quarantine the key. No background
 resolver repeats a provider write. Exact replay after absence must atomically
 reacquire capacity before another provider call.
 Workstream never stores upload bytes in Postgres, Redis, or Celery payloads.
 
-Before binding, an object confirmed missing returns its reserved producer attempt to
-`replay_required`, and only the original authorized producer may replay the
+Before binding, an object confirmed missing returns its reserved put attempt to
+`absent_replay_required`, and only the original authorized producer may replay the
 same bytes under the same operation identity. That pre-binding replay resets
 the same replica from `missing/unavailable/unknown` to
 `pending/unknown/unknown`, appends a receipt, and creates a new verification

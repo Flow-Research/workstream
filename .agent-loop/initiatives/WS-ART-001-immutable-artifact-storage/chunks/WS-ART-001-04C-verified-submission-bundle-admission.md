@@ -65,6 +65,9 @@ verify it, and publish one bindable submission-bundle admission.
 - this chunk alone composes the hidden contributor endpoint across the 04A
   intake, 04B checks, and 04C durable handoff in one process-local operation;
   no scratch handle/path is serialized into a later request or Celery payload;
+- v0.1 exposes no separate preparation-status GET route; an exact idempotent
+  POST retry may return only the same bounded durable operation/admission state
+  under the original `artifact.submission_bundle.prepare` authorization;
 - focused subsystem coverage is at least 90 percent and repository coverage
   remains at least 78 percent.
 

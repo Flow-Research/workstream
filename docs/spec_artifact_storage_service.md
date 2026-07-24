@@ -735,8 +735,8 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
 5. The claimed attempt is set to `put_in_flight`; the adapter conditionally
    stores or resolves an exact replay candidate.
 6. Transaction B validates the reservation/CAS, completes every provisional
-   charge, records content, replica, and operation receipt, sets the item to
-   `object_confirmed`, sets a legacy contributor upload item, while it exists,
+   charge, records content, replica, and operation receipt, sets the
+   `ArtifactPutAttempt` to `object_confirmed`, sets a legacy contributor upload item, while it exists,
    to `stored_pending_verification`, and sets the replica to
    `pending/unknown/unknown`.
 7. The transaction creates an outbox/publication obligation for one
@@ -760,10 +760,11 @@ Acknowledgement loss leaves the durable put attempt and charges provisional.
 The attempt scanner publishes resolution after an ambiguous outcome or expired
 execution lease. Resolution performs a fresh read-only observation and full
 hash. A confirmed object completes the same charges and Transaction B facts.
-Fresh authoritative absence releases them and moves the item to exact replay;
-replay must atomically reacquire every applicable charge before another provider
-call. Integrity-mismatched or quarantined existing bytes remain completed and
-charged.
+Fresh authoritative absence releases them and moves the `ArtifactPutAttempt` to
+`absent_replay_required`; while a legacy contributor upload item exists, it
+alone moves to `replay_required`. Replay must atomically reacquire every
+applicable charge before another provider call. Integrity-mismatched or
+quarantined existing bytes remain completed and charged.
 
 ### Prepared Byte Sources
 
@@ -1069,16 +1070,15 @@ manifest, semantic-manifest hash, or server content IDs.
 
 ```text
 POST   /api/v1/tasks/{task_id}/submission-bundle-preparations
-GET    /api/v1/tasks/{task_id}/submission-bundle-preparations/{operation_id}
 POST   /api/v1/tasks/{task_id}/submissions
 ```
 
 The preparation POST performs scratch intake, inspection, checks, and durable
 handoff as one process-local orchestration. It returns only a Workstream
-operation/admission identity and bounded redacted status; polling occurs only
-after durable intent and never resolves a scratch path. APIs never return
-provider internals. Every ID-addressed status read uses concealed deny/not-found
-behavior across actors, projects, revocation, terminal state, and random IDs.
+operation/admission identity and bounded redacted status. An exact idempotent
+POST retry may observe the same durable operation after durable intent; v0.1
+exposes no separate preparation-status GET route. No retry resolves a scratch
+path, and APIs never return provider internals.
 
 ## Guide And Checker Binding
 
@@ -1114,10 +1114,13 @@ mismatch on an existing content-addressed key is likewise unrecoverable in
 v0.1: the replica remains quarantined, evaluation stays blocked, and a security
 incident is required. Recovery never overwrites the poisoned key.
 
-Pre-submit and post-submit outage continuation are distinct contracts. The
-former preserves a sealed, unconsumed attempt and returns the stable 503 above;
-the latter preserves `evaluation_pending` and uses checker retry
-infrastructure. Neither path fabricates `accept`, `needs_revision`, or `reject`.
+Pre-submit and post-submit outage continuation are distinct contracts. Before
+durable artifact intent, the former cleans scratch, preserves no reusable
+attempt, returns the stable 503 above, and requires reupload after scratch or
+process loss. After durable handoff, existing ART put/verification recovery
+owns ambiguity. Post-submit checker outage preserves `evaluation_pending` and
+uses checker retry infrastructure. No path fabricates `accept`,
+`needs_revision`, or `reject`.
 
 ## Authorization Dependencies
 
