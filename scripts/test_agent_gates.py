@@ -5503,6 +5503,8 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "app.workers approves project guides.",
         "app.workers manages contributor grants.",
         "backend/app/workers/reviews.py may review a contributor submission.",
+        "backend/app/workers/reviews.py claims a task.",
+        "backend/app/workers/tasks.py can claim a task.",
     )
     for sample in human_worker_statements:
         assert gate.scan_text("docs/new_active_doc.md", sample), sample

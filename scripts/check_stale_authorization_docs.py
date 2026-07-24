@@ -398,7 +398,7 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
         r"^(?:[/.][A-Za-z0-9_.-]+)+", "", authority_suffix
     )
     code_path_claims_product_authority = exact_code_path and re.search(
-        r"\b(?:submits?|reviews?|approves?|grants?|revokes?|manages?|accepts?|"
+        r"\b(?:claims?|submits?|reviews?|approves?|grants?|revokes?|manages?|accepts?|"
         r"rejects?|requests?\s+revision)\b",
         after_code_reference,
         re.IGNORECASE,
