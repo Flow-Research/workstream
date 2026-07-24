@@ -13,4 +13,3 @@
 Only `WS-ENG-008-01` is named by the planning merge intent. Every later chunk
 must be named by its predecessor's reviewed merge intent and receive a separate
 signed start. No chunk starts automatically.
-

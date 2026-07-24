@@ -80,7 +80,8 @@ Discovery was performed read-only against trusted `main`
 | Risk | Impact | Required treatment |
 |---|---|---|
 | Glob semantics differ across platforms | Scope bypass or false rejection | Define one closed repository-relative grammar and test traversal, symlink, rename, and case behavior. |
-| Legacy contracts lack schemas | Immediate repository-wide failure | Forward ratchet new/materially changed contracts; never infer old scope. |
+| Legacy contracts lack schemas | Immediate repository-wide failure | Exact cutover: every changed contract after the 01 merge requires schema; unchanged pre-cutover contracts alone are grandfathered. |
+| Git permits control and normalization-colliding path bytes | Line/display parsing can conceal a delta | Parse NUL-delimited bytes, reject invalid UTF-8/control/non-NFC names and normalization/casefold collisions. |
 | Scheduled audit becomes a repair path | Unreviewed signed-state mutation | Read-only permissions, no signing key, no publication command, regression-test workflow semantics. |
 | Property suites are nondeterministic | Flaky required CI | Fixed profiles, stored counterexample text in evidence, bounded examples/deadlines, rerunnable seeds. |
 | Mutation score is gamed | False assurance | Report eligible/killed/survived/timeout/excluded counts and classify survivors; do not use “kill one mutant.” |
@@ -102,4 +103,3 @@ Discovery was performed read-only against trusted `main`
 - Exact-current-main signed starts and human-owned specific-PR merge approval.
 - Internal reviewer completion before publication; external checks supplement it.
 - Automated Merge Memory owns the generated branch and never starts successors.
-

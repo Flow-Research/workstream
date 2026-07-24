@@ -37,6 +37,9 @@ P1
 ```text
 CONTRIBUTING.md
 AGENTS.md
+README.md
+docs/glossary.md
+docs/architecture_lockdown.md
 .agent-loop/templates/CHUNK_CONTRACT.md
 .agent-loop/policies/repository-engineering-policy.md
 .agent-loop/policies/definition-of-done.md
@@ -71,6 +74,10 @@ coverage, test, evidence, reviewer, PR, or human merge gate weakening
       contradict the machine block.
 - [ ] A closed repository-relative pattern grammar has deterministic semantics
       for files and recursive directories without arbitrary regex or shell use.
+- [ ] Git status and diff parsing is byte-preserving and NUL-delimited (`-z` or
+      equivalent), decodes strict UTF-8, rejects C0/C1/DEL controls and non-NFC
+      names, and rejects byte, NFC, or casefold path collisions. Fixtures cover
+      tabs, newlines, invalid byte sequences, and distinct NFC/NFD names.
 - [ ] Status-aware base-to-head plus staged/dirty/untracked discovery rejects
       every added, modified, deleted, renamed, copied, type-changed, symlinked,
       executable, gitlink, case-colliding, or foreign path not allowed by the
@@ -78,14 +85,23 @@ coverage, test, evidence, reviewer, PR, or human merge gate weakening
 - [ ] The PR's exact one merge intent, initiative evidence/status, and permitted
       post-review evidence paths are represented explicitly rather than hidden
       exemptions.
-- [ ] New/materially changed contracts require schema v1. Unchanged historical
-      contracts continue without inferred or retroactive scope.
+- [ ] Every implementation/specification contract changed in a PR whose base
+      contains `.agent-loop/merge-intents/WS-ENG-008-01.json` requires schema
+      v1. Unchanged contracts from a pre-cutover base alone are grandfathered;
+      there is no subjective material-change exception.
+- [ ] This chunk adds valid schema-v1 blocks to the already-reviewed
+      `WS-ENG-008-02` through `WS-ENG-008-07` contracts and proves them before
+      its merge intent may name 02. ENG-008 cannot exempt its own successors as
+      legacy contracts.
 - [ ] Required reviewer metadata agrees with the internal evidence gate; command
       identifiers bind evidence without executing contract-provided text.
 - [ ] Agent Gates invoke the checker on the exact PR base/head and fail closed
       on unresolved refs, shallow history, ambiguity, or malformed contracts.
 - [ ] Positive fixtures and one negative mutation per schema, identity, path,
       diff-status, reviewer, command, legacy-ratchet, and workflow drift class pass.
+- [ ] README, glossary, and architecture lockdown consistently define the
+      Repository-Native Human-Agent SDLC as the broader model and retain the
+      Codex-native zero-trust engineering loop as its enforcement mechanism.
 - [ ] Exactly one schema-v2 merge intent names `WS-ENG-008-02` and requires a
       separate explicit start.
 
@@ -122,4 +138,3 @@ git diff --check origin/main...HEAD
 
 Stop if deterministic path semantics cannot be closed, historical contracts
 must be rewritten, or any current evidence/review/coverage gate must weaken.
-

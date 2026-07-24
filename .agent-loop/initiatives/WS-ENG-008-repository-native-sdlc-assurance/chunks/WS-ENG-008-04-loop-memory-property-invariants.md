@@ -36,6 +36,7 @@ P2
 
 ```text
 scripts/agent-gate-requirements.txt
+scripts/assurance-requirements.txt
 scripts/test_loop_memory_properties.py
 scripts/test_agent_gates.py
 .github/workflows/agent-gates.yml
@@ -55,7 +56,9 @@ coverage, test, review, or human gate weakening
 
 ## Acceptance criteria
 
-- [ ] Hypothesis is exactly pinned with reproducible dependency evidence.
+- [ ] Hypothesis and every transitive distribution are exactly pinned and
+      hash-locked in `scripts/assurance-requirements.txt`; CI installs it with
+      `--require-hashes`.
 - [ ] A bounded CI profile and a documented deeper local profile have explicit
       examples, deadlines, health checks, and failure reproduction instructions.
 - [ ] Generated event sequences prove at most one active chunk per initiative,
@@ -66,7 +69,8 @@ coverage, test, review, or human gate weakening
       and malformed scalar types fail closed without partial state mutation.
 - [ ] Properties reuse real reducers/validators and compare independent
       invariants; they do not reimplement expected behavior identically.
-- [ ] Hosted runtime is measured and remains inside the chunk's approved budget.
+- [ ] The focused hosted property command has a hard 120-second limit and its
+      exact-head elapsed time is recorded; timeout is failure, never retry/skip.
 - [ ] Existing deterministic regression and coverage suites remain unchanged.
 - [ ] Exactly one schema-v2 merge intent names `WS-ENG-008-05` and requires a
       separate explicit start.
@@ -103,4 +107,3 @@ git diff --check origin/main...HEAD
 
 Stop if Hypothesis introduces flaky required CI, cannot be reproducibly pinned,
 or exposes a production behavior fix outside this test-only contract.
-

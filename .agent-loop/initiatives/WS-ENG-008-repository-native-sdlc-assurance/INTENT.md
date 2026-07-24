@@ -104,4 +104,3 @@ exact current `main` before implementation, review, publication, and merge.
 - Approve each implementation chunk's exact scope and PR independently.
 - Decide after the mutation pilot whether any score becomes blocking.
 - Approve the lossless review-log archive layout before migration.
-

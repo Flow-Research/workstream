@@ -11,12 +11,15 @@ durable review navigation. Each mechanism lands independently and stops.
 
 ### Forward-ratcheted contract scope
 
-New or materially changed implementation/specification contracts gain one
-strict fenced JSON block. A dedicated parser validates exact keys, canonical
+Every implementation/specification contract changed in a PR whose base contains
+the `WS-ENG-008-01` merge intent must carry one strict fenced JSON block; there
+is no subjective “material” exception. Chunk 01 also upgrades the already-added
+ENG-008 contracts 02–07 before it may name 02 as successor. Contracts unchanged
+since a pre-cutover base form the immutable grandfather set and are never
+inferred or mass-rewritten. A dedicated parser validates exact keys, canonical
 repository-relative patterns, reviewer names, and verification commands. Agent
 Gates compare the PR's status-aware diff to this block and fail closed on
 unmatched, forbidden, renamed, symlinked, submodule, or ambiguous paths.
-Historical unchanged contracts are not guessed or rewritten.
 
 ### Read-only drift audit
 
@@ -103,9 +106,15 @@ all contract proof.
 ## Verification strategy
 
 - Parser and mutation matrices for schemas, paths, diff statuses, and reviewer sets.
+- Byte-preserving NUL-delimited Git fixtures for controls, invalid UTF-8,
+  non-NFC names, normalization/casefold collisions, and rename/type changes.
 - Workflow semantic tests for read-only permissions and absence of repair/signing paths.
 - Independent signed-state fixture audits and scheduled-run dry runs.
 - Deterministic Hypothesis profiles with replayable failing examples.
+- Property suites have hosted hard limits of 120 seconds each, with the exact
+  head's elapsed time recorded; mutation execution has a 12-minute command
+  limit inside a 15-minute job limit and may add no more than two minutes to the
+  existing required Backend critical path because it runs as an independent lane.
 - Mutation pilot artifact integrity and survivor-classification tests.
 - Byte/digest/link equality for review-log archives.
 - Existing Agent Gates, Backend full CI, coverage floors, Markdown links, stale
@@ -125,4 +134,3 @@ All seven chunks are L1 repository-assurance changes and receive senior, QA,
 security, product/ops, architecture, CI integrity, docs, reuse, and test-delta
 review. Each reviewer receives exact base, implementation SHA, signed start,
 contract blob, concurrent-PR overlap report, and deterministic evidence.
-

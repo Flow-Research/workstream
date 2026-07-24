@@ -39,6 +39,7 @@ backend/pyproject.toml
 backend/scripts/mutation_policy.py
 backend/tests/test_mutation_policy.py
 .github/workflows/backend.yml
+scripts/assurance-requirements.txt
 scripts/test_agent_gates.py
 docs/operations_backend_testing.md
 .agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/**
@@ -60,8 +61,9 @@ unbounded runtime, silent timeout exclusion, or “one mutant killed” success 
 
 - [ ] Discovery reconciles current Backend workflow and records which dormant
       QUALITY ideas, if any, are recreated rather than cherry-picked as authority.
-- [ ] One exactly pinned mutation engine runs only eligible changed pure-logic
-      modules under a deterministic bounded selection and timeout policy.
+- [ ] One mutation engine and its complete transitive closure are exactly pinned
+      and hash-locked in `scripts/assurance-requirements.txt`, installed with
+      `--require-hashes`, and run only on eligible changed pure-logic modules.
 - [ ] Authenticated evidence reports eligible, generated, killed, survived,
       timeout, suspicious, excluded, and error counts plus module/test identity.
 - [ ] Every survivor and non-killed category requires explicit classification;
@@ -70,8 +72,11 @@ unbounded runtime, silent timeout exclusion, or “one mutant killed” success 
       malformed evidence, scope escape, or weakened coverage remain blocking.
 - [ ] Existing full suite, API E2E, shards, 78 percent global floor, and protected
       90 percent floors remain exact and authoritative.
-- [ ] Hosted duration is measured. A later blocking threshold requires a separate
-      reviewed plan and explicit human decision.
+- [ ] Mutation execution has a hard 12-minute command limit inside a 15-minute
+      job limit, records exact-head elapsed time, and runs independently so it
+      adds no more than two minutes to the existing required Backend critical
+      path. A later blocking threshold requires a separate reviewed plan and
+      explicit human decision.
 - [ ] Exactly one schema-v2 merge intent names `WS-ENG-008-07` and requires a
       separate explicit start.
 
@@ -110,4 +115,3 @@ git diff --check origin/main...HEAD
 
 Stop if the engine cannot be pinned, hosted runtime is unbounded, evidence is
 not complete, or any existing required test/coverage lane must weaken.
-

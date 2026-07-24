@@ -107,4 +107,3 @@ git diff --check origin/main...HEAD
 
 Stop if the audit needs a write token, signing secret, generated-state edit, or
 new recovery path.
-

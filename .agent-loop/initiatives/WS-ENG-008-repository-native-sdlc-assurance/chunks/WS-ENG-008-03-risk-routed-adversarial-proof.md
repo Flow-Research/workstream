@@ -112,4 +112,3 @@ git diff --check origin/main...HEAD
 
 Stop if adversarial proof requires production access, destructive tests, a new
 authority role, or removal of an existing reviewer.
-

@@ -113,4 +113,3 @@ git diff --check origin/main...HEAD
 
 Stop if any history cannot be preserved byte-for-byte, links cannot be mapped,
 or concurrent PRs still carry unresolved root-log changes.
-

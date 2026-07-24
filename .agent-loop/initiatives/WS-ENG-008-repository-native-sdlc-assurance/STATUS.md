@@ -9,4 +9,3 @@
   external checks, and explicit human merge approval
 - Concurrent signed initiatives at planning base: ART-03, AUTH-10C, and REV-03P
 - Successor after planning: `WS-ENG-008-01`, separate explicit start required
-
