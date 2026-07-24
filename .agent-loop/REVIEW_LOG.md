@@ -2900,3 +2900,12 @@ fresh GitHub Backend, Agent Gates, CodeRabbit, and human review remain.
   scratch/admission/recovery abstractions, and passes all deterministic gates.
 - Final senior, architecture, QA/test, security/auth, product/ops, reuse/dedup,
   CI integrity, test-delta, and docs reviews pass with no open finding.
+
+## 2026-07-24 - WS-ART-001-PLAN2 External Review Reconciliation
+
+CodeRabbit found seven valid inconsistencies in phase ownership, hidden route
+composition, canonical ZIP paths, AUTH retirement custody, successor wording,
+put-attempt state vocabulary, and server-owned manifest input. Hosted CI also
+found noncanonical chunk headings and a successor-title mismatch. The repair
+resolves all findings without runtime behavior or AUTH activation; refreshed
+internal review, hosted checks, and human approval remain required.

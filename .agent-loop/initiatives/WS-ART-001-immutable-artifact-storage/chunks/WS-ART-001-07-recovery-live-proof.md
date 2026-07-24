@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-07 Real API And Provider Proof
+# Chunk Contract: WS-ART-001-07 - Real API And Provider Proof
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06B
 

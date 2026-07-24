@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-PLAN2 Submission Bundle Reconciliation
+# Chunk Contract: WS-ART-001-PLAN2 - Submission Bundle Reconciliation
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Planning only
 

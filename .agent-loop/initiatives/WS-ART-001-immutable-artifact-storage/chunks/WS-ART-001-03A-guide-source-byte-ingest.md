@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-03A Guide Source Byte Ingest
+# Chunk Contract: WS-ART-001-03A - Guide Source Byte Ingest
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after PLAN2
 

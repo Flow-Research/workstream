@@ -1,8 +1,8 @@
-# Chunk Contract: WS-ART-001-04A One-ZIP Scratch Intake And Manifest
+# Chunk Contract: WS-ART-001-04A - One-ZIP Scratch Intake And Manifest
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03C and AUTH planned registration
 
-Artifact contract phase: `guide_source_cutover`
+Artifact contract phase: `upload_admission`
 
 ## Goal
 
@@ -70,12 +70,9 @@ or Submission creation.
   remains;
 - process loss requires reupload; normal, error, cancellation, timeout, and
   crash cleanup release scratch quota without deleting durable artifacts;
-- the route declares only planned action `artifact.submission_bundle.prepare`,
-  mapped by AUTH to `submission.create`, with ART-owned task/assignment/actor
-  facts and guards; the old multi-step upload-session actions are not accepted
-  as aliases or alternate routes;
-- hidden behavior remains unavailable until AUTH activates that exact action
-  only after 04A-04C publish the complete surface/guard manifest;
+- 04A declares no contributor route or routable action manifest entry; the
+  planned `artifact.submission_bundle.prepare` action and AUTH mapping are
+  composed only by 04C after the complete internal operation exists;
 - focused subsystem coverage is at least 90 percent and repository coverage
   remains at least 78 percent.
 

@@ -172,7 +172,7 @@ def artifact_contract_phase_for(coverage_phase: str) -> str:
         phase = "artifact_store_cutover"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("03A"):
         phase = "guide_source_cutover"
-    if active_index >= ARTIFACT_COVERAGE_ORDER.index("04B"):
+    if active_index >= ARTIFACT_COVERAGE_ORDER.index("04A"):
         phase = "upload_admission"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("05"):
         phase = "submission_cutover"
@@ -5791,7 +5791,7 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "no feature consumer or activation" in work_queue
     assert "| `WS-ART-001-PLAN2` |" in artifact_map
     assert "Planning-only successor proposed after cancellation" in artifact_map
-    assert "`WS-ART-001-03A` is the only declared ART" in artifact_status
+    assert "`WS-ART-001-03A` is the only immediate ART" in artifact_status
 
 
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:

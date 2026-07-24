@@ -291,9 +291,15 @@ semantic identity = canonical hash of normalized path, entry type,
 ZIP timestamps, compression settings, comments, ownership, and platform
 permission metadata do not change semantic identity. Explicit empty directories
 and synthetic parents use one documented canonical representation. Symlinks and
-special entries are rejected. A ZIP entry within the outer archive is opaque
-in v0.1; recursive inspection means walking the outer archive tree, not opening
-nested archives. A later capability requires separate cumulative safety proof.
+special entries are rejected. Canonical paths use `/` separators, contain only
+relative non-empty segments, and normalize Unicode to NFC. The identity remains
+case-sensitive, but Workstream rejects exact duplicates, NFC collisions, and
+Unicode case-fold collisions so the checked tree cannot vary by filesystem.
+Collision detection completes before an entry enters the manifest, any project
+precheck or materializer observes the tree, or provider I/O starts. A ZIP entry
+within the outer archive is opaque in v0.1; recursive inspection means walking
+the outer archive tree, not opening nested archives. A later capability requires
+separate cumulative safety proof.
 
 Both identities are compared with the immediate prior immutable `Submission`.
 Exact archive equality or semantic equality rejects before checker and provider

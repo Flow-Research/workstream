@@ -36,8 +36,11 @@ authorized bytes
 -> content-addressed S3-compatible object key
 -> independent complete-object verification
 -> immutable ArtifactContent and ArtifactReplica facts
+-> ArtifactBinding to guide, checker input, log, or output
+
+submission outer ZIP only
 -> verified archive identity and canonical semantic-manifest commitment
--> ArtifactBinding to guide, submission, checker input, log, or output
+-> exact Submission binding
 ```
 
 PostgreSQL stores metadata, bindings, operation receipts, lifecycle state,

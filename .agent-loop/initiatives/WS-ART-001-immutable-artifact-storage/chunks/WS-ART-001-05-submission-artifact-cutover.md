@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-05 Submission Bundle Binding Cutover
+# Chunk Contract: WS-ART-001-05 - Submission Bundle Binding Cutover
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04C and exact AUTH activation
 

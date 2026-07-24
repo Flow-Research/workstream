@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-04C Verified Submission Bundle Admission
+# Chunk Contract: WS-ART-001-04C - Verified Submission Bundle Admission
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04B
 
@@ -58,6 +58,10 @@ verify it, and publish one bindable submission-bundle admission.
   v0.1 adds no deletion path;
 - after 04A-04C merge their complete hidden manifest, AUTH alone may activate
   `artifact.submission_bundle.prepare`; ART changes no action availability;
+- 04C alone declares the hidden contributor route and routable
+  `artifact.submission_bundle.prepare` action, mapped by AUTH to
+  `submission.create`, with ART-owned task/assignment/actor facts and guards;
+  old upload-session actions are never aliases or alternate routes;
 - this chunk alone composes the hidden contributor endpoint across the 04A
   intake, 04B checks, and 04C durable handoff in one process-local operation;
   no scratch handle/path is serialized into a later request or Celery payload;

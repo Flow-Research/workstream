@@ -54,3 +54,10 @@ successor `WS-ART-001-03A` with a separate explicit start.
 This planning merge starts no implementation. `WS-ART-001-03A` requires a
 fresh signed explicit start after human merge approval and automated merge
 memory reconciliation.
+
+## External Review
+
+CodeRabbit reported seven valid planning/specification inconsistencies. All
+were addressed in the smallest planning-only repair, alongside the two
+governance failures exposed by hosted CI. The detailed disposition is recorded
+in `WS-ART-001-PLAN2-external-review-response.md`.

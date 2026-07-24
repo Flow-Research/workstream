@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-06A Checker Input And Materialization
+# Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05
 

@@ -139,7 +139,8 @@ A bounded PostgreSQL scanner publishes `prepared`,
 uses read-only `observe_put_result`, then opens and hashes any observed object.
 Matching bytes complete the original charges and Transaction B facts exactly
 once. Authoritative absence releases charges and moves the producer attempt to
-`replay_required`. Mismatched bytes remain charged, quarantine the key, and
+`absent_replay_required`; a legacy contributor upload item, while it exists,
+moves to `replay_required`. Mismatched bytes remain charged, quarantine the key, and
 create an incident. Terminal writes require matching executor and generation.
 No background resolver performs another provider write.
 
@@ -170,8 +171,9 @@ availability_state = unknown | available | unavailable
 integrity_state    = unknown | valid | invalid
 ```
 
-Transaction B sets the producer attempt to `stored_pending_verification` and creates
-the replica as `pending/unknown/unknown`. A matching complete read makes the
+Transaction B sets the `ArtifactPutAttempt` to `object_confirmed`, sets a legacy
+contributor upload item, while it exists, to `stored_pending_verification`, and
+creates the replica as `pending/unknown/unknown`. A matching complete read makes the
 admission bindable and replica `verified/available/valid`. A provider-unavailable or
 conflict job result does not fabricate a replica observation.
 
@@ -179,8 +181,9 @@ A confirmed absent object sets the replica to
 `missing/unavailable/unknown`. Before any binding exists, and only while the
 original producer attempt remains eligible, an exact replay by the original
 authorized producer may move that same replica to `pending/unknown/unknown`,
-set the attempt back to `stored_pending_verification`, append a new operation
-receipt, and create a new verification job. After a binding exists, the missing
+set the attempt back to `object_confirmed`, set a legacy contributor upload item,
+while it exists, to `stored_pending_verification`, append a new operation receipt,
+and create a new verification job. After a binding exists, the missing
 replica is terminal and cannot return to pending in v0.1. A digest/size mismatch
 sets the replica to `integrity_mismatch/available/invalid`, fails the pre-binding
 attempt when applicable, and quarantines access; it never returns to pending.
@@ -733,7 +736,8 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
    stores or resolves an exact replay candidate.
 6. Transaction B validates the reservation/CAS, completes every provisional
    charge, records content, replica, and operation receipt, sets the item to
-   `stored_pending_verification`, and sets the replica to
+   `object_confirmed`, sets a legacy contributor upload item, while it exists,
+   to `stored_pending_verification`, and sets the replica to
    `pending/unknown/unknown`.
 7. The transaction creates an outbox/publication obligation for one
    verification job.

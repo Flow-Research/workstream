@@ -47,7 +47,7 @@ ZIP and immutable Submission.
 
 ## Next Proposed Chunk
 
-After this planning package merges, `WS-ART-001-03A` is the only declared ART
+After this planning package merges, `WS-ART-001-03A` is the only immediate ART
 successor. It adds hidden guide-source byte ingest through the existing artifact
 preparation/admission/verification path. It requires a separate signed start and
 does not activate its own AUTH action.

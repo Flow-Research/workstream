@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-03B Guide Source Binding And Materialization
+# Chunk Contract: WS-ART-001-03B - Guide Source Binding And Materialization
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03A and exact AUTH activation
 

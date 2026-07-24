@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-04B Scratch-Bound Pre-Submission Checks
+# Chunk Contract: WS-ART-001-04B - Scratch-Bound Pre-Submission Checks
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 04A
 

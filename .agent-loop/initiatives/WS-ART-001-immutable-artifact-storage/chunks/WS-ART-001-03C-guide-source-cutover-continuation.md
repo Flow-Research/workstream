@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-03C Guide Source Cutover And Continuation
+# Chunk Contract: WS-ART-001-03C - Guide Source Cutover And Continuation
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03B and exact AUTH activation
 

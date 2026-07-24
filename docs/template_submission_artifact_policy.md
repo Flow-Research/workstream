@@ -86,8 +86,12 @@ Every project inherits Workstream default submission artifact rules. Project pol
 Default required packet fields:
 
 - summary
-- artifact hash manifest
 - contributor attestation
+
+Workstream generates the archive commitment and semantic artifact manifest
+after safely inspecting the submitted outer ZIP. Clients do not supply an
+artifact hash manifest as packet input; later APIs may expose an immutable
+server-generated manifest reference.
 
 Default artifact rules:
 
