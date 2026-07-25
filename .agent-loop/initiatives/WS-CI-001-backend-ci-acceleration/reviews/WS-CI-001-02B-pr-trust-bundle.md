@@ -191,9 +191,9 @@ External review response file, if findings are posted:
 
 ## Reviewer results
 
-Reviewed code SHA: `a44c5167080d65a6ba8093cbaab8d50de790d17e`
+Reviewed code SHA: `1526ade7b0bb320a9b0673f7871f409c2ef4724c`
 
-Reviewed at: `2026-07-25T08:14:49Z`
+Reviewed at: `2026-07-25T15:06:39Z`
 
 Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 `ci02b_cr_ops`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`,
