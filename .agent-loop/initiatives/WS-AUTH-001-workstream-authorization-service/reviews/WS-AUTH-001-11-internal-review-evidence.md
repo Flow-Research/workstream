@@ -30,9 +30,11 @@ migration, route, test, workflow, action availability, or product behavior.
 
 - Merge-intent validation: PASS for `WS-AUTH-001-11`; only 11A is named and a
   fresh explicit start is required.
+- Stale authorization documentation: PASS after canonical wording repair; the
+  initial hosted run failed and no scanner rule or exception was weakened.
 - Stale Workstream wording: PASS.
-- Markdown links: PASS for all nine changed Markdown files.
-- Agent gates: PASS, 100 tests.
+- Markdown links: PASS for all twelve changed Markdown files.
+- Local agent gates: PASS, 100 tests; repaired hosted rerun remains external.
 - `git diff --check`: PASS.
 - Changed files remain inside the planning-parent allowed paths.
 - No CI, package, test, dependency, coverage threshold, or skip changed.

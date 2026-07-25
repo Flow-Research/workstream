@@ -162,8 +162,9 @@ WS-AUTH-001-PLAN
   locking and caller-owned commit before sensitive product/review mutations.
 - Parent chunk 11 is planning-only and splits the hard project-read cutover
   into 11A catalogue/evidence, 11B identity/context, 11C1 setup diagnostics,
-  and 11C2 effective policy/guide reads. Each child removes token-role
-  authority from its complete surface family; no compatibility path remains.
+  and 11C2 effective policy/guide reads. 11A activates no surface. Runtime
+  children 11B, 11C1, and 11C2 each make local grants the sole authority for
+  their complete surface family; no compatibility path remains.
 - Chunks 12-15 migrate bounded complete product/system surfaces.
 - Artifact upload, read, retention, release/delete, replication, integrity, and
   reconciliation remain mechanically owned by the artifact subsystem but must

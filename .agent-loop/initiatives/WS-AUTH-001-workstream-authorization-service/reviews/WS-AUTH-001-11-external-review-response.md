@@ -7,6 +7,12 @@
   request-claim vocabulary. The wording now states the canonical invariant:
   local grants are the sole product-authority source after each hard cutover.
 - No scanner rule, exception, historical-path allowlist, or CI behavior changed.
+- CodeRabbit correctly noted that catalogue-only 11A cannot remove route
+  authority. `CHUNK_MAP.md` now assigns the hard runtime cutover only to 11B,
+  11C1, and 11C2.
+- CodeRabbit's evidence-integrity comment is addressed: the bundle now records
+  the initial hosted failure, the repaired local passes, twelve changed
+  Markdown files, and the fact that the hosted rerun remains required.
 
 ## Comments deferred
 

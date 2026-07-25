@@ -57,11 +57,12 @@ Only 11A is named as successor, and it remains inactive.
 
 ## Tests/checks run
 
-- Merge-intent validator: PASS.
-- Stale wording scan: PASS.
-- Markdown link scan: PASS.
-- Agent gates: 100 PASS.
-- Diff integrity: PASS.
+- Merge-intent validator: local PASS.
+- Stale authorization and Workstream wording scans: local PASS after wording
+  repair; the original hosted stale-authorization run failed.
+- Markdown link scan: local PASS for twelve changed Markdown files.
+- Agent gates: 100 local tests PASS; repaired hosted rerun remains required.
+- Diff integrity: local PASS.
 
 No local four-hour backend suite was run for this documentation-only parent.
 Every runtime child requires the hosted GitHub `Backend / test` full suite,
