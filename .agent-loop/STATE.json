@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-AUTH-001-11",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-AUTH-001-10C",
+      "chunk_title": "Project Role Grant Mutations",
+      "initiative_id": "WS-AUTH-001",
+      "next_chunk_id": "WS-AUTH-001-11",
+      "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-AUTH-001-11",
+      "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "bcf1292e1a591e3e84bf8ee212ee7191d80741fa",
+      "head_ref": "codex/ws-auth-001-10c-project-role-grant-mutations",
+      "head_sha": "f2673d63a55b6ebf22449ac275f0268bb0618bd2",
+      "intent_blob_sha": "cfef9a9a3a14930dd2e8f85f2dd667fe513a5387",
+      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10C.json",
+      "main_sha": "d7169cb6ae76ae634329d2a10720ac8ca7bafc28",
+      "merged_at": "2026-07-25T08:22:08Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 194,
+      "pr_title": "feat(auth): add project role grant mutations",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/194"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": null,
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-AUTH-001-11",
+    "created_at": "2026-07-25T17:15:45Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:30167274426:start",
+    "initiative_id": "WS-AUTH-001",
+    "main_sha": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
+    "prior_state_tip": "dc47b1e198ca69d7d446ed7f00b627062200afa6",
+    "reason": "Approved AUTH-11 hard cutover planning and implementation",
+    "run_id": 30167274426,
+    "selection": {
+      "contract_blob_sha": "bfcb2c692384bf7a783f2fc01ddcfb17a0390ae7",
+      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-11-project-read-cutover.md",
+      "contract_title": "Project Identity, Guide, Source, And Visibility Cutover",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": null,
@@ -87,5 +147,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/198"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-25T16:21:40Z"
+  "updated_at": "2026-07-25T17:15:45Z"
 }

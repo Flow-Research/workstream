@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-CI-001-02B.json` at blob `ff0d1859af0e88ee1ca301fdcea615c2b7b55aac`
 - Completed chunk: `WS-CI-001-02B` - Exact-Custody Semantic Test Lanes
 - Active planning chunks: none
-- Active implementation chunks: `WS-REV-001-03P`
+- Active implementation chunks: `WS-AUTH-001-11`, `WS-REV-001-03P`
+- Latest authority event: `start` for `WS-AUTH-001-11`
+- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: none recorded.
 - Required check evidence: passed
