@@ -15,6 +15,8 @@ _STRICT = ConfigDict(extra="forbid")
 
 
 def _reason(value: str) -> str:
+    """Validate one canonical project-role mutation reason."""
+
     if (
         value != value.strip()
         or not 1 <= len(value.encode("utf-8")) <= 500
@@ -28,6 +30,8 @@ Reason = Annotated[str, Field(min_length=1), AfterValidator(_reason)]
 
 
 class ProjectRoleGrantIssueBody(BaseModel):
+    """Request body for one project-role grant issuance."""
+
     model_config = _STRICT
 
     target_actor_profile_id: UUID
@@ -37,12 +41,16 @@ class ProjectRoleGrantIssueBody(BaseModel):
 
 
 class ProjectRoleGrantRevokeBody(BaseModel):
+    """Request body for one project-role grant revocation."""
+
     model_config = _STRICT
 
     reason: Reason
 
 
 class ProjectRoleGrantMutationResponse(BaseModel):
+    """Stable project-role grant state returned after a mutation."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: UUID
