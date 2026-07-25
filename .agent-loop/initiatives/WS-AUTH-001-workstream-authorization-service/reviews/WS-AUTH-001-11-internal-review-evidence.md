@@ -1,16 +1,20 @@
 # WS-AUTH-001-11 Internal Review Evidence
 
-Reviewed code SHA: `ab16a1d7cf96f5e0dffc4c0b4ca7277f902b291b`
+Reviewed code SHA: `ed0f58732fd76388ec32309fccd37c4ad377ffad`
 
-Reviewed planning SHA: `ab16a1d7cf96f5e0dffc4c0b4ca7277f902b291b`
+Reviewed planning SHA: `ed0f58732fd76388ec32309fccd37c4ad377ffad`
 
 Reviewed against trusted main: `03a05eeb8f129e0d5f226cc5c058965f43590a81`
 
-Reviewed at: `2026-07-25T18:55:00Z`
+Reviewed at: `2026-07-25T19:20:00Z`
 
 Reviewer run IDs: `auth11_senior`, `auth11_qa`, `auth11_security`,
 `auth11_product`, `auth11_arch`, `auth11_ci`, `auth11_docs`, `auth11_reuse`,
 and `auth11_testdelta`
+
+External wording repair re-review: the same nine tracks re-reviewed the repair
+from `ab16a1d7` through exact SHA `ed0f5873`; the sole reported blocker was this
+evidence rebinding, resolved by this evidence-only update.
 
 Reviewer tracks: senior engineering, QA/test, security/auth, product/ops,
 architecture, CI integrity, docs, reuse/dedup, and test delta
