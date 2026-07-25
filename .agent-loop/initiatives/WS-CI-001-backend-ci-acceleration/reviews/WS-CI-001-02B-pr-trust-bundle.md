@@ -24,7 +24,8 @@ hosted timing outcome on the exact PR head.
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/chunks/WS-CI-001-02B-exact-custody-semantic-test-lanes.md`
 - Signed contract blob SHA: `784bae53f72f6460b4b74799c1c9b1519565dabe`
-- Reviewed implementation SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
+- Initial reviewed implementation SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
+- Final refreshed repair review SHA: `400be486863e6eb83a6343e872763b9076770537`
 
 Only independently verified signed automation state is canonical authority.
 PR prose and checked boxes are navigation evidence, not authorization.
@@ -51,11 +52,12 @@ PR prose and checked boxes are navigation evidence, not authorization.
   showed CPU contention. Rebalanced the existing four isolated processes as
   `shared_foundations`, `schema_contracts`, `project_lifecycle`, and
   `task_lifecycle` without changing the final workflow contract or gates.
-- Addressed fourteen external findings across failure observability, stable Git
+- Addressed seventeen external findings across failure observability, stable Git
   errors, MinIO interrupts, independent pytest environment isolation, UUID
   teardown, workflow failure-gate regression protection, and exact operations
-  wording. Partial startup and unexpected orchestration failures now retain
-  four explicit failed lane rows without becoming acceptable evidence.
+  wording, exact verification commands, traceback redaction, and async
+  cancellation custody. Partial startup and unexpected orchestration failures
+  retain four explicit failed lane rows without becoming acceptable evidence.
 - Deleted the obsolete shard runner and shard tests and updated operations docs.
 
 ## Why it changed
@@ -186,14 +188,14 @@ External review response file, if findings are posted:
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Addressed | Fourteen inline findings reconciled; refreshed review remains pending. |
+| CodeRabbit | Addressed | Seventeen findings reconciled; refreshed review remains pending. |
 | GitHub checks | Pending | Exact final head must pass Agent Gates and Backend. |
 
 ## Reviewer results
 
-Reviewed code SHA: `1526ade7b0bb320a9b0673f7871f409c2ef4724c`
+Reviewed code SHA: `400be486863e6eb83a6343e872763b9076770537`
 
-Reviewed at: `2026-07-25T15:06:39Z`
+Reviewed at: `2026-07-25T15:42:43Z`
 
 Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 `ci02b_cr_ops`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`,
@@ -201,15 +203,15 @@ Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | None | Accepted timing evidence is clear; correctness remains fail closed. |
-| QA/test | PASS | None | Timing semantics and existing acceptance criteria are regression protected. |
-| security/auth | PASS | None | Permissions, redaction, and resource custody remain intact. |
+| senior engineering | PASS | None | Redacted tracebacks and cancellation cleanup are maintainable. |
+| QA/test | PASS | None | Failure diagnostics, redaction, and cancellation are regression protected. |
+| security/auth | PASS WITH LOW RISKS | None | Known workflow secrets are redacted; broader pattern hardening is deferred. |
 | product/ops | PASS | None | Product and contribution workflows are unchanged. |
-| architecture | PASS | None | Acceptance remains evidence, not workflow bypass logic. |
-| CI integrity | PASS | None | Tests, coverage, custody, API, and failures remain blocking. |
-| docs | PASS WITH LOW RISKS | None | Canonical runbook and evidence use one timing convention. |
-| reuse/dedup | PASS | None | No duplicate timing convention or validator path remains. |
-| test delta | PASS | None | No removed, skipped, deselected, or weakened tests. |
+| architecture | PASS | None | Runner ownership and failure-evidence boundaries remain intact. |
+| CI integrity | PASS WITH LOW RISKS | None | Gate posture is unchanged; current secret inputs are covered. |
+| docs | PASS | None | Exact commands and all seventeen findings are reconciled. |
+| reuse/dedup | PASS | None | Existing cleanup and finalization paths remain reused. |
+| test delta | PASS | None | No tests weakened; five focused repair cases pass. |
 
 ## Remaining risks
 

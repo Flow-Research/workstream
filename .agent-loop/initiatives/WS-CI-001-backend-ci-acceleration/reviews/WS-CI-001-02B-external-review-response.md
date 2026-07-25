@@ -62,13 +62,14 @@ coverage, isolation, and service-contract gates.
 
 ```bash
 cd backend
-python -m pip install ruff==0.15.22
-ruff check app tests scripts
-python -m pytest -q \
+.venv/bin/python -m pip install ruff==0.15.22
+.venv/bin/ruff check app tests scripts
+.venv/bin/python -m pytest -q \
   tests/test_ci_test_lanes.py::test_unexpected_runner_failure_force_kills_and_records_every_lane \
   tests/test_ci_test_lanes.py::test_partial_startup_failure_records_exactly_four_failed_lanes \
   tests/test_isolated_database_runner.py::test_minio_creation_preserves_process_interrupts \
-  tests/test_isolated_database_runner.py::test_minio_creation_preserves_async_cancellation
+  tests/test_isolated_database_runner.py::test_minio_creation_preserves_async_cancellation \
+  tests/test_isolated_database_runner.py::test_minio_probe_cleans_up_and_preserves_async_cancellation
 cd ..
 python3 scripts/test_agent_gates.py
 python3 scripts/check_internal_review_evidence.py
@@ -77,7 +78,7 @@ python3 scripts/check_markdown_links.py \
 git diff --check
 ```
 
-Latest focused repair result: exact Ruff passed; the four named traceback,
+Latest focused repair result: exact Ruff passed; the five named traceback,
 partial-startup, process-interrupt, and async-cancellation tests passed; all 100
 Agent Gate tests passed. The earlier broader local run passed 89 focused
 non-service tests, while 11 service-backed tests remained mandatory for hosted
@@ -85,12 +86,15 @@ CI.
 
 ## Internal repair review
 
-Reviewed code SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
+Historical CodeRabbit repair review SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
+
+Final refreshed repair review SHA: `400be486863e6eb83a6343e872763b9076770537`
 
 Senior engineering, QA/test, security/auth, product/ops, architecture, CI
 integrity, docs, reuse/dedup, and test-delta tracks passed. Low residual risks
-are limited to generic synthetic failure codes and reliance on job logs for the
-parent-side orchestration cause.
+are limited to an allowlist-based traceback redactor; current workflow secret
+inputs are covered and regression tested, while broader pattern-based hardening
+is deferred.
 
 ## Remaining risks
 

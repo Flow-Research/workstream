@@ -12,30 +12,30 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 1526ade7b0bb320a9b0673f7871f409c2ef4724c
+Reviewed code SHA: 400be486863e6eb83a6343e872763b9076770537
 
-Reviewed at: 2026-07-25T15:06:39Z
+Reviewed at: 2026-07-25T15:42:43Z
 
 Reviewer run IDs: ci02b_cr_senior, ci02b_cr_qa, ci02b_cr_security,
 ci02b_cr_ops, ci02b_cr_arch, ci02b_cr_ci, ci02b_cr_docs,
 ci02b_cr_reuse, ci02b_cr_test_delta
 
-The reviewed SHA includes current trusted main through PR #200. After it, only
-this final evidence reconciliation changed.
+The reviewed SHA includes current trusted main through PR #200 and the final
+CodeRabbit repair. After it, only this final evidence reconciliation changed.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS | None | Accepted timing evidence is operationally clear; correctness gates remain fail closed. |
-| QA/test | PASS | None | Timing-target semantics and all existing correctness criteria are regression protected. |
-| security/auth | PASS | None | Read-only permissions, untrusted-PR safety, redaction, and resource custody remain intact. |
+| senior engineering | PASS | None | Redacted tracebacks and cancellation cleanup are maintainable. |
+| QA/test | PASS | None | Failure diagnostics, redaction, and cancellation are regression protected. |
+| security/auth | PASS WITH LOW RISKS | None | Known workflow secrets are redacted; broader pattern hardening is deferred. |
 | product/ops | PASS | None | No product, compensation, review-decision, or reputation behavior changed. |
-| architecture | PASS | None | Human acceptance remains evidence, not workflow bypass logic. |
-| CI integrity | PASS | None | Tests, coverage, custody, API, and failure gates remain blocking; timing remains measured. |
-| docs | PASS WITH LOW RISKS | None | Runbook, status, trust bundle, and workflow now use one timing convention. |
-| reuse/dedup | PASS | None | No duplicate validator or alternate timing convention remains. |
-| test delta | PASS | None | No tests were removed or skipped; consistency assertions protect the new semantics. |
+| architecture | PASS | None | Runner ownership and failure-evidence boundaries remain intact. |
+| CI integrity | PASS WITH LOW RISKS | None | Gate posture is unchanged; current secret inputs are covered. |
+| docs | PASS | None | Exact commands and all seventeen findings are reconciled. |
+| reuse/dedup | PASS | None | Existing cleanup and finalization paths remain reused. |
+| test delta | PASS | None | No tests weakened; five focused repair cases pass. |
 
 The bootstrap repair review initially blocked publication because the reviewed
 SHA was stale and this file had an extra blank line at EOF. Both evidence
