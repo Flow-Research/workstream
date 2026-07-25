@@ -79,7 +79,7 @@ live API proof is explicit.
 ## Reviewer results and external review
 
 All nine required internal tracks passed the repaired exact planning SHA
-`ed0f58732fd76388ec32309fccd37c4ad377ffad` after fixes: senior engineering,
+`81e470306f81edafb8cb592dd53d036ee07ba7e7` after fixes: senior engineering,
 QA/test, security/auth, product/ops, architecture, CI integrity, docs,
 reuse/dedup, and test delta. GitHub Agent Gates then identified stale legacy
 authorization vocabulary in the new prose; the wording was repaired without
