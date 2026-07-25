@@ -743,3 +743,37 @@ and missing or cross-project grants have one identical public response. No
 route catches and discards `AuthorizationDenied`, no response exposes a total,
 and no candidate or grant row is queried before canonical resolution and
 authorization succeed. AUTH-10C follows only after 10B2.
+
+## D34: Split project-read catalogue, identity, diagnostics, and effective views
+
+Status: accepted planning resolution on 2026-07-25 after exact AUTH-11 surface
+discovery.
+
+AUTH-11 becomes a planning-only parent. The current project API has ten GET
+routes and no project collection/list route. The promised self authorization-
+context route does not yet exist. The inherited contract also combined minimal
+contributor identity, sensitive setup diagnostics, and composite guide/policy
+responses, which cannot share one safe disclosure rule.
+
+AUTH-11 therefore splits into four sequential same-initiative children. 11A
+registers eleven planned actions and owns migration `0035`; it activates no
+surface. 11B activates exact-project identity and introduces the self
+authorization-context surface. 11C1 activates setup and draft diagnostic
+reads. 11C2 activates effective policy and active-guide reads with an explicit
+principal-specific projection. Every activated surface is a hard cutover from
+token roles to local grants; no fallback, alias, or dual authorization path is
+allowed.
+
+Project identity and active-guide actions use the existing `project.read`
+permission. 11A adds the narrow read-only `project.setup_diagnostic.read` and
+`project.effective_policy.read` permissions for Project Manager, Operator, and
+Audit Authority under their existing scopes. Finance Authority and Access
+Administrator do not receive them. The actor-context action uses the existing
+self-profile read permission. Active exact-project
+submitter, reviewer, and adjudicator grants imply only the minimal project
+identity projection unless a later child explicitly proves a narrower safe
+active-guide view. Contributors do not receive diagnostic/policy access from
+`project.read`; authority derives from the registered permission/scope matrix,
+never token roles. This preserves the operating requirement that Operator and
+Audit inspect setup through authorized API projections rather than direct
+database access without conflating read authority with management.

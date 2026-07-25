@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-11",
+  "chunk_title": "Project Read Cutover Planning Parent",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-11A",
+  "next_chunk_title": "Project Read Catalogue And Projection Foundation",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

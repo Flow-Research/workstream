@@ -111,7 +111,7 @@ or consumer feature action is active.
 
 ## Active planning chunk
 
-None. `WS-AUTH-001-XINT` merged through PR #140.
+None.
 
 ## Active implementation chunk
 
@@ -156,7 +156,11 @@ None.
 | `WS-AUTH-001-REV-CUSTODY` | Merged | `codex/ws-auth-001-rev-custody` | #160 | Merged as `fe0e4492` on 2026-07-20; all 19 REV actions remain planned. |
 | `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
-| `WS-AUTH-001-11` | Proposed | - | - | Project identity/guide/source/read cutover. |
+| `WS-AUTH-001-11` | Planning split authored | `codex/ws-auth-001-11-project-read-cutover` | - | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2; signed automation remains the live-state authority. |
+| `WS-AUTH-001-11A` | Proposed | - | - | Project-read action catalogue and migration `0035`; no activation. |
+| `WS-AUTH-001-11B` | Proposed | - | - | Project identity and self authorization-context cutover. |
+| `WS-AUTH-001-11C1` | Proposed | - | - | Setup and draft diagnostic read cutover. |
+| `WS-AUTH-001-11C2` | Proposed | - | - | Effective policy and active-guide read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |
