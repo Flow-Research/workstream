@@ -53,6 +53,7 @@ def _mock_successful_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drop)
     async def observed(*_): return "0015"
     calls = iter([(0, b"", b""), (0, b"", b"")])
     monkeypatch.setenv(ADMIN_ENV, "postgresql+asyncpg://local@localhost/postgres")
+    monkeypatch.delenv(runner.MINIO_ENDPOINT_ENV, raising=False)
     monkeypatch.setattr(runner, "_urls", lambda _: ("workstream_test_012345abcdef", "workstream_role_012345abcdef", "password", "target"))
     monkeypatch.setattr(runner, "_create", noop)
     monkeypatch.setattr(runner, "_observed_head", observed)
@@ -60,6 +61,261 @@ def _mock_successful_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, drop)
     monkeypatch.setattr(runner, "_run", lambda *_: next(calls))
     monkeypatch.setattr(runner.subprocess, "check_output", lambda *_args, **_kwargs: "1" * 40)
     monkeypatch.setattr(sys, "argv", [str(RUNNER), "--metadata-json", str(tmp_path / "db.json"), "--", "child"])
+
+
+def test_lane_namespaces_bind_real_s3_traffic_and_separate_other_lanes() -> None:
+    """Only the S3 lane receives the application's hardcoded integration bucket."""
+    s3_bucket, s3_prefix = runner._minio_namespace("shared_foundations", "012345abcdef")
+    control_bucket, control_prefix = runner._minio_namespace(
+        "project_lifecycle", "012345abcdef"
+    )
+    execution_bucket, execution_prefix = runner._minio_namespace(
+        "task_lifecycle", "fedcba543210"
+    )
+    assert (s3_bucket, s3_prefix) == (
+        "workstream-artifacts",
+        "ci/shared_foundations/012345abcdef",
+    )
+    assert len({s3_bucket, control_bucket, execution_bucket}) == 3
+    assert len({s3_prefix, control_prefix, execution_prefix}) == 3
+    with pytest.raises(runner.RunnerError, match="invalid_lane"):
+        runner._minio_namespace("../foreign", "012345abcdef")
+
+
+def test_tree_sha_maps_git_failure_to_stable_runner_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Broken Git custody cannot escape as a traceback."""
+    def fail(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"])
+
+    monkeypatch.setattr(runner.subprocess, "check_output", fail)
+    with pytest.raises(runner.RunnerError, match="invalid_tree_sha"):
+        runner._tree_sha()
+
+
+def test_minio_creation_preserves_process_interrupts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bucket creation cannot translate shutdown signals into collisions."""
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(KeyboardInterrupt):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+
+
+def test_minio_creation_preserves_async_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bucket creation cannot translate task cancellation into a collision."""
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+
+
+def test_minio_probe_cleans_up_and_preserves_async_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Probe cancellation cleans the bucket and remains task cancellation."""
+    calls: list[str] = []
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            calls.append("create_bucket")
+
+        async def put_object(self, **_kwargs):
+            calls.append("put_object")
+            raise asyncio.CancelledError
+
+        async def delete_object(self, **_kwargs):
+            calls.append("delete_object")
+
+        async def delete_bucket(self, **_kwargs):
+            calls.append("delete_bucket")
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+    assert calls == ["create_bucket", "put_object", "delete_object", "delete_bucket"]
+
+
+@pytest.mark.parametrize(
+    ("lane", "expected_bucket"),
+    [
+        ("shared_foundations", "workstream-artifacts"),
+        ("schema_contracts", "workstream-ci-schema-contracts-012345abcdef"),
+        ("project_lifecycle", "workstream-ci-project-lifecycle-012345abcdef"),
+        ("task_lifecycle", "workstream-ci-task-lifecycle-012345abcdef"),
+    ],
+)
+def test_committed_lane_buckets_use_validator_compatible_s3_grammar(
+    lane: str, expected_bucket: str
+) -> None:
+    """Every committed lane maps deterministically to a valid S3 bucket name."""
+    bucket, prefix = runner._minio_namespace(lane, "012345abcdef")
+    assert bucket == expected_bucket
+    assert 3 <= len(bucket) <= 63
+    assert runner.BUCKET_RE.fullmatch(bucket)
+    assert "_" not in bucket
+    assert prefix == f"ci/{lane}/012345abcdef"
+
+
+def test_lane_namespaces_do_not_collide_across_lanes_or_runner_suffixes() -> None:
+    """Separate lane identities and runner invocations cannot share custody."""
+    namespaces = {
+        runner._minio_namespace(lane, suffix)
+        for lane in (
+            "shared_foundations",
+            "schema_contracts",
+            "project_lifecycle",
+            "task_lifecycle",
+        )
+        for suffix in ("012345abcdef", "fedcba543210")
+    }
+    assert len(namespaces) == 8
+    with pytest.raises(runner.RunnerError, match="invalid_lane"):
+        runner._minio_namespace("project_lifecycle", "not-hex")
+    with pytest.raises(runner.RunnerError, match="invalid_minio_namespace"):
+        runner._minio_namespace("a" * 63, "012345abcdef")
+
+
+def test_child_environment_binds_lane_namespace_without_admin_custody() -> None:
+    """Children receive resource targets but never the destructive admin authority."""
+    env = runner._child_env(
+        "postgresql+asyncpg://role:password@localhost/database",
+        minio_bucket="workstream-artifacts",
+        minio_prefix="ci/shared_foundations/012345abcdef",
+    )
+    assert env["WORKSTREAM_TEST_MINIO_BUCKET"] == "workstream-artifacts"
+    assert env["WORKSTREAM_TEST_MINIO_PREFIX"] == "ci/shared_foundations/012345abcdef"
+    assert runner.ADMIN_ENV not in env
+    assert runner.OVERRIDE_ENV not in env
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://localhost:9000",
+        "http://user:secret@localhost:9000",
+        "http://localhost:9000/foreign",
+        "http://minio.example.com:9000",
+        "http://localhost:not-a-port",
+    ],
+)
+def test_minio_boundary_rejects_nonlocal_or_credentialed_endpoints(endpoint: str) -> None:
+    """Cleanup authority is restricted to one uncredentialed loopback origin."""
+    with pytest.raises(runner.RunnerError, match="unsafe_minio_endpoint"):
+        runner._minio_client(endpoint)
+
+
+def test_metadata_is_private_deterministic_and_refuses_symlinks(tmp_path: Path) -> None:
+    """Custody evidence is stable, mode 0600, and never follows an output symlink."""
+    path = tmp_path / "runner.json"
+    runner._write_metadata(path, {"tree_sha": "1" * 40, "lane": "project_lifecycle"})
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path.read_text(encoding="utf-8") == (
+        '{\n  "lane": "project_lifecycle",\n  "tree_sha": "' + "1" * 40 + '"\n}\n'
+    )
+    path.unlink()
+    path.symlink_to(tmp_path / "outside.json")
+    with pytest.raises(OSError):
+        runner._write_metadata(path, {"secret": "must-not-land"})
+    assert not (tmp_path / "outside.json").exists()
+
+
+def test_run_emits_secret_free_heartbeat_and_uses_bounded_timeout_cleanup(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Liveness contains only elapsed time and timeout escalates TERM to KILL."""
+    class Process:
+        pid = 123
+        returncode = 0
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def communicate(self, timeout=None):
+            self.calls += 1
+            if self.calls < 3:
+                raise runner.TimeoutExpired("private-command", timeout)
+            return b"private stdout", b"private stderr"
+
+    process = Process()
+    signals: list[int] = []
+    clock = iter((0.0, 0.0, 60.0, 120.0))
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(runner.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(runner, "_signal_group", lambda _process, value: signals.append(value))
+    code, stdout, stderr = runner._run(["private-command"], {}, 120.0)
+    assert (code, stdout, stderr) == (124, b"private stdout", b"private stderr")
+    assert signals == [signal.SIGTERM, signal.SIGKILL]
+    heartbeat = capsys.readouterr().out
+    assert heartbeat == "isolated-test child active: elapsed_seconds=60\n"
+    assert "private" not in heartbeat
+
+
+def test_tree_binding_rejects_foreign_expected_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A lane cannot provision resources for metadata naming another commit."""
+    monkeypatch.setenv(ADMIN_ENV, "postgresql+asyncpg://local@localhost/postgres")
+    monkeypatch.delenv(runner.MINIO_ENDPOINT_ENV, raising=False)
+    monkeypatch.setattr(runner, "_tree_sha", lambda: "1" * 40)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RUNNER),
+            "--metadata-json",
+            str(tmp_path / "db.json"),
+            "--lane",
+            "project_lifecycle",
+            "--tree-sha",
+            "2" * 40,
+            "--",
+            "child",
+        ],
+    )
+    assert runner.main() == 2
+    assert capsys.readouterr().err == "isolated-test runner failed: tree_sha_mismatch\n"
+    assert not (tmp_path / "db.json").exists()
 
 
 def test_runner_rejects_nonlocal_admin_without_exposing_it(

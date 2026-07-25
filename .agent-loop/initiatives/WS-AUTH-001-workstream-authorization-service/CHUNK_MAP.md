@@ -46,7 +46,11 @@ stopped.
 | `WS-AUTH-001-10B1` | Durable Authorization Read Rate Control | L1 | Proposed successor after 10B planning merge/memory |
 | `WS-AUTH-001-10B2` | Privacy-Safe Project Role Grant Reads | L1 | Proposed after 10B1 |
 | `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B2 |
-| `WS-AUTH-001-11` | Project Identity, Guide, Source, And Visibility Cutover | L1 | Proposed |
+| `WS-AUTH-001-11` | Project Read Cutover Planning Parent | L1 | Signed start run `30167274426`; planning split authored, no runtime implementation |
+| `WS-AUTH-001-11A` | Project Read Catalogue And Projection Foundation | L1 | Proposed successor; migration `0035`, no active surface |
+| `WS-AUTH-001-11B` | Project Identity And Actor Context Cutover | L1 | Proposed after 11A |
+| `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Proposed after 11B |
+| `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Proposed after 11C1 |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Submission, Checker, And Audit Visibility Cutover | L1 | Proposed |
@@ -114,6 +118,10 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-10B2
 -> WS-AUTH-001-10C
 -> WS-AUTH-001-11
+-> WS-AUTH-001-11A
+-> WS-AUTH-001-11B
+-> WS-AUTH-001-11C1
+-> WS-AUTH-001-11C2
 -> WS-AUTH-001-12
 -> WS-AUTH-001-13
 -> WS-AUTH-001-14
@@ -152,7 +160,12 @@ WS-AUTH-001-PLAN
   transfer follows 09E and changes only owner metadata and availability-neutral
   parity. PREP then establishes AUTH-first
   locking and caller-owned commit before sensitive product/review mutations.
-- Chunks 11-15 migrate bounded complete product/system surfaces.
+- Parent chunk 11 is planning-only and splits the hard project-read cutover
+  into 11A catalogue/evidence, 11B identity/context, 11C1 setup diagnostics,
+  and 11C2 effective policy/guide reads. 11A activates no surface. Runtime
+  children 11B, 11C1, and 11C2 each make local grants the sole authority for
+  their complete surface family; no compatibility path remains.
+- Chunks 12-15 migrate bounded complete product/system surfaces.
 - Artifact upload, read, retention, release/delete, replication, integrity, and
   reconciliation remain mechanically owned by the artifact subsystem but must
   receive centralized AUTH decisions. Chunk 07A owns the permission/action

@@ -238,9 +238,10 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 70 rows after AUTH-10B2: 20 active actions
-and 50 planned rows. AUTH-10A added five project-role read/manage rows,
-owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 70 rows after AUTH-10C: 22 active actions
+and 48 planned rows. AUTH-10A added five project-role read/manage rows;
+AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
+the two reason-bound, idempotent project-role mutations. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
@@ -361,11 +362,20 @@ The paired artifact hidden-behavior matrix is closed:
 |---|---|
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, and `artifact.guide_source.binding.create` mapped to `artifact.binding.create` |
-| `WS-ART-001-04A` | upload-session create/read/seal/cancel/expire and upload-item write |
+| `WS-ART-001-04A` legacy unavailable baseline | planned upload-session create/read/seal/cancel/expire and upload-item write have no route/command and must be retired by the separate AUTH registration contract before 04A starts |
+| `WS-ART-001-04A` through `04C` after AUTH registration | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; remains unavailable until 04C evidence and a later AUTH activation contract |
 | `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-06B` | `artifact.checker_output.write` and `artifact.checker_output.binding.create` mapped to `artifact.binding.create` using the checker-run resource |
+
+The `WS-ART-001-04A` row records the current planned/unavailable catalogue
+baseline only. ART PLAN2 proposes a separate AUTH-owned registration contract
+that retires those unused multi-step actions and registers planned
+`artifact.submission_bundle.prepare -> submission.create`. No ART implementation
+may use that new ActionId before the AUTH contract merges; no action activates
+until ART-04A-C publish the complete hidden surface and a later AUTH activation
+contract consumes its exact evidence.
 
 Every row requires AUTH-07A's registry and AUTH-07B's kernel first. A row with an Operator principal
 also requires its AUTH-08 grant definition; a row with a fixed service
@@ -434,7 +444,7 @@ and unavailable, and add no migration.
 | `artifact.verification.execute` | `artifact.verification.execute` | fixed verifier service | verification job | `02D` |
 | `artifact.pending_work.scan` | `artifact.pending_work.scan` | fixed scheduler service | system pending-work scope | `02D` |
 | `artifact.put_attempt.resolve` | `artifact.put_attempt.resolve` | fixed put-resolver service | put attempt | `02D` |
-| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | sealed upload session and task | `04B` |
+| `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
 
@@ -743,11 +753,13 @@ chunk. A `needs_revision` task retains a durable revision obligation and cannot
 be returned as ordinary ready work.
 
 Project-role invalidation is exact-role-specific. Submitter revocation alone can
-enter task-assignment reconciliation. Reviewer revocation creates only the
-REV-owned review obligation; adjudicator invalidation remains dormant until its
-lifecycle is enabled. Revoking any one project role leaves the other roles and
-all AdminRoleGrants unchanged. Consumers verify the cause event, grant ID,
-actor, project, and role before changing product state.
+enter task-assignment reconciliation and persists `auth13_assignment`. Reviewer
+revocation creates only the REV-owned review obligation and persists
+`rev_reviewer_obligation`; adjudicator invalidation persists `none` and remains
+dormant until its lifecycle is enabled. Revoking any one project role leaves the
+other roles and all AdminRoleGrants unchanged. Consumers verify the cause event,
+grant ID, actor, project, role, and closed future-obligation token before
+changing product state.
 
 ## Idempotency And Authority Evidence
 
@@ -808,9 +820,15 @@ issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
 and identity-link reads for effective system Access Administrator or Audit
 Authority grants. AUTH-09D-A activates the three profile lifecycle routes for
 effective system Access Administrators only. AUTH-09D-B activates exact
-identity-link revoke and reactivate for the same authority; the project-role
-route family remains planned. Project-scoped
-`GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
+identity-link revoke and reactivate for the same authority. AUTH-10B activates
+the concealed project-role reads, and AUTH-10C activates exact-role issue and
+revoke mutations for covered Project Managers. Those mutations use
+`Idempotency-Key`, transaction-bound PREP, immutable qualification snapshots,
+canonical replay validation, and one route-owned commit. Issue requires a
+different active human with an active identity link; revoke remains available
+after target suspension or identity-link revocation so authority cannot become
+irremovable. Project-scoped
+`GET /api/v1/actors/me/authorization-context` begins in AUTH-11 after
 exact-project grant and canonical project capability composition exists.
 
 `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.

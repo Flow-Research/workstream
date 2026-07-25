@@ -1,6 +1,12 @@
 # Chunk Contract: WS-ART-001-03 - Guide Source Artifact Cutover
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 02D
+Initiative: `WS-ART-001` | Risk: L1 | Status: Cancelled before implementation; superseded by 03A-03C
+
+This contract was signed and then cancelled after mandatory preimplementation
+review found that it combined guide byte intake, binding, setup-agent reads,
+recovery continuation, migration, and inactive AUTH dependencies without an
+implementable byte-transport or activation sequence. It authorizes no work and
+is retained only as history.
 
 Artifact contract phase: `guide_source_cutover`
 

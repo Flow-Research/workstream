@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-07 Real API And Provider Proof
+# Chunk Contract: WS-ART-001-07 - Real API And Provider Proof
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 06B
 
@@ -39,9 +39,11 @@ without direct database inspection or Terminal Benchmark product coupling.
 
 - a standalone project guide is ingested, verified, snapshotted, and processed
   through setup using real APIs and visible async status.
-- a contributor uploads exact artifacts, seals them, runs pre-submit, creates a
-  submission, and automatically enters `evaluation_pending`.
-- post-submit reads the same immutable artifact-set commitment and stores
+- a contributor uploads one outer ZIP; Workstream inspects and checks it in
+  bounded scratch, admits and verifies it once, creates a submission, and
+  automatically enters `evaluation_pending`.
+- post-submit reads the same immutable binding/archive/semantic-manifest
+  commitment and stores
   checker logs/outputs as verified artifacts.
 - post-submit remains `evaluation_pending` while execution or infrastructure
   retry is active. Durable completion preserves the existing checker-owned
@@ -50,9 +52,9 @@ without direct database inspection or Terminal Benchmark product coupling.
   assignment, or decision.
 - provider outage produces infrastructure pending/retry, not contributor or
   review outcomes; restart recovers through the periodic scanner.
-- pre-submit outage exhausts to `pre_submission_infrastructure_unavailable`,
-  preserves the exact sealed unconsumed attempt, and continues on contributor
-  retry without manager/operator approval; post-submit outage separately keeps
+- pre-submit process/scratch loss requires reupload without manager/operator
+  approval; durable-admission ambiguity is resolved by existing ART recovery;
+  post-submit outage separately keeps
   `evaluation_pending` and uses checker retry infrastructure.
 - changed/truncated/missing bytes and stale/duplicate Celery executions are
   proven safely.

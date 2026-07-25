@@ -36,9 +36,12 @@ ARTIFACT_COVERAGE_ORDER = (
     "02C2",
     "02C3",
     "02D",
-    "03",
+    "03A",
+    "03B",
+    "03C",
     "04A",
     "04B",
+    "04C",
     "05",
     "06A",
     "06B",
@@ -77,19 +80,23 @@ ARTIFACT_COVERAGE_COMMAND_OWNERS = {
     "02D": (
         "coverage report --include='app/api/router.py' --precision=2 --fail-under=90",
     ),
-    "03": (
+    "03A": (
         "coverage report --include='app/modules/projects/*' "
         "--precision=2 --fail-under=90",
+    ),
+    "03B": (
         "coverage report "
         "--include='app/adapters/project_agents/*,app/interfaces/project_agents.py' "
         "--precision=2 --fail-under=90",
     ),
+    "03C": (),
     "04A": (),
     "04B": (
         "coverage report --include='app/modules/tasks/*' --precision=2 --fail-under=90",
         "coverage report --include='app/modules/checkers/*' "
         "--precision=2 --fail-under=90",
     ),
+    "04C": (),
     "05": (),
     "06A": (),
     "06B": (),
@@ -163,9 +170,9 @@ def artifact_contract_phase_for(coverage_phase: str) -> str:
     phase = "foundation"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("02A3"):
         phase = "artifact_store_cutover"
-    if active_index >= ARTIFACT_COVERAGE_ORDER.index("03"):
+    if active_index >= ARTIFACT_COVERAGE_ORDER.index("03A"):
         phase = "guide_source_cutover"
-    if active_index >= ARTIFACT_COVERAGE_ORDER.index("04B"):
+    if active_index >= ARTIFACT_COVERAGE_ORDER.index("04A"):
         phase = "upload_admission"
     if active_index >= ARTIFACT_COVERAGE_ORDER.index("05"):
         phase = "submission_cutover"
@@ -5445,6 +5452,7 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "See app/workers/tasks.py.",
         "coverage report --include='app/workers/*' --precision=2 --fail-under=90",
         "ruff check app/workers/reviews.py",
+        "pytest --cov=app.workers --cov-report=term-missing",
         "review_lifecycle_live_drill.py --start-api-worker-beat --require-workers",
     )
     for sample in technical_worker_statements:
@@ -5488,6 +5496,20 @@ def test_stale_authorization_rule_examples_are_rejected() -> None:
         "review_lifecycle_live_drill.py --require-workers-extra",
         "maliciousapp/workers/reviews.py",
         "maliciousapp.workers.reviews",
+        "app.workers submit task packets.",
+        "app.workers approves project work.",
+        "The app.workers module submits contributor packets.",
+        "app.workers may review a contributor submission.",
+        "app.workers approves project guides.",
+        "app.workers manages contributor grants.",
+        "backend/app/workers/reviews.py may review a contributor submission.",
+        "backend/app/workers/reviews.py claims a task.",
+        "backend/app/workers/tasks.py can claim a task.",
+        "backend/app/workers/tasks.py creates a project.",
+        "backend/app/workers/tasks.py can create a project.",
+        "app/workers/tasks.py creates a project.",
+        "backend/app/workers/tasks.py uses submitter authority.",
+        "backend/app/workers/tasks.py is a human product role.",
     )
     for sample in human_worker_statements:
         assert gate.scan_text("docs/new_active_doc.md", sample), sample
@@ -5658,7 +5680,7 @@ def test_auth_spec_orders_service_admission_before_project_roles() -> None:
 
 
 def test_parallel_initiative_status_matches_trusted_main() -> None:
-    """Auth prerequisites and the current ART gate remain internally consistent."""
+    """Auth history and authored ART planning remain internally consistent."""
     auth_map = Path(
         ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
         "CHUNK_MAP.md"
@@ -5672,12 +5694,20 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     artifact_status = Path(
         ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md"
     ).read_text(encoding="utf-8")
-    artifact_contract = Path(
-        ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/"
-        "WS-ART-001-02C2-verification-publication-fencing.md"
-    ).read_text(encoding="utf-8")
     work_queue = Path(".agent-loop/WORK_QUEUE.md").read_text(encoding="utf-8")
     loop_state = Path(".agent-loop/LOOP_STATE.md").read_text(encoding="utf-8")
+    contribution_guide = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
+    loop_guide = Path(".agent-loop/README.md").read_text(encoding="utf-8")
+
+    # Authored main snapshots below remain historical discovery input. Live
+    # active/cancel state is read only from independently verified signed
+    # automation, so ART assertions use its initiative status/map rather than
+    # pretending copied root projections are current authority.
+    canonical_warning = (
+        "Only independently verified signed automation state is canonical authority"
+    )
+    assert canonical_warning in " ".join(contribution_guide.split())
+    assert canonical_warning in " ".join(loop_guide.split())
 
     assert "Merged through PR #131 as `aa0fdcd`" in auth_map
     assert "Merged through PR #143 as `053242b`" in auth_map
@@ -5711,7 +5741,6 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "as `8d5eb15` on 2026-07-19" in work_queue
     )
     assert "Active implementation chunk: `WS-AUTH-001-CONTRIBUTOR-FOUNDATION`" not in loop_state
-    assert "Active ART implementation chunk: `WS-ART-001-02C2`" in loop_state
     assert "Merged through PR #157 as `42a89b2d`" in work_queue
     assert "ActionIds, with 17 active actions" in loop_state
     assert "candidate total of 17" not in loop_state
@@ -5742,27 +5771,19 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "Merged through PR #141 as `a10d901`" in artifact_map
     assert "Merged through PR #151 as `1b5422fc`" in artifact_map
     assert "Merged through PR #154 as `44f2467c`" in artifact_map
-    assert "Active after PR #154 and explicit user start" in artifact_map
-    assert "Status: Active after explicit start on 2026-07-19" in artifact_contract
+    assert "Merged through PR #159 as `bc5e6a42`" in artifact_map
+    assert "Merged through PR #174 as `92b8a7aa`" in artifact_map
+    assert "Merged through PR #177 as `93c14181`" in artifact_map
     assert (
         "AUTH's owner reconciliation merged through PR #140 as\n"
         "`d541521`" in artifact_status
     )
-    assert "`WS-ART-001-02C2` is active" in artifact_status
-    assert "The current gate is external CI/review followed by explicit human" in (
-        artifact_status.replace("\n", " ")
-    )
-    assert "No later artifact chunk starts automatically" in artifact_status.replace(
-        "\n", " "
-    )
+    assert "`WS-ART-001-03` received a signed implementation start" in artifact_status
+    assert "recorded `stopped_after_cancel`" in artifact_status
+    assert "The planning merge starts no successor" in artifact_status
     assert (
         "| `WS-AUTH-001-09C` | Actor And Identity-Link Administration Reads | L1 | "
         "Merged through PR #146 as `0ffdabf`" in work_queue
-    )
-    assert (
-        "| `WS-ART-001-02C2` | Verification Publication And Fencing | L1 | "
-        "Latest-main, sharded-CI, AUTH-PREP, and outbox-repair reconciliation complete"
-        in work_queue
     )
     assert (
         "| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | "
@@ -5779,12 +5800,72 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
         "Merged through PR #162 as `c559d556`" in work_queue
     )
     assert "no feature consumer or activation" in work_queue
-    assert "Current ART gate: latest-main integration" in loop_state
-    assert "hosted checks, and explicit human merge approval remain" in " ".join(
-        loop_state.split()
+    assert "| `WS-ART-001-PLAN2` |" in artifact_map
+    assert "Planning-only successor proposed after cancellation" in artifact_map
+    assert "`WS-ART-001-03A` is the only immediate ART" in artifact_status
+
+
+def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
+    """PLAN2 locks admission, executable, and durable-auth semantics."""
+    initiative = ROOT / ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage"
+    plan = (initiative / "PLAN.md").read_text(encoding="utf-8")
+    decisions = (initiative / "DECISIONS.md").read_text(encoding="utf-8")
+    auth_handoff = (initiative / "AUTH_HANDOFF.md").read_text(encoding="utf-8")
+    contract_04a = (initiative / "chunks/WS-ART-001-04A-upload-inspection-sealing.md").read_text(encoding="utf-8")
+    contract_04b = (initiative / "chunks/WS-ART-001-04B-pre-submit-admission.md").read_text(encoding="utf-8")
+    contract_04c = (initiative / "chunks/WS-ART-001-04C-verified-submission-bundle-admission.md").read_text(encoding="utf-8")
+    contract_05 = (initiative / "chunks/WS-ART-001-05-submission-artifact-cutover.md").read_text(encoding="utf-8")
+    contract_06a = (initiative / "chunks/WS-ART-001-06A-checker-input-materialization.md").read_text(encoding="utf-8")
+    storage_spec = (ROOT / "docs/spec_artifact_storage_service.md").read_text(encoding="utf-8")
+    normalized_auth_handoff = " ".join(auth_handoff.split())
+
+    for text in (plan, decisions, contract_04c, storage_spec):
+        assert "ready -> consumed" in text
+        assert "stale" in text
+    no_lifecycle_process = {
+        "plan": "No state expires, releases capacity, or authorizes provider deletion.",
+        "decisions": (
+            "No expiry, release, deletion, retention process, or cleanup lifecycle "
+            "exists in v0.1."
+        ),
+        "04c": (
+            "v0.1 adds no expiry, release, deletion, retention process, or cleanup "
+            "route;"
+        ),
+        "storage_spec": (
+            "No admission expiry, release, deletion, provider cleanup, retention "
+            "process, or new recovery aggregate exists."
+        ),
+    }
+    for name, text in {
+        "plan": plan,
+        "decisions": decisions,
+        "04c": contract_04c,
+        "storage_spec": storage_spec,
+    }.items():
+        normalized = " ".join(text.split())
+        clause = no_lifecycle_process[name]
+        assert clause in normalized
+        assert clause not in normalized.replace(clause, "Admission expiry is enabled.")
+    assert "Client abandonment" in plan
+    assert "existing completed-byte scopes" in plan
+    assert "transaction-local prepared capability" in normalized_auth_handoff
+    assert "ART and TASK never import AUTH-owned repositories" in contract_05
+    assert "authorization evidence" in contract_04c
+    assert "ActionId `artifact.submission.binding.create`" in normalized_auth_handoff
+    assert "PermissionId `artifact.binding.create`" in normalized_auth_handoff
+    assert "`artifact.pre_submit.checker_input.materialize`" in normalized_auth_handoff
+    assert "`artifact.post_submit.checker_input.materialize`" in normalized_auth_handoff
+    assert (
+        "mapped to PermissionId `artifact.checker_input.materialize`"
+        in normalized_auth_handoff
     )
-    assert "hosted reruns, and explicit human merge approval remain" in work_queue
-    assert "PR #154 then merged `WS-ART-001-02C1`" in loop_state
+    assert "fixed service action\n  `artifact.checker_input.materialize`" not in contract_04b
+    assert "fixed service action `artifact.binding.create`" not in contract_05
+    assert "normalized executable flag" in contract_04a
+    assert "same fixed" in contract_06a
+    assert "non-Unix" in storage_spec
+    assert "submission_bundle_admission_already_consumed" in storage_spec
 
 
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:
@@ -6424,7 +6505,7 @@ def test_local_minio_compose_is_regression_protected() -> None:
 
 
 def test_backend_coverage_thresholds_are_regression_protected() -> None:
-    """Keep parallel full-suite fan-in and every coverage floor fail closed."""
+    """Keep exact-custody semantic lanes and every coverage floor fail closed."""
     workflow_path = ROOT / ".github/workflows/backend.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
     parsed_workflow = yaml.safe_load(workflow)
@@ -6433,98 +6514,127 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert "pull_request_target" not in workflow
     assert "paths-ignore" not in workflow and "continue-on-error" not in workflow
     jobs = parsed_workflow["jobs"]
-    assert set(jobs) == {"preflight", "shards", "api_e2e", "test"}
+    assert set(jobs) == {"test"}
 
     postgres_image = (
         "public.ecr.aws/docker/library/postgres:16@sha256:"
         "33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
     )
-    for job_name in ("preflight", "shards", "api_e2e"):
-        assert jobs[job_name]["services"]["postgres"]["image"] == postgres_image
-
-    preflight = jobs["preflight"]
-    assert set(preflight["outputs"]) == {"tree_sha"}
-    assert any(
-        step.get("name") == "Isolated database runner test"
-        and step.get("run") == "python -m pytest -q tests/test_isolated_database_runner.py"
-        for step in preflight["steps"]
-    )
-    plan_steps = [
-        step for step in preflight["steps"] if step.get("name") == "Collect and plan exact test inventory"
-    ]
-    assert len(plan_steps) == 1
-    assert "ci_test_shards.py plan" in str(plan_steps[0]["run"])
-    assert "--shards 4" in str(plan_steps[0]["run"])
-
-    shard_job = jobs["shards"]
-    assert shard_job["needs"] == "preflight"
-    assert shard_job["strategy"] == {
-        "fail-fast": False,
-        "matrix": {"shard": [1, 2, 3, 4]},
+    test_job = jobs["test"]
+    assert set(test_job) == {
+        "runs-on", "timeout-minutes", "services", "steps",
     }
-    shard_steps = shard_job["steps"]
+    assert test_job["services"]["postgres"]["image"] == postgres_image
+    steps = test_job["steps"]
+    assert not any(
+        step.get("name") == "Isolated database runner test"
+        or "tests/test_isolated_database_runner.py" in str(step.get("run", ""))
+        for step in steps
+    )
+    checkout = [step for step in steps if "actions/checkout@" in step.get("uses", "")]
+    assert checkout == [{
+        "uses": "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
+        "with": {"persist-credentials": False, "fetch-depth": 0},
+    }]
+    identity = [step for step in steps if step.get("name") == "Bind exact checked-out tree"]
+    assert len(identity) == 1
+    assert '${tree_sha}' in str(identity[0]["run"])
+    assert '${GITHUB_SHA}' in str(identity[0]["run"])
+    identity_command = str(identity[0]["run"])
+    assert identity_command.index('job_start_epoch="$(date +%s)"') < (
+        identity_command.index('tree_sha="$(git rev-parse HEAD)"')
+    )
+    assert 'job_start_epoch=${job_start_epoch}' in identity_command
+
+    install = [step for step in steps if step.get("name") == "Install backend and exact Ruff"]
+    assert len(install) == 1
+    assert "python -m pip install ruff==0.15.22" in str(install[0]["run"])
+    assert 'test "$(ruff --version)" = "ruff 0.15.22"' in str(install[0]["run"])
+
+    collect = [
+        step for step in steps
+        if step.get("name") == "Collect canonical semantic-lane inventory"
+    ]
+    assert len(collect) == 1
+    assert "run_test_lanes.py" in str(collect[0]["run"])
+    assert "--collect-only" in str(collect[0]["run"])
+    assert ".ci/test-lanes/collect-summary.json" in str(collect[0]["run"])
+    validators = [
+        step for step in steps
+        if "validate_test_lane_evidence.py" in str(step.get("run", ""))
+    ]
+    assert len(validators) == 2
+    assert ".ci/test-lanes/collect-summary.json" in str(validators[0]["run"])
+    assert ".ci/test-lanes/run-summary.json" in str(validators[1]["run"])
+
     minio_steps = [
-        step for step in shard_steps if step.get("name") == "Start real MinIO artifact provider"
+        step for step in steps if step.get("name") == "Start real MinIO artifact provider"
     ]
     assert len(minio_steps) == 1
     assert "${MINIO_IMAGE}" in str(minio_steps[0]["run"])
-    run_shard_steps = [
-        step for step in shard_steps if str(step.get("name", "")).startswith("Run isolated shard")
+    run_lane_steps = [
+        step for step in steps if step.get("name") == "Execute four semantic lanes"
     ]
-    assert len(run_shard_steps) == 1
-    assert "ci_test_shards.py run-shard" in str(run_shard_steps[0]["run"])
-    assert "--cov-fail-under" not in str(run_shard_steps[0]["run"])
+    assert len(run_lane_steps) == 1
+    assert "run_test_lanes.py" in str(run_lane_steps[0]["run"])
+    assert "--timeout-seconds 1200" in str(run_lane_steps[0]["run"])
+    assert ".ci/test-lanes/run.exit" in str(run_lane_steps[0]["run"])
+    assert "--cov-fail-under" not in str(run_lane_steps[0]["run"])
+    require_success = [
+        step for step in steps
+        if step.get("name") == "Require semantic-lane execution success"
+    ]
+    assert len(require_success) == 1
+    assert 'cat .ci/test-lanes/run.exit' in str(require_success[0]["run"])
+    assert "if" not in require_success[0]
+    assert steps.index(run_lane_steps[0]) < steps.index(require_success[0])
+    assert run_lane_steps[0]["env"]["WORKSTREAM_TEST_ADMIN_DATABASE_URL"] == (
+        "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
+    )
+    lane_runner = (ROOT / "backend/scripts/run_test_lanes.py").read_text(
+        encoding="utf-8"
+    )
+    lane_validator = (
+        ROOT / "backend/scripts/validate_test_lane_evidence.py"
+    ).read_text(encoding="utf-8")
+    assert "tests/test_isolated_database_runner.py" in lane_runner
+    assert "admin_runner_self_test" in lane_runner
+    assert "execution_kind" in lane_runner
+    assert "run_isolated_tests.py" in lane_runner
+    assert "admin_runner_self_test" in lane_validator
+    assert "execution_kind" in lane_validator
 
-    api_steps = jobs["api_e2e"]["steps"]
     api_e2e_steps = [
-        step for step in api_steps if step.get("name") == "API contract real API e2e"
+        step for step in steps if step.get("name") == "API contract real API e2e"
     ]
     assert len(api_e2e_steps) == 1
     assert "scripts/run_isolated_tests.py" in str(api_e2e_steps[0]["run"])
     assert "scripts/api_contract_e2e.py" in str(api_e2e_steps[0]["run"])
-    shard_tool = (ROOT / "backend/scripts/ci_test_shards.py").read_text(encoding="utf-8")
-    assert 4800 <= jobs["shards"]["timeout-minutes"] * 60 - 600
-    assert '"4800"' in shard_tool
-    assert 1500 <= jobs["api_e2e"]["timeout-minutes"] * 60 - 300
+    assert 1500 <= test_job["timeout-minutes"] * 60 - 300
     assert "--timeout-seconds 1500" in str(api_e2e_steps[0]["run"])
-
-    test_job = parsed_workflow["jobs"]["test"]
-    assert set(test_job) == {"if", "needs", "runs-on", "timeout-minutes", "steps"}
-    assert test_job["if"] == "${{ always() }}"
-    assert test_job["needs"] == ["preflight", "shards", "api_e2e"]
-    steps = test_job["steps"]
-    upstream = [step for step in steps if step.get("name") == "Require every upstream proof"]
-    assert len(upstream) == 1
-    assert upstream[0]["env"] == {
-        "PREFLIGHT_RESULT": "${{ needs.preflight.result }}",
-        "SHARDS_RESULT": "${{ needs.shards.result }}",
-        "API_E2E_RESULT": "${{ needs.api_e2e.result }}",
-    }
-    assert str(upstream[0]["run"]).count('= success') == 3
     downloads = [step for step in steps if "actions/download-artifact@" in step.get("uses", "")]
-    assert len(downloads) == 5
-    assert all(
-        step["uses"]
-        == "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
-        and "pattern" not in step.get("with", {})
-        for step in downloads
-    )
+    assert downloads == []
     uploads = [
-        step
-        for job in jobs.values()
-        for step in job["steps"]
+        step for step in steps
         if "actions/upload-artifact@" in step.get("uses", "")
     ]
-    assert len(uploads) == 3
-    assert all(
-        step["uses"]
-        == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
-        for step in uploads
+    assert len(uploads) == 1
+    assert uploads[0]["uses"] == (
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
     )
-    fan_in = [step for step in steps if step.get("name") == "Validate exact fan-in and combine coverage"]
-    assert len(fan_in) == 1
-    assert "ci_test_shards.py fan-in" in str(fan_in[0]["run"])
-    assert "coverage combine ../.ci/combined-coverage" in str(fan_in[0]["run"])
+    assert uploads[0]["if"] == "${{ always() }}"
+    assert uploads[0]["with"]["path"] == "backend/.ci/test-lanes/**"
+    combines = [
+        step for step in steps
+        if step.get("name") == "Combine semantic-lane coverage exactly once"
+    ]
+    assert len(combines) == 1
+    combine_command = str(combines[0]["run"])
+    assert combine_command.count("coverage combine") == 1
+    assert 'test "${#coverage_files[@]}" -eq 4' in combine_command
+    assert "test ! -L" in combine_command
+    assert "sha256sum" in combine_command
+    assert steps.index(validators[1]) < steps.index(combines[0])
 
     full_suite_steps = [
         step for step in steps if step.get("name") == "Backend full-suite coverage"
@@ -6548,6 +6658,46 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         assert coverage_step.get("working-directory") == "backend"
         for forbidden_key in ("if", "continue-on-error", "shell", "env"):
             assert forbidden_key not in coverage_step
+    hosted_steps = [
+        step for step in steps
+        if step.get("name") == "Record hosted timing and fail-closed coverage evidence"
+    ]
+    assert len(hosted_steps) == 1
+    hosted_step = hosted_steps[0]
+    hosted_command = str(hosted_step["run"])
+    assert steps.index(hosted_step) > max(steps.index(step) for step in auth_coverage_steps)
+    assert "coverage json -o .ci/test-lanes/coverage.json" in hosted_command
+    assert ".ci/test-lanes/hosted-evidence.json" in hosted_command
+    assert 'summary.get("head_sha") != expected_head' in hosted_command
+    assert 'summary.get("canonical_node_count")' in hosted_command
+    assert 'summary.get("aggregate_runner_seconds")' in hosted_command
+    assert 'summary.get("slowest_lane_seconds")' in hosted_command
+    assert '"timing_target_met": total_wall <= 480' in hosted_command
+    assert 'total_wall > 480' not in hosted_command
+    assert 'percent < 78' in hosted_command
+    assert "math.isfinite" in hosted_command
+    assert "Counter(collected) != Counter(completed)" in hosted_command
+    assert "hosted lane digest drift" in hosted_command
+    for required_field in (
+        "head_sha",
+        "total_backend_wall_seconds",
+        "slowest_lane_seconds",
+        "aggregate_runner_seconds",
+        "timing_target_met",
+        "canonical_collected_count",
+        "completed_count",
+        "global_coverage_percent",
+        "global_coverage_sha256",
+        "run_summary_sha256",
+    ):
+        assert f'"{required_field}"' in hosted_command
+    assert "waiver" not in hosted_command.lower()
+    operations = (ROOT / "docs/operations_backend_testing.md").read_text(
+        encoding="utf-8"
+    )
+    assert "whether\nthe eight-minute target was met" in operations
+    assert "does not override otherwise passing correctness" in operations
+    assert "makes the required check fail outright" not in operations
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
     actual_coverage = tuple(
@@ -7092,7 +7242,7 @@ def test_artifact_chunk_verification_commands_are_isolated_and_rerunnable() -> N
         assert "run_isolated_tests.py" in metadata_command
         assert metadata_command.endswith("))")
         assert "alembic upgrade head" not in verification
-        if phase in {"03", "05"}:
+        if phase in {"03C", "05"}:
             assert "backend/scripts/api_contract_e2e.py" in contract
             assert "scripts/api_contract_e2e.py" in verification
         expected_contract_phase = artifact_contract_phase_for(phase)

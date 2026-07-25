@@ -1,9 +1,13 @@
-# Chunk Contract: WS-AUTH-001-11 - Project Identity, Guide, Source, And Visibility Cutover
+# Chunk Contract: WS-AUTH-001-11 - Project Read Cutover Planning Parent
 
 ## Status
 
-Proposed and inactive. The exact project read/list ActionId inventory and
-then-current migration mapping delta must be added before implementation review.
+Planning-only parent authorized by successful signed explicit-start workflow
+run `30167274426` on exact trusted-main SHA
+`bba4ba5f171a4438b072740707a5cf8bde49d9af`. Runtime implementation is
+prohibited. Signed automation remains the live-state authority; authored
+`STATUS.md` does not mirror conversational activity. This chunk defines the
+complete hard-cutover inventory and four separately started L1 children.
 
 ## Parent initiative
 
@@ -11,14 +15,16 @@ then-current migration mapping delta must be added before implementation review.
 
 ## Goal
 
-Move project identity reads, guide/source reads, setup-status visibility, and
-policy-summary queries from token roles to scoped local permissions without
-changing project setup mutations.
+Replace token-role authorization on every current project GET surface with
+registered local authority, without retaining a fallback or changing project
+mutations. This parent resolves the design and sequencing only.
 
 ## Why this chunk exists
 
-Separating query/visibility cutover from policy mutations keeps project
-authorization reviewable and proves anti-IDOR filtering before write cutover.
+The inherited contract combined catalogue migration, a new actor-context API,
+minimal contributor projection, and sensitive setup/policy/guide disclosures.
+Those boundaries need independent evidence and review. The split preserves a
+hard cutover while keeping each runtime change reviewable.
 
 ## Approved plan reference
 
@@ -37,85 +43,89 @@ P1
 ## Allowed files
 
 ```text
-backend/app/modules/projects/router.py
-backend/app/modules/projects/service.py
-backend/app/modules/projects/repository.py
-backend/app/modules/projects/schemas.py
-backend/app/modules/authorization/**
-backend/app/modules/audit/**
-backend/alembic/versions/<then-current-next>_*.py
-backend/app/api/deps/auth.py
-backend/tests/test_projects.py
-backend/tests/test_auth.py
-backend/tests/test_alembic.py
-backend/scripts/api_contract_e2e.py
-docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 .agent-loop/merge-intents/WS-AUTH-001-11.json
-.agent-loop/LOOP_STATE.md
-.agent-loop/WORK_QUEUE.md
-.agent-loop/REVIEW_LOG.md
 ```
 
 ## Not allowed
 
 ```text
-project create/update, guide/source mutation, policy approval, activation
+backend/**
+runtime authorization or route changes
+permission or action activation
+compatibility aliases, token-role fallback, or dual authorization paths
+project create/update, guide/source mutation, policy approval, or activation
 task/submission/checker authorization
-issuer-role fallback or authorization pagination after unfiltered counts
 ```
+
+## Exact surface and action inventory
+
+Targets preserve the current project/guide/child-resource hierarchy. Project
+identity and active-guide actions map to existing `PermissionId.PROJECT_READ`.
+11A introduces the read-only `project.setup_diagnostic.read` and
+`project.effective_policy.read` permissions so inspection never borrows a
+management permission. Project Manager, Operator, and Audit Authority receive
+those permissions under their existing scopes; Finance Authority, Access
+Administrator, and contributor grants do not. The actor-context action maps to
+existing `PermissionId.ACTOR_PROFILE_READ_SELF`.
+
+| ActionId | Surface | Target and principal boundary | Child |
+|---|---|---|---|
+| `project.read` | `GET /api/v1/projects/{project_id}` | exact project; eligible admin grants or active exact-project submitter/reviewer/adjudicator grant | 11B |
+| `actor.authorization_context.read` | new `GET /api/v1/actors/me/authorization-context?project_id=...` | self actor plus canonical project; disclose only effective caller authority for that project | 11B |
+| `project.setup_run.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest` | exact project and child guide/version/setup run; `project.setup_diagnostic.read` | 11C1 |
+| `project.guide_sufficiency_report.list` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports` | exact project and child guide/version; `project.setup_diagnostic.read` | 11C1 |
+| `project.guide_sufficiency_report.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}` | exact project, guide/version, and child report; `project.setup_diagnostic.read` | 11C1 |
+| `project.submission_artifact_policy.list` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` | exact project and child guide/version; `project.effective_policy.read` | 11C1 |
+| `project.submission_artifact_policy.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` | exact project, guide/version, and child policy; `project.effective_policy.read` | 11C1 |
+| `project.post_submit_checker_policy_setup.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup` | exact project and child guide/version; `project.effective_policy.read` | 11C1 |
+| `project.effective_submission_artifact_policy.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | exact project and child guide/version; `project.effective_policy.read` | 11C2 |
+| `project.pre_submit_checker_policy.read` | `GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | exact project and child guide/version; `project.effective_policy.read` | 11C2 |
+| `project.active_guide.read` | `GET /api/v1/projects/{project_id}/active-guide` | exact project; explicit safe projection by principal class | 11C2 |
+
+There is no project collection/list route in the current API. Count/cursor
+criteria from the inherited contract are removed rather than inventing a new
+surface.
+
+## Child sequence
+
+1. `WS-AUTH-001-11A` registers the eleven actions as planned, adds action-aware
+   evidence parity in migration `0035`, and activates no route.
+2. `WS-AUTH-001-11B` activates project identity and the new self authorization
+   context. It defines the minimal contributor projection and concealed
+   exact-project denial.
+3. `WS-AUTH-001-11C1` hard-cuts the six setup and draft diagnostic reads to
+   admin-grant authority.
+4. `WS-AUTH-001-11C2` hard-cuts the three effective policy/guide reads and
+   defines any contributor-safe active-guide projection explicitly.
+
+Each child requires its own signed explicit start. No child may preserve the
+superseded request-claim authority path on any surface it activates.
 
 ## Acceptance criteria
 
-- Project Managers read only covered projects; system scope covers all projects
-  only for registered Project Manager permissions.
-- Operator, Finance Authority, and Audit Authority receive only their defined
-  minimal project views.
-- Access Administrator and contributor grants do not imply project-management
-  visibility.
-- An active submitter, reviewer, or adjudicator grant independently allows the
-  minimal `project.read` projection for its exact project, without management
-  fields or permissions. Each role has exact-project allow, cross-project deny,
-  minimal-field, concealed-not-found, and pre-filtered count/cursor tests.
-- The adjudicator grant supplies no adjudication action in this chunk; it adds
-  only the same minimal exact-project read projection.
-- One actor may hold all three rows. A decision records the exact matched grant,
-  never a synthetic combined role. Revoking one role preserves minimal
-  `project.read` when another eligible exact-project role remains, and changes
-  no AdminRoleGrant.
-- Canonical project scope is resolved before filtering, counts, and cursors.
-- Every migrated project read/list route declares one primary registered action
-  and its canonical project or collection-parent target; permission strings and
-  secondary role policy do not live in the router.
-- Generated OpenAPI/command manifest-delta tests prove every protected project
-  read/list surface migrated here has exactly one active `ActionId` declaration.
-- Before runtime edits, the contract enumerates every new ActionId, existing
-  PermissionId mapping, canonical target, principal class, facts, guards, and
-  surface. The then-current migration updates typed/PostgreSQL action-evidence parity and
-  proves prior-head upgrade, downgrade, re-upgrade, and fresh replay.
-- ProjectRepository remains the canonical project/guide/source persistence
-  query owner and returns domain records. The project application service or a
-  feature-owned resource loader composes ResourceContext; persistence does not
-  depend on authorization DTOs, and authorization does not re-query project
-  tables through a parallel repository.
-- Hidden project/resource existence is not leaked through errors or totals.
-- No migrated query uses `require_any_role()` or token roles.
-- Full backend suite and API contract drill pass.
+- The complete current project GET inventory and the deferred actor-context
+  surface are assigned exactly once.
+- Generated OpenAPI/route-manifest proof matches every literal existing path to
+  exactly one action owner and includes project, guide, and child identifiers.
+- Every action has an exact PermissionId mapping, canonical target,
+  principal boundary, owning child, and disclosure boundary.
+- The current migration head `0034_project_role_issue_evidence` is recorded;
+  AUTH-11A alone reserves `0035` for the two new read permissions, exact role
+  mappings, action registration, and evidence parity.
+- The four child contracts state hard-cutover, concealment, evidence,
+  migration, and verification requirements without compatibility behavior.
+- This parent changes no runtime or feature availability.
+- The merge intent names only `WS-AUTH-001-11A` as the same-initiative
+  successor; it does not start that child.
 
 ## Verification commands
 
 ```bash
-(cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q \
-  tests/test_authorization.py tests/test_auth.py tests/test_projects.py \
-  --cov=app.modules.authorization --cov-report=term-missing --cov-fail-under=90)
-(cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python -m pytest -q)
-(cd backend && WORKSTREAM_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
-(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
-(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic downgrade -1)
-(cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
+python3 scripts/update_post_merge_memory.py validate-merge-intent --base-ref origin/main
 python3 scripts/check_stale_workstream_wording.py
 python3 scripts/check_markdown_links.py
+python3 scripts/test_agent_gates.py
 git diff --check
 ```
 
@@ -133,10 +143,12 @@ git diff --check
 
 ## Human review focus
 
-Review query scope, minimal disclosure, pagination/count concealment, and that
-mutation behavior is untouched.
+Review the exact action ownership, the absence of token-role fallback, the
+contributor/admin disclosure split, and whether the four children are bounded
+enough for independent L1 proof.
 
 ## Stop conditions
 
-Stop if safe query cutover requires changing setup mutations or accepting a
-token-role fallback.
+Stop if any current GET route is unowned, if a child requires dual authority,
+or if safe contributor disclosure cannot be specified without changing a
+mutation or another product subsystem.

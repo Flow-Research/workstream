@@ -1,85 +1,96 @@
-# Chunk Contract: WS-ART-001-04A Upload, Inspection, And Sealing
+# Chunk Contract: WS-ART-001-04A - One-ZIP Scratch Intake And Manifest
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03C and AUTH planned registration
 
-Artifact contract phase: `guide_source_cutover`
+Artifact contract phase: `upload_admission`
 
 ## Goal
 
-Add contributor-authorized task upload sessions/items, trusted archive
-inspection, independent verification, immutable sealing, and artifact-set
-manifests without running pre-submit or creating submissions.
+Accept exactly one contributor outer ZIP into bounded private scratch, safely
+inspect its complete internal tree, and produce authoritative archive and
+semantic-manifest commitments without provider I/O, project checker execution,
+or Submission creation.
 
 ## Allowed Files
 
-- artifact upload-session/item/set models and one migration;
-- artifact repository/service/router/schemas for upload, inspect, seal, and
-  logical cancellation APIs and internal upload-session expiry;
-- trusted archive/media inspection helpers;
-- artifact call sites consuming exact decisions already delivered by the
-  approved WS-AUTH dependency; no Authorization Service owner files;
-- focused migration, concurrency, upload, inspection, sealing, and real-API tests;
-- `.github/workflows/backend.yml` only to expand the exact 90 percent scoped gate;
-- `scripts/test_agent_gates.py` only to assert that backend CI retains this
-  chunk's exact scoped coverage sources and fail-closed 90 percent threshold;
-- related docs and chunk memory.
+- ART-owned scratch-intake, ZIP inspection, normalization, and manifest code;
+- existing `ArtifactUploadSession`/`ArtifactUploadItem` models, migration,
+  repositories, schemas, and routes only to remove them or make them unreachable
+  as contributor intake; no retained provider/content-result staging semantics;
+- task-scoped hidden upload surface and ART canonical resource facts/guards;
+- one migration for the bounded intake/manifest control plane if required;
+- focused archive, quota, concurrency, cleanup, fuzz/regression, API, coverage,
+  docs, and chunk-memory changes;
+- CI files only to add and preserve the exact scoped 90 percent gate.
 
 ## Not Allowed
 
-- pre-submit checker execution or admission records;
-- submission creation/finalization changes;
-- post-submit checker or review changes;
-- presigned/direct provider upload or provider identifiers in responses;
-- free-form client policy/checker overrides;
-- physical provider deletion on cancellation.
+- `ArtifactStore.put`, `ArtifactContent`, replica, binding, or provider I/O;
+- project pre-submit checker execution or admission;
+- Submission, Review, Contribution, compensation, reputation, or delivery work;
+- multi-item submission sets, direct/presigned uploads, candidate storage,
+  retention windows, or physical deletion;
+- AUTH-owned catalogue, evaluator, grant, identity, matrix, or activation edits;
+- raising current configured limits.
 
 ## Acceptance Criteria
 
-- only the assigned contributor with exact task authorization can create or
-  mutate a live task upload session;
-- create, read, item write, seal, and cancel call the distinct task-scoped
-  permissions `artifact.upload_session.create`,
-  `artifact.upload_session.read`, `artifact.upload_item.write`,
-  `artifact.upload_session.seal`, and `artifact.upload_session.cancel`
-  through the central AUTH kernel with ART-owned canonical resource facts and
-  guards; this chunk first supplies hidden behavior while actions remain planned,
-  and AUTH alone activates them afterward; none implies another;
-- every ID-addressed read/mutation uses concealed deny/not-found behavior and
-  is tested across actors, projects, revocation, terminal states, and random IDs;
-- upload requires a server-approved logical role, bounded display name, client
-  SHA-256 commitment, expected byte count, and streamed file;
-- Workstream prepares and hashes the complete stream, rejects mismatch before
-  provider I/O, and derives the key only from the server commitment;
-- PostgreSQL atomically enforces configured open-session slots at task, actor,
-  project, and deployment scope; contributor item bytes use the generic 02C1
-  admission service at task, authenticated actor, project, and deployment
-  scope after canonical hashing and before provider I/O;
-- PostgreSQL-clock expiry is owned by a bounded periodic Celery scanner and is
-  also applied lazily before new-session admission. Both paths require the
-  fixed internal permission `artifact.upload_session.expire`; one atomic
-  terminal transition releases each open-session slot exactly once, and stale
-  scanner execution cannot release it again;
-- cancellation and expiry release only the open-session slot. Provisional and
-  completed byte charges follow the generic admission state machine;
-  cancelled, expired, and unbound completed bytes remain charged in v0.1,
-  while exact deduplicated content is charged once per applicable scope;
-- every item is independently verified before it can be sealed;
-- limits cover item count, aggregate/per-file bytes, archive expansion, entry
-  count, path safety, nesting, and compression ratio;
-- sealing row-locks the session/items, requires verified replicas, creates a
-  deterministic manifest/hash, and is idempotent under exact replay;
-- cancellation is logical and cannot delete shared completed bytes;
-- race tests cover upload/seal/cancel/expiry conflicts, repeated-session quota
-  exhaustion, concurrent quota admission without oversubscription, terminal
-  session-slot release by periodic and lazy expiry, retained charges for
-  cancelled/expired/unbound content,
-  and first-writer and cross-project digest-key poisoning attempts;
-- changed subsystem coverage is at least 90 percent and repository coverage
-  remains at least 78 percent;
-- backend CI installs this chunk's exact focused 90 percent gate, preserves
-  every earlier scoped 90 percent gate, and retains the exact 78 percent
-  repository command below; `scripts/test_agent_gates.py` fails on workflow
-  command, source-set, threshold, or cumulative-retention drift.
+- a contributor attempt accepts exactly one outer ZIP and rejects every other
+  archive form or additional item;
+- Workstream streams, sizes, and hashes the exact ZIP while reserving bounded
+  aggregate scratch through the canonical `ArtifactScratchManager`;
+- the outer ZIP tree is walked recursively without `extractall`; ZIP entries
+  contained inside that tree remain opaque ordinary files by default;
+- path normalization rejects absolute/drive/UNC paths, `.`/`..`, NUL/control
+  characters, backslashes, symlinks/special entries, duplicate normalized paths,
+  Unicode-normalization collisions, and configured case-fold collisions;
+- bounded streaming enforces current upload, extracted-byte, per-file, entry,
+  path-depth/path-length, compression-ratio, deadline, concurrency, and free-space
+  limits without allocating from untrusted declared sizes;
+- the canonical semantic manifest records normalized file and directory paths,
+  entry type, file SHA-256/byte count, and `executable` for regular files;
+  valid Unix mode metadata normalizes any execute bit to true, while non-Unix
+  or invalid mode metadata defaults false and directories record null;
+- timestamps, compression, comments, ownership, group, read/write/special bits,
+  and other platform permission metadata do not affect the manifest hash;
+- same bytes with a changed normalized executable flag produce different
+  semantic hashes, while timestamp/compression-only repackaging does not;
+- explicit empty directories and deterministic synthetic parents have one
+  documented canonical representation;
+- exact archive hash and semantic manifest hash are compared with the immediate
+  prior immutable Submission under task/version locking; equality returns a
+  stable unchanged error before checker or provider I/O;
+- the server-computed ZIP commitment is authoritative; an optional client
+  commitment can only cause early mismatch rejection;
+- successful output is a process-local, lease-bound prepared bundle handle that
+  contains no path/provider reference in an API response and is unusable after
+  cleanup, expiry, process loss, or generation mismatch;
+- that handle is metadata around the existing `ArtifactScratchManager`,
+  `PreparedArtifact`, and `CommittedArtifactSource` lifecycle, not a second
+  handle/lease/ledger/quota/cleanup abstraction;
+- 04A exposes only internal hidden library seams and tests. It composes no
+  contributor route until 04C completes the same-process orchestration;
+- every old multi-step upload-session/item route and action path is removed or
+  statically unreachable; no multi-item or provider-result compatibility path
+  remains;
+- process loss requires reupload; normal, error, cancellation, timeout, and
+  crash cleanup release scratch quota without deleting durable artifacts;
+- ZIP inspection never blindly applies archive modes; the scratch manager seals
+  regular files to fixed read-only or read-and-execute modes and directories to
+  a fixed read-and-traverse mode, with startup parity across every process that
+  shares the scratch root and secure cleanup owned by the manager; cleanup may
+  restore only manager-owned directory write access under an exclusive valid
+  lease after no-follow ownership/type checks;
+- executable intent alone never causes execution; the locked Project Guide and
+  checker policy remain the execution decision owners;
+- focused tests prove false-to-true execute-bit changes alter semantic hash,
+  timestamp/compression-only changes do not, non-Unix entries default false,
+  and symlink/special entries are rejected;
+- 04A declares no contributor route or routable action manifest entry; the
+  planned `artifact.submission_bundle.prepare` action and AUTH mapping are
+  composed only by 04C after the complete internal operation exists;
+- focused subsystem coverage is at least 90 percent and repository coverage
+  remains at least 78 percent.
 
 ## Exact CI Coverage Gates
 
@@ -100,8 +111,8 @@ coverage report --include='app/adapters/project_agents/*,app/interfaces/project_
 ## Verification
 
 ```bash
-docker compose up -d --wait postgres redis minio
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_artifact_upload_api.py -q --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+docker compose up -d --wait postgres redis
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_submission_bundle_intake.py tests/test_submission_zip_safety.py tests/test_submission_bundle_manifest.py tests/test_artifact_scratch_manager.py -q --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
 (metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 (cd backend && .venv/bin/ruff check app tests)
 python3 scripts/check_stale_artifact_contracts.py
@@ -115,6 +126,6 @@ reuse/dedup, CI integrity, test delta, and docs.
 
 ## Human Review Focus
 
-- Can a client choose a provider key or bypass independent verification?
-- Is the sealed artifact-set commitment deterministic and immutable?
-- Are archive and resource-exhaustion boundaries explicit and tested?
+- Can more than one outer ZIP or unchecked bytes escape scratch?
+- Is recursive inspection clearly the outer archive tree, not nested unpacking?
+- Does semantic equality ignore packaging-only changes without ignoring files?

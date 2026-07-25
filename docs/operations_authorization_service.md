@@ -703,8 +703,8 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 74 PermissionIds, 70 ActionIds, 20 active actions, and
-50 planned actions after AUTH-10B2 activates the three project-role read rows.
+Catalogue totals are 74 PermissionIds, 70 ActionIds, 22 active actions, and
+48 planned actions after AUTH-10C activates the two project-role mutation rows.
 Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
@@ -1129,8 +1129,19 @@ log the key, a cursor, or distinctions hidden by the shared 404. Authorization
 read exhaustion returns 429 with `Retry-After`, and unavailable rate/evidence
 persistence returns retryable 503 before private row lookup.
 
-This read activation adds no migration and changes no PREP, project-role grant
-issue/revoke, or other mutation behavior.
+AUTH-10C adds migration `0034_project_role_issue_evidence`. It performs no
+product-row rewrite: it replaces only the three frozen authority evidence
+function bodies, adds `qualification_snapshot` to the existing privacy resource
+registry, and leaves the existing fact constraint and trigger identities in
+place. Its project-role mutations use the admin-mutation rate control,
+exact-project PREP, UUID idempotency keys, stable replay/conflict responses, and
+fail-closed retryable 503 handling for persistence failures.
+Operators may retry the same key and body after a 503; they must not invent a
+new key until the committed state is known. A revoked or suspended target may
+still have an active grant revoked. Issue writes snapshot-captured then
+grant-issued evidence without invalidation; revoke writes grant-revoked then a
+linked authority invalidation bound to the affected actor, exact grant, role,
+project, and closed future-obligation token.
 
 ## Authority Audit Custody
 
