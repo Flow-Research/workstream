@@ -7,7 +7,7 @@ Proposed and inactive after 11B. Requires a separate signed explicit start.
 ## Goal
 
 Hard-cut the six setup and draft diagnostic GET surfaces assigned by AUTH-11
-from token roles to scoped administrative grants.
+to scoped local administrative grants as the sole product-authority source.
 
 ## Risk and SLA
 
@@ -56,8 +56,8 @@ token-role fallback or dual authorization
 - ProjectRepository remains persistence owner and returns domain records; the
   application layer composes authorization context without a parallel project
   repository in AUTH.
-- Every migrated route declares exactly one primary action and contains no
-  `require_any_role()` or token-role authorization.
+- Every migrated route declares exactly one primary action and uses local
+  grants as its sole product-authority source.
 - Per-action scope, child-binding, concealed-denial, audit, invalidation, and
   live API contract tests pass, including positive Project Manager/Operator/
   Audit and negative Finance/Access Administrator/contributor cases.

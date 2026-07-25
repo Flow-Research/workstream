@@ -55,8 +55,8 @@ token-role fallback or dual authorization
   response as unauthorized and nonexistent resources.
 - Canonical project resolution and authorization precede sensitive assembly;
   concealed denial is identical for unauthorized and nonexistent resources.
-- Every migrated route declares exactly one primary action and contains no
-  `require_any_role()` or token-role authorization.
+- Every migrated route declares exactly one primary action and uses local
+  grants as its sole product-authority source.
 - Principal-specific field allowlists, scope, concealed denial, audit,
   invalidation, and live API contract tests pass.
 - Authorization spec, role matrix, project operating manual, and authorization

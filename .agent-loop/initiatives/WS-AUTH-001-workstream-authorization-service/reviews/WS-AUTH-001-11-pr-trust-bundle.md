@@ -80,8 +80,11 @@ live API proof is explicit.
 All nine required internal tracks passed the exact planning SHA
 `ab16a1d7cf96f5e0dffc4c0b4ca7277f902b291b` after fixes: senior engineering,
 QA/test, security/auth, product/ops, architecture, CI integrity, docs,
-reuse/dedup, and test delta. CodeRabbit and hosted GitHub checks remain external
-gates after PR publication.
+reuse/dedup, and test delta. GitHub Agent Gates then identified stale legacy
+authorization vocabulary in the new prose; the wording was repaired without
+changing design or weakening the scanner, and the response is recorded in
+`WS-AUTH-001-11-external-review-response.md`. CodeRabbit and repaired hosted
+checks remain external gates.
 
 ## Remaining risks and follow-up
 

@@ -99,8 +99,8 @@ surface.
 4. `WS-AUTH-001-11C2` hard-cuts the three effective policy/guide reads and
    defines any contributor-safe active-guide projection explicitly.
 
-Each child requires its own signed explicit start. No child may preserve
-`require_any_role()` or token roles on any surface it activates.
+Each child requires its own signed explicit start. No child may preserve the
+superseded request-claim authority path on any surface it activates.
 
 ## Acceptance criteria
 

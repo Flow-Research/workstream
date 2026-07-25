@@ -396,9 +396,8 @@ need an independently reviewable contract and production-code budget.
 - The current project router exposes ten GET routes and no project collection
   or list route. The inherited count/cursor requirement therefore described no
   existing surface and is removed.
-- All ten reads currently rely on `require_any_role()` with token roles
-  `admin` or `project_manager`; none has a registered primary project-read
-  ActionId declaration.
+- All ten reads currently rely on the superseded request-claim gate; none has a
+  registered primary project-read ActionId declaration.
 - `GET /api/v1/actors/me/authorization-context?project_id=...` is intentionally
   absent today and remains AUTH-11 work carried forward from D32.
 - The current Alembic head is `0034_project_role_issue_evidence`; the next

@@ -57,8 +57,8 @@ project collection/list API
 - The context response is self-only, exact-project, derived from current local
   grants and action availability, and cannot advertise planned/inactive actions.
 - Routers declare one primary ActionId and target; policy stays in the kernel or
-  feature policy layer. Both routes contain no `require_any_role()` or token-
-  role authority after cutover.
+  feature policy layer. Both routes use local grants as their sole product-
+  authority source after cutover.
 - Exact-project allow, cross-project deny, role revocation independence,
   minimal-field, concealed-not-found, audit, invalidation, and live API tests
   pass.

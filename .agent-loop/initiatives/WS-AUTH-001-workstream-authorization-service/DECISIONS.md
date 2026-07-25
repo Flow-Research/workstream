@@ -760,9 +760,9 @@ registers eleven planned actions and owns migration `0035`; it activates no
 surface. 11B activates exact-project identity and introduces the self
 authorization-context surface. 11C1 activates setup and draft diagnostic
 reads. 11C2 activates effective policy and active-guide reads with an explicit
-principal-specific projection. Every activated surface is a hard cutover from
-token roles to local grants; no fallback, alias, or dual authorization path is
-allowed.
+principal-specific projection. Every activated surface uses local grants as
+the sole product-authority source; no fallback, alias, or dual authorization
+path is allowed.
 
 Project identity and active-guide actions use the existing `project.read`
 permission. 11A adds the narrow read-only `project.setup_diagnostic.read` and
