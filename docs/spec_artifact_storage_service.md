@@ -53,22 +53,20 @@ product role, product authorization, or proof of stored content.
 
 ## Canonical Records
 
-### ArtifactUploadSession
+### SubmissionBundlePreparation
 
-Fields include id, actor, project, optional task/guide, permitted logical roles,
-state, item/byte limits and totals, sealed artifact-set hash, expiry, consumed
-timestamp, database timestamps, and CAS version.
+One contributor operation accepts exactly one outer ZIP. The ZIP remains in the
+existing bounded `ArtifactScratchManager` through safe tree inspection,
+canonical archive/semantic-manifest identity, unchanged-work comparison, and
+mandatory platform/locked-guide checks. It is not candidate storage, carries no
+provider reference, cannot cross a process boundary, and is discarded on
+failure or process loss.
 
-States are `open`, `sealed`, `consumed`, `expired`, and `cancelled`.
-
-### ArtifactUploadItem
-
-One per staged object. Fields include session, logical role, normalized display
-name, expected SHA-256, expected byte count, canonical request digest, scoped
-idempotency key, CAS version, content ID, failure code, and timestamps.
-
-States are `reserved`, `uploading`, `replay_required`,
-`stored_pending_verification`, `ready`, `failed`, and `cancelled`.
+Only a passing preparation enters generic durable admission. Existing
+`ArtifactUploadSession`/`ArtifactUploadItem` rows and planned actions are legacy
+unavailable staging input and must be removed or made statically unreachable by
+ART-04A plus the separately reviewed AUTH registration handoff before the new
+surface activates.
 
 ### ArtifactStorageAdmissionLedger
 
@@ -107,7 +105,7 @@ configuration for task, producer, project, and deployment scopes; a missing,
 malformed, or nonpositive required limit fails startup rather than creating an
 unbounded scope. Product callers never supply scope collections. They submit
 one of the closed producer requests defined below; artifact orchestration loads
-the authoritative project, task, upload-session, checker-run, actor/service,
+the authoritative project, task, submission-bundle operation, checker-run, actor/service,
 and deployment facts, derives the complete `AdmissionScopeSet` internally, and
 commits all reservations or none. A missing canonical relationship fails before
 provider I/O rather than silently omitting a quota scope.
@@ -121,7 +119,7 @@ manufacture capacity.
 ### ArtifactPutAttempt
 
 One durable attempt owns the gap between Transaction A and Transaction B.
-Fields include producer request type/reference, upload item or system output
+Fields include producer request type/reference, producer admission or system output
 reference, content commitment, deterministic object identity, admission-charge
 references, operation/request digests, status, next-run time, executor UUID,
 database-clock lease expiry, execution generation, bounded terminal result,
@@ -140,19 +138,17 @@ A bounded PostgreSQL scanner publishes `prepared`,
 `acknowledgement_unknown`, and expired `put_in_flight` attempts. The resolver
 uses read-only `observe_put_result`, then opens and hashes any observed object.
 Matching bytes complete the original charges and Transaction B facts exactly
-once. Authoritative absence releases charges and moves the item to
-`replay_required`. Mismatched bytes remain charged, quarantine the key, and
+once. Authoritative absence releases charges and moves the producer attempt to
+`absent_replay_required`; a legacy contributor upload item, while it exists,
+moves to `replay_required`. Mismatched bytes remain charged, quarantine the key, and
 create an incident. Terminal writes require matching executor and generation.
 No background resolver performs another provider write.
 
-Contributor upload sessions also reserve open-session slots at task, actor,
-project, and deployment scope. PostgreSQL-clock expiry is owned by one bounded
-periodic scanner and is also applied lazily before new session admission. The
-scanner and lazy path use the fixed system permission
-`artifact.upload_session.expire`; the atomic terminal transition releases the
-slot once. Completed byte charges remain after cancellation, expiry, or absence
-of a product binding because v0.1 has no physical deletion. Provider I/O never
-starts when any applicable scope lacks capacity.
+Submission-bundle preparation reserves bounded scratch through the existing
+scratch ledger, not a durable open-session slot. Failed or lost preparations
+release scratch without altering completed durable-byte charges. Provider I/O
+never starts until every pre-submit gate passes and every applicable durable
+scope has capacity.
 
 ### ArtifactContent
 
@@ -175,20 +171,22 @@ availability_state = unknown | available | unavailable
 integrity_state    = unknown | valid | invalid
 ```
 
-Transaction B sets the upload item to `stored_pending_verification` and creates
-the replica as `pending/unknown/unknown`. A matching complete read sets the item
-to `ready` and replica to `verified/available/valid`. A provider-unavailable or
+Transaction B sets the `ArtifactPutAttempt` to `object_confirmed`, sets a legacy
+contributor upload item, while it exists, to `stored_pending_verification`, and
+creates the replica as `pending/unknown/unknown`. A matching complete read makes the
+admission bindable and replica `verified/available/valid`. A provider-unavailable or
 conflict job result does not fabricate a replica observation.
 
 A confirmed absent object sets the replica to
 `missing/unavailable/unknown`. Before any binding exists, and only while the
-original upload session/item remains eligible, an exact replay by the original
-authorized uploader may move that same replica to `pending/unknown/unknown`,
-set the item back to `stored_pending_verification`, append a new operation
-receipt, and create a new verification job. After a binding exists, the missing
+original producer attempt remains eligible, an exact replay by the original
+authorized producer may move that same replica to `pending/unknown/unknown`,
+set the attempt back to `object_confirmed`, set a legacy contributor upload item,
+while it exists, to `stored_pending_verification`, append a new operation receipt,
+and create a new verification job. After a binding exists, the missing
 replica is terminal and cannot return to pending in v0.1. A digest/size mismatch
 sets the replica to `integrity_mismatch/available/invalid`, fails the pre-binding
-item when applicable, and quarantines access; it never returns to pending.
+attempt when applicable, and quarantines access; it never returns to pending.
 
 Provider references are internal. They never appear in contributor, reviewer,
 project-owner, or public API responses.
@@ -270,7 +268,7 @@ preserves history.
 ### ArtifactOperationReceipt
 
 Append-only Workstream evidence for one immutable put acknowledgement. It links
-the exact upload item and replica and records operation, idempotency key,
+the exact producer admission/attempt and replica and records operation, idempotency key,
 `request_digest`, opaque `provider_object_ref`, replay observation, bounded
 outcome/details, attempt number, correlation ID, and `created_at`. Adapter and
 namespace identity resolve through the linked replica. A response digest,
@@ -356,9 +354,9 @@ Product modules receive only these narrow asynchronous capabilities:
 
 ```text
 GuideArtifactIngestPort.ingest(GuideArtifactIngestRequest)
-ContributorArtifactUploadPort.create/read/write/seal/cancel(...)
+SubmissionBundlePreparationPort.prepare(SubmissionBundlePreparationRequest)
 ArtifactBindingPort.bind_verified(ArtifactBindingCreateRequest)
-ArtifactMaterializationPort.materialize_ready_upload_set(ReadyUploadSetRequest)
+ArtifactMaterializationPort.materialize_prepared_bundle(PreparedBundleMaterializationRequest)
 ArtifactMaterializationPort.materialize_bindings(BindingMaterializationRequest)
 CheckerArtifactOutputPort.store(CheckerOutputArtifactRequest)
 ArtifactOperatorReadPort.list_bindings/list_replicas/list_receipts/
@@ -368,8 +366,10 @@ ArtifactOperatorRecoveryPort.retry_verification(ArtifactRecoveryRequest)
 
 `GuideArtifactIngestRequest` contains the authenticated actor context, project
 and guide-source snapshot item IDs, logical role, authorized byte source, and
-optional client commitment. `ReadyUploadSetRequest` contains task ID, sealed
-upload-session ID, locked policy/checker context, and authorization context.
+optional client commitment. `SubmissionBundlePreparationRequest` contains the
+authorized contributor/task/assignment context and one outer ZIP byte source.
+`PreparedBundleMaterializationRequest` is internal and process-local; it wraps
+only the current `PreparedArtifact` generation and locked policy/checker context.
 `BindingMaterializationRequest` contains task/submission/checker-run context and
 immutable binding IDs. `CheckerOutputArtifactRequest` contains the fixed
 service actor, task/submission/checker-run IDs, logical role, and generated byte
@@ -735,8 +735,9 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
 5. The claimed attempt is set to `put_in_flight`; the adapter conditionally
    stores or resolves an exact replay candidate.
 6. Transaction B validates the reservation/CAS, completes every provisional
-   charge, records content, replica, and operation receipt, sets the item to
-   `stored_pending_verification`, and sets the replica to
+   charge, records content, replica, and operation receipt, sets the
+   `ArtifactPutAttempt` to `object_confirmed`, sets a legacy contributor upload item, while it exists,
+   to `stored_pending_verification`, and sets the replica to
    `pending/unknown/unknown`.
 7. The transaction creates an outbox/publication obligation for one
    verification job.
@@ -759,10 +760,11 @@ Acknowledgement loss leaves the durable put attempt and charges provisional.
 The attempt scanner publishes resolution after an ambiguous outcome or expired
 execution lease. Resolution performs a fresh read-only observation and full
 hash. A confirmed object completes the same charges and Transaction B facts.
-Fresh authoritative absence releases them and moves the item to exact replay;
-replay must atomically reacquire every applicable charge before another provider
-call. Integrity-mismatched or quarantined existing bytes remain completed and
-charged.
+Fresh authoritative absence releases them and moves the `ArtifactPutAttempt` to
+`absent_replay_required`; while a legacy contributor upload item exists, it
+alone moves to `replay_required`. Replay must atomically reacquire every
+applicable charge before another provider call. Integrity-mismatched or
+quarantined existing bytes remain completed and charged.
 
 ### Prepared Byte Sources
 
@@ -884,11 +886,11 @@ The same canonical `ArtifactScratchManager` also owns checker-workspace
 allocations. Authoritative pre-submit introduces one authorized artifact
 materializer, and post-submit reuses it without a second workspace manager.
 The materializer exposes two separate methods, not one caller-selected source
-union: `materialize_ready_upload_set` accepts a sealed upload artifact set whose
-items are all `ready` before a submission binding exists, and
-`materialize_bindings` accepts immutable `ArtifactBinding` IDs after submission
-creation. Source resolution is phase-specific and authorized; staging never
-creates a premature product binding. The materializer reserves
+union: an internal pre-submit method accepts only the current process-local
+`PreparedArtifact` submission-bundle workspace, and `materialize_bindings`
+accepts immutable `ArtifactBinding` IDs after submission creation. No scratch
+path or handle crosses an API/Celery boundary, and staging never creates a
+premature product binding. The materializer reserves
 the complete workspace against the same aggregate ledger and quotas, streams
 exact provider bytes into private no-follow paths, and recomputes SHA-256 and
 byte count for every file. Any mismatch becomes an artifact incident before
@@ -1021,20 +1023,32 @@ those stable Workstream IDs.
 No route returns provider object references, bucket/key, endpoint, credentials,
 signed URLs, or raw provider responses. Pagination is bounded and stable.
 
-## Exact Artifact-Set Admission
+## Exact Submission-Bundle Admission
 
-Sealing generates `ArtifactSetManifest` from trusted server facts. Entries are
-deterministically ordered and commit to logical role, normalized display name,
-content ID, SHA-256, and byte count. Exact duplicates are rejected.
+One contributor operation receives one outer ZIP into bounded private scratch.
+Workstream computes its exact SHA-256/byte count, walks the complete safe outer
+archive tree, and generates a deterministic `SubmissionBundleManifest` from
+normalized file/directory paths, entry type, file SHA-256/byte count, and the
+normalized executable flag for each regular file. Nested
+archives remain opaque in v0.1. Exact archive or semantic-manifest equality with
+the immediate prior immutable Submission rejects before checker/provider I/O.
 
-The pre-submit admission binds the artifact-set hash to actor, task, effective
-project policy, project pre-submit checker, summary, contributor attestation,
-expiry, and upload session. Submission creation locks and consumes that exact
-admission and session in one transaction. A changed field or changed artifact
-requires a new precheck.
+For a regular Unix-created ZIP entry with valid mode metadata, `executable` is
+true when any execute bit is present. It defaults false for non-Unix or invalid
+mode metadata and is null for directories. Ownership, group, read/write bits,
+setuid/setgid/sticky bits, timestamps, compression, and comments are excluded.
+Symlinks/special entries remain rejected. Materialization never restores raw
+archive modes: fixed startup-validated modes produce sealed read-only files,
+read-and-execute files, and read-and-traverse directories. The flag never
+authorizes execution by itself. Pre-submit and post-submit materialization use
+the same projection and `ArtifactScratchManager` retains secure cleanup custody.
+The exact numeric modes are one startup configuration shared by every process
+using the scratch root. Cleanup under an exclusive generation/lease may restore
+only the manager-owned directory write bit after no-follow ownership/type
+validation, then remove the tree; archive-supplied modes are never applied.
 
-Artifact reads during authoritative pre-submit have a bounded Workstream-owned
-transient retry budget. Exhaustion returns:
+Mandatory platform and locked Project Guide checks consume that same read-only
+scratch tree. Infrastructure exhaustion returns:
 
 ```text
 HTTP 503
@@ -1042,26 +1056,96 @@ code = pre_submission_infrastructure_unavailable
 ```
 
 This is infrastructure state, not a checker result, review decision, or
-contributor outcome. It creates no admission, submission, checker finding,
-compensation, contribution, or reputation effect. The sealed upload session and
-artifact set remain sealed, unconsumed, and reusable until normal expiry; only
-the infrastructure attempt and audit are persisted. Idempotency scope is actor,
-task, sealed session/artifact set, locked context, client key, and canonical
-request digest. Exact replay continues or returns the same attempt, changed
-replay conflicts, and concurrent replay cannot create duplicate attempts or
-admissions. After retry-after or storage recovery, the contributor continues
-that same exact attempt without Project Manager or Operator approval.
+contributor outcome. It creates no durable artifact, admission, Submission,
+compensation, contribution, or reputation effect. Scratch is cleaned and
+process loss requires reupload without manager/operator approval.
 
-Before authoritative pre-submit invokes the checker, the shared authorized
-materializer resolves every `ready` item in the sealed upload artifact set,
-reads its content through the referenced verified replica into a canonical
-scratch-manager workspace, recomputes SHA-256 and byte count, and compares them
-with the upload-item/content commitment. No `ArtifactBinding` exists at this
-stage. The checker executes only that verified read-only workspace. Post-submit
-materialization instead resolves immutable binding IDs and compares bytes with
-their bound content commitments. A mismatch is an artifact incident; quota
-exhaustion or transient read failure is infrastructure state and creates no
-checker result or admission.
+Only a passing result is handed immediately to generic durable admission in the
+same process. Workstream writes the outer ZIP once, independently reads it back,
+and publishes a `ready` bindable admission only after exact verification. Existing put
+attempt, observation, receipt, verification, scanner, and recovery records own
+durable ambiguity. Submission creation locks and consumes the exact admission;
+post-submit materialization resolves its immutable binding and recomputes
+integrity before checker execution.
+
+### SubmissionBundleAdmission
+
+One immutable verified preparation with closed status:
+
+```text
+status                         = ready | consumed | stale
+actor_profile_id               = UUID
+preparation_identity_link_id   = UUID
+project_id                     = UUID
+task_id                        = UUID
+assignment_id                  = UUID
+predecessor_submission_id      = UUID | null
+locked_task_context_id/hash    = immutable canonical context reference
+artifact_content_id            = UUID
+submission_bundle_manifest_id  = UUID
+pre_submit_evidence_set_id      = UUID
+ready_at                       = timestamp
+consumed_at                    = timestamp | null
+consumed_by_submission_id      = UUID | null
+stale_at                       = timestamp | null
+stale_reason                   = bounded token | null
+```
+
+It records preparation actor/profile and identity-link provenance, project,
+task, assignment, immediate predecessor, exact locked task/guide/policy context,
+`ArtifactContent`, `SubmissionBundleManifest`, immutable pre-submit evidence-set
+identity, timestamps, terminal reason, and optional consuming Submission.
+Status-field constraints require terminal facts only in their matching state.
+A unique Submission admission reference plus locked/CAS transition permits at
+most one consumer.
+
+`ready -> consumed` occurs only in the transaction creating Submission and
+binding. `ready -> stale` occurs only when consumption proves task closure,
+predecessor advancement, or locked-context replacement. Authority loss alone
+does not stale the admission. Both terminal states are irreversible. Client
+abandonment may leave `ready` unbound indefinitely; it has no Submission,
+review, contribution, compensation, or reputation effect.
+
+All states count against existing completed-byte task/actor/project/deployment
+capacity. Existing Operator admission-usage projections expose bounded unbound
+ready and stale counts/bytes. No admission expiry, release, deletion, provider
+cleanup, retention process, or new recovery aggregate exists. Exact preparation
+replay returns the original admission without another provider write, charge,
+evidence set, or admission.
+
+### Authorization At Durable Boundaries
+
+The preparation route authorizes `artifact.submission_bundle.prepare` before
+accepting bytes. Immediately before capacity reservation and put-attempt
+creation, the owning transaction consumes AUTH's transaction-local prepared
+capability. AUTH and typed TASK/PROJECT capabilities reload/lock their own actor,
+identity-link, project authority, assignment, task, predecessor, locked context,
+action availability, and canonical resource facts. ART does not access
+AUTH-owned persistence. Authorization evidence, capacity, and durable put intent
+commit atomically; provider I/O starts only afterward.
+
+Revocation after durable put intent does not cancel fixed-service verification
+or recovery. It does prevent later binding until Submission creation receives a
+new human decision. That transaction consumes both fresh human
+`submission.create` and fixed-service ActionId
+`artifact.submission.binding.create` capabilities, mapped to PermissionId
+`artifact.binding.create`, locks and matches
+admission/task/assignment/predecessor/context, creates the
+immutable Submission and binding, and marks admission consumed. Any denial,
+cancellation, stale execution, or persistence failure rolls back all effects.
+After authority succeeds, proven task closure, predecessor advancement, or
+locked-context replacement may commit only `ready -> stale` plus bounded
+evidence, never a Submission/binding. Authorization/concealment precedes
+detailed admission status errors.
+
+Stable outcomes for an already authorized matching resource include:
+
+```text
+409 submission_bundle_admission_already_consumed
+409 submission_bundle_admission_context_changed
+409 submission_bundle_admission_stale
+403 <canonical AUTH denial; no admission state disclosure>
+```
 
 After cutover, the public request is:
 
@@ -1069,33 +1153,27 @@ After cutover, the public request is:
 {
   "summary": "...",
   "contributor_attestation": "...",
-  "upload_session_id": "..."
+  "submission_bundle_admission_id": "..."
 }
 ```
 
 Clients do not provide package URI, provider reference, canonical digest
-manifest, artifact-set hash, or server content IDs.
+manifest, semantic-manifest hash, or server content IDs.
 
-### Product Upload APIs
+### Product Submission-Bundle APIs
 
 ```text
-POST   /api/v1/tasks/{task_id}/artifact-upload-sessions
-GET    /api/v1/artifact-upload-sessions/{session_id}
-POST   /api/v1/artifact-upload-sessions/{session_id}/artifacts
-POST   /api/v1/artifact-upload-sessions/{session_id}/seal
-DELETE /api/v1/artifact-upload-sessions/{session_id}
-POST   /api/v1/tasks/{task_id}/submission-precheck
+POST   /api/v1/tasks/{task_id}/submission-bundle-preparations
 POST   /api/v1/tasks/{task_id}/submissions
 ```
 
-The upload APIs return Workstream IDs, canonical SHA-256, byte count, detected
-media type, verification/readiness, and bounded artifact summaries. They never
-return provider internals. Session cancellation is logical staging cleanup; it
-does not physically delete a completed content-addressed object.
-
-Every ID-addressed session read or mutation uses concealed deny/not-found
-behavior. Cross-actor, cross-project, revoked, expired, cancelled, consumed,
-and random IDs cannot be used as an existence oracle.
+The preparation POST performs scratch intake, inspection, checks, and durable
+handoff as one process-local orchestration. It returns only a Workstream
+operation/admission identity and bounded redacted status. An exact idempotent
+POST retry may observe the same durable operation after durable intent; v0.1
+exposes no separate preparation-status GET route. No retry resolves a scratch
+path, every retry obtains fresh preparation authority, and APIs never return
+provider internals.
 
 ## Guide And Checker Binding
 
@@ -1114,9 +1192,10 @@ policy. Recovery authorization and automatic setup continuation write separate
 audit events. A changed snapshot creates a new setup run and cannot resume the
 old one.
 
-`CheckerInputSnapshot` references binding/content IDs, digest, byte count,
-artifact-set hash, locked policy/checker identities, and checker implementation
-identity. Pre-submit and post-submit consume the same sealed artifact-set hash.
+`CheckerInputSnapshot` references binding/content IDs, outer-ZIP digest/byte
+count, semantic-manifest hash, locked policy/checker identities, and checker
+implementation identity. Pre-submit evidence and post-submit execution name the
+same verified admission and exact binding.
 Checker logs and generated outputs become artifact bindings.
 
 Transient post-submit storage unavailability leaves the task in
@@ -1130,10 +1209,13 @@ mismatch on an existing content-addressed key is likewise unrecoverable in
 v0.1: the replica remains quarantined, evaluation stays blocked, and a security
 incident is required. Recovery never overwrites the poisoned key.
 
-Pre-submit and post-submit outage continuation are distinct contracts. The
-former preserves a sealed, unconsumed attempt and returns the stable 503 above;
-the latter preserves `evaluation_pending` and uses checker retry
-infrastructure. Neither path fabricates `accept`, `needs_revision`, or `reject`.
+Pre-submit and post-submit outage continuation are distinct contracts. Before
+durable artifact intent, the former cleans scratch, preserves no reusable
+attempt, returns the stable 503 above, and requires reupload after scratch or
+process loss. After durable handoff, existing ART put/verification recovery
+owns ambiguity. Post-submit checker outage preserves `evaluation_pending` and
+uses checker retry infrastructure. No path fabricates `accept`,
+`needs_revision`, or `reject`.
 
 ## Authorization Dependencies
 

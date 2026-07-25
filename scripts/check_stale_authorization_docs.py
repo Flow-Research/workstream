@@ -377,6 +377,7 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     prefix = text[max(0, worker_offset - 120) : worker_offset]
     token_end = worker_offset + len(token.group(0))
     suffix = text[token_end : token_end + 20]
+    authority_suffix = text[token_end : token_end + 120]
     exact_code_path = token.group(0).lower() == "workers" and (
         (
             re.search(r"(?:^|[^A-Za-z0-9_.-])(?:backend/)?app/$", prefix)
@@ -387,6 +388,30 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
             re.search(r"(?:^|[^A-Za-z0-9_.-])app\.$", prefix) is not None
             and suffix.startswith(".")
         )
+    )
+    exact_coverage_module = (
+        token.group(0).lower() == "workers"
+        and re.search(r"(?:^|\s)--cov=app\.$", prefix) is not None
+        and (not suffix or suffix[0].isspace())
+    )
+    after_code_reference = re.sub(
+        r"^(?:[/.][A-Za-z0-9_.-]+)+", "", authority_suffix
+    )
+    exact_coverage_path = bool(
+        exact_code_path
+        and re.search(r"coverage\s+report\s+--include=['\"]app/$", prefix)
+        and re.match(r"/\*['\"](?:\s|$)", suffix)
+    )
+    exact_celery_module_path = bool(
+        exact_code_path
+        and re.search(r"(?:^|\n)[^;\n]*\bcelery\s+-A\s+app\.$", prefix)
+        and re.match(r"\s+worker\s+--", after_code_reference)
+    )
+    code_path_has_prose = bool(
+        exact_code_path
+        and not exact_coverage_path
+        and not exact_celery_module_path
+        and re.search(r"[A-Za-z]", after_code_reference)
     )
     exact_technical_cli_flag = (
         token.group(0).lower() == "worker"
@@ -407,7 +432,8 @@ def technical_worker_match(text: str, match: re.Match[str]) -> bool:
     )
     return bool(
         TECHNICAL_WORKER_PREFIX.search(prefix)
-        or exact_code_path
+        or (exact_code_path and not code_path_has_prose)
+        or exact_coverage_module
         or exact_celery_cli
         or exact_technical_cli_flag
     )

@@ -86,8 +86,12 @@ Every project inherits Workstream default submission artifact rules. Project pol
 Default required packet fields:
 
 - summary
-- artifact hash manifest
 - contributor attestation
+
+Workstream generates the archive commitment and semantic artifact manifest
+after safely inspecting the submitted outer ZIP. Clients do not supply an
+artifact hash manifest as packet input; later APIs may expose an immutable
+server-generated manifest reference.
 
 Default artifact rules:
 
@@ -95,12 +99,18 @@ Default artifact rules:
 - artifact paths must not contain empty, `.`, or `..` segments
 - uploaded artifacts and storage-backed evidence require `sha256:<64 lowercase hex>` hashes in production
 - test fixtures may use deterministic placeholder hash tokens only in explicit local test paths
+- Workstream normalizes regular-file executable intent from valid Unix ZIP mode
+  metadata; non-Unix/invalid metadata defaults to non-executable
+- executable intent participates in semantic identity, but never by itself
+  authorizes a checker or service to execute the file
 
 Default storage rules:
 
-- clients submit bytes through Workstream upload sessions and receive only
-  Workstream artifact IDs
+- clients submit exactly one outer ZIP through Workstream submission-bundle
+  preparation and receive only Workstream operation/admission IDs
 - persisted product references are immutable Workstream artifact bindings
+- verified admissions may remain unbound and capacity-charged in `ready` or
+  terminal `stale`; clients cannot expire, release, or delete them
 - signed URLs, raw local filesystem paths, provider references, credentials,
   query strings, bucket secrets, and token-bearing references are rejected
   before persistence

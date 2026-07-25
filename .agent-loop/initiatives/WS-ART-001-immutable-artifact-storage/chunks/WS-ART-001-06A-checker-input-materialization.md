@@ -1,4 +1,4 @@
-# Chunk Contract: WS-ART-001-06A Checker Input And Materialization
+# Chunk Contract: WS-ART-001-06A - Checker Input And Materialization
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 05
 
@@ -37,14 +37,15 @@ bounded isolated checker workspaces.
 
 ## Acceptance Criteria
 
-- `CheckerInputSnapshot` commits to submission version, artifact set, exact
-  binding/content IDs, hashes/sizes, locked policy/checker versions, and checker
+- `CheckerInputSnapshot` commits to submission version, submission-bundle
+  manifest, exact binding/content IDs, hashes/sizes, locked policy/checker versions, and checker
   implementation identity;
-- pre-submit and post-submit input prove the same artifact-set hash;
+- pre-submit evidence and post-submit input prove the same archive commitment,
+  semantic-manifest hash, and exact binding;
 - the post-submit runner receives only authorized immutable Workstream binding
-  IDs and reuses the canonical materializer that pre-submit invoked with a
-  sealed-ready upload-set source; both are closed forms of the same typed
-  materialization request;
+  IDs and reuses the same scratch-manager/materialization primitives without
+  accepting a pre-submit scratch handle; pre-submit was process-local and
+  post-submit is binding-only;
 - the fixed checker service principal declares
   `artifact.post_submit.checker_input.materialize`, mapped to
   `artifact.checker_input.materialize`; it does not authorize any binding-create
@@ -57,6 +58,12 @@ bounded isolated checker workspaces.
 - files are sealed read-only after digest/size verification and before checker
   access; success, failure, cancellation, and crash/stale paths cannot orphan
   confidential bytes;
+- materialization reproduces each manifest entry's normalized executable flag
+  with the same fixed read-only/read-and-execute/read-and-traverse modes used by
+  pre-submit scratch; arbitrary archive modes are never restored and executable
+  intent alone never authorizes execution;
+- parity tests prove identical pre/post materialization semantics and reject any
+  mode configuration mismatch across processes sharing a scratch root;
 - transient unavailability leaves the post-submit task in
   `evaluation_pending`; missing/integrity mismatch blocks execution as an
   artifact incident and never becomes a review decision;

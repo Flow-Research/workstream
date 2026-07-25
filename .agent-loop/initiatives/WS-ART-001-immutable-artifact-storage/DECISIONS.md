@@ -149,23 +149,25 @@ Operators receive bounded read-only admission-usage visibility and alerts.
 Quota expansion is a reviewed configuration/runbook operation; it never
 releases or edits an authoritative charge.
 
-## D19 - Upload-Session Slot Expiry
+## D19 - Submission-Bundle Scratch Capacity
 
-Contributor open-session slots are separate from retained-byte admission.
-Chunk 04A owns PostgreSQL-clock periodic Celery expiry and lazy expiry before
-new-session admission. Both paths use the fixed system permission
-`artifact.upload_session.expire` and one atomic terminal transition that
-releases the slot exactly once. Cancellation or expiry never releases a
-completed durable-byte charge.
+The earlier durable multi-step upload-session slot design is superseded before
+activation. One continuous submission-bundle preparation reserves bounded
+scratch capacity through the existing `ArtifactScratchManager`. No durable
+upload session/item is a candidate store, no scratch path crosses a process or
+Celery boundary, and process loss requires reupload. ART-04A must remove or make
+unreachable every unused upload-session/item model and action path; no alias or
+parallel contributor intake remains.
 
 ## D20 - Closed Materialization Sources
 
-The provider-neutral materializer accepts exactly one sealed upload artifact
-set whose items are all `ready` before submission creation, or immutable
-`ArtifactBinding` IDs after submission creation. Staging never creates a
-premature product binding. Both forms resolve through phase-specific
-authorization, stream exact provider bytes, and recompute SHA-256 and byte
-count before a checker receives a read-only workspace.
+Before durable admission, the checker receives only one internal
+`PreparedArtifact`/`ArtifactScratchManager`-owned submission-bundle workspace in
+the same process-local orchestration. After admission, the provider-neutral
+materializer accepts only immutable `ArtifactBinding` IDs. Neither form creates
+a second handle, lease, ledger, quota, cleanup path, or premature product
+binding. Both recompute the relevant SHA-256 and byte counts before a checker
+receives a read-only workspace.
 
 ## D21 - Configured Storage Namespace Fence
 
@@ -254,3 +256,109 @@ defined canonically in
 `WS-AUTH-001-ART-CUSTODY` chunk contract. Operator verification retry remains
 an independently authorized human action. Service identity, Celery executor
 identity, and execution-generation fencing never substitute for one another.
+
+## D29 - One Outer ZIP Per Submission
+
+Every contributor Submission version accepts exactly one outer ZIP. Workstream
+recursively inspects the directory/file tree represented by that archive so a
+locked Project Guide checker can require entries such as `task.toml`. An archive
+entry that is itself a ZIP remains one opaque ordinary file. Nested archive
+unpacking is outside v0.1 and requires a separate reviewed capability with
+cumulative safety limits before a Project Guide may request it.
+
+## D30 - Scratch Before Durable Admission
+
+Unchecked contributor bytes remain only in bounded private scratch through
+format/safety inspection, canonical manifest generation, unchanged-work
+comparison, mandatory platform gates, and locked project pre-submit checks.
+Failed, unsafe, unchanged, abandoned, or checker-failing attempts never enter
+object storage. Process or scratch loss before durable intent requires reupload.
+
+No candidate provider namespace, retention window, promotion/copy, or physical
+cleanup API is added. A passing ZIP enters the existing immutable
+`ArtifactStore` path once. Ambiguous durable effects reuse existing put attempt,
+observation, verification, receipt, scanner, and recovery abstractions.
+
+## D31 - Canonical Submission Bundle Identity
+
+Workstream records both exact archive identity (server-computed SHA-256 and byte
+count) and semantic tree identity. The semantic manifest commits to normalized
+file/directory path, entry type, each file's SHA-256 and byte count, and the
+normalized executable flag for regular files. It does
+not commit to archive timestamps, compression method/level, comments, ownership,
+or ownership, group, read/write/special bits, or other platform permission
+metadata. Valid Unix execute bits are normalized into the sole semantic
+permission flag; non-Unix/invalid mode metadata defaults it to false. Symlinks
+and unsupported special entries are
+rejected. Exact archive equality or semantic-manifest equality with the
+immediate prior immutable Submission rejects before provider I/O.
+
+## D32 - Existing Submission Is The Version Aggregate
+
+The current immutable `Submission` row plus its `version` and
+`supersedes_submission_id` is the canonical version aggregate. There is no
+competing `SubmissionVersion` table. A reviewer attaches only one of `accept`,
+`needs_revision`, or `reject` plus note/findings to the exact Submission. A
+contributor response to `needs_revision` uploads a new complete ZIP, creates the
+next Submission, and records the exact prior-Submission and review relationship
+through the TASK/REV joint contract.
+
+Indexed latest/current/accepted queries or projections serve normal reads;
+immutable relationships retain complete history and audit reconstruction.
+
+## D33 - Integrity Is Rechecked On Egress
+
+Historical verification is necessary but not sufficient for a later full-byte
+read. Checker materialization, reviewer download, and downstream delivery use an
+ART-owned provider-neutral read capability that recomputes complete SHA-256 and
+byte count while streaming and fails closed on missing or mismatched bytes.
+Consumer initiatives own their lifecycle decisions and reference the exact
+Submission/binding; ART owns only byte identity, integrity, manifests, binding,
+and access capability.
+
+## D34 - Conservative Limits Remain
+
+The existing configured upload, scratch, duration, and provider limits remain
+unchanged. Any larger ZIP, extracted-byte, per-file, entry-count, depth,
+compression-ratio, scratch, or time limit requires a separate reviewed change
+with concurrency, capacity, runtime, cost, and abuse evidence.
+
+## D35 - Verified Admissions May Remain Unbound
+
+`SubmissionBundleAdmission` has the closed lifecycle `ready -> consumed|stale`.
+Client abandonment is valid and remains charged to existing completed-byte
+capacity. Consumption and Submission/binding creation are one transaction with
+database uniqueness. Proven task/predecessor/locked-context drift makes a ready
+admission stale; authority loss alone does not. No expiry, release, deletion,
+retention process, or cleanup lifecycle exists in v0.1.
+
+## D36 - Authorization Is Fresh At Both Durable Mutations
+
+Initial route authorization is insufficient. 04C consumes an AUTH-owned
+transaction-local prepared capability in the durable-intent transaction before
+provider I/O. 05 obtains and consumes new human submission and fixed-service
+binding capabilities in the atomic Submission/binding/admission transaction.
+ART never reads or locks AUTH-owned persistence directly.
+
+## D37 - Executable Intent Is Canonical, Not Archive Permission Preservation
+
+Regular-file executable intent participates in semantic identity. Materializers
+project fixed read-only or read-and-execute modes and fixed read-and-traverse
+directory modes; they never preserve arbitrary ZIP permissions or automatically
+execute a file. The Project Guide/checker policy remains the execution decision
+owner. Shared scratch startup rejects inconsistent canonical mode configuration,
+and secure cleanup remains owned by `ArtifactScratchManager`.
+
+## D38 - One Contributor Preparation Action
+
+The prior multi-step upload-session action proposal does not govern the new
+continuous scratch-bound flow. AUTH first registers planned ActionId
+`artifact.submission_bundle.prepare` mapped to existing PermissionId
+`submission.create`. ART-04A through 04C then provide the complete hidden route,
+canonical task/assignment/actor resource facts, guards, and manifest. AUTH alone
+integrates and activates it afterward.
+
+Contributor authority never implies fixed service authority. Checker
+materialization, verification execution, pending-work scanning, ambiguous-put
+resolution, and binding retain their distinct fixed actions. No compatibility
+alias exposes the obsolete multi-step session actions.

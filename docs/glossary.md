@@ -68,11 +68,13 @@ actor IDs or grants.
 The active-or-revoked link between one canonical issuer/opaque subject and one
 ActorProfile. Raw tokens, provider credentials, and full claims are not stored.
 
-## ArtifactUploadSession
+## SubmissionBundlePreparation
 
-The task- or guide-scoped operational staging record that authorizes bounded
-artifact upload, sealing, expiry, and single-use consumption. It is not a
-submission and grants no review authority.
+The bounded process-local operation that receives one contributor outer ZIP,
+inspects and checks its internal tree in private scratch, and hands passing bytes
+once to immutable artifact admission. It is not durable candidate storage, a
+Submission, or review authority; process loss before durable intent requires
+reupload.
 
 ## ArtifactContent
 
@@ -80,12 +82,20 @@ Workstream's provider-neutral immutable content identity: server-computed
 SHA-256, byte count, and bounded media metadata. Opaque provider identifiers and
 protocol observations are replica details, not this record's identity.
 
+## SubmissionBundleAdmission
+
+The capacity-charged verified result of one passing submission-bundle
+preparation. Its closed lifecycle is `ready -> consumed|stale`. A ready admission
+may remain unbound through client abandonment; consumption is atomic with one
+immutable Submission and binding, while proven task/predecessor/locked-context
+drift may make it stale. No state expires, releases storage capacity, or
+authorizes deletion in v0.1.
+
 ## ArtifactUploadItem
 
-The per-item mutable upload-operation ledger inside an
-`ArtifactUploadSession`. It owns byte reservation, logical role, scoped
-idempotency, request digest, CAS state, opaque `provider_object_ref`, and the
-resulting `ArtifactContent`. It is not an `ArtifactBinding`.
+Legacy unavailable multi-item staging metadata. ART-04A must remove it or make
+it statically unreachable before submission-bundle preparation activates. It is
+not the v0.1 contributor intake, `ArtifactContent`, or an `ArtifactBinding`.
 
 ## ArtifactBinding
 
@@ -105,20 +115,20 @@ states. Logical Workstream references are represented only by
 ## ArtifactOperationReceipt
 
 Append-only Workstream evidence for one immutable put acknowledgement. It links
-the exact upload item and replica and records operation, idempotency key,
+the exact producer admission/attempt and replica and records operation, idempotency key,
 `request_digest`, opaque `provider_object_ref`, replay observation, bounded
 outcome/details, attempt number, correlation ID, and creation time. It contains
 no response digest or provider receipt.
 
-## ArtifactSetManifest
+## SubmissionBundleManifest
 
-The server-generated canonical description of a sealed upload session's content
-IDs, logical roles, trusted file facts, SHA-256 values, and byte counts. Every
-entry has a server-derived identity over all semantic fields, exact duplicate
-entries are rejected, and a total ordering makes the hash deterministic. Its
-hash commits only to that exact set. A separate pre-submit admission record
-binds the hash to actor, task, policy, checker, exact submission input, result,
-and expiry.
+The server-generated canonical semantic description of the file/directory tree
+inside one contributor outer ZIP. It commits to normalized paths, entry types,
+each file's SHA-256/byte count, and normalized regular-file executable intent
+while excluding other ZIP packaging and permission metadata.
+It is distinct from the exact outer-ZIP SHA-256/byte count. Together they bind
+pre-submit evidence, verified admission, the immutable Submission, and its exact
+artifact binding.
 
 ## ReviewPacketManifest
 
