@@ -143,7 +143,7 @@ python3 scripts/check_markdown_links.py docs/operations_backend_testing.md .agen
 git diff --check origin/main...HEAD
 ```
 
-Result summary: Ruff passed; 83 focused non-service tests passed and all 11
+Result summary: Ruff passed; 89 focused non-service tests passed and all 11
 service-backed runner tests remain mandatory in hosted CI; 100 Agent Gates
 passed; exact collection and independent recollection agreed on 2,056 nodes;
 merge intent,

@@ -20,7 +20,9 @@ Reviewer run IDs: ci02b_cr_senior, ci02b_cr_qa, ci02b_cr_security,
 ci02b_cr_ops, ci02b_cr_arch, ci02b_cr_ci, ci02b_cr_docs,
 ci02b_cr_reuse, ci02b_cr_test_delta
 
-After the reviewed SHA, only evidence files changed.
+The timing-target repair after this historical reviewed revision is undergoing
+a fresh exact-SHA review. The final evidence commit will replace this revision
+binding after every required track passes.
 
 ## Reviewer Results
 
@@ -31,8 +33,8 @@ After the reviewed SHA, only evidence files changed.
 | security/auth | PASS | None | Environment isolation and admin/MinIO custody remain fail closed. |
 | product/ops | PASS | None | No product, compensation, review-decision, or reputation behavior changed. |
 | architecture | PASS WITH LOW RISKS | None | Runner, provisioner, and independent validator boundaries remain separate. |
-| CI integrity | PASS | None | Four-lane failure custody and every coverage/timing gate remain blocking. |
-| docs | PASS WITH LOW RISKS | None | Runbook distinguishes prior hosted evidence, hard timing failure, and null failed metadata. |
+| CI integrity | SUPERSEDED | None | Historical result before the owner-accepted timing-target repair. |
+| docs | SUPERSEDED | None | Historical result before the runbook was aligned with accepted-risk semantics. |
 | reuse/dedup | PASS WITH LOW RISKS | None | The single synthetic-row path reuses canonical lane finalization. |
 | test delta | PASS | None | Repair adds regression coverage without skips or weakened assertions. |
 
@@ -67,9 +69,11 @@ coverage or exact-node custody bypass.
 - Removed intermediate coverage files after authenticated per-lane combination
   so the final workflow accepts exactly four public lane artifacts before one
   literal `coverage combine`.
-- Added fail-closed hosted evidence for total Backend wall time, slowest lane,
-  aggregate runner seconds, exact node counts, coverage percentage, and raw
-  digests; total wall time above 480 seconds fails with no silent waiver.
+- Added hosted evidence for total Backend wall time, slowest lane, aggregate
+  runner seconds, exact node counts, coverage percentage, raw digests, and the
+  explicit 480-second target outcome. Correctness and coverage remain
+  fail-closed; the owner-accepted performance miss is recorded rather than
+  overriding those results.
 - Redacted direct admin-runner logs and aligned the operations runbook with the
   actual hosted sequence and local diagnostic boundary.
 - Added explicit fixed-path initialization of `.ci/test-lanes` before the first
@@ -123,8 +127,8 @@ git diff --check origin/main...HEAD
 ## Remaining Risks
 
 - The exact GitHub Backend job must still prove real PostgreSQL and MinIO
-  concurrency, API E2E, 78/90 coverage gates, and total wall time at or below
-  480 seconds on the final PR head. Prior run `30118538144` passed functional
+  concurrency, API E2E, 78/90 coverage gates, and record its 480-second target
+  outcome on the final PR head. Prior run `30118538144` passed functional
   and coverage custody but failed timing for the now-reverted six-process
   experiment; it is diagnostic evidence, not completion proof.
 - A force-kill after the bounded cleanup grace can leave runner-owned resources

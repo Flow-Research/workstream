@@ -6611,6 +6611,12 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     ):
         assert f'"{required_field}"' in hosted_command
     assert "waiver" not in hosted_command.lower()
+    operations = (ROOT / "docs/operations_backend_testing.md").read_text(
+        encoding="utf-8"
+    )
+    assert "whether\nthe eight-minute target was met" in operations
+    assert "does not override otherwise passing correctness" in operations
+    assert "makes the required check fail outright" not in operations
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
     actual_coverage = tuple(

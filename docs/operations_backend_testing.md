@@ -132,7 +132,9 @@ coverage tampering before coverage combination.
 
 Rerun the complete job on the same exact head. Never edit or upload evidence
 manually. Every new commit requires a complete new run because its head and
-digests differ. More than eight minutes makes the required check fail outright.
-An explicit repository-owner acceptance is a human merge-checkpoint decision;
-it does not turn the workflow green or change its evidence. Never lower
-coverage, skip nodes, or add a silent fallback to meet the target.
+digests differ. Hosted evidence always records the exact wall time and whether
+the eight-minute target was met. When the repository owner explicitly accepts
+a measured target miss at the human merge checkpoint, that performance result
+does not override otherwise passing correctness, custody, service-contract,
+API, and coverage gates. Never lower coverage, skip nodes, or add a silent
+fallback to meet the target.
