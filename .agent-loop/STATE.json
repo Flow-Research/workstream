@@ -14,27 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30126871329/job/89592328264"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30152361574/job/89664787544"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30126705724/job/89594399993"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30152361564/job/89665622635"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-001-10C",
-    "chunk_title": "Project Role Grant Mutations",
-    "initiative_id": "WS-AUTH-001",
-    "next_chunk_id": "WS-AUTH-001-11",
-    "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
+    "chunk_id": "WS-AUTH-002-PLAN",
+    "chunk_title": "Authorization Docstring Lint Correction Planning Intake",
+    "initiative_id": "WS-AUTH-002",
+    "next_chunk_id": "WS-AUTH-002-01",
+    "next_chunk_title": "Four Authorization Public Docstrings",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-AUTH-001-11",
-    "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
+    "next_chunk_id": "WS-AUTH-002-01",
+    "next_chunk_title": "Four Authorization Public Docstrings",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -45,47 +45,70 @@
       "pr_number": 149
     }
   ],
+  "planning_intake": {
+    "base_tree_sha": "03ce7c91d528342495cef818fbb01949bcb3ef04",
+    "changed_paths": [
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/CHUNK_MAP.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/DECISIONS.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/DISCOVERY.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/INTENT.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/PLAN.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/RISKS.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/STATUS.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/chunks/WS-AUTH-002-01-four-public-docstrings.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/chunks/WS-AUTH-002-PLAN-planning-intake.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/reviews/WS-AUTH-002-PLAN-internal-review-evidence.md",
+      ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/reviews/WS-AUTH-002-PLAN-pr-trust-bundle.md",
+      ".agent-loop/merge-intents/WS-AUTH-002-PLAN.json"
+    ],
+    "delta_sha256": "6967aa43296be0876671e3ee7d7bd515fdade4698b44fff7f80df450120eee93",
+    "first_parent_tree_sha": "03ce7c91d528342495cef818fbb01949bcb3ef04",
+    "head_tree_sha": "49acd63db82dc53d7dd86e56893176385a8b081d",
+    "initiative_directory": "WS-AUTH-002-authorization-docstring-lint-correction",
+    "merge_tree_sha": "49acd63db82dc53d7dd86e56893176385a8b081d",
+    "schema_version": 1
+  },
   "protected_checks": {
     "schema_version": 1,
     "selected": {
       "agent-gates": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-24T21:12:33Z",
+        "completed_at": "2026-07-25T09:10:54Z",
         "conclusion": "success",
-        "head_sha": "f2673d63a55b6ebf22449ac275f0268bb0618bd2",
-        "id": 89592328264,
-        "merge_cutoff": "2026-07-25T08:22:08Z",
-        "started_at": "2026-07-24T21:11:50Z"
+        "head_sha": "c87080c0d17969ac543ccab990370f4b99b58f90",
+        "id": 89664787544,
+        "merge_cutoff": "2026-07-25T09:53:12Z",
+        "started_at": "2026-07-25T09:10:20Z"
       },
       "test": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-24T21:23:32Z",
+        "completed_at": "2026-07-25T09:23:09Z",
         "conclusion": "success",
-        "head_sha": "f2673d63a55b6ebf22449ac275f0268bb0618bd2",
-        "id": 89594399993,
-        "merge_cutoff": "2026-07-25T08:22:08Z",
-        "started_at": "2026-07-24T21:22:50Z"
+        "head_sha": "c87080c0d17969ac543ccab990370f4b99b58f90",
+        "id": 89665622635,
+        "merge_cutoff": "2026-07-25T09:53:12Z",
+        "started_at": "2026-07-25T09:22:30Z"
       }
     },
-    "sha256": "9eec0d7875bca259bd68712d0f2fceed4e0692e2f2f866706cac0a2d2184a23a"
+    "sha256": "610d3987a49e73206aeb5bc7d5cdc3a37306ca03b10149f26eb964458f32453a"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "bcf1292e1a591e3e84bf8ee212ee7191d80741fa",
-    "head_ref": "codex/ws-auth-001-10c-project-role-grant-mutations",
-    "head_sha": "f2673d63a55b6ebf22449ac275f0268bb0618bd2",
-    "intent_blob_sha": "cfef9a9a3a14930dd2e8f85f2dd667fe513a5387",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10C.json",
-    "main_sha": "d7169cb6ae76ae634329d2a10720ac8ca7bafc28",
-    "merged_at": "2026-07-25T08:22:08Z",
+    "first_parent_sha": "d7169cb6ae76ae634329d2a10720ac8ca7bafc28",
+    "head_ref": "codex/ws-auth-002-plan-docstring-lint",
+    "head_sha": "c87080c0d17969ac543ccab990370f4b99b58f90",
+    "intent_blob_sha": "e25f07d86b3cb8bf3150baa16ae0f918d960b83e",
+    "intent_path": ".agent-loop/merge-intents/WS-AUTH-002-PLAN.json",
+    "main_sha": "f3ece23e0f128258947137764b39b7d59dd7b2a8",
+    "merged_at": "2026-07-25T09:53:12Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 194,
-    "pr_title": "feat(auth): add project role grant mutations",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/194"
+    "pr_number": 199,
+    "pr_title": "docs(auth): plan four-docstring lint correction",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/199"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-25T08:22:08Z"
+  "updated_at": "2026-07-25T09:53:12Z"
 }
