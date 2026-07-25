@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "initiative_id": "WS-AUTH-002",
+  "chunk_id": "WS-AUTH-002-PLAN",
+  "chunk_title": "Authorization Docstring Lint Correction Planning Intake",
+  "next_chunk_id": "WS-AUTH-002-01",
+  "next_chunk_title": "Four Authorization Public Docstrings",
+  "next_requires_explicit_start": true
+}
