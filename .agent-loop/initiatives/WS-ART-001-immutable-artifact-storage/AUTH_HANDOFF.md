@@ -59,9 +59,10 @@ intent commit atomically before provider I/O.
 
 ART-05 requires a new human authorization decision for `submission.create` and
 a separately prepared fixed-service capability for
+ActionId `artifact.submission.binding.create`, mapped to PermissionId
 `artifact.binding.create`. Both are consumed in the one transaction that locks
-the ready admission and TASK-owned context, creates Submission and binding, and
-marks the admission consumed. Human authority implies no service authority.
+the ready admission and TASK-owned context, creates Submission and binding,
+and marks the admission consumed. Human authority implies no service authority.
 Revocation after durable put intent does not cancel verification/recovery, but
 the resulting admission remains unbound until a fresh 05 decision succeeds.
 Authorization denial precedes admission-detail errors so unrelated actors
@@ -69,11 +70,14 @@ cannot distinguish missing, ready, stale, or consumed admissions.
 
 The continuous contributor action never implies the fixed service actions:
 
-- `artifact.checker_input.materialize`;
+- `artifact.pre_submit.checker_input.materialize` and
+  `artifact.post_submit.checker_input.materialize`, both mapped to PermissionId
+  `artifact.checker_input.materialize`;
 - `artifact.verification.execute`;
 - `artifact.pending_work.scan`;
 - `artifact.put_attempt.resolve`;
-- `artifact.binding.create`.
+- `artifact.submission.binding.create`, mapped to PermissionId
+  `artifact.binding.create`.
 
 Each fixed service action retains its canonical provisioned service identity,
 matrix row, resource facts, terminal reauthorization, and separate activation

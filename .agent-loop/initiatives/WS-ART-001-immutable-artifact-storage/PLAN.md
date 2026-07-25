@@ -366,7 +366,8 @@ intent commit atomically; failure means no provider I/O and scratch cleanup.
 Durable put intent creates a technical recovery obligation that later human
 revocation does not cancel. Verification may finish, but binding remains
 impossible until 05 obtains fresh human `submission.create` authority and fresh
-fixed-service `artifact.binding.create` authority. 05 consumes both prepared
+fixed-service ActionId `artifact.submission.binding.create` authority, mapped
+to PermissionId `artifact.binding.create`. 05 consumes both prepared
 capabilities in the single task transaction that locks the admission/context,
 creates Submission and binding, and marks the admission consumed. Denial,
 cancellation, stale execution, or persistence failure rolls back every protected

@@ -1127,8 +1127,10 @@ commit atomically; provider I/O starts only afterward.
 Revocation after durable put intent does not cancel fixed-service verification
 or recovery. It does prevent later binding until Submission creation receives a
 new human decision. That transaction consumes both fresh human
-`submission.create` and fixed-service `artifact.binding.create` capabilities,
-locks and matches admission/task/assignment/predecessor/context, creates the
+`submission.create` and fixed-service ActionId
+`artifact.submission.binding.create` capabilities, mapped to PermissionId
+`artifact.binding.create`, locks and matches
+admission/task/assignment/predecessor/context, creates the
 immutable Submission and binding, and marks admission consumed. Any denial,
 cancellation, stale execution, or persistence failure rolls back all effects.
 After authority succeeds, proven task closure, predecessor advancement, or

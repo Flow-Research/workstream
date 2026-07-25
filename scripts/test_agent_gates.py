@@ -5824,13 +5824,43 @@ def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
     for text in (plan, decisions, contract_04c, storage_spec):
         assert "ready -> consumed" in text
         assert "stale" in text
-        assert "expiry" in text.lower()
+    no_lifecycle_process = {
+        "plan": "No state expires, releases capacity, or authorizes provider deletion.",
+        "decisions": (
+            "No expiry, release, deletion, retention process, or cleanup lifecycle "
+            "exists in v0.1."
+        ),
+        "04c": (
+            "v0.1 adds no expiry, release, deletion, retention process, or cleanup "
+            "route;"
+        ),
+        "storage_spec": (
+            "No admission expiry, release, deletion, provider cleanup, retention "
+            "process, or new recovery aggregate exists."
+        ),
+    }
+    for name, text in {
+        "plan": plan,
+        "decisions": decisions,
+        "04c": contract_04c,
+        "storage_spec": storage_spec,
+    }.items():
+        normalized = " ".join(text.split())
+        clause = no_lifecycle_process[name]
+        assert clause in normalized
+        assert clause not in normalized.replace(clause, "Admission expiry is enabled.")
     assert "Client abandonment" in plan
     assert "existing completed-byte scopes" in plan
     assert "transaction-local prepared capability" in auth_handoff
     assert "never imports AUTH-owned repositories" in contract_05
     assert "authorization evidence" in contract_04c
-    assert "fixed-service `artifact.binding.create`" in auth_handoff
+    assert "ActionId `artifact.submission.binding.create`" in auth_handoff
+    assert "PermissionId `artifact.binding.create`" in auth_handoff
+    assert "`artifact.pre_submit.checker_input.materialize`" in auth_handoff
+    assert "`artifact.post_submit.checker_input.materialize`" in auth_handoff
+    assert "mapped to PermissionId\n  `artifact.checker_input.materialize`" in auth_handoff
+    assert "fixed service action\n  `artifact.checker_input.materialize`" not in contract_04a
+    assert "fixed service action `artifact.binding.create`" not in contract_05
     assert "normalized executable flag" in contract_04a
     assert "same fixed" in contract_06a
     assert "non-Unix" in storage_spec

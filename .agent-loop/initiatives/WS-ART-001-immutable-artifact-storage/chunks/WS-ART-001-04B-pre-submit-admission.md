@@ -53,7 +53,8 @@ artifact content, provider object, or Submission.
   same fixed sealed modes as post-submit materialization; it never preserves
   arbitrary ZIP permission metadata or executes a file merely because the flag
   is true;
-- checker workspace creation uses the distinct fixed service action
+- checker workspace creation uses fixed-service ActionId
+  `artifact.pre_submit.checker_input.materialize`, mapped to PermissionId
   `artifact.checker_input.materialize`; contributor preparation authority never
   grants or substitutes for that service authority;
 - a checker failure creates structured findings only: no durable artifact,

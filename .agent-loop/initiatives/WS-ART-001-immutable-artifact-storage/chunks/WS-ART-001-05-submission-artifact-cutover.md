@@ -40,9 +40,10 @@ package transport/hash/manifest authority.
 - before revealing admission state/context, the route obtains a fresh human
   authorization decision; AUTH denial remains concealed from unrelated actors;
 - one transaction consumes fresh prepared human `submission.create` and fixed
-  service `artifact.binding.create` capabilities, locks task, assignment,
-  admission and predecessor, and recomposes final resource facts without TASK
-  or ART importing AUTH-owned repositories;
+  service ActionId `artifact.submission.binding.create` capabilities (mapped to
+  PermissionId `artifact.binding.create`), locks task, assignment, admission and
+  predecessor, and recomposes final resource facts without TASK or ART importing
+  AUTH-owned repositories;
 - the transaction requires `ready`, matches actor profile, task, project,
   assignment, predecessor and exact locked context, allocates the next version,
   creates the immutable Submission and binding, and changes admission to
@@ -55,9 +56,11 @@ package transport/hash/manifest authority.
 - proven task closure, predecessor advancement, or locked-context replacement
   changes a still-ready admission to `stale`; authority loss alone does not, so
   restored authority may later consume a still-compatible ready admission;
-- binding creation uses fixed service action `artifact.binding.create`; the
-  contributor's active `artifact.submission_bundle.prepare` action and
-  `submission.create` permission do not imply internal binding authority;
+- binding creation uses fixed-service ActionId
+  `artifact.submission.binding.create`, mapped to PermissionId
+  `artifact.binding.create`; the contributor's active
+  `artifact.submission_bundle.prepare` ActionId and `submission.create`
+  permission do not imply internal binding authority;
 - version `N+1` records `supersedes_submission_id = N`; the exact relationship
   to a `needs_revision` Review is added only through the reviewed REV/TASK joint
   contract and cannot be fabricated from a note or client ID;
