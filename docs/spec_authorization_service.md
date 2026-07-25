@@ -238,9 +238,10 @@ approved Operator recovery identifiers, 21 artifact identifiers, and
 `review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 70 rows after AUTH-10B2: 20 active actions
-and 50 planned rows. AUTH-10A added five project-role read/manage rows,
-owned by AUTH-10B and AUTH-10C. AUTH-08 adds seven active administrative definition,
+The closed action registry contains 70 rows after AUTH-10C: 22 active actions
+and 48 planned rows. AUTH-10A added five project-role read/manage rows;
+AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
+the two reason-bound, idempotent project-role mutations. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
@@ -743,11 +744,13 @@ chunk. A `needs_revision` task retains a durable revision obligation and cannot
 be returned as ordinary ready work.
 
 Project-role invalidation is exact-role-specific. Submitter revocation alone can
-enter task-assignment reconciliation. Reviewer revocation creates only the
-REV-owned review obligation; adjudicator invalidation remains dormant until its
-lifecycle is enabled. Revoking any one project role leaves the other roles and
-all AdminRoleGrants unchanged. Consumers verify the cause event, grant ID,
-actor, project, and role before changing product state.
+enter task-assignment reconciliation and persists `auth13_assignment`. Reviewer
+revocation creates only the REV-owned review obligation and persists
+`rev_reviewer_obligation`; adjudicator invalidation persists `none` and remains
+dormant until its lifecycle is enabled. Revoking any one project role leaves the
+other roles and all AdminRoleGrants unchanged. Consumers verify the cause event,
+grant ID, actor, project, role, and closed future-obligation token before
+changing product state.
 
 ## Idempotency And Authority Evidence
 
@@ -808,9 +811,15 @@ issue/revoke APIs, and local bootstrap command. AUTH-09C activates exact actor
 and identity-link reads for effective system Access Administrator or Audit
 Authority grants. AUTH-09D-A activates the three profile lifecycle routes for
 effective system Access Administrators only. AUTH-09D-B activates exact
-identity-link revoke and reactivate for the same authority; the project-role
-route family remains planned. Project-scoped
-`GET /api/v1/actors/me/authorization-context` begins in AUTH-10 after
+identity-link revoke and reactivate for the same authority. AUTH-10B activates
+the concealed project-role reads, and AUTH-10C activates exact-role issue and
+revoke mutations for covered Project Managers. Those mutations use
+`Idempotency-Key`, transaction-bound PREP, immutable qualification snapshots,
+canonical replay validation, and one route-owned commit. Issue requires a
+different active human with an active identity link; revoke remains available
+after target suspension or identity-link revocation so authority cannot become
+irremovable. Project-scoped
+`GET /api/v1/actors/me/authorization-context` begins in AUTH-11 after
 exact-project grant and canonical project capability composition exists.
 
 `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.

@@ -331,12 +331,12 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_ROLE_GRANT_READ,
         ActionOwner.AUTH_10B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         PermissionId.PROJECT_ROLE_GRANT_MANAGE,
         ActionOwner.AUTH_10C,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
         PermissionId.PROJECT_ROLE_GRANT_MANAGE,
         ActionOwner.AUTH_10C,
@@ -633,6 +633,8 @@ def _index_actions(
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
     }
     if {
         definition.action_id
@@ -663,18 +665,14 @@ _SERVICE_ACTIONS = {
             ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
         }
     ),
-    ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset(
-        {ActionId.ARTIFACT_GUIDE_SOURCE_READ}
-    ),
+    ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset({ActionId.ARTIFACT_GUIDE_SOURCE_READ}),
     ServiceIdentity.ARTIFACT_MATERIALIZER: frozenset(
         {
             ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
             ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
         }
     ),
-    ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
-        {ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}
-    ),
+    ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset({ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}),
 }
 
 
@@ -683,12 +681,8 @@ def _index_service_actions(
 ) -> MappingProxyType[ServiceIdentity, frozenset[ActionId]]:
     """Validate the exact fixed service matrix and return an immutable view."""
     expected_rows = {
-        ServiceIdentity.ARTIFACT_VERIFIER: frozenset(
-            {ActionId.ARTIFACT_VERIFICATION_EXECUTE}
-        ),
-        ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset(
-            {ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}
-        ),
+        ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
+        ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
         ServiceIdentity.ARTIFACT_SCHEDULER: frozenset(
             {ActionId.ARTIFACT_PENDING_WORK_SCAN, ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE}
         ),
@@ -699,9 +693,7 @@ def _index_service_actions(
                 ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
             }
         ),
-        ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset(
-            {ActionId.ARTIFACT_GUIDE_SOURCE_READ}
-        ),
+        ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset({ActionId.ARTIFACT_GUIDE_SOURCE_READ}),
         ServiceIdentity.ARTIFACT_MATERIALIZER: frozenset(
             {
                 ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
