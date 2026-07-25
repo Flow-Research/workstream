@@ -390,3 +390,30 @@ need an independently reviewable contract and production-code budget.
 - New service identities require an exact owning-feature manifest, closed enum
   and matrix extension, database constraint migration, controlled provisioning,
   AUTH-09E admission reuse, and cross-service negative proof.
+
+## AUTH-11 exact project-read delta (2026-07-25)
+
+- The current project router exposes ten GET routes and no project collection
+  or list route. The inherited count/cursor requirement therefore described no
+  existing surface and is removed.
+- All ten reads currently rely on the superseded request-claim gate; none has a
+  registered primary project-read ActionId declaration.
+- `GET /api/v1/actors/me/authorization-context?project_id=...` is intentionally
+  absent today and remains AUTH-11 work carried forward from D32.
+- The current Alembic head is `0034_project_role_issue_evidence`; the next
+  available migration for the project-read action-evidence delta is `0035`.
+- `PermissionId.PROJECT_READ` and `PermissionId.ACTOR_PROFILE_READ_SELF`
+  already exist. Existing guide/effective-policy permissions are management
+  authorities and cannot accurately represent read-only Operator/Audit
+  inspection. 11A therefore adds exactly two read permissions for setup
+  diagnostics and effective policy, preventing generic project-read holders
+  from inheriting sensitive data or read consumers from inheriting mutations.
+- Project identity is a minimal response suitable for an active exact-project
+  contributor grant. Setup runs, sufficiency reports, draft artifact policies,
+  checker setup, and the existing composite active-guide response include
+  diagnostics, provenance, configuration, or payment data and cannot inherit
+  that contributor disclosure rule.
+- The safe boundary is four sequential chunks: planned catalogue/evidence;
+  identity plus self context; admin-only setup diagnostics; and effective
+  policy/active-guide projection. Each runtime child hard-removes token-role
+  authority from every surface it owns.
