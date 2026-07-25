@@ -30,6 +30,9 @@
   shared PermissionIds;
 - strengthened agent-gate assertions so lifecycle and ActionId/PermissionId
   regressions fail closed.
+- repaired the hosted pytest-only failure by asserting the explicit typed
+  capability/no-AUTH-repository boundary and normalizing Markdown whitespace
+  before semantic ActionId/PermissionId checks.
 
 ## Comments deferred
 
@@ -46,6 +49,8 @@ None beyond the normal human review and explicit merge approval for PR #197.
 - `python3 scripts/check_stale_authorization_docs.py`
 - `python3 scripts/check_markdown_links.py`
 - `python3 scripts/test_agent_gates.py` — 100 tests
+- hosted-equivalent loop-memory branch-coverage command — 300 tests, 90.46
+  percent
 - `python3 scripts/check_internal_review_evidence.py`
 - `python3 scripts/update_post_merge_memory.py validate-merge-intent --base-ref origin/main`
 

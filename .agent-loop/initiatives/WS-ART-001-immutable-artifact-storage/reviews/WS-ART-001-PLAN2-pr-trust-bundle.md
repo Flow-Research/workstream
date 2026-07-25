@@ -39,7 +39,7 @@ successor `WS-ART-001-03A` with a separate explicit start.
 
 - diff, stale-contract, markdown-link, and 100 agent-gate tests pass;
 - all nine required reviewer tracks pass after repair;
-- exact reviewed candidate `25bae979` is based on trusted main `f3ece23e`;
+- exact reviewed candidate `648dd311` is based on trusted main `f3ece23e`;
 - the stale-authorization documentation gate and its technical-module
   regression repair pass without reopening deprecated product-role vocabulary;
 - detailed findings and resolutions are recorded in
