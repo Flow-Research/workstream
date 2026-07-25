@@ -18,6 +18,18 @@
 - canonicalized every changed chunk heading and aligned the PLAN2 successor
   title so repository governance gates can parse the contracts;
 - expanded the PR description to the canonical trust-bundle structure.
+- defined abandoned verified admissions as capacity-charged `ready` records
+  with only terminal `consumed` or `stale` outcomes and no expiry, release,
+  deletion, cleanup, or retention process;
+- made normalized regular-file executable intent part of semantic identity and
+  fixed read-only materialization without preserving arbitrary ZIP permissions;
+- required fresh AUTH-owned prepared capabilities at durable put intent and at
+  atomic Submission/admission consumption;
+- used canonical phase-specific fixed-service ActionIds and kept
+  `artifact.binding.create` and `artifact.checker_input.materialize` as their
+  shared PermissionIds;
+- strengthened agent-gate assertions so lifecycle and ActionId/PermissionId
+  regressions fail closed.
 
 ## Comments deferred
 
@@ -31,6 +43,7 @@ None beyond the normal human review and explicit merge approval for PR #197.
 
 - `git diff --check`
 - `python3 scripts/check_stale_artifact_contracts.py`
+- `python3 scripts/check_stale_authorization_docs.py`
 - `python3 scripts/check_markdown_links.py`
 - `python3 scripts/test_agent_gates.py` — 100 tests
 - `python3 scripts/check_internal_review_evidence.py`

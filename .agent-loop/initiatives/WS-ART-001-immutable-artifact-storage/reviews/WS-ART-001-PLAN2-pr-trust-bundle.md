@@ -16,6 +16,8 @@ one outer ZIP
 -> mandatory platform and locked-guide checks
 -> one existing ArtifactStore admission
 -> complete read-back verification
+-> one capacity-charged ready SubmissionBundleAdmission
+-> fresh human and fixed-service authorization
 -> one immutable Submission binding
 ```
 
@@ -37,6 +39,7 @@ successor `WS-ART-001-03A` with a separate explicit start.
 
 - diff, stale-contract, markdown-link, and 100 agent-gate tests pass;
 - all nine required reviewer tracks pass after repair;
+- exact reviewed candidate `25bae979` is based on trusted main `f3ece23e`;
 - the stale-authorization documentation gate and its technical-module
   regression repair pass without reopening deprecated product-role vocabulary;
 - detailed findings and resolutions are recorded in
@@ -50,6 +53,12 @@ successor `WS-ART-001-03A` with a separate explicit start.
   exact bundle action before ART-04A/05 can proceed.
 - Confirm ART owns bytes/identity/access capabilities while REV, CON, and
   delivery retain their lifecycle decisions.
+- Confirm abandoned ready admissions remain quota-bounded and capacity-charged
+  in v0.1, with no expiry, deletion, release, or retention worker.
+- Confirm executable intent is semantic manifest data, not permission
+  preservation or authority to execute contributor content.
+- Confirm authority is freshly revalidated at durable put intent and again at
+  atomic Submission consumption through AUTH-owned prepared capabilities.
 
 ## Gate
 

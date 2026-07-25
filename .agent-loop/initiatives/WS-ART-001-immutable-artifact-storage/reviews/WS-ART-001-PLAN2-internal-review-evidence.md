@@ -1,15 +1,15 @@
 # Internal Review Evidence: WS-ART-001-PLAN2
 
-Reviewed code SHA: `afb883dd4e8ab52fad3d7301b5e865d3a25885a7`
+Reviewed code SHA: `25bae9792208697366bd828230d8f321d819586d`
 
-Reviewed against trusted main: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+Reviewed against trusted main: `f3ece23e0f128258947137764b39b7d59dd7b2a8`
 
-Reviewed at: `2026-07-24T17:35:13Z`
+Reviewed at: `2026-07-25T09:10:36Z`
 
-Reviewer run IDs: `art_plan2_ext_senior`, `art_plan2_ext_arch`,
-`art_plan2_ext_qa`, `art_plan2_ext_security`, `art_plan2_ext_product`,
-`art_plan2_ext_docs`, `art_plan2_ext_reuse`, `art_plan2_ext_ci`,
-`art_plan2_ext_test_delta`
+Reviewer run IDs: `art_plan2_ext_senior`, `art_plan2_amend_arch`,
+`art_plan2_ext_qa`, `art_plan2_amend_security`, `art_plan2_ext_product`,
+`art_plan2_amend_docs`, `art_plan2_final_reuse`, `art_plan2_final_ci`,
+`art_plan2_final_test_delta`
 
 ## Candidate
 
@@ -22,7 +22,10 @@ implemented or activated.
 - `git diff --check` — PASS
 - `python3 scripts/check_stale_artifact_contracts.py` — PASS at
   `artifact_store_cutover`
+- `python3 scripts/check_stale_authorization_docs.py` — PASS
 - `python3 scripts/check_markdown_links.py` — PASS
+- `python3 scripts/update_post_merge_memory.py validate-merge-intent
+  --base-ref origin/main` — PASS
 - `python3 scripts/test_agent_gates.py` — PASS, 100 tests
 - targeted stale wording scan — only explicit rejected/legacy/unavailable
   references remain
@@ -31,15 +34,15 @@ implemented or activated.
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---|---|---|
-| senior engineering | PASS AFTER FIXES | none | Reconciled status, state vocabulary, outage behavior, route ownership, and evidence accuracy. |
-| architecture | PASS AFTER FIXES | none | Removed duplicate session/candidate paths, reused existing scratch/admission/recovery, and separated generic attempt from legacy item state. |
-| QA/test | PASS AFTER FIXES | none | Proved exact verification commands, 78/90 percent gates, nested-archive closure, process-loss behavior, and governance parsing. |
-| security/auth | PASS AFTER FIXES | none | Kept 04A non-routable, removed the unmapped GET, preserved AUTH activation custody, and closed canonical-path collisions. |
-| product/ops | PASS AFTER FIXES | none | Corrected reviewer/revision semantics and separated pre-intent reupload from durable ART/checker recovery. |
+| senior engineering | PASS AFTER FIXES | none | The only final finding was this expected evidence refresh; admission, executable, and reauthorization contracts are maintainable and operationally bounded. |
+| architecture | PASS | none | Preserved ART/AUTH/TASK/REV ownership, reused existing scratch/admission/recovery, and resolved latest-main review-history integration. |
+| QA/test | PASS AFTER FIXES | none | Closed executable-template coverage and proved lifecycle, authorization crossed states, concurrency, and governance gates. |
+| security/auth | PASS | none | Preserved prepared-capability ordering, fixed-service separation, concealment, and ready/consumed/stale integrity fencing. |
+| product/ops | PASS | none | Preserved one-ZIP contributor flow, reviewer decision vocabulary, and zero downstream effect before immutable Submission consumption. |
 | reuse/dedup | PASS | none | Reused `ArtifactScratchManager`, `PreparedArtifact`, `CommittedArtifactSource`, and existing admission/put/verification/recovery paths. |
 | CI integrity | PASS AFTER FIXES | none | Canonical headings/merge intent parse; stale-auth scanner remains fail-closed; cumulative 90 percent and repository 78 percent gates remain enforced. |
 | test delta | PASS | none | No removed/skipped tests or weakened assertions; 100 agent-gate tests pass. |
-| docs | PASS AFTER FIXES | none | Reconciled storage/auth specs and all live submission/manifest templates. |
+| docs | PASS AFTER FIXES | none | Reconciled storage/auth specs and templates, including canonical executable-intent semantics in the submission packet. |
 
 ## Material Repairs
 
@@ -54,7 +57,24 @@ implemented or activated.
   registration/activation handoff;
 - preserved existing immutable `Submission` as the version aggregate and REV's
   decision/note ownership;
-- required integrity recomputation for checker, reviewer, and delivery streams.
+- required integrity recomputation for checker, reviewer, and delivery streams;
+- defined verified-but-unbound admissions as capacity-charged
+  `ready -> consumed|stale` records with no expiry, deletion, release, retention
+  worker, or downstream product effect before atomic consumption;
+- included normalized regular-file executable intent in semantic identity while
+  excluding arbitrary permission preservation and execution authority;
+- required fresh transaction-local AUTH capabilities immediately before durable
+  put intent and again during atomic Submission/admission consumption;
+- corrected fixed-service contracts to use canonical phase-specific ActionIds,
+  with shared `artifact.binding.create` and
+  `artifact.checker_input.materialize` named only as PermissionIds;
+- strengthened the governance regression to require exact no-expiry, no-release,
+  no-deletion, no-cleanup, and no-retention-process admission clauses;
+- corrected the materializer regression assertion to inspect its owning 04B
+  contract rather than the adjacent 04A contract;
+- rebased onto trusted main `f3ece23e` and preserved AUTH-10C, AUTH-002, and
+  PLAN2 review history.
+- recorded the final amendment review outcome in the canonical review log.
 
 ## Accepted Risks
 
