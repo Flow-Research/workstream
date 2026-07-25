@@ -2918,8 +2918,8 @@ intent and Submission consumption. Review repair replaced shared PermissionIds
 misnamed as service actions with the canonical phase-specific AUTH ActionIds
 and strengthened the governance test to require exact no-expiry, no-release,
 no-deletion, no-cleanup, and no-retention-process clauses. Exact material SHA
-`8c23ab7edec9b3caa73ab2d6c40a5cac58cfe1be` is rebased on trusted main
-`f3ece23e0f128258947137764b39b7d59dd7b2a8`; all nine internal reviewer tracks
+`b839d2572d64657c5759ecbf234a20a650f46bf5` is rebased on trusted main
+`bba4ba5f171a4438b072740707a5cf8bde49d9af`; all nine internal reviewer tracks
 pass with no open finding. Hosted external checks and human merge approval
 remain required.
 
@@ -2929,3 +2929,8 @@ The repair makes the 05 typed-capability/no-AUTH-repository boundary explicit
 and normalizes handoff whitespace before semantic ActionId/PermissionId checks.
 The exact hosted-equivalent command passes 300 tests with 90.46 percent branch
 coverage for the loop-memory updater.
+
+The later trusted-main reconciliation incorporates PR #198's exact CI custody
+and Ruff/orchestration repairs without changing the 22-commit PLAN2 patch
+series; range-diff equivalence and fresh exact-base integration review are the
+required evidence before republishing PR #197.
