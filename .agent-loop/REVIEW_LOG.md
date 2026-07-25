@@ -2918,7 +2918,14 @@ intent and Submission consumption. Review repair replaced shared PermissionIds
 misnamed as service actions with the canonical phase-specific AUTH ActionIds
 and strengthened the governance test to require exact no-expiry, no-release,
 no-deletion, no-cleanup, and no-retention-process clauses. Exact material SHA
-`91c2c95900a59cf1e5aa4c0524b48e0e218aeed9` is rebased on trusted main
+`8c23ab7edec9b3caa73ab2d6c40a5cac58cfe1be` is rebased on trusted main
 `f3ece23e0f128258947137764b39b7d59dd7b2a8`; all nine internal reviewer tracks
 pass with no open finding. Hosted external checks and human merge approval
 remain required.
+
+GitHub Agent Gates then exercised the full pytest collection that the direct
+script entry point does not run and exposed two line-wrap-sensitive assertions.
+The repair makes the 05 typed-capability/no-AUTH-repository boundary explicit
+and normalizes handoff whitespace before semantic ActionId/PermissionId checks.
+The exact hosted-equivalent command passes 300 tests with 90.46 percent branch
+coverage for the loop-memory updater.
