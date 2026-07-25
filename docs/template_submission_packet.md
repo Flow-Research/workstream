@@ -27,8 +27,15 @@ artifact identity; the contributor does not submit links or storage references.
 - generated at:
 
 Workstream records the server-computed outer-ZIP SHA-256/byte count, canonical
-semantic manifest, verified admission, and immutable binding. Those values are
+semantic manifest including normalized regular-file executable intent, verified
+admission, and immutable binding. Those values are
 server output, not contributor input.
+
+A successful preparation may return a verified `ready` admission before a
+Submission exists. Submission creation obtains fresh authority and atomically
+consumes that admission with the immutable Submission/binding. An abandoned
+ready admission has no review, contribution, compensation, or reputation
+effect, remains capacity-charged, and has no client expiry/release/delete path.
 
 Workstream derives the locked project guide version, locked guide-source
 snapshot id/hash, effective project submission artifact policy id/hash,

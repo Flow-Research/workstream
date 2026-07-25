@@ -48,8 +48,13 @@ or Submission creation.
   path-depth/path-length, compression-ratio, deadline, concurrency, and free-space
   limits without allocating from untrusted declared sizes;
 - the canonical semantic manifest records normalized file and directory paths,
-  entry type, and file SHA-256/byte count; timestamps, compression, comments,
-  ownership, and platform permission metadata do not affect its hash;
+  entry type, file SHA-256/byte count, and `executable` for regular files;
+  valid Unix mode metadata normalizes any execute bit to true, while non-Unix
+  or invalid mode metadata defaults false and directories record null;
+- timestamps, compression, comments, ownership, group, read/write/special bits,
+  and other platform permission metadata do not affect the manifest hash;
+- same bytes with a changed normalized executable flag produce different
+  semantic hashes, while timestamp/compression-only repackaging does not;
 - explicit empty directories and deterministic synthetic parents have one
   documented canonical representation;
 - exact archive hash and semantic manifest hash are compared with the immediate
@@ -70,6 +75,17 @@ or Submission creation.
   remains;
 - process loss requires reupload; normal, error, cancellation, timeout, and
   crash cleanup release scratch quota without deleting durable artifacts;
+- ZIP inspection never blindly applies archive modes; the scratch manager seals
+  regular files to fixed read-only or read-and-execute modes and directories to
+  a fixed read-and-traverse mode, with startup parity across every process that
+  shares the scratch root and secure cleanup owned by the manager; cleanup may
+  restore only manager-owned directory write access under an exclusive valid
+  lease after no-follow ownership/type checks;
+- executable intent alone never causes execution; the locked Project Guide and
+  checker policy remain the execution decision owners;
+- focused tests prove false-to-true execute-bit changes alter semantic hash,
+  timestamp/compression-only changes do not, non-Unix entries default false,
+  and symlink/special entries are rejected;
 - 04A declares no contributor route or routable action manifest entry; the
   planned `artifact.submission_bundle.prepare` action and AUTH mapping are
   composed only by 04C after the complete internal operation exists;

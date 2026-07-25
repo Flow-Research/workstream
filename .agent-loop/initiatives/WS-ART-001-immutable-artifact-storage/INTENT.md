@@ -55,6 +55,7 @@ one immutable Submission row/version
 -> one canonical semantic manifest
 -> mandatory platform and locked Project Guide prechecks
 -> one ArtifactStore admission and complete read-back verification
+-> one capacity-charged ready admission, which may remain unbound
 -> one exact ArtifactBinding
 -> the same bytes checked, reviewed, accepted, recorded, and delivered
 ```
@@ -87,6 +88,13 @@ unpacking is outside v0.1 even when a guide would otherwise request it.
 - The existing `Submission` row is the immutable version aggregate. Reviewers
   attach only a decision and note/findings to that exact version; a contributor
   response to `needs_revision` is another complete ZIP and immutable Submission.
+- A verified admission may remain unbound through client abandonment. It stays
+  capacity-charged and creates no product lifecycle effect; consumption is
+  atomic with Submission/binding creation and no admission expires or deletes
+  bytes in v0.1.
+- Regular-file executable intent is normalized into semantic identity and
+  materialized consistently, without preserving arbitrary archive permissions
+  or granting execution authority.
 - Local storage is forbidden in staging and production.
 - No compatibility alias or dual provider-construction path is retained.
 

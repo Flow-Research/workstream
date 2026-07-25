@@ -287,11 +287,15 @@ and derives two identities:
 ```text
 archive identity  = SHA-256 and byte count of the exact outer ZIP
 semantic identity = canonical hash of normalized path, entry type,
-                    file SHA-256, and file byte count
+                    file SHA-256, file byte count, and normalized executable flag
 ```
 
-ZIP timestamps, compression settings, comments, ownership, and platform
-permission metadata do not change semantic identity. Explicit empty directories
+ZIP timestamps, compression settings, comments, ownership, group, read/write
+bits, special bits, and other platform permission metadata do not change
+semantic identity. Executable intent is the sole permission-derived semantic:
+for a regular entry created with valid Unix mode metadata it is true when any
+execute bit is present; otherwise it is false. Directories have no executable
+field. Explicit empty directories
 and synthetic parents use one documented canonical representation. Symlinks and
 special entries are rejected. Canonical paths use `/` separators, contain only
 relative non-empty segments, and normalize Unicode to NFC. The identity remains
@@ -318,6 +322,58 @@ and publishes a bindable admission only after the observed archive identity
 matches. Existing put-attempt, observation, verification, receipt, scanner, and
 recovery behavior resolves ambiguity. No candidate namespace, promotion copy,
 retention window, physical deletion, or second recovery aggregate exists.
+
+### Verified Submission-Bundle Admission
+
+Verification publishes an immutable, capacity-charged
+`SubmissionBundleAdmission` in `ready`. It binds the preparing actor and
+identity-link provenance, project, task, assignment, immediate predecessor,
+exact locked task/guide/policy context, verified `ArtifactContent`, semantic
+manifest, and immutable pre-submit evidence set. Client abandonment is an
+accepted quota-bounded v0.1 outcome: a `ready` admission may remain unbound
+without creating a Submission, review, contribution, compensation, or
+reputation effect.
+
+The only transitions are `ready -> consumed` and `ready -> stale`.
+Consumption occurs in the same transaction that creates the immutable
+Submission and binding, and database uniqueness permits one consuming
+Submission. Proven task closure, predecessor advancement, or locked-context
+replacement makes a still-ready admission `stale` during a consumption attempt.
+Authority loss alone does not make it stale; every attempt obtains fresh AUTH
+authority, and restored authority may consume a still-compatible admission.
+`consumed` and `stale` are terminal. No state expires, releases capacity, or
+authorizes provider deletion. Ready, stale, and consumed admissions continue to
+count against existing completed-byte scopes. Existing Operator admission-usage
+projections add bounded unbound-ready and stale counts/bytes without exposing
+content or provider identities.
+
+Exact preparation replay returns the original admission without another put,
+charge, evidence set, or admission. Uniqueness and status/terminal-field check
+constraints enforce the lifecycle; the Submission owns a unique admission
+reference as the second database fence.
+
+### Durable Authorization Boundaries
+
+The contributor request is authorized before scratch intake. Immediately before
+durable capacity reservation and `ArtifactPutAttempt` creation, 04C opens the
+owning transaction and consumes AUTH's transaction-local prepared capability.
+AUTH—not ART—reloads and validates the current ActorProfile, exact identity link,
+project authority, assignment, action availability, and canonical resource
+facts. TASK/PROJECT owners lock task, predecessor, and locked context through
+their typed capabilities. Authorization evidence, capacity reservation, and put
+intent commit atomically; failure means no provider I/O and scratch cleanup.
+
+Durable put intent creates a technical recovery obligation that later human
+revocation does not cancel. Verification may finish, but binding remains
+impossible until 05 obtains fresh human `submission.create` authority and fresh
+fixed-service `artifact.binding.create` authority. 05 consumes both prepared
+capabilities in the single task transaction that locks the admission/context,
+creates Submission and binding, and marks the admission consumed. Denial,
+cancellation, stale execution, or persistence failure rolls back every protected
+effect. After authority succeeds, proven task closure, predecessor advancement,
+or locked-context replacement may instead commit only the terminal stale
+transition and bounded evidence, with no Submission or binding. ART/TASK never
+imports or locks AUTH-owned tables.
 
 ## Durable Verification And Recovery
 

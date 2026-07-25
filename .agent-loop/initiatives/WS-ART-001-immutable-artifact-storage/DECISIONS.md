@@ -283,9 +283,13 @@ observation, verification, receipt, scanner, and recovery abstractions.
 
 Workstream records both exact archive identity (server-computed SHA-256 and byte
 count) and semantic tree identity. The semantic manifest commits to normalized
-file/directory path, entry type, and each file's SHA-256 and byte count. It does
+file/directory path, entry type, each file's SHA-256 and byte count, and the
+normalized executable flag for regular files. It does
 not commit to archive timestamps, compression method/level, comments, ownership,
-or platform permission metadata. Symlinks and unsupported special entries are
+or ownership, group, read/write/special bits, or other platform permission
+metadata. Valid Unix execute bits are normalized into the sole semantic
+permission flag; non-Unix/invalid mode metadata defaults it to false. Symlinks
+and unsupported special entries are
 rejected. Exact archive equality or semantic-manifest equality with the
 immediate prior immutable Submission rejects before provider I/O.
 
@@ -319,7 +323,33 @@ unchanged. Any larger ZIP, extracted-byte, per-file, entry-count, depth,
 compression-ratio, scratch, or time limit requires a separate reviewed change
 with concurrency, capacity, runtime, cost, and abuse evidence.
 
-## D35 - One Contributor Preparation Action
+## D35 - Verified Admissions May Remain Unbound
+
+`SubmissionBundleAdmission` has the closed lifecycle `ready -> consumed|stale`.
+Client abandonment is valid and remains charged to existing completed-byte
+capacity. Consumption and Submission/binding creation are one transaction with
+database uniqueness. Proven task/predecessor/locked-context drift makes a ready
+admission stale; authority loss alone does not. No expiry, release, deletion,
+retention process, or cleanup lifecycle exists in v0.1.
+
+## D36 - Authorization Is Fresh At Both Durable Mutations
+
+Initial route authorization is insufficient. 04C consumes an AUTH-owned
+transaction-local prepared capability in the durable-intent transaction before
+provider I/O. 05 obtains and consumes new human submission and fixed-service
+binding capabilities in the atomic Submission/binding/admission transaction.
+ART never reads or locks AUTH-owned persistence directly.
+
+## D37 - Executable Intent Is Canonical, Not Archive Permission Preservation
+
+Regular-file executable intent participates in semantic identity. Materializers
+project fixed read-only or read-and-execute modes and fixed read-and-traverse
+directory modes; they never preserve arbitrary ZIP permissions or automatically
+execute a file. The Project Guide/checker policy remains the execution decision
+owner. Shared scratch startup rejects inconsistent canonical mode configuration,
+and secure cleanup remains owned by `ArtifactScratchManager`.
+
+## D38 - One Contributor Preparation Action
 
 The prior multi-step upload-session action proposal does not govern the new
 continuous scratch-bound flow. AUTH first registers planned ActionId

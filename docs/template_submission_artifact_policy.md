@@ -99,12 +99,18 @@ Default artifact rules:
 - artifact paths must not contain empty, `.`, or `..` segments
 - uploaded artifacts and storage-backed evidence require `sha256:<64 lowercase hex>` hashes in production
 - test fixtures may use deterministic placeholder hash tokens only in explicit local test paths
+- Workstream normalizes regular-file executable intent from valid Unix ZIP mode
+  metadata; non-Unix/invalid metadata defaults to non-executable
+- executable intent participates in semantic identity, but never by itself
+  authorizes a checker or service to execute the file
 
 Default storage rules:
 
 - clients submit exactly one outer ZIP through Workstream submission-bundle
   preparation and receive only Workstream operation/admission IDs
 - persisted product references are immutable Workstream artifact bindings
+- verified admissions may remain unbound and capacity-charged in `ready` or
+  terminal `stale`; clients cannot expire, release, or delete them
 - signed URLs, raw local filesystem paths, provider references, credentials,
   query strings, bucket secrets, and token-bearing references are rejected
   before persistence

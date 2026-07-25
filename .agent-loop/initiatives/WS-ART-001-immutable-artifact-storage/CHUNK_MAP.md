@@ -20,11 +20,11 @@ Each chunk is one PR. No later chunk starts automatically.
 | `WS-ART-001-03A` | Add hidden guide-source byte ingest through existing preparation, admission, verification, and publication. | L1 | Proposed after PLAN2 |
 | `WS-ART-001-03B` | Bind verified guide-source content and provide authorized integrity-checking setup materialization. | L1 | Proposed after 03A and exact AUTH activation |
 | `WS-ART-001-03C` | Remove legacy guide-source identity and add exact same-generation setup continuation. | L1 | Proposed after 03B and exact AUTH activation |
-| `WS-ART-001-04A` | Accept one outer ZIP in bounded scratch, safely inspect its tree, produce canonical identities, and reject unchanged work before provider I/O. | L1 | Proposed after 03C and AUTH planned action registration |
-| `WS-ART-001-04B` | Run mandatory platform and locked Project Guide pre-submit checks against the same scratch-bound tree without durable storage. | L1 | Proposed after 04A |
-| `WS-ART-001-04C` | Admit the passing ZIP once through existing ArtifactStore, independently verify it, and publish one bindable admission. | L1 | Proposed after 04B; AUTH activation follows hidden completion |
-| `WS-ART-001-05` | Atomically bind one verified admission to one immutable Submission and remove legacy caller transport authority. | L1 | Proposed after 04C and exact AUTH activation |
-| `WS-ART-001-06A` | Persist checker input snapshots and materialize authorized immutable bytes into bounded checker workspaces. | L1 | Proposed after 05 |
+| `WS-ART-001-04A` | Accept one outer ZIP in bounded scratch, safely inspect its tree, normalize executable intent, produce canonical identities, and reject unchanged work before provider I/O. | L1 | Proposed after 03C and AUTH planned action registration |
+| `WS-ART-001-04B` | Run mandatory platform and locked Project Guide pre-submit checks against the same scratch-bound tree and executable semantics without durable storage. | L1 | Proposed after 04A |
+| `WS-ART-001-04C` | Reauthorize at durable intent, admit/verify the passing ZIP once, and publish one capacity-charged `ready` admission that may remain unbound. | L1 | Proposed after 04B; AUTH activation follows hidden completion |
+| `WS-ART-001-05` | Freshly authorize and atomically consume one ready admission into one immutable Submission/binding, or terminally stale it on proven context drift. | L1 | Proposed after 04C and exact AUTH activation |
+| `WS-ART-001-06A` | Persist checker input snapshots and materialize authorized immutable bytes with identical normalized executable semantics. | L1 | Proposed after 05 |
 | `WS-ART-001-06B` | Ingest checker logs/outputs as artifacts, persist checker completion facts, and preserve existing checker-owned routing without creating review aggregates. | L1 | Proposed after 06A |
 | `WS-ART-001-07` | Prove Local/MinIO plus AWS S3 readiness, Operator recovery, and exact-byte guide/pre/post-submit behavior through real APIs. | L1 | Proposed after 06B |
 

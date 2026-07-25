@@ -5809,6 +5809,34 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     assert "`WS-ART-001-03A` is the only immediate ART" in artifact_status
 
 
+def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
+    """PLAN2 locks admission, executable, and durable-auth semantics."""
+    initiative = ROOT / ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage"
+    plan = (initiative / "PLAN.md").read_text(encoding="utf-8")
+    decisions = (initiative / "DECISIONS.md").read_text(encoding="utf-8")
+    auth_handoff = (initiative / "AUTH_HANDOFF.md").read_text(encoding="utf-8")
+    contract_04a = (initiative / "chunks/WS-ART-001-04A-upload-inspection-sealing.md").read_text(encoding="utf-8")
+    contract_04c = (initiative / "chunks/WS-ART-001-04C-verified-submission-bundle-admission.md").read_text(encoding="utf-8")
+    contract_05 = (initiative / "chunks/WS-ART-001-05-submission-artifact-cutover.md").read_text(encoding="utf-8")
+    contract_06a = (initiative / "chunks/WS-ART-001-06A-checker-input-materialization.md").read_text(encoding="utf-8")
+    storage_spec = (ROOT / "docs/spec_artifact_storage_service.md").read_text(encoding="utf-8")
+
+    for text in (plan, decisions, contract_04c, storage_spec):
+        assert "ready -> consumed" in text
+        assert "stale" in text
+        assert "expiry" in text.lower()
+    assert "Client abandonment" in plan
+    assert "existing completed-byte scopes" in plan
+    assert "transaction-local prepared capability" in auth_handoff
+    assert "never imports AUTH-owned repositories" in contract_05
+    assert "authorization evidence" in contract_04c
+    assert "fixed-service `artifact.binding.create`" in auth_handoff
+    assert "normalized executable flag" in contract_04a
+    assert "same fixed" in contract_06a
+    assert "non-Unix" in storage_spec
+    assert "submission_bundle_admission_already_consumed" in storage_spec
+
+
 def test_stale_authorization_discovery_includes_new_untracked_docs() -> None:
     """A new active doc fails without being added to a hardcoded corpus."""
     gate = load_module(

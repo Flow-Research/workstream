@@ -45,6 +45,12 @@ note/findings to the
 exact `Submission`; contributors answer `needs_revision` with another complete
 ZIP and immutable Submission.
 
+PLAN2 also treats client-abandoned verified admissions as valid, bounded,
+capacity-charged `ready` facts with terminal `consumed|stale` outcomes; it
+normalizes regular-file executable intent into the semantic manifest; and it
+requires fresh AUTH prepared capabilities at durable put intent and atomic
+Submission/binding consumption.
+
 ## Next Proposed Chunk
 
 After this planning package merges, `WS-ART-001-03A` is the only immediate ART

@@ -58,6 +58,12 @@ bounded isolated checker workspaces.
 - files are sealed read-only after digest/size verification and before checker
   access; success, failure, cancellation, and crash/stale paths cannot orphan
   confidential bytes;
+- materialization reproduces each manifest entry's normalized executable flag
+  with the same fixed read-only/read-and-execute/read-and-traverse modes used by
+  pre-submit scratch; arbitrary archive modes are never restored and executable
+  intent alone never authorizes execution;
+- parity tests prove identical pre/post materialization semantics and reject any
+  mode configuration mismatch across processes sharing a scratch root;
 - transient unavailability leaves the post-submit task in
   `evaluation_pending`; missing/integrity mismatch blocks execution as an
   artifact incident and never becomes a review decision;

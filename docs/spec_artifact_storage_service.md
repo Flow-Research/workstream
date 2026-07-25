@@ -1028,9 +1028,24 @@ signed URLs, or raw provider responses. Pagination is bounded and stable.
 One contributor operation receives one outer ZIP into bounded private scratch.
 Workstream computes its exact SHA-256/byte count, walks the complete safe outer
 archive tree, and generates a deterministic `SubmissionBundleManifest` from
-normalized file/directory paths, entry type, and file SHA-256/byte count. Nested
+normalized file/directory paths, entry type, file SHA-256/byte count, and the
+normalized executable flag for each regular file. Nested
 archives remain opaque in v0.1. Exact archive or semantic-manifest equality with
 the immediate prior immutable Submission rejects before checker/provider I/O.
+
+For a regular Unix-created ZIP entry with valid mode metadata, `executable` is
+true when any execute bit is present. It defaults false for non-Unix or invalid
+mode metadata and is null for directories. Ownership, group, read/write bits,
+setuid/setgid/sticky bits, timestamps, compression, and comments are excluded.
+Symlinks/special entries remain rejected. Materialization never restores raw
+archive modes: fixed startup-validated modes produce sealed read-only files,
+read-and-execute files, and read-and-traverse directories. The flag never
+authorizes execution by itself. Pre-submit and post-submit materialization use
+the same projection and `ArtifactScratchManager` retains secure cleanup custody.
+The exact numeric modes are one startup configuration shared by every process
+using the scratch root. Cleanup under an exclusive generation/lease may restore
+only the manager-owned directory write bit after no-follow ownership/type
+validation, then remove the tree; archive-supplied modes are never applied.
 
 Mandatory platform and locked Project Guide checks consume that same read-only
 scratch tree. Infrastructure exhaustion returns:
@@ -1047,11 +1062,88 @@ process loss requires reupload without manager/operator approval.
 
 Only a passing result is handed immediately to generic durable admission in the
 same process. Workstream writes the outer ZIP once, independently reads it back,
-and publishes a bindable admission only after exact verification. Existing put
+and publishes a `ready` bindable admission only after exact verification. Existing put
 attempt, observation, receipt, verification, scanner, and recovery records own
 durable ambiguity. Submission creation locks and consumes the exact admission;
 post-submit materialization resolves its immutable binding and recomputes
 integrity before checker execution.
+
+### SubmissionBundleAdmission
+
+One immutable verified preparation with closed status:
+
+```text
+status                         = ready | consumed | stale
+actor_profile_id               = UUID
+preparation_identity_link_id   = UUID
+project_id                     = UUID
+task_id                        = UUID
+assignment_id                  = UUID
+predecessor_submission_id      = UUID | null
+locked_task_context_id/hash    = immutable canonical context reference
+artifact_content_id            = UUID
+submission_bundle_manifest_id  = UUID
+pre_submit_evidence_set_id      = UUID
+ready_at                       = timestamp
+consumed_at                    = timestamp | null
+consumed_by_submission_id      = UUID | null
+stale_at                       = timestamp | null
+stale_reason                   = bounded token | null
+```
+
+It records preparation actor/profile and identity-link provenance, project,
+task, assignment, immediate predecessor, exact locked task/guide/policy context,
+`ArtifactContent`, `SubmissionBundleManifest`, immutable pre-submit evidence-set
+identity, timestamps, terminal reason, and optional consuming Submission.
+Status-field constraints require terminal facts only in their matching state.
+A unique Submission admission reference plus locked/CAS transition permits at
+most one consumer.
+
+`ready -> consumed` occurs only in the transaction creating Submission and
+binding. `ready -> stale` occurs only when consumption proves task closure,
+predecessor advancement, or locked-context replacement. Authority loss alone
+does not stale the admission. Both terminal states are irreversible. Client
+abandonment may leave `ready` unbound indefinitely; it has no Submission,
+review, contribution, compensation, or reputation effect.
+
+All states count against existing completed-byte task/actor/project/deployment
+capacity. Existing Operator admission-usage projections expose bounded unbound
+ready and stale counts/bytes. No admission expiry, release, deletion, provider
+cleanup, retention process, or new recovery aggregate exists. Exact preparation
+replay returns the original admission without another provider write, charge,
+evidence set, or admission.
+
+### Authorization At Durable Boundaries
+
+The preparation route authorizes `artifact.submission_bundle.prepare` before
+accepting bytes. Immediately before capacity reservation and put-attempt
+creation, the owning transaction consumes AUTH's transaction-local prepared
+capability. AUTH and typed TASK/PROJECT capabilities reload/lock their own actor,
+identity-link, project authority, assignment, task, predecessor, locked context,
+action availability, and canonical resource facts. ART does not access
+AUTH-owned persistence. Authorization evidence, capacity, and durable put intent
+commit atomically; provider I/O starts only afterward.
+
+Revocation after durable put intent does not cancel fixed-service verification
+or recovery. It does prevent later binding until Submission creation receives a
+new human decision. That transaction consumes both fresh human
+`submission.create` and fixed-service `artifact.binding.create` capabilities,
+locks and matches admission/task/assignment/predecessor/context, creates the
+immutable Submission and binding, and marks admission consumed. Any denial,
+cancellation, stale execution, or persistence failure rolls back all effects.
+After authority succeeds, proven task closure, predecessor advancement, or
+locked-context replacement may commit only `ready -> stale` plus bounded
+evidence, never a Submission/binding. Authorization/concealment precedes
+detailed admission status errors.
+
+Stable outcomes for an already authorized matching resource include:
+
+```text
+409 submission_bundle_admission_already_consumed
+409 submission_bundle_admission_context_changed
+409 submission_bundle_admission_stale
+403 <canonical AUTH denial; no admission state disclosure>
+```
 
 After cutover, the public request is:
 
@@ -1078,7 +1170,8 @@ handoff as one process-local orchestration. It returns only a Workstream
 operation/admission identity and bounded redacted status. An exact idempotent
 POST retry may observe the same durable operation after durable intent; v0.1
 exposes no separate preparation-status GET route. No retry resolves a scratch
-path, and APIs never return provider internals.
+path, every retry obtains fresh preparation authority, and APIs never return
+provider internals.
 
 ## Guide And Checker Binding
 

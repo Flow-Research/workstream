@@ -46,6 +46,27 @@ activation contract may integrate the evaluator and change only
 `artifact.submission_bundle.prepare` to active. ART-05 cannot start until that
 activation merges.
 
+The preparation surface authorizes before scratch intake, but the initial
+decision cannot authorize the later durable mutation. Immediately before
+capacity reservation and `ArtifactPutAttempt` creation, 04C must consume an
+AUTH-owned transaction-local prepared capability whose canonical facts cover
+the current actor, exact identity link, project authority, assignment, task,
+predecessor, locked task/guide/policy context, action availability, and
+operation generation. AUTH and the owning product services reload/lock their
+own facts; ART receives only the typed capability and never imports AUTH-owned
+repositories. Authorization evidence, capacity reservation, and durable put
+intent commit atomically before provider I/O.
+
+ART-05 requires a new human authorization decision for `submission.create` and
+a separately prepared fixed-service capability for
+`artifact.binding.create`. Both are consumed in the one transaction that locks
+the ready admission and TASK-owned context, creates Submission and binding, and
+marks the admission consumed. Human authority implies no service authority.
+Revocation after durable put intent does not cancel verification/recovery, but
+the resulting admission remains unbound until a fresh 05 decision succeeds.
+Authorization denial precedes admission-detail errors so unrelated actors
+cannot distinguish missing, ready, stale, or consumed admissions.
+
 The continuous contributor action never implies the fixed service actions:
 
 - `artifact.checker_input.materialize`;

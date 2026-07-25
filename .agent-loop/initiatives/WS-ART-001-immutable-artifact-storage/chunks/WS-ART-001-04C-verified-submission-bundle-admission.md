@@ -12,7 +12,8 @@ verify it, and publish one bindable submission-bundle admission.
 
 ## Allowed Files
 
-- ART admission orchestration and one submission-bundle admission model/migration;
+- ART admission orchestration and one submission-bundle admission model/migration
+  with the closed `ready|consumed|stale` lifecycle and database constraints;
 - existing put-attempt, replica, receipt, verification-job, recovery, scanner,
   and scratch-source integration needed for this producer;
 - hidden submission-bundle admission surfaces and ART resource facts/guards;
@@ -34,6 +35,14 @@ verify it, and publish one bindable submission-bundle admission.
   commitment, semantic manifest, locked task context, actor, and predecessor;
 - the predecessor is rechecked under task/version locking before provider I/O;
   drift invalidates the attempt and requires a fresh upload/check;
+- initial request authorization occurs before scratch intake; immediately before
+  durable capacity/put intent, the owning transaction consumes AUTH's fresh
+  prepared capability and typed TASK/PROJECT context capabilities without ART
+  importing or locking AUTH-owned tables;
+- current actor/identity, project authority, assignment, task, predecessor,
+  locked context, canonical resource facts, authorization evidence, capacity,
+  and put intent validate/commit atomically; denial or drift causes no provider
+  I/O, durable admission, or Submission and cleans scratch;
 - the existing generic admission service derives and reserves authoritative
   byte scopes before one conditional `ArtifactStore.put`;
 - Workstream persists the put attempt before I/O and uses existing observation,
@@ -45,7 +54,11 @@ verify it, and publish one bindable submission-bundle admission.
 - provider acknowledgement alone creates no bindable admission;
 - complete provider read-back recomputes ZIP SHA-256 and byte count; only an
   exact match publishes `ArtifactContent`, a ready replica, and one immutable
-  admission bound to the manifest and checker evidence;
+  `ready` admission bound to preparation actor/identity provenance, project,
+  task, assignment, predecessor, exact locked context, manifest, and immutable
+  checker-evidence set;
+- the admission lifecycle is exactly `ready -> consumed|stale`; only 05 may
+  perform either terminal transition and both terminal states are irreversible;
 - provider absence, mismatch, ambiguity, or unavailability creates no
   Submission and never becomes checker failure or review state;
 - exact replay is idempotent and concurrent replay creates one provider/business
@@ -53,9 +66,14 @@ verify it, and publish one bindable submission-bundle admission.
 - scratch is cleaned after safe source handoff or terminal outcome; if process
   loss occurs before durable put intent, reupload is required; after durable
   intent, existing ART recovery resolves the operation;
-- unbound verified content can result only from a transaction/process failure
-  after successful admission and is resolved through exact idempotent retry;
-  v0.1 adds no deletion path;
+- client abandonment may leave a valid unbound `ready` admission; it creates no
+  product lifecycle effect and remains charged to existing completed-byte
+  scopes alongside terminal `stale`/`consumed` admissions;
+- exact preparation replay returns the original admission with no new provider
+  write, charge, evidence set, or admission; v0.1 adds no expiry, release,
+  deletion, retention process, or cleanup route;
+- Operator capacity projections expose bounded counts/bytes for unbound ready
+  and stale admissions through existing admission-usage authority;
 - after 04A-04C merge their complete hidden manifest, AUTH alone may activate
   `artifact.submission_bundle.prepare`; ART changes no action availability;
 - 04C alone declares the hidden contributor route and routable
@@ -67,7 +85,15 @@ verify it, and publish one bindable submission-bundle admission.
   no scratch handle/path is serialized into a later request or Celery payload;
 - v0.1 exposes no separate preparation-status GET route; an exact idempotent
   POST retry may return only the same bounded durable operation/admission state
-  under the original `artifact.submission_bundle.prepare` authorization;
+  after a fresh `artifact.submission_bundle.prepare` decision; it never relies
+  on the original human authorization evidence;
+- revocation after committed put intent does not cancel fixed-service technical
+  verification/recovery, but no later Submission consumption inherits the old
+  human decision;
+- crossed-state tests revoke authority during upload and checker execution and
+  prove no durable put/provider I/O; revocation after durable intent permits
+  verification only; exact replay and abandoned-ready capacity projections are
+  single-effect and bounded;
 - focused subsystem coverage is at least 90 percent and repository coverage
   remains at least 78 percent.
 

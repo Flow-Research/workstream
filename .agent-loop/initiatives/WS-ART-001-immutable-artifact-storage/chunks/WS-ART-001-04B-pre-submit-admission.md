@@ -49,6 +49,10 @@ artifact content, provider object, or Submission.
   while reviewers, CON, and delivery cannot consume it before Submission binding;
 - the checker receives a read-only private workspace and no provider reference,
   credential, mutable intake path, or arbitrary host path;
+- the workspace projects the manifest's normalized executable flag using the
+  same fixed sealed modes as post-submit materialization; it never preserves
+  arbitrary ZIP permission metadata or executes a file merely because the flag
+  is true;
 - checker workspace creation uses the distinct fixed service action
   `artifact.checker_input.materialize`; contributor preparation authority never
   grants or substitutes for that service authority;
@@ -67,6 +71,9 @@ artifact content, provider object, or Submission.
   a later distributed service to a local path;
 - completion, failure, cancellation, deadline, and abandoned-work cleanup are
   bounded and idempotent;
+- focused tests prove pre-submit and post-submit views expose identical
+  executable semantics for Unix, non-Unix, symlink/special, and permission-only
+  revision cases;
 - the continuous contributor surface remains hidden; this chunk does not
   activate the planned contributor action or change fixed service grants;
 - focused subsystem coverage is at least 90 percent and repository coverage

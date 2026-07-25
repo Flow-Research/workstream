@@ -82,6 +82,15 @@ Workstream's provider-neutral immutable content identity: server-computed
 SHA-256, byte count, and bounded media metadata. Opaque provider identifiers and
 protocol observations are replica details, not this record's identity.
 
+## SubmissionBundleAdmission
+
+The capacity-charged verified result of one passing submission-bundle
+preparation. Its closed lifecycle is `ready -> consumed|stale`. A ready admission
+may remain unbound through client abandonment; consumption is atomic with one
+immutable Submission and binding, while proven task/predecessor/locked-context
+drift may make it stale. No state expires, releases storage capacity, or
+authorizes deletion in v0.1.
+
 ## ArtifactUploadItem
 
 Legacy unavailable multi-item staging metadata. ART-04A must remove it or make
@@ -115,7 +124,8 @@ no response digest or provider receipt.
 
 The server-generated canonical semantic description of the file/directory tree
 inside one contributor outer ZIP. It commits to normalized paths, entry types,
-and each file's SHA-256 and byte count while excluding ZIP packaging metadata.
+each file's SHA-256/byte count, and normalized regular-file executable intent
+while excluding other ZIP packaging and permission metadata.
 It is distinct from the exact outer-ZIP SHA-256/byte count. Together they bind
 pre-submit evidence, verified admission, the immutable Submission, and its exact
 artifact binding.

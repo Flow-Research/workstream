@@ -60,8 +60,9 @@ AUTH, task, checker, review, contribution, or delivery behavior.
 - bounded private scratch is the only pre-admission custody; failed, unsafe,
   unchanged, abandoned, or checker-failing attempts never enter object storage;
 - the canonical semantic manifest commits to normalized file/directory paths,
-  entry type, and each file's SHA-256 and byte count while excluding packaging,
-  timestamps, ownership, compression, and platform permission metadata;
+  entry type, each file's SHA-256/byte count, and normalized regular-file
+  executable intent while excluding packaging, timestamps, ownership, group,
+  read/write/special bits, compression, and other permission metadata;
 - exact archive equality and manifest equality are compared with the immediate
   prior immutable Submission and both reject before provider I/O;
 - all mandatory platform gates and locked project pre-submit checks pass before
@@ -74,6 +75,16 @@ AUTH, task, checker, review, contribution, or delivery behavior.
 - process loss before durable admission requires reupload; an ambiguous durable
   put uses existing observation/recovery and never creates a Submission until
   verified content is bindable;
+- a verified admission may remain unbound through client abandonment; its
+  closed lifecycle is `ready -> consumed|stale`, every state stays charged to
+  existing completed-byte scopes, and v0.1 adds no expiry/release/delete process;
+- fresh AUTH-owned prepared capabilities guard durable put intent and later
+  Submission/binding consumption in their respective transactions; ART never
+  reads AUTH persistence directly and old human authority never implies fixed
+  service binding authority;
+- pre-submit and post-submit materializers project identical fixed executable
+  semantics without preserving arbitrary archive modes or automatically
+  executing files;
 - current conservative configured limits remain unchanged;
 - the current `Submission` row remains the immutable version aggregate; a new
   version links through `supersedes_submission_id` and, when responding to

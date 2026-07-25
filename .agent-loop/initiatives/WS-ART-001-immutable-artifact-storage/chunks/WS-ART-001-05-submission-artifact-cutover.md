@@ -37,9 +37,24 @@ package transport/hash/manifest authority.
   outer ZIP plus its canonical semantic manifest and checker evidence;
 - request body contains only contributor-authored product fields and the
   opaque verified admission identifier; all artifact identity is server-owned;
-- one transaction locks task/assignment/admission, rechecks predecessor and
-  locked context, consumes admission once, allocates the next version, creates
-  the immutable binding, and enters the existing post-submit lifecycle;
+- before revealing admission state/context, the route obtains a fresh human
+  authorization decision; AUTH denial remains concealed from unrelated actors;
+- one transaction consumes fresh prepared human `submission.create` and fixed
+  service `artifact.binding.create` capabilities, locks task, assignment,
+  admission and predecessor, and recomposes final resource facts without TASK
+  or ART importing AUTH-owned repositories;
+- the transaction requires `ready`, matches actor profile, task, project,
+  assignment, predecessor and exact locked context, allocates the next version,
+  creates the immutable Submission and binding, and changes admission to
+  `consumed` before one commit;
+- the admission records preparation identity-link provenance, while consumption
+  records its new decision/identity evidence and requires the same canonical
+  actor rather than an obsolete identity-link row;
+- database status/terminal-field checks and a unique Submission admission
+  reference guarantee at most one consumer; `consumed` and `stale` are terminal;
+- proven task closure, predecessor advancement, or locked-context replacement
+  changes a still-ready admission to `stale`; authority loss alone does not, so
+  restored authority may later consume a still-compatible ready admission;
 - binding creation uses fixed service action `artifact.binding.create`; the
   contributor's active `artifact.submission_bundle.prepare` action and
   `submission.create` permission do not imply internal binding authority;
@@ -47,6 +62,19 @@ package transport/hash/manifest authority.
   to a `needs_revision` Review is added only through the reviewed REV/TASK joint
   contract and cannot be fabricated from a note or client ID;
 - exact replay/concurrency creates one Submission and one business effect;
+- concurrent consumption yields one success and one exact replay or stable
+  conflict; cancellation, denial, service-action unavailability, context drift,
+  stale execution, or persistence failure creates no Submission/binding;
+- after successful authorization, proven task closure, predecessor advancement,
+  or locked-context replacement may commit only the terminal stale transition
+  and bounded evidence; every other failed mutation rolls back authorization
+  evidence and admission transition together;
+- stable authorized outcomes distinguish already-consumed, context-changed, and
+  stale admissions, but unauthorized callers learn no admission existence/state;
+- crossed-state tests cover authority restoration for a compatible ready
+  admission, predecessor advancement to stale, disabled binding service action,
+  token-valid but revoked identity/grant/assignment, stale execution, and two
+  concurrent requests producing one business effect;
 - latest/current/accepted access uses indexed repository queries or projections,
   while the immutable version/review graph remains fully queryable;
 - no manager finalization is required for an ordinary passing contributor
