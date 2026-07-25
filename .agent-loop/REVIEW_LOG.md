@@ -2918,7 +2918,7 @@ intent and Submission consumption. Review repair replaced shared PermissionIds
 misnamed as service actions with the canonical phase-specific AUTH ActionIds
 and strengthened the governance test to require exact no-expiry, no-release,
 no-deletion, no-cleanup, and no-retention-process clauses. Exact material SHA
-`b839d2572d64657c5759ecbf234a20a650f46bf5` is rebased on trusted main
+`3185af57055f8e7b2411a2090671a9707a26dc58` is rebased on trusted main
 `bba4ba5f171a4438b072740707a5cf8bde49d9af`; all nine internal reviewer tracks
 pass with no open finding. Hosted external checks and human merge approval
 remain required.
@@ -2934,3 +2934,8 @@ The later trusted-main reconciliation incorporates PR #198's exact CI custody
 and Ruff/orchestration repairs without changing the 22-commit PLAN2 patch
 series; range-diff equivalence and fresh exact-base integration review are the
 required evidence before republishing PR #197.
+
+The exact Ruff 0.15.22 integration review found one branch-owned `F841`: a
+historical ART contract read remained after its assertion was retired. The
+repair removes only that dead read; focused Ruff passes, all 104 collected
+agent-gate pytest cases pass, and the 100 direct regression cases pass.
