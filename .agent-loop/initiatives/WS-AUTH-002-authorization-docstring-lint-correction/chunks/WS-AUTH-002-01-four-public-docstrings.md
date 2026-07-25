@@ -59,7 +59,9 @@ PR #198 branch changes
 - [ ] The source diff contains docstrings only.
 - [ ] Ruff 0.15.22 passes without configuration or invocation changes.
 - [ ] Docstring coverage passes without exclusions or threshold changes.
-- [ ] Generated schema changes, if any, are limited to descriptions sourced from the four docstrings.
+- [ ] Generated schema changes, if any, are limited to description metadata
+      sourced from the three Pydantic model docstrings; the helper docstring
+      creates no schema metadata.
 - [ ] No test, runtime, API, schema, migration, or CI behavior changes.
 - [ ] Merge intent has no successor and leaves this corrective initiative stopped.
 

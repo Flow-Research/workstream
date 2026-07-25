@@ -23,11 +23,12 @@
 The implementation changes documentation only. Pydantic validation,
 serialization structure, authorization semantics, database state, migrations,
 and CI configuration remain unchanged. Generated JSON Schema/OpenAPI may gain
-only the four corresponding description fields; no structural contract delta
-is permitted.
+only description metadata sourced from the Pydantic model docstrings; no
+structural contract delta is permitted.
 
 ## Proof strategy
 
 Review the exact source diff, run Ruff 0.15.22 and docstring coverage, compile
 the module, run deterministic repository gates, and require senior, QA,
-security, product, architecture, docs, reuse, and CI-integrity review.
+security, product, architecture, docs, reuse, CI-integrity, and test-delta
+review.
