@@ -6579,7 +6579,7 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
             assert forbidden_key not in coverage_step
     hosted_steps = [
         step for step in steps
-        if step.get("name") == "Record fail-closed hosted timing and coverage evidence"
+        if step.get("name") == "Record hosted timing and fail-closed coverage evidence"
     ]
     assert len(hosted_steps) == 1
     hosted_step = hosted_steps[0]
@@ -6591,7 +6591,8 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert 'summary.get("canonical_node_count")' in hosted_command
     assert 'summary.get("aggregate_runner_seconds")' in hosted_command
     assert 'summary.get("slowest_lane_seconds")' in hosted_command
-    assert 'total_wall > 480' in hosted_command
+    assert '"timing_target_met": total_wall <= 480' in hosted_command
+    assert 'total_wall > 480' not in hosted_command
     assert 'percent < 78' in hosted_command
     assert "math.isfinite" in hosted_command
     assert "Counter(collected) != Counter(completed)" in hosted_command
@@ -6601,6 +6602,7 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         "total_backend_wall_seconds",
         "slowest_lane_seconds",
         "aggregate_runner_seconds",
+        "timing_target_met",
         "canonical_collected_count",
         "completed_count",
         "global_coverage_percent",

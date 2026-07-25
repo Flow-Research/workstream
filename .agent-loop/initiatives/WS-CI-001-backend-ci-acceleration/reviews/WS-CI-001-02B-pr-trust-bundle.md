@@ -38,8 +38,10 @@ PR prose and checked boxes are navigation evidence, not authorization.
 - Extended the canonical isolated runner with per-lane PostgreSQL and MinIO
   namespace custody, redaction, heartbeat, and bounded cleanup evidence.
 - Pinned and asserted Ruff `0.15.22` in the workflow to remove resolver drift.
-- Added hosted exact-head timing, node-count, coverage, and digest evidence with
-  a blocking 480-second wall-time ceiling.
+- Added hosted exact-head timing, node-count, coverage, and digest evidence.
+  The evidence records whether the 480-second target is met; after the owner
+  explicitly accepted the measured miss, timing no longer overrides passing
+  correctness and coverage gates.
 - Initialized the fixed `.ci/test-lanes` evidence root with mode 700 before the
   first collection, closing the hosted `invalid_lane_outputs` bootstrap failure.
 - Preserved schema-lane ordinary coverage when its direct admin self-test unit
@@ -121,7 +123,7 @@ resources, coverage bytes, failures, and timings before combination.
 - [x] Exactly four authenticated coverage artifacts precede one literal
   `coverage combine`; global 78 and every protected 90 floor remain blocking.
 - [x] Hosted evidence records wall, slowest lane, aggregate runner seconds,
-  counts, coverage, and digests and blocks above 480 seconds.
+  counts, coverage, digests, and the explicit 480-second target outcome.
 - [x] Konan remains a Git contributor through the immutable `Co-authored-by`
   trailer on implementation commit `161417ff`; eligible source commits are
   `e22e9fba` and `c73b2893`. Later custody repairs are Abiorh-authored.
@@ -169,10 +171,12 @@ links, stale wording, and diff integrity passed.
 - [x] Coverage thresholds unchanged and blocking
 - [x] Exact Ruff pin removes resolver drift without suppressions
 - [x] No typecheck or package-script weakening
-- [x] No workflow weakening, `continue-on-error`, or path suppression
+- [x] No test, coverage, custody, service-contract, or failure-gate weakening;
+      no `continue-on-error` or path suppression
 - [x] No unpinned new GitHub Action or service image
 - [x] Checkout credential persistence disabled
-- [ ] Exact final GitHub Backend job passes in at most 480 seconds
+- [ ] Exact final GitHub Backend job passes; hosted evidence records the
+      accepted miss against the 480-second performance target
 
 ## External review
 
@@ -202,18 +206,17 @@ Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 | security/auth | PASS | None | Environment, database, and MinIO custody remain isolated. |
 | product/ops | PASS | None | Product and contribution workflows are unchanged. |
 | architecture | PASS WITH LOW RISKS | None | Existing runner/provisioner/validator boundaries remain intact. |
-| CI integrity | PASS | None | Failure, coverage, and timing gates remain blocking. |
+| CI integrity | Pending refresh | None | Re-reviewing the owner-accepted separation of the timing target from correctness gates. |
 | docs | PASS WITH LOW RISKS | None | Operations wording matches the final failure semantics. |
 | reuse/dedup | PASS WITH LOW RISKS | None | Synthetic failures reuse canonical finalization. |
 | test delta | PASS | None | No removed, skipped, deselected, or weakened tests. |
 
 ## Remaining risks
 
-- Hosted PostgreSQL/MinIO execution, API E2E, complete coverage, and the
-  480-second outcome remain unproven until GitHub runs repair SHA `24f3b638`.
-  Prior run `30121249272` passed all functional and coverage gates at
-  `f5d2abd7` but failed the hard timing check; it is not completion proof for
-  the repair head.
+- The final workflow repair still needs exact-head hosted PostgreSQL/MinIO, API
+  E2E, complete coverage, and timing evidence. Run `30123755007` passed every
+  functional and coverage gate at `cd1e8a8f` and measured about nine minutes;
+  it predates the accepted-risk workflow repair and is not final-head proof.
 - Persistent local services can retain exact runner-owned resources if forced
   cleanup exceeds its bounded grace; evidence fails and operators must inspect
   only the recorded resource identities.
