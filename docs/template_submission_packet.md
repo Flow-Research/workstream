@@ -60,7 +60,10 @@ and do not return review decision values: `accept`, `needs_revision`, or
 ## Submission Bundle Manifest
 
 Workstream generates this manifest from normalized directory/file paths, entry
-type, and each file's SHA-256/byte count. Nested archives remain opaque in v0.1.
+type, each file's SHA-256/byte count, and normalized executable intent for
+regular files. Valid Unix execute bits normalize to true; non-Unix or invalid
+mode metadata defaults false, and directories have no executable value. Other
+archive permission metadata is excluded. Nested archives remain opaque in v0.1.
 
 ## Evidence
 
