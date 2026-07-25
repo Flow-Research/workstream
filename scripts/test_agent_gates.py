@@ -5694,10 +5694,6 @@ def test_parallel_initiative_status_matches_trusted_main() -> None:
     artifact_status = Path(
         ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/STATUS.md"
     ).read_text(encoding="utf-8")
-    artifact_contract = Path(
-        ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/"
-        "WS-ART-001-02C2-verification-publication-fencing.md"
-    ).read_text(encoding="utf-8")
     work_queue = Path(".agent-loop/WORK_QUEUE.md").read_text(encoding="utf-8")
     loop_state = Path(".agent-loop/LOOP_STATE.md").read_text(encoding="utf-8")
     contribution_guide = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
