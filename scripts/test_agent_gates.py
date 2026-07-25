@@ -2305,16 +2305,16 @@ def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
     policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
     assert policy == {
         "activation": {
-            "chunk_id": "WS-ENG-007-00R5",
+            "chunk_id": "WS-ENG-007-00R6",
             "initiative_id": "WS-ENG-007",
         },
-        "signed_basis": "a3eecadcf847ac70fc28c58dad642f2d761015e0",
+        "signed_basis": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
         "recovered_merges": [
             {
-                "chunk_id": "WS-ENG-007-00R4",
-                "initiative_id": "WS-ENG-007",
-                "merge_sha": "9bf16d478f669d48172810c83cdf6a7d2b8992ed",
-                "pr_number": 191,
+                "chunk_id": "WS-ART-001-PLAN2",
+                "initiative_id": "WS-ART-001",
+                "merge_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
+                "pr_number": 197,
             },
         ],
         "schema_version": 5,
