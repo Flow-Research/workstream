@@ -33,6 +33,10 @@
 - repaired the hosted pytest-only failure by asserting the explicit typed
   capability/no-AUTH-repository boundary and normalizing Markdown whitespace
   before semantic ActionId/PermissionId checks.
+- rebased without conflict onto `bba4ba5f`, including PR #198's exact CI/Ruff
+  custody repairs; range-diff confirms the complete PLAN2 series is unchanged.
+- removed one obsolete `artifact_contract` read exposed by Ruff `F841`; no live
+  assertion or coverage obligation was removed.
 
 ## Comments deferred
 
@@ -51,6 +55,8 @@ None beyond the normal human review and explicit merge approval for PR #197.
 - `python3 scripts/test_agent_gates.py` — 100 tests
 - hosted-equivalent loop-memory branch-coverage command — 300 tests, 90.46
   percent
+- `ruff 0.15.22 check app tests scripts` — PASS on the reconciled tree
+- focused agent-gate pytest collection — 104 PASS
 - `python3 scripts/check_internal_review_evidence.py`
 - `python3 scripts/update_post_merge_memory.py validate-merge-intent --base-ref origin/main`
 

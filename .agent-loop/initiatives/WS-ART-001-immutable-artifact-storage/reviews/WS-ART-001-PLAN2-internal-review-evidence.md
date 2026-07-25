@@ -1,10 +1,10 @@
 # Internal Review Evidence: WS-ART-001-PLAN2
 
-Reviewed code SHA: `648dd31117ab5bbd4a6c25d7067f89e4edb61d85`
+Reviewed code SHA: `1dbc0d4e52c262844106ef9434c69139e38b33e9`
 
-Reviewed against trusted main: `f3ece23e0f128258947137764b39b7d59dd7b2a8`
+Reviewed against trusted main: `bba4ba5f171a4438b072740707a5cf8bde49d9af`
 
-Reviewed at: `2026-07-25T10:27:17Z`
+Reviewed at: `2026-07-25T16:41:40Z`
 
 Reviewer run IDs: `art_plan2_ext_senior`, `art_plan2_amend_arch`,
 `art_plan2_ext_qa`, `art_plan2_amend_security`, `art_plan2_ext_product`,
@@ -77,9 +77,16 @@ implemented or activated.
 - made 05's typed-capability boundary and prohibition on ART/TASK imports of
   AUTH-owned repositories explicit, then proved the exact hosted pytest
   collection rather than relying only on the direct script entry point;
-- rebased onto trusted main `f3ece23e` and preserved AUTH-10C, AUTH-002, and
-  PLAN2 review history.
+- rebased onto trusted main `bba4ba5f` and preserved AUTH-10C, AUTH-002, CI,
+  and PLAN2 review history;
 - recorded the final amendment review outcome in the canonical review log.
+- proved all 22 PLAN2 commits patch-equivalent across the latest-main rebase and
+  confirmed the merged exact Ruff/CI custody changes introduce no ART conflict;
+  Ruff 0.15.22, the 300-test hosted-equivalent suite, and all deterministic
+  planning gates pass;
+- removed the obsolete ART contract read exposed by the new Ruff `F841` rule;
+  focused Ruff, 104 collected pytest cases, and the 100 direct regression cases
+  pass without weakening an assertion.
 
 ## Accepted Risks
 
