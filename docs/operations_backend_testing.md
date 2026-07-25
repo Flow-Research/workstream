@@ -3,7 +3,13 @@ Workstream's application tests run against a new local Postgres database per
 invocation. Provisioning and cleanup use the admin database; the application
 phase receives only a strict `workstream_test_<12 lowercase hex>` database and an ephemeral login without elevated authority.
 
-## Local full suite
+## Local PostgreSQL diagnostic
+
+This legacy sequential command checks PostgreSQL provisioning and cleanup. It
+is not complete full-suite proof because it does not start or bind a MinIO
+provider. Use the hosted semantic-lane workflow below for authoritative
+PostgreSQL, MinIO, exact-node, timing, API, and coverage custody.
+
 Keep the admin URL in the environment with `postgresql+asyncpg` and a loopback host.
 Never put real or shared credentials in arguments, logs, evidence, or configuration.
 
@@ -17,7 +23,9 @@ export WORKSTREAM_TEST_ADMIN_DATABASE_URL='postgresql+asyncpg://USER:PASSWORD@lo
 unset WORKSTREAM_TEST_ADMIN_DATABASE_URL
 ```
 
-Run both phases. The second can exceed three hours locally; CI gives the child 210 minutes and the job 240 minutes so cleanup retains a bounded window.
+Run both phases for the legacy sequential local diagnostic. Hosted CI instead
+uses four concurrent semantic lanes with a 20-minute lane limit inside a
+45-minute job, leaving a bounded validation and cleanup window.
 
 The runner removes the admin URL before child launch, overwrites both child database URLs,
 removes the nonlocal override, redacts complete URLs, and writes only credential-free metadata.
@@ -57,59 +65,76 @@ Do not use `WORKSTREAM_ALLOW_NONLOCAL_E2E_DATABASE` for ordinary proof.
 
 If provisioning fails, confirm the local PostgreSQL provisioning credential can create/drop databases and roles, terminate owned sessions, and reach the named admin database. Diagnostics omit credentials.
 
-## Hosted parallel full-suite proof
+## Hosted semantic-lane full-suite proof
 
-The required GitHub check remains `Backend / test`. It is the final fan-in for:
+The required GitHub check remains `Backend / test`. One job owns one
+digest-pinned PostgreSQL service container, one digest-pinned MinIO container
+started in-step and published on `127.0.0.1:9000`, and four concurrent
+dependency lanes. A step-level curl health loop admits MinIO before collection.
+This avoids arbitrary shard fan-out and artifact fan-in while retaining exact
+node and coverage custody.
 
-1. `preflight`: evidence gate, lint, docstrings, isolated-runner test, exact test
-   collection, and deterministic four-shard plan;
-2. `shards`: four independent jobs, each with its own digest-pinned PostgreSQL
-   service, runner-owned migrated database, real digest-pinned MinIO, and
-   coverage file;
-3. `api_e2e`: the real API contract proof in a separate isolated database; and
-4. `test`: exact artifact validation, coverage combination, the 78 percent
-   repository floor, and all protected 90 percent subsystem floors.
+The lanes are balanced by measured dependency ownership: `project_lifecycle`
+owns project tests, `task_lifecycle` owns task and checker tests,
+`schema_contracts` owns migrations and reset contracts, and
+`shared_foundations` owns the remaining authorization, artifact, API, and
+infrastructure tests. Every discovered module must belong to exactly one lane.
 
-Matrix job state is the live progress view. The isolated runner continues to
-buffer and redact pytest output, so a running shard does not stream individual
-test names. The final check reports shard duration and balance metadata after
-all evidence is authenticated.
+The job binds the checkout to `GITHUB_SHA`, installs and asserts exact Ruff
+`0.15.22`, runs lint and docstrings, starts MinIO, then collects every canonical
+pytest node. The independent evidence validator must
+accept the collection before execution begins. Each lane receives a distinct
+runner-created database and role plus a distinct MinIO bucket/prefix custody
+record. `shared_foundations` owns the actual `workstream-artifacts` test bucket
+and a unique run prefix; other lanes create, probe, and remove distinct buckets.
+The isolated-runner self-tests remain in the canonical manifest as the explicit
+`admin_runner_self_test` execution kind. The lane orchestrator runs only those
+nodes directly with the admin URL while stripping application database URLs;
+every ordinary node remains behind isolated-runner custody and never receives
+the admin credential.
 
-### Evidence bundles
+After execution, independent validation rejects missing, duplicated, foreign,
+deselected, unexpectedly skipped, interrupted, or partially completed nodes.
+It also binds the exact head, manifest, per-lane isolation metadata, evidence,
+and coverage-file SHA-256 digests. Only then are exactly four regular,
+non-symlink coverage files copied byte-for-byte for one literal
+`coverage combine`. The 78 percent global floor and every protected 90 percent
+subsystem floor remain blocking. The real API contract drill remains a separate
+isolated invocation inside the same required job.
 
-The preflight plan and four fixed shard bundles are retained for seven days.
-Their names include the actual checked-out tree SHA. Each shard bundle contains
-only `coverage.data` and allowlisted `result.json`; the result binds the tree,
-manifest, shard, modules, collected and completed pytest node IDs, duration, and
-SHA-256 of the exact coverage bytes. Repository-owned pytest hooks record the
-final selected inventory and lifecycle completions in the same process; fan-in
-requires exact equality and matches stable test-base cardinalities to preflight.
-Bundles never contain database URLs or passwords, MinIO
-credentials, environment dumps, or runner database metadata.
+### Evidence bundle
 
-The fan-in accepts exactly four expected regular-file bundles. It rejects stale
-tree or manifest bindings, missing/extra/duplicate nodes or modules, altered
-coverage, symlinks, path traversal, unexpected files, failed/cancelled/skipped
-upstream jobs, and missing artifacts before `coverage combine` runs.
+The workflow uploads the `.ci/test-lanes` tree even on failure. Its summary
+records the exact head, canonical node count, four lane results, elapsed time,
+and raw-file digests. Per-lane evidence records collected, completed, skipped,
+and deselected exact node IDs plus the bound resource-isolation metadata and
+coverage digest. Resource metadata is mode `0600`, omits credentials, and proves
+database, role, bucket, prefix, probe, and cleanup custody.
+If startup or provisioning fails before isolation metadata exists, the failed
+lane records null metadata fields, a nonzero exit, and interrupted custody; it
+cannot satisfy independent validation or be mistaken for successful proof.
+
+The validator accepts only safe repository-local regular files and exact schema
+keys. It rejects symlinks, traversal, stale heads, digest drift, unexpected
+lanes, zero collection, incomplete execution, resource cleanup failure, and
+coverage tampering before coverage combination.
 
 ### Failure diagnosis and reruns
 
-- `preflight` failure: inspect evidence/lint/runner/collection output. No shard
-  evidence is valid until preflight succeeds.
-- one `shards` matrix failure: inspect that shard's database, MinIO, collection,
-  or test failure. The final required check must fail even if other shards pass.
-- `api_e2e` failure: inspect the independent API contract job; coverage cannot
-  compensate for it.
-- `test` failure: inspect dependency-result validation, exact bundle fan-in, then
-  the named global or subsystem coverage report.
+- Collection or collection-validation failure: inspect the canonical manifest,
+  lane assignment, and exact-head binding. No execution evidence is valid.
+- Lane failure: inspect the named private log and evidence result; confirm its
+  database/role and MinIO namespace cleanup without exposing credentials.
+- Execution-validation failure: inspect node reconciliation, isolation metadata,
+  and raw coverage digests before considering the test output.
+- API contract or coverage failure: the required job remains failed; lane
+  completion cannot compensate for either boundary.
 
-A complete workflow rerun creates evidence for the same checked-out tree and is
-the clearest recovery. GitHub may rerun failed jobs, but the fan-in still rejects
-missing or stale artifacts; never upload or edit bundles manually. A new commit
-always requires a complete new run because its tree SHA differs.
-
-Four shards reduce wall-clock latency by using more concurrent runner minutes.
-Review shard durations and total Actions consumption after deployment before
-changing the shard count. If parallel execution is unstable or does not justify
-its cost, revert the single implementation PR to restore the prior sequential
-workflow; do not lower coverage, skip a shard, or add a silent fallback.
+Rerun the complete job on the same exact head. Never edit or upload evidence
+manually. Every new commit requires a complete new run because its head and
+digests differ. Hosted evidence always records the exact wall time and whether
+the eight-minute target was met. When the repository owner explicitly accepts
+a measured target miss at the human merge checkpoint, that performance result
+does not override otherwise passing correctness, custody, service-contract,
+API, and coverage gates. Never lower coverage, skip nodes, or add a silent
+fallback to meet the target.

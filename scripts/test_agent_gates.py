@@ -6424,7 +6424,7 @@ def test_local_minio_compose_is_regression_protected() -> None:
 
 
 def test_backend_coverage_thresholds_are_regression_protected() -> None:
-    """Keep parallel full-suite fan-in and every coverage floor fail closed."""
+    """Keep exact-custody semantic lanes and every coverage floor fail closed."""
     workflow_path = ROOT / ".github/workflows/backend.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
     parsed_workflow = yaml.safe_load(workflow)
@@ -6433,98 +6433,127 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
     assert "pull_request_target" not in workflow
     assert "paths-ignore" not in workflow and "continue-on-error" not in workflow
     jobs = parsed_workflow["jobs"]
-    assert set(jobs) == {"preflight", "shards", "api_e2e", "test"}
+    assert set(jobs) == {"test"}
 
     postgres_image = (
         "public.ecr.aws/docker/library/postgres:16@sha256:"
         "33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20"
     )
-    for job_name in ("preflight", "shards", "api_e2e"):
-        assert jobs[job_name]["services"]["postgres"]["image"] == postgres_image
-
-    preflight = jobs["preflight"]
-    assert set(preflight["outputs"]) == {"tree_sha"}
-    assert any(
-        step.get("name") == "Isolated database runner test"
-        and step.get("run") == "python -m pytest -q tests/test_isolated_database_runner.py"
-        for step in preflight["steps"]
-    )
-    plan_steps = [
-        step for step in preflight["steps"] if step.get("name") == "Collect and plan exact test inventory"
-    ]
-    assert len(plan_steps) == 1
-    assert "ci_test_shards.py plan" in str(plan_steps[0]["run"])
-    assert "--shards 4" in str(plan_steps[0]["run"])
-
-    shard_job = jobs["shards"]
-    assert shard_job["needs"] == "preflight"
-    assert shard_job["strategy"] == {
-        "fail-fast": False,
-        "matrix": {"shard": [1, 2, 3, 4]},
+    test_job = jobs["test"]
+    assert set(test_job) == {
+        "runs-on", "timeout-minutes", "services", "steps",
     }
-    shard_steps = shard_job["steps"]
+    assert test_job["services"]["postgres"]["image"] == postgres_image
+    steps = test_job["steps"]
+    assert not any(
+        step.get("name") == "Isolated database runner test"
+        or "tests/test_isolated_database_runner.py" in str(step.get("run", ""))
+        for step in steps
+    )
+    checkout = [step for step in steps if "actions/checkout@" in step.get("uses", "")]
+    assert checkout == [{
+        "uses": "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
+        "with": {"persist-credentials": False, "fetch-depth": 0},
+    }]
+    identity = [step for step in steps if step.get("name") == "Bind exact checked-out tree"]
+    assert len(identity) == 1
+    assert '${tree_sha}' in str(identity[0]["run"])
+    assert '${GITHUB_SHA}' in str(identity[0]["run"])
+    identity_command = str(identity[0]["run"])
+    assert identity_command.index('job_start_epoch="$(date +%s)"') < (
+        identity_command.index('tree_sha="$(git rev-parse HEAD)"')
+    )
+    assert 'job_start_epoch=${job_start_epoch}' in identity_command
+
+    install = [step for step in steps if step.get("name") == "Install backend and exact Ruff"]
+    assert len(install) == 1
+    assert "python -m pip install ruff==0.15.22" in str(install[0]["run"])
+    assert 'test "$(ruff --version)" = "ruff 0.15.22"' in str(install[0]["run"])
+
+    collect = [
+        step for step in steps
+        if step.get("name") == "Collect canonical semantic-lane inventory"
+    ]
+    assert len(collect) == 1
+    assert "run_test_lanes.py" in str(collect[0]["run"])
+    assert "--collect-only" in str(collect[0]["run"])
+    assert ".ci/test-lanes/collect-summary.json" in str(collect[0]["run"])
+    validators = [
+        step for step in steps
+        if "validate_test_lane_evidence.py" in str(step.get("run", ""))
+    ]
+    assert len(validators) == 2
+    assert ".ci/test-lanes/collect-summary.json" in str(validators[0]["run"])
+    assert ".ci/test-lanes/run-summary.json" in str(validators[1]["run"])
+
     minio_steps = [
-        step for step in shard_steps if step.get("name") == "Start real MinIO artifact provider"
+        step for step in steps if step.get("name") == "Start real MinIO artifact provider"
     ]
     assert len(minio_steps) == 1
     assert "${MINIO_IMAGE}" in str(minio_steps[0]["run"])
-    run_shard_steps = [
-        step for step in shard_steps if str(step.get("name", "")).startswith("Run isolated shard")
+    run_lane_steps = [
+        step for step in steps if step.get("name") == "Execute four semantic lanes"
     ]
-    assert len(run_shard_steps) == 1
-    assert "ci_test_shards.py run-shard" in str(run_shard_steps[0]["run"])
-    assert "--cov-fail-under" not in str(run_shard_steps[0]["run"])
+    assert len(run_lane_steps) == 1
+    assert "run_test_lanes.py" in str(run_lane_steps[0]["run"])
+    assert "--timeout-seconds 1200" in str(run_lane_steps[0]["run"])
+    assert ".ci/test-lanes/run.exit" in str(run_lane_steps[0]["run"])
+    assert "--cov-fail-under" not in str(run_lane_steps[0]["run"])
+    require_success = [
+        step for step in steps
+        if step.get("name") == "Require semantic-lane execution success"
+    ]
+    assert len(require_success) == 1
+    assert 'cat .ci/test-lanes/run.exit' in str(require_success[0]["run"])
+    assert "if" not in require_success[0]
+    assert steps.index(run_lane_steps[0]) < steps.index(require_success[0])
+    assert run_lane_steps[0]["env"]["WORKSTREAM_TEST_ADMIN_DATABASE_URL"] == (
+        "postgresql+asyncpg://workstream:workstream@localhost:5433/postgres"
+    )
+    lane_runner = (ROOT / "backend/scripts/run_test_lanes.py").read_text(
+        encoding="utf-8"
+    )
+    lane_validator = (
+        ROOT / "backend/scripts/validate_test_lane_evidence.py"
+    ).read_text(encoding="utf-8")
+    assert "tests/test_isolated_database_runner.py" in lane_runner
+    assert "admin_runner_self_test" in lane_runner
+    assert "execution_kind" in lane_runner
+    assert "run_isolated_tests.py" in lane_runner
+    assert "admin_runner_self_test" in lane_validator
+    assert "execution_kind" in lane_validator
 
-    api_steps = jobs["api_e2e"]["steps"]
     api_e2e_steps = [
-        step for step in api_steps if step.get("name") == "API contract real API e2e"
+        step for step in steps if step.get("name") == "API contract real API e2e"
     ]
     assert len(api_e2e_steps) == 1
     assert "scripts/run_isolated_tests.py" in str(api_e2e_steps[0]["run"])
     assert "scripts/api_contract_e2e.py" in str(api_e2e_steps[0]["run"])
-    shard_tool = (ROOT / "backend/scripts/ci_test_shards.py").read_text(encoding="utf-8")
-    assert 4800 <= jobs["shards"]["timeout-minutes"] * 60 - 600
-    assert '"4800"' in shard_tool
-    assert 1500 <= jobs["api_e2e"]["timeout-minutes"] * 60 - 300
+    assert 1500 <= test_job["timeout-minutes"] * 60 - 300
     assert "--timeout-seconds 1500" in str(api_e2e_steps[0]["run"])
-
-    test_job = parsed_workflow["jobs"]["test"]
-    assert set(test_job) == {"if", "needs", "runs-on", "timeout-minutes", "steps"}
-    assert test_job["if"] == "${{ always() }}"
-    assert test_job["needs"] == ["preflight", "shards", "api_e2e"]
-    steps = test_job["steps"]
-    upstream = [step for step in steps if step.get("name") == "Require every upstream proof"]
-    assert len(upstream) == 1
-    assert upstream[0]["env"] == {
-        "PREFLIGHT_RESULT": "${{ needs.preflight.result }}",
-        "SHARDS_RESULT": "${{ needs.shards.result }}",
-        "API_E2E_RESULT": "${{ needs.api_e2e.result }}",
-    }
-    assert str(upstream[0]["run"]).count('= success') == 3
     downloads = [step for step in steps if "actions/download-artifact@" in step.get("uses", "")]
-    assert len(downloads) == 5
-    assert all(
-        step["uses"]
-        == "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093"
-        and "pattern" not in step.get("with", {})
-        for step in downloads
-    )
+    assert downloads == []
     uploads = [
-        step
-        for job in jobs.values()
-        for step in job["steps"]
+        step for step in steps
         if "actions/upload-artifact@" in step.get("uses", "")
     ]
-    assert len(uploads) == 3
-    assert all(
-        step["uses"]
-        == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
-        for step in uploads
+    assert len(uploads) == 1
+    assert uploads[0]["uses"] == (
+        "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
     )
-    fan_in = [step for step in steps if step.get("name") == "Validate exact fan-in and combine coverage"]
-    assert len(fan_in) == 1
-    assert "ci_test_shards.py fan-in" in str(fan_in[0]["run"])
-    assert "coverage combine ../.ci/combined-coverage" in str(fan_in[0]["run"])
+    assert uploads[0]["if"] == "${{ always() }}"
+    assert uploads[0]["with"]["path"] == "backend/.ci/test-lanes/**"
+    combines = [
+        step for step in steps
+        if step.get("name") == "Combine semantic-lane coverage exactly once"
+    ]
+    assert len(combines) == 1
+    combine_command = str(combines[0]["run"])
+    assert combine_command.count("coverage combine") == 1
+    assert 'test "${#coverage_files[@]}" -eq 4' in combine_command
+    assert "test ! -L" in combine_command
+    assert "sha256sum" in combine_command
+    assert steps.index(validators[1]) < steps.index(combines[0])
 
     full_suite_steps = [
         step for step in steps if step.get("name") == "Backend full-suite coverage"
@@ -6548,6 +6577,46 @@ def test_backend_coverage_thresholds_are_regression_protected() -> None:
         assert coverage_step.get("working-directory") == "backend"
         for forbidden_key in ("if", "continue-on-error", "shell", "env"):
             assert forbidden_key not in coverage_step
+    hosted_steps = [
+        step for step in steps
+        if step.get("name") == "Record hosted timing and fail-closed coverage evidence"
+    ]
+    assert len(hosted_steps) == 1
+    hosted_step = hosted_steps[0]
+    hosted_command = str(hosted_step["run"])
+    assert steps.index(hosted_step) > max(steps.index(step) for step in auth_coverage_steps)
+    assert "coverage json -o .ci/test-lanes/coverage.json" in hosted_command
+    assert ".ci/test-lanes/hosted-evidence.json" in hosted_command
+    assert 'summary.get("head_sha") != expected_head' in hosted_command
+    assert 'summary.get("canonical_node_count")' in hosted_command
+    assert 'summary.get("aggregate_runner_seconds")' in hosted_command
+    assert 'summary.get("slowest_lane_seconds")' in hosted_command
+    assert '"timing_target_met": total_wall <= 480' in hosted_command
+    assert 'total_wall > 480' not in hosted_command
+    assert 'percent < 78' in hosted_command
+    assert "math.isfinite" in hosted_command
+    assert "Counter(collected) != Counter(completed)" in hosted_command
+    assert "hosted lane digest drift" in hosted_command
+    for required_field in (
+        "head_sha",
+        "total_backend_wall_seconds",
+        "slowest_lane_seconds",
+        "aggregate_runner_seconds",
+        "timing_target_met",
+        "canonical_collected_count",
+        "completed_count",
+        "global_coverage_percent",
+        "global_coverage_sha256",
+        "run_summary_sha256",
+    ):
+        assert f'"{required_field}"' in hosted_command
+    assert "waiver" not in hosted_command.lower()
+    operations = (ROOT / "docs/operations_backend_testing.md").read_text(
+        encoding="utf-8"
+    )
+    assert "whether\nthe eight-minute target was met" in operations
+    assert "does not override otherwise passing correctness" in operations
+    assert "makes the required check fail outright" not in operations
     active_phase = active_artifact_coverage_phase()
     expected_coverage = artifact_expected_coverage_commands_for(active_phase)
     actual_coverage = tuple(
