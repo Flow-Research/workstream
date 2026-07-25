@@ -117,6 +117,65 @@ def test_minio_creation_preserves_process_interrupts(
         )
 
 
+def test_minio_creation_preserves_async_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bucket creation cannot translate task cancellation into a collision."""
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+
+
+def test_minio_probe_cleans_up_and_preserves_async_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Probe cancellation cleans the bucket and remains task cancellation."""
+    calls: list[str] = []
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def create_bucket(self, **_kwargs):
+            calls.append("create_bucket")
+
+        async def put_object(self, **_kwargs):
+            calls.append("put_object")
+            raise asyncio.CancelledError
+
+        async def delete_object(self, **_kwargs):
+            calls.append("delete_object")
+
+        async def delete_bucket(self, **_kwargs):
+            calls.append("delete_bucket")
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _endpoint: Client())
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            runner._create_minio(
+                "http://localhost:9000", "workstream-artifacts", "ci/test/run"
+            )
+        )
+    assert calls == ["create_bucket", "put_object", "delete_object", "delete_bucket"]
+
+
 @pytest.mark.parametrize(
     ("lane", "expected_bucket"),
     [

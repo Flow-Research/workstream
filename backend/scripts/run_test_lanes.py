@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 from typing import Any, TextIO
 import uuid
 
@@ -24,6 +25,13 @@ ROOT = Path(__file__).resolve().parents[1]
 TESTS_DIR = ROOT / "tests"
 ISOLATED_RUNNER = ROOT / "scripts" / "run_isolated_tests.py"
 ADMIN_ENV = "WORKSTREAM_TEST_ADMIN_DATABASE_URL"
+TRACEBACK_SECRET_ENVS = (
+    ADMIN_ENV,
+    "WORKSTREAM_DATABASE_URL",
+    "WORKSTREAM_TEST_DATABASE_URL",
+    "MINIO_ROOT_PASSWORD",
+    "WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY",
+)
 COLLECTED_ENV = "WORKSTREAM_LANE_COLLECTED_NODES"
 COMPLETED_ENV = "WORKSTREAM_LANE_COMPLETED_NODES"
 SKIPPED_ENV = "WORKSTREAM_LANE_SKIPPED_NODES"
@@ -519,6 +527,17 @@ def _handle_interrupt(_signum: int, _frame: object) -> None:
     INTERRUPTED = True
 
 
+def _print_redacted_exception(exc: BaseException) -> None:
+    """Surface an orchestration traceback without known environment secrets."""
+    rendered = "".join(traceback.format_exception(exc))
+    for name in TRACEBACK_SECRET_ENVS:
+        value = os.environ.get(name)
+        if value:
+            rendered = rendered.replace(value, f"[REDACTED_{name}]")
+    sys.stderr.write(rendered)
+    sys.stderr.flush()
+
+
 def _finish_unit(active: ActiveLane, exit_code: int, elapsed: float) -> dict[str, Any]:
     active.log.flush()
     active.log.close()
@@ -757,6 +776,7 @@ def run_lanes(metadata_dir: Path, summary_json: Path, timeout_seconds: float, *,
                 time.sleep(POLL_SECONDS)
     except BaseException as exc:
         run_error = exc
+        _print_redacted_exception(exc)
     finally:
         now = time.monotonic()
         for key, item in list(active.items()):

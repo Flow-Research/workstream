@@ -34,6 +34,18 @@ All fourteen comments were valid and addressed:
 14. Added an Agent Gate assertion for the step that reads `run.exit` and fails
     the required check.
 
+The refreshed review on exact head `f601266a` added three findings, all
+addressed:
+
+15. Replaced placeholder command arguments with the exact focused pytest nodes
+    and Markdown path used for verification.
+16. Preserved the traceback and exception message for unexpected lane
+    orchestration failures while retaining cleanup and four-lane failure
+    evidence.
+17. Allowed `asyncio.CancelledError` and other non-`Exception` cancellation
+    signals to propagate during MinIO bucket creation instead of translating
+    them into namespace collisions.
+
 ## Comments deferred
 
 None.
@@ -50,18 +62,26 @@ coverage, isolation, and service-contract gates.
 
 ```bash
 cd backend
+python -m pip install ruff==0.15.22
 ruff check app tests scripts
-python -m pytest -q tests/test_ci_test_lanes.py tests/test_test_lane_evidence.py tests/test_isolated_database_runner.py -k '<non-service selection>'
+python -m pytest -q \
+  tests/test_ci_test_lanes.py::test_unexpected_runner_failure_force_kills_and_records_every_lane \
+  tests/test_ci_test_lanes.py::test_partial_startup_failure_records_exactly_four_failed_lanes \
+  tests/test_isolated_database_runner.py::test_minio_creation_preserves_process_interrupts \
+  tests/test_isolated_database_runner.py::test_minio_creation_preserves_async_cancellation
 cd ..
 python3 scripts/test_agent_gates.py
 python3 scripts/check_internal_review_evidence.py
-python3 scripts/check_markdown_links.py <changed Markdown files>
+python3 scripts/check_markdown_links.py \
+  .agent-loop/initiatives/WS-CI-001-backend-ci-acceleration/reviews/WS-CI-001-02B-external-review-response.md
 git diff --check
 ```
 
-Local result before final evidence binding: exact Ruff passed, 89 focused
-non-service tests passed, 11 service-backed tests remained mandatory for hosted
-CI, and all 100 Agent Gate tests passed.
+Latest focused repair result: exact Ruff passed; the four named traceback,
+partial-startup, process-interrupt, and async-cancellation tests passed; all 100
+Agent Gate tests passed. The earlier broader local run passed 89 focused
+non-service tests, while 11 service-backed tests remained mandatory for hosted
+CI.
 
 ## Internal repair review
 

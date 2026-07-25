@@ -532,9 +532,9 @@ def test_failure_interrupts_sibling_process_groups_and_records_all_lanes(
 
 
 def test_unexpected_runner_failure_force_kills_and_records_every_lane(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Cleanup after an orchestration failure still emits four-lane evidence."""
+    """Cleanup preserves four-lane evidence and the orchestration traceback."""
     lanes = tuple(
         LaneDefinition(f"lane_{index}", (f"tests/test_{index}.py",))
         for index in range(4)
@@ -551,8 +551,11 @@ def test_unexpected_runner_failure_force_kills_and_records_every_lane(
         return [sys.executable, "-c", "import time; time.sleep(30)"]
 
     monkeypatch.setattr(runner, "lane_command", fake_command)
+    admin_url = os.environ[runner.ADMIN_ENV]
     monkeypatch.setattr(
-        runner.time, "sleep", lambda _seconds: (_ for _ in ()).throw(RuntimeError("boom"))
+        runner.time,
+        "sleep",
+        lambda _seconds: (_ for _ in ()).throw(RuntimeError(f"boom {admin_url}")),
     )
     metadata = tmp_path / "metadata"
     summary_path = tmp_path / "summary.json"
@@ -562,6 +565,10 @@ def test_unexpected_runner_failure_force_kills_and_records_every_lane(
     assert len(summary["lanes"]) == 4
     assert all(row["interrupted"] for row in summary["lanes"])
     assert all(row["execution_exit_code"] != 0 for row in summary["lanes"])
+    stderr = capsys.readouterr().err
+    assert "Traceback (most recent call last)" in stderr
+    assert "RuntimeError: boom [REDACTED_WORKSTREAM_TEST_ADMIN_DATABASE_URL]" in stderr
+    assert admin_url not in stderr
 
 
 def test_partial_startup_failure_records_exactly_four_failed_lanes(

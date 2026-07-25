@@ -242,9 +242,7 @@ async def _create_minio(endpoint: str, bucket: str, prefix: str) -> None:
     async with _minio_client(endpoint) as client:
         try:
             await client.create_bucket(Bucket=bucket)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except BaseException as exc:
+        except Exception as exc:
             raise RunnerError("minio_namespace_collision") from exc
         try:
             key = f"{prefix}/runner-probe"
@@ -259,8 +257,10 @@ async def _create_minio(endpoint: str, bucket: str, prefix: str) -> None:
                 await client.delete_object(Bucket=bucket, Key=f"{prefix}/runner-probe")
                 await client.delete_bucket(Bucket=bucket)
             except BaseException as cleanup_error:
+                if not isinstance(cleanup_error, Exception):
+                    raise
                 raise RunnerError("minio_provisioning_cleanup_failed") from cleanup_error
-            if isinstance(exc, (KeyboardInterrupt, SystemExit, RunnerError)):
+            if not isinstance(exc, Exception) or isinstance(exc, RunnerError):
                 raise
             raise RunnerError("minio_probe_failed") from exc
 
