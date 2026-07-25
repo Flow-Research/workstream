@@ -47,15 +47,15 @@ Valid findings addressed: yes
 
 | Reviewer | Result |
 |---|---:|
-| senior engineering | PASS AFTER FIXES |
-| QA/test | PASS AFTER FIXES |
-| security/auth | PASS AFTER FIXES |
+| senior engineering | PASS WITH LOW RISKS |
+| QA/test | PASS WITH LOW RISKS |
+| security/auth | PASS |
 | product/ops | PASS |
 | architecture | PASS |
-| CI integrity | PASS AFTER FIXES |
-| docs | PASS AFTER FIXES |
+| CI integrity | PASS WITH LOW RISKS |
+| docs | PASS |
 | reuse/dedup | PASS |
-| test delta | PASS AFTER FIXES |
+| test delta | PASS WITH LOW RISKS |
 
 The fixes add only the required evidence and trust bundle. No implementation
 changed after the reviewed code SHA.

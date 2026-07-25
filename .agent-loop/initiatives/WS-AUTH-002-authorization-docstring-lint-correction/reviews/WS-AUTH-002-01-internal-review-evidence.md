@@ -35,15 +35,15 @@ test-delta=/root/auth002_01_testdelta
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS AFTER FIXES | None | Required evidence and trust bundle added after confirming the minimal source diff. |
-| QA/test | PASS AFTER FIXES | None | Source and schema checks pass; hosted DB/full-suite proof remains an external gate. |
-| security/auth | PASS AFTER FIXES | None | AST without docstrings is identical and no authorization behavior changed. |
+| senior engineering | PASS WITH LOW RISKS | None | Required evidence is present; hosted proof remains an external gate. |
+| QA/test | PASS WITH LOW RISKS | None | Source and schema checks pass; hosted DB/full-suite proof remains an external gate. |
+| security/auth | PASS | None | AST without docstrings is identical and no authorization behavior changed. |
 | product/ops | PASS | None | Wording accurately describes existing issue, revoke, and response behavior. |
 | architecture | PASS | None | Boundary is exact and AUTH-11 remains untouched. |
-| CI integrity | PASS AFTER FIXES | None | Evidence gate repaired; CI configuration and enforcement are unchanged. |
-| docs | PASS AFTER FIXES | None | Four docstrings are accurate; required evidence artifacts added. |
+| CI integrity | PASS WITH LOW RISKS | None | Evidence gate passes; hosted exact-head proof remains required. |
+| docs | PASS | None | Four docstrings and evidence artifacts are accurate and complete. |
 | reuse/dedup | PASS | None | Reused adjacent AUTH schema wording conventions without refactoring. |
-| test delta | PASS AFTER FIXES | None | No tests, assertions, skips, or coverage controls changed; evidence added. |
+| test delta | PASS WITH LOW RISKS | None | No tests, assertions, skips, or coverage controls changed; hosted proof remains required. |
 
 ## Valid Findings Addressed
 
