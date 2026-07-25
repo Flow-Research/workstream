@@ -14,19 +14,19 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30154213381/job/89669510104"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30165366809/job/89697337224"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30154213379/job/89670303558"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30164212367/job/89694367171"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-AUTH-002-01",
-    "chunk_title": "Four Authorization Public Docstrings",
-    "initiative_id": "WS-AUTH-002",
+    "chunk_id": "WS-CI-001-02B",
+    "chunk_title": "Exact-Custody Semantic Test Lanes",
+    "initiative_id": "WS-CI-001",
     "next_chunk_id": null,
     "next_chunk_title": null,
     "next_requires_explicit_start": true,
@@ -51,41 +51,41 @@
       "agent-gates": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-25T10:18:06Z",
+        "completed_at": "2026-07-25T16:19:21Z",
         "conclusion": "success",
-        "head_sha": "09852d8b1799fc1a945600741e767f3238c9b3fa",
-        "id": 89669510104,
-        "merge_cutoff": "2026-07-25T14:57:09Z",
-        "started_at": "2026-07-25T10:17:26Z"
+        "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
+        "id": 89697337224,
+        "merge_cutoff": "2026-07-25T16:21:40Z",
+        "started_at": "2026-07-25T16:18:37Z"
       },
       "test": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-25T10:29:26Z",
+        "completed_at": "2026-07-25T15:54:52Z",
         "conclusion": "success",
-        "head_sha": "09852d8b1799fc1a945600741e767f3238c9b3fa",
-        "id": 89670303558,
-        "merge_cutoff": "2026-07-25T14:57:09Z",
-        "started_at": "2026-07-25T10:28:45Z"
+        "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
+        "id": 89694367171,
+        "merge_cutoff": "2026-07-25T16:21:40Z",
+        "started_at": "2026-07-25T15:44:16Z"
       }
     },
-    "sha256": "8688dff1e01778b0279c21e8c70ab77315b5f5ef9f04e304b45a407714051a75"
+    "sha256": "25f172783ae02c9514cbac4e779b5ac1af17992ac937713e8129c1568bc171c8"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "f3ece23e0f128258947137764b39b7d59dd7b2a8",
-    "head_ref": "codex/ws-auth-002-01-four-public-docstrings",
-    "head_sha": "09852d8b1799fc1a945600741e767f3238c9b3fa",
-    "intent_blob_sha": "7f80c14e0627b5067e2233a3f8a96eb8dca15dc0",
-    "intent_path": ".agent-loop/merge-intents/WS-AUTH-002-01.json",
-    "main_sha": "77d248c15e5096969e29cabec2a1ce7c39c24ff5",
-    "merged_at": "2026-07-25T14:57:09Z",
+    "first_parent_sha": "77d248c15e5096969e29cabec2a1ce7c39c24ff5",
+    "head_ref": "codex/ws-ci-001-02b-exact-custody-semantic-lanes",
+    "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
+    "intent_blob_sha": "ff0d1859af0e88ee1ca301fdcea615c2b7b55aac",
+    "intent_path": ".agent-loop/merge-intents/WS-CI-001-02B.json",
+    "main_sha": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
+    "merged_at": "2026-07-25T16:21:40Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 200,
-    "pr_title": "docs(auth): add project-role mutation docstrings",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/200"
+    "pr_number": 198,
+    "pr_title": "ci(backend): replace shards with exact-custody semantic lanes",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/198"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-25T14:57:09Z"
+  "updated_at": "2026-07-25T16:21:40Z"
 }
