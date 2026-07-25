@@ -2909,3 +2909,16 @@ put-attempt state vocabulary, and server-owned manifest input. Hosted CI also
 found noncanonical chunk headings and a successor-title mismatch. The repair
 resolves all findings without runtime behavior or AUTH activation; refreshed
 internal review, hosted checks, and human approval remain required.
+
+## 2026-07-25 - WS-ART-001-PLAN2 Admission And Authorization Amendment
+
+The final planning candidate now closes verified-but-unbound admission
+lifecycle, canonical executable intent, and fresh authorization at durable put
+intent and Submission consumption. Review repair replaced shared PermissionIds
+misnamed as service actions with the canonical phase-specific AUTH ActionIds
+and strengthened the governance test to require exact no-expiry, no-release,
+no-deletion, no-cleanup, and no-retention-process clauses. Exact material SHA
+`91c2c95900a59cf1e5aa4c0524b48e0e218aeed9` is rebased on trusted main
+`f3ece23e0f128258947137764b39b7d59dd7b2a8`; all nine internal reviewer tracks
+pass with no open finding. Hosted external checks and human merge approval
+remain required.
