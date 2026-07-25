@@ -10,7 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-AUTH-002-PLAN.json` at blob `e25f07d86b3cb8bf3150baa16ae0f918d960b83e`
 - Completed chunk: `WS-AUTH-002-PLAN` - Authorization Docstring Lint Correction Planning Intake
 - Active planning chunks: none
-- Active implementation chunks: `WS-CI-001-02B`, `WS-REV-001-03P`
+- Active implementation chunks: `WS-AUTH-002-01`, `WS-CI-001-02B`, `WS-REV-001-03P`
+- Latest authority event: `start` for `WS-AUTH-002-01`
+- Authority initiative: `WS-AUTH-002`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-AUTH-002-01` - Four Authorization Public Docstrings; requires a separate explicit start.
 - Required check evidence: passed

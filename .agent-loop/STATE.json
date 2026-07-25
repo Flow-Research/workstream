@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-AUTH-002-01",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-AUTH-002-PLAN",
+      "chunk_title": "Authorization Docstring Lint Correction Planning Intake",
+      "initiative_id": "WS-AUTH-002",
+      "next_chunk_id": "WS-AUTH-002-01",
+      "next_chunk_title": "Four Authorization Public Docstrings",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-AUTH-002-01",
+      "next_chunk_title": "Four Authorization Public Docstrings",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "d7169cb6ae76ae634329d2a10720ac8ca7bafc28",
+      "head_ref": "codex/ws-auth-002-plan-docstring-lint",
+      "head_sha": "c87080c0d17969ac543ccab990370f4b99b58f90",
+      "intent_blob_sha": "e25f07d86b3cb8bf3150baa16ae0f918d960b83e",
+      "intent_path": ".agent-loop/merge-intents/WS-AUTH-002-PLAN.json",
+      "main_sha": "f3ece23e0f128258947137764b39b7d59dd7b2a8",
+      "merged_at": "2026-07-25T09:53:12Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 199,
+      "pr_title": "docs(auth): plan four-docstring lint correction",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/199"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": "Four Authorization Public Docstrings",
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-AUTH-002-01",
+    "created_at": "2026-07-25T09:54:06Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:30153540273:start",
+    "initiative_id": "WS-AUTH-002",
+    "main_sha": "f3ece23e0f128258947137764b39b7d59dd7b2a8",
+    "prior_state_tip": "d6da1b23d33640a9b6aacd55f8d9fc45ea835c6c",
+    "reason": "Approved four-docstring AUTH lint correction after planning intake merge",
+    "run_id": 30153540273,
+    "selection": {
+      "contract_blob_sha": "ff04810317a7b20d4218e9a676e53297ecc6da6c",
+      "contract_path": ".agent-loop/initiatives/WS-AUTH-002-authorization-docstring-lint-correction/chunks/WS-AUTH-002-01-four-public-docstrings.md",
+      "contract_title": "Four Authorization Public Docstrings",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": "WS-AUTH-002-01",
@@ -110,5 +170,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/199"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-25T09:53:12Z"
+  "updated_at": "2026-07-25T09:54:06Z"
 }
