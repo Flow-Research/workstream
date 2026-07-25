@@ -2844,3 +2844,42 @@ inline finding. Its unexplained 37.61 percent docstring warning is
 non-actionable because the unchanged repository gate independently passes the
 same head at 87.6 percent against the 80 percent floor. Human review and
 explicit approval of PR #178 remain.
+
+## 2026-07-23 - WS-AUTH-001-10C Internal Implementation Review
+
+AUTH-10C exact implementation SHA
+`0d05b7096eb7a2cf7c68a1770c0b35f07d5b55df` activates the two
+Project-Manager-only project-role mutations with PREP-bound lexical principal
+locking, deterministic absence serialization, strict replay, immutable
+qualification evidence, lifecycle-independent revoke, and typed invalidation.
+The repair loop closed real named-index fallback and residue, lifecycle
+attribution, database-observed cancellation rollback, committed same-key retry,
+and crossed-principal ordering proof. Senior engineering, architecture,
+reuse/dedup, security/auth, QA/test, test delta, product/ops, docs, and CI
+integrity all pass with no open finding. GitHub full CI/coverage, hosted API E2E,
+CodeRabbit, and human review remain.
+
+## 2026-07-24 - WS-AUTH-001-10C Migration And External Review Repair
+
+Repaired implementation SHA:
+`84c94a9697ee34d75697f4de274df9e8ded4ecdd`.
+
+AUTH-10C now includes migration 0034 with frozen predecessor/forward evidence
+definitions, exact issue-event ordering, and actor/grant/target-bound revoke
+invalidation. Internal repair closed definition drift, incompatible pending
+state, downgrade refusal, concealment/zero-mutation, project lifecycle, and
+linked-target proof gaps. CodeRabbit identified a valid qualification-reference
+coercion concern; field-level strict token and canonical UUID admission preserve
+valid FastAPI JSON while rejecting numeric and byte coercion. The PR body and
+review provenance were refreshed. The final CodeRabbit repair also closed the
+SQL-NULL facts bypass, made trigger-fixture restoration exception-safe, bounded
+lock polling, corrected the exact constraint drop, and repaired the intended
+request-binding test path. Hosted API E2E then exposed and closed a stale
+`id`/`identity_link_id` script reference and an unstable whole-error-envelope
+comparison that included per-request correlation metadata. All nine internal
+tracks pass the repaired tree; the final assertion excludes only
+`correlation_id` and preserves equality for code, message, details, and
+retryability. Full GitHub shards then exposed and closed a stale linked-event
+matrix classification plus legacy-fixture trigger/constraint cleanup residue;
+the exact isolated audit case and sequential upgrade/downgrade matrices pass.
+fresh GitHub Backend, Agent Gates, CodeRabbit, and human review remain.

@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-AUTH-001-10C",
+  "chunk_title": "Project Role Grant Mutations",
+  "initiative_id": "WS-AUTH-001",
+  "next_chunk_id": "WS-AUTH-001-11",
+  "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

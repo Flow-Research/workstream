@@ -10,7 +10,15 @@ import re
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    Strict,
+    TypeAdapter,
+    model_validator,
+)
 
 from app.core.hashing import canonical_json_hash
 from app.modules.audit.schemas import ActorReferenceKind
@@ -146,14 +154,25 @@ class QualificationUnavailableReason(StrEnum):
 
 ReferenceToken = Annotated[
     str,
+    Strict(),
     Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,119}$"),
 ]
+
+
+def _canonical_uuid_input(value: object) -> object:
+    """Admit only the two representations UUID references can have at this boundary."""
+    if not isinstance(value, (str, UUID)):
+        raise ValueError("invalid UUID reference")
+    return value
+
+
+CanonicalUUID = Annotated[UUID, BeforeValidator(_canonical_uuid_input)]
 
 
 class QualificationAvailabilitySnapshot(BaseModel):
     """Privacy-bounded availability and opaque-reference evidence."""
 
-    model_config = _MODEL_CONFIG
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
 
     availability: QualificationAvailability
     reference_ids: Annotated[list[ReferenceToken], Field(max_length=20)]
@@ -188,6 +207,23 @@ class ProjectRoleQualificationSnapshotInput(BaseModel):
     @model_validator(mode="after")
     def reject_url_references(self) -> Self:
         """Keep external references opaque and credential-free."""
+        if any("://" in reference for reference in self.external_expertise_refs):
+            raise ValueError("invalid qualification reference")
+        return self
+
+
+class ProjectRoleQualificationEvidence(BaseModel):
+    """Identifier-free qualification facts supplied for one role decision."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, hide_input_in_errors=True)
+
+    skills_snapshot: QualificationAvailabilitySnapshot
+    reputation_snapshot: QualificationAvailabilitySnapshot
+    prior_project_work_refs: Annotated[list[CanonicalUUID], Field(max_length=20)]
+    external_expertise_refs: Annotated[list[ReferenceToken], Field(max_length=20)]
+
+    @model_validator(mode="after")
+    def reject_url_references(self) -> Self:
         if any("://" in reference for reference in self.external_expertise_refs):
             raise ValueError("invalid qualification reference")
         return self
@@ -284,6 +320,7 @@ class ProjectRoleGrantIssueRequest(CanonicalAuthorityRequest):
     project_id: UUID
     target_actor_id: UUID
     role: ProjectRole
+    qualification: ProjectRoleQualificationEvidence
     reason_digest: Digest
 
 
@@ -461,6 +498,27 @@ class AuthorityInvalidationContext(BaseModel):
     event_id: UUID
     request_id: UUID
     correlation_id: UUID
+    target_ref_kind: AuthorityResourceType | None = None
+    target_ref_id: UUID | None = None
+    project_role: ProjectRole | None = None
+    future_obligation: Literal[
+        "auth13_assignment", "rev_reviewer_obligation", "none"
+    ] | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if (self.target_ref_kind is None) != (self.target_ref_id is None):
+            raise ValueError("invalid authority invalidation target")
+        expected = {
+            ProjectRole.SUBMITTER: "auth13_assignment",
+            ProjectRole.REVIEWER: "rev_reviewer_obligation",
+            ProjectRole.ADJUDICATOR: "none",
+        }.get(self.project_role)
+        if (self.project_role is None) != (self.future_obligation is None):
+            raise ValueError("invalid authority invalidation projection")
+        if expected is not None and self.future_obligation != expected:
+            raise ValueError("invalid authority invalidation projection")
+        return self
 
 
 class AuthorityMismatchContext(BaseModel):
@@ -481,7 +539,7 @@ class AuthorityCompletionResult(BaseModel):
 
     response: AuthorityResponseReference
     success_event_id: UUID
-    invalidation_event_id: UUID
+    invalidation_event_id: UUID | None = None
 
 
 class PendingAuthorityReservationError(RuntimeError):
