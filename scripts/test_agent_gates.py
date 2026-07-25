@@ -5821,6 +5821,7 @@ def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
     contract_05 = (initiative / "chunks/WS-ART-001-05-submission-artifact-cutover.md").read_text(encoding="utf-8")
     contract_06a = (initiative / "chunks/WS-ART-001-06A-checker-input-materialization.md").read_text(encoding="utf-8")
     storage_spec = (ROOT / "docs/spec_artifact_storage_service.md").read_text(encoding="utf-8")
+    normalized_auth_handoff = " ".join(auth_handoff.split())
 
     for text in (plan, decisions, contract_04c, storage_spec):
         assert "ready -> consumed" in text
@@ -5852,14 +5853,17 @@ def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
         assert clause not in normalized.replace(clause, "Admission expiry is enabled.")
     assert "Client abandonment" in plan
     assert "existing completed-byte scopes" in plan
-    assert "transaction-local prepared capability" in auth_handoff
-    assert "never imports AUTH-owned repositories" in contract_05
+    assert "transaction-local prepared capability" in normalized_auth_handoff
+    assert "ART and TASK never import AUTH-owned repositories" in contract_05
     assert "authorization evidence" in contract_04c
-    assert "ActionId `artifact.submission.binding.create`" in auth_handoff
-    assert "PermissionId `artifact.binding.create`" in auth_handoff
-    assert "`artifact.pre_submit.checker_input.materialize`" in auth_handoff
-    assert "`artifact.post_submit.checker_input.materialize`" in auth_handoff
-    assert "mapped to PermissionId\n  `artifact.checker_input.materialize`" in auth_handoff
+    assert "ActionId `artifact.submission.binding.create`" in normalized_auth_handoff
+    assert "PermissionId `artifact.binding.create`" in normalized_auth_handoff
+    assert "`artifact.pre_submit.checker_input.materialize`" in normalized_auth_handoff
+    assert "`artifact.post_submit.checker_input.materialize`" in normalized_auth_handoff
+    assert (
+        "mapped to PermissionId `artifact.checker_input.materialize`"
+        in normalized_auth_handoff
+    )
     assert "fixed service action\n  `artifact.checker_input.materialize`" not in contract_04b
     assert "fixed service action `artifact.binding.create`" not in contract_05
     assert "normalized executable flag" in contract_04a

@@ -42,8 +42,8 @@ package transport/hash/manifest authority.
 - one transaction consumes fresh prepared human `submission.create` and fixed
   service ActionId `artifact.submission.binding.create` capabilities (mapped to
   PermissionId `artifact.binding.create`), locks task, assignment, admission and
-  predecessor, and recomposes final resource facts without TASK or ART importing
-  AUTH-owned repositories;
+  predecessor, and recomposes final resource facts through typed capabilities;
+  ART and TASK never import AUTH-owned repositories;
 - the transaction requires `ready`, matches actor profile, task, project,
   assignment, predecessor and exact locked context, allocates the next version,
   creates the immutable Submission and binding, and changes admission to
