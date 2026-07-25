@@ -12,31 +12,29 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 24f3b638b175352ddce3548d8c247b65c3328087
+Reviewed code SHA: a44c5167080d65a6ba8093cbaab8d50de790d17e
 
-Reviewed at: 2026-07-24T20:18:04Z
+Reviewed at: 2026-07-25T08:14:49Z
 
 Reviewer run IDs: ci02b_cr_senior, ci02b_cr_qa, ci02b_cr_security,
 ci02b_cr_ops, ci02b_cr_arch, ci02b_cr_ci, ci02b_cr_docs,
 ci02b_cr_reuse, ci02b_cr_test_delta
 
-The timing-target repair after this historical reviewed revision is undergoing
-a fresh exact-SHA review. The final evidence commit will replace this revision
-binding after every required track passes.
+After the reviewed SHA, only this final evidence reconciliation changed.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS WITH LOW RISKS | None | Failure rows remain simple; root-cause details stay in job logs. |
-| QA/test | PASS | None | Startup, provisioning, collection, interruption, and teardown failures are covered. |
-| security/auth | PASS | None | Environment isolation and admin/MinIO custody remain fail closed. |
+| senior engineering | PASS | None | Accepted timing evidence is operationally clear; correctness gates remain fail closed. |
+| QA/test | PASS | None | Timing-target semantics and all existing correctness criteria are regression protected. |
+| security/auth | PASS | None | Read-only permissions, untrusted-PR safety, redaction, and resource custody remain intact. |
 | product/ops | PASS | None | No product, compensation, review-decision, or reputation behavior changed. |
-| architecture | PASS WITH LOW RISKS | None | Runner, provisioner, and independent validator boundaries remain separate. |
-| CI integrity | SUPERSEDED | None | Historical result before the owner-accepted timing-target repair. |
-| docs | SUPERSEDED | None | Historical result before the runbook was aligned with accepted-risk semantics. |
-| reuse/dedup | PASS WITH LOW RISKS | None | The single synthetic-row path reuses canonical lane finalization. |
-| test delta | PASS | None | Repair adds regression coverage without skips or weakened assertions. |
+| architecture | PASS | None | Human acceptance remains evidence, not workflow bypass logic. |
+| CI integrity | PASS | None | Tests, coverage, custody, API, and failure gates remain blocking; timing remains measured. |
+| docs | PASS WITH LOW RISKS | None | Runbook, status, trust bundle, and workflow now use one timing convention. |
+| reuse/dedup | PASS | None | No duplicate validator or alternate timing convention remains. |
+| test delta | PASS | None | No tests were removed or skipped; consistency assertions protect the new semantics. |
 
 The bootstrap repair review initially blocked publication because the reviewed
 SHA was stale and this file had an extra blank line at EOF. Both evidence
@@ -120,7 +118,8 @@ git diff --check origin/main...HEAD
   mandatory in hosted CI and are not skipped by the workflow.
 - 100 Agent Gate tests passed.
 - Exact collection and independent recollection agreed on 2,056 pytest nodes
-  at reviewed code SHA `24f3b638`; independent evidence validation passed.
+  before the timing-only workflow repair; final exact-head hosted recollection
+  remains required.
 - Merge intent, Markdown links, stale wording, and diff integrity passed.
 - Local full-service execution was not used as hosted performance evidence.
 

@@ -191,9 +191,9 @@ External review response file, if findings are posted:
 
 ## Reviewer results
 
-Reviewed code SHA: `24f3b638b175352ddce3548d8c247b65c3328087`
+Reviewed code SHA: `a44c5167080d65a6ba8093cbaab8d50de790d17e`
 
-Reviewed at: `2026-07-24T20:18:04Z`
+Reviewed at: `2026-07-25T08:14:49Z`
 
 Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 `ci02b_cr_ops`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`,
@@ -201,14 +201,14 @@ Reviewer run IDs: `ci02b_cr_senior`, `ci02b_cr_qa`, `ci02b_cr_security`,
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS WITH LOW RISKS | None | Failure evidence remains simple and deterministic. |
-| QA/test | PASS | None | All reported failure modes have regression coverage. |
-| security/auth | PASS | None | Environment, database, and MinIO custody remain isolated. |
+| senior engineering | PASS | None | Accepted timing evidence is clear; correctness remains fail closed. |
+| QA/test | PASS | None | Timing semantics and existing acceptance criteria are regression protected. |
+| security/auth | PASS | None | Permissions, redaction, and resource custody remain intact. |
 | product/ops | PASS | None | Product and contribution workflows are unchanged. |
-| architecture | PASS WITH LOW RISKS | None | Existing runner/provisioner/validator boundaries remain intact. |
-| CI integrity | Pending refresh | None | Re-reviewing the owner-accepted separation of the timing target from correctness gates. |
-| docs | PASS WITH LOW RISKS | None | Operations wording matches the final failure semantics. |
-| reuse/dedup | PASS WITH LOW RISKS | None | Synthetic failures reuse canonical finalization. |
+| architecture | PASS | None | Acceptance remains evidence, not workflow bypass logic. |
+| CI integrity | PASS | None | Tests, coverage, custody, API, and failures remain blocking. |
+| docs | PASS WITH LOW RISKS | None | Canonical runbook and evidence use one timing convention. |
+| reuse/dedup | PASS | None | No duplicate timing convention or validator path remains. |
 | test delta | PASS | None | No removed, skipped, deselected, or weakened tests. |
 
 ## Remaining risks
