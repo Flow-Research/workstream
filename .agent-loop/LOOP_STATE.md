@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#193](https://github.com/Flow-Research/workstream/pull/193) - docs(contributing): establish canonical engineering entry
-- Merge commit: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
-- Final PR head: `79b7aaa20bfe3f6af79b7f269e3226becf6c95c9`
-- Merged at: `2026-07-23T13:34:24Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ENG-006-01.json` at blob `d476cdca759c374f6ca07d5f574d70a55607ec34`
-- Completed chunk: `WS-ENG-006-01` - Canonical Human And Agent Contribution Entry
+- Last merged PR: [#194](https://github.com/Flow-Research/workstream/pull/194) - feat(auth): add project role grant mutations
+- Merge commit: `d7169cb6ae76ae634329d2a10720ac8ca7bafc28`
+- Final PR head: `f2673d63a55b6ebf22449ac275f0268bb0618bd2`
+- Merged at: `2026-07-25T08:22:08Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-AUTH-001-10C.json` at blob `cfef9a9a3a14930dd2e8f85f2dd667fe513a5387`
+- Completed chunk: `WS-AUTH-001-10C` - Project Role Grant Mutations
 - Active planning chunks: none
-- Active implementation chunks: `WS-AUTH-001-10C`, `WS-CI-001-02B`, `WS-REV-001-03P`
-- Latest authority event: `start` for `WS-CI-001-02B`
-- Authority initiative: `WS-CI-001`
+- Active implementation chunks: `WS-CI-001-02B`, `WS-REV-001-03P`
 - Current gate: `stopped_after_merge`
-- Next chunk: none recorded.
+- Next chunk: `WS-AUTH-001-11` - Project Identity, Guide, Source, And Visibility Cutover; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
