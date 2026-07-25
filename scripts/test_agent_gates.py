@@ -5816,6 +5816,7 @@ def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
     decisions = (initiative / "DECISIONS.md").read_text(encoding="utf-8")
     auth_handoff = (initiative / "AUTH_HANDOFF.md").read_text(encoding="utf-8")
     contract_04a = (initiative / "chunks/WS-ART-001-04A-upload-inspection-sealing.md").read_text(encoding="utf-8")
+    contract_04b = (initiative / "chunks/WS-ART-001-04B-pre-submit-admission.md").read_text(encoding="utf-8")
     contract_04c = (initiative / "chunks/WS-ART-001-04C-verified-submission-bundle-admission.md").read_text(encoding="utf-8")
     contract_05 = (initiative / "chunks/WS-ART-001-05-submission-artifact-cutover.md").read_text(encoding="utf-8")
     contract_06a = (initiative / "chunks/WS-ART-001-06A-checker-input-materialization.md").read_text(encoding="utf-8")
@@ -5859,7 +5860,7 @@ def test_artifact_plan2_closes_submission_bundle_lifecycle_gaps() -> None:
     assert "`artifact.pre_submit.checker_input.materialize`" in auth_handoff
     assert "`artifact.post_submit.checker_input.materialize`" in auth_handoff
     assert "mapped to PermissionId\n  `artifact.checker_input.materialize`" in auth_handoff
-    assert "fixed service action\n  `artifact.checker_input.materialize`" not in contract_04a
+    assert "fixed service action\n  `artifact.checker_input.materialize`" not in contract_04b
     assert "fixed service action `artifact.binding.create`" not in contract_05
     assert "normalized executable flag" in contract_04a
     assert "same fixed" in contract_06a
