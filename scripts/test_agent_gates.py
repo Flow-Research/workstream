@@ -376,6 +376,34 @@ git diff --check origin/main...head
     )
 
 
+def test_review_gate_allows_only_missing_plan_contract_for_planning_intake() -> None:
+    """A PLAN intake has evidence identity but no PLAN chunk contract."""
+    gate = load_module(
+        "review_gate_planning_intake", "scripts/check_internal_review_evidence.py"
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        original_root = gate.ROOT
+        gate.ROOT = Path(tmpdir)
+        try:
+            assert gate.machine_contract_for(
+                "WS-NEW-001-PLAN", planning_intake=True
+            ) is None
+            try:
+                gate.machine_contract_for("WS-NEW-001-01")
+            except RuntimeError as exc:
+                assert "expected one contract" in str(exc)
+            else:
+                raise AssertionError("ordinary missing chunk contract did not fail closed")
+            try:
+                gate.machine_contract_for("WS-NEW-001-PLAN", planning_intake=False)
+            except RuntimeError as exc:
+                assert "expected one contract" in str(exc)
+            else:
+                raise AssertionError("unclassified PLAN contract absence bypassed the gate")
+        finally:
+            gate.ROOT = original_root
+
+
 def test_review_evidence_files_are_not_relevant_changes() -> None:
     """Review evidence files satisfy the gate without requiring more evidence."""
     gate = load_module(
@@ -2356,30 +2384,17 @@ def test_planning_tree_entries_canonicalize_recursive_directory_objects() -> Non
     )
 
 
-def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
-    """The temporary production recovery authority is identity-exact."""
+def test_root_recovery_policy_is_exactly_pinned() -> None:
+    """The one-use planning-intake gate recovery is identity-exact."""
     policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
     assert policy == {
         "activation": {
-            "chunk_id": "WS-ENG-007-00R6",
-            "initiative_id": "WS-ENG-007",
+            "chunk_id": "WS-ENG-ROOT-001-01",
+            "initiative_id": "WS-ENG-ROOT-001",
         },
-        "signed_basis": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
-        "recovered_merges": [
-            {
-                "chunk_id": "WS-ART-001-PLAN2",
-                "initiative_id": "WS-ART-001",
-                "merge_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
-                "pr_number": 197,
-            },
-            {
-                "chunk_id": "WS-AUTH-001-11",
-                "initiative_id": "WS-AUTH-001",
-                "merge_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
-                "pr_number": 201,
-            },
-        ],
-        "schema_version": 6,
+        "signed_basis": "339248c40020658583bf7bd1e4a58daf85f5ffb8",
+        "recovered_merges": [],
+        "schema_version": 7,
     }
 
 
@@ -7743,6 +7758,7 @@ def main() -> int:
         test_backend_config_paths_require_review_evidence,
         test_materialized_evidence_gate_uses_explicit_repository_root,
         test_machine_scope_binds_reviewer_routing_and_verification_evidence,
+        test_review_gate_allows_only_missing_plan_contract_for_planning_intake,
         test_review_evidence_files_are_not_relevant_changes,
         test_evidence_requires_completed_yes_statements,
         test_evidence_must_reference_changed_chunk,
@@ -7781,7 +7797,7 @@ def main() -> int:
         test_planning_intake_record_schema_fails_closed,
         test_independent_checker_accepts_and_mutates_planning_intake_state,
         test_planning_tree_entries_canonicalize_recursive_directory_objects,
-        test_ws_eng_007_recovery_policy_is_exactly_pinned,
+        test_root_recovery_policy_is_exactly_pinned,
         test_planning_checks_canonicalize_trusted_reruns_and_fail_closed,
         test_planning_intake_collection_binds_paths_trees_and_check_sources,
         test_eng006_exact_recovery_certificate_is_consumed_and_inert_on_replay,

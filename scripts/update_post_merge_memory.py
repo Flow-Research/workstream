@@ -73,6 +73,12 @@ GITHUB_ACTIONS_APP_ID = 15368
 GITHUB_ACTIONS_APP_SLUG = "github-actions"
 R3_RECOVERY_CERTIFICATE_SHA256 = "4fe49b2f4a5a7ad18382a717dcc11f798c465a534066102bf9810c9ed5784f4a"
 R3_HISTORICAL_HEAD_SHA = "55a11d9e0ae356734dbcce73564f5f570220a81b"
+ROOT_RECOVERY_SIGNED_BASIS = "339248c40020658583bf7bd1e4a58daf85f5ffb8"
+ROOT_RECOVERY_INITIATIVE_ID = "WS-ENG-ROOT-001"
+ROOT_RECOVERY_CHUNK_ID = "WS-ENG-ROOT-001-01"
+ROOT_RECOVERY_REASON = "planning-intake-gate-circularity"
+ROOT_RECOVERY_CODE = "exact-root-gate-repair-v1"
+ROOT_RECOVERY_CERTIFICATE_SHA256 = "32f75b9709e6b09b30e672cc9889a8754dad1428e0b57e06d6bd237ae6476e40"
 CHECK_RUN_CONCLUSIONS = frozenset({
     "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
     "success", "timed_out",
@@ -1164,6 +1170,7 @@ def collect_merge_record(
     merge_sha: str,
     *,
     historical_recovery: bool = False,
+    root_recovery_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Collect one exact merged PR and its bounded loop metadata from GitHub."""
     _validate_repository_and_sha(repository, merge_sha)
@@ -1254,7 +1261,25 @@ def collect_merge_record(
             "merged pull request URL does not match repository and number"
         )
 
-    if historical_recovery:
+    if root_recovery_policy is not None:
+        recovery_only = {
+            "merge_sha": merge_sha, "head_sha": head_sha,
+            "chunk_id": metadata.chunk_id, "pr_number": pr_number,
+            "policy_schema": 7,
+            "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+            "activation_chunk_id": ROOT_RECOVERY_CHUNK_ID,
+            "certificate_sha256": hashlib.sha256(
+                _canonical_json(root_recovery_policy).encode("utf-8")
+            ).hexdigest(),
+            "reason": ROOT_RECOVERY_REASON, "code": ROOT_RECOVERY_CODE,
+        }
+        protected_checks = {
+            "schema_version": 1, "recovery_only": recovery_only,
+            "sha256": hashlib.sha256(
+                _canonical_json(recovery_only).encode("utf-8")
+            ).hexdigest(),
+        }
+    elif historical_recovery:
         recovery_only = {
             "merge_sha": merge_sha, "head_sha": head_sha,
             "chunk_id": metadata.chunk_id,
@@ -1302,7 +1327,7 @@ def collect_merge_record(
         },
         "checks": _check_evidence(check_runs, statuses, merged_at),
     }
-    if historical_recovery or complete_check_client:
+    if root_recovery_policy is not None or historical_recovery or complete_check_client:
         record["protected_checks"] = protected_checks
     planning_intake = _collect_planning_intake(
         client,
@@ -2116,6 +2141,18 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
         raise LoopMemoryError("protected check evidence has an invalid schema")
     if set(protected) == {"schema_version", "recovery_only", "sha256"}:
         recovery_only = protected.get("recovery_only")
+        if isinstance(recovery_only, dict) and recovery_only.get("policy_schema") == 7:
+            expected = {
+                "merge_sha": source["main_sha"], "head_sha": source["head_sha"],
+                "chunk_id": ROOT_RECOVERY_CHUNK_ID, "pr_number": source["pr_number"],
+                "policy_schema": 7, "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+                "activation_chunk_id": ROOT_RECOVERY_CHUNK_ID,
+                "certificate_sha256": ROOT_RECOVERY_CERTIFICATE_SHA256,
+                "reason": ROOT_RECOVERY_REASON, "code": ROOT_RECOVERY_CODE,
+            }
+            if recovery_only != expected or protected.get("sha256") != hashlib.sha256(_canonical_json(expected).encode("utf-8")).hexdigest():
+                raise LoopMemoryError("root recovery evidence is invalid")
+            return metadata
         expected = {
             "merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
             "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2",
@@ -2293,11 +2330,12 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         4: {"schema_version", "signed_basis", "activation", "recovered_merges"},
         5: {"schema_version", "signed_basis", "activation", "recovered_merges"},
         6: {"schema_version", "signed_basis", "activation", "recovered_merges"},
+        7: {"schema_version", "signed_basis", "activation", "recovered_merges"},
     }.get(version, set())
     if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    if version not in {1, 2, 3, 4, 5, 6} or not isinstance(activation, dict):
+    if version not in {1, 2, 3, 4, 5, 6, 7} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
@@ -2306,6 +2344,17 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
     if version == 2:
         if payload.get("mode") != "exact_single_target":
             raise LoopMemoryError("recovery policy mode is unsupported")
+        return json.loads(_canonical_json(payload))
+    if version == 7:
+        if (
+            payload.get("signed_basis") != ROOT_RECOVERY_SIGNED_BASIS
+            or activation != {
+                "initiative_id": ROOT_RECOVERY_INITIATIVE_ID,
+                "chunk_id": ROOT_RECOVERY_CHUNK_ID,
+            }
+            or payload.get("recovered_merges") != []
+        ):
+            raise LoopMemoryError("root recovery certificate is not exact")
         return json.loads(_canonical_json(payload))
     if version in {3, 4, 5, 6}:
         recovered_merges = payload.get("recovered_merges")
@@ -2405,7 +2454,13 @@ def prepare_recovery_exemptions(
             repository_root, target_sha, RECOVERY_POLICY_PATH, "recovery policy"
         )
     )
-    target_record = collect_merge_record(client, repository, target_sha)
+    target_record = (
+        collect_merge_record(
+            client, repository, target_sha, root_recovery_policy=policy
+        )
+        if policy["schema_version"] == 7
+        else collect_merge_record(client, repository, target_sha)
+    )
     activation = policy["activation"]
     target_identity = _record_exemption(target_record)
     if (
@@ -2428,6 +2483,27 @@ def prepare_recovery_exemptions(
             raise LoopMemoryError("single-target recovery plan is not exact")
         if target_record.get("source", {}).get("first_parent_sha") != signed_main:
             raise LoopMemoryError("single-target recovery is not the signed first parent")
+        exemption = target_identity
+        existing = state.get("legacy_exemptions", [])
+        if not isinstance(existing, list) or exemption in existing:
+            raise LoopMemoryError("recovery exemption collides with signed state")
+        return [exemption]
+    if policy["schema_version"] == 7:
+        signed_main = (
+            state.get("event", {}).get("main_sha")
+            if _event_type(state) in {"start", "cancel"}
+            else state.get("source", {}).get("main_sha")
+        )
+        if signed_main != policy["signed_basis"]:
+            raise LoopMemoryError("root recovery signed basis does not match canonical state")
+        if planned_shas != [target_sha]:
+            raise LoopMemoryError("root recovery plan is not exact")
+        source = target_record.get("source", {})
+        if source.get("main_sha") != target_sha or source.get("first_parent_sha") != signed_main:
+            raise LoopMemoryError("root recovery target is not the signed first parent")
+        protected = target_record.get("protected_checks", {})
+        if protected.get("recovery_only", {}).get("policy_schema") != 7:
+            raise LoopMemoryError("root recovery protected evidence is missing")
         exemption = target_identity
         existing = state.get("legacy_exemptions", [])
         if not isinstance(existing, list) or exemption in existing:

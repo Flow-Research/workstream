@@ -200,6 +200,45 @@ def test_checker_rejects_invalid_legacy_exemption(tmp_path: Path) -> None:
     assert checker._record_failures(record, "fixture")
 
 
+def test_checker_independently_validates_root_recovery_evidence() -> None:
+    record = fixtures._record()
+    record["source"].update(
+        main_sha="f" * 40, first_parent_sha=checker.ROOT_RECOVERY_SIGNED_BASIS,
+        pr_number=999,
+        pr_url="https://github.com/Flow-Research/workstream/pull/999",
+    )
+    record["completed_chunk"].update(
+        initiative_id="WS-ENG-ROOT-001", chunk_id=checker.ROOT_RECOVERY_CHUNK_ID,
+        chunk_title="Exact Root Recovery",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    record["source"]["intent_path"] = (
+        ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json"
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    recovery = {
+        "merge_sha": record["source"]["main_sha"],
+        "head_sha": record["source"]["head_sha"],
+        "chunk_id": checker.ROOT_RECOVERY_CHUNK_ID, "pr_number": 999,
+        "policy_schema": 7, "signed_basis": checker.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation_chunk_id": checker.ROOT_RECOVERY_CHUNK_ID,
+        "certificate_sha256": checker.ROOT_RECOVERY_CERTIFICATE_SHA256,
+        "reason": checker.ROOT_RECOVERY_REASON, "code": checker.ROOT_RECOVERY_CODE,
+    }
+    record["protected_checks"] = {
+        "schema_version": 1, "recovery_only": recovery,
+        "sha256": checker.hashlib.sha256(
+            json.dumps(recovery, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    assert checker._record_failures(record, "root") == []
+    record["protected_checks"]["recovery_only"]["reason"] = "widened"
+    assert any(
+        "invalid root recovery evidence" in failure
+        for failure in checker._record_failures(record, "root")
+    )
+
+
 def test_explicit_event_workflow_has_closed_write_boundary() -> None:
     root = Path(__file__).resolve().parents[1]
     path = root / ".github/workflows/loop-memory-start.yml"

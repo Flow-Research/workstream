@@ -489,6 +489,84 @@ def _recovery_policy_v3() -> dict:
     }
 
 
+def _root_recovery_policy_v7() -> dict:
+    return {
+        "schema_version": 7,
+        "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation": {
+            "initiative_id": loop.ROOT_RECOVERY_INITIATIVE_ID,
+            "chunk_id": loop.ROOT_RECOVERY_CHUNK_ID,
+        },
+        "recovered_merges": [],
+    }
+
+
+def test_root_recovery_v7_is_exact_one_use_and_check_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["source"]["main_sha"] = loop.ROOT_RECOVERY_SIGNED_BASIS
+    loop.apply_merge_record(state_root, base)
+    target_sha = "f" * 40
+    target = _merge_record(
+        loop.ROOT_RECOVERY_INITIATIVE_ID, loop.ROOT_RECOVERY_CHUNK_ID, 999,
+        target_sha, loop.ROOT_RECOVERY_SIGNED_BASIS,
+    )
+    target["checks"] = {
+        "required": {
+            name: {"kind": "missing", "conclusion": None, "url": None}
+            for name in loop.REQUIRED_CHECKS
+        },
+        "all_required_passed": False,
+    }
+    policy = _root_recovery_policy_v7()
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+
+    def collect(_client, _repository, sha, **kwargs):
+        assert sha == target_sha
+        assert kwargs == {"root_recovery_policy": policy}
+        record = json.loads(json.dumps(target))
+        recovery = {
+            "merge_sha": target_sha, "head_sha": record["source"]["head_sha"],
+            "chunk_id": loop.ROOT_RECOVERY_CHUNK_ID, "pr_number": 999,
+            "policy_schema": 7, "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+            "activation_chunk_id": loop.ROOT_RECOVERY_CHUNK_ID,
+            "certificate_sha256": loop.ROOT_RECOVERY_CERTIFICATE_SHA256,
+            "reason": loop.ROOT_RECOVERY_REASON, "code": loop.ROOT_RECOVERY_CODE,
+        }
+        record["protected_checks"] = {
+            "schema_version": 1, "recovery_only": recovery,
+            "sha256": loop.hashlib.sha256(
+                loop._canonical_json(recovery).encode()
+            ).hexdigest(),
+        }
+        return record
+
+    monkeypatch.setattr(loop, "collect_merge_record", collect)
+    exemptions = loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha=target_sha, planned_shas=[target_sha],
+    )
+    target = collect(object(), "Flow-Research/workstream", target_sha,
+                     root_recovery_policy=policy)
+    assert not target["checks"]["all_required_passed"]
+    assert loop.apply_merge_record(state_root, target, exemptions)
+    loop.assert_recovery_consumed(state_root, target_sha, exemptions)
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha=target_sha, planned_shas=[],
+    ) == []
+
+
+@pytest.mark.parametrize("field", ["signed_basis", "activation", "recovered_merges"])
+def test_root_recovery_v7_rejects_widening(field: str) -> None:
+    policy = _root_recovery_policy_v7()
+    policy[field] = "bad" if field != "recovered_merges" else [{}]
+    with pytest.raises(loop.LoopMemoryError):
+        loop._validate_recovery_policy(policy)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

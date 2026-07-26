@@ -388,6 +388,98 @@ class SignedHistorySelectionTests(unittest.TestCase):
             checker.select_contract(Path("."), "base", "head", "state")
 
 
+class PlanningIntakeSelectionTests(unittest.TestCase):
+    def git(self, repo: Path, *args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=repo, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        ).stdout.strip()
+
+    def fixture(self, directory: str, *, foreign: str | None = None) -> tuple[Path, str, dict[str, object]]:
+        repo = Path(directory)
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "config", "user.email", "test@example.invalid")
+        self.git(repo, "config", "user.name", "Test")
+        (repo / "README.md").write_text("trusted base\n")
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-qm", "base")
+        base = self.git(repo, "rev-parse", "HEAD").decode()
+        initiative = "WS-NEW-001"
+        root = repo / f".agent-loop/initiatives/{initiative}-planning"
+        (root / "chunks").mkdir(parents=True)
+        (root / "reviews").mkdir()
+        for name in checker.PLANNING_ROOT_FILES:
+            text = (
+                "- Active planning chunk: `none`\n"
+                "- Active implementation chunk: `none`\n"
+                if name == "STATUS.md" else f"# {name}\n"
+            )
+            (root / name).write_text(text)
+        successor = contract().replace(b"WS-ENG-008-01", b"WS-NEW-001-01")
+        (root / "chunks/WS-NEW-001-01-implementation.md").write_bytes(successor)
+        (root / "reviews/WS-NEW-001-PLAN-internal-review-evidence.md").write_text("review\n")
+        (root / "reviews/WS-NEW-001-PLAN-pr-trust-bundle.md").write_text("trust\n")
+        intent_path = repo / ".agent-loop/merge-intents/WS-NEW-001-PLAN.json"
+        intent_path.parent.mkdir(parents=True)
+        intent_path.write_text(json.dumps({
+            "schema_version": 2, "initiative_id": initiative,
+            "chunk_id": f"{initiative}-PLAN", "chunk_title": "Planning intake",
+            "next_chunk_id": f"{initiative}-01", "next_chunk_title": "First chunk",
+            "next_requires_explicit_start": True,
+        }))
+        if foreign:
+            path = repo / foreign
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("unauthorized\n")
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-qm", "planning intake")
+        intent = checker.added_merge_intent(repo, base, "HEAD")
+        return repo, base, intent
+
+    def test_first_new_initiative_planning_intake_gets_exact_additive_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            scope = checker.planning_intake_scope(repo, base, "HEAD", intent, ())
+            self.assertIsNotNone(scope)
+            assert scope is not None
+            self.assertEqual(scope.chunk_id, "WS-NEW-001-PLAN")
+            self.assertEqual(scope.phase, "planning")
+            checker.enforce_scope(scope, checker.discover_changes(repo, base, "HEAD"))
+
+    def test_planning_intake_rejects_foreign_and_existing_initiative(self) -> None:
+        for foreign in (
+            "scripts/implementation.py",
+            ".github/workflows/bypass.yml",
+            ".agent-loop/policies/broadened.json",
+        ):
+            with self.subTest(foreign=foreign), tempfile.TemporaryDirectory() as directory:
+                repo, base, intent = self.fixture(directory, foreign=foreign)
+                with self.assertRaisesRegex(checker.ContractError, "foreign path"):
+                    checker.planning_intake_scope(repo, base, "HEAD", intent, ())
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            records = ({"event": {
+                "type": "start", "initiative_id": "WS-NEW-001",
+                "chunk_id": "WS-NEW-001-00",
+            }},)
+            with self.assertRaisesRegex(checker.ContractError, "already exists"):
+                checker.planning_intake_scope(repo, base, "HEAD", intent, records)
+
+    def test_planning_intake_rejects_nonadditive_and_bad_successor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            (repo / "README.md").write_text("modified by intake\n")
+            self.git(repo, "add", "README.md")
+            self.git(repo, "commit", "-qm", "smuggled modification")
+            with self.assertRaisesRegex(checker.ContractError, "additive files only"):
+                checker.planning_intake_scope(repo, base, "HEAD", intent, ())
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            intent["next_chunk_id"] = "WS-NEW-001-99"
+            with self.assertRaisesRegex(checker.ContractError, "successor contract"):
+                checker.planning_intake_scope(repo, base, "HEAD", intent, ())
+
+
 class GitDiscoveryIntegrationTests(unittest.TestCase):
     def git(self, repo: Path, *args: str) -> bytes:
         return subprocess.run(
