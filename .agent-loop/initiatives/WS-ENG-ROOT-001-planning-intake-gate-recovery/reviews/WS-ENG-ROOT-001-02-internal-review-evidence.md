@@ -11,6 +11,7 @@ Reviewer run IDs: `r2f_senior`, `r2f_qa`, `r2f_security`, `r2f_product`,
 
 ```bash
 python3 scripts/test_agent_gates.py
+python3 scripts/test_check_chunk_contract.py
 python3 scripts/check_loop_memory_state.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
 python3 scripts/check_internal_review_evidence.py
