@@ -1957,7 +1957,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0034_project_role_issue_evidence",
+                    "0035_project_read_evidence",
                     True,
                     True,
                 )
@@ -1984,7 +1984,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0034_project_role_issue_evidence",
+                    "0035_project_read_evidence",
                     True,
                     True,
                 )
@@ -2072,7 +2072,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0034_project_role_issue_evidence"
+                "0035_project_read_evidence"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
@@ -2524,6 +2524,9 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_09D_B,
                             ActionOwner.AUTH_10B,
                             ActionOwner.AUTH_10C,
+                            ActionOwner.AUTH_11B,
+                            ActionOwner.AUTH_11C1,
+                            ActionOwner.AUTH_11C2,
                         }
                     ),
                 )
@@ -2678,6 +2681,9 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_09D_B,
                             ActionOwner.AUTH_10B,
                             ActionOwner.AUTH_10C,
+                            ActionOwner.AUTH_11B,
+                            ActionOwner.AUTH_11C1,
+                            ActionOwner.AUTH_11C2,
                         }
                     ),
                 )
