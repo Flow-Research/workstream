@@ -29,7 +29,6 @@ docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
-.agent-loop/merge-intents/WS-AUTH-001-11A.json
 ```
 
 ## Not allowed
