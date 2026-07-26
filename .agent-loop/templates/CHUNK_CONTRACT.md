@@ -30,6 +30,41 @@ L0 / L1 / L2 / L3 / L4
 
 P0 / P1 / P2 / P3
 
+## Machine-checkable scope
+
+Every implementation or specification contract admitted after the
+`WS-ENG-008-01` cutover must contain exactly one block in this form. The arrays
+contain repository-relative paths or closed directory patterns, canonical
+reviewer names, and repository-owned verification identifiers; they never
+contain shell commands.
+
+```chunk-scope-json
+{
+  "schema_version": 1,
+  "chunk_id": "<CHUNK_ID>",
+  "phase": "implementation",
+  "risk_class": "L1",
+  "allowed_paths": [
+    "<path>"
+  ],
+  "forbidden_paths": [
+    "<path-or-directory-pattern>"
+  ],
+  "required_reviewers": [
+    "senior engineering",
+    "qa/test",
+    "security/auth",
+    "product/ops"
+  ],
+  "verification_commands": [
+    "<repository-owned-command-id>"
+  ]
+}
+```
+
+The human-readable sections below remain mandatory and must agree with this
+block. See `CONTRIBUTING.md` for the closed path grammar and cutover rule.
+
 ## Allowed files
 
 ```text

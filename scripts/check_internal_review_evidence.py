@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import json
 import re
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from check_chunk_contract import ContractError, ScopeContract, parse_contract_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -87,6 +90,9 @@ PROVENANCE_PLACEHOLDER_FRAGMENTS = (
     "agent ids",
     "ci run ids",
     "local reviewer run references",
+)
+VERIFICATION_IDS_PATTERN = re.compile(
+    r"^verification command ids:[ \t]*(.+)$", re.IGNORECASE | re.MULTILINE
 )
 
 
@@ -479,6 +485,78 @@ def evidence_chunk_ids(text: str) -> set[str]:
     }
 
 
+def active_merge_intent_chunk(paths: list[str]) -> str | None:
+    """Return the one chunk identity carried by this PR's added merge intent."""
+    candidates: list[str] = []
+    for path in paths:
+        if not path.startswith(".agent-loop/merge-intents/") or not path.endswith(
+            ".json"
+        ):
+            continue
+        intent_path = ROOT / path
+        if not intent_path.is_file() or intent_path.is_symlink():
+            continue
+        try:
+            data = json.loads(intent_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"cannot read changed merge intent {path}") from exc
+        chunk_id = data.get("chunk_id") if isinstance(data, dict) else None
+        if not isinstance(chunk_id, str):
+            raise RuntimeError(f"changed merge intent has no chunk_id: {path}")
+        candidates.append(chunk_id)
+    if not candidates:
+        return None
+    if len(candidates) != 1:
+        raise RuntimeError("exactly one changed merge intent is required")
+    return candidates[0]
+
+
+def machine_contract_for(chunk_id: str) -> ScopeContract | None:
+    """Load the current chunk's schema-v1 contract, if it has crossed cutover."""
+    matches: list[Path] = []
+    for path in (ROOT / ".agent-loop/initiatives").glob("*/chunks/*.md"):
+        try:
+            first_line = path.read_text(encoding="utf-8").splitlines()[0]
+        except (OSError, UnicodeDecodeError, IndexError) as exc:
+            raise RuntimeError(f"cannot read chunk contract {path}") from exc
+        if chunk_id_from_heading(first_line) == chunk_id.lower():
+            matches.append(path)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"expected one contract for {chunk_id}, found {len(matches)}"
+        )
+    raw = matches[0].read_bytes()
+    if b"```chunk-scope-json" not in raw:
+        return None
+    try:
+        return parse_contract_bytes(raw)
+    except ContractError as exc:
+        raise RuntimeError(f"invalid machine scope for {chunk_id}: {exc}") from exc
+
+
+def validate_machine_evidence(
+    text: str, contract: ScopeContract, required_tracks: tuple[str, ...]
+) -> list[str]:
+    """Bind reviewer and verification evidence to the machine contract."""
+    failures: list[str] = []
+    if set(contract.required_reviewers) != set(required_tracks):
+        failures.append("machine required_reviewers disagree with evidence routing")
+    match = VERIFICATION_IDS_PATTERN.search(text)
+    if not match:
+        failures.append("verification command ids")
+    else:
+        observed = tuple(
+            item.strip().strip("`").lower()
+            for item in match.group(1).split(",")
+            if item.strip()
+        )
+        if len(observed) != len(set(observed)) or set(observed) != set(
+            contract.verification_commands
+        ):
+            failures.append("verification command ids disagree with machine contract")
+    return failures
+
+
 def main() -> int:
     """Check that changed engineering files include complete review evidence."""
     try:
@@ -513,6 +591,10 @@ def main() -> int:
     failures: list[str] = []
     try:
         chunk_ids = required_chunk_ids(changed)
+        intent_chunk = active_merge_intent_chunk(changed)
+        machine_contract = (
+            machine_contract_for(intent_chunk) if intent_chunk is not None else None
+        )
     except RuntimeError as exc:
         print(f"Internal review evidence gate failed closed: {exc}", file=sys.stderr)
         return 1
@@ -524,6 +606,14 @@ def main() -> int:
             continue
         try:
             missing = validate_evidence(path, required_tracks, chunk_ids)
+            if machine_contract is not None:
+                missing.extend(
+                    validate_machine_evidence(
+                        path.read_text(encoding="utf-8").lower(),
+                        machine_contract,
+                        required_tracks,
+                    )
+                )
         except (OSError, UnicodeDecodeError) as exc:
             failures.append(
                 f"{path}: unreadable evidence file ({exc.__class__.__name__})"

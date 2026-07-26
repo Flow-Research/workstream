@@ -32,6 +32,34 @@ P2
 
 `implementation`
 
+## Machine-checkable scope
+
+```chunk-scope-json
+{
+  "schema_version": 1,
+  "chunk_id": "WS-ENG-008-05",
+  "phase": "implementation",
+  "risk_class": "L1",
+  "allowed_paths": [
+    "backend/pyproject.toml",
+    "backend/tests/test_authorization_properties.py",
+    ".github/workflows/backend.yml",
+    "scripts/assurance-requirements.txt",
+    "docs/operations_authorization_service.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-05-authorization-property-invariants.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-pr-trust-bundle.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-adversarial-proof.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-05-external-review-response.md",
+    ".agent-loop/merge-intents/WS-ENG-008-05.json"
+  ],
+  "forbidden_paths": ["backend/app/**", "backend/alembic/**"],
+  "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
+  "verification_commands": ["authorization-property-tests", "authorization-property-lint", "markdown-links", "stale-wording", "git-diff-check"]
+}
+```
+
 ## Allowed files
 
 ```text

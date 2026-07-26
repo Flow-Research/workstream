@@ -72,6 +72,12 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
   paths.
 - Every non-trivial task starts with the smallest applicable loop artifact: an initiative plan for large work, or a chunk contract for bounded work.
 - Do not implement a chunk until its allowed files, not-allowed changes, acceptance criteria, risk class, verification commands, and required reviewers are explicit.
+- After the `WS-ENG-008-01` cutover, every implementation or specification
+  contract must carry one valid schema-v1 `chunk-scope-json` block. Agent Gates
+  enforce its closed repository-relative path grammar against the complete Git
+  delta; human prose cannot widen it, forbidden paths win, and contract values
+  never execute shell text. Only work already signed-active at the exact
+  cutover may use the generated event/path/blob-bound grandfather record.
 - Do not begin the next chunk automatically after finishing the current chunk.
 - Merge-intent schema v2 may name only a successor in the same initiative. Use
   a null successor when no same-initiative chunk is declared; cross-initiative

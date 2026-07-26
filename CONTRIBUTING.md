@@ -34,6 +34,9 @@ execution; they are not authority.
    large or ambiguous work, or a bounded chunk contract for smaller work. The
    contract must state allowed files, forbidden changes, acceptance criteria,
    risk, verification commands, reviewers, and human review focus.
+   Post-cutover implementation and specification contracts also carry one
+   strict `chunk-scope-json` block. Agent Gates compare the complete PR and
+   local-status delta with that block; prose cannot widen it.
 3. Ask an authenticated repository writer to dispatch `Loop Memory Explicit
    Event` on exact current `main`. A valid start is independently verified
    signed state on `automation/loop-memory`; chat, an issue, a branch, a commit,
@@ -75,6 +78,14 @@ to skip current-main reconciliation, tests, internal review, or human approval.
 
 - Work in the exact signed chunk and remain inside its allowed files and
   acceptance criteria.
+- Machine scope paths are repository-relative NFC UTF-8 names. A literal file
+  names one file; a trailing `/**` names that directory recursively. Absolute
+  paths, `.`/`..` components, shell/regex syntax, negation, braces, backslashes,
+  controls, symlinks, gitlinks, executable changes, and byte, normalization, or
+  casefold collisions fail closed. A forbidden match always overrides an
+  allowed match.
+- Contract verification values are closed repository-owned command identifiers,
+  never executable text supplied by the contract.
 - Reconcile with current `main` before publication. If the base changes, inspect
   the delta and rerun all contract proof; a rebase does not replace the signed
   contract or authorize scope drift.
@@ -84,6 +95,14 @@ to skip current-main reconciliation, tests, internal review, or human approval.
   findings in the initiative evidence.
 - Do not begin another chunk automatically. Distinct initiatives may proceed in
   parallel only when each has its own valid signed active chunk.
+
+The scope ratchet begins when trusted `main` contains the
+`WS-ENG-008-01` merge intent. Every implementation or specification start from
+that point requires schema v1. Only a chunk already signed-active at the exact
+cutover may finish without it, and only through generated evidence bound to its
+pre-cutover start event, initiative/chunk identity, contract path, and contract
+blob. Stopped, proposed, cancelled/restarted, and newly started work is never
+grandfathered.
 
 ## Before Opening A Pull Request
 

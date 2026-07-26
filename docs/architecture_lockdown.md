@@ -11,6 +11,12 @@ and reputation consequences.
 
 The ADR files under `docs/decision_*.md` are the decision record for this lockdown. When a locked rule changes, update or add an ADR before changing implementation specs.
 
+Repository changes use the Repository-Native Human-Agent SDLC documented in
+`README.md` and `CONTRIBUTING.md`. Its Codex-native zero-trust engineering loop
+binds reviewed intent, signed authority, machine-checkable chunk scope,
+evidence, internal review, a human merge checkpoint, and signed merge memory.
+That repository process is separate from every product lifecycle below.
+
 The canonical v0.1 scope remains narrower:
 
 ```text

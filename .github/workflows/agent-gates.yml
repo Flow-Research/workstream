@@ -24,6 +24,19 @@ jobs:
       - name: Install agent gate dependencies
         run: python -m pip install --require-hashes -r scripts/agent-gate-requirements.txt
 
+      - name: Fetch signed loop-memory state
+        run: >-
+          git fetch --no-tags origin
+          +refs/heads/automation/loop-memory:refs/remotes/origin/automation/loop-memory
+
+      - name: Machine-checkable chunk scope
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: >-
+          python3 scripts/check_chunk_contract.py
+          --base-ref "origin/${BASE_REF}" --head-ref HEAD
+          --state-ref origin/automation/loop-memory
+
       - name: Static agent sensor advisory
         env:
           BASE_REF: ${{ github.base_ref }}

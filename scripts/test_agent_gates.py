@@ -320,6 +320,40 @@ def test_backend_config_paths_require_review_evidence() -> None:
     assert "ci integrity" in backend_config_tracks
 
 
+def test_machine_scope_binds_reviewer_routing_and_verification_evidence() -> None:
+    """Machine metadata cannot drift from internal reviewer proof."""
+    gate = load_module(
+        "review_gate_machine_scope", "scripts/check_internal_review_evidence.py"
+    )
+    tracks = (
+        "senior engineering",
+        "qa/test",
+        "security/auth",
+        "product/ops",
+    )
+    contract = gate.ScopeContract(
+        "WS-ENG-008-01",
+        "implementation",
+        "L1",
+        ("scripts/check_chunk_contract.py",),
+        ("backend/**",),
+        tracks,
+        ("chunk-scope-tests", "git-diff-check"),
+    )
+    valid = (
+        "verification command ids: `chunk-scope-tests`, `git-diff-check`\n"
+    )
+    assert gate.validate_machine_evidence(valid, contract, tracks) == []
+    assert "verification command ids disagree with machine contract" in (
+        gate.validate_machine_evidence(
+            "verification command ids: `chunk-scope-tests`\n", contract, tracks
+        )
+    )
+    assert "machine required_reviewers disagree with evidence routing" in (
+        gate.validate_machine_evidence(valid, contract, tracks[:-1])
+    )
+
+
 def test_review_evidence_files_are_not_relevant_changes() -> None:
     """Review evidence files satisfy the gate without requiring more evidence."""
     gate = load_module(
@@ -6456,6 +6490,29 @@ def test_agent_gates_runs_stale_artifact_contracts_fail_closed() -> None:
     assert all(step.get("if") not in {False, "false", "${{ false }}"} for step in steps)
 
 
+def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
+    """Agent Gates must enforce exact PR scope from authenticated loop memory."""
+    workflow = (ROOT / ".github/workflows/agent-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    command = "python3 scripts/check_chunk_contract.py"
+    state_refspec = (
+        "+refs/heads/automation/loop-memory:"
+        "refs/remotes/origin/automation/loop-memory"
+    )
+    assert workflow.count(command) == 1
+    assert workflow.count(state_refspec) == 1
+    assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
+    assert "--state-ref origin/automation/loop-memory" in workflow
+    assert "continue-on-error" not in workflow
+    assert workflow.index("Fetch signed loop-memory state") < workflow.index(
+        "Machine-checkable chunk scope"
+    )
+    assert workflow.index("Machine-checkable chunk scope") < workflow.index(
+        "Internal review evidence gate"
+    )
+
+
 def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
     """The YAML parser dependency and its installation remain deterministic."""
     workflow = yaml.safe_load(
@@ -7704,6 +7761,7 @@ def main() -> int:
         test_stale_review_contracts_run_fail_closed_in_agent_gates,
         test_agent_gates_runs_stale_authorization_docs_fail_closed,
         test_agent_gates_runs_stale_artifact_contracts_fail_closed,
+        test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound,
         test_agent_gate_dependencies_and_workflow_are_pinned,
         test_local_minio_compose_is_regression_protected,
         test_backend_coverage_thresholds_are_regression_protected,
