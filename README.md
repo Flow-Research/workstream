@@ -163,40 +163,29 @@ implementation history until their owning migrations replace the runtime.
 
 ## Repository-Native Human-Agent SDLC
 
-Workstream uses a Repository-Native Human-Agent SDLC: intent, authority,
-execution, verification, review, and durable memory are encoded and enforced in
-the repository so humans and agents can collaborate without trusting chat
-history or unaudited claims. Its enforcement mechanism is the Codex-native
-zero-trust engineering loop:
+Workstream uses a Repository-Native Human-Agent SDLC. Plans, tests, review, and
+durable decisions live with the code so humans and agents can collaborate
+without depending on chat history. GitHub permissions and branch protection
+remain the repository authority; process notes never create a second permission
+system.
 
 ```text
 Intent
--> Discovery
 -> Plan
--> Chunk Map
--> Chunk Contract
--> Implementation
+-> Bounded Change
 -> Evidence
--> Internal Review
+-> Review
 -> PR
--> Human Checkpoint
--> Automated Merge Memory
--> Stop
+-> Human Merge
 ```
 
 Codex-discoverable skills live in `.agents/skills/`. Codex custom reviewer
-agents live in `.codex/agents/`. Durable engineering memory, policies, chunk
-contracts, reviews, and status live in `.agent-loop/`.
-
-Post-cutover implementation and specification contracts include a strict
-machine-checkable scope block. Agent Gates fail closed when a changed path,
-reviewer requirement, or verification identifier falls outside the reviewed
-contract; the block authorizes no command execution.
+agents live in `.codex/agents/`. Durable engineering plans, decisions, and
+optional review notes live in `.agent-loop/`.
 
 This engineering loop is separate from Workstream product state. It governs how
 the repository is changed; it does not define runtime task or review records.
-Each initiative may have at most one active planning or implementation chunk;
-distinct initiatives may run concurrently. Start with
+Independent initiatives and branches may proceed concurrently. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md) before proposing repository work.
 
 ## Local Backend Database
