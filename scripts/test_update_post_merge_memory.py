@@ -2118,7 +2118,7 @@ def test_shared_reconcile_orders_recovery_and_validates_atomically(
     collection_calls: list[tuple[str, bool]] = []
     monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: events.append("plan") or planned)
     monkeypatch.setattr(loop, "prepare_recovery_exemptions", lambda *_args, **_kwargs: events.append("prepare") or exemptions)
-    def collect(_client, _repository, sha, *, historical_recovery=False):
+    def collect(_client, _repository, sha, *, historical_recovery=False, root_recovery_policy=None):
         collection_calls.append((sha, historical_recovery))
         events.append("collect")
         return _record()
@@ -2133,6 +2133,36 @@ def test_shared_reconcile_orders_recovery_and_validates_atomically(
     )
     assert events == ["plan", "prepare", "collect", "apply", "collect", "apply", "assert", "validate"]
     assert collection_calls == [(normal_sha, False), (recovery_sha, True)]
+
+
+def test_shared_reconcile_preserves_root_recovery_policy_during_collection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    loop.apply_merge_record(state_root, _record())
+    planned = [loop.ROOT_RECONCILE_MERGE_SHA, "f" * 40]
+    policy = {
+        "schema_version": 8,
+        "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation": {"initiative_id": loop.ROOT_RECOVERY_INITIATIVE_ID, "chunk_id": loop.ROOT_RECONCILE_CHUNK_ID},
+        "recovered_merges": [{
+            "initiative_id": loop.ROOT_RECOVERY_INITIATIVE_ID,
+            "chunk_id": loop.ROOT_RECOVERY_CHUNK_ID,
+            "pr_number": loop.ROOT_RECONCILE_PR_NUMBER,
+            "merge_sha": loop.ROOT_RECONCILE_MERGE_SHA,
+        }],
+    }
+    exemptions = [{"initiative_id": "WS-ENG-ROOT-001", "chunk_id": "WS-ENG-ROOT-001-01", "pr_number": 205}]
+    calls = []
+    monkeypatch.setattr(loop, "plan_reconciliation_commits", lambda *_args: planned)
+    monkeypatch.setattr(loop, "prepare_recovery_exemptions", lambda *_args, **_kwargs: exemptions)
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+    monkeypatch.setattr(loop, "collect_merge_record", lambda *_args, **kwargs: calls.append(kwargs.get("root_recovery_policy")) or _record())
+    monkeypatch.setattr(loop, "apply_merge_record", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(loop, "assert_recovery_consumed", lambda *_args: None)
+    monkeypatch.setattr(loop, "validate_generated_state", lambda *_args: None)
+    loop.reconcile_to_main(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40)
+    assert calls == [policy, policy]
 
 
 def test_merge_bound_evidence_is_mandatory_after_cutover_in_both_validators() -> None:

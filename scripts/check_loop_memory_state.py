@@ -116,6 +116,11 @@ ROOT_RECOVERY_CHUNK_ID = "WS-ENG-ROOT-001-01"
 ROOT_RECOVERY_REASON = "planning-intake-gate-circularity"
 ROOT_RECOVERY_CODE = "exact-root-gate-repair-v1"
 ROOT_RECOVERY_CERTIFICATE_SHA256 = "32f75b9709e6b09b30e672cc9889a8754dad1428e0b57e06d6bd237ae6476e40"
+ROOT_RECONCILE_CHUNK_ID = "WS-ENG-ROOT-001-02"
+ROOT_RECONCILE_MERGE_SHA = "ce512bdb6ae47e94ae8067845531cacfc3378a85"
+ROOT_RECONCILE_REASON = "root-recovery-reconciliation-circularity"
+ROOT_RECONCILE_CODE = "exact-root-reconcile-repair-v1"
+ROOT_RECONCILE_CERTIFICATE_SHA256 = "f7fbd8bca3ba731c1a6c51c953533906a92cd8ad719dadee88ef763a1f70cf56"
 ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$")
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -890,6 +895,31 @@ def _record_failures(
                     or source.get("first_parent_sha") != ROOT_RECOVERY_SIGNED_BASIS
                 ):
                     failures.append(f"{label}: invalid root recovery evidence")
+            elif isinstance(recovery, dict) and recovery.get("policy_schema") == 8:
+                recovered = source.get("main_sha") == ROOT_RECONCILE_MERGE_SHA
+                chunk = ROOT_RECOVERY_CHUNK_ID if recovered else ROOT_RECONCILE_CHUNK_ID
+                parent = ROOT_RECOVERY_SIGNED_BASIS if recovered else ROOT_RECONCILE_MERGE_SHA
+                expected_recovery = {
+                    "merge_sha": source.get("main_sha"), "head_sha": source.get("head_sha"),
+                    "chunk_id": chunk, "pr_number": source.get("pr_number"),
+                    "policy_schema": 8, "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+                    "activation_chunk_id": ROOT_RECONCILE_CHUNK_ID,
+                    "certificate_sha256": ROOT_RECONCILE_CERTIFICATE_SHA256,
+                    "reason": ROOT_RECONCILE_REASON, "code": ROOT_RECONCILE_CODE,
+                }
+                completed = record.get("completed_chunk")
+                if (
+                    recovery != expected_recovery
+                    or protected.get("sha256") != hashlib.sha256(json.dumps(expected_recovery, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                    or not isinstance(completed, dict)
+                    or completed.get("initiative_id") != "WS-ENG-ROOT-001"
+                    or completed.get("chunk_id") != chunk
+                    or completed.get("next_chunk_id") is not None
+                    or completed.get("next_chunk_title") is not None
+                    or source.get("intent_path") != f".agent-loop/merge-intents/{chunk}.json"
+                    or source.get("first_parent_sha") != parent
+                ):
+                    failures.append(f"{label}: invalid root reconciliation evidence")
             else:
                 expected_recovery = {"merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953", "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2", "pr_number": 189, "policy_schema": 4, "signed_basis": "73b457925b02301587b83d01ced0adb66319d134", "activation_chunk_id": "WS-ENG-007-00R3", "certificate_sha256": R3_RECOVERY_CERTIFICATE_SHA256, "reason": "no-completed-pre-merge-agent-gates"}
                 if recovery != expected_recovery or source.get("head_sha") != R3_HISTORICAL_HEAD_SHA or source.get("pr_number") != 189 or protected.get("sha256") != hashlib.sha256(json.dumps(expected_recovery, sort_keys=True, separators=(",", ":")).encode()).hexdigest():

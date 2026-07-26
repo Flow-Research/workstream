@@ -2385,16 +2385,21 @@ def test_planning_tree_entries_canonicalize_recursive_directory_objects() -> Non
 
 
 def test_root_recovery_policy_is_exactly_pinned() -> None:
-    """The one-use planning-intake gate recovery is identity-exact."""
+    """The one-use root reconciliation recovery is identity-exact."""
     policy = json.loads(Path(".agent-loop/policies/loop-memory-recovery.json").read_text())
     assert policy == {
         "activation": {
-            "chunk_id": "WS-ENG-ROOT-001-01",
+            "chunk_id": "WS-ENG-ROOT-001-02",
             "initiative_id": "WS-ENG-ROOT-001",
         },
         "signed_basis": "339248c40020658583bf7bd1e4a58daf85f5ffb8",
-        "recovered_merges": [],
-        "schema_version": 7,
+        "recovered_merges": [{
+            "initiative_id": "WS-ENG-ROOT-001",
+            "chunk_id": "WS-ENG-ROOT-001-01",
+            "pr_number": 205,
+            "merge_sha": "ce512bdb6ae47e94ae8067845531cacfc3378a85",
+        }],
+        "schema_version": 8,
     }
 
 

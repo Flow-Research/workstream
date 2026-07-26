@@ -79,6 +79,12 @@ ROOT_RECOVERY_CHUNK_ID = "WS-ENG-ROOT-001-01"
 ROOT_RECOVERY_REASON = "planning-intake-gate-circularity"
 ROOT_RECOVERY_CODE = "exact-root-gate-repair-v1"
 ROOT_RECOVERY_CERTIFICATE_SHA256 = "32f75b9709e6b09b30e672cc9889a8754dad1428e0b57e06d6bd237ae6476e40"
+ROOT_RECONCILE_CHUNK_ID = "WS-ENG-ROOT-001-02"
+ROOT_RECONCILE_MERGE_SHA = "ce512bdb6ae47e94ae8067845531cacfc3378a85"
+ROOT_RECONCILE_PR_NUMBER = 205
+ROOT_RECONCILE_REASON = "root-recovery-reconciliation-circularity"
+ROOT_RECONCILE_CODE = "exact-root-reconcile-repair-v1"
+ROOT_RECONCILE_CERTIFICATE_SHA256 = "f7fbd8bca3ba731c1a6c51c953533906a92cd8ad719dadee88ef763a1f70cf56"
 CHECK_RUN_CONCLUSIONS = frozenset({
     "action_required", "cancelled", "failure", "neutral", "skipped", "stale",
     "success", "timed_out",
@@ -1278,16 +1284,19 @@ def collect_merge_record(
         )
 
     if root_recovery_policy is not None:
+        policy_schema = root_recovery_policy["schema_version"]
+        activation_chunk_id = root_recovery_policy["activation"]["chunk_id"]
         recovery_only = {
             "merge_sha": merge_sha, "head_sha": head_sha,
             "chunk_id": metadata.chunk_id, "pr_number": pr_number,
-            "policy_schema": 7,
+            "policy_schema": policy_schema,
             "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
-            "activation_chunk_id": ROOT_RECOVERY_CHUNK_ID,
+            "activation_chunk_id": activation_chunk_id,
             "certificate_sha256": hashlib.sha256(
                 _canonical_json(root_recovery_policy).encode("utf-8")
             ).hexdigest(),
-            "reason": ROOT_RECOVERY_REASON, "code": ROOT_RECOVERY_CODE,
+            "reason": ROOT_RECOVERY_REASON if policy_schema == 7 else ROOT_RECONCILE_REASON,
+            "code": ROOT_RECOVERY_CODE if policy_schema == 7 else ROOT_RECONCILE_CODE,
         }
         protected_checks = {
             "schema_version": 1, "recovery_only": recovery_only,
@@ -2178,6 +2187,30 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             ):
                 raise LoopMemoryError("root recovery evidence is invalid")
             return metadata
+        if isinstance(recovery_only, dict) and recovery_only.get("policy_schema") == 8:
+            recovered = source["main_sha"] == ROOT_RECONCILE_MERGE_SHA
+            expected_chunk = ROOT_RECOVERY_CHUNK_ID if recovered else ROOT_RECONCILE_CHUNK_ID
+            expected_parent = ROOT_RECOVERY_SIGNED_BASIS if recovered else ROOT_RECONCILE_MERGE_SHA
+            expected = {
+                "merge_sha": source["main_sha"], "head_sha": source["head_sha"],
+                "chunk_id": expected_chunk, "pr_number": source["pr_number"],
+                "policy_schema": 8, "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+                "activation_chunk_id": ROOT_RECONCILE_CHUNK_ID,
+                "certificate_sha256": ROOT_RECONCILE_CERTIFICATE_SHA256,
+                "reason": ROOT_RECONCILE_REASON, "code": ROOT_RECONCILE_CODE,
+            }
+            if (
+                recovery_only != expected
+                or protected.get("sha256") != hashlib.sha256(_canonical_json(expected).encode()).hexdigest()
+                or metadata.initiative_id != ROOT_RECOVERY_INITIATIVE_ID
+                or metadata.chunk_id != expected_chunk
+                or metadata.next_chunk_id is not None
+                or metadata.next_chunk_title is not None
+                or source.get("intent_path") != f".agent-loop/merge-intents/{expected_chunk}.json"
+                or source.get("first_parent_sha") != expected_parent
+            ):
+                raise LoopMemoryError("root reconciliation evidence is invalid")
+            return metadata
         expected = {
             "merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953",
             "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2",
@@ -2356,11 +2389,12 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
         5: {"schema_version", "signed_basis", "activation", "recovered_merges"},
         6: {"schema_version", "signed_basis", "activation", "recovered_merges"},
         7: {"schema_version", "signed_basis", "activation", "recovered_merges"},
+        8: {"schema_version", "signed_basis", "activation", "recovered_merges"},
     }.get(version, set())
     if set(payload) != expected:
         raise LoopMemoryError("recovery policy has an invalid schema")
     activation = payload.get("activation")
-    if version not in {1, 2, 3, 4, 5, 6, 7} or not isinstance(activation, dict):
+    if version not in {1, 2, 3, 4, 5, 6, 7, 8} or not isinstance(activation, dict):
         raise LoopMemoryError("recovery policy is unsupported")
     if set(activation) != {"initiative_id", "chunk_id"} or not _is_valid_exemption_id(
         activation.get("initiative_id"), activation.get("chunk_id")
@@ -2380,6 +2414,19 @@ def _validate_recovery_policy(payload: Any) -> dict[str, Any]:
             or payload.get("recovered_merges") != []
         ):
             raise LoopMemoryError("root recovery certificate is not exact")
+        return json.loads(_canonical_json(payload))
+    if version == 8:
+        if (
+            payload.get("signed_basis") != ROOT_RECOVERY_SIGNED_BASIS
+            or activation != {"initiative_id": ROOT_RECOVERY_INITIATIVE_ID, "chunk_id": ROOT_RECONCILE_CHUNK_ID}
+            or payload.get("recovered_merges") != [{
+                "initiative_id": ROOT_RECOVERY_INITIATIVE_ID,
+                "chunk_id": ROOT_RECOVERY_CHUNK_ID,
+                "pr_number": ROOT_RECONCILE_PR_NUMBER,
+                "merge_sha": ROOT_RECONCILE_MERGE_SHA,
+            }]
+        ):
+            raise LoopMemoryError("root reconciliation certificate is not exact")
         return json.loads(_canonical_json(payload))
     if version in {3, 4, 5, 6}:
         recovered_merges = payload.get("recovered_merges")
@@ -2483,7 +2530,7 @@ def prepare_recovery_exemptions(
         collect_merge_record(
             client, repository, target_sha, root_recovery_policy=policy
         )
-        if policy["schema_version"] == 7
+        if policy["schema_version"] in {7, 8}
         else collect_merge_record(client, repository, target_sha)
     )
     activation = policy["activation"]
@@ -2534,6 +2581,35 @@ def prepare_recovery_exemptions(
         if not isinstance(existing, list) or exemption in existing:
             raise LoopMemoryError("recovery exemption collides with signed state")
         return [exemption]
+    if policy["schema_version"] == 8:
+        if planned_shas != [ROOT_RECONCILE_MERGE_SHA, target_sha]:
+            raise LoopMemoryError("root reconciliation plan is not exact")
+        if state.get("source", {}).get("main_sha") != policy["signed_basis"]:
+            raise LoopMemoryError("root reconciliation signed basis does not match canonical state")
+        recovered = collect_merge_record(
+            client, repository, ROOT_RECONCILE_MERGE_SHA,
+            root_recovery_policy=policy,
+        )
+        records = [recovered, target_record]
+        expected_parent = policy["signed_basis"]
+        for sha, record in zip(planned_shas, records, strict=True):
+            source = record.get("source", {})
+            if source.get("main_sha") != sha or source.get("first_parent_sha") != expected_parent:
+                raise LoopMemoryError("root reconciliation is not first-parent adjacent")
+            if record.get("protected_checks", {}).get("recovery_only", {}).get("policy_schema") != 8:
+                raise LoopMemoryError("root reconciliation protected evidence is missing")
+            expected_parent = sha
+        exemptions = [_record_exemption(record) for record in records]
+        if exemptions[0] != {
+            "initiative_id": ROOT_RECOVERY_INITIATIVE_ID,
+            "chunk_id": ROOT_RECOVERY_CHUNK_ID,
+            "pr_number": ROOT_RECONCILE_PR_NUMBER,
+        }:
+            raise LoopMemoryError("root reconciliation recovered merge is not exact")
+        existing = state.get("legacy_exemptions", [])
+        if not isinstance(existing, list) or any(item in existing for item in exemptions):
+            raise LoopMemoryError("recovery exemption collides with signed state")
+        return exemptions
     if policy["schema_version"] in {3, 4, 5, 6}:
         recovered_policies = policy["recovered_merges"]
         expected_shas = [item["merge_sha"] for item in recovered_policies] + [target_sha]
@@ -2652,11 +2728,20 @@ def reconcile_to_main(
         client, repository, repository_root=repository_root, state_root=state_root,
         target_sha=target_sha, planned_shas=planned,
     )
+    recovery_policy = None
+    if any(item.get("initiative_id") == ROOT_RECOVERY_INITIATIVE_ID for item in exemptions):
+        candidate = _validate_recovery_policy(_load_json_at_commit(
+            repository_root, target_sha, RECOVERY_POLICY_PATH, "recovery policy"
+        ))
+        if candidate["schema_version"] in {7, 8}:
+            recovery_policy = candidate
     for merge_sha in planned:
         historical = _is_r3_historical_recovery(merge_sha, exemptions)
         record = collect_merge_record(
             client, repository, merge_sha, historical_recovery=True
-        ) if historical else collect_merge_record(client, repository, merge_sha)
+        ) if historical else collect_merge_record(
+            client, repository, merge_sha, root_recovery_policy=recovery_policy
+        )
         apply_merge_record(state_root, record, recovery_exemptions=exemptions or None)
     assert_recovery_consumed(state_root, target_sha, exemptions)
     validate_generated_state(state_root)
