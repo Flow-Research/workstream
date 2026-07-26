@@ -1,20 +1,22 @@
 # STATUS: WS-ENG-007 - Concurrent PR Review Reconciliation
 
-- Phase: R4 activation recovery
+- Phase: ART PLAN2 signed-memory recovery
 - Gate: fail-closed automation repair
 - Active planning chunk: none
 - Active implementation chunk: none
 - Reconciled recovery history: `WS-ENG-007-00R1`, `WS-ENG-007-00R2`,
   `WS-ENG-007-00R3`
-- Completed recovery chunk: `WS-ENG-007-00R3`
-- Merged recovery chunk: `WS-ENG-007-00R4`
-- Active recovery chunk: `WS-ENG-007-00R5`
+- Completed recovery chunks: `WS-ENG-007-00R1` through `WS-ENG-007-00R5`
+- Unsigned merge requiring recovery: `WS-ART-001-PLAN2` / PR #197
+- Later signed merge in the exact recovery sequence: `WS-AUTH-001-11` / PR #201
+- Active recovery chunk: `WS-ENG-007-00R6`
 - Proposed implementation successor after recovery: `WS-ENG-007-01`
 - Separate explicit start required: true
-- Current gate: PR #191 merged as
-  `9bf16d478f669d48172810c83cdf6a7d2b8992ed`, but post-merge memory rejected it
-  because recovery chunk R4 had no signed start. Signed state remains at PR #190;
-  no successor is active.
-- Review gate: all nine internal tracks passed exact implementation head
-  `10159497b3f3ca3464cbbbfd10f16945ade1879a`; awaiting external checks and the
-  user-owned merge decision.
+- Current gate: PR #197 merged as
+  `03a05eeb8f129e0d5f226cc5c058965f43590a81` without a signed planning start.
+  Reconciliation fails closed at that merge, so later explicit starts cannot
+  reach current main. Signed state remains based at merge
+  `bba4ba5f171a4438b072740707a5cf8bde49d9af`; AUTH-11 was correctly active
+  there and its later merge is preserved as the second exact predecessor.
+- Review gate: R6 exact-head internal review and protected checks required
+  before the user-owned merge decision.
