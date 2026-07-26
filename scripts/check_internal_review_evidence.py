@@ -520,7 +520,7 @@ def active_merge_intent_chunk(paths: list[str]) -> str | None:
     return candidates[0]
 
 
-def machine_contract_for(chunk_id: str) -> ScopeContract | None:
+def machine_contract_for(chunk_id: str, *, planning_intake: bool = False) -> ScopeContract | None:
     """Load the current chunk's schema-v1 contract, if it has crossed cutover."""
     matches: list[Path] = []
     for path in (ROOT / ".agent-loop/initiatives").glob("*/chunks/*.md"):
@@ -530,6 +530,10 @@ def machine_contract_for(chunk_id: str) -> ScopeContract | None:
             raise RuntimeError(f"cannot read chunk contract {path}") from exc
         if chunk_id_from_heading(first_line) == chunk_id.lower():
             matches.append(path)
+    if not matches and planning_intake and chunk_id.endswith("-PLAN"):
+        # The PLAN identity describes the reviewed additive planning tree; its
+        # one implementation successor carries the first chunk contract.
+        return None
     if len(matches) != 1:
         raise RuntimeError(
             f"expected one contract for {chunk_id}, found {len(matches)}"
@@ -607,8 +611,12 @@ def main() -> int:
     try:
         chunk_ids = required_chunk_ids(changed)
         intent_chunk = active_merge_intent_chunk(changed)
+        if intent_chunk is not None and intent_chunk.lower() not in chunk_ids:
+            chunk_ids.append(intent_chunk.lower())
         machine_contract = (
-            machine_contract_for(intent_chunk) if intent_chunk is not None else None
+            machine_contract_for(
+                intent_chunk, planning_intake=intent_chunk.endswith("-PLAN")
+            ) if intent_chunk is not None else None
         )
     except RuntimeError as exc:
         print(f"Internal review evidence gate failed closed: {exc}", file=sys.stderr)

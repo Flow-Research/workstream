@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import subprocess
 
 import pytest
 import yaml
@@ -198,6 +199,138 @@ def test_checker_rejects_invalid_legacy_exemption(tmp_path: Path) -> None:
         {"initiative_id": "WS-AUTH-001", "chunk_id": "bad", "pr_number": 0}
     ]
     assert checker._record_failures(record, "fixture")
+
+
+def test_checker_independently_validates_root_recovery_evidence() -> None:
+    record = fixtures._record()
+    record["source"].update(
+        main_sha="f" * 40, first_parent_sha=checker.ROOT_RECOVERY_SIGNED_BASIS,
+        pr_number=999,
+        pr_url="https://github.com/Flow-Research/workstream/pull/999",
+    )
+    record["completed_chunk"].update(
+        initiative_id="WS-ENG-ROOT-001", chunk_id=checker.ROOT_RECOVERY_CHUNK_ID,
+        chunk_title="Exact Root Recovery",
+        next_chunk_id=None, next_chunk_title=None,
+    )
+    record["source"]["intent_path"] = (
+        ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json"
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    recovery = {
+        "merge_sha": record["source"]["main_sha"],
+        "head_sha": record["source"]["head_sha"],
+        "chunk_id": checker.ROOT_RECOVERY_CHUNK_ID, "pr_number": 999,
+        "policy_schema": 7, "signed_basis": checker.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation_chunk_id": checker.ROOT_RECOVERY_CHUNK_ID,
+        "certificate_sha256": checker.ROOT_RECOVERY_CERTIFICATE_SHA256,
+        "reason": checker.ROOT_RECOVERY_REASON, "code": checker.ROOT_RECOVERY_CODE,
+    }
+    record["protected_checks"] = {
+        "schema_version": 1, "recovery_only": recovery,
+        "sha256": checker.hashlib.sha256(
+            json.dumps(recovery, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    assert checker._record_failures(record, "root") == []
+    record["protected_checks"]["recovery_only"]["reason"] = "widened"
+    assert any(
+        "invalid root recovery evidence" in failure
+        for failure in checker._record_failures(record, "root")
+    )
+
+
+@pytest.mark.parametrize("mutation", ["initiative", "parent"])
+def test_checker_binds_root_recovery_to_root_record(mutation: str) -> None:
+    record = fixtures._record()
+    record["source"].update(
+        main_sha="f" * 40,
+        first_parent_sha=checker.ROOT_RECOVERY_SIGNED_BASIS,
+        pr_number=999,
+        pr_url="https://github.com/Flow-Research/workstream/pull/999",
+        intent_path=f".agent-loop/merge-intents/{checker.ROOT_RECOVERY_CHUNK_ID}.json",
+    )
+    record["completed_chunk"].update(
+        initiative_id="WS-ENG-ROOT-001",
+        chunk_id=checker.ROOT_RECOVERY_CHUNK_ID,
+        next_chunk_id=None,
+        next_chunk_title=None,
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    recovery = {
+        "merge_sha": record["source"]["main_sha"],
+        "head_sha": record["source"]["head_sha"],
+        "chunk_id": checker.ROOT_RECOVERY_CHUNK_ID,
+        "pr_number": 999,
+        "policy_schema": 7,
+        "signed_basis": checker.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation_chunk_id": checker.ROOT_RECOVERY_CHUNK_ID,
+        "certificate_sha256": checker.ROOT_RECOVERY_CERTIFICATE_SHA256,
+        "reason": checker.ROOT_RECOVERY_REASON,
+        "code": checker.ROOT_RECOVERY_CODE,
+    }
+    record["protected_checks"] = {
+        "schema_version": 1,
+        "recovery_only": recovery,
+        "sha256": checker.hashlib.sha256(
+            json.dumps(recovery, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    if mutation == "initiative":
+        record["completed_chunk"].update(
+            initiative_id="WS-OTHER-001", chunk_id="WS-OTHER-001-01"
+        )
+        record["source"]["intent_path"] = ".agent-loop/merge-intents/WS-OTHER-001-01.json"
+    else:
+        record["source"]["first_parent_sha"] = "a" * 40
+    assert any(
+        "invalid root recovery evidence" in failure
+        for failure in checker._record_failures(record, "root")
+    )
+
+
+def test_checker_rejects_planning_intake_when_first_parent_has_prefixed_tree(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    legacy = repository / ".agent-loop/initiatives/WS-NEW-001-existing/STATUS.md"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("# Existing\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repository)], check=True)
+    subprocess.run(["git", "-C", str(repository), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(repository), "config", "user.email", "test@example.com"], check=True)
+    subprocess.run(["git", "-C", str(repository), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repository), "commit", "-qm", "base"], check=True)
+    parent = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    tree = subprocess.run(
+        ["git", "-C", str(repository), "rev-parse", "HEAD^{tree}"],
+        check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    intake = {
+        "base_tree_sha": tree,
+        "first_parent_tree_sha": tree,
+        "merge_tree_sha": tree,
+        "changed_paths": [],
+        "delta_sha256": "0" * 64,
+    }
+    source = {
+        "first_parent_sha": parent,
+        "main_sha": parent,
+        "intent_path": ".agent-loop/merge-intents/WS-NEW-001-PLAN.json",
+    }
+    assert any(
+        "initiative tree already exists" in failure
+        for failure in checker._planning_tree_failures(
+            intake, source, repository, "fixture"
+        )
+    )
+    source["intent_path"] = None
+    assert checker._planning_tree_failures(
+        intake, source, repository, "fixture"
+    ) == ["fixture: planning intake intent path is invalid"]
 
 
 def test_explicit_event_workflow_has_closed_write_boundary() -> None:

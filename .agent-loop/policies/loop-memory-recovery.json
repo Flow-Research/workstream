@@ -1,22 +1,9 @@
 {
   "activation": {
-    "chunk_id": "WS-ENG-007-00R6",
-    "initiative_id": "WS-ENG-007"
+    "chunk_id": "WS-ENG-ROOT-001-01",
+    "initiative_id": "WS-ENG-ROOT-001"
   },
-  "signed_basis": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
-  "recovered_merges": [
-    {
-      "chunk_id": "WS-ART-001-PLAN2",
-      "initiative_id": "WS-ART-001",
-      "merge_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
-      "pr_number": 197
-    },
-    {
-      "chunk_id": "WS-AUTH-001-11",
-      "initiative_id": "WS-AUTH-001",
-      "merge_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
-      "pr_number": 201
-    }
-  ],
-  "schema_version": 6
+  "signed_basis": "339248c40020658583bf7bd1e4a58daf85f5ffb8",
+  "recovered_merges": [],
+  "schema_version": 7
 }
