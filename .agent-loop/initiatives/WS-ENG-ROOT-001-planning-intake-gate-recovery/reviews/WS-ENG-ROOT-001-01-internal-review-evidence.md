@@ -1,12 +1,11 @@
 # WS-ENG-ROOT-001-01 Internal Review Evidence
 
-Reviewed code SHA: `905c5a46bb819ea19c20ce4504b16454a4a6c011`
+Reviewed code SHA: `60db7ce2d682319b0c14ec0920b6adc75654bab9`
 
 Reviewed at: `2026-07-26T14:00:00Z`
 
-Reviewer run IDs: `final_senior`, `final_qa`, `final_security`,
-`final_product`, `final_arch`, `final_ci`, `final_docs`, `final_reuse`,
-`final_testdelta`
+Reviewer run IDs: `cr_senior`, `cr_qa`, `cr_security`, `cr_product`,
+`cr_arch`, `cr_ci`, `cr_docs`, `cr_reuse`, `cr_testdelta`
 
 ## Commands Run
 
@@ -25,13 +24,13 @@ git diff --check origin/main...HEAD
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---|---|---|
-| senior engineering | PASS | none | The repair remains exact, bounded, and maintainable. |
-| QA/test | PASS WITH LOW RISKS | none | Adversarial tests cover intake collisions, recovery widening, replay, identity, and parent binding. |
-| security/auth | PASS WITH LOW RISKS | none | Ordinary implementation remains signed-start-only; recovery is exact and one-use. |
-| product/ops | PASS WITH LOW RISKS | none | Planning intake is restored without changing product lifecycle behavior. |
-| architecture | PASS WITH LOW RISKS | none | Independent gate and memory validators enforce the same closed invariants. |
+| senior engineering | PASS WITH LOW RISKS | none | The malformed-path repair is minimal and retains exact recovery boundaries. |
+| QA/test | PASS WITH LOW RISKS | none | The `null` intent-path regression proves a controlled fail-closed result. |
+| security/auth | PASS | none | Ordinary implementation remains signed-start-only; recovery remains exact and one-use. |
+| product/ops | PASS AFTER FIXES | none | The only procedural finding was this stale evidence, now rebound to the reviewed SHA. |
+| architecture | PASS AFTER FIXES | none | The external-response path is explicitly re-reviewed as part of the closed certificate. |
 | CI integrity | PASS WITH LOW RISKS | none | No workflow, threshold, exclusion, dependency, or coverage command was weakened. |
-| docs | PASS WITH LOW RISKS | none | Links and wording pass; optional recovery runbook expansion is deferred because it is outside this exact repair certificate. |
+| docs | PASS AFTER FIXES | none | The external response is recorded separately and this evidence is rebound to the reviewed SHA. |
 | reuse/dedup | PASS WITH LOW RISKS | none | Validator duplication is deliberate independent verification, not a forked helper. |
 | test delta | PASS WITH LOW RISKS | none | No tests were removed, skipped, deselected, or weakened. |
 
@@ -41,11 +40,11 @@ Valid findings addressed: yes
 
 Open sub-agent sessions: none
 
-The repaired implementation rejects trusted-base initiative collisions in all
-three validators, binds recovery-only evidence to the exact completed record
-and first parent, admits only the exact root repair itself, and aligns the
-machine and human verification commands. All nine reviewer tracks reviewed the
-exact implementation SHA above and reported no blocking findings.
+The repaired implementation also rejects a non-string planning-intake
+`intent_path` with a stable failure instead of raising. All nine reviewer
+tracks reviewed the exact implementation SHA above. Their only procedural
+finding was stale evidence after the external-review repair; this evidence-only
+commit resolves it without changing the reviewed implementation.
 
 ## Remaining Gate
 
