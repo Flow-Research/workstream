@@ -581,7 +581,9 @@ def _human_phase_risk(raw: bytes) -> tuple[str, str]:
     return phase.group(1), risk.group(1).strip(" `")
 
 
-def select_contract(repo: Path, base: str, head: str, state_ref: str) -> tuple[ScopeContract | None, SignedStart]:
+def select_contract(
+    repo: Path, base: str, head: str, state_ref: str
+) -> tuple[ScopeContract, SignedStart]:
     intent = added_merge_intent(repo, base, head)
     verify_state_ref(repo, state_ref)
     records = authenticated_ledger(repo, state_ref)
@@ -727,12 +729,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.contract is None:
-            contract, start = select_contract(args.repo, args.base_ref, args.head_ref, args.state_ref)
-            if contract is None:
-                # Grandfathering proves eligibility only; it never invents scope.
-                discover_changes(args.repo, args.base_ref, args.head_ref)
-                print(f"chunk contract check passed (exact cutover grandfather): {start.chunk_id}")
-                return 0
+            contract, _start = select_contract(
+                args.repo, args.base_ref, args.head_ref, args.state_ref
+            )
         else:
             contract = parse_contract_bytes(args.contract.read_bytes())
         if args.chunk_id and args.chunk_id != contract.chunk_id:
