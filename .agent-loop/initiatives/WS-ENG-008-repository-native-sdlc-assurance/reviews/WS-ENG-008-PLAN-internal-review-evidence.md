@@ -16,25 +16,29 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: 9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65
+Reviewed code SHA: 8ce2c1cffd63ba9a8a4867773fe38d7861d2fa69
 
-Reviewed at: 2026-07-24T13:12:00Z
+Reviewed at: 2026-07-26T01:29:34Z
 
-Reviewer run IDs: eng008_plan_senior_arch_docs, eng008_plan_qa_ci_tests, eng008_plan_security_ops_reuse
+Reviewer run IDs: senior-engineering=`ci02b_lane_runner`;
+QA/test=`ci02b_cr_arch`; security/auth=`ci02b_cr_ci`;
+product/ops=`ci02b_cr_docs`; architecture=`ci02b_cr_arch`;
+CI-integrity=`ci02b_cr_ci`; docs=`ci02b_cr_docs`;
+reuse/dedup=`ci02b_cr_reuse`; test-delta=`ci02b_cr_test_delta`.
 
-After the reviewed SHA, only evidence and status files changed.
+After the reviewed SHA, only this evidence and trust bundle changed.
 
 ## Reviewer Results
 
 | Reviewer | Result | Blocking findings | Notes |
 |---|---:|---|---|
-| senior engineering | PASS AFTER FIXES | None | Exact cutover, successor conversion, sequencing, and runtime budgets are bounded. |
-| QA/test | PASS AFTER FIXES | None | Objective ratchet, negative path cases, measurable limits, and testable acceptance criteria pass. |
-| security/auth | PASS AFTER FIXES | None | NUL-delimited bytes, UTF-8/NFC/control rejection, collision proof, read-only audit, and AUTH wait are explicit. |
+| senior engineering | PASS | None | Signed-active-only grandfathering, successor conversion, sequencing, semantic lanes, and budgets are bounded. |
+| QA/test | PASS | None | Exact start ratchet, negative path cases, measurable limits, and acceptance criteria pass. |
+| security/auth | PASS | None | Event/blob binding, path-byte controls, read-only audit, and AUTH reconciliation are explicit. |
 | product/ops | PASS | None | Engineering assurance remains separate from product review and Contributor authority. |
-| architecture | PASS AFTER FIXES | None | ENG-008 cannot exempt its successors; current validators and authority paths remain canonical. |
-| CI integrity | PASS AFTER FIXES | None | Hash-locked dependencies and numeric budgets preserve all existing blocking gates. |
-| docs | PASS AFTER FIXES | None | Canonical terminology surfaces are assigned without editing them in planning intake. |
+| architecture | PASS | None | ENG-008 cannot exempt successors or post-cutover starts; canonical authority paths remain. |
+| CI integrity | PASS | None | Planning changes no CI surface; future locks and budgets preserve blocking gates. |
+| docs | PASS | None | Historical discovery and current reconciliation are distinct and consistent. |
 | reuse/dedup | PASS | None | Existing validators, evidence gate, risk router, reviewers, aggregation, and initiative reviews are reused. |
 | test delta | PASS | None | Planning-only diff changes no test, workflow, threshold, or application file. |
 
@@ -62,6 +66,11 @@ After the reviewed SHA, only evidence and status files changed.
 - Required duplicate JSON object-key rejection, exact signed discovery
   provenance, and a deterministic lossless review-log migration snapshot and
   32,768-byte UTF-8 index ceiling.
+- Closed the file-history grandfather bypass: only chunks signed-active at the
+  exact cutover may finish under an event/identity/path/blob-bound record;
+  stopped, new, cancelled/restarted, and post-cutover work require schema.
+- Reconciled the future mutation contract to current exact-custody semantic
+  lanes while retaining the earlier shard topology as historical discovery.
 
 ## Concurrent Initiative Reconciliation
 
@@ -88,7 +97,7 @@ git diff --check origin/main...HEAD
 
 - Planning merge intent passed for `WS-ENG-008-PLAN`.
 - 100 Agent Gate tests passed.
-- Markdown links passed for all 14 planning Markdown files.
+- Markdown links passed for all 16 changed planning Markdown files.
 - Stale wording and exact diff integrity passed.
 - The reviewed diff is one additive initiative tree plus one merge intent.
 

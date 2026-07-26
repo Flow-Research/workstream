@@ -33,7 +33,7 @@ mutation evidence, and lossless review-memory indexing.
   `../chunks/WS-ENG-008-06-changed-module-mutation-pilot.md`, and
   `../chunks/WS-ENG-008-07-lossless-review-memory-index.md`
 - Signed contract blob SHA: N/A until post-merge explicit start selects chunk 01
-- Reviewed planning SHA: `9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65`
+- Reviewed planning SHA: `8ce2c1cffd63ba9a8a4867773fe38d7861d2fa69`
 
 Only independently verified signed automation state is canonical authority.
 Planning intake records stopped state and cannot authorize implementation.
@@ -97,7 +97,7 @@ python3 scripts/check_stale_workstream_wording.py
 git diff --check origin/main...HEAD
 ```
 
-Result: all passed; 100 Agent Gate tests and 14 planning Markdown link checks.
+Result: all passed; 100 Agent Gate tests and 16 planning Markdown link checks.
 
 ## Test delta
 
@@ -115,10 +115,10 @@ Result: all passed; 100 Agent Gate tests and 14 planning Markdown link checks.
 
 ## Reviewer results
 
-Reviewed planning SHA: `9ce7bf3d3e0a7eae2a18ff85a7d9c22f60b0ab65`
+Reviewed planning SHA: `8ce2c1cffd63ba9a8a4867773fe38d7861d2fa69`
 
-Reviewer run IDs: `eng008_plan_senior_arch_docs`,
-`eng008_plan_qa_ci_tests`, `eng008_plan_security_ops_reuse`
+Reviewer run IDs: `ci02b_lane_runner`, `ci02b_cr_arch`, `ci02b_cr_ci`,
+`ci02b_cr_docs`, `ci02b_cr_reuse`, and `ci02b_cr_test_delta`.
 
 All nine tracks pass after the bounded internal and external repair cycles. See
 `WS-ENG-008-PLAN-internal-review-evidence.md`.
