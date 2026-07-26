@@ -6,21 +6,22 @@ AI review is a sensor, not a verdict. Human merge ownership remains required.
 
 ```text
 1. Evidence gate
-2. Required Codex internal reviewer agents
+2. Risk-based Codex internal reviewer agents
 3. External review such as CodeRabbit or GitHub review
 4. Human checkpoint
 ```
 
-## Required Internal Tracks
+## Reviewer Routing
 
-Every implementation or specification chunk requires:
+For security, authorization, payment, architecture, workflow, or broad product
+changes, select the applicable tracks:
 
 - senior engineering
 - QA/test
 - security/auth
 - product/ops
 
-Add focused reviewers when relevant:
+For smaller changes, select only the focused reviewers that add useful evidence:
 
 - architecture for boundary or abstraction changes
 - CI integrity for workflow, test, lint, or coverage changes

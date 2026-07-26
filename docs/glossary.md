@@ -7,6 +7,13 @@ guides, task queues, submission packets, automated checks, reviewer routing,
 evaluation sprints, revision loops, contribution records, compensation award
 and fulfillment state, and reputation signals.
 
+## Repository-Native Human-Agent SDLC
+
+A software-development lifecycle in which intent, implementation, tests,
+review, and durable decisions are visible in the repository. Repository records
+support human judgment; they do not replace GitHub permissions or create a
+second contribution-authorization system.
+
 ## Project
 
 A configured work program with its own human-facing guide, submission artifact

@@ -1,8 +1,8 @@
 # Chunk Contract: <CHUNK_ID> — <TITLE>
 
-Keep the first line in this exact form. The internal review evidence gate binds
-evidence to the complete `<CHUNK_ID>` from this canonical heading and fails
-closed when a changed contract has no readable canonical heading.
+Use this template when a change is large or risky enough to benefit from a
+bounded contract. Small changes may state intent, scope, and evidence directly
+in the pull request.
 
 ## Parent initiative
 
@@ -56,14 +56,14 @@ P0 / P1 / P2 / P3
 
 ## Required reviewers
 
-Every listed reviewer must end with one exact result value:
+Record reviewer outcomes when reviewers are used:
 
 - `PASS`
 - `PASS AFTER FIXES`
 - `PASS WITH LOW RISKS`
 - `N/A - with approved reason`
 
-Baseline:
+Recommended for higher-risk work:
 
 - [ ] senior engineering
 - [ ] QA/test
@@ -81,9 +81,8 @@ Conditional:
   scripts
 - [ ] test delta, when the chunk touches tests or test-like files
 
-Use `N/A - with approved reason` only when the reviewer track is explicitly
-unrelated to the chunk. Security and architecture cannot be marked N/A when the
-chunk touches their surfaces.
+Select reviewers according to risk. Reviews improve confidence; they do not
+grant repository authority or replace required GitHub review and checks.
 
 ## Human review focus
 

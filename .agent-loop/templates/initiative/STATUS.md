@@ -2,9 +2,9 @@
 
 ## Current status
 
-Planning / Active / Blocked / Complete / Abandoned
+Planning / In progress / Blocked / Complete / Abandoned
 
-## Active chunk
+## Current focus
 
 _None_
 

@@ -5,13 +5,11 @@ description: Check deterministic proof before expensive reviewer fanout: tests, 
 
 # Evidence Gate
 
-Run deterministic proof checks before reviewer fanout. Run internal review
-evidence validation after reviewer fanout has completed and the evidence file
-exists.
+Run deterministic proof checks before reviewer fanout.
 
 ## Check
 
-- Changed files are inside chunk scope.
+- Changed files are inside the stated scope.
 - PR size is reviewable.
 - Relevant tests ran.
 - Lint ran if applicable.

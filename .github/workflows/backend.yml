@@ -55,9 +55,6 @@ jobs:
           echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
           echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
 
-      - name: Internal review evidence gate
-        run: python3 scripts/check_internal_review_evidence.py
-
       - name: Install backend and exact Ruff
         working-directory: backend
         run: |

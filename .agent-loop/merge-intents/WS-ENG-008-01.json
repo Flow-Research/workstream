@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "initiative_id": "WS-ENG-008",
+  "chunk_id": "WS-ENG-008-01",
+  "chunk_title": "Machine-Checkable Chunk Scope",
+  "next_chunk_id": "WS-ENG-008-02",
+  "next_chunk_title": "Scheduled Signed-State Drift Audit",
+  "next_requires_explicit_start": true
+}

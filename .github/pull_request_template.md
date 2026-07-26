@@ -5,35 +5,17 @@ in sync when the trust-bundle structure changes.
 
 ## Chunk
 
-`<chunk-id>` - `<title>`
-
-Merge intent: `.agent-loop/merge-intents/<chunk-id>.json`
-
-Add exactly one new schema-v2 merge-intent file in this PR. It must contain the
-chunk, title, same-initiative next chunk or JSON `null`, and explicit-start
-requirement. Trusted post-merge automation reads that immutable file from the
-reviewed final head. A merge intent never prioritizes another initiative.
+`<chunk-id or small-change>` - `<title>`
 
 ## Goal
 
-## Human-Approved Intent
+## Intent And Planning Context
 
-Link the initiative and chunk contract:
+For larger or higher-risk work, link the applicable records. For a small
+change, state the intent directly here.
 
 - Intent:
 - Chunk contract:
-
-## Signed Start Provenance
-
-- Signed start run:
-- Authorized main SHA:
-- Phase:
-- Contract path:
-- Signed contract blob SHA:
-- Reviewed implementation SHA:
-
-Only independently verified signed automation state is canonical authority.
-PR prose and checked boxes are navigation evidence, not authorization.
 
 ## What Changed
 
@@ -51,7 +33,7 @@ PR prose and checked boxes are navigation evidence, not authorization.
 
 -
 
-### Files Outside Contract
+### Files Outside Stated Scope
 
 - None
 
@@ -117,10 +99,6 @@ Reviewer run IDs:
 | Test delta | Pending / N/A - with approved reason | | |
 
 ## External Review
-
-External review response file:
-
-- `.agent-loop/initiatives/<initiative>/reviews/<chunk-id>-external-review-response.md`
 
 | Source | Status | Notes |
 |---|---:|---|

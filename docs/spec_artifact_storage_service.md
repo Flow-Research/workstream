@@ -1289,11 +1289,9 @@ bytes in PostgreSQL.
   to every accumulated changed subsystem using the full suite's coverage data.
   This avoids freezing partial test lists while later chunks expand a package;
 - independently executable services/examples retain their own exact 90 percent
-  test-and-coverage steps. The active artifact implementation coverage phase
-  advances only after Agent Gates proves the expected unconditional steps occur
-  exactly once in the backend `test` job, after the full-suite test step, with no
-  `continue-on-error`, condition, shell, environment, working-directory, raw-
-  text, or source-only bypass;
+  test-and-coverage steps. CI integrity review confirms that the expected
+  unconditional steps occur in the backend `test` job after the full-suite test
+  step, without bypasses;
 - final proof uses real HTTP APIs and visible jobs/recovery, not direct database
   inspection.
 

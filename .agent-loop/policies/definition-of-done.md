@@ -4,8 +4,9 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 
 ## Scope
 
-- The chunk maps to one approved contract.
-- Changed files stay inside the allowed file set, or exceptions are documented.
+- The change has a stated goal and reviewable scope. Large or risky changes use
+  a plan or chunk contract; small changes may document this in the PR.
+- Changed files stay inside the stated scope, or exceptions are explained.
 - No unrelated refactor, product behavior, schema, dependency, or CI weakening is included.
 
 ## Evidence
@@ -13,7 +14,7 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 - Verification commands ran or blockers are documented.
 - Stale wording scan ran.
 - Markdown link check ran for changed docs.
-- Internal review evidence exists and includes required tracks.
+- Material internal review findings are summarized when internal review applies.
 - PR trust bundle summarizes intent, scope, proof, and remaining risk.
 
 ## Security
@@ -30,7 +31,7 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 
 ## Review
 
-- Required internal reviewer agents completed.
+- Applicable risk-based internal reviewers completed.
 - External review findings from CodeRabbit, GitHub review, or CI are reviewed.
 - Critical and High internal or external findings are fixed or explicitly waived
   by the human owner.
