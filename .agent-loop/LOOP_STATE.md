@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#196](https://github.com/Flow-Research/workstream/pull/196) - docs(agent-loop): plan repository-native SDLC assurance
-- Merge commit: `bd2203d5e8a972d8afbf833805b92ed70dedee4a`
-- Final PR head: `b1bc0a90601cca9d34e2e1511fcf3ea871536b45`
-- Merged at: `2026-07-26T05:23:48Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-ENG-008-PLAN.json` at blob `0ffe1d0158d896d069b771f9ff44d68c4e6d9fd5`
-- Completed chunk: `WS-ENG-008-PLAN` - Repository-Native SDLC Assurance Planning
+- Last merged PR: [#203](https://github.com/Flow-Research/workstream/pull/203) - feat(agent-loop): enforce machine-checkable chunk scope
+- Merge commit: `339248c40020658583bf7bd1e4a58daf85f5ffb8`
+- Final PR head: `a6668d663d9218b36f442522859263cb9728d6d2`
+- Merged at: `2026-07-26T09:07:14Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-008-01.json` at blob `3a17b85c533493b313a2bd6f8dd6ebda67faf7a4`
+- Completed chunk: `WS-ENG-008-01` - Machine-Checkable Chunk Scope
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-03A`, `WS-AUTH-001-11A`, `WS-ENG-008-01`, `WS-REV-001-03P`
-- Latest authority event: `start` for `WS-ART-001-03A`
-- Authority initiative: `WS-ART-001`
+- Active implementation chunks: `WS-ART-001-03A`, `WS-AUTH-001-11A`, `WS-REV-001-03P`
 - Current gate: `stopped_after_merge`
-- Next chunk: `WS-ENG-008-01` - Machine-Checkable Chunk Scope; requires a separate explicit start.
+- Next chunk: `WS-ENG-008-02` - Scheduled Signed-State Drift Audit; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
