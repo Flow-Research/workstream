@@ -6557,6 +6557,35 @@ def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
     )
 
 
+def test_loop_memory_drift_audit_is_read_only_and_default_branch_bound() -> None:
+    """Scheduled custody audit cannot become a write or feature-ref path."""
+    path = ROOT / ".github/workflows/loop-memory-drift-audit.yml"
+    text = path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(text)
+    assert workflow["permissions"] == {"actions": "read", "contents": "read"}
+    assert workflow["jobs"]["audit"]["timeout-minutes"] == 10
+    assert '[[ "${GITHUB_REF}" == "refs/heads/${DEFAULT_BRANCH}" ]]' in text
+    assert "persist-credentials: false" in text
+    assert text.count("persist-credentials: false") == 2
+    assert "ref: ${{ github.event.repository.default_branch }}" in text
+    assert "ref: ${{ steps.tips.outputs.state_sha }}" in text
+    assert "path: loop-memory-state-audit" in text
+    assert "git clone" not in text
+    assert "git ls-remote" not in text
+    assert text.count("GH_TOKEN: ${{ github.token }}") == 2
+    assert "gh api" in text
+    assert '"category":"advanced"' in text
+    assert "scripts/audit_loop_memory_drift.py" in text
+    assert "types: [loop-memory-drift-audit]" in text
+    assert "workflow_dispatch" not in text
+    assert "audit did not reach validation" in text
+    for forbidden in (
+        "LOOP_MEMORY_SIGNING_KEY", "apply-event", "sign-state", "publish",
+        "gh workflow run", "git push", "contents: write", "continue-on-error",
+    ):
+        assert forbidden not in text
+
+
 def test_chunk_contract_template_exposes_all_machine_scope_choices() -> None:
     """The canonical template cannot silently under-declare scope metadata."""
     template = (ROOT / ".agent-loop/templates/CHUNK_CONTRACT.md").read_text(
@@ -7829,6 +7858,7 @@ def main() -> int:
         test_agent_gates_runs_stale_authorization_docs_fail_closed,
         test_agent_gates_runs_stale_artifact_contracts_fail_closed,
         test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound,
+        test_loop_memory_drift_audit_is_read_only_and_default_branch_bound,
         test_chunk_contract_template_exposes_all_machine_scope_choices,
         test_agent_gate_dependencies_and_workflow_are_pinned,
         test_local_minio_compose_is_regression_protected,

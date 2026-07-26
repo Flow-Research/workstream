@@ -111,6 +111,31 @@ python3 scripts/update_post_merge_memory.py verify-state \
   --expected-main-sha "$(git rev-parse origin/main)"
 ```
 
+## Scheduled Read-Only Drift Audit
+
+`Loop Memory Drift Audit` runs daily and may also be requested manually through
+the `loop-memory-drift-audit` repository-dispatch event. GitHub resolves that
+event's workflow only from the protected default branch; callers cannot select
+feature-branch workflow code. The audit captures exact `main` and
+`automation/loop-memory` tips, verifies the signature, manifest digests, closed
+Git tree, ledger chain, projections, main ancestry, and active contract binding,
+then confirms both remote tips remained unchanged for the entire audit.
+
+The workflow has only read permissions, persists no checkout credentials,
+receives no signing secret, and exposes no replay, repair, dispatch, publication,
+or push command. A cryptographic or semantic failure is reported as corruption.
+Branch advancement during the audit is reported separately as an advanced/stale
+snapshot and also fails; neither condition is silently accepted. Diagnostics are
+bounded to a short-lived JSON artifact. Recovery remains the existing trusted
+default-branch procedure documented below.
+
+Request a manual audit without granting the job write authority:
+
+```bash
+gh api --method POST repos/Flow-Research/workstream/dispatches \
+  -f event_type=loop-memory-drift-audit
+```
+
 ## Recovery
 
 If the workflow fails because of repository permissions or a transient GitHub

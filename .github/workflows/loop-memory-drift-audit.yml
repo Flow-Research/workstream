@@ -1,0 +1,86 @@
+name: Loop Memory Drift Audit
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  repository_dispatch:
+    types: [loop-memory-drift-audit]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: loop-memory-drift-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require trusted default-branch dispatch
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"category":"environment","message":"audit did not reach validation","status":"failed"}' \
+            > "${RUNNER_TEMP}/loop-memory-drift-audit.json"
+          [[ "${GITHUB_REF}" == "refs/heads/${DEFAULT_BRANCH}" ]]
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Capture immutable branch tips
+        id: tips
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          state_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/automation/loop-memory" --jq .object.sha)
+          [[ "${main_sha}" =~ ^[0-9a-f]{40}$ && "${state_sha}" =~ ^[0-9a-f]{40}$ ]]
+          if [[ "${GITHUB_SHA}" != "${main_sha}" ]]; then
+            printf '%s\n' '{"category":"advanced","message":"main advanced before validation","status":"failed"}' \
+              > "${RUNNER_TEMP}/loop-memory-drift-audit.json"
+            exit 2
+          fi
+          echo "main_sha=${main_sha}" >> "${GITHUB_OUTPUT}"
+          echo "state_sha=${state_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Materialize exact signed state with transient read credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ steps.tips.outputs.state_sha }}
+          path: loop-memory-state-audit
+
+      - name: Audit signed state without mutation authority
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/audit_loop_memory_drift.py \
+            --repository-root "${GITHUB_WORKSPACE}" \
+            --state-root "${GITHUB_WORKSPACE}/loop-memory-state-audit" \
+            --public-key .agent-loop/keys/loop-memory-signing-public.pem \
+            --repository "${GITHUB_REPOSITORY}" \
+            --expected-main-sha "${{ steps.tips.outputs.main_sha }}" \
+            --expected-state-sha "${{ steps.tips.outputs.state_sha }}" \
+            --diagnostic-output "${RUNNER_TEMP}/loop-memory-drift-audit.json"
+
+      - name: Upload bounded diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: loop-memory-drift-audit-${{ github.run_id }}
+          path: ${{ runner.temp }}/loop-memory-drift-audit.json
+          if-no-files-found: warn
+          retention-days: 7
