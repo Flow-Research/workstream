@@ -494,6 +494,98 @@ class PlanningIntakeSelectionTests(unittest.TestCase):
                     checker.planning_intake_scope(repo, base, "HEAD", intent, ())
 
 
+class RootRecoverySelectionTests(unittest.TestCase):
+    def git(self, repo: Path, *args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=repo, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        ).stdout.strip()
+
+    def fixture(self, directory: str) -> tuple[Path, str, dict[str, object]]:
+        repo = Path(directory)
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "config", "user.email", "test@example.invalid")
+        self.git(repo, "config", "user.name", "Test")
+        (repo / "README.md").write_text("base\n")
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-qm", "base")
+        base = self.git(repo, "rev-parse", "HEAD").decode()
+        source_contract = (
+            Path(__file__).resolve().parents[1] / checker.ROOT_RECOVERY_CONTRACT
+        ).read_bytes()
+        for path in checker.ROOT_RECOVERY_PATHS:
+            destination = repo / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text("fixture\n")
+        (repo / checker.ROOT_RECOVERY_CONTRACT).write_bytes(source_contract)
+        (repo / ".agent-loop/policies/loop-memory-recovery.json").write_text(json.dumps({
+            "activation": {
+                "chunk_id": checker.ROOT_RECOVERY_CHUNK,
+                "initiative_id": checker.ROOT_RECOVERY_INITIATIVE,
+            },
+            "signed_basis": base,
+            "recovered_merges": [],
+            "schema_version": 7,
+        }))
+        intent = {
+            "initiative_id": checker.ROOT_RECOVERY_INITIATIVE,
+            "chunk_id": checker.ROOT_RECOVERY_CHUNK,
+        }
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-qm", "root recovery")
+        return repo, base, intent
+
+    def scope(self, repo: Path, base: str, intent: dict[str, object]) -> checker.ScopeContract | None:
+        with mock.patch.object(checker, "ROOT_RECOVERY_SIGNED_BASIS", base):
+            return checker.root_recovery_scope(repo, base, "HEAD", intent)
+
+    def test_exact_one_use_root_recovery_is_admitted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            scope = self.scope(repo, base, intent)
+            self.assertIsNotNone(scope)
+            assert scope is not None
+            checker.enforce_scope(scope, checker.discover_changes(repo, base, "HEAD"))
+
+    def test_root_recovery_rejects_wrong_base_and_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            with self.assertRaisesRegex(checker.ContractError, "exact trusted commit"):
+                checker.root_recovery_scope(repo, base, "HEAD", intent)
+            wrong = {**intent, "initiative_id": "WS-ENG-ROOT-999"}
+            with self.assertRaisesRegex(checker.ContractError, "identity"):
+                self.scope(repo, base, wrong)
+            self.assertIsNone(self.scope(repo, base, {**intent, "chunk_id": "WS-ENG-ROOT-001-02"}))
+
+    def test_root_recovery_rejects_extra_path_scope_and_reuse(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            (repo / "scripts/extra.py").write_text("extra\n")
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-qm", "extra path")
+            with self.assertRaisesRegex(checker.ContractError, "exact path certificate"):
+                self.scope(repo, base, intent)
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            path = repo / checker.ROOT_RECOVERY_CONTRACT
+            path.write_bytes(path.read_bytes().replace(
+                b"scripts/test_update_post_merge_memory.py", b"scripts/extra.py"
+            ))
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-qm", "broaden scope")
+            with self.assertRaisesRegex(checker.ContractError, "contract scope"):
+                self.scope(repo, base, intent)
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            policy = repo / ".agent-loop/policies/loop-memory-recovery.json"
+            data = json.loads(policy.read_text())
+            data["recovered_merges"] = [{"merge_sha": "a" * 40}]
+            policy.write_text(json.dumps(data))
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-qm", "reuse")
+            with self.assertRaisesRegex(checker.ContractError, "consumed"):
+                self.scope(repo, base, intent)
+
 class GitDiscoveryIntegrationTests(unittest.TestCase):
     def git(self, repo: Path, *args: str) -> bytes:
         return subprocess.run(

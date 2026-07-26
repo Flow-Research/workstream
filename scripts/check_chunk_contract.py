@@ -59,6 +59,35 @@ PLANNING_ROOT_FILES = frozenset({
     "INTENT.md", "DISCOVERY.md", "PLAN.md", "CHUNK_MAP.md", "STATUS.md",
     "RISKS.md", "DECISIONS.md",
 })
+ROOT_RECOVERY_SIGNED_BASIS = "339248c40020658583bf7bd1e4a58daf85f5ffb8"
+ROOT_RECOVERY_INITIATIVE = "WS-ENG-ROOT-001"
+ROOT_RECOVERY_CHUNK = "WS-ENG-ROOT-001-01"
+ROOT_RECOVERY_CONTRACT = (
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/"
+    "chunks/WS-ENG-ROOT-001-01-exact-planning-intake-gate-recovery.md"
+)
+ROOT_RECOVERY_ALLOWED = (
+    ".agent-loop/policies/loop-memory-recovery.json",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/**",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json",
+    "scripts/check_chunk_contract.py",
+    "scripts/check_internal_review_evidence.py",
+    "scripts/check_loop_memory_state.py",
+    "scripts/update_post_merge_memory.py",
+    "scripts/test_agent_gates.py",
+    "scripts/test_check_chunk_contract.py",
+    "scripts/test_check_loop_memory_state.py",
+    "scripts/test_update_post_merge_memory.py",
+)
+ROOT_RECOVERY_PATHS = frozenset({
+    ".agent-loop/policies/loop-memory-recovery.json",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/STATUS.md",
+    ROOT_RECOVERY_CONTRACT,
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-pr-trust-bundle.md",
+    *ROOT_RECOVERY_ALLOWED[3:],
+})
 
 
 class ContractError(ValueError):
@@ -512,6 +541,76 @@ def planning_intake_scope(
     return ScopeContract(chunk, "planning", "L1", paths, (), (), ())
 
 
+def root_recovery_scope(
+    repo: Path, base: str, head: str, intent: dict[str, Any]
+) -> ScopeContract | None:
+    """Consume the exact one-use certificate for the root gate repair only."""
+    if intent["chunk_id"] != ROOT_RECOVERY_CHUNK:
+        return None
+    if intent["initiative_id"] != ROOT_RECOVERY_INITIATIVE:
+        raise ContractError("root recovery merge intent identity is invalid")
+    resolved_base = _decode_utf8(
+        _git(repo, "rev-parse", f"{base}^{{commit}}"), "root recovery base"
+    ).strip()
+    if resolved_base != ROOT_RECOVERY_SIGNED_BASIS:
+        raise ContractError("root recovery is not based on the exact trusted commit")
+    policy = _git_json(
+        repo, f"{head}:.agent-loop/policies/loop-memory-recovery.json"
+    )
+    expected_policy = {
+        "activation": {
+            "chunk_id": ROOT_RECOVERY_CHUNK,
+            "initiative_id": ROOT_RECOVERY_INITIATIVE,
+        },
+        "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+        "recovered_merges": [],
+        "schema_version": 7,
+    }
+    if policy != expected_policy:
+        raise ContractError("root recovery certificate is invalid, consumed, or reusable")
+    raw = _git(repo, "diff", "--name-status", "-z", f"{base}...{head}")
+    statuses = parse_name_status_z(raw)
+    if any(status not in {"A", "M"} for status, _names in statuses):
+        raise ContractError("root recovery permits only its exact added or modified files")
+    paths = validate_path_bytes(name for _status, names in statuses for name in names)
+    if frozenset(paths) != ROOT_RECOVERY_PATHS:
+        raise ContractError("root recovery delta does not match its exact path certificate")
+    contract_raw = _git(repo, "show", f"{head}:{ROOT_RECOVERY_CONTRACT}")
+    contract_text = _decode_utf8(contract_raw)
+    heading = HEADING_RE.match(contract_text)
+    try:
+        scope_data = json.loads(
+            machine_block(contract_raw), object_pairs_hook=_object
+        )
+    except (json.JSONDecodeError, ContractError) as exc:
+        raise ContractError(f"root recovery contract scope is malformed: {exc}") from exc
+    expected_scope = {
+        "schema_version": 1,
+        "chunk_id": ROOT_RECOVERY_CHUNK,
+        "phase": "implementation",
+        "risk_class": "L0",
+        "allowed_paths": list(ROOT_RECOVERY_ALLOWED),
+        "forbidden_paths": ["backend/**", "frontend/**", ".github/**"],
+        "required_reviewers": [
+            "senior engineering", "qa/test", "security/auth", "product/ops",
+            "architecture", "ci integrity", "docs", "reuse/dedup", "test delta",
+        ],
+        "verification_commands": [
+            "agent-gate-tests", "loop-memory-state", "chunk-scope-tests",
+            "internal-review-evidence", "markdown-links", "stale-wording",
+            "git-diff-check",
+        ],
+    }
+    if heading is None or heading.group("id") != ROOT_RECOVERY_CHUNK or scope_data != expected_scope:
+        raise ContractError("root recovery contract scope is not exact")
+    return ScopeContract(
+        ROOT_RECOVERY_CHUNK, "implementation", "L0", ROOT_RECOVERY_ALLOWED,
+        ("backend/**", "frontend/**", ".github/**"),
+        tuple(expected_scope["required_reviewers"]),
+        tuple(expected_scope["verification_commands"]),
+    )
+
+
 @dataclass(frozen=True)
 class SignedStart:
     ledger_index: int
@@ -725,6 +824,9 @@ def select_contract(
     intake = planning_intake_scope(repo, base, head, intent, records)
     if intake is not None:
         return intake, None
+    recovery = root_recovery_scope(repo, base, head, intent)
+    if recovery is not None:
+        return recovery, None
     start = latest_signed_start(records, intent["chunk_id"])
     if start.initiative_id != intent["initiative_id"]:
         raise ContractError("signed start initiative disagrees with merge intent")
