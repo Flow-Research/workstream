@@ -64,8 +64,11 @@ After the reviewed SHA, only evidence and status files changed.
 
 ## Concurrent Initiative Reconciliation
 
-- ART-03, AUTH-10C, and REV-03P retain their signed initiative-local authority.
-- AUTH property work waits for the canonical AUTH result.
+- Historical discovery pinned ART-03, AUTH-10C, and REV-03P exactly.
+- Final reconciliation pins current main `a04fd1a0a623b7150ec40c9934a9982f80a2dce7`
+  and signed-state tip `33edd1a682ea5fe5ea973870f89bdd3a75a63da3`.
+- ART is stopped at PLAN2, AUTH is stopped at 11, and REV-03P remains active.
+- AUTH property work starts only from the then-current canonical AUTH result.
 - CON remains stopped; its unexplained local PDF deletion is not adopted.
 - Dormant QUALITY work and stale external PRs remain discovery input only.
 - Every implementation boundary repeats exact-main, signed-state, and path-overlap checks.
@@ -90,13 +93,11 @@ git diff --check origin/main...HEAD
 
 ## Remaining Risks
 
-- Open AUTH and REV PRs may advance `main`; the planning PR must rebase and rerun
+- Any concurrent PR may advance `main`; the planning PR must reconcile and rerun
   exact evidence before merge if its base changes.
 - Tool choice and hosted runtime remain implementation-chunk decisions inside
   the reviewed dependency, evidence, and timeout boundaries.
 - Planning merge grants no implementation authority. Chunk 01 still requires a
   separate signed start after canonical post-merge reconciliation.
-- Backend CI on the published PR installed unbounded `ruff 0.16.0` and exposed
-  374 pre-existing lint findings although Agent Gates passed. This planning-only
-  intake cannot repair that unrelated current-main dependency drift; a separate
-  authorized CI repair must restore the Backend gate before merge.
+- The prior Backend failure belonged to the retired dependency/workflow state.
+  Exact-head Backend CI must pass again against current main before merge.

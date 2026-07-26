@@ -70,7 +70,7 @@ is deleted; future root entries become compact navigation only.
   merge policy changes.
 - Existing CI and coverage floors may only be preserved or strengthened after
   measured human approval.
-- Active ART/AUTH/REV initiatives retain their scope and merge independently.
+- Concurrent ART/AUTH/REV initiatives retain their scope and merge independently.
 
 ## Risk routing
 
@@ -93,7 +93,8 @@ proof before reviewer fanout, and no automatic successor.
 2. Drift audit reuses canonical contract parsing and current signed validators.
 3. Adversarial proof routing reuses contract reviewer metadata.
 4. Loop property tests precede the broader authorization suite.
-5. Authorization property work waits for AUTH-10C and any intervening AUTH merge.
+5. Authorization property work reconciles the then-current canonical AUTH result
+   before its separate signed start.
 6. Mutation pilot inspects dormant QUALITY patches only as discovery and starts
    from the then-current canonical Backend workflow.
 7. Review-log migration waits until active initiatives no longer carry root-log

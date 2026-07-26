@@ -21,7 +21,9 @@ mutation evidence, and lossless review-memory indexing.
 ## Signed Start Provenance
 
 - Signed start run: N/A — first-new-initiative planning intake
-- Authorized main SHA: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+- Discovery main SHA: `bcf1292e1a591e3e84bf8ee212ee7191d80741fa`
+- Reconciled main SHA: `a04fd1a0a623b7150ec40c9934a9982f80a2dce7`
+- Reconciled signed-state tip: `33edd1a682ea5fe5ea973870f89bdd3a75a63da3`
 - Phase: planning intake; no active planning or implementation chunk
 - Contract paths: `../chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md`,
   `../chunks/WS-ENG-008-02-scheduled-signed-state-drift-audit.md`,
@@ -79,7 +81,8 @@ coverage threshold, generated state, or product behavior.
 - [x] Complete intent, discovery, plan, chunk map, status, risks, and decisions.
 - [x] Seven bounded contracts with allowed files, prohibitions, measurable proof,
   all required reviewers, human focus, and stop conditions.
-- [x] ART/AUTH/REV concurrent state and CON/QUALITY dormant state reconciled.
+- [x] Historical and current ART/AUTH/REV/CON/QUALITY state reconciled without
+  borrowing initiative authority.
 - [x] Objective scope cutover and successor conversion close self-exemption.
 - [x] One merge intent names same-initiative chunk 01 with explicit start true.
 - [x] Status claims no active planning or implementation chunk.
@@ -124,9 +127,9 @@ All nine tracks pass after the bounded internal and external repair cycles. See
 
 | Source | Status | Notes |
 |---|---:|---|
-| CodeRabbit | Repairs addressed; rerun pending | Nine comments were verified and repaired; the exact final head still needs its follow-up audit. |
-| GitHub Agent Gates | Passed on prior published head | Must pass again on the exact final PR head. |
-| GitHub Backend | Blocked by current-main dependency drift | Runner resolved unbounded `ruff 0.16.0`, exposing 374 existing lint findings; repair belongs to a separate authorized CI chunk. |
+| CodeRabbit | Prior comments resolved; rerun pending | Nine comments were verified and repaired; the reconciled final head still needs its follow-up audit. |
+| GitHub Agent Gates | Prior head passed | Must pass again on the exact reconciled PR head. |
+| GitHub Backend | Prior failure superseded | Must pass the current semantic-lane workflow on the exact reconciled PR head. |
 
 ## Remaining risks
 

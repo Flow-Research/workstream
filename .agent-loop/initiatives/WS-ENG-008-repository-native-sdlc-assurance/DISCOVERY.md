@@ -5,6 +5,13 @@ Discovery was performed read-only against trusted `main`
 `automation/loop-memory` tip
 `8affe98a0b877ba79abf9d23f86013f838985dcf` on 2026-07-24.
 
+Before final planning publication on 2026-07-26, the branch was reconciled to
+trusted `main` `a04fd1a0a623b7150ec40c9934a9982f80a2dce7` and signed
+`automation/loop-memory` tip
+`33edd1a682ea5fe5ea973870f89bdd3a75a63da3`. The historical observations below
+remain discovery provenance; the current signed projection is recorded in the
+reconciliation addendum.
+
 ## Current behavior
 
 - `scripts/check_internal_review_evidence.py` discovers changed files, resolves
@@ -51,6 +58,17 @@ Discovery was performed read-only against trusted `main`
 | `WS-CON-001` | stopped at `02A`, next `02B` | Worktree has an unexplained local PDF deletion | No adoption or modification; deletion remains outside ENG-008. |
 | `WS-QUAL-001` | absent from signed state | Two stale local worktrees; no current authority | Treat all QUALITY commits as discovery input only; mutation work starts from current main under ENG-008. |
 | External PRs #62, #138, #149 | no active signed initiative authority | stale, conflicting, or missing current gates | Never merge as ENG-008 authority; inspect only as preserved proposals when relevant. |
+
+### Final current-main reconciliation
+
+| Initiative | Signed state at final reconciliation | ENG-008 boundary |
+|---|---|---|
+| `WS-ART-001` | stopped after `WS-ART-001-PLAN2`; next `WS-ART-001-03A` requires explicit start | No ART authority is borrowed. |
+| `WS-AUTH-001` | stopped after `WS-AUTH-001-11`; next `WS-AUTH-001-11A` requires explicit start | Chunk 05 must start from the then-current canonical AUTH result. |
+| `WS-REV-001` | `WS-REV-001-03P` remains signed-active | Avoid REV runtime and reconcile its result before overlapping work. |
+| `WS-CON-001` | stopped after `WS-CON-001-02A`; next `02B` requires explicit start | Local worktree state remains non-authoritative. |
+| `WS-QUAL-001` | absent from signed state | Dormant patches remain discovery input only. |
+| `WS-ENG-008` | absent from signed history | This additive planning intake may create only stopped PLAN state. |
 
 ## Existing tests and gaps
 
