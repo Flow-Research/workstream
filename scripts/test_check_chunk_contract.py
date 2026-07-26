@@ -130,6 +130,10 @@ class ContractSchemaTests(unittest.TestCase):
     def test_negative_unicode_size_and_duplicate_block(self) -> None:
         with self.assertRaises(checker.ContractError):
             checker.parse_contract_bytes(b"\xff")
+        with self.assertRaisesRegex(checker.ContractError, "not valid UTF-8"):
+            checker.machine_block_or_none(b"\xff")
+        with self.assertRaisesRegex(checker.ContractError, "not valid UTF-8"):
+            checker._human_phase_risk(b"\xff")
         with self.assertRaises(checker.ContractError):
             checker.parse_contract_bytes(contract() + b"x" * checker.MAX_CONTRACT_BYTES)
         block = b"```chunk-scope-json\n{}\n```\n"

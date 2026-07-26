@@ -46,8 +46,8 @@ contain shell commands.
 {
   "schema_version": 1,
   "chunk_id": "<CHUNK_ID>",
-  "phase": "implementation",
-  "risk_class": "L1",
+  "phase": "<PHASE>",
+  "risk_class": "<RISK_CLASS>",
   "allowed_paths": [
     "<path>"
   ],
@@ -58,7 +58,12 @@ contain shell commands.
     "senior engineering",
     "qa/test",
     "security/auth",
-    "product/ops"
+    "product/ops",
+    "architecture",
+    "ci integrity",
+    "docs",
+    "reuse/dedup",
+    "test delta"
   ],
   "verification_commands": [
     "<repository-owned-command-id>"
@@ -67,7 +72,10 @@ contain shell commands.
 ```
 
 The human-readable sections below remain mandatory and must agree with this
-block. See `CONTRIBUTING.md` for the closed path grammar and cutover rule.
+block. Replace phase and risk placeholders with the exact human values. Include
+every applicable conditional reviewer in both reviewer sections and remove a
+conditional track from both only when routing marks it unrelated. See
+`CONTRIBUTING.md` for the closed path grammar and cutover rule.
 
 ## Allowed files
 

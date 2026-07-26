@@ -61,6 +61,14 @@ class ContractError(ValueError):
     """A stable, user-facing contract validation failure."""
 
 
+def _decode_utf8(raw: bytes, label: str = "contract") -> str:
+    """Decode security-sensitive bytes into one stable fail-closed error."""
+    try:
+        return raw.decode("utf-8", "strict")
+    except UnicodeDecodeError as exc:
+        raise ContractError(f"{label} is not valid UTF-8") from exc
+
+
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -434,10 +442,12 @@ def verify_state_ref(repo: Path, state_ref: str) -> None:
                 verify_generated_state_signature,
             )
             from check_loop_memory_state import generated_state_failures
-
+        except ImportError as exc:
+            raise ContractError(f"state-ref authentication failed: {exc}") from exc
+        try:
             verify_generated_state_signature(root, public_key)
             failures = generated_state_failures(root, repo)
-        except (ImportError, LoopMemoryError, OSError, UnicodeError, ValueError) as exc:
+        except (LoopMemoryError, OSError, UnicodeError, ValueError) as exc:
             raise ContractError(f"state-ref authentication failed: {exc}") from exc
         if failures:
             raise ContractError(
@@ -543,7 +553,9 @@ def reduce_active(records: Sequence[dict[str, Any]]) -> dict[str, tuple[str, str
 
 def require_active_projection(repo: Path, state_ref: str, start: SignedStart) -> None:
     path = f".agent-loop/INITIATIVE_STATE/{start.initiative_id}.md"
-    text = _git(repo, "show", f"{state_ref}:{path}").decode("utf-8", "strict")
+    text = _decode_utf8(
+        _git(repo, "show", f"{state_ref}:{path}"), "initiative projection"
+    )
     label = "planning" if start.phase == "planning" else "implementation"
     match = re.search(rf"^- Active {label} chunk: `([^`]+)`$", text, re.M)
     if not match or match.group(1) != start.chunk_id:
@@ -554,7 +566,10 @@ def signed_contract_blob(repo: Path, start: SignedStart, base: str) -> bytes:
     if _git(repo, "merge-base", "--is-ancestor", start.main_sha, base) != b"":
         # merge-base --is-ancestor has no output; _git already enforces its exit code.
         raise ContractError("unexpected ancestry output")
-    tree = _git(repo, "ls-tree", start.main_sha, "--", start.contract_path).decode("utf-8").strip()
+    tree = _decode_utf8(
+        _git(repo, "ls-tree", start.main_sha, "--", start.contract_path),
+        "contract tree entry",
+    ).strip()
     expected = f"100644 blob {start.contract_blob_sha}\t{start.contract_path}"
     if tree != expected:
         raise ContractError("signed start contract path/blob does not match its trusted main")
@@ -573,7 +588,7 @@ def machine_block(raw: bytes) -> bytes:
 
 
 def _human_phase_risk(raw: bytes) -> tuple[str, str]:
-    text = raw.decode("utf-8", "strict")
+    text = _decode_utf8(raw)
     phase = re.search(r"^## Start phase\n\n`([^`]+)`[ \t]*$", text, re.M)
     risk = re.search(r"^## Risk class\n\n([^\n]+)$", text, re.M)
     if not phase or not risk:
@@ -615,10 +630,11 @@ def select_contract(
     if start.chunk_id == "WS-ENG-008-01" and not cutover_present:
         parsed = parse_contract_bytes(head_raw)
         old_phase, old_risk = _human_phase_risk(signed_raw)
-        old_allowed = _text_block_items(signed_raw.decode("utf-8"), "Allowed files")
+        signed_text = _decode_utf8(signed_raw)
+        old_allowed = _text_block_items(signed_text, "Allowed files")
         old_reviewers = tuple(re.findall(
             r"^- \[[ xX]\] (.+)$",
-            _section(signed_raw.decode("utf-8"), "Required reviewers"), re.M,
+            _section(signed_text, "Required reviewers"), re.M,
         ))
         if (parsed.chunk_id != start.chunk_id or parsed.phase != start.phase
                 or parsed.phase != old_phase or parsed.risk_class != old_risk
@@ -634,7 +650,7 @@ def select_contract(
 
 
 def machine_block_or_none(raw: bytes) -> bytes | None:
-    text = raw.decode("utf-8", "strict")
+    text = _decode_utf8(raw)
     blocks = list(FENCE_RE.finditer(text))
     if len(blocks) > 1:
         raise ContractError("duplicate machine scope blocks")
@@ -643,7 +659,7 @@ def machine_block_or_none(raw: bytes) -> bytes | None:
 
 def legacy_scope_from_signed_blob(raw: bytes, start: SignedStart) -> ScopeContract:
     """Derive the only grandfather scope from the exact authenticated blob."""
-    text = raw.decode("utf-8", "strict")
+    text = _decode_utf8(raw)
     allowed = tuple(
         validate_pattern(path) for path in _text_block_items(text, "Allowed files")
     )

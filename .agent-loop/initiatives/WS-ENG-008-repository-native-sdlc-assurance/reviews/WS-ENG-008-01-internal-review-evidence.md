@@ -14,7 +14,7 @@ valid findings addressed: yes
 
 - Authorized main SHA: `bd2203d5e8a972d8afbf833805b92ed70dedee4a`
 - Signed start run: `30191914510`
-- Signed state commit: `6923f9ed4a8e48327d3aa4d046c8a8dc3a31ea3`
+- Signed state commit: `6923f9ed4a8e48327d3aa4d046c8a8dc3a31ea3a`
 - Contract path: `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md`
 - Signed contract blob: `2fb0afba71653e7aefcc074079fe98f44051c068`
 
@@ -25,6 +25,11 @@ Reviewed code SHA: `1ef5c3bd0bffedec684ae8b6cec2e6affbcb3b21`
 Reviewed at: `2026-07-26T07:48:30Z`
 
 Reviewer run IDs: `ci02b_lane_runner`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`, `ci02b_cr_reuse`, `ci02b_cr_test_delta`
+
+Track/session mapping: senior engineering, QA/test, and security/auth used
+`ci02b_lane_runner`; product/ops and docs used `ci02b_cr_docs`; architecture
+used `ci02b_cr_arch`; CI integrity used `ci02b_cr_ci`; reuse/dedup used
+`ci02b_cr_reuse`; test delta used `ci02b_cr_test_delta`.
 
 After the reviewed SHA, only initiative evidence, trust-bundle, external-review,
 and status files may change.
@@ -70,6 +75,7 @@ python3 scripts/test_agent_gates.py
 python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
+ruff check scripts/check_chunk_contract.py scripts/check_internal_review_evidence.py scripts/test_check_chunk_contract.py scripts/test_agent_gates.py
 git diff --check origin/main...HEAD
 ```
 
@@ -87,4 +93,3 @@ git diff --check origin/main...HEAD
   reduction have small duplicate representations across existing gate modules.
   Reviewers classified consolidation as Low risk; it must not be performed in
   this security-boundary chunk without a separate contract.
-

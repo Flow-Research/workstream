@@ -6516,10 +6516,40 @@ def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
     assert 'python3 "${trusted_checker}"' in workflow
     assert 'PYTHONPATH="${trusted_scope_dir}"' in workflow
     assert (
-        '! git cat-file -e "origin/${BASE_REF}:'
+        'if git cat-file -e "origin/${BASE_REF}:'
         '.agent-loop/merge-intents/WS-ENG-008-01.json"'
     ) in workflow
+    assert workflow.count("refusing local-script bootstrap") == 1
+    assert workflow.count("refusing local evidence bootstrap") == 1
+    assert workflow.count("exit 1") >= 2
     assert 'cp "scripts/${script}" "${trusted_scope_dir}/${script}"' in workflow
+    assert (
+        'git show "origin/${BASE_REF}:scripts/${script}" > '
+        '"${trusted_evidence_dir}/${script}"'
+    ) in workflow
+    assert '"${trusted_evidence_dir}/check_internal_review_evidence.py"' in workflow
+    assert 'PYTHONPATH="${trusted_evidence_dir}"' in workflow
+
+
+def test_chunk_contract_template_exposes_all_machine_scope_choices() -> None:
+    """The canonical template cannot silently under-declare scope metadata."""
+    template = (ROOT / ".agent-loop/templates/CHUNK_CONTRACT.md").read_text(
+        encoding="utf-8"
+    )
+    assert '"phase": "<PHASE>"' in template
+    assert '"risk_class": "<RISK_CLASS>"' in template
+    for reviewer in (
+        "senior engineering",
+        "qa/test",
+        "security/auth",
+        "product/ops",
+        "architecture",
+        "ci integrity",
+        "docs",
+        "reuse/dedup",
+        "test delta",
+    ):
+        assert template.count(f'"{reviewer}"') == 1
     assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
     assert "--state-ref origin/automation/loop-memory" in workflow
     assert "continue-on-error" not in workflow
@@ -7781,6 +7811,7 @@ def main() -> int:
         test_agent_gates_runs_stale_authorization_docs_fail_closed,
         test_agent_gates_runs_stale_artifact_contracts_fail_closed,
         test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound,
+        test_chunk_contract_template_exposes_all_machine_scope_choices,
         test_agent_gate_dependencies_and_workflow_are_pinned,
         test_local_minio_compose_is_regression_protected,
         test_backend_coverage_thresholds_are_regression_protected,

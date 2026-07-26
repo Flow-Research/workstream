@@ -100,6 +100,11 @@ Reviewed at: `2026-07-26T07:48:30Z`
 
 Reviewer run IDs: `ci02b_lane_runner`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`, `ci02b_cr_reuse`, `ci02b_cr_test_delta`
 
+Track/session mapping: `ci02b_lane_runner` covered senior engineering, QA/test,
+and security/auth; `ci02b_cr_docs` covered product/ops and docs;
+`ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_reuse`, and `ci02b_cr_test_delta`
+covered architecture, CI integrity, reuse/dedup, and test delta respectively.
+
 All nine required tracks passed. Architecture and reuse recorded only Low-risk
 future consolidation opportunities; there are no blocking findings.
 
