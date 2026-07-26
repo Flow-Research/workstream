@@ -116,6 +116,7 @@ ROOT_RECONCILE_PATHS = frozenset({
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/STATUS.md",
     ROOT_RECONCILE_CONTRACT,
     ROOT_RECOVERY_CONTRACT,
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-02-internal-review-evidence.md",
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-02-pr-trust-bundle.md",
     "scripts/check_chunk_contract.py",
     "scripts/check_loop_memory_state.py",
