@@ -666,7 +666,6 @@ For each chunk:
    was added or restored.
 5. Run required internal reviewers and repair valid findings.
 6. Publish one chunk-sized PR and stop for human merge approval.
-7. Update post-merge memory before activating the next chunk.
 
 Do not cut over a resource family until its local actor, grant, permission,
 resource loader, lifecycle guards, negative tests, and evidence path exist.
@@ -677,8 +676,11 @@ The catalogue contains exactly 76 PermissionIds and 81 ActionIds after
 AUTH-11A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
-identity-link lifecycle actions are active; the other 59 entries remain planned
-and non-executable. The target post-custody
+identity-link lifecycle actions are active. The remaining five active actions
+are the AUTH-10B reads `project.contributor_candidate.list`,
+`project_role_grant.list`, and `project_role_grant.read`, plus the AUTH-10C
+mutations `project_role_grant.issue` and `project_role_grant.revoke`; the other
+59 entries remain planned and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
 transfers assign all 25 ART rows to eight exact AUTH custodians and all 19 REV
