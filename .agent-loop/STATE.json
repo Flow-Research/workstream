@@ -3,6 +3,40 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
+  "authority_state": {
+    "active": {
+      "implementation_chunk": "WS-ENG-008-02",
+      "planning_chunk": null
+    },
+    "completed_chunk": {
+      "chunk_id": "WS-ENG-008-01",
+      "chunk_title": "Machine-Checkable Chunk Scope",
+      "initiative_id": "WS-ENG-008",
+      "next_chunk_id": "WS-ENG-008-02",
+      "next_chunk_title": "Scheduled Signed-State Drift Audit",
+      "next_requires_explicit_start": true,
+      "schema_version": 2
+    },
+    "gate": {
+      "next_chunk_id": "WS-ENG-008-02",
+      "next_chunk_title": "Scheduled Signed-State Drift Audit",
+      "next_requires_explicit_start": true,
+      "status": "active"
+    },
+    "source": {
+      "first_parent_sha": "bd2203d5e8a972d8afbf833805b92ed70dedee4a",
+      "head_ref": "codex/ws-eng-008-01-machine-checkable-scope",
+      "head_sha": "a6668d663d9218b36f442522859263cb9728d6d2",
+      "intent_blob_sha": "3a17b85c533493b313a2bd6f8dd6ebda67faf7a4",
+      "intent_path": ".agent-loop/merge-intents/WS-ENG-008-01.json",
+      "main_sha": "339248c40020658583bf7bd1e4a58daf85f5ffb8",
+      "merged_at": "2026-07-26T09:07:14Z",
+      "merged_by": "abiorh-claw",
+      "pr_number": 203,
+      "pr_title": "feat(agent-loop): enforce machine-checkable chunk scope",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/203"
+    }
+  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -31,6 +65,32 @@
     "next_chunk_title": "Scheduled Signed-State Drift Audit",
     "next_requires_explicit_start": true,
     "schema_version": 2
+  },
+  "event": {
+    "authorization": {
+      "actor": "Abiorh001",
+      "permission": "admin",
+      "schema_version": 2,
+      "type": "github_repository_permission"
+    },
+    "chunk_id": "WS-ENG-008-02",
+    "created_at": "2026-07-26T09:13:30Z",
+    "dispatcher": "Abiorh001",
+    "event_id": "github-actions:30196062548:start",
+    "initiative_id": "WS-ENG-008",
+    "main_sha": "339248c40020658583bf7bd1e4a58daf85f5ffb8",
+    "prior_state_tip": "56a9c943e27333d3c43bd90305f227d67fc9ad7a",
+    "reason": "User explicitly approved starting scheduled signed-state drift audit",
+    "run_id": 30196062548,
+    "selection": {
+      "contract_blob_sha": "00f9b5f918a4f987c2352aa8f85ca2f913f4d4ee",
+      "contract_path": ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-02-scheduled-signed-state-drift-audit.md",
+      "contract_title": "Scheduled Signed-State Drift Audit",
+      "mode": "declared_successor",
+      "phase": "implementation",
+      "schema_version": 1
+    },
+    "type": "start"
   },
   "gate": {
     "next_chunk_id": "WS-ENG-008-02",
@@ -87,5 +147,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/203"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-26T09:07:14Z"
+  "updated_at": "2026-07-26T09:13:30Z"
 }
