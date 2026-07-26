@@ -90,6 +90,40 @@ ROOT_RECOVERY_PATHS = frozenset({
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-pr-trust-bundle.md",
     *ROOT_RECOVERY_ALLOWED[3:],
 })
+ROOT_RECONCILE_BASE = "ce512bdb6ae47e94ae8067845531cacfc3378a85"
+ROOT_RECONCILE_CHUNK = "WS-ENG-ROOT-001-02"
+ROOT_RECONCILE_CONTRACT = (
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/"
+    "chunks/WS-ENG-ROOT-001-02-exact-root-reconciliation-recovery.md"
+)
+ROOT_RECONCILE_ALLOWED = (
+    ".agent-loop/policies/loop-memory-recovery.json",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/**",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-02.json",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json",
+    "scripts/check_loop_memory_state.py",
+    "scripts/check_chunk_contract.py",
+    "scripts/update_post_merge_memory.py",
+    "scripts/test_agent_gates.py",
+    "scripts/test_check_chunk_contract.py",
+    "scripts/test_check_loop_memory_state.py",
+    "scripts/test_update_post_merge_memory.py",
+)
+ROOT_RECONCILE_PATHS = frozenset({
+    ".agent-loop/policies/loop-memory-recovery.json",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-02.json",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/STATUS.md",
+    ROOT_RECONCILE_CONTRACT,
+    ROOT_RECOVERY_CONTRACT,
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-02-pr-trust-bundle.md",
+    "scripts/check_chunk_contract.py",
+    "scripts/check_loop_memory_state.py",
+    "scripts/update_post_merge_memory.py",
+    "scripts/test_agent_gates.py",
+    "scripts/test_check_chunk_contract.py",
+    "scripts/test_update_post_merge_memory.py",
+})
 
 
 class ContractError(ValueError):
@@ -613,6 +647,71 @@ def root_recovery_scope(
     )
 
 
+def root_reconcile_scope(
+    repo: Path, base: str, head: str, intent: dict[str, Any]
+) -> ScopeContract | None:
+    """Admit only the exact schema-v8 repair that consumes PR #205."""
+    if intent["chunk_id"] != ROOT_RECONCILE_CHUNK:
+        return None
+    if intent["initiative_id"] != ROOT_RECOVERY_INITIATIVE:
+        raise ContractError("root reconciliation merge intent identity is invalid")
+    resolved_base = _decode_utf8(
+        _git(repo, "rev-parse", f"{base}^{{commit}}"), "root reconciliation base"
+    ).strip()
+    if resolved_base != ROOT_RECONCILE_BASE:
+        raise ContractError("root reconciliation is not based on exact PR 205 merge")
+    expected_policy = {
+        "activation": {"chunk_id": ROOT_RECONCILE_CHUNK, "initiative_id": ROOT_RECOVERY_INITIATIVE},
+        "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
+        "recovered_merges": [{
+            "initiative_id": ROOT_RECOVERY_INITIATIVE,
+            "chunk_id": ROOT_RECOVERY_CHUNK,
+            "pr_number": 205,
+            "merge_sha": ROOT_RECONCILE_BASE,
+        }],
+        "schema_version": 8,
+    }
+    if _git_json(repo, f"{head}:.agent-loop/policies/loop-memory-recovery.json") != expected_policy:
+        raise ContractError("root reconciliation certificate is invalid or reusable")
+    statuses = parse_name_status_z(_git(
+        repo, "diff", "--name-status", "-z", "--find-renames",
+        "--find-copies-harder", f"{base}...{head}"
+    ))
+    if any(status not in {"A", "M"} and not status.startswith("C") for status, _names in statuses):
+        raise ContractError("root reconciliation permits only exact added or modified files")
+    paths = validate_path_bytes(name for _status, names in statuses for name in names)
+    if frozenset(paths) != ROOT_RECONCILE_PATHS:
+        raise ContractError("root reconciliation delta does not match exact path certificate")
+    contract_raw = _git(repo, "show", f"{head}:{ROOT_RECONCILE_CONTRACT}")
+    heading = HEADING_RE.match(_decode_utf8(contract_raw))
+    try:
+        scope_data = json.loads(machine_block(contract_raw), object_pairs_hook=_object)
+    except (json.JSONDecodeError, ContractError) as exc:
+        raise ContractError(f"root reconciliation contract scope is malformed: {exc}") from exc
+    expected_scope = {
+        "schema_version": 1, "chunk_id": ROOT_RECONCILE_CHUNK,
+        "phase": "implementation", "risk_class": "L0",
+        "allowed_paths": list(ROOT_RECONCILE_ALLOWED),
+        "forbidden_paths": ["backend/**", "frontend/**", ".github/**"],
+        "required_reviewers": [
+            "senior engineering", "qa/test", "security/auth", "product/ops",
+            "architecture", "ci integrity", "docs", "reuse/dedup", "test delta",
+        ],
+        "verification_commands": [
+            "agent-gate-tests", "loop-memory-state", "loop-memory-recovery-tests",
+            "chunk-scope-tests", "internal-review-evidence", "markdown-links",
+            "stale-wording", "git-diff-check",
+        ],
+    }
+    if heading is None or heading.group("id") != ROOT_RECONCILE_CHUNK or scope_data != expected_scope:
+        raise ContractError("root reconciliation contract scope is not exact")
+    return ScopeContract(
+        ROOT_RECONCILE_CHUNK, "implementation", "L0", ROOT_RECONCILE_ALLOWED,
+        ("backend/**", "frontend/**", ".github/**"),
+        tuple(expected_scope["required_reviewers"]), tuple(expected_scope["verification_commands"]),
+    )
+
+
 @dataclass(frozen=True)
 class SignedStart:
     ledger_index: int
@@ -829,6 +928,9 @@ def select_contract(
     recovery = root_recovery_scope(repo, base, head, intent)
     if recovery is not None:
         return recovery, None
+    reconciliation = root_reconcile_scope(repo, base, head, intent)
+    if reconciliation is not None:
+        return reconciliation, None
     start = latest_signed_start(records, intent["chunk_id"])
     if start.initiative_id != intent["initiative_id"]:
         raise ContractError("signed start initiative disagrees with merge intent")

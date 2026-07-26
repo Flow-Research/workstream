@@ -25,16 +25,44 @@ L0
     ".agent-loop/policies/loop-memory-recovery.json",
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/**",
     ".agent-loop/merge-intents/WS-ENG-ROOT-001-02.json",
+    ".agent-loop/merge-intents/WS-ENG-ROOT-001-01.json",
     "scripts/check_loop_memory_state.py",
+    "scripts/check_chunk_contract.py",
     "scripts/update_post_merge_memory.py",
     "scripts/test_agent_gates.py",
+    "scripts/test_check_chunk_contract.py",
     "scripts/test_check_loop_memory_state.py",
     "scripts/test_update_post_merge_memory.py"
   ],
   "forbidden_paths": ["backend/**", "frontend/**", ".github/**"],
   "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
-  "verification_commands": ["agent-gate-tests", "loop-memory-state", "loop-memory-recovery-tests", "internal-review-evidence", "markdown-links", "stale-wording", "git-diff-check"]
+  "verification_commands": ["agent-gate-tests", "loop-memory-state", "loop-memory-recovery-tests", "chunk-scope-tests", "internal-review-evidence", "markdown-links", "stale-wording", "git-diff-check"]
 }
+```
+
+## Allowed files
+
+```text
+.agent-loop/policies/loop-memory-recovery.json
+.agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/**
+.agent-loop/merge-intents/WS-ENG-ROOT-001-02.json
+.agent-loop/merge-intents/WS-ENG-ROOT-001-01.json
+scripts/check_loop_memory_state.py
+scripts/check_chunk_contract.py
+scripts/update_post_merge_memory.py
+scripts/test_agent_gates.py
+scripts/test_check_chunk_contract.py
+scripts/test_check_loop_memory_state.py
+scripts/test_update_post_merge_memory.py
+```
+
+## Not allowed
+
+```text
+backend/**
+frontend/**
+.github/**
+product behavior, workflow changes, dependencies, reusable recovery authority
 ```
 
 ## Acceptance criteria
@@ -54,6 +82,7 @@ L0
 python3 scripts/test_agent_gates.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
 python3 scripts/check_loop_memory_state.py
+python3 scripts/test_check_chunk_contract.py
 python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py
@@ -62,8 +91,15 @@ git diff --check origin/main...HEAD
 
 ## Required reviewers
 
-Senior engineering, QA/test, security/auth, product/ops, architecture, CI
-integrity, docs, reuse/dedup, and test delta.
+- [ ] senior engineering
+- [ ] qa/test
+- [ ] security/auth
+- [ ] product/ops
+- [ ] architecture
+- [ ] ci integrity
+- [ ] docs
+- [ ] reuse/dedup
+- [ ] test delta
 
 ## Human review focus
 

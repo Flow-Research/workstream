@@ -586,6 +586,69 @@ class RootRecoverySelectionTests(unittest.TestCase):
             with self.assertRaisesRegex(checker.ContractError, "consumed"):
                 self.scope(repo, base, intent)
 
+class RootReconciliationScopeTests(unittest.TestCase):
+    def git(self, repo: Path, *args: str) -> bytes:
+        return subprocess.run(["git", *args], cwd=repo, check=True, stdout=subprocess.PIPE).stdout.strip()
+
+    def fixture(self, directory: str) -> tuple[Path, str, dict[str, object]]:
+        repo = Path(directory)
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "config", "user.email", "test@example.invalid")
+        self.git(repo, "config", "user.name", "Test")
+        (repo / "README.md").write_text("base\n")
+        self.git(repo, "add", "."); self.git(repo, "commit", "-qm", "base")
+        base = self.git(repo, "rev-parse", "HEAD").decode()
+        source_root = Path(__file__).resolve().parents[1]
+        for path in checker.ROOT_RECONCILE_PATHS:
+            destination = repo / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source = source_root / path
+            destination.write_bytes(source.read_bytes() if source.exists() else b"fixture\n")
+        policy = {
+            "activation": {"chunk_id": checker.ROOT_RECONCILE_CHUNK, "initiative_id": checker.ROOT_RECOVERY_INITIATIVE},
+            "signed_basis": base,
+            "recovered_merges": [{
+                "initiative_id": checker.ROOT_RECOVERY_INITIATIVE,
+                "chunk_id": checker.ROOT_RECOVERY_CHUNK,
+                "pr_number": 205, "merge_sha": base,
+            }],
+            "schema_version": 8,
+        }
+        (repo / ".agent-loop/policies/loop-memory-recovery.json").write_text(json.dumps(policy))
+        self.git(repo, "add", "."); self.git(repo, "commit", "-qm", "reconcile")
+        return repo, base, {"initiative_id": checker.ROOT_RECOVERY_INITIATIVE, "chunk_id": checker.ROOT_RECONCILE_CHUNK}
+
+    def scope(self, repo: Path, base: str, intent: dict[str, object]):
+        with mock.patch.object(checker, "ROOT_RECONCILE_BASE", base), mock.patch.object(checker, "ROOT_RECOVERY_SIGNED_BASIS", base):
+            return checker.root_reconcile_scope(repo, base, "HEAD", intent)
+
+    def test_exact_schema_v8_reconciliation_is_admitted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            scope = self.scope(repo, base, intent)
+            assert scope is not None
+            checker.enforce_scope(scope, checker.discover_changes(repo, base, "HEAD"))
+
+    def test_reconciliation_rejects_foreign_identity_path_policy_and_base(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            self.assertIsNone(self.scope(repo, base, {**intent, "chunk_id": "WS-ENG-ROOT-001-03"}))
+            with self.assertRaisesRegex(checker.ContractError, "identity"):
+                self.scope(repo, base, {**intent, "initiative_id": "WS-ENG-ROOT-999"})
+            with self.assertRaisesRegex(checker.ContractError, "exact PR 205"):
+                checker.root_reconcile_scope(repo, base, "HEAD", intent)
+            (repo / "extra.py").write_text("no\n"); self.git(repo, "add", "."); self.git(repo, "commit", "-qm", "extra")
+            with self.assertRaisesRegex(checker.ContractError, "path certificate"):
+                self.scope(repo, base, intent)
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base, intent = self.fixture(directory)
+            policy = repo / ".agent-loop/policies/loop-memory-recovery.json"
+            data = json.loads(policy.read_text()); data["schema_version"] = 7
+            policy.write_text(json.dumps(data)); self.git(repo, "add", "."); self.git(repo, "commit", "-qm", "reuse")
+            with self.assertRaisesRegex(checker.ContractError, "invalid or reusable"):
+                self.scope(repo, base, intent)
+
+
 class GitDiscoveryIntegrationTests(unittest.TestCase):
     def git(self, repo: Path, *args: str) -> bytes:
         return subprocess.run(
