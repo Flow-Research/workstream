@@ -28,3 +28,12 @@ is bound to current signed main and this single identity, then consumed.
 
 The owner must explicitly approve this specific repair PR. A failing old scope
 check is the defect being repaired and must not be represented as passing.
+
+## External review response
+
+CodeRabbit identified one valid fail-closed issue: a non-string planning-intake
+`intent_path` could raise during independent state validation. The repair now
+returns a controlled validation failure and includes an adversarial regression.
+The Backend rerun passed after its first attempt hit a transient quay.io MinIO
+image-pull timeout. The trusted-main Agent Gate remains the expected circular
+failure that this exact recovery repairs.

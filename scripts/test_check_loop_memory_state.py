@@ -327,6 +327,10 @@ def test_checker_rejects_planning_intake_when_first_parent_has_prefixed_tree(
             intake, source, repository, "fixture"
         )
     )
+    source["intent_path"] = None
+    assert checker._planning_tree_failures(
+        intake, source, repository, "fixture"
+    ) == ["fixture: planning intake intent path is invalid"]
 
 
 def test_explicit_event_workflow_has_closed_write_boundary() -> None:

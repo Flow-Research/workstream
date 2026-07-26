@@ -416,7 +416,10 @@ def _planning_tree_failures(
         or after[0] != intake.get("merge_tree_sha")
     ):
         return [f"{label}: planning intake tree identity is invalid"]
-    initiative = source.get("intent_path", "").removeprefix(
+    intent_path = source.get("intent_path")
+    if not isinstance(intent_path, str):
+        return [f"{label}: planning intake intent path is invalid"]
+    initiative = intent_path.removeprefix(
         ".agent-loop/merge-intents/"
     ).removesuffix("-PLAN.json")
     prefixes = (

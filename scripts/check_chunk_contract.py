@@ -86,6 +86,7 @@ ROOT_RECOVERY_PATHS = frozenset({
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/STATUS.md",
     ROOT_RECOVERY_CONTRACT,
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-external-review-response.md",
     ".agent-loop/initiatives/WS-ENG-ROOT-001-planning-intake-gate-recovery/reviews/WS-ENG-ROOT-001-01-pr-trust-bundle.md",
     *ROOT_RECOVERY_ALLOWED[3:],
 })
