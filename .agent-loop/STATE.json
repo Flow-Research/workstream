@@ -14,27 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30181421774/job/89738500201"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30183177024/job/89743191305"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30181411772/job/89738471754"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30183002208/job/89742717525"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-ENG-007-00R6",
-    "chunk_title": "ART PLAN2 Signed-Memory Recovery",
-    "initiative_id": "WS-ENG-007",
-    "next_chunk_id": "WS-ENG-007-01",
-    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
+    "chunk_id": "WS-ENG-008-PLAN",
+    "chunk_title": "Repository-Native SDLC Assurance Planning",
+    "initiative_id": "WS-ENG-008",
+    "next_chunk_id": "WS-ENG-008-01",
+    "next_chunk_title": "Machine-Checkable Chunk Scope",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
   "gate": {
-    "next_chunk_id": "WS-ENG-007-01",
-    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
+    "next_chunk_id": "WS-ENG-008-01",
+    "next_chunk_title": "Machine-Checkable Chunk Scope",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -45,47 +45,75 @@
       "pr_number": 149
     }
   ],
+  "planning_intake": {
+    "base_tree_sha": "f73e40f70d3fd451e3ba8a653c012c957661e245",
+    "changed_paths": [
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/CHUNK_MAP.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/DECISIONS.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/DISCOVERY.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/INTENT.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/PLAN.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/RISKS.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-02-scheduled-signed-state-drift-audit.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-03-risk-routed-adversarial-proof.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-04-loop-memory-property-invariants.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-05-authorization-property-invariants.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-06-changed-module-mutation-pilot.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-PLAN-internal-review-evidence.md",
+      ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-PLAN-pr-trust-bundle.md",
+      ".agent-loop/merge-intents/WS-ENG-008-PLAN.json"
+    ],
+    "delta_sha256": "0b3717dbcd119a5d2cfeebbded7ea9ce9c07f16615a521251585de7b118147bc",
+    "first_parent_tree_sha": "f73e40f70d3fd451e3ba8a653c012c957661e245",
+    "head_tree_sha": "cf0756a65c0c9d7ad6de885c5647cee2663b5572",
+    "initiative_directory": "WS-ENG-008-repository-native-sdlc-assurance",
+    "merge_tree_sha": "cf0756a65c0c9d7ad6de885c5647cee2663b5572",
+    "schema_version": 1
+  },
   "protected_checks": {
     "schema_version": 1,
     "selected": {
       "agent-gates": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-26T00:36:20Z",
+        "completed_at": "2026-07-26T01:37:33Z",
         "conclusion": "success",
-        "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
-        "id": 89738500201,
-        "merge_cutoff": "2026-07-26T01:10:08Z",
-        "started_at": "2026-07-26T00:35:41Z"
+        "head_sha": "b1bc0a90601cca9d34e2e1511fcf3ea871536b45",
+        "id": 89743191305,
+        "merge_cutoff": "2026-07-26T05:23:48Z",
+        "started_at": "2026-07-26T01:36:55Z"
       },
       "test": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-26T00:45:50Z",
+        "completed_at": "2026-07-26T01:41:23Z",
         "conclusion": "success",
-        "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
-        "id": 89738471754,
-        "merge_cutoff": "2026-07-26T01:10:08Z",
-        "started_at": "2026-07-26T00:35:19Z"
+        "head_sha": "b1bc0a90601cca9d34e2e1511fcf3ea871536b45",
+        "id": 89742717525,
+        "merge_cutoff": "2026-07-26T05:23:48Z",
+        "started_at": "2026-07-26T01:30:42Z"
       }
     },
-    "sha256": "73bba22b30b2d252ca417198d685638b7b9f9b37619afb73e0be214ec44c6927"
+    "sha256": "b23412993e5a59d4d6f8fd72ff5e21101f6a56333dff6d154c27cabce6ca466d"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
-    "head_ref": "codex/ws-eng-007-00r6-art-plan2-recovery",
-    "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
-    "intent_blob_sha": "0dddc285e897debe0a7fe1f06b0201c75f2ba8d1",
-    "intent_path": ".agent-loop/merge-intents/WS-ENG-007-00R6.json",
-    "main_sha": "a04fd1a0a623b7150ec40c9934a9982f80a2dce7",
-    "merged_at": "2026-07-26T01:10:08Z",
+    "first_parent_sha": "a04fd1a0a623b7150ec40c9934a9982f80a2dce7",
+    "head_ref": "codex/ws-eng-008-plan-repository-native-assurance",
+    "head_sha": "b1bc0a90601cca9d34e2e1511fcf3ea871536b45",
+    "intent_blob_sha": "0ffe1d0158d896d069b771f9ff44d68c4e6d9fd5",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-008-PLAN.json",
+    "main_sha": "bd2203d5e8a972d8afbf833805b92ed70dedee4a",
+    "merged_at": "2026-07-26T05:23:48Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 202,
-    "pr_title": "fix(agent-loop): recover unsigned ART planning merge",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/202"
+    "pr_number": 196,
+    "pr_title": "docs(agent-loop): plan repository-native SDLC assurance",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/196"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-26T01:10:08Z"
+  "updated_at": "2026-07-26T05:23:48Z"
 }

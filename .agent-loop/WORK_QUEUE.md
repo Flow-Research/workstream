@@ -16,7 +16,8 @@
 | `WS-ENG-005` | `WS-ENG-005-01` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-006` | `WS-ENG-006-01` | `stopped_after_merge` | `none` | yes |
 | `WS-ENG-007` | `WS-ENG-007-00R6` | `stopped_after_merge` | `WS-ENG-007-01` | yes |
+| `WS-ENG-008` | `WS-ENG-008-PLAN` | `stopped_after_merge` | `WS-ENG-008-01` | yes |
 | `WS-REV-001` | `WS-REV-001-PLAN3` | `active` | `WS-REV-001-03P` | yes |
 | `WS-XINT-001` | `WS-XINT-001-PLAN` | `stopped_after_merge` | `none` | yes |
 
-Latest global merge: `a04fd1a0a623b7150ec40c9934a9982f80a2dce7`
+Latest global merge: `bd2203d5e8a972d8afbf833805b92ed70dedee4a`
