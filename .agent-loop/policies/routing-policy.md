@@ -18,8 +18,8 @@ Core infrastructure, orchestration, payment boundaries, permission systems,
 policy engines, task lifecycle, audit logs, security-sensitive integrations,
 or engineering-loop enforcement.
 
-Task-scoped implementation is allowed only with explicit chunk contracts,
-evidence, required reviewers, and human checkpoint.
+Use an explicit chunk contract, evidence, focused reviewers, and a human merge
+checkpoint.
 
 ### L2 - Bounded Engineering
 
@@ -38,9 +38,8 @@ source edits.
 
 ## Reviewer Matrix
 
-The baseline reviewer set is always senior engineering, QA/test, security/auth,
-and product/ops unless a chunk contract explicitly marks a track unrelated. The
-matrix below adds focused reviewers; it does not replace the baseline set.
+Choose reviewers according to the affected boundary and blast radius. The
+matrix is guidance for proportionate review, not contribution authorization.
 
 | Work type | Risk | Required reviewers |
 |---|---:|---|

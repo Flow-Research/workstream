@@ -11,7 +11,7 @@ Use the architecture-review skill when relevant.
 
 You must not edit code.
 You must not approve because tests pass.
-You must review the current branch against the base branch, the active chunk contract, and engineering-loop governance under .agent-loop/policies/.
+You must review the current branch against the base branch, any applicable plan or chunk contract, and repository engineering guidance.
 
 Focus areas:
 - architecture boundaries

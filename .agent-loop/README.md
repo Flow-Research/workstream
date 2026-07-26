@@ -1,60 +1,22 @@
-# Workstream Agent Loop
+# Workstream Engineering Records
 
-This directory is durable engineering memory for building Workstream with Codex.
+This directory stores durable planning and review context for Workstream. It is
+not product state and it is not an authorization database.
 
-It is not Workstream product state. It records how engineering work is planned,
-chunked, reviewed, proven, and handed to a human for merge decisions.
+Useful records include initiative intent, plans, bounded chunk contracts,
+risks, decisions, evidence, and review notes. Historical signed-loop and
+recovery artifacts remain only where they help explain earlier decisions; they
+do not activate work, lock initiatives, or block pull requests.
 
-## Codex-Native Surfaces
-
-- `AGENTS.md` contains repository rules that Codex loads before work.
-- `.agents/skills/` contains Codex-discoverable workflow skills.
-- `.codex/agents/` contains Codex custom reviewer agents.
-- `.codex/config.toml` contains repo-scoped Codex settings that load only after
-  the repository is trusted.
-
-## Durable Loop Surfaces
-
-- `.agent-loop/policies/` contains Workstream engineering policies.
-- `.agent-loop/templates/` contains reusable loop templates.
-- `.agent-loop/initiatives/` contains intent, discovery, plans, chunk maps,
-  contracts, risks, decisions, and status.
-- `.agent-loop/REVIEW_LOG.md` records review outcomes.
-- `.agent-loop/WORK_QUEUE.md` records proposed and active engineering chunks.
-- `.agent-loop/LOOP_STATE.md` records the current loop state.
-
-## Required Loop
+The active engineering loop is:
 
 ```text
-Intent
--> Discovery
--> Plan
--> Chunk Map
--> Chunk Contract
--> Implementation
--> Evidence
--> Internal Review
--> PR
--> Human Checkpoint
--> Automated Merge Memory
--> Stop
+Intent -> Plan -> Bounded Change -> Tests -> Review -> PR -> Human Merge
 ```
 
-The stop step is intentional. Codex must not begin the next chunk unless the
-user explicitly asks for it.
+Use the smallest useful artifact. A small change may explain intent and scope
+directly in its pull request. Larger or higher-risk work should use an
+initiative plan and chunk contract. Different initiatives may run concurrently.
 
-Every human and agent begins with [the contribution guide](../CONTRIBUTING.md).
-Each initiative may have at most one active planning or implementation chunk,
-while distinct initiatives may run concurrently. Only independently verified
-signed automation state is canonical authority; chat, issues, commits, patches,
-branches, PR prose, and worktrees are instructions or discovery input.
-
-## First Planning Intake
-
-A new initiative has no contract on trusted `main`, so it cannot use an ordinary
-explicit start for its first planning package. Its one planning-intake PR is
-restricted to a new canonical initiative tree plus one `<initiative>-PLAN`
-merge intent. It retains internal review, required checks, and the human merge
-checkpoint. Signed merge automation records it as stopped and grants no
-implementation authority. Each implementation contract then uses the ordinary
-signed explicit-start workflow.
+GitHub permissions govern who may contribute. CI validates quality. Human
+maintainers decide merges. See [CONTRIBUTING.md](../CONTRIBUTING.md).

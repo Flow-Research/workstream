@@ -13,30 +13,20 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
 ## Working Rules
 
 - Keep wording consistent with `README.md`, `docs/glossary.md`, and `docs/architecture_lockdown.md`.
-- Treat this repository's engineering loop as a Codex-native zero-trust loop:
-  `Intent -> Discovery -> Plan -> Chunk Map -> Chunk Contract -> Implementation -> Evidence -> Internal Review -> PR -> Human Checkpoint -> Automated Merge Memory -> Stop`.
+- Use the simple engineering loop:
+  `Intent -> Plan -> Bounded Change -> Tests -> Review -> PR -> Human Merge`.
 - Keep the engineering loop separate from the Workstream product lifecycle. Workstream product review decisions remain `accept`, `needs_revision`, and `reject`; internal engineering reviewer findings are process evidence, not product decisions.
 - Codex-discoverable repository skills live under `.agents/skills/`.
 - Codex custom reviewer agents live under `.codex/agents/`.
 - Durable engineering memory, initiative plans, chunk contracts, policies, evidence, and review logs live under `.agent-loop/`.
-- `CONTRIBUTING.md` is the canonical human and agent entry path. Existing
-  commits and patches are preservation/discovery input, never retroactive
-  authorization; adoption still requires a reviewed contract, signed start,
-  bounded evidence, internal review, and the normal PR path.
-- Canonical live post-merge state is generated on `automation/loop-memory` from trusted `main` after a PR merge. Do not open a manual post-merge memory PR when that workflow succeeds.
-- Start a declared successor or unique reviewed contract, and cancel active work, only through the `Loop Memory Explicit Event` workflow on exact current `main`. Each initiative may have at most one active planning or implementation chunk; distinct initiatives may run concurrently. A start requires an idle target initiative and an authenticated dispatcher whose current GitHub `write`/`push`, `maintain`, or `admin` permission satisfies the trusted-main start-authority policy; this is the single authorization checkpoint. After an explicit user instruction, the orchestrator dispatches without requesting a second approval. For `cancel`, a distinct `loop-memory-start` environment reviewer remains required. Chat and local worktree state are instructions or context, never canonical signed evidence. Rerun recovery uses a fresh dispatch after inspecting signed state.
-- A brand-new initiative absent from signed history may enter through exactly one
-  planning-intake PR. It adds only one canonical initiative planning tree and
-  one merge intent for `<initiative>-PLAN`, passes required reviews and checks,
-  names one reviewed same-initiative implementation successor, and reconciles
-  to stopped state. Planning intake cannot contain implementation, modify
-  existing files, or activate work. Every successor still requires the normal
-  explicit event.
-- The automation branch is a closed generated tree. Verify its signed manifest,
-  JSON/ledger, loop view, work queue, and initiative projections together; do
-  not treat authored narrative status copied from `main` as live automation
-  state. Before signed start events exist, merge projections intentionally show
-  stopped/next state and cannot attest conversational or unmerged starts.
+- `CONTRIBUTING.md` is the canonical human and agent entry path. GitHub
+  permissions and branch protection govern contribution authority. Planning
+  artifacts explain work; they do not activate, lease, or lock it.
+- Do not require signed starts, explicit-event dispatches, active-chunk state,
+  merge intents, recovery certificates, or generated loop memory to implement
+  work or open a pull request.
+- Distinct initiatives may proceed concurrently in separate branches or
+  worktrees. Derived process state must never block product development.
 - Do not add Claude-specific files unless the user explicitly asks for cross-tool support.
 - Do not use old names such as "task-production control plane" or "Garden roadmap".
 - Spreadsheet exports live locally under ignored `sheets/`; do not commit them.
@@ -72,25 +62,17 @@ Workstream is how Flow measures, certifies, and coordinates useful human-agent w
   paths.
 - Every non-trivial task starts with the smallest applicable loop artifact: an initiative plan for large work, or a chunk contract for bounded work.
 - Do not implement a chunk until its allowed files, not-allowed changes, acceptance criteria, risk class, verification commands, and required reviewers are explicit.
-- After the `WS-ENG-008-01` cutover, every implementation or specification
-  contract must carry one valid schema-v1 `chunk-scope-json` block. Agent Gates
-  enforce its closed repository-relative path grammar against the complete Git
-  delta; human prose cannot widen it, forbidden paths win, and contract values
-  never execute shell text. Only work already signed-active at the exact
-  cutover may use the generated event/path/blob-bound grandfather record.
 - Do not begin the next chunk automatically after finishing the current chunk.
-- Merge-intent schema v2 may name only a successor in the same initiative. Use
-  a null successor when no same-initiative chunk is declared; cross-initiative
-  priority remains a human-owned work-queue decision.
-- Every implementation or specification chunk must receive internal sub-agent review before external PR review is treated as sufficient.
-- Generated commits on `automation/loop-memory` are deterministic process output, not implementation or specification chunks. They do not require reviewer fanout, a second human approval, or a PR. This exception does not apply to `main`, workflow code, generator code, policies, or hand-edited memory.
-- Required internal reviewer tracks are senior engineering, QA/test, security/auth, and product/ops unless the chunk is explicitly unrelated to that track.
+- Use internal sub-agent review proportionate to risk. Security, authorization,
+  payment, architecture, workflow, and broad product changes require focused
+  review; small low-risk changes do not require ceremonial fanout.
 - For architecture, CI/workflow, docs, or reuse-sensitive chunks, add the matching reviewer track from `.codex/agents/`.
-- Do not report a chunk complete while reviewer agents are still running. Wait for them, address valid findings, and close any open sub-agent sessions.
+- Do not report work complete while requested reviewer agents are still running. Wait for them, address valid findings, and close any open sub-agent sessions.
 - CodeRabbit, CI, and GitHub review are external checks. They supplement internal reviewer agents; they do not replace them.
-- Do not open, push, or ask for review on a PR until required internal reviewer tracks have run for the chunk, all valid findings are addressed or documented, and no sub-agent sessions remain open.
+- Contributors may open a draft PR while work or review is ongoing. Do not mark
+  it ready for merge until applicable internal reviewers have run and valid
+  findings are addressed or documented.
 - Do not merge a PR unless the user explicitly approves that specific PR for merge.
-- Every PR must add exactly one `.agent-loop/merge-intents/<chunk-id>.json` file so the merge workflow can record the completed chunk and its next explicit gate from reviewed, immutable commit content rather than mutable PR prose.
 - New or materially changed backend subsystems must remain at or above 90
   percent test coverage. Until the dedicated global-coverage work reaches 90
   percent, CI must also preserve the current repository-wide 78 percent
@@ -105,6 +87,7 @@ Before reporting completion:
 - verify the local XLSX has one sheet only when local sheet exports are present
 - verify the current Workstream definition appears in README and local sheet exports when local sheet exports are present
 - update related docs/templates and local sheet exports together when the roadmap changes
-- run required internal sub-agent reviewers for the chunk and resolve or explicitly document every valid finding
+- run applicable internal sub-agent reviewers and resolve or explicitly document every valid finding
 - confirm no sub-agent sessions remain open
-- update `.agent-loop/` initiative status, review log, and memory when the chunk materially changes the engineering process
+- update relevant plans, contracts, or review notes when they materially help
+  future contributors; do not create process artifacts solely to satisfy a gate

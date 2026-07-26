@@ -1,8 +1,8 @@
 # Chunk Contract: <CHUNK_ID> — <TITLE>
 
-Keep the first line in this exact form. The internal review evidence gate binds
-evidence to the complete `<CHUNK_ID>` from this canonical heading and fails
-closed when a changed contract has no readable canonical heading.
+Use this template when a change is large or risky enough to benefit from a
+bounded contract. Small changes may state intent, scope, and evidence directly
+in the pull request.
 
 ## Parent initiative
 
@@ -30,53 +30,6 @@ L0 / L1 / L2 / L3 / L4
 
 P0 / P1 / P2 / P3
 
-## Start phase
-
-`implementation` / `specification`
-
-## Machine-checkable scope
-
-Every implementation or specification contract admitted after the
-`WS-ENG-008-01` cutover must contain exactly one block in this form. The arrays
-contain repository-relative paths or closed directory patterns, canonical
-reviewer names, and repository-owned verification identifiers; they never
-contain shell commands.
-
-```chunk-scope-json
-{
-  "schema_version": 1,
-  "chunk_id": "<CHUNK_ID>",
-  "phase": "<PHASE>",
-  "risk_class": "<RISK_CLASS>",
-  "allowed_paths": [
-    "<path>"
-  ],
-  "forbidden_paths": [
-    "<path-or-directory-pattern>"
-  ],
-  "required_reviewers": [
-    "senior engineering",
-    "qa/test",
-    "security/auth",
-    "product/ops",
-    "architecture",
-    "ci integrity",
-    "docs",
-    "reuse/dedup",
-    "test delta"
-  ],
-  "verification_commands": [
-    "<repository-owned-command-id>"
-  ]
-}
-```
-
-The human-readable sections below remain mandatory and must agree with this
-block. Replace phase and risk placeholders with the exact human values. Include
-every applicable conditional reviewer in both reviewer sections and remove a
-conditional track from both only when routing marks it unrelated. See
-`CONTRIBUTING.md` for the closed path grammar and cutover rule.
-
 ## Allowed files
 
 ```text
@@ -103,14 +56,14 @@ conditional track from both only when routing marks it unrelated. See
 
 ## Required reviewers
 
-Every listed reviewer must end with one exact result value:
+Record reviewer outcomes when reviewers are used:
 
 - `PASS`
 - `PASS AFTER FIXES`
 - `PASS WITH LOW RISKS`
 - `N/A - with approved reason`
 
-Baseline:
+Recommended for higher-risk work:
 
 - [ ] senior engineering
 - [ ] QA/test
@@ -128,9 +81,8 @@ Conditional:
   scripts
 - [ ] test delta, when the chunk touches tests or test-like files
 
-Use `N/A - with approved reason` only when the reviewer track is explicitly
-unrelated to the chunk. Security and architecture cannot be marked N/A when the
-chunk touches their surfaces.
+Select reviewers according to risk. Reviews improve confidence; they do not
+grant repository authority or replace required GitHub review and checks.
 
 ## Human review focus
 

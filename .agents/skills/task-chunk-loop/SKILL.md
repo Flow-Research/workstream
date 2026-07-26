@@ -1,21 +1,22 @@
 ---
 name: task-chunk-loop
-description: Execute exactly one approved chunk using bounded implementation, evidence gates, zero-trust reviewers, repair loop, and PR trust bundle. Do not start the next chunk.
+description: Execute one bounded change with proportionate planning, evidence, review, and a PR trust bundle.
 ---
 
 # Task Chunk Loop
 
-Execute exactly one approved chunk.
+Execute one bounded change. A chunk contract is recommended for broad or risky
+work and optional for small changes.
 
 ## Inputs
 
-- Chunk contract path.
-- Initiative artifacts: `INTENT.md`, `DISCOVERY.md`, `PLAN.md`, `CHUNK_MAP.md`.
+- Chunk contract or PR-stated intent and scope.
+- Initiative artifacts when they exist.
 - Policies under `.agent-loop/policies/`.
 
 ## Required process
 
-1. Read the chunk contract and parent initiative artifacts.
+1. Read the applicable contract or restate the requested intent and scope.
 2. Restate:
    - goal
    - why this chunk exists
@@ -27,24 +28,23 @@ Execute exactly one approved chunk.
    - human review focus
 3. Produce a short implementation plan.
 4. Run plan review for L0/L1 or architecture/security-sensitive work.
-5. Implement only the approved chunk.
+5. Implement only the bounded change.
 6. Run relevant tests/checks.
 7. Run deterministic proof checks before reviewer fanout.
 8. If deterministic checks fail, fix cheap blockers before reviewer fanout.
 9. Run required reviewer agents or skills based on risk routing.
 10. Fix all Critical and High findings.
 11. Re-run failed reviewers.
-12. Write internal review evidence.
-13. Run the internal review evidence gate.
-14. Stop after two failed repair cycles on the same class of issue.
-15. Produce a PR trust bundle.
-16. Stop for human review.
+12. Summarize material reviewer findings in the PR or a durable note when useful.
+13. Stop after two failed repair cycles on the same class of issue.
+14. Produce a PR trust bundle.
+15. Stop for human review.
 
 ## Hard stops
 
 Stop immediately if:
 
-- required scope exceeds the chunk contract
+- required scope exceeds the stated boundary
 - architecture direction changes
 - auth/payment/policy/data boundary changes beyond contract
 - tests or CI must be weakened to pass

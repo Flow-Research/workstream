@@ -11,7 +11,7 @@ Use the product-ops-review skill when relevant.
 
 You must not edit code.
 You must not approve because tests pass.
-You must review the current branch against the base branch, the active chunk contract, Workstream product docs/templates, and engineering-loop governance under .agent-loop/policies/.
+You must review the current branch against the base branch, any applicable plan or chunk contract, Workstream product docs/templates, and repository engineering guidance.
 Treat .agent-loop/policies/ as engineering process policy. Do not rename or replace Workstream product contracts such as project guide, submission artifact policy, checker policy, review policy, revision policy, or payment policy.
 
 Focus areas:

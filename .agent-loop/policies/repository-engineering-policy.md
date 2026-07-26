@@ -2,77 +2,52 @@
 
 ## Project Identity
 
-- Project name: Workstream
-- Project type: backend-first task evaluation and contribution infrastructure
-- Backend: Python, FastAPI, SQLAlchemy 2.x async, Alembic, Pydantic schemas
-- Frontend: React, Vite, TypeScript
-- Record database: Postgres
-- File storage: AWS S3 in v0.1 production behind the provider-neutral artifact
-  abstraction; MinIO proves the S3 protocol in local/CI, LocalStorage is
-  development-only, and R2 plus Flow Node are deferred
+- Backend: Python, FastAPI, SQLAlchemy 2.x async, Alembic, and Pydantic.
+- Frontend: React, Vite, and TypeScript.
+- Record database: PostgreSQL.
+- Hosted artifact storage: AWS S3 behind `ArtifactStore`; MinIO proves the
+  protocol locally and in CI.
 
-## Setup Commands
+## Contribution Authority
 
-```bash
-docker compose up -d postgres
+GitHub repository permissions and branch protection govern contribution
+authority. Plans, contracts, review evidence, and `.agent-loop/` records are
+useful engineering context, not runtime authorization.
 
-cd backend
-python -m pip install -e ".[dev]"
-alembic upgrade head
-ruff check app tests scripts
-docstr-coverage --config .docstr.yaml
-pytest -q
+The repository does not require signed starts, active-chunk leases,
+administrator dispatches, merge intents, recovery certificates, or generated
+loop memory before implementation or pull-request creation.
+
+## Engineering Loop
+
+```text
+Intent -> Plan -> Bounded Change -> Tests -> Review -> PR -> Human Merge
 ```
+
+- Keep changes small and explain scope and non-goals.
+- Use a plan and chunk contract when complexity or risk warrants them.
+- Run relevant tests, lint, type checks, and coverage checks.
+- Use internal reviewers for high-risk security, authorization, payment,
+  architecture, workflow, or product-lifecycle changes.
+- Different initiatives may proceed concurrently.
+- Explicit human approval is required before merge.
+- Derived process records must never block product development.
 
 ## Core Boundaries
 
 | Boundary | Owner | Rule |
 |---|---|---|
-| External authentication | `backend/app/adapters/auth`, `backend/app/api/deps/auth.py` | Verify external Flow tokens only; do not add Workstream login/password/session ownership or product roles to verified-token types. |
-| Actors | `backend/app/modules/actors` | Own canonical ActorProfile and ActorIdentityLink persistence/resolution. |
-| Authorization | `backend/app/modules/authorization` | Own grants, permission registry/evaluation, idempotency, invalidation, and authority decisions; routers map stable errors. |
-| Project guide and policy context | `backend/app/modules/projects` | Guide and policy versions are explicit and locked before task/submission use. |
+| External authentication | `backend/app/adapters/auth`, `backend/app/api/deps/auth.py` | Verify external Flow tokens only; do not add Workstream-owned passwords or primary sessions. |
+| Actors | `backend/app/modules/actors` | Own canonical actor profiles and identity links. |
+| Authorization | `backend/app/modules/authorization` | Own grants, permissions, evaluation, invalidation, and authority decisions. |
+| Project guides | `backend/app/modules/projects` | Guide and policy versions are explicit and locked before downstream use. |
 | Task lifecycle | `backend/app/modules/tasks` | State transitions are policy-driven and auditable. |
-| Submission/checker lifecycle | `backend/app/modules/submissions`, `backend/app/modules/checkers` | Pre-submit blocking gates and post-submit checker records stay separate. |
-| Persistence | `backend/app/db`, module models/repositories | Use async SQLAlchemy repositories and Alembic migrations. |
-| CI/review gates | `.github/workflows`, `scripts/`, `.agent-loop/` | Gates may be strengthened; weakening requires explicit human approval. |
-| Generated merge memory | `automation/loop-memory` | Trusted `main` automation owns a closed signed tree containing canonical state, ledger, manifest, loop/queue views, and compact initiative projections. Humans and agents do not edit it manually or trust isolated files without manifest/signature verification. Merge projections remain stopped/next-only until signed start events exist. |
-| Explicit engineering starts | `.github/workflows/loop-memory-start.yml` | An authenticated dispatcher whose current GitHub repository permission meets `.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main` may dispatch a signed start for a declared successor or exact reviewed contract; the orchestrator may dispatch after an explicit user instruction, but conversation is not canonical evidence. Cancellation retains a protected-environment reviewer distinct from the dispatcher. No automatic start is valid. |
-| Machine-checkable chunk scope | `scripts/check_chunk_contract.py` | After the WS-ENG-008-01 cutover, every implementation/specification start selects one strict schema-v1 contract. Agent Gates compare the complete byte-safe Git delta with its closed allowed/forbidden path grammar and never execute contract-provided text. |
-
-Explicit starts are initiative-local: each initiative may have at most one
-active planning or implementation chunk, while distinct initiatives may be
-active concurrently. Local worktrees are execution isolation, not authority.
-
-Only work already signed-active at the exact machine-scope cutover may finish
-under a generated grandfather record. That record is bound to the pre-cutover
-start event, initiative/chunk identity, contract path, and immutable blob.
-Stopped, proposed, cancelled/restarted, and post-cutover starts cannot inherit
-the exception.
-
-The sole first-contract admission is a planning-intake merge for an initiative
-absent from signed history. It is a closed additive planning tree with canonical
-`<initiative>-PLAN` identity, required review/check evidence, one reviewed
-same-initiative implementation successor, and explicit-start true. It records a
-trusted signed merge but no active chunk. It cannot change product, code,
-workflows, scripts, policy, existing initiatives, or generated memory. It is not
-an implementation-start substitute.
+| Submission/checker lifecycle | `backend/app/modules/submissions`, `backend/app/modules/checkers` | Pre-submit gates and post-submit checker records remain separate. |
+| Persistence | `backend/app/db`, module repositories | Use async SQLAlchemy and Alembic migrations. |
+| CI | `.github/workflows` | CI validates code quality and tests; it does not grant permission to contribute. |
 
 ## Dependency Policy
 
-- New production dependencies require explicit human approval.
-- New dev dependencies require a clear reason and reviewer coverage when they affect CI, tests, lint, docs, or generated code.
-- Do not replace locked stack choices without a new ADR and human approval.
-
-## Agent Rules
-
-- Follow the repository contribution entry path in `CONTRIBUTING.md`; it applies
-  equally to humans and agents and does not change product Contributor authority.
-- Keep PRs chunk-sized.
-- Do not weaken CI, tests, docstring coverage, internal review evidence, or auth defaults.
-- Do not use chat memory as the source of truth. Update docs, ADRs, templates, policies, or loop memory.
-- Review and approve an implementation PR once. After merge, rely on the canonical automation branch; do not create a second PR or repeat reviewer fanout solely to restate merge metadata.
-- After the 04B cutover, an implementation merge without an active signed start
-  fails unless its exact identity is covered by a reviewed one-use root recovery.
-  The only permanent no-predecessor admission is the closed first-planning merge
-  above, which always remains stopped.
+- Production dependencies require explicit human approval.
+- Development dependencies require a clear reason.
+- Do not replace locked stack choices without an ADR and human approval.

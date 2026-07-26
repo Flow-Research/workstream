@@ -18,10 +18,10 @@ Reviewed at: <UTC timestamp, for example 2026-06-18T00:00:00Z>
 
 Reviewer run IDs: <agent ids, CI run IDs, or local reviewer run references>
 
-After the reviewed SHA, only evidence and status files may change:
+When this optional template is used, record the exact revision that reviewers
+examined. Later changes require proportionate re-review of the affected delta.
 
 - `.agent-loop/initiatives/**/reviews/**`
-- `.agent-loop/LOOP_STATE.md`
 - `.agent-loop/initiatives/**/STATUS.md`
 - `docs/internal_reviews/**`
 

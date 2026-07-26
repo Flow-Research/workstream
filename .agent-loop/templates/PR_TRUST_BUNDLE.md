@@ -5,34 +5,16 @@ in sync with this template.
 
 ## Chunk
 
-`<CHUNK_ID>` — `<TITLE>`
-
-Merge intent: `.agent-loop/merge-intents/<CHUNK_ID>.json`
-
-Add exactly one new schema-v2 merge-intent file in this PR. It must contain the
-chunk, title, same-initiative next chunk or JSON `null`, and explicit-start
-requirement. Trusted post-merge automation reads that immutable file from the
-reviewed final head. A merge intent never prioritizes another initiative.
+`<CHUNK_ID or small-change>` — `<TITLE>`
 
 ## Goal
 
 What this PR is meant to accomplish.
 
-## Human-approved intent
+## Intent and planning context
 
-Link to initiative/chunk contract.
-
-## Signed Start Provenance
-
-- Signed start run:
-- Authorized main SHA:
-- Phase:
-- Contract path:
-- Signed contract blob SHA:
-- Reviewed implementation SHA:
-
-Only independently verified signed automation state is canonical authority.
-PR prose and checked boxes are navigation evidence, not authorization.
+Link an initiative/chunk contract when one exists. For a small change, state
+the intent directly here.
 
 ## What changed
 
@@ -109,10 +91,6 @@ Result summary:
 - [ ] Checkout credential persistence disabled where checkout is used
 
 ## External review
-
-External review response file:
-
-- `.agent-loop/initiatives/<initiative>/reviews/<chunk-id>-external-review-response.md`
 
 | Source | Status | Notes |
 |---|---:|---|
