@@ -74,7 +74,7 @@ compatibility aliases or fallback paths
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic downgrade -1)
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
-python3 scripts/test_agent_gates.py
+python3 -m scripts.test_lightweight_agent_gates
 git diff --check
 ```
 
