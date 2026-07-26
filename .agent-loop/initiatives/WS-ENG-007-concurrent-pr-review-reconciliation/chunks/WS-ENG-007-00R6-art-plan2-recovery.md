@@ -57,7 +57,7 @@ reinterpretation of PR #197 as implementation authority
 - [ ] All three records carry successful merge-bound `agent-gates` and `test`
       provenance; mutable reruns and CodeRabbit are not recovery authority.
 - [ ] All three temporary exemptions are consumed before signing and cannot persist,
-      replay, reorder, broaden, or authorize a third merge.
+      replay, reorder, broaden, or authorize a fourth or additional merge.
 - [ ] ART PLAN2 reconciles to stopped state with `WS-ART-001-03A` requiring an
       explicit start; recovery starts no implementation or planning chunk.
 - [ ] Exactly one merge intent stops ENG-007 at its existing `01` gate.
