@@ -3,40 +3,6 @@
     "implementation_chunk": null,
     "planning_chunk": null
   },
-  "authority_state": {
-    "active": {
-      "implementation_chunk": "WS-AUTH-001-11",
-      "planning_chunk": null
-    },
-    "completed_chunk": {
-      "chunk_id": "WS-AUTH-001-10C",
-      "chunk_title": "Project Role Grant Mutations",
-      "initiative_id": "WS-AUTH-001",
-      "next_chunk_id": "WS-AUTH-001-11",
-      "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
-      "next_requires_explicit_start": true,
-      "schema_version": 2
-    },
-    "gate": {
-      "next_chunk_id": "WS-AUTH-001-11",
-      "next_chunk_title": "Project Identity, Guide, Source, And Visibility Cutover",
-      "next_requires_explicit_start": true,
-      "status": "active"
-    },
-    "source": {
-      "first_parent_sha": "bcf1292e1a591e3e84bf8ee212ee7191d80741fa",
-      "head_ref": "codex/ws-auth-001-10c-project-role-grant-mutations",
-      "head_sha": "f2673d63a55b6ebf22449ac275f0268bb0618bd2",
-      "intent_blob_sha": "cfef9a9a3a14930dd2e8f85f2dd667fe513a5387",
-      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-10C.json",
-      "main_sha": "d7169cb6ae76ae634329d2a10720ac8ca7bafc28",
-      "merged_at": "2026-07-25T08:22:08Z",
-      "merged_by": "abiorh-claw",
-      "pr_number": 194,
-      "pr_title": "feat(auth): add project role grant mutations",
-      "pr_url": "https://github.com/Flow-Research/workstream/pull/194"
-    }
-  },
   "checks": {
     "all_required_passed": true,
     "required": {
@@ -48,53 +14,27 @@
       "agent-gates": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30165366809/job/89697337224"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30181421774/job/89738500201"
       },
       "test": {
         "conclusion": "success",
         "kind": "check_run",
-        "url": "https://github.com/Flow-Research/workstream/actions/runs/30164212367/job/89694367171"
+        "url": "https://github.com/Flow-Research/workstream/actions/runs/30181411772/job/89738471754"
       }
     }
   },
   "completed_chunk": {
-    "chunk_id": "WS-CI-001-02B",
-    "chunk_title": "Exact-Custody Semantic Test Lanes",
-    "initiative_id": "WS-CI-001",
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "chunk_id": "WS-ENG-007-00R6",
+    "chunk_title": "ART PLAN2 Signed-Memory Recovery",
+    "initiative_id": "WS-ENG-007",
+    "next_chunk_id": "WS-ENG-007-01",
+    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
     "next_requires_explicit_start": true,
     "schema_version": 2
   },
-  "event": {
-    "authorization": {
-      "actor": "Abiorh001",
-      "permission": "admin",
-      "schema_version": 2,
-      "type": "github_repository_permission"
-    },
-    "chunk_id": "WS-AUTH-001-11",
-    "created_at": "2026-07-25T17:15:45Z",
-    "dispatcher": "Abiorh001",
-    "event_id": "github-actions:30167274426:start",
-    "initiative_id": "WS-AUTH-001",
-    "main_sha": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
-    "prior_state_tip": "dc47b1e198ca69d7d446ed7f00b627062200afa6",
-    "reason": "Approved AUTH-11 hard cutover planning and implementation",
-    "run_id": 30167274426,
-    "selection": {
-      "contract_blob_sha": "bfcb2c692384bf7a783f2fc01ddcfb17a0390ae7",
-      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-11-project-read-cutover.md",
-      "contract_title": "Project Identity, Guide, Source, And Visibility Cutover",
-      "mode": "declared_successor",
-      "phase": "implementation",
-      "schema_version": 1
-    },
-    "type": "start"
-  },
   "gate": {
-    "next_chunk_id": null,
-    "next_chunk_title": null,
+    "next_chunk_id": "WS-ENG-007-01",
+    "next_chunk_title": "Reviewed Patch and Base-Delta Reconciliation",
     "next_requires_explicit_start": true,
     "status": "stopped_after_merge"
   },
@@ -111,41 +51,41 @@
       "agent-gates": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-25T16:19:21Z",
+        "completed_at": "2026-07-26T00:36:20Z",
         "conclusion": "success",
-        "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
-        "id": 89697337224,
-        "merge_cutoff": "2026-07-25T16:21:40Z",
-        "started_at": "2026-07-25T16:18:37Z"
+        "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
+        "id": 89738500201,
+        "merge_cutoff": "2026-07-26T01:10:08Z",
+        "started_at": "2026-07-26T00:35:41Z"
       },
       "test": {
         "app_id": 15368,
         "app_slug": "github-actions",
-        "completed_at": "2026-07-25T15:54:52Z",
+        "completed_at": "2026-07-26T00:45:50Z",
         "conclusion": "success",
-        "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
-        "id": 89694367171,
-        "merge_cutoff": "2026-07-25T16:21:40Z",
-        "started_at": "2026-07-25T15:44:16Z"
+        "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
+        "id": 89738471754,
+        "merge_cutoff": "2026-07-26T01:10:08Z",
+        "started_at": "2026-07-26T00:35:19Z"
       }
     },
-    "sha256": "25f172783ae02c9514cbac4e779b5ac1af17992ac937713e8129c1568bc171c8"
+    "sha256": "73bba22b30b2d252ca417198d685638b7b9f9b37619afb73e0be214ec44c6927"
   },
   "repository": "Flow-Research/workstream",
   "schema_version": 2,
   "source": {
-    "first_parent_sha": "77d248c15e5096969e29cabec2a1ce7c39c24ff5",
-    "head_ref": "codex/ws-ci-001-02b-exact-custody-semantic-lanes",
-    "head_sha": "fb6a7ff0047cac57489cba546ba81c42e8938dfe",
-    "intent_blob_sha": "ff0d1859af0e88ee1ca301fdcea615c2b7b55aac",
-    "intent_path": ".agent-loop/merge-intents/WS-CI-001-02B.json",
-    "main_sha": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
-    "merged_at": "2026-07-25T16:21:40Z",
+    "first_parent_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
+    "head_ref": "codex/ws-eng-007-00r6-art-plan2-recovery",
+    "head_sha": "79557119810b2764cfd57beda6926b4c9239d41a",
+    "intent_blob_sha": "0dddc285e897debe0a7fe1f06b0201c75f2ba8d1",
+    "intent_path": ".agent-loop/merge-intents/WS-ENG-007-00R6.json",
+    "main_sha": "a04fd1a0a623b7150ec40c9934a9982f80a2dce7",
+    "merged_at": "2026-07-26T01:10:08Z",
     "merged_by": "abiorh-claw",
-    "pr_number": 198,
-    "pr_title": "ci(backend): replace shards with exact-custody semantic lanes",
-    "pr_url": "https://github.com/Flow-Research/workstream/pull/198"
+    "pr_number": 202,
+    "pr_title": "fix(agent-loop): recover unsigned ART planning merge",
+    "pr_url": "https://github.com/Flow-Research/workstream/pull/202"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-25T17:15:45Z"
+  "updated_at": "2026-07-26T01:10:08Z"
 }

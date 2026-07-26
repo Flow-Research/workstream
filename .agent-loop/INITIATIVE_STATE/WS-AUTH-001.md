@@ -3,12 +3,12 @@
 > Signed merge/start/cancel state. Unsigned chat or worktree starts are not represented.
 
 - Initiative: `WS-AUTH-001`
-- Latest completed chunk: `WS-AUTH-001-10C` - Project Role Grant Mutations
-- Gate: `active`
+- Latest completed chunk: `WS-AUTH-001-11` - Project Read Cutover Planning Parent
+- Gate: `stopped_after_merge`
 - Active planning chunk: `none`
-- Active implementation chunk: `WS-AUTH-001-11`
-- Next chunk: `WS-AUTH-001-11`
+- Active implementation chunk: `none`
+- Next chunk: `WS-AUTH-001-11A`
 - Separate explicit start required: `true`
-- Source PR: [#194](https://github.com/Flow-Research/workstream/pull/194)
-- Source merge: `d7169cb6ae76ae634329d2a10720ac8ca7bafc28`
-- Source event time: `2026-07-25T08:22:08Z`
+- Source PR: [#201](https://github.com/Flow-Research/workstream/pull/201)
+- Source merge: `f670b7058c71ad4d11a68c6e242e9fe501ae3aaf`
+- Source event time: `2026-07-25T23:54:22Z`

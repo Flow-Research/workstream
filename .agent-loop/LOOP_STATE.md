@@ -3,18 +3,16 @@
 > Canonical generated view. Do not edit this branch by hand.
 
 - Repository: `Flow-Research/workstream`
-- Last merged PR: [#198](https://github.com/Flow-Research/workstream/pull/198) - ci(backend): replace shards with exact-custody semantic lanes
-- Merge commit: `bba4ba5f171a4438b072740707a5cf8bde49d9af`
-- Final PR head: `fb6a7ff0047cac57489cba546ba81c42e8938dfe`
-- Merged at: `2026-07-25T16:21:40Z` by `abiorh-claw`
-- Merge intent: `.agent-loop/merge-intents/WS-CI-001-02B.json` at blob `ff0d1859af0e88ee1ca301fdcea615c2b7b55aac`
-- Completed chunk: `WS-CI-001-02B` - Exact-Custody Semantic Test Lanes
+- Last merged PR: [#202](https://github.com/Flow-Research/workstream/pull/202) - fix(agent-loop): recover unsigned ART planning merge
+- Merge commit: `a04fd1a0a623b7150ec40c9934a9982f80a2dce7`
+- Final PR head: `79557119810b2764cfd57beda6926b4c9239d41a`
+- Merged at: `2026-07-26T01:10:08Z` by `abiorh-claw`
+- Merge intent: `.agent-loop/merge-intents/WS-ENG-007-00R6.json` at blob `0dddc285e897debe0a7fe1f06b0201c75f2ba8d1`
+- Completed chunk: `WS-ENG-007-00R6` - ART PLAN2 Signed-Memory Recovery
 - Active planning chunks: none
-- Active implementation chunks: `WS-AUTH-001-11`, `WS-REV-001-03P`
-- Latest authority event: `start` for `WS-AUTH-001-11`
-- Authority initiative: `WS-AUTH-001`
+- Active implementation chunks: `WS-REV-001-03P`
 - Current gate: `stopped_after_merge`
-- Next chunk: none recorded.
+- Next chunk: `WS-ENG-007-01` - Reviewed Patch and Base-Delta Reconciliation; requires a separate explicit start.
 - Required check evidence: passed
   - `agent-gates`: `success`
   - `test`: `success`
