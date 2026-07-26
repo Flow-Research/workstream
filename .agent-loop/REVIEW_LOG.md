@@ -2953,3 +2953,9 @@ consumed before signing, and absent from replay. ART remains stopped at 03A;
 `WS-CI-001-03`, `WS-ENG-007-01`, and every other successor still require
 ordinary explicit starts. All nine internal tracks reviewed the bounded recovery; exact final-SHA
 evidence and protected GitHub checks remain required.
+
+CodeRabbit's final-head review raised two stale-context findings: it treated the
+superseded `609be24d` revision as current and proposed omitting signed PR #201
+from the first-parent recovery chain. The external-review response records why
+final code review is bound to `f3eab24e` and why exact PR #201 reconciliation is
+mandatory rather than expanded authority.

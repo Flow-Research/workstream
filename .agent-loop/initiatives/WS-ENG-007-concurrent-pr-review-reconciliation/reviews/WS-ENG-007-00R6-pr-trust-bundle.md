@@ -39,6 +39,11 @@ All nine required internal tracks completed. No implementation blocker remains.
 CI/security and senior engineering retain only the operational risk that any
 intervening main merge or missing protected evidence invalidates recovery.
 
+CodeRabbit's two comments were dispositioned as stale-context findings. The
+external-review response records why the reviewed SHA is `f3eab24e` and why
+signed PR #201 is a mandatory exact predecessor rather than broadened recovery
+authority.
+
 ## Human Review Focus
 
 - Confirm PR #197 then signed PR #201 are the only recovered predecessors.
