@@ -30,6 +30,8 @@ unrecorded predecessor is reconciled.
 .agent-loop/policies/loop-memory-recovery.json
 .agent-loop/REVIEW_LOG.md
 scripts/test_agent_gates.py
+scripts/test_update_post_merge_memory.py
+scripts/update_post_merge_memory.py
 docs/operations_post_merge_memory.md
 .agent-loop/initiatives/WS-ENG-007-concurrent-pr-review-reconciliation/**
 .agent-loop/merge-intents/WS-ENG-007-00R6.json
@@ -38,7 +40,7 @@ docs/operations_post_merge_memory.md
 ## Not allowed
 
 ```text
-workflow, updater, checker, permission, CI, test, or coverage behavior changes
+workflow, checker, permission, CI, backend test, or coverage behavior changes
 application, API, database, auth, artifact, payment, or product changes
 wildcard, persistent, reordered, reusable, or post-signing exemptions
 automatic ART, CI, AUTH, ENG, or other successor starts
@@ -47,8 +49,9 @@ reinterpretation of PR #197 as implementation authority
 
 ## Acceptance criteria
 
-- [ ] Schema-v5 recovery binds signed basis `bba4ba5f…` and names only PR #197 /
-      `WS-ART-001-PLAN2` / `03a05eeb…` as the recovered predecessor.
+- [ ] Schema-v6 recovery binds signed basis `bba4ba5f…` and names exactly PR
+      #197 / `WS-ART-001-PLAN2` / `03a05eeb…` followed by signed PR #201 /
+      `WS-AUTH-001-11` / `f670b705…` as its two predecessors.
 - [ ] Activation names only `WS-ENG-007-00R6`; the target identity comes from
       trusted GitHub merge evidence and must be direct-next on first-parent main.
 - [ ] Both merges carry successful merge-bound `agent-gates` and `test`

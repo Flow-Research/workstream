@@ -2944,10 +2944,11 @@ agent-gate pytest cases pass, and the 100 direct regression cases pass.
 
 PR #197 merged planning chunk `WS-ART-001-PLAN2` without its required signed
 planning start, so canonical reconciliation fails closed at merge
-`03a05eeb8f129e0d5f226cc5c058965f43590a81`. R6 reuses the closed schema-v5
-recovery engine with signed basis `bba4ba5f171a4438b072740707a5cf8bde49d9af`,
-that one exact recovered merge, and only the direct-next R6 activation. Both
-temporary exemptions must be merge-evidence-bound, first-parent adjacent,
+`03a05eeb8f129e0d5f226cc5c058965f43590a81`. After signed AUTH-11 PR #201
+merged, R6 extends the closed recovery engine with schema v6: signed basis
+`bba4ba5f171a4438b072740707a5cf8bde49d9af`, exact PR #197 then exact signed
+PR #201, and only the direct-next R6 activation. All three temporary exemptions
+must be merge-evidence-bound, first-parent adjacent,
 consumed before signing, and absent from replay. ART remains stopped at 03A;
 `WS-CI-001-03`, `WS-ENG-007-01`, and every other successor still require
 ordinary explicit starts. All nine internal tracks reviewed the bounded recovery; exact final-SHA

@@ -2141,6 +2141,89 @@ def test_prepare_recovery_v5_uses_merge_bound_evidence_and_consumes_exact_r4(
         )
 
 
+def test_prepare_recovery_v6_consumes_exact_two_predecessor_sequence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record()
+    base["source"]["main_sha"] = "a" * 40
+    loop.apply_merge_record(state_root, base)
+    first = _merge_bound_record()
+    second = _merge_bound_record()
+    target = _merge_bound_record()
+    _set_merge_identity(
+        first, chunk_id="WS-ENG-007-00R4", pr_number=191,
+        main_sha="c" * 40, first_parent_sha="a" * 40, head_sha="4" * 40,
+    )
+    _set_merge_identity(
+        second, chunk_id="WS-ENG-007-00R5", pr_number=192,
+        main_sha="d" * 40, first_parent_sha="c" * 40, head_sha="5" * 40,
+    )
+    _set_merge_identity(
+        target, chunk_id="WS-ENG-007-00R6", pr_number=202,
+        main_sha="f" * 40, first_parent_sha="d" * 40, head_sha="6" * 40,
+    )
+    policy = {
+        "schema_version": 6,
+        "signed_basis": "a" * 40,
+        "activation": {
+            "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R6",
+        },
+        "recovered_merges": [
+            {
+                "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R4",
+                "pr_number": 191, "merge_sha": "c" * 40,
+            },
+            {
+                "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R5",
+                "pr_number": 192, "merge_sha": "d" * 40,
+            },
+        ],
+    }
+    records = {"c" * 40: first, "d" * 40: second, "f" * 40: target}
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+    monkeypatch.setattr(
+        loop, "collect_merge_record",
+        lambda _client, _repository, sha: json.loads(json.dumps(records[sha])),
+    )
+    monkeypatch.setattr(
+        loop, "_validate_protected_actions_checks",
+        lambda *_args: pytest.fail("schema-v6 must not query mutable check authority"),
+    )
+
+    planned = ["c" * 40, "d" * 40, "f" * 40]
+    exemptions = loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="f" * 40, planned_shas=planned,
+    )
+    assert [item["chunk_id"] for item in exemptions] == [
+        "WS-ENG-007-00R4", "WS-ENG-007-00R5", "WS-ENG-007-00R6",
+    ]
+    assert loop.apply_merge_record(state_root, first, exemptions)
+    assert loop.apply_merge_record(state_root, second, exemptions)
+    assert loop.apply_merge_record(state_root, target, exemptions)
+    loop.assert_recovery_consumed(state_root, "f" * 40, exemptions)
+    assert loop.prepare_recovery_exemptions(
+        object(), "Flow-Research/workstream", repository_root=tmp_path,
+        state_root=state_root, target_sha="f" * 40, planned_shas=[],
+    ) == []
+
+    fresh = tmp_path / "wrong-order"
+    loop.apply_merge_record(fresh, base)
+    with pytest.raises(loop.LoopMemoryError, match="exact ordered sequence"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=fresh, target_sha="f" * 40,
+            planned_shas=["d" * 40, "c" * 40, "f" * 40],
+        )
+    with pytest.raises(loop.LoopMemoryError, match="exact ordered sequence"):
+        loop.prepare_recovery_exemptions(
+            object(), "Flow-Research/workstream", repository_root=tmp_path,
+            state_root=fresh, target_sha="f" * 40,
+            planned_shas=[*planned, "1" * 40],
+        )
+
+
 def _cross_initiative_merge_bound_state(tmp_path: Path) -> tuple[Path, Path]:
     state_root, repository_root = tmp_path / "state", tmp_path / "repo"
     _contract(repository_root)

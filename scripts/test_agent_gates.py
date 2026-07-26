@@ -2316,8 +2316,14 @@ def test_ws_eng_007_recovery_policy_is_exactly_pinned() -> None:
                 "merge_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
                 "pr_number": 197,
             },
+            {
+                "chunk_id": "WS-AUTH-001-11",
+                "initiative_id": "WS-AUTH-001",
+                "merge_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
+                "pr_number": 201,
+            },
         ],
-        "schema_version": 5,
+        "schema_version": 6,
     }
 
 

@@ -316,7 +316,7 @@ and requires exactly three unique entries on every reload.
 
 ## WS-ENG-007 ART PLAN2 Recovery
 
-`WS-ENG-007-00R6` uses the closed schema-v5 certificate after PR #197 merged
+`WS-ENG-007-00R6` uses the closed schema-v6 certificate after PR #197 merged
 planning chunk `WS-ART-001-PLAN2` without its required signed planning start.
 The certificate begins at signed basis
 `bba4ba5f171a4438b072740707a5cf8bde49d9af` and permits exactly this adjacent
@@ -324,10 +324,12 @@ order:
 
 1. PR #197 / `WS-ART-001-PLAN2` /
    `03a05eeb8f129e0d5f226cc5c058965f43590a81`;
-2. the direct-next `WS-ENG-007-00R6` activation merge.
+2. signed PR #201 / `WS-AUTH-001-11` /
+   `f670b7058c71ad4d11a68c6e242e9fe501ae3aaf`;
+3. the direct-next `WS-ENG-007-00R6` activation merge.
 
-Both records require merge-bound successful `agent-gates` and `test` evidence.
-The two temporary exemptions are consumed before signing and cannot persist or
+All three records require merge-bound successful `agent-gates` and `test`
+evidence. The three temporary exemptions are consumed before signing and cannot persist or
 replay. Recovery records ART PLAN2 as completed and stopped at its explicit
 `WS-ART-001-03A` gate; it does not start ART, CI, ENG, or any other successor.
 Any intervening main merge invalidates adjacency and requires a newly reviewed
