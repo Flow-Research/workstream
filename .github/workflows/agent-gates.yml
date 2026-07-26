@@ -32,10 +32,26 @@ jobs:
       - name: Machine-checkable chunk scope
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: >-
-          python3 scripts/check_chunk_contract.py
-          --base-ref "origin/${BASE_REF}" --head-ref HEAD
-          --state-ref origin/automation/loop-memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          trusted_scope_dir="$(mktemp -d)"
+          trap 'rm -rf "${trusted_scope_dir}"' EXIT
+          trusted_checker="${trusted_scope_dir}/check_chunk_contract.py"
+          if git cat-file -e "origin/${BASE_REF}:scripts/check_chunk_contract.py"; then
+            for script in check_chunk_contract.py update_post_merge_memory.py check_loop_memory_state.py; do
+              git show "origin/${BASE_REF}:scripts/${script}" > "${trusted_scope_dir}/${script}"
+            done
+          else
+            ! git cat-file -e "origin/${BASE_REF}:.agent-loop/merge-intents/WS-ENG-008-01.json" 2>/dev/null
+            for script in check_chunk_contract.py update_post_merge_memory.py check_loop_memory_state.py; do
+              cp "scripts/${script}" "${trusted_scope_dir}/${script}"
+            done
+          fi
+          PYTHONPATH="${trusted_scope_dir}" python3 "${trusted_checker}" \
+            --repo "${GITHUB_WORKSPACE}" \
+            --base-ref "origin/${BASE_REF}" --head-ref HEAD \
+            --state-ref origin/automation/loop-memory
 
       - name: Static agent sensor advisory
         env:

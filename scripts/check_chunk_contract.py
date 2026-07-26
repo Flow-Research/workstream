@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -22,14 +24,25 @@ REVIEWERS = {
     "senior engineering", "qa/test", "security/auth", "product/ops",
     "architecture", "ci integrity", "docs", "reuse/dedup", "test delta",
 }
-VERIFICATION_COMMAND_IDS = frozenset({
-    "chunk-scope-tests", "agent-gate-tests", "internal-review-evidence",
-    "markdown-links", "stale-wording", "git-diff-check",
-    "loop-memory-drift-tests", "loop-memory-property-tests",
-    "authorization-property-tests", "authorization-property-lint",
-    "mutation-policy-tests", "mutation-policy-lint", "review-log-archive-tests",
-    "review-log-archive-check", "loop-memory-state", "stale-artifact-contracts",
-})
+VERIFICATION_COMMANDS = {
+    "chunk-scope-tests": "python3 scripts/test_check_chunk_contract.py",
+    "agent-gate-tests": "python3 scripts/test_agent_gates.py",
+    "internal-review-evidence": "python3 scripts/check_internal_review_evidence.py",
+    "markdown-links": "python3 scripts/check_markdown_links.py",
+    "stale-wording": "python3 scripts/check_stale_workstream_wording.py",
+    "git-diff-check": "git diff --check origin/main...HEAD",
+    "loop-memory-drift-tests": "python3 scripts/test_audit_loop_memory_drift.py",
+    "loop-memory-property-tests": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -p hypothesis.extra.pytestplugin -q scripts/test_loop_memory_properties.py",
+    "authorization-property-tests": "python -m pytest -q tests/test_authorization_properties.py",
+    "authorization-property-lint": "ruff check tests/test_authorization_properties.py",
+    "mutation-policy-tests": "python -m pytest -q tests/test_mutation_policy.py",
+    "mutation-policy-lint": "ruff check scripts/mutation_policy.py tests/test_mutation_policy.py",
+    "review-log-archive-tests": "python3 scripts/test_check_review_log_archive.py",
+    "review-log-archive-check": "python3 scripts/check_review_log_archive.py",
+    "loop-memory-state": "python3 scripts/check_loop_memory_state.py",
+    "stale-artifact-contracts": "python3 scripts/check_stale_artifact_contracts.py",
+}
+VERIFICATION_COMMAND_IDS = frozenset(VERIFICATION_COMMANDS)
 KEYS = {
     "schema_version", "chunk_id", "phase", "risk_class", "allowed_paths",
     "forbidden_paths", "required_reviewers", "verification_commands",
@@ -157,6 +170,17 @@ def parse_contract_bytes(raw: bytes) -> ScopeContract:
     unknown_commands = set(commands) - VERIFICATION_COMMAND_IDS
     if unknown_commands:
         raise ContractError(f"unknown verification identifiers: {sorted(unknown_commands)}")
+    verification_section = _section(text, "Verification commands")
+    verification_fence = re.search(r"```bash\n(.*?)```", verification_section, re.S)
+    if not verification_fence:
+        raise ContractError("Verification commands must contain a bash fence")
+    human_commands = tuple(
+        line for line in verification_fence.group(1).splitlines()
+        if line and not line.startswith("cd ")
+    )
+    expected_commands = tuple(VERIFICATION_COMMANDS[identifier] for identifier in commands)
+    if set(human_commands) != set(expected_commands) or len(human_commands) != len(expected_commands):
+        raise ContractError("machine verification identifiers disagree with human commands")
     human_allowed = _text_block_items(text, "Allowed files")
     if set(human_allowed) != set(allowed):
         raise ContractError("machine allowed_paths disagree with human Allowed files")
@@ -217,7 +241,7 @@ def matches(pattern: str, path: str) -> bool:
 
 
 def enforce_scope(contract: ScopeContract, paths: Iterable[bytes]) -> tuple[str, ...]:
-    decoded = validate_path_bytes(paths)
+    decoded = validate_path_bytes(tuple(dict.fromkeys(paths)))
     for path in decoded:
         if any(matches(pattern, path) for pattern in contract.forbidden_paths):
             raise ContractError(f"forbidden changed path: {path}")
@@ -277,11 +301,60 @@ def validate_raw_modes_z(raw: bytes) -> None:
                 raise ContractError(f"raw Git diff has forbidden {labels.get(mode, 'type')} mode")
 
 
+def tree_paths_z(raw: bytes) -> tuple[bytes, ...]:
+    """Return paths from a recursive NUL tree for result-name collision checks."""
+    paths: list[bytes] = []
+    for record in (item for item in raw.split(b"\0") if item):
+        metadata, separator, path = record.partition(b"\t")
+        fields = metadata.split(b" ")
+        if not separator or len(fields) != 3:
+            raise ContractError("malformed resulting Git tree record")
+        mode, kind, _blob = fields
+        valid_entry = (
+            (mode in {b"100644", b"100755", b"120000"} and kind == b"blob")
+            or (mode == b"160000" and kind == b"commit")
+        )
+        if not valid_entry:
+            raise ContractError("resulting tree has malformed mode/type")
+        paths.append(path)
+    return tuple(paths)
+
+
 def _git(repo: Path, *args: str) -> bytes:
     proc = subprocess.run(["git", *args], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if proc.returncode:
         raise ContractError(f"git {' '.join(args)} failed: {proc.stderr.decode('utf-8', 'replace').strip()}")
     return proc.stdout
+
+
+def validate_untracked_files(repo: Path, raw_paths: Sequence[bytes]) -> None:
+    """Accept only regular, non-executable untracked files without symlink walks."""
+    paths = validate_path_bytes(raw_paths)
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    root_fd = os.open(repo, directory_flags)
+    try:
+        for path in paths:
+            parts = path.split("/")
+            current_fd = root_fd
+            opened: list[int] = []
+            try:
+                for component in parts[:-1]:
+                    current_fd = os.open(component, directory_flags, dir_fd=current_fd)
+                    opened.append(current_fd)
+                info = os.stat(parts[-1], dir_fd=current_fd, follow_symlinks=False)
+            except (FileNotFoundError, NotADirectoryError, OSError) as exc:
+                raise ContractError(f"unsafe untracked path: {path}") from exc
+            finally:
+                for descriptor in reversed(opened):
+                    os.close(descriptor)
+            if not stat.S_ISREG(info.st_mode):
+                raise ContractError(f"untracked path is not a regular file: {path}")
+            if info.st_mode & 0o111:
+                raise ContractError(f"untracked path is executable: {path}")
+    finally:
+        os.close(root_fd)
 
 
 def _git_json(repo: Path, revision_path: str) -> dict[str, Any]:
@@ -555,7 +628,7 @@ def select_contract(repo: Path, base: str, head: str, state_ref: str) -> tuple[S
     if not cutover_present:
         raise ContractError("pre-cutover non-bootstrap contract has no machine scope")
     require_grandfather(records, start)
-    return None, start
+    return legacy_scope_from_signed_blob(signed_raw, start), start
 
 
 def machine_block_or_none(raw: bytes) -> bytes | None:
@@ -564,6 +637,18 @@ def machine_block_or_none(raw: bytes) -> bytes | None:
     if len(blocks) > 1:
         raise ContractError("duplicate machine scope blocks")
     return blocks[0].group("body").encode() if blocks else None
+
+
+def legacy_scope_from_signed_blob(raw: bytes, start: SignedStart) -> ScopeContract:
+    """Derive the only grandfather scope from the exact authenticated blob."""
+    text = raw.decode("utf-8", "strict")
+    allowed = tuple(
+        validate_pattern(path) for path in _text_block_items(text, "Allowed files")
+    )
+    phase, risk = _human_phase_risk(raw)
+    if phase != start.phase:
+        raise ContractError("grandfather human phase disagrees with signed start")
+    return ScopeContract(start.chunk_id, phase, risk, allowed, (), (), ())
 
 
 def require_grandfather(records: Sequence[dict[str, Any]], start: SignedStart) -> None:
@@ -591,19 +676,22 @@ def discover_changes(repo: Path, base: str, head: str) -> tuple[bytes, ...]:
     if not merge_base:
         raise ContractError("base and head have no merge base")
     outputs = [
-        _git(repo, "diff", "--name-status", "-z", "--find-renames", "--find-copies", f"{base}...{head}"),
-        _git(repo, "diff", "--name-status", "-z", "--cached"),
-        _git(repo, "diff", "--name-status", "-z"),
+        _git(repo, "diff", "--name-status", "-z", "--find-renames", "--find-copies-harder", f"{base}...{head}"),
+        _git(repo, "diff", "--name-status", "-z", "--find-renames", "--find-copies-harder", "--cached"),
+        _git(repo, "diff", "--name-status", "-z", "--find-renames", "--find-copies-harder"),
     ]
     raw_outputs = [
-        _git(repo, "diff", "--raw", "-z", "--no-abbrev", "--find-renames", "--find-copies", f"{base}...{head}"),
-        _git(repo, "diff", "--raw", "-z", "--no-abbrev", "--cached"),
-        _git(repo, "diff", "--raw", "-z", "--no-abbrev"),
+        _git(repo, "diff", "--raw", "-z", "--no-abbrev", "--find-renames", "--find-copies-harder", f"{base}...{head}"),
+        _git(repo, "diff", "--raw", "-z", "--no-abbrev", "--find-renames", "--find-copies-harder", "--cached"),
+        _git(repo, "diff", "--raw", "-z", "--no-abbrev", "--find-renames", "--find-copies-harder"),
     ]
     for raw_output in raw_outputs:
         validate_raw_modes_z(raw_output)
     statuses = [entry for output in outputs for entry in parse_name_status_z(output)]
     untracked = [p for p in _git(repo, "ls-files", "--others", "--exclude-standard", "-z").split(b"\0") if p]
+    validate_untracked_files(repo, untracked)
+    head_tree_paths = tree_paths_z(_git(repo, "ls-tree", "-rz", "--full-tree", head))
+    validate_path_bytes(head_tree_paths)
     paths = [path for _status, names in statuses for path in names] + untracked
     # Modes are part of authorization: only ordinary non-executable blobs are accepted.
     index = _git(repo, "ls-files", "--stage", "-z").split(b"\0")
@@ -615,6 +703,7 @@ def discover_changes(repo: Path, base: str, head: str) -> tuple[bytes, ...]:
         if not sep:
             raise ContractError("malformed Git index record")
         mode_by_path[name] = metadata.split(b" ", 1)[0]
+    validate_path_bytes((*mode_by_path, *untracked))
     for path in paths:
         mode = mode_by_path.get(path)
         if mode is not None and mode != b"100644":

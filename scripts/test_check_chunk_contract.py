@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -59,6 +60,13 @@ Explicit forbidden scope remains human-reviewed.
 {json.dumps(data, ensure_ascii=False)}
 ```
 
+## Verification commands
+
+```bash
+python3 scripts/test_check_chunk_contract.py
+git diff --check origin/main...HEAD
+```
+
 ## Required reviewers
 
 {reviewers}
@@ -87,6 +95,14 @@ class ContractSchemaTests(unittest.TestCase):
             b"- [ ] ci integrity", b"- [ ] CI integrity"
         )
         self.assertEqual(checker.parse_contract_bytes(raw).required_reviewers, REVIEWERS)
+
+    def test_human_verification_command_disagreement_is_rejected(self) -> None:
+        raw = contract().replace(
+            b"git diff --check origin/main...HEAD\n```",
+            b"git diff --stat origin/main...HEAD\n```",
+        )
+        with self.assertRaisesRegex(checker.ContractError, "verification identifiers"):
+            checker.parse_contract_bytes(raw)
 
     def test_negative_schema_mutations(self) -> None:
         mutations = [
@@ -237,6 +253,27 @@ class SignedHistorySelectionTests(unittest.TestCase):
             self.assertEqual(start.contract_blob_sha, blob)
             with self.assertRaisesRegex(checker.ContractError, "authentication failed"):
                 checker.select_contract(repo, base, "HEAD", "automation")
+            self.git(repo, "checkout", "-q", "automation")
+            cancel_record = {
+                "event": {"type": "cancel", "initiative_id": "WS-ENG-008",
+                          "chunk_id": "WS-ENG-008-01"}
+            }
+            with (repo / ".agent-loop/MERGE_LOG.jsonl").open("a") as ledger:
+                ledger.write(json.dumps({
+                    "schema_version": 2, "previous_entry_hash": "0" * 64,
+                    "record": cancel_record, "entry_hash": "1" * 64,
+                }) + "\n")
+            (repo / ".agent-loop/INITIATIVE_STATE/WS-ENG-008.md").write_text(
+                "- Active planning chunk: `none`\n- Active implementation chunk: `none`\n"
+            )
+            self.git(repo, "add", ".")
+            self.git(repo, "commit", "-qm", "cancel")
+            self.git(repo, "checkout", "-q", "main")
+            with (
+                mock.patch.object(checker, "verify_state_ref"),
+                self.assertRaisesRegex(checker.ContractError, "not a start"),
+            ):
+                checker.select_contract(repo, base, "HEAD", "automation")
 
     def test_rejects_stopped_projection_and_blob_mutation(self) -> None:
         # Focused helper mutations prove both state and tree bindings fail closed.
@@ -295,6 +332,192 @@ class SignedHistorySelectionTests(unittest.TestCase):
             )
             with self.assertRaisesRegex(checker.ContractError, "after cutover"):
                 checker.require_grandfather(records, restarted)
+
+    def test_select_rejects_stopped_and_post_cutover_no_schema_starts(self) -> None:
+        start_record = {
+            "event": {
+                "type": "start", "initiative_id": "WS-OLD-001",
+                "chunk_id": "WS-OLD-001-01", "main_sha": "a" * 40,
+                "selection": {"phase": "implementation", "contract_path": "legacy.md",
+                              "contract_blob_sha": "b" * 40},
+            }
+        }
+        cutover = {
+            "completed_chunk": {"initiative_id": "WS-ENG-008", "chunk_id": "WS-ENG-008-01"},
+            "event": None,
+        }
+        stopped = {
+            "completed_chunk": {"initiative_id": "WS-OLD-001", "chunk_id": "WS-OLD-001-01"},
+            "event": None,
+        }
+        common = (
+            mock.patch.object(checker, "added_merge_intent", return_value={
+                "path": ".agent-loop/merge-intents/WS-OLD-001-01.json",
+                "initiative_id": "WS-OLD-001", "chunk_id": "WS-OLD-001-01",
+            }),
+            mock.patch.object(checker, "verify_state_ref"),
+        )
+        with common[0], common[1], mock.patch.object(
+            checker, "authenticated_ledger", return_value=(start_record, stopped)
+        ), self.assertRaisesRegex(checker.ContractError, "not active"):
+            checker.select_contract(Path("."), "base", "head", "state")
+        with (
+            mock.patch.object(checker, "added_merge_intent", return_value={
+                "path": ".agent-loop/merge-intents/WS-OLD-001-01.json",
+                "initiative_id": "WS-OLD-001", "chunk_id": "WS-OLD-001-01",
+            }),
+            mock.patch.object(checker, "verify_state_ref"),
+            mock.patch.object(checker, "authenticated_ledger", return_value=(cutover, start_record)),
+            mock.patch.object(checker, "require_active_projection"),
+            mock.patch.object(checker, "signed_contract_blob", return_value=b"legacy contract"),
+            mock.patch.object(checker, "_git", return_value=b"legacy contract"),
+            mock.patch.object(subprocess, "run", return_value=mock.Mock(returncode=0)),
+            self.assertRaisesRegex(checker.ContractError, "not signed-active at exact cutover"),
+        ):
+            checker.select_contract(Path("."), "base", "head", "state")
+
+
+class GitDiscoveryIntegrationTests(unittest.TestCase):
+    def git(self, repo: Path, *args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=repo, check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        ).stdout.strip()
+
+    def repo(self, directory: str) -> tuple[Path, str]:
+        repo = Path(directory)
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "config", "user.email", "test@example.invalid")
+        self.git(repo, "config", "user.name", "Test")
+        (repo / "README.md").write_text("tracked\n")
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-qm", "base")
+        return repo, self.git(repo, "rev-parse", "HEAD").decode()
+
+    def scope(self, *allowed: str) -> checker.ScopeContract:
+        return checker.ScopeContract(
+            "WS-ENG-008-01", "implementation", "L1", tuple(allowed), (), (), (),
+        )
+
+    def test_untracked_symlink_is_rejected_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            (repo / "allowed-link").symlink_to("README.md")
+            with self.assertRaisesRegex(checker.ContractError, "not a regular file"):
+                checker.discover_changes(repo, base, "HEAD")
+
+    def test_untracked_executable_is_rejected_end_to_end(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            executable = repo / "allowed-tool.py"
+            executable.write_text("print('ok')\n")
+            executable.chmod(0o755)
+            with self.assertRaisesRegex(checker.ContractError, "executable"):
+                checker.discover_changes(repo, base, "HEAD")
+
+    def test_untracked_case_collision_with_unchanged_head_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            (repo / "readme.md").write_text("collision\n")
+            with self.assertRaisesRegex(checker.ContractError, "collide"):
+                checker.discover_changes(repo, base, "HEAD")
+
+    def test_staged_dirty_and_untracked_paths_are_aggregated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            (repo / "staged.txt").write_text("staged\n")
+            self.git(repo, "add", "staged.txt")
+            (repo / "README.md").write_text("dirty\n")
+            (repo / "untracked.txt").write_text("untracked\n")
+            changed = set(checker.discover_changes(repo, base, "HEAD"))
+            self.assertTrue({b"staged.txt", b"README.md", b"untracked.txt"} <= changed)
+
+    def test_grandfather_scope_rejects_foreign_path(self) -> None:
+        raw = b"""# Chunk Contract: WS-OLD-001-01 -- Legacy
+
+## Risk class
+
+L1
+
+## Start phase
+
+`implementation`
+
+## Allowed files
+
+```text
+allowed.txt
+```
+"""
+        start = checker.SignedStart(
+            0, "WS-OLD-001", "WS-OLD-001-01", "implementation",
+            "a" * 40, "legacy.md", "b" * 40,
+        )
+        scope = checker.legacy_scope_from_signed_blob(raw, start)
+        with self.assertRaisesRegex(checker.ContractError, "outside allowed scope"):
+            checker.enforce_scope(scope, [b"foreign.txt"])
+
+    def test_rename_checks_source_and_destination_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            self.git(repo, "mv", "README.md", "allowed.md")
+            with self.assertRaisesRegex(checker.ContractError, "outside allowed scope"):
+                checker.enforce_scope(
+                    self.scope("allowed.md"), checker.discover_changes(repo, base, "HEAD")
+                )
+
+    def test_copy_checks_source_and_destination_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            (repo / "allowed.md").write_bytes((repo / "README.md").read_bytes())
+            self.git(repo, "add", "allowed.md")
+            changed = checker.discover_changes(repo, base, "HEAD")
+            self.assertIn(b"README.md", changed, "copy source must be present")
+            with self.assertRaisesRegex(checker.ContractError, "outside allowed scope"):
+                checker.enforce_scope(self.scope("allowed.md"), changed)
+
+    def test_staged_executable_symlink_and_gitlink_are_rejected(self) -> None:
+        for mode in ("executable", "symlink", "gitlink"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                repo, base = self.repo(directory)
+                if mode == "executable":
+                    path = repo / "mode-path"
+                    path.write_text("tool\n")
+                    path.chmod(0o755)
+                    self.git(repo, "add", "mode-path")
+                elif mode == "symlink":
+                    (repo / "mode-path").symlink_to("README.md")
+                    self.git(repo, "add", "mode-path")
+                else:
+                    commit = self.git(repo, "rev-parse", "HEAD").decode()
+                    self.git(repo, "update-index", "--add", "--cacheinfo", f"160000,{commit},mode-path")
+                with self.assertRaisesRegex(checker.ContractError, mode):
+                    checker.discover_changes(repo, base, "HEAD")
+
+    def test_staged_type_change_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo, base = self.repo(directory)
+            (repo / "README.md").unlink()
+            (repo / "README.md").symlink_to("missing")
+            self.git(repo, "add", "README.md")
+            with self.assertRaises(checker.ContractError):
+                checker.discover_changes(repo, base, "HEAD")
+
+    def test_git_permitted_invalid_utf8_and_non_nfc_names_are_rejected(self) -> None:
+        for raw_name in (b"bad-\xff", "cafe\u0301".encode("utf-8")):
+            with self.subTest(raw_name=raw_name), tempfile.TemporaryDirectory() as directory:
+                repo, base = self.repo(directory)
+                descriptor = os.open(os.fsencode(repo), os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    file_descriptor = os.open(
+                        raw_name, os.O_WRONLY | os.O_CREAT, 0o644, dir_fd=descriptor
+                    )
+                    os.write(file_descriptor, b"bad\n")
+                    os.close(file_descriptor)
+                finally:
+                    os.close(descriptor)
+                with self.assertRaises(checker.ContractError):
+                    checker.discover_changes(repo, base, "HEAD")
 
 
 if __name__ == "__main__":

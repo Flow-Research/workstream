@@ -30,6 +30,10 @@ L0 / L1 / L2 / L3 / L4
 
 P0 / P1 / P2 / P3
 
+## Start phase
+
+`implementation` / `specification`
+
 ## Machine-checkable scope
 
 Every implementation or specification contract admitted after the

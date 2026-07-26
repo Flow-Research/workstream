@@ -340,13 +340,19 @@ def test_machine_scope_binds_reviewer_routing_and_verification_evidence() -> Non
         tracks,
         ("chunk-scope-tests", "git-diff-check"),
     )
-    valid = (
-        "verification command ids: `chunk-scope-tests`, `git-diff-check`\n"
-    )
+    valid = """## commands run
+
+```bash
+python3 scripts/test_check_chunk_contract.py
+git diff --check origin/main...head
+```
+"""
     assert gate.validate_machine_evidence(valid, contract, tracks) == []
-    assert "verification command ids disagree with machine contract" in (
+    assert "commands run do not prove every machine verification id" in (
         gate.validate_machine_evidence(
-            "verification command ids: `chunk-scope-tests`\n", contract, tracks
+            "## commands run\n\n```bash\npython3 scripts/test_check_chunk_contract.py\n```\n",
+            contract,
+            tracks,
         )
     )
     assert "machine required_reviewers disagree with evidence routing" in (
@@ -6495,13 +6501,25 @@ def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
     workflow = (ROOT / ".github/workflows/agent-gates.yml").read_text(
         encoding="utf-8"
     )
-    command = "python3 scripts/check_chunk_contract.py"
     state_refspec = (
         "+refs/heads/automation/loop-memory:"
         "refs/remotes/origin/automation/loop-memory"
     )
-    assert workflow.count(command) == 1
     assert workflow.count(state_refspec) == 1
+    for script in (
+        "check_chunk_contract.py",
+        "update_post_merge_memory.py",
+        "check_loop_memory_state.py",
+    ):
+        assert script in workflow
+    assert 'git show "origin/${BASE_REF}:scripts/${script}"' in workflow
+    assert 'python3 "${trusted_checker}"' in workflow
+    assert 'PYTHONPATH="${trusted_scope_dir}"' in workflow
+    assert (
+        '! git cat-file -e "origin/${BASE_REF}:'
+        '.agent-loop/merge-intents/WS-ENG-008-01.json"'
+    ) in workflow
+    assert 'cp "scripts/${script}" "${trusted_scope_dir}/${script}"' in workflow
     assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
     assert "--state-ref origin/automation/loop-memory" in workflow
     assert "continue-on-error" not in workflow
@@ -7676,6 +7694,7 @@ def main() -> int:
     tests = [
         test_required_tracks_expand_for_loop_and_ci_paths,
         test_backend_config_paths_require_review_evidence,
+        test_machine_scope_binds_reviewer_routing_and_verification_evidence,
         test_review_evidence_files_are_not_relevant_changes,
         test_evidence_requires_completed_yes_statements,
         test_evidence_must_reference_changed_chunk,

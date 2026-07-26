@@ -10,7 +10,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from check_chunk_contract import ContractError, ScopeContract, parse_contract_bytes
+from check_chunk_contract import (
+    VERIFICATION_COMMANDS,
+    ContractError,
+    ScopeContract,
+    parse_contract_bytes,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,9 +95,6 @@ PROVENANCE_PLACEHOLDER_FRAGMENTS = (
     "agent ids",
     "ci run ids",
     "local reviewer run references",
-)
-VERIFICATION_IDS_PATTERN = re.compile(
-    r"^verification command ids:[ \t]*(.+)$", re.IGNORECASE | re.MULTILINE
 )
 
 
@@ -541,19 +543,25 @@ def validate_machine_evidence(
     failures: list[str] = []
     if set(contract.required_reviewers) != set(required_tracks):
         failures.append("machine required_reviewers disagree with evidence routing")
-    match = VERIFICATION_IDS_PATTERN.search(text)
-    if not match:
-        failures.append("verification command ids")
-    else:
-        observed = tuple(
-            item.strip().strip("`").lower()
-            for item in match.group(1).split(",")
-            if item.strip()
-        )
-        if len(observed) != len(set(observed)) or set(observed) != set(
-            contract.verification_commands
-        ):
-            failures.append("verification command ids disagree with machine contract")
+    commands_section = re.search(
+        r"^## commands run\n(?P<body>.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL
+    )
+    command_block = (
+        re.search(r"```bash\n(?P<body>.*?)```", commands_section.group("body"), re.DOTALL)
+        if commands_section
+        else None
+    )
+    observed = {
+        line.strip()
+        for line in command_block.group("body").splitlines()
+        if line.strip()
+    } if command_block else set()
+    expected = {
+        VERIFICATION_COMMANDS[identifier].lower()
+        for identifier in contract.verification_commands
+    }
+    if not expected.issubset(observed):
+        failures.append("commands run do not prove every machine verification id")
     return failures
 
 
