@@ -118,6 +118,7 @@ ROOT_RECOVERY_CODE = "exact-root-gate-repair-v1"
 ROOT_RECOVERY_CERTIFICATE_SHA256 = "32f75b9709e6b09b30e672cc9889a8754dad1428e0b57e06d6bd237ae6476e40"
 ROOT_RECONCILE_CHUNK_ID = "WS-ENG-ROOT-001-02"
 ROOT_RECONCILE_MERGE_SHA = "ce512bdb6ae47e94ae8067845531cacfc3378a85"
+ROOT_RECONCILE_PR_NUMBER = 205
 ROOT_RECONCILE_REASON = "root-recovery-reconciliation-circularity"
 ROOT_RECONCILE_CODE = "exact-root-reconcile-repair-v1"
 ROOT_RECONCILE_CERTIFICATE_SHA256 = "f7fbd8bca3ba731c1a6c51c953533906a92cd8ad719dadee88ef763a1f70cf56"
@@ -901,7 +902,8 @@ def _record_failures(
                 parent = ROOT_RECOVERY_SIGNED_BASIS if recovered else ROOT_RECONCILE_MERGE_SHA
                 expected_recovery = {
                     "merge_sha": source.get("main_sha"), "head_sha": source.get("head_sha"),
-                    "chunk_id": chunk, "pr_number": source.get("pr_number"),
+                    "chunk_id": chunk,
+                    "pr_number": ROOT_RECONCILE_PR_NUMBER if recovered else source.get("pr_number"),
                     "policy_schema": 8, "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
                     "activation_chunk_id": ROOT_RECONCILE_CHUNK_ID,
                     "certificate_sha256": ROOT_RECONCILE_CERTIFICATE_SHA256,

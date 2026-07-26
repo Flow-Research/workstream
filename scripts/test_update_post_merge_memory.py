@@ -2165,6 +2165,92 @@ def test_shared_reconcile_preserves_root_recovery_policy_during_collection(
     assert calls == [policy, policy]
 
 
+def _root_reconcile_record(*, recovered: bool, pr_number: int = 205) -> dict:
+    record = _merge_bound_record()
+    chunk = loop.ROOT_RECOVERY_CHUNK_ID if recovered else loop.ROOT_RECONCILE_CHUNK_ID
+    main = loop.ROOT_RECONCILE_MERGE_SHA if recovered else "f" * 40
+    parent = loop.ROOT_RECOVERY_SIGNED_BASIS if recovered else loop.ROOT_RECONCILE_MERGE_SHA
+    record["source"].update(
+        main_sha=main, first_parent_sha=parent, head_sha=("4" if recovered else "5") * 40,
+        pr_number=pr_number, pr_url=f"https://github.com/Flow-Research/workstream/pull/{pr_number}",
+        intent_path=f".agent-loop/merge-intents/{chunk}.json",
+    )
+    record["completed_chunk"].update(
+        initiative_id=loop.ROOT_RECOVERY_INITIATIVE_ID, chunk_id=chunk,
+        chunk_title=chunk, next_chunk_id=None, next_chunk_title=None,
+    )
+    record["gate"].update(next_chunk_id=None, next_chunk_title=None)
+    evidence = {
+        "merge_sha": main, "head_sha": record["source"]["head_sha"],
+        "chunk_id": chunk, "pr_number": pr_number, "policy_schema": 8,
+        "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation_chunk_id": loop.ROOT_RECONCILE_CHUNK_ID,
+        "certificate_sha256": loop.ROOT_RECONCILE_CERTIFICATE_SHA256,
+        "reason": loop.ROOT_RECONCILE_REASON, "code": loop.ROOT_RECONCILE_CODE,
+    }
+    record["protected_checks"] = {
+        "schema_version": 1, "recovery_only": evidence,
+        "sha256": loop.hashlib.sha256(loop._canonical_json(evidence).encode()).hexdigest(),
+    }
+    return record
+
+
+def test_schema_v8_records_validate_and_pin_recovered_pr_number() -> None:
+    recovered = _root_reconcile_record(recovered=True)
+    activation = _root_reconcile_record(recovered=False, pr_number=206)
+    assert loop._validate_record(recovered).chunk_id == loop.ROOT_RECOVERY_CHUNK_ID
+    assert loop._validate_record(activation).chunk_id == loop.ROOT_RECONCILE_CHUNK_ID
+    assert not checker._record_failures(recovered, "recovered", None)
+    assert not checker._record_failures(activation, "activation", None)
+    mutated = _root_reconcile_record(recovered=True, pr_number=999)
+    with pytest.raises(loop.LoopMemoryError, match="root reconciliation evidence"):
+        loop._validate_record(mutated)
+    assert any("root reconciliation evidence" in failure for failure in checker._record_failures(mutated, "mutated", None))
+
+
+def test_prepare_schema_v8_consumes_exact_adjacent_pair_and_rejects_mutations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state_root = tmp_path / "state"
+    base = _record(); base["source"]["main_sha"] = loop.ROOT_RECOVERY_SIGNED_BASIS
+    loop.apply_merge_record(state_root, base)
+    recovered = _root_reconcile_record(recovered=True)
+    activation = _root_reconcile_record(recovered=False, pr_number=206)
+    policy = {
+        "schema_version": 8, "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation": {"initiative_id": loop.ROOT_RECOVERY_INITIATIVE_ID, "chunk_id": loop.ROOT_RECONCILE_CHUNK_ID},
+        "recovered_merges": [{"initiative_id": loop.ROOT_RECOVERY_INITIATIVE_ID, "chunk_id": loop.ROOT_RECOVERY_CHUNK_ID, "pr_number": 205, "merge_sha": loop.ROOT_RECONCILE_MERGE_SHA}],
+    }
+    monkeypatch.setattr(loop, "_load_json_at_commit", lambda *_args: policy)
+    monkeypatch.setattr(loop, "collect_merge_record", lambda _c, _r, sha, **_kw: recovered if sha == loop.ROOT_RECONCILE_MERGE_SHA else activation)
+    planned = [loop.ROOT_RECONCILE_MERGE_SHA, "f" * 40]
+    exemptions = loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40, planned_shas=planned)
+    assert [item["chunk_id"] for item in exemptions] == [loop.ROOT_RECOVERY_CHUNK_ID, loop.ROOT_RECONCILE_CHUNK_ID]
+    for wrong in (["f" * 40], ["f" * 40, loop.ROOT_RECONCILE_MERGE_SHA]):
+        with pytest.raises(loop.LoopMemoryError, match="plan is not exact"):
+            loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40, planned_shas=wrong)
+    wrong_basis_root = tmp_path / "wrong-basis"
+    wrong_base = _record(); wrong_base["source"]["main_sha"] = "a" * 40
+    loop.apply_merge_record(wrong_basis_root, wrong_base)
+    with pytest.raises(loop.LoopMemoryError, match="signed basis"):
+        loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=wrong_basis_root, target_sha="f" * 40, planned_shas=planned)
+    wrong_parent = json.loads(json.dumps(recovered)); wrong_parent["source"]["first_parent_sha"] = "a" * 40
+    monkeypatch.setattr(loop, "collect_merge_record", lambda _c, _r, sha, **_kw: wrong_parent if sha == loop.ROOT_RECONCILE_MERGE_SHA else activation)
+    with pytest.raises(loop.LoopMemoryError, match="first-parent adjacent"):
+        loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40, planned_shas=planned)
+    wrong_evidence = json.loads(json.dumps(recovered)); wrong_evidence["protected_checks"]["recovery_only"]["policy_schema"] = 7
+    monkeypatch.setattr(loop, "collect_merge_record", lambda _c, _r, sha, **_kw: wrong_evidence if sha == loop.ROOT_RECONCILE_MERGE_SHA else activation)
+    with pytest.raises(loop.LoopMemoryError, match="protected evidence"):
+        loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40, planned_shas=planned)
+    wrong_identity = _root_reconcile_record(recovered=True, pr_number=999)
+    monkeypatch.setattr(loop, "collect_merge_record", lambda _c, _r, sha, **_kw: wrong_identity if sha == loop.ROOT_RECONCILE_MERGE_SHA else activation)
+    with pytest.raises(loop.LoopMemoryError, match="recovered merge is not exact"):
+        loop.prepare_recovery_exemptions(object(), "Flow-Research/workstream", repository_root=tmp_path, state_root=state_root, target_sha="f" * 40, planned_shas=planned)
+    bad = json.loads(json.dumps(policy)); bad["recovered_merges"][0]["pr_number"] = 999
+    with pytest.raises(loop.LoopMemoryError, match="certificate is not exact"):
+        loop._validate_recovery_policy(bad)
+
+
 def test_merge_bound_evidence_is_mandatory_after_cutover_in_both_validators() -> None:
     record = _record()
     record["source"]["merged_at"] = "2026-07-23T05:11:46Z"

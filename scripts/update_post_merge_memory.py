@@ -2193,7 +2193,8 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
             expected_parent = ROOT_RECOVERY_SIGNED_BASIS if recovered else ROOT_RECONCILE_MERGE_SHA
             expected = {
                 "merge_sha": source["main_sha"], "head_sha": source["head_sha"],
-                "chunk_id": expected_chunk, "pr_number": source["pr_number"],
+                "chunk_id": expected_chunk,
+                "pr_number": ROOT_RECONCILE_PR_NUMBER if recovered else source["pr_number"],
                 "policy_schema": 8, "signed_basis": ROOT_RECOVERY_SIGNED_BASIS,
                 "activation_chunk_id": ROOT_RECONCILE_CHUNK_ID,
                 "certificate_sha256": ROOT_RECONCILE_CERTIFICATE_SHA256,
