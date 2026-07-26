@@ -10,9 +10,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: f3eab24ecac32f959933369c1b5342bc901c7153
+Reviewed code SHA: 7a22070fe66770fc229671421ab0a899c9b2c97d
 
-Reviewed at: 2026-07-26T00:19:17Z
+Reviewed at: 2026-07-26T00:27:00Z
 
 After the reviewed SHA, only this evidence and trust reconciliation changed.
 
@@ -40,7 +40,10 @@ The first review pass found stale evidence wording and a missing exact
 cross-initiative recovery proof. The repair models signed-active AUTH-11,
 ART PLAN2 recovery, AUTH-11 completion, and ENG R6 while proving all successors
 remain stopped. The final pass resolved a cardinality wording ambiguity. All
-reviewers passed exact SHA `f3eab24ecac32f959933369c1b5342bc901c7153`.
+reviewers passed recovery code SHA `f3eab24ecac32f959933369c1b5342bc901c7153`.
+All tracks then reviewed the CodeRabbit disposition and durable review-log
+delta at exact SHA `7a22070fe66770fc229671421ab0a899c9b2c97d`;
+no authority, code, test, CI, or product behavior changed in that delta.
 
 ## Commands Run
 

@@ -14,12 +14,14 @@ granting ART, CI, AUTH, ENG, or product implementation authority.
   `f670b7058c71ad4d11a68c6e242e9fe501ae3aaf`.
 - Activation: only `WS-ENG-007-00R6` as the direct-next main merge.
 - Successors remain stopped: ART at `WS-ART-001-03A`, AUTH at
-  `WS-AUTH-001-11A`, and ENG at `WS-ENG-007-01`; CI-03 still requires its own
-  signed planning start.
+  `WS-AUTH-001-11A`, and ENG at `WS-ENG-007-01`; `WS-CI-001-03` still requires
+  its own signed planning start.
 
 ## Reviewed Revision
 
-`f3eab24ecac32f959933369c1b5342bc901c7153`
+`7a22070fe66770fc229671421ab0a899c9b2c97d`
+
+Recovery code revision: `f3eab24ecac32f959933369c1b5342bc901c7153`.
 
 ## Evidence
 
