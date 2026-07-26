@@ -10,9 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-008-01.json` at blob `3a17b85c533493b313a2bd6f8dd6ebda67faf7a4`
 - Completed chunk: `WS-ENG-008-01` - Machine-Checkable Chunk Scope
 - Active planning chunks: none
-- Active implementation chunks: `WS-ART-001-03A`, `WS-AUTH-001-11A`, `WS-ENG-008-02`, `WS-REV-001-03P`
-- Latest authority event: `start` for `WS-ENG-008-02`
-- Authority initiative: `WS-ENG-008`
+- Active implementation chunks: `WS-ART-001-03A`, `WS-ENG-008-02`, `WS-REV-001-03P`
+- Latest authority event: `cancel` for `WS-AUTH-001-11A`
+- Authority initiative: `WS-AUTH-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-ENG-008-02` - Scheduled Signed-State Drift Audit; requires a separate explicit start.
 - Required check evidence: passed

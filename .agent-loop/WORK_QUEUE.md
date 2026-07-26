@@ -5,7 +5,7 @@
 | Initiative | Latest completed chunk | Gate | Next chunk | Explicit start |
 |---|---|---|---|---|
 | `WS-ART-001` | `WS-ART-001-PLAN2` | `active` | `WS-ART-001-03A` | yes |
-| `WS-AUTH-001` | `WS-AUTH-001-11` | `active` | `WS-AUTH-001-11A` | yes |
+| `WS-AUTH-001` | `WS-AUTH-001-11` | `stopped_after_cancel` | `WS-AUTH-001-11A` | yes |
 | `WS-AUTH-002` | `WS-AUTH-002-01` | `stopped_after_merge` | `none` | yes |
 | `WS-CI-001` | `WS-CI-001-02B` | `stopped_after_merge` | `none` | yes |
 | `WS-CON-001` | `WS-CON-001-02A` | `stopped_after_merge` | `WS-CON-001-02B` | yes |

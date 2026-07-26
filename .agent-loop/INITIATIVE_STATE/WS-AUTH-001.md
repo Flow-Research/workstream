@@ -4,9 +4,9 @@
 
 - Initiative: `WS-AUTH-001`
 - Latest completed chunk: `WS-AUTH-001-11` - Project Read Cutover Planning Parent
-- Gate: `active`
+- Gate: `stopped_after_cancel`
 - Active planning chunk: `none`
-- Active implementation chunk: `WS-AUTH-001-11A`
+- Active implementation chunk: `none`
 - Next chunk: `WS-AUTH-001-11A`
 - Separate explicit start required: `true`
 - Source PR: [#201](https://github.com/Flow-Research/workstream/pull/201)
