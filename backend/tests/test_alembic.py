@@ -1707,12 +1707,18 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
     """A committed 11A audit row must block removal of its frozen vocabulary."""
     config = _alembic_config()
     definition = next(item for item in ACTION_DEFINITIONS if item.owner is ActionOwner.AUTH_11B)
-    values = _action_evidence_values(definition.action_id.value, definition.permission_id.value)
+    event_id = ""
     with migration_lock():
         try:
             command.downgrade(config, "base")
             command.upgrade(config, "head")
-            asyncio.run(_insert_committed_action_evidence(isolated_database_env, values=values))
+            event_id = asyncio.run(
+                _insert_authorization_action_event_for(
+                    isolated_database_env,
+                    definition.action_id.value,
+                    definition.permission_id.value,
+                )
+            )
             with pytest.raises(
                 RuntimeError, match="cannot downgrade non-empty project-read action evidence"
             ):
@@ -1722,7 +1728,7 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
             )
         finally:
             asyncio.run(
-                _remove_authority_audit_fixture(isolated_database_env, event_id=str(values["id"]))
+                _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
             )
             command.downgrade(config, "base")
 
@@ -7646,17 +7652,6 @@ def _action_evidence_values(action_id: str | None, permission_id: str) -> dict[s
         "permission_id": permission_id,
         "action_id": action_id,
     }
-
-
-async def _insert_committed_action_evidence(
-    database_url: str, *, values: dict[str, str | None]
-) -> None:
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.begin() as connection:
-            await connection.execute(_ACTION_EVIDENCE_INSERT, values)
-    finally:
-        await engine.dispose()
 
 
 async def _authorization_action_schema(database_url: str) -> dict[str, object]:
