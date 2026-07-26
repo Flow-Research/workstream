@@ -416,6 +416,22 @@ def _planning_tree_failures(
         or after[0] != intake.get("merge_tree_sha")
     ):
         return [f"{label}: planning intake tree identity is invalid"]
+    initiative = source.get("intent_path", "").removeprefix(
+        ".agent-loop/merge-intents/"
+    ).removesuffix("-PLAN.json")
+    prefixes = (
+        f".agent-loop/initiatives/{initiative}/",
+        f".agent-loop/initiatives/{initiative}-",
+    )
+    base = _git_tree(repository_root, intake.get("base_tree_sha"))
+    if base is None:
+        return [f"{label}: planning intake reviewed base tree is unavailable"]
+    if any(
+        path.startswith(prefixes)
+        for entries in (base[1], before[1])
+        for path in entries
+    ):
+        return [f"{label}: planning intake initiative tree already exists"]
     delta = {
         path: after[1].get(path)
         for path in sorted(set(before[1]) | set(after[1]))
@@ -858,7 +874,18 @@ def _record_failures(
                     "certificate_sha256": ROOT_RECOVERY_CERTIFICATE_SHA256,
                     "reason": ROOT_RECOVERY_REASON, "code": ROOT_RECOVERY_CODE,
                 }
-                if recovery != expected_recovery or protected.get("sha256") != hashlib.sha256(json.dumps(expected_recovery, sort_keys=True, separators=(",", ":")).encode()).hexdigest():
+                completed = record.get("completed_chunk")
+                if (
+                    recovery != expected_recovery
+                    or protected.get("sha256") != hashlib.sha256(json.dumps(expected_recovery, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                    or not isinstance(completed, dict)
+                    or completed.get("initiative_id") != "WS-ENG-ROOT-001"
+                    or completed.get("chunk_id") != ROOT_RECOVERY_CHUNK_ID
+                    or completed.get("next_chunk_id") is not None
+                    or completed.get("next_chunk_title") is not None
+                    or source.get("intent_path") != f".agent-loop/merge-intents/{ROOT_RECOVERY_CHUNK_ID}.json"
+                    or source.get("first_parent_sha") != ROOT_RECOVERY_SIGNED_BASIS
+                ):
                     failures.append(f"{label}: invalid root recovery evidence")
             else:
                 expected_recovery = {"merge_sha": "d3321698fb856f3fac320cdc7bc598f813fe1953", "head_sha": R3_HISTORICAL_HEAD_SHA, "chunk_id": "WS-ENG-007-00R2", "pr_number": 189, "policy_schema": 4, "signed_basis": "73b457925b02301587b83d01ced0adb66319d134", "activation_chunk_id": "WS-ENG-007-00R3", "certificate_sha256": R3_RECOVERY_CERTIFICATE_SHA256, "reason": "no-completed-pre-merge-agent-gates"}

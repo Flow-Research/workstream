@@ -501,6 +501,57 @@ def _root_recovery_policy_v7() -> dict:
     }
 
 
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".agent-loop/initiatives/WS-NEW-001/STATUS.md",
+        ".agent-loop/initiatives/WS-NEW-001-existing/STATUS.md",
+    ],
+)
+def test_planning_intake_rejects_exact_or_prefixed_existing_tree(path: str) -> None:
+    entries = {path: ("100644", "blob", "a" * 40)}
+    assert loop._initiative_tree_exists(entries, "WS-NEW-001")
+    assert not loop._initiative_tree_exists(entries, "WS-OTHER-001")
+
+
+@pytest.mark.parametrize("mutation", ["initiative", "parent"])
+def test_root_recovery_record_binds_identity_and_signed_parent(mutation: str) -> None:
+    record = _merge_record(
+        loop.ROOT_RECOVERY_INITIATIVE_ID,
+        loop.ROOT_RECOVERY_CHUNK_ID,
+        999,
+        "f" * 40,
+        loop.ROOT_RECOVERY_SIGNED_BASIS,
+    )
+    recovery = {
+        "merge_sha": record["source"]["main_sha"],
+        "head_sha": record["source"]["head_sha"],
+        "chunk_id": loop.ROOT_RECOVERY_CHUNK_ID,
+        "pr_number": 999,
+        "policy_schema": 7,
+        "signed_basis": loop.ROOT_RECOVERY_SIGNED_BASIS,
+        "activation_chunk_id": loop.ROOT_RECOVERY_CHUNK_ID,
+        "certificate_sha256": loop.ROOT_RECOVERY_CERTIFICATE_SHA256,
+        "reason": loop.ROOT_RECOVERY_REASON,
+        "code": loop.ROOT_RECOVERY_CODE,
+    }
+    record["protected_checks"] = {
+        "schema_version": 1,
+        "recovery_only": recovery,
+        "sha256": loop.hashlib.sha256(
+            loop._canonical_json(recovery).encode()
+        ).hexdigest(),
+    }
+    if mutation == "initiative":
+        record["completed_chunk"]["initiative_id"] = "WS-OTHER-001"
+        record["completed_chunk"]["chunk_id"] = "WS-OTHER-001-01"
+        record["source"]["intent_path"] = ".agent-loop/merge-intents/WS-OTHER-001-01.json"
+    else:
+        record["source"]["first_parent_sha"] = "a" * 40
+    with pytest.raises(loop.LoopMemoryError, match="root recovery evidence"):
+        loop._validate_record(record)
+
+
 def test_root_recovery_v7_is_exact_one_use_and_check_independent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1023,6 +1023,17 @@ def _planning_chunk_name_matches(filename: str, initiative_id: str) -> bool:
     return bool(pattern.fullmatch(filename))
 
 
+def _initiative_tree_exists(
+    entries: dict[str, tuple[str, str, str]], initiative_id: str
+) -> bool:
+    """Return whether a canonical exact or slugged initiative tree exists."""
+    prefixes = (
+        f"{CHUNK_CONTRACT_ROOT}{initiative_id}/",
+        f"{CHUNK_CONTRACT_ROOT}{initiative_id}-",
+    )
+    return any(path.startswith(prefixes) for path in entries)
+
+
 def _collect_planning_intake(
     client: GitHubClient,
     repository: str,
@@ -1139,6 +1150,11 @@ def _collect_planning_intake(
         client, repository, first_parent_tree, "first parent"
     )
     merge_entries = _tree_entries(client, repository, merge_tree, "merge")
+    if any(
+        _initiative_tree_exists(entries, metadata.initiative_id)
+        for entries in (base_entries, first_parent_entries)
+    ):
+        raise LoopMemoryError("planning intake initiative tree already exists")
     reviewed_delta = _tree_delta(base_entries, head_entries)
     merged_delta = _tree_delta(first_parent_entries, merge_entries)
     if reviewed_delta != merged_delta or sorted(reviewed_delta) != sorted(changed_paths):
@@ -2150,7 +2166,16 @@ def _validate_record(record: dict[str, Any]) -> LoopMetadata:
                 "certificate_sha256": ROOT_RECOVERY_CERTIFICATE_SHA256,
                 "reason": ROOT_RECOVERY_REASON, "code": ROOT_RECOVERY_CODE,
             }
-            if recovery_only != expected or protected.get("sha256") != hashlib.sha256(_canonical_json(expected).encode("utf-8")).hexdigest():
+            if (
+                recovery_only != expected
+                or protected.get("sha256") != hashlib.sha256(_canonical_json(expected).encode("utf-8")).hexdigest()
+                or metadata.initiative_id != ROOT_RECOVERY_INITIATIVE_ID
+                or metadata.chunk_id != ROOT_RECOVERY_CHUNK_ID
+                or metadata.next_chunk_id is not None
+                or metadata.next_chunk_title is not None
+                or source.get("intent_path") != f".agent-loop/merge-intents/{ROOT_RECOVERY_CHUNK_ID}.json"
+                or source.get("first_parent_sha") != ROOT_RECOVERY_SIGNED_BASIS
+            ):
                 raise LoopMemoryError("root recovery evidence is invalid")
             return metadata
         expected = {
