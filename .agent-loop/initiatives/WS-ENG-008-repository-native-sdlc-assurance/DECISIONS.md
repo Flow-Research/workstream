@@ -8,11 +8,11 @@ is not renamed away.
 
 ## D2 — Enforce future contracts without guessing historical intent
 
-Machine scope applies to every implementation/specification contract changed in
-a PR whose base contains the `WS-ENG-008-01` merge intent. Chunk 01 must upgrade
-its already-reviewed ENG-008 successors 02–07 before selecting 02. Unchanged
-pre-cutover contracts are the only grandfather set and remain governed by their
-reviewed evidence and existing gates.
+Machine scope applies to every implementation/specification start whose trusted-
+main basis contains the `WS-ENG-008-01` merge intent. Chunk 01 must upgrade its
+already-reviewed ENG-008 successors 02–07 before selecting 02. Chunks already
+signed-active at cutover are the only grandfather set and remain bound to their
+exact start event, contract blob, reviewed evidence, and existing gates.
 
 ## D3 — Keep scheduled drift verification read-only
 

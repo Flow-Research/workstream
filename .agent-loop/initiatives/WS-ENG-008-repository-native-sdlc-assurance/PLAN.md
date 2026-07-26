@@ -11,11 +11,13 @@ durable review navigation. Each mechanism lands independently and stops.
 
 ### Forward-ratcheted contract scope
 
-Every implementation/specification contract changed in a PR whose base contains
-the `WS-ENG-008-01` merge intent must carry one strict fenced JSON block; there
-is no subjective “material” exception. Chunk 01 also upgrades the already-added
-ENG-008 contracts 02–07 before it may name 02 as successor. Contracts unchanged
-since a pre-cutover base form the immutable grandfather set and are never
+Every implementation/specification start after the `WS-ENG-008-01` merge must
+select a contract carrying one strict fenced JSON block; there is no subjective
+“material” exception. Chunk 01 also upgrades the already-added ENG-008 contracts
+02–07 before it may name 02 as successor. Only chunks already signed-active at
+the cutover may finish under an immutable grandfather record bound to the exact
+pre-cutover start event and contract blob; stopped, proposed, or newly started
+work cannot inherit that exemption. Grandfather records are never
 inferred or mass-rewritten. A dedicated parser validates exact keys, canonical
 repository-relative patterns, reviewer names, and verification commands. JSON
 decoding uses an object-pairs hook (or equivalent) that rejects duplicate object

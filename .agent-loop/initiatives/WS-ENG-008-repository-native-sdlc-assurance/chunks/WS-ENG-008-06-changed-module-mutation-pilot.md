@@ -56,7 +56,7 @@ docs/operations_backend_testing.md
 ```text
 application behavior or production dependency changes
 global or blocking mutation percentage
-replacement, reduction, or bypass of coverage, shards, API E2E, or full-suite aggregation
+replacement, reduction, or bypass of coverage, semantic lanes, API E2E, or full-suite aggregation
 mutation of migrations, generated code, schemas/declarations, adapters, or unowned modules without explicit eligibility
 use of stale QUALITY branches as implementation authority
 unbounded runtime, silent timeout exclusion, or “one mutant killed” success rule
@@ -75,8 +75,8 @@ unbounded runtime, silent timeout exclusion, or “one mutant killed” success 
       missing or malformed evidence fails the pilot job.
 - [ ] Pilot is non-blocking only with respect to score; infrastructure errors,
       malformed evidence, scope escape, or weakened coverage remain blocking.
-- [ ] Existing full suite, API E2E, shards, 78 percent global floor, and protected
-      90 percent floors remain exact and authoritative.
+- [ ] Existing full suite, API E2E, exact-custody semantic lanes, 78 percent
+      global floor, and protected 90 percent floors remain exact and authoritative.
 - [ ] Mutation execution has a hard 12-minute command limit inside a 15-minute
       job limit, records exact-head elapsed time, and runs independently so it
       adds no more than two minutes to the existing required Backend critical

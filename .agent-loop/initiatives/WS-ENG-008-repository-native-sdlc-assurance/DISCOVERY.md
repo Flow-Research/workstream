@@ -31,9 +31,10 @@ reconciliation addendum.
   exists.
 - `scripts/agent-gate-requirements.txt` and `backend/pyproject.toml` contain no
   Hypothesis or mutation-testing dependency.
-- Backend CI fans out four isolated shards, recombines exact artifacts, and
-  blocks at 78 percent global coverage plus multiple 90 percent protected
-  subsystem floors.
+- At original discovery, Backend CI fanned out four isolated shards and
+  recombined exact artifacts. Final reconciliation records the replacement
+  four exact-custody semantic lanes. Both designs preserve the 78 percent global
+  coverage floor plus multiple 90 percent protected subsystem floors.
 - `.agent-loop/REVIEW_LOG.md` is 147,017 bytes and 2,846 lines. Detailed review
   evidence also lives under initiative `reviews/` directories.
 
@@ -70,6 +71,10 @@ reconciliation addendum.
 | `WS-QUAL-001` | absent from signed state | Dormant patches remain discovery input only. |
 | `WS-ENG-008` | absent from signed history | This additive planning intake may create only stopped PLAN state. |
 
+Current Backend CI uses four exact-custody semantic lanes with one combined
+coverage result. The earlier four-shard topology remains historical discovery
+context only and is not a protected future contract boundary.
+
 ## Existing tests and gaps
 
 - Agent Gate tests strongly cover merge intent, evidence, workflow pinning,
@@ -99,7 +104,7 @@ reconciliation addendum.
 | Risk | Impact | Required treatment |
 |---|---|---|
 | Glob semantics differ across platforms | Scope bypass or false rejection | Define one closed repository-relative grammar and test traversal, symlink, rename, and case behavior. |
-| Legacy contracts lack schemas | Immediate repository-wide failure | Exact cutover: every changed contract after the 01 merge requires schema; unchanged pre-cutover contracts alone are grandfathered. |
+| Legacy contracts lack schemas | Immediate repository-wide failure | Exact cutover: every post-cutover start requires schema; only work already signed-active at cutover may finish under its exact pre-cutover event and contract blob. |
 | Git permits control and normalization-colliding path bytes | Line/display parsing can conceal a delta | Parse NUL-delimited bytes, reject invalid UTF-8/control/non-NFC names and normalization/casefold collisions. |
 | Scheduled audit becomes a repair path | Unreviewed signed-state mutation | Read-only permissions, no signing key, no publication command, regression-test workflow semantics. |
 | Property suites are nondeterministic | Flaky required CI | Fixed profiles, stored counterexample text in evidence, bounded examples/deadlines, rerunnable seeds. |

@@ -40,9 +40,10 @@ After the reviewed SHA, only evidence and status files changed.
 
 ## Valid Findings Addressed
 
-- Replaced subjective “materially changed” scope with an exact cutover: every
-  contract changed when its PR base contains the 01 merge intent requires schema;
-  only unchanged pre-cutover contracts are grandfathered.
+- Replaced subjective “materially changed” scope with an exact start cutover:
+  every post-cutover implementation/specification start requires schema; only
+  chunks already signed-active at cutover are grandfathered, bound to their
+  exact start event and contract blob.
 - Required chunk 01 to convert and validate ENG-008 contracts 02–07 before it
   may name chunk 02, closing the initiative's self-exemption gap.
 - Required byte-preserving NUL-delimited Git parsing, strict UTF-8 and NFC,

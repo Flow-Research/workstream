@@ -31,9 +31,10 @@ unbounded tests or creating a second authority path.
 
 ## Target behavior
 
-- Every implementation/specification contract changed in a PR whose base
-  contains the `WS-ENG-008-01` merge intent carries a strict versioned scope
-  block; only unchanged pre-cutover contracts are grandfathered.
+- Every implementation/specification start after the `WS-ENG-008-01` cutover
+  selects a strict versioned scope contract. Grandfathering is limited to work
+  already signed-active at cutover and bound to its pre-cutover event and
+  immutable contract blob.
 - A read-only schedule verifies signed-state custody, ancestry, ledger,
   projections, active contracts, and closed-tree integrity without repairing.
 - High-risk work records attacks attempted, observed denials, findings, and
