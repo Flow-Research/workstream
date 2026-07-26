@@ -94,7 +94,7 @@ class AdminRoleGrantService:
                 PermissionDefinitionResponse(permission_id=permission)
                 for permission in sorted(PermissionId, key=lambda value: value.value)
             ),
-            total=74,
+            total=len(PermissionId),
         )
 
     @staticmethod

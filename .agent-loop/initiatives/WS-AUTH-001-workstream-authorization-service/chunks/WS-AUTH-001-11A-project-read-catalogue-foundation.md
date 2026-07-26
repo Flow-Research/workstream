@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed and inactive. Requires a separate signed explicit start.
+Active for implementation. Signed automation run `30191914627` activated this
+exact child on protected main `bd2203d5`. Chat and local branch state are not
+authority; the signed automation projection is the canonical start proof.
 
 ## Goal
 
@@ -20,7 +22,9 @@ backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/alembic/versions/0035_project_read_action_evidence.py
 backend/tests/test_authorization.py
+backend/tests/test_auth.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
 docs/spec_authorization_service.md

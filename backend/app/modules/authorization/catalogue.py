@@ -28,6 +28,8 @@ class PermissionId(StrEnum):
     ADMIN_ROLE_REVOKE = "admin_role.revoke"
     PROJECT_CREATE = "project.create"
     PROJECT_READ = "project.read"
+    PROJECT_SETUP_DIAGNOSTIC_READ = "project.setup_diagnostic.read"
+    PROJECT_EFFECTIVE_POLICY_READ = "project.effective_policy.read"
     PROJECT_UPDATE = "project.update"
     PROJECT_ARCHIVE = "project.archive"
     PROJECT_GUIDE_MANAGE = "project.guide.manage"
@@ -115,6 +117,19 @@ class ActionId(StrEnum):
     PROJECT_ROLE_GRANT_READ = "project_role_grant.read"
     PROJECT_ROLE_GRANT_ISSUE = "project_role_grant.issue"
     PROJECT_ROLE_GRANT_REVOKE = "project_role_grant.revoke"
+    PROJECT_READ = "project.read"
+    ACTOR_AUTHORIZATION_CONTEXT_READ = "actor.authorization_context.read"
+    PROJECT_SETUP_RUN_READ = "project.setup_run.read"
+    PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST = "project.guide_sufficiency_report.list"
+    PROJECT_GUIDE_SUFFICIENCY_REPORT_READ = "project.guide_sufficiency_report.read"
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST = "project.submission_artifact_policy.list"
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_READ = "project.submission_artifact_policy.read"
+    PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ = "project.post_submit_checker_policy_setup.read"
+    PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ = (
+        "project.effective_submission_artifact_policy.read"
+    )
+    PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ = "project.pre_submit_checker_policy.read"
+    PROJECT_ACTIVE_GUIDE_READ = "project.active_guide.read"
     OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
@@ -179,6 +194,9 @@ class ActionOwner(StrEnum):
     AUTH_09D_B = "WS-AUTH-001-09D-B"
     AUTH_10B = "WS-AUTH-001-10B"
     AUTH_10C = "WS-AUTH-001-10C"
+    AUTH_11B = "WS-AUTH-001-11B"
+    AUTH_11C1 = "WS-AUTH-001-11C1"
+    AUTH_11C2 = "WS-AUTH-001-11C2"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     AUTH_REV_05 = "WS-AUTH-001-REV-05"
@@ -340,6 +358,57 @@ ACTION_DEFINITIONS = (
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
         PermissionId.PROJECT_ROLE_GRANT_MANAGE,
         ActionOwner.AUTH_10C,
+    ),
+    _planned(ActionId.PROJECT_READ, PermissionId.PROJECT_READ, ActionOwner.AUTH_11B),
+    _planned(
+        ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+        PermissionId.ACTOR_PROFILE_READ_SELF,
+        ActionOwner.AUTH_11B,
+    ),
+    _planned(
+        ActionId.PROJECT_SETUP_RUN_READ,
+        PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        ActionOwner.AUTH_11C1,
+    ),
+    _planned(
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        ActionOwner.AUTH_11C2,
+    ),
+    _planned(
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        ActionOwner.AUTH_11C2,
+    ),
+    _planned(
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
+        PermissionId.PROJECT_READ,
+        ActionOwner.AUTH_11C2,
     ),
     _planned(
         ActionId.OPERATIONS_TASK_START_OVERRIDE,
@@ -563,6 +632,8 @@ PERMISSION_IDS = frozenset(PermissionId)
 ACTION_IDS = frozenset(ActionId)
 NEW_PERMISSION_IDS = frozenset(
     {
+        PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         PermissionId.OPERATIONS_TASK_START_OVERRIDE,
         PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         PermissionId.OPERATIONS_CHECKER_RETRY,
@@ -606,11 +677,11 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 74 or len(ACTION_IDS) != 70:
+    if len(PERMISSION_IDS) != 76 or len(ACTION_IDS) != 81:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 25:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 27:
         raise RuntimeError("authorization permission boundary mismatch")
     active_actions = {
         ActionId.ACTOR_PROFILE_READ_SELF,

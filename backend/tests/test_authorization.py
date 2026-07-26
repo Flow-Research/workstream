@@ -236,9 +236,7 @@ def test_project_role_issue_advisory_key_contract_is_frozen_and_separated() -> N
     assert project_role_issue_lock_key(actor, project, "submitter") != project_role_issue_lock_key(
         project, actor, "submitter"
     )
-    original = SimpleNamespace(
-        constraint_name="uq_project_role_grants_active_exact_role"
-    )
+    original = SimpleNamespace(constraint_name="uq_project_role_grants_active_exact_role")
     error = IntegrityError("insert", {}, original)
     assert _constraint_name(error) == "uq_project_role_grants_active_exact_role"
 
@@ -259,9 +257,7 @@ async def test_project_role_issue_crossed_principals_use_one_lexical_lock_order(
             actor = low if str(low) in values else high
             if entity is ActorProfile:
                 self.calls.append(("profile", actor))
-                return SimpleNamespace(
-                    id=str(actor), actor_kind="human", status="active"
-                )
+                return SimpleNamespace(id=str(actor), actor_kind="human", status="active")
             self.calls.append(("link", actor))
             link_id = low_link if actor == low else high_link
             return SimpleNamespace(id=str(link_id), actor_profile_id=str(actor))
@@ -278,12 +274,10 @@ async def test_project_role_issue_crossed_principals_use_one_lexical_lock_order(
     ):
         session = RecordingSession()
         repository = AdminAuthorizationRepository(session)  # type: ignore[arg-type]
-        locked_caller, target_eligible = (
-            await repository.lock_project_role_issue_principals(
-                caller_actor_profile_id=caller,
-                caller_identity_link_id=caller_link,
-                target_actor_profile_id=target,
-            )
+        locked_caller, target_eligible = await repository.lock_project_role_issue_principals(
+            caller_actor_profile_id=caller,
+            caller_identity_link_id=caller_link,
+            target_actor_profile_id=target,
         )
         assert locked_caller is not None
         assert target_eligible is True
@@ -814,7 +808,9 @@ async def test_project_role_mutation_rate_failure_precedes_private_work(
 
     app.dependency_overrides[enforce_admin_mutation_rate_limit] = fail_rate_first
     monkeypatch.setattr(ProjectRepository, "get_project", forbidden_project_lookup)
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
         response = await client.post(
             path(uuid4(), uuid4()),
             headers={"Idempotency-Key": str(uuid4())},
@@ -853,20 +849,118 @@ def _project_role_denial_decision(
 @pytest.mark.parametrize(
     ("operation", "hidden_case", "denial_code", "expected_status", "expected_code", "message"),
     [
-        ("issue", "valid_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "missing_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "inactive_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "nonhuman_target_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "valid_target_cross_project_manager", AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "missing_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "inactive_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "nonhuman_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "unauthorized_target_manager", AuthorizationDenialCode.RESOURCE_GUARD_DENIED, 404, "resource_not_found", "Resource not found"),
-        ("issue", "self_target_manager", AuthorizationDenialCode.SELF_GRANT_FORBIDDEN, 403, "self_grant_forbidden", "Self grant is forbidden"),
-        ("revoke", "nonexistent_grant", AuthorizationDenialCode.GRANT_NOT_FOUND, 404, "resource_not_found", "Resource not found"),
-        ("revoke", "cross_project_grant", AuthorizationDenialCode.GRANT_NOT_FOUND, 404, "resource_not_found", "Resource not found"),
-        ("revoke", "self_owned_grant_no_manager", AuthorizationDenialCode.PERMISSION_NOT_GRANTED, 404, "resource_not_found", "Resource not found"),
-        ("revoke", "self_owned_grant_manager", AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN, 403, "self_role_revoke_forbidden", "Self role revocation is forbidden"),
+        (
+            "issue",
+            "valid_target_no_manager",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "missing_target_no_manager",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "inactive_target_no_manager",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "nonhuman_target_no_manager",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "valid_target_cross_project_manager",
+            AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "missing_target_manager",
+            AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "inactive_target_manager",
+            AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "nonhuman_target_manager",
+            AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "unauthorized_target_manager",
+            AuthorizationDenialCode.RESOURCE_GUARD_DENIED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "issue",
+            "self_target_manager",
+            AuthorizationDenialCode.SELF_GRANT_FORBIDDEN,
+            403,
+            "self_grant_forbidden",
+            "Self grant is forbidden",
+        ),
+        (
+            "revoke",
+            "nonexistent_grant",
+            AuthorizationDenialCode.GRANT_NOT_FOUND,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "revoke",
+            "cross_project_grant",
+            AuthorizationDenialCode.GRANT_NOT_FOUND,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "revoke",
+            "self_owned_grant_no_manager",
+            AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            404,
+            "resource_not_found",
+            "Resource not found",
+        ),
+        (
+            "revoke",
+            "self_owned_grant_manager",
+            AuthorizationDenialCode.SELF_ROLE_REVOKE_FORBIDDEN,
+            403,
+            "self_role_revoke_forbidden",
+            "Self role revocation is forbidden",
+        ),
     ],
 )
 async def test_project_role_mutation_routes_conceal_denials_and_preserve_self_guards_atomically(
@@ -1586,7 +1680,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         audit.read audit.export""".split()
     )
     new_permissions = frozenset(
-        """operations.task.start_override operations.submission_gate.repair
+        """project.setup_diagnostic.read project.effective_policy.read
+        operations.task.start_override operations.submission_gate.repair
         operations.checker.retry artifact.binding.read artifact.replica.read
         artifact.receipt.read artifact.verification_job.read
         artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
@@ -1641,11 +1736,49 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         "project_role_grant.read": ("project.role_grant.read", "WS-AUTH-001-10B"),
         "project_role_grant.issue": ("project.role_grant.manage", "WS-AUTH-001-10C"),
         "project_role_grant.revoke": ("project.role_grant.manage", "WS-AUTH-001-10C"),
+        "project.read": ("project.read", "WS-AUTH-001-11B"),
+        "actor.authorization_context.read": (
+            "actor.profile.read_self",
+            "WS-AUTH-001-11B",
+        ),
+        "project.setup_run.read": (
+            "project.setup_diagnostic.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.guide_sufficiency_report.list": (
+            "project.setup_diagnostic.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.guide_sufficiency_report.read": (
+            "project.setup_diagnostic.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.submission_artifact_policy.list": (
+            "project.effective_policy.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.submission_artifact_policy.read": (
+            "project.effective_policy.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.post_submit_checker_policy_setup.read": (
+            "project.effective_policy.read",
+            "WS-AUTH-001-11C1",
+        ),
+        "project.effective_submission_artifact_policy.read": (
+            "project.effective_policy.read",
+            "WS-AUTH-001-11C2",
+        ),
+        "project.pre_submit_checker_policy.read": (
+            "project.effective_policy.read",
+            "WS-AUTH-001-11C2",
+        ),
+        "project.active_guide.read": ("project.read", "WS-AUTH-001-11C2"),
     }
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 70
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 81
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -1761,7 +1894,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 48
+        == 59
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -1892,7 +2025,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "74 PermissionIds, 70 ActionIds, 22 active actions, and\n48 planned actions" in operations
+        "76 PermissionIds, 81 ActionIds, 22 active actions, and\n59 planned actions" in operations
     )
 
 
@@ -2004,7 +2137,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             actor.profile.reactivate actor.profile.deactivate actor.identity_link.read
             actor.identity_link.revoke actor.identity_link.reactivate actor.service.provision
             admin_role.read admin_role.grant admin_role.revoke audit.read audit.export""".split(),
-        AdminRole.OPERATOR: """project.read review.queue.inspect review.lease.force_release
+        AdminRole.OPERATOR: """project.read project.setup_diagnostic.read
+            project.effective_policy.read review.queue.inspect review.lease.force_release
             contribution.read_project compensation.award.read operations.status.read
             operations.timer.run operations.reconcile.run operations.outbox.retry
             operations.projection.rebuild operations.task.start_override
@@ -2012,7 +2146,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             artifact.replica.read artifact.receipt.read artifact.verification_job.read
             artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
             audit.read""".split(),
-        AdminRole.PROJECT_MANAGER: """project.create project.read project.update project.archive
+        AdminRole.PROJECT_MANAGER: """project.create project.read project.setup_diagnostic.read
+            project.effective_policy.read project.update project.archive
             project.guide.manage project.effective_policy.manage project.task.manage
             project.review_policy.manage project.role_grant.read project.role_grant.manage
             review.queue.inspect contribution.read_project compensation.award.read
@@ -2021,7 +2156,8 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             compensation.policy.manage compensation.adapter_binding.manage
             compensation.award.read compensation.delivery.reconcile audit.read""".split(),
         AdminRole.AUDIT_AUTHORITY: """actor.profile.read_any actor.identity_link.read
-            admin_role.read project.read project.role_grant.read review.queue.inspect
+            admin_role.read project.read project.setup_diagnostic.read
+            project.effective_policy.read project.role_grant.read review.queue.inspect
             review.chain.read contribution.read_project compensation.award.read audit.read
             audit.export""".split(),
     }
@@ -2045,7 +2181,7 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
 
     permission_response = AdminRoleGrantService.permission_definitions()
     role_response = AdminRoleGrantService.role_definitions()
-    assert permission_response.total == 74
+    assert permission_response.total == 76
     assert [item.permission_id.value for item in permission_response.items] == sorted(
         permission.value for permission in PermissionId
     )
@@ -2902,9 +3038,7 @@ def test_project_role_mutation_denials_share_resource_not_found_concealment(
         request_id=uuid4(),
         correlation_id=uuid4(),
     )
-    translated = authorization_router._project_role_mutation_denial(
-        AuthorizationDenied(decision)
-    )
+    translated = authorization_router._project_role_mutation_denial(AuthorizationDenied(decision))
     assert translated.status_code == 404
     assert translated.error_code == "resource_not_found"
     assert translated.error_message == "Resource not found"
@@ -2915,6 +3049,17 @@ def test_project_role_read_permissions_separate_manager_and_auditor_authority() 
     assert (
         PermissionId.PROJECT_ROLE_GRANT_MANAGE in ADMIN_ROLE_PERMISSIONS[AdminRole.PROJECT_MANAGER]
     )
+
+
+def test_project_read_projection_permissions_have_exact_admin_role_matrix() -> None:
+    permissions = {
+        PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+    }
+    for role in (AdminRole.PROJECT_MANAGER, AdminRole.OPERATOR, AdminRole.AUDIT_AUTHORITY):
+        assert permissions <= set(ADMIN_ROLE_PERMISSIONS[role])
+    for role in (AdminRole.FINANCE_AUTHORITY, AdminRole.ACCESS_ADMINISTRATOR):
+        assert permissions.isdisjoint(ADMIN_ROLE_PERMISSIONS[role])
     assert PermissionId.PROJECT_ROLE_GRANT_READ in ADMIN_ROLE_PERMISSIONS[AdminRole.AUDIT_AUTHORITY]
     assert (
         PermissionId.PROJECT_ROLE_GRANT_MANAGE
@@ -8835,9 +8980,7 @@ async def test_project_role_issue_shared_completion_writes_ordered_zero_invalida
         actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
         actor_ref=str(actor_id),
         operation=request.operation,
-        request_digest=canonical_json_hash(
-            request.model_dump(mode="json", exclude_none=True)
-        ),
+        request_digest=canonical_json_hash(request.model_dump(mode="json", exclude_none=True)),
     )
     response = AuthorityResponseReference(
         resource_type=AuthorityResourceType.PROJECT_ROLE_GRANT,
@@ -9109,7 +9252,11 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
     monkeypatch,
 ) -> None:
     caller_id, caller_link_id, target_id, target_link_id, project_id = (
-        uuid4(), uuid4(), uuid4(), uuid4(), uuid4()
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
     )
     manager_grant_id = uuid4()
     bootstrap_grant_id = uuid4()
@@ -9117,12 +9264,59 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
     async with authorization_factory() as session:
         session.add_all(
             [
-                ActorProfile(id=str(caller_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(caller_id)),
-                ActorIdentityLink(id=str(caller_link_id), actor_profile_id=str(caller_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-caller-{caller_id}", subject_kind="human", status="active", linked_by=str(caller_id), last_verified_at=now),
-                ActorProfile(id=str(target_id), actor_kind="human", status="active", provisioning_method="automatic_first_access", created_by=str(target_id)),
-                ActorIdentityLink(id=str(target_link_id), actor_profile_id=str(target_id), issuer="https://identity.flowresearch.tech", subject=f"auth10c-target-{target_id}", subject_kind="human", status="active", linked_by=str(target_id), last_verified_at=now),
-                Project(id=str(project_id), name="AUTH-10C PREP proof", slug=f"auth-10c-prep-{project_id}", status="draft"),
-                AdminRoleGrant(id=bootstrap_grant_id, target_actor_profile_id=str(caller_id), role="access_administrator", scope_type="system", scope_project_id=None, status="active", version=1, granted_by_actor_profile_id=None, granted_by_system_principal="workstream:system:bootstrap", granted_by_admin_role_grant_id=None, grant_reason="AUTH-10C PostgreSQL bootstrap proof"),
+                ActorProfile(
+                    id=str(caller_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(caller_id),
+                ),
+                ActorIdentityLink(
+                    id=str(caller_link_id),
+                    actor_profile_id=str(caller_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"auth10c-caller-{caller_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(caller_id),
+                    last_verified_at=now,
+                ),
+                ActorProfile(
+                    id=str(target_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(target_id),
+                ),
+                ActorIdentityLink(
+                    id=str(target_link_id),
+                    actor_profile_id=str(target_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"auth10c-target-{target_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(target_id),
+                    last_verified_at=now,
+                ),
+                Project(
+                    id=str(project_id),
+                    name="AUTH-10C PREP proof",
+                    slug=f"auth-10c-prep-{project_id}",
+                    status="draft",
+                ),
+                AdminRoleGrant(
+                    id=bootstrap_grant_id,
+                    target_actor_profile_id=str(caller_id),
+                    role="access_administrator",
+                    scope_type="system",
+                    scope_project_id=None,
+                    status="active",
+                    version=1,
+                    granted_by_actor_profile_id=None,
+                    granted_by_system_principal="workstream:system:bootstrap",
+                    granted_by_admin_role_grant_id=None,
+                    grant_reason="AUTH-10C PostgreSQL bootstrap proof",
+                ),
             ]
         )
         await session.flush()
@@ -9135,10 +9329,30 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         )
         await session.commit()
         session.add(
-            AdminRoleGrant(id=manager_grant_id, target_actor_profile_id=str(caller_id), role="project_manager", scope_type="project", scope_project_id=str(project_id), status="active", version=1, granted_by_actor_profile_id=str(caller_id), granted_by_system_principal=None, granted_by_admin_role_grant_id=bootstrap_grant_id, grant_reason="AUTH-10C PostgreSQL project-manager proof")
+            AdminRoleGrant(
+                id=manager_grant_id,
+                target_actor_profile_id=str(caller_id),
+                role="project_manager",
+                scope_type="project",
+                scope_project_id=str(project_id),
+                status="active",
+                version=1,
+                granted_by_actor_profile_id=str(caller_id),
+                granted_by_system_principal=None,
+                granted_by_admin_role_grant_id=bootstrap_grant_id,
+                grant_reason="AUTH-10C PostgreSQL project-manager proof",
+            )
         )
         await session.commit()
-        context = HumanAuthorizationContext(actor_profile_id=caller_id, actor_kind=ActorKind.HUMAN, actor_status=ActorStatus.ACTIVE, identity_link_id=caller_link_id, identity_link_status=IdentityLinkStatus.ACTIVE, request_id=uuid4(), correlation_id=uuid4())
+        context = HumanAuthorizationContext(
+            actor_profile_id=caller_id,
+            actor_kind=ActorKind.HUMAN,
+            actor_status=ActorStatus.ACTIVE,
+            identity_link_id=caller_link_id,
+            identity_link_status=IdentityLinkStatus.ACTIVE,
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+        )
         repository = AdminAuthorizationRepository(session)
         authorization = AuthorizationService(session, context, admin_repository=repository)
         prepared = PreparedAuthorizationService(session, context, authorization, repository)
@@ -9159,13 +9373,37 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             request=canonical_issue,
         )
         assert isinstance(issue_reservation, ClaimedReservation)
-        caller_input = PreparedAuthorizationInput(idempotency_key=issue_key, request_value=canonical_issue.model_dump(mode="json"))
-        handle = await prepared.prepare(ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER))
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=issue_key, request_value=canonical_issue.model_dump(mode="json")
+        )
+        handle = await prepared.prepare(
+            ActionId.PROJECT_ROLE_GRANT_ISSUE,
+            caller_input,
+            PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=project_id,
+                target_actor_profile_id=target_id,
+                role=ProjectRole.SUBMITTER,
+            ),
+        )
         assert await repository.lock_project(project_id) is not None
-        await repository.take_project_role_issue_lock(project_role_issue_lock_key(target_id, project_id, "submitter"))
+        await repository.take_project_role_issue_lock(
+            project_role_issue_lock_key(target_id, project_id, "submitter")
+        )
         assert await repository.lock_eligible_human(target_id) is not None
-        issue_resource = ProjectRoleGrantIssueResourceContext(resource_type="project_role_grant", resource_id=project_id, scope_project_id=project_id, target_actor_profile_id=target_id, role=ProjectRole.SUBMITTER, project_status="draft", target_eligible=True, active_exact_role_exists=False)
-        decision = await prepared.consume(handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, issue_resource)
+        issue_resource = ProjectRoleGrantIssueResourceContext(
+            resource_type="project_role_grant",
+            resource_id=project_id,
+            scope_project_id=project_id,
+            target_actor_profile_id=target_id,
+            role=ProjectRole.SUBMITTER,
+            project_status="draft",
+            target_eligible=True,
+            active_exact_role_exists=False,
+        )
+        decision = await prepared.consume(
+            handle, ActionId.PROJECT_ROLE_GRANT_ISSUE, caller_input, issue_resource
+        )
         assert decision.allowed is True
         assert decision.matched_grant_id == manager_grant_id
         issue_service = ProjectRoleGrantMutationService(session)
@@ -9238,9 +9476,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             ),
         )
         project = await repository.lock_project(project_id)
-        row = await repository.lock_project_role_grant(
-            project_id=project_id, grant_id=issued.id
-        )
+        row = await repository.lock_project_role_grant(project_id=project_id, grant_id=issued.id)
         assert project is not None and row is not None
         grant, _snapshot = row
         revoke_resource = ProjectRoleGrantRevokeResourceContext(
@@ -9262,15 +9498,11 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         revoke_service = ProjectRoleGrantMutationService(session)
         for substituted_decision, substituted_resource in (
             (
-                revoke_decision.model_copy(
-                    update={"action_id": ActionId.PROJECT_ROLE_GRANT_ISSUE}
-                ),
+                revoke_decision.model_copy(update={"action_id": ActionId.PROJECT_ROLE_GRANT_ISSUE}),
                 revoke_resource,
             ),
             (
-                revoke_decision.model_copy(
-                    update={"permission_id": PermissionId.PROJECT_READ}
-                ),
+                revoke_decision.model_copy(update={"permission_id": PermissionId.PROJECT_READ}),
                 revoke_resource,
             ),
             (revoke_decision.model_copy(update={"revalidated": False}), revoke_resource),
@@ -9448,12 +9680,8 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             race_claim_ids.append(reservation.claim.record_id)
             return reservation
 
-        monkeypatch.setattr(
-            AdminAuthorizationRepository, "find_active_project_role", race_find
-        )
-        monkeypatch.setattr(
-            ProjectRoleGrantMutationService, "reserve", capture_race_claim
-        )
+        monkeypatch.setattr(AdminAuthorizationRepository, "find_active_project_role", race_find)
+        monkeypatch.setattr(ProjectRoleGrantMutationService, "reserve", capture_race_claim)
         caller_profile = await session.get(ActorProfile, str(caller_id))
         caller_link = await session.get(ActorIdentityLink, str(caller_link_id))
         assert caller_profile is not None and caller_link is not None
@@ -9507,8 +9735,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         assert (
             await clean.scalar(
                 text(
-                    "select count(*) from authority_idempotency_records "
-                    "where idempotency_key=:key"
+                    "select count(*) from authority_idempotency_records where idempotency_key=:key"
                 ),
                 {"key": str(race_key)},
             )
@@ -9527,16 +9754,14 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
                 },
             )
         ).all()
-        assert denial_rows.count(
-            ("SensitiveAuthorizationDenied", "project_role_grant_exists", None)
-        ) == 1
+        assert (
+            denial_rows.count(("SensitiveAuthorizationDenied", "project_role_grant_exists", None))
+            == 1
+        )
         assert all(row[0] != "AuthorityInvalidationRequested" for row in denial_rows)
         assert (
             await clean.scalar(
-                text(
-                    "select count(*) from audit_events "
-                    "where idempotency_reference=:claim"
-                ),
+                text("select count(*) from audit_events where idempotency_reference=:claim"),
                 {"claim": str(race_claim_ids[0])},
             )
             == 0
@@ -9690,8 +9915,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
         assert (
             await clean.scalar(
                 text(
-                    "select count(*) from authority_idempotency_records "
-                    "where idempotency_key=:key"
+                    "select count(*) from authority_idempotency_records where idempotency_key=:key"
                 ),
                 {"key": str(waiting_key)},
             )

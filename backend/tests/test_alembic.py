@@ -234,23 +234,29 @@ def test_0034_project_role_issue_evidence_fact_shape_is_closed(
                     (before, {**after, "role": mismatched_role}),
                 )
                 for invalid_before, invalid_after in invalid:
-                    assert asyncio.run(
-                        _facts_are_safe_0034(
-                            isolated_database_env,
-                            invalid_before,
-                            invalid_after,
-                            project_id,
+                    assert (
+                        asyncio.run(
+                            _facts_are_safe_0034(
+                                isolated_database_env,
+                                invalid_before,
+                                invalid_after,
+                                project_id,
+                            )
                         )
-                    ) is False
+                        is False
+                    )
                 for null_before, null_after in ((None, after), (before, None)):
-                    assert asyncio.run(
-                        _facts_are_safe_0034(
-                            isolated_database_env,
-                            null_before,
-                            null_after,
-                            project_id,
+                    assert (
+                        asyncio.run(
+                            _facts_are_safe_0034(
+                                isolated_database_env,
+                                null_before,
+                                null_after,
+                                project_id,
+                            )
                         )
-                    ) is False
+                        is False
+                    )
             assert asyncio.run(
                 _facts_are_safe_0034(
                     isolated_database_env,
@@ -314,9 +320,7 @@ def test_0034_five_key_revoke_invalidation_requires_exact_linkage(
                 records: list[str] = []
                 try:
                     if invalid_form == "non_revoke":
-                        fixture = asyncio.run(
-                            _seed_pending_issue_cause_0034(isolated_database_env)
-                        )
+                        fixture = asyncio.run(_seed_pending_issue_cause_0034(isolated_database_env))
                         records.append(fixture["record"])
                         cause = fixture
                     else:
@@ -336,12 +340,8 @@ def test_0034_five_key_revoke_invalidation_requires_exact_linkage(
                             )
                             records.append(cause["record"])
 
-                    before_facts = _five_key_revoke_facts_0034(
-                        fixture, effective=True
-                    )
-                    after_facts = _five_key_revoke_facts_0034(
-                        fixture, effective=False
-                    )
+                    before_facts = _five_key_revoke_facts_0034(fixture, effective=True)
+                    after_facts = _five_key_revoke_facts_0034(fixture, effective=False)
                     if invalid_form == "mixed_facts":
                         after_facts = {"effective": False}
                     target_ref_kind: str | None = "project_role_grant"
@@ -355,9 +355,7 @@ def test_0034_five_key_revoke_invalidation_requires_exact_linkage(
                     elif invalid_form == "wrong_target_id":
                         target_ref_id = str(uuid4())
                     before = asyncio.run(
-                        _linked_revoke_fixture_state_0034(
-                            isolated_database_env, records
-                        )
+                        _linked_revoke_fixture_state_0034(isolated_database_env, records)
                     )
 
                     with pytest.raises(IntegrityError) as rejected:
@@ -373,24 +371,15 @@ def test_0034_five_key_revoke_invalidation_requires_exact_linkage(
                             )
                         )
                     expected_sqlstate = "23503" if invalid_form == "orphan" else "23514"
-                    assert (
-                        getattr(rejected.value.orig, "sqlstate", None)
-                        == expected_sqlstate
-                    )
+                    assert getattr(rejected.value.orig, "sqlstate", None) == expected_sqlstate
                     assert (
                         asyncio.run(
-                            _linked_revoke_fixture_state_0034(
-                                isolated_database_env, records
-                            )
+                            _linked_revoke_fixture_state_0034(isolated_database_env, records)
                         )
                         == before
                     )
                 finally:
-                    asyncio.run(
-                        _clear_linked_revoke_fixtures_0034(
-                            isolated_database_env, records
-                        )
-                    )
+                    asyncio.run(_clear_linked_revoke_fixtures_0034(isolated_database_env, records))
         finally:
             command.downgrade(config, "base")
 
@@ -426,9 +415,7 @@ def test_0034_downgrade_refuses_five_key_revoke_evidence_without_mutation(
                 _linked_revoke_fixture_state_0034(isolated_database_env, records)
             )
             assert admitted != before_insert
-            assert admitted["event_ids"] == tuple(
-                sorted((fixture["cause"], invalidation_id))
-            )
+            assert admitted["event_ids"] == tuple(sorted((fixture["cause"], invalidation_id)))
             assert admitted["event_count"] == 2
 
             before_downgrade = {
@@ -1629,7 +1616,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0034_project_role_issue_evidence",
+                "revision": "0035_project_read_evidence",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1683,6 +1670,63 @@ async def _artifact_recovery_schema(database_url: str) -> dict[str, object]:
         await engine.dispose()
 
 
+def test_0035_project_read_action_evidence_round_trip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Prove all eleven planned pairs and both permissions round-trip exactly."""
+    config = _alembic_config()
+    definitions = tuple(
+        definition
+        for definition in ACTION_DEFINITIONS
+        if definition.owner in {ActionOwner.AUTH_11B, ActionOwner.AUTH_11C1, ActionOwner.AUTH_11C2}
+    )
+    assert len(definitions) == 11
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
+            )
+            command.downgrade(config, "0034_project_role_issue_evidence")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """A committed 11A audit row must block removal of its frozen vocabulary."""
+    config = _alembic_config()
+    definition = next(item for item in ACTION_DEFINITIONS if item.owner is ActionOwner.AUTH_11B)
+    values = _action_evidence_values(definition.action_id.value, definition.permission_id.value)
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(_insert_committed_action_evidence(isolated_database_env, values=values))
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade non-empty project-read action evidence"
+            ):
+                command.downgrade(config, "0034_project_role_issue_evidence")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0035_project_read_evidence"
+            )
+        finally:
+            asyncio.run(
+                _remove_authority_audit_fixture(isolated_database_env, event_id=str(values["id"]))
+            )
+            command.downgrade(config, "base")
+
+
 def test_project_role_migration_constraints_and_immutable_history(
     isolated_database_env: str,
     migration_lock,
@@ -1695,7 +1739,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0034_project_role_issue_evidence",
+                "revision": "0035_project_read_evidence",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -1962,7 +2006,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0034_project_role_issue_evidence",
+                "revision": "0035_project_read_evidence",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -7604,6 +7648,17 @@ def _action_evidence_values(action_id: str | None, permission_id: str) -> dict[s
     }
 
 
+async def _insert_committed_action_evidence(
+    database_url: str, *, values: dict[str, str | None]
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(_ACTION_EVIDENCE_INSERT, values)
+    finally:
+        await engine.dispose()
+
+
 async def _authorization_action_schema(database_url: str) -> dict[str, object]:
     """Return the migration revision and action-evidence schema markers."""
     engine = create_async_engine(database_url)
@@ -9615,8 +9670,7 @@ async def _install_legacy_project_role_blocker(
             else:
                 await connection.execute(
                     text(
-                        "alter table audit_events disable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events disable trigger audit_events_reject_update_delete"
                     )
                 )
             assignments = []
@@ -9656,8 +9710,7 @@ async def _remove_legacy_project_role_blocker(
             async with engine.begin() as connection:
                 await connection.execute(
                     text(
-                        "alter table audit_events disable trigger "
-                        "audit_events_reject_update_delete"
+                        "alter table audit_events disable trigger audit_events_reject_update_delete"
                     )
                 )
                 await connection.execute(

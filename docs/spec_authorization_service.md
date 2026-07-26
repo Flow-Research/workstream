@@ -150,6 +150,8 @@ admin_role.revoke
 
 project.create
 project.read
+project.setup_diagnostic.read
+project.effective_policy.read
 project.update
 project.archive
 project.guide.manage
@@ -231,17 +233,20 @@ registration, hidden ART behavior/resource composition, then dedicated AUTH
 evaluator integration and activation. ART never writes availability. AUTH-12,
 AUTH-14, and AUTH-15 are not alternate artifact activation paths.
 
-These are 74 approved `PermissionId` values. `ActionId` values are a separate
+These are 76 approved `PermissionId` values. `ActionId` values are a separate
 closed registry layer and are not included in that permission count. AUTH-05A's
 typed and PostgreSQL audit registry accepts the exact historical 49. The three
-approved Operator recovery identifiers, 21 artifact identifiers, and
-`review.queue.override` are the exact 25 post-`0020` permissions. AUTH-07A adds
+approved Operator recovery identifiers, 21 artifact identifiers,
+`review.queue.override`, and the two AUTH-11A read-only project inspection
+permissions are the exact 27 post-`0020` permissions. AUTH-07A and AUTH-11A add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 70 rows after AUTH-10C: 22 active actions
-and 48 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 81 rows after AUTH-11A: 22 active actions
+and 59 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
-the two reason-bound, idempotent project-role mutations. AUTH-08 adds seven active administrative definition,
+the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
+planned project identity, context, setup, policy, and active-guide reads owned
+by 11B, 11C1, and 11C2. AUTH-08 adds seven active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
@@ -262,7 +267,7 @@ The four proposed REV lifecycle actions and
 registry. Catalogue totals are derived from trusted `main` when each gate runs:
 REV registration adds exactly four planned and zero active actions, while the
 review-evidence registration adds exactly one planned and zero active action, in
-either order. Both retain 74 PermissionIds and stay blocked until complete
+either order. Both retain 76 PermissionIds and stay blocked until complete
 feature-owned typed and transaction manifests exist.
 
 AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.

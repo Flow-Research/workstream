@@ -674,11 +674,11 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 74 PermissionIds and 70 ActionIds after
-AUTH-10A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+The catalogue contains exactly 76 PermissionIds and 81 ActionIds after
+AUTH-11A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
-identity-link lifecycle actions are active; the other 53 entries remain planned
+identity-link lifecycle actions are active; the other 59 entries remain planned
 and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
@@ -703,8 +703,15 @@ complete. Counts and mappings remain unchanged. The ART transfer adds no migrati
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 74 PermissionIds, 70 ActionIds, 22 active actions, and
-48 planned actions after AUTH-10C activates the two project-role mutation rows.
+Catalogue totals are 76 PermissionIds, 81 ActionIds, 22 active actions, and
+59 planned actions after AUTH-11A registers project-read actions without
+activating a route.
+
+AUTH-11A adds read-only `project.setup_diagnostic.read` and
+`project.effective_policy.read`. Project Manager and Audit Authority receive
+them at system or exact-project scope; Operator receives them at system scope.
+Finance Authority and Access Administrator do not. The eleven AUTH-11 actions
+remain planned under 11B, 11C1, or 11C2 and cannot produce allowed evidence.
 Four later
 REV registrations add exactly four planned and zero active actions, while the
 review-evidence binding registration adds exactly one planned and zero active
@@ -720,7 +727,8 @@ actions. Planned actions can record bounded denial evidence but cannot record an
 allowed decision through the typed writer.
 
 The historical permission set remains exactly 49 values. The post-`0020` set
-contains exactly 25 values, including `review.queue.override`; do not derive
+contains exactly 27 values, including `review.queue.override`,
+`project.setup_diagnostic.read`, and `project.effective_policy.read`; do not derive
 historical status from identifier prefixes. All submission/review rows remain
 planned. Initial and revision submission share `submission.create`, and no
 revision-specific permission or preparation action exists.
