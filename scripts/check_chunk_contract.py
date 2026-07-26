@@ -418,6 +418,18 @@ def planning_intake_scope(
         or intent.get("next_requires_explicit_start") is not True
     ):
         raise ContractError("planning intake requires one same-initiative explicit-start successor")
+    base_tree = _git(
+        repo, "ls-tree", "-r", "--name-only", "-z", base,
+        "--", ".agent-loop/initiatives",
+    )
+    base_paths = validate_path_bytes(path for path in base_tree.split(b"\0") if path)
+    initiative_root = f".agent-loop/initiatives/{initiative}"
+    if any(
+        path.startswith(initiative_root + "/")
+        or path.startswith(initiative_root + "-")
+        for path in base_paths
+    ):
+        raise ContractError("planning intake initiative already exists in trusted base tree")
     for record in records:
         event = record.get("event")
         completed = record.get("completed_chunk")

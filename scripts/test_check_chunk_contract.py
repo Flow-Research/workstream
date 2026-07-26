@@ -395,12 +395,19 @@ class PlanningIntakeSelectionTests(unittest.TestCase):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         ).stdout.strip()
 
-    def fixture(self, directory: str, *, foreign: str | None = None) -> tuple[Path, str, dict[str, object]]:
+    def fixture(
+        self, directory: str, *, foreign: str | None = None,
+        base_existing: str | None = None,
+    ) -> tuple[Path, str, dict[str, object]]:
         repo = Path(directory)
         self.git(repo, "init", "-q", "-b", "main")
         self.git(repo, "config", "user.email", "test@example.invalid")
         self.git(repo, "config", "user.name", "Test")
         (repo / "README.md").write_text("trusted base\n")
+        if base_existing:
+            existing = repo / f".agent-loop/initiatives/{base_existing}/STATUS.md"
+            existing.parent.mkdir(parents=True)
+            existing.write_text("existing initiative\n")
         self.git(repo, "add", ".")
         self.git(repo, "commit", "-qm", "base")
         base = self.git(repo, "rev-parse", "HEAD").decode()
@@ -478,6 +485,13 @@ class PlanningIntakeSelectionTests(unittest.TestCase):
             intent["next_chunk_id"] = "WS-NEW-001-99"
             with self.assertRaisesRegex(checker.ContractError, "successor contract"):
                 checker.planning_intake_scope(repo, base, "HEAD", intent, ())
+
+    def test_planning_intake_rejects_existing_base_tree_initiative(self) -> None:
+        for existing in ("WS-NEW-001", "WS-NEW-001-existing"):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as directory:
+                repo, base, intent = self.fixture(directory, base_existing=existing)
+                with self.assertRaisesRegex(checker.ContractError, "trusted base tree"):
+                    checker.planning_intake_scope(repo, base, "HEAD", intent, ())
 
 
 class GitDiscoveryIntegrationTests(unittest.TestCase):
