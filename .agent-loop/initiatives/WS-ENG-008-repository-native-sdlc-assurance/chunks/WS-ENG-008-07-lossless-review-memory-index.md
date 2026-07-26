@@ -36,6 +36,42 @@ Execution remains blocked until this planning intake is merged, chunks 01–06
 are completed in order, and the explicit post-merge signed start selects this
 exact contract from current trusted `main`.
 
+## Machine-checkable scope
+
+```chunk-scope-json
+{
+  "schema_version": 1,
+  "chunk_id": "WS-ENG-008-07",
+  "phase": "implementation",
+  "risk_class": "L1",
+  "allowed_paths": [
+    ".agent-loop/README.md",
+    ".agent-loop/REVIEW_LOG.md",
+    ".agent-loop/review-log-archive/**",
+    ".agent-loop/policies/repository-engineering-policy.md",
+    "scripts/check_review_log_archive.py",
+    "scripts/test_check_review_log_archive.py",
+    "scripts/check_loop_memory_state.py",
+    "scripts/check_stale_artifact_contracts.py",
+    "scripts/check_markdown_links.py",
+    "scripts/check_stale_workstream_wording.py",
+    "scripts/test_agent_gates.py",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-07-lossless-review-memory-index.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pr-trust-bundle.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-external-review-response.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-07-pre-migration-reconciliation.json",
+    ".agent-loop/merge-intents/WS-ENG-008-07.json"
+  ],
+  "forbidden_paths": ["backend/**", "frontend/**", ".github/workflows/**"],
+  "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
+  "verification_commands": ["review-log-archive-tests", "review-log-archive-check", "agent-gate-tests", "loop-memory-state", "stale-artifact-contracts", "markdown-links", "stale-wording", "git-diff-check"]
+}
+```
+
 ## Allowed files
 
 ```text

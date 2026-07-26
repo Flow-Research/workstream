@@ -24,6 +24,38 @@ jobs:
       - name: Install agent gate dependencies
         run: python -m pip install --require-hashes -r scripts/agent-gate-requirements.txt
 
+      - name: Fetch signed loop-memory state
+        run: >-
+          git fetch --no-tags origin
+          +refs/heads/automation/loop-memory:refs/remotes/origin/automation/loop-memory
+
+      - name: Machine-checkable chunk scope
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          trusted_scope_dir="$(mktemp -d)"
+          trap 'rm -rf "${trusted_scope_dir}"' EXIT
+          trusted_checker="${trusted_scope_dir}/check_chunk_contract.py"
+          if git cat-file -e "origin/${BASE_REF}:scripts/check_chunk_contract.py"; then
+            for script in check_chunk_contract.py update_post_merge_memory.py check_loop_memory_state.py; do
+              git show "origin/${BASE_REF}:scripts/${script}" > "${trusted_scope_dir}/${script}"
+            done
+          else
+            if git cat-file -e "origin/${BASE_REF}:.agent-loop/merge-intents/WS-ENG-008-01.json" 2>/dev/null; then
+              echo "::error::scope cutover is present; refusing local-script bootstrap" >&2
+              exit 1
+            fi
+            for script in check_chunk_contract.py update_post_merge_memory.py check_loop_memory_state.py; do
+              cp "scripts/${script}" "${trusted_scope_dir}/${script}"
+            done
+          fi
+          PYTHONPATH="${trusted_scope_dir}" python3 "${trusted_checker}" \
+            --repo "${GITHUB_WORKSPACE}" \
+            --base-ref "origin/${BASE_REF}" --head-ref HEAD \
+            --state-ref origin/automation/loop-memory
+
       - name: Static agent sensor advisory
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -74,4 +106,25 @@ jobs:
       - name: Internal review evidence gate
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: python3 scripts/check_internal_review_evidence.py
+          BASE_REF: ${{ github.base_ref }}
+          INTERNAL_REVIEW_REPOSITORY_ROOT: ${{ github.workspace }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          trusted_evidence_dir="$(mktemp -d)"
+          trap 'rm -rf "${trusted_evidence_dir}"' EXIT
+          if git cat-file -e "origin/${BASE_REF}:scripts/check_chunk_contract.py"; then
+            for script in check_internal_review_evidence.py check_chunk_contract.py; do
+              git show "origin/${BASE_REF}:scripts/${script}" > "${trusted_evidence_dir}/${script}"
+            done
+          else
+            if git cat-file -e "origin/${BASE_REF}:.agent-loop/merge-intents/WS-ENG-008-01.json" 2>/dev/null; then
+              echo "::error::scope cutover is present; refusing local evidence bootstrap" >&2
+              exit 1
+            fi
+            for script in check_internal_review_evidence.py check_chunk_contract.py; do
+              cp "scripts/${script}" "${trusted_evidence_dir}/${script}"
+            done
+          fi
+          PYTHONPATH="${trusted_evidence_dir}" python3 \
+            "${trusted_evidence_dir}/check_internal_review_evidence.py"

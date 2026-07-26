@@ -32,6 +32,42 @@ P1
 
 `implementation`
 
+## Machine-checkable scope
+
+```chunk-scope-json
+{
+  "schema_version": 1,
+  "chunk_id": "WS-ENG-008-03",
+  "phase": "implementation",
+  "risk_class": "L1",
+  "allowed_paths": [
+    ".agents/skills/risk-router/SKILL.md",
+    ".agents/skills/security-review/SKILL.md",
+    ".agents/skills/qa-review/SKILL.md",
+    ".agents/skills/evidence-gate/SKILL.md",
+    ".agent-loop/templates/CHUNK_CONTRACT.md",
+    ".agent-loop/templates/PR_TRUST_BUNDLE.md",
+    ".agent-loop/templates/ADVERSARIAL_PROOF.md",
+    ".agent-loop/policies/routing-policy.md",
+    ".github/pull_request_template.md",
+    "scripts/check_internal_review_evidence.py",
+    "scripts/test_agent_gates.py",
+    "CONTRIBUTING.md",
+    "AGENTS.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-03-risk-routed-adversarial-proof.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-pr-trust-bundle.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-adversarial-proof.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-03-external-review-response.md",
+    ".agent-loop/merge-intents/WS-ENG-008-03.json"
+  ],
+  "forbidden_paths": ["backend/**", "frontend/**"],
+  "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
+  "verification_commands": ["agent-gate-tests", "internal-review-evidence", "markdown-links", "stale-wording", "git-diff-check"]
+}
+```
+
 ## Allowed files
 
 ```text

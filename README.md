@@ -161,9 +161,13 @@ and compensation specification control contribution recognition, award
 eligibility, and fulfillment boundaries. Older chunk specifications remain
 implementation history until their owning migrations replace the runtime.
 
-## Engineering Loop
+## Repository-Native Human-Agent SDLC
 
-Workstream is built with a Codex-native zero-trust engineering loop:
+Workstream uses a Repository-Native Human-Agent SDLC: intent, authority,
+execution, verification, review, and durable memory are encoded and enforced in
+the repository so humans and agents can collaborate without trusting chat
+history or unaudited claims. Its enforcement mechanism is the Codex-native
+zero-trust engineering loop:
 
 ```text
 Intent
@@ -183,6 +187,11 @@ Intent
 Codex-discoverable skills live in `.agents/skills/`. Codex custom reviewer
 agents live in `.codex/agents/`. Durable engineering memory, policies, chunk
 contracts, reviews, and status live in `.agent-loop/`.
+
+Post-cutover implementation and specification contracts include a strict
+machine-checkable scope block. Agent Gates fail closed when a changed path,
+reviewer requirement, or verification identifier falls outside the reviewed
+contract; the block authorizes no command execution.
 
 This engineering loop is separate from Workstream product state. It governs how
 the repository is changed; it does not define runtime task or review records.

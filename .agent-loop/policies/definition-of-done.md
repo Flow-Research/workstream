@@ -6,6 +6,9 @@ A Workstream engineering chunk is done only when all applicable sections pass.
 
 - The chunk maps to one approved contract.
 - Changed files stay inside the allowed file set, or exceptions are documented.
+- For post-cutover implementation/specification work, Agent Gates prove the
+  complete delta against the contract's schema-v1 machine scope; documentation
+  cannot waive or widen a failed scope result.
 - No unrelated refactor, product behavior, schema, dependency, or CI weakening is included.
 
 ## Evidence

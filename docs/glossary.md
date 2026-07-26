@@ -7,6 +7,23 @@ guides, task queues, submission packets, automated checks, reviewer routing,
 evaluation sprints, revision loops, contribution records, compensation award
 and fulfillment state, and reputation signals.
 
+## Repository-Native Human-Agent SDLC
+
+The broader software-development lifecycle in which intent, authority,
+execution, verification, review, and durable memory are encoded and enforced
+inside the repository. It allows humans and agents to collaborate without
+trusting chat history or unaudited implementation claims. Workstream's
+Codex-native zero-trust engineering loop is the enforcement mechanism for this
+lifecycle, not a Workstream product review state machine.
+
+## Machine-Checkable Chunk Scope
+
+The strict schema-v1 `chunk-scope-json` block in a post-cutover implementation
+or specification contract. It binds the chunk identity, phase, risk, allowed
+and forbidden repository-relative paths, reviewer tracks, and repository-owned
+verification identifiers. Agent Gates compare it with the complete Git delta;
+it cannot execute contract-provided commands or widen human-readable scope.
+
 ## Project
 
 A configured work program with its own human-facing guide, submission artifact

@@ -21,6 +21,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import yaml
 
@@ -318,6 +319,61 @@ def test_backend_config_paths_require_review_evidence() -> None:
 
     backend_config_tracks = gate.required_tracks_for(["backend/pyproject.toml"])
     assert "ci integrity" in backend_config_tracks
+
+
+def test_materialized_evidence_gate_uses_explicit_repository_root() -> None:
+    """A trusted copied checker must still inspect the candidate workspace."""
+    with tempfile.TemporaryDirectory() as directory:
+        configured = Path(directory).resolve()
+        with mock.patch.dict(
+            os.environ,
+            {"INTERNAL_REVIEW_REPOSITORY_ROOT": str(configured)},
+        ):
+            gate = load_module(
+                "review_gate_explicit_repository_root",
+                "scripts/check_internal_review_evidence.py",
+            )
+        assert gate.ROOT == configured
+
+
+def test_machine_scope_binds_reviewer_routing_and_verification_evidence() -> None:
+    """Machine metadata cannot drift from internal reviewer proof."""
+    gate = load_module(
+        "review_gate_machine_scope", "scripts/check_internal_review_evidence.py"
+    )
+    tracks = (
+        "senior engineering",
+        "qa/test",
+        "security/auth",
+        "product/ops",
+    )
+    contract = gate.ScopeContract(
+        "WS-ENG-008-01",
+        "implementation",
+        "L1",
+        ("scripts/check_chunk_contract.py",),
+        ("backend/**",),
+        tracks,
+        ("chunk-scope-tests", "git-diff-check"),
+    )
+    valid = """## commands run
+
+```bash
+python3 scripts/test_check_chunk_contract.py
+git diff --check origin/main...head
+```
+"""
+    assert gate.validate_machine_evidence(valid, contract, tracks) == []
+    assert "commands run do not prove every machine verification id" in (
+        gate.validate_machine_evidence(
+            "## commands run\n\n```bash\npython3 scripts/test_check_chunk_contract.py\n```\n",
+            contract,
+            tracks,
+        )
+    )
+    assert "machine required_reviewers disagree with evidence routing" in (
+        gate.validate_machine_evidence(valid, contract, tracks[:-1])
+    )
 
 
 def test_review_evidence_files_are_not_relevant_changes() -> None:
@@ -6456,6 +6512,72 @@ def test_agent_gates_runs_stale_artifact_contracts_fail_closed() -> None:
     assert all(step.get("if") not in {False, "false", "${{ false }}"} for step in steps)
 
 
+def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
+    """Agent Gates must enforce exact PR scope from authenticated loop memory."""
+    workflow = (ROOT / ".github/workflows/agent-gates.yml").read_text(
+        encoding="utf-8"
+    )
+    state_refspec = (
+        "+refs/heads/automation/loop-memory:"
+        "refs/remotes/origin/automation/loop-memory"
+    )
+    assert workflow.count(state_refspec) == 1
+    for script in (
+        "check_chunk_contract.py",
+        "update_post_merge_memory.py",
+        "check_loop_memory_state.py",
+    ):
+        assert script in workflow
+    assert 'git show "origin/${BASE_REF}:scripts/${script}"' in workflow
+    assert 'python3 "${trusted_checker}"' in workflow
+    assert 'PYTHONPATH="${trusted_scope_dir}"' in workflow
+    assert (
+        'if git cat-file -e "origin/${BASE_REF}:'
+        '.agent-loop/merge-intents/WS-ENG-008-01.json"'
+    ) in workflow
+    assert workflow.count("refusing local-script bootstrap") == 1
+    assert workflow.count("refusing local evidence bootstrap") == 1
+    assert workflow.count("exit 1") >= 2
+    assert 'cp "scripts/${script}" "${trusted_scope_dir}/${script}"' in workflow
+    assert (
+        'git show "origin/${BASE_REF}:scripts/${script}" > '
+        '"${trusted_evidence_dir}/${script}"'
+    ) in workflow
+    assert '"${trusted_evidence_dir}/check_internal_review_evidence.py"' in workflow
+    assert 'PYTHONPATH="${trusted_evidence_dir}"' in workflow
+    assert "INTERNAL_REVIEW_REPOSITORY_ROOT: ${{ github.workspace }}" in workflow
+    assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
+    assert "--state-ref origin/automation/loop-memory" in workflow
+    assert "continue-on-error" not in workflow
+    assert workflow.index("Fetch signed loop-memory state") < workflow.index(
+        "Machine-checkable chunk scope"
+    )
+    assert workflow.index("Machine-checkable chunk scope") < workflow.index(
+        "Internal review evidence gate"
+    )
+
+
+def test_chunk_contract_template_exposes_all_machine_scope_choices() -> None:
+    """The canonical template cannot silently under-declare scope metadata."""
+    template = (ROOT / ".agent-loop/templates/CHUNK_CONTRACT.md").read_text(
+        encoding="utf-8"
+    )
+    assert '"phase": "<PHASE>"' in template
+    assert '"risk_class": "<RISK_CLASS>"' in template
+    for reviewer in (
+        "senior engineering",
+        "qa/test",
+        "security/auth",
+        "product/ops",
+        "architecture",
+        "ci integrity",
+        "docs",
+        "reuse/dedup",
+        "test delta",
+    ):
+        assert template.count(f'"{reviewer}"') == 1
+
+
 def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
     """The YAML parser dependency and its installation remain deterministic."""
     workflow = yaml.safe_load(
@@ -7619,6 +7741,8 @@ def main() -> int:
     tests = [
         test_required_tracks_expand_for_loop_and_ci_paths,
         test_backend_config_paths_require_review_evidence,
+        test_materialized_evidence_gate_uses_explicit_repository_root,
+        test_machine_scope_binds_reviewer_routing_and_verification_evidence,
         test_review_evidence_files_are_not_relevant_changes,
         test_evidence_requires_completed_yes_statements,
         test_evidence_must_reference_changed_chunk,
@@ -7704,6 +7828,8 @@ def main() -> int:
         test_stale_review_contracts_run_fail_closed_in_agent_gates,
         test_agent_gates_runs_stale_authorization_docs_fail_closed,
         test_agent_gates_runs_stale_artifact_contracts_fail_closed,
+        test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound,
+        test_chunk_contract_template_exposes_all_machine_scope_choices,
         test_agent_gate_dependencies_and_workflow_are_pinned,
         test_local_minio_compose_is_regression_protected,
         test_backend_coverage_thresholds_are_regression_protected,

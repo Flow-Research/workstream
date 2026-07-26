@@ -32,6 +32,34 @@ P2
 
 `implementation`
 
+## Machine-checkable scope
+
+```chunk-scope-json
+{
+  "schema_version": 1,
+  "chunk_id": "WS-ENG-008-04",
+  "phase": "implementation",
+  "risk_class": "L1",
+  "allowed_paths": [
+    "scripts/agent-gate-requirements.txt",
+    "scripts/assurance-requirements.txt",
+    "scripts/test_loop_memory_properties.py",
+    "scripts/test_agent_gates.py",
+    ".github/workflows/agent-gates.yml",
+    "docs/operations_post_merge_memory.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/STATUS.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-04-loop-memory-property-invariants.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-internal-review-evidence.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-pr-trust-bundle.md",
+    ".agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-04-external-review-response.md",
+    ".agent-loop/merge-intents/WS-ENG-008-04.json"
+  ],
+  "forbidden_paths": ["backend/**", "frontend/**"],
+  "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
+  "verification_commands": ["loop-memory-property-tests", "agent-gate-tests", "markdown-links", "stale-wording", "git-diff-check"]
+}
+```
+
 ## Allowed files
 
 ```text

@@ -38,10 +38,17 @@ pytest -q
 | CI/review gates | `.github/workflows`, `scripts/`, `.agent-loop/` | Gates may be strengthened; weakening requires explicit human approval. |
 | Generated merge memory | `automation/loop-memory` | Trusted `main` automation owns a closed signed tree containing canonical state, ledger, manifest, loop/queue views, and compact initiative projections. Humans and agents do not edit it manually or trust isolated files without manifest/signature verification. Merge projections remain stopped/next-only until signed start events exist. |
 | Explicit engineering starts | `.github/workflows/loop-memory-start.yml` | An authenticated dispatcher whose current GitHub repository permission meets `.agent-loop/policies/loop-memory-start-authorities.json` on trusted `main` may dispatch a signed start for a declared successor or exact reviewed contract; the orchestrator may dispatch after an explicit user instruction, but conversation is not canonical evidence. Cancellation retains a protected-environment reviewer distinct from the dispatcher. No automatic start is valid. |
+| Machine-checkable chunk scope | `scripts/check_chunk_contract.py` | After the WS-ENG-008-01 cutover, every implementation/specification start selects one strict schema-v1 contract. Agent Gates compare the complete byte-safe Git delta with its closed allowed/forbidden path grammar and never execute contract-provided text. |
 
 Explicit starts are initiative-local: each initiative may have at most one
 active planning or implementation chunk, while distinct initiatives may be
 active concurrently. Local worktrees are execution isolation, not authority.
+
+Only work already signed-active at the exact machine-scope cutover may finish
+under a generated grandfather record. That record is bound to the pre-cutover
+start event, initiative/chunk identity, contract path, and immutable blob.
+Stopped, proposed, cancelled/restarted, and post-cutover starts cannot inherit
+the exception.
 
 The sole first-contract admission is a planning-intake merge for an initiative
 absent from signed history. It is a closed additive planning tree with canonical
