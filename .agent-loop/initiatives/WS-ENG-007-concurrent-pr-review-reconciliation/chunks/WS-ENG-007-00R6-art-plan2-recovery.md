@@ -54,9 +54,9 @@ reinterpretation of PR #197 as implementation authority
       `WS-AUTH-001-11` / `f670b705…` as its two predecessors.
 - [ ] Activation names only `WS-ENG-007-00R6`; the target identity comes from
       trusted GitHub merge evidence and must be direct-next on first-parent main.
-- [ ] Both merges carry successful merge-bound `agent-gates` and `test`
+- [ ] All three records carry successful merge-bound `agent-gates` and `test`
       provenance; mutable reruns and CodeRabbit are not recovery authority.
-- [ ] Both temporary exemptions are consumed before signing and cannot persist,
+- [ ] All three temporary exemptions are consumed before signing and cannot persist,
       replay, reorder, broaden, or authorize a third merge.
 - [ ] ART PLAN2 reconciles to stopped state with `WS-ART-001-03A` requiring an
       explicit start; recovery starts no implementation or planning chunk.

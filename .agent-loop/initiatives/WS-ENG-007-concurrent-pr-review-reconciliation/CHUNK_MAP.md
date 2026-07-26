@@ -13,7 +13,7 @@
 | 3 | `WS-ENG-007-03` | Add merge-group CI parity and queue-readiness proof | L1 | Blocked on 02 merge and explicit start |
 
 Recovery chunks are exceptional ordered prerequisites. `00R6` consumes only
-the exact unsigned ART PLAN2 merge and its own activation; it grants no ART or
-CI implementation authority. Implementation chunks
+the exact unsigned ART PLAN2 merge, the later signed AUTH-11 merge, and its own
+activation; it grants no ART, AUTH, or CI implementation authority. Implementation chunks
 remain one PR each and stop after merge. Every successor requires a separate
 explicit signed start.

@@ -2145,19 +2145,62 @@ def test_prepare_recovery_v6_consumes_exact_two_predecessor_sequence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state_root = tmp_path / "state"
+    repository_root = tmp_path / "repo"
+    _contract(repository_root)
     base = _record()
-    base["source"]["main_sha"] = "a" * 40
+    base["source"].update(
+        main_sha="a" * 40,
+        intent_path=".agent-loop/merge-intents/WS-AUTH-001-10C.json",
+    )
+    base["completed_chunk"].update(
+        initiative_id="WS-AUTH-001", chunk_id="WS-AUTH-001-10C",
+        chunk_title="Project Role Grant Mutations",
+        next_chunk_id="WS-AUTH-001-11", next_chunk_title="Project Read Cutover",
+    )
+    base["gate"].update(
+        next_chunk_id="WS-AUTH-001-11", next_chunk_title="Project Read Cutover",
+    )
     loop.apply_merge_record(state_root, base)
+    auth_start = _event("start", 40)
+    auth_start.update(
+        main_sha="a" * 40,
+        initiative_id="WS-AUTH-001", chunk_id="WS-AUTH-001-11",
+    )
+    assert loop.apply_authority_event(
+        state_root, auth_start, repository_root=repository_root
+    )
     first = _merge_bound_record()
     second = _merge_bound_record()
     target = _merge_bound_record()
     _set_merge_identity(
-        first, chunk_id="WS-ENG-007-00R4", pr_number=191,
+        first, chunk_id="WS-ART-001-PLAN2", pr_number=197,
         main_sha="c" * 40, first_parent_sha="a" * 40, head_sha="4" * 40,
     )
+    first["source"]["intent_path"] = (
+        ".agent-loop/merge-intents/WS-ART-001-PLAN2.json"
+    )
+    first["completed_chunk"].update(
+        initiative_id="WS-ART-001", chunk_id="WS-ART-001-PLAN2",
+        chunk_title="Submission Bundle Reconciliation",
+        next_chunk_id="WS-ART-001-03A", next_chunk_title="Guide Source Byte Ingest",
+    )
+    first["gate"].update(
+        next_chunk_id="WS-ART-001-03A", next_chunk_title="Guide Source Byte Ingest",
+    )
     _set_merge_identity(
-        second, chunk_id="WS-ENG-007-00R5", pr_number=192,
+        second, chunk_id="WS-AUTH-001-11", pr_number=201,
         main_sha="d" * 40, first_parent_sha="c" * 40, head_sha="5" * 40,
+    )
+    second["source"]["intent_path"] = ".agent-loop/merge-intents/WS-AUTH-001-11.json"
+    second["completed_chunk"].update(
+        initiative_id="WS-AUTH-001", chunk_id="WS-AUTH-001-11",
+        chunk_title="Project Read Cutover Planning Parent",
+        next_chunk_id="WS-AUTH-001-11A",
+        next_chunk_title="Project Read Catalogue And Projection Foundation",
+    )
+    second["gate"].update(
+        next_chunk_id="WS-AUTH-001-11A",
+        next_chunk_title="Project Read Catalogue And Projection Foundation",
     )
     _set_merge_identity(
         target, chunk_id="WS-ENG-007-00R6", pr_number=202,
@@ -2171,12 +2214,12 @@ def test_prepare_recovery_v6_consumes_exact_two_predecessor_sequence(
         },
         "recovered_merges": [
             {
-                "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R4",
-                "pr_number": 191, "merge_sha": "c" * 40,
+                "initiative_id": "WS-ART-001", "chunk_id": "WS-ART-001-PLAN2",
+                "pr_number": 197, "merge_sha": "c" * 40,
             },
             {
-                "initiative_id": "WS-ENG-007", "chunk_id": "WS-ENG-007-00R5",
-                "pr_number": 192, "merge_sha": "d" * 40,
+                "initiative_id": "WS-AUTH-001", "chunk_id": "WS-AUTH-001-11",
+                "pr_number": 201, "merge_sha": "d" * 40,
             },
         ],
     }
@@ -2197,7 +2240,7 @@ def test_prepare_recovery_v6_consumes_exact_two_predecessor_sequence(
         state_root=state_root, target_sha="f" * 40, planned_shas=planned,
     )
     assert [item["chunk_id"] for item in exemptions] == [
-        "WS-ENG-007-00R4", "WS-ENG-007-00R5", "WS-ENG-007-00R6",
+        "WS-ART-001-PLAN2", "WS-AUTH-001-11", "WS-ENG-007-00R6",
     ]
     assert loop.apply_merge_record(state_root, first, exemptions)
     assert loop.apply_merge_record(state_root, second, exemptions)
@@ -2207,6 +2250,22 @@ def test_prepare_recovery_v6_consumes_exact_two_predecessor_sequence(
         object(), "Flow-Research/workstream", repository_root=tmp_path,
         state_root=state_root, target_sha="f" * 40, planned_shas=[],
     ) == []
+    latest = loop._latest_by_initiative(
+        loop._validate_ledger_entries(loop._load_ledger(state_root / loop.LEDGER_PATH))
+    )
+    assert latest["WS-ART-001"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
+    assert latest["WS-ART-001"]["gate"]["next_chunk_id"] == "WS-ART-001-03A"
+    assert latest["WS-AUTH-001"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
+    assert latest["WS-AUTH-001"]["gate"]["next_chunk_id"] == "WS-AUTH-001-11A"
+    assert latest["WS-ENG-007"]["active"] == {
+        "planning_chunk": None, "implementation_chunk": None,
+    }
+    assert latest["WS-ENG-007"]["gate"]["next_chunk_id"] == "WS-ENG-007-01"
+    loop.validate_generated_state(state_root)
 
     fresh = tmp_path / "wrong-order"
     loop.apply_merge_record(fresh, base)
