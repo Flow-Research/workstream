@@ -50,6 +50,11 @@ and the new bootstrap machine block. No product, API, database, migration,
 authorization, payment, signing, start/cancel, branch-protection, secret,
 dependency, or coverage behavior changed.
 
+Final reconciliation found no overlap with active REV PR #195 or the concurrent
+AUTH/ART work. Stale PR #149 overlaps the evidence checker and Agent Gate tests;
+it has no ENG-008 authority and must rebase and satisfy the post-cutover scope
+gate independently.
+
 ## Acceptance criteria proof
 
 - Strict schema and human agreement: parser mutations plus all seven ENG-008 contracts pass.
@@ -120,4 +125,3 @@ contract and must not delay this closed enforcement cutover.
 
 The PR remains stopped for explicit review and merge approval. Its merge will
 not start `WS-ENG-008-02`.
-
