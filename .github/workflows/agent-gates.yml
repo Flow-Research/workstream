@@ -107,6 +107,7 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.base_ref }}
+          INTERNAL_REVIEW_REPOSITORY_ROOT: ${{ github.workspace }}
         shell: bash
         run: |
           set -euo pipefail

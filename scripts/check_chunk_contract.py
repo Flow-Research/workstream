@@ -368,7 +368,10 @@ def validate_untracked_files(repo: Path, raw_paths: Sequence[bytes]) -> None:
 def _git_json(repo: Path, revision_path: str) -> dict[str, Any]:
     raw = _git(repo, "show", revision_path)
     try:
-        value = json.loads(raw, object_pairs_hook=_object)
+        value = json.loads(
+            _decode_utf8(raw, f"signed state at {revision_path}"),
+            object_pairs_hook=_object,
+        )
     except (json.JSONDecodeError, ContractError) as exc:
         raise ContractError(f"malformed signed state at {revision_path}: {exc}") from exc
     if type(value) is not dict:
@@ -457,7 +460,10 @@ def verify_state_ref(repo: Path, state_ref: str) -> None:
 
 def authenticated_ledger(repo: Path, state_ref: str) -> tuple[dict[str, Any], ...]:
     """Return ordered records from the already authenticated tip ledger."""
-    raw = _git(repo, "show", f"{state_ref}:.agent-loop/MERGE_LOG.jsonl")
+    raw = _decode_utf8(
+        _git(repo, "show", f"{state_ref}:.agent-loop/MERGE_LOG.jsonl"),
+        "authenticated ledger",
+    )
     records: list[dict[str, Any]] = []
     for number, line in enumerate(raw.splitlines(), 1):
         if not line:

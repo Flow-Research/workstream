@@ -140,6 +140,13 @@ class ContractSchemaTests(unittest.TestCase):
         with self.assertRaises(checker.ContractError):
             checker.parse_contract_bytes(contract() + block)
 
+    def test_signed_json_decoders_normalize_invalid_utf8(self) -> None:
+        with mock.patch.object(checker, "_git", return_value=b"\xff"):
+            with self.assertRaisesRegex(checker.ContractError, "not valid UTF-8"):
+                checker._git_json(Path("."), "state:.agent-loop/STATE.json")
+            with self.assertRaisesRegex(checker.ContractError, "not valid UTF-8"):
+                checker.authenticated_ledger(Path("."), "state")
+
 
 class PathAndStatusTests(unittest.TestCase):
     def test_positive_closed_recursive_path(self) -> None:

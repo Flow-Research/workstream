@@ -21,6 +21,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import yaml
 
@@ -318,6 +319,21 @@ def test_backend_config_paths_require_review_evidence() -> None:
 
     backend_config_tracks = gate.required_tracks_for(["backend/pyproject.toml"])
     assert "ci integrity" in backend_config_tracks
+
+
+def test_materialized_evidence_gate_uses_explicit_repository_root() -> None:
+    """A trusted copied checker must still inspect the candidate workspace."""
+    with tempfile.TemporaryDirectory() as directory:
+        configured = Path(directory).resolve()
+        with mock.patch.dict(
+            os.environ,
+            {"INTERNAL_REVIEW_REPOSITORY_ROOT": str(configured)},
+        ):
+            gate = load_module(
+                "review_gate_explicit_repository_root",
+                "scripts/check_internal_review_evidence.py",
+            )
+        assert gate.ROOT == configured
 
 
 def test_machine_scope_binds_reviewer_routing_and_verification_evidence() -> None:
@@ -6529,6 +6545,16 @@ def test_machine_chunk_scope_gate_is_mandatory_and_signed_state_bound() -> None:
     ) in workflow
     assert '"${trusted_evidence_dir}/check_internal_review_evidence.py"' in workflow
     assert 'PYTHONPATH="${trusted_evidence_dir}"' in workflow
+    assert "INTERNAL_REVIEW_REPOSITORY_ROOT: ${{ github.workspace }}" in workflow
+    assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
+    assert "--state-ref origin/automation/loop-memory" in workflow
+    assert "continue-on-error" not in workflow
+    assert workflow.index("Fetch signed loop-memory state") < workflow.index(
+        "Machine-checkable chunk scope"
+    )
+    assert workflow.index("Machine-checkable chunk scope") < workflow.index(
+        "Internal review evidence gate"
+    )
 
 
 def test_chunk_contract_template_exposes_all_machine_scope_choices() -> None:
@@ -6550,15 +6576,6 @@ def test_chunk_contract_template_exposes_all_machine_scope_choices() -> None:
         "test delta",
     ):
         assert template.count(f'"{reviewer}"') == 1
-    assert '--base-ref "origin/${BASE_REF}" --head-ref HEAD' in workflow
-    assert "--state-ref origin/automation/loop-memory" in workflow
-    assert "continue-on-error" not in workflow
-    assert workflow.index("Fetch signed loop-memory state") < workflow.index(
-        "Machine-checkable chunk scope"
-    )
-    assert workflow.index("Machine-checkable chunk scope") < workflow.index(
-        "Internal review evidence gate"
-    )
 
 
 def test_agent_gate_dependencies_and_workflow_are_pinned() -> None:
@@ -7724,6 +7741,7 @@ def main() -> int:
     tests = [
         test_required_tracks_expand_for_loop_and_ci_paths,
         test_backend_config_paths_require_review_evidence,
+        test_materialized_evidence_gate_uses_explicit_repository_root,
         test_machine_scope_binds_reviewer_routing_and_verification_evidence,
         test_review_evidence_files_are_not_relevant_changes,
         test_evidence_requires_completed_yes_statements,

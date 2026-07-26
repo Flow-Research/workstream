@@ -17,7 +17,14 @@ from check_chunk_contract import (
     parse_contract_bytes,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
+_configured_root = os.environ.get("INTERNAL_REVIEW_REPOSITORY_ROOT", "").strip()
+if _configured_root and not Path(_configured_root).is_absolute():
+    raise RuntimeError("INTERNAL_REVIEW_REPOSITORY_ROOT must be absolute")
+ROOT = (
+    Path(_configured_root).resolve()
+    if _configured_root
+    else Path(__file__).resolve().parents[1]
+)
 
 ALLOWED_POST_REVIEW_PREFIXES = (
     ".agent-loop/initiatives/",
