@@ -5,36 +5,36 @@
   },
   "authority_state": {
     "active": {
-      "implementation_chunk": "WS-AUTH-001-11A",
+      "implementation_chunk": "WS-ART-001-03A",
       "planning_chunk": null
     },
     "completed_chunk": {
-      "chunk_id": "WS-AUTH-001-11",
-      "chunk_title": "Project Read Cutover Planning Parent",
-      "initiative_id": "WS-AUTH-001",
-      "next_chunk_id": "WS-AUTH-001-11A",
-      "next_chunk_title": "Project Read Catalogue And Projection Foundation",
+      "chunk_id": "WS-ART-001-PLAN2",
+      "chunk_title": "Submission Bundle Reconciliation",
+      "initiative_id": "WS-ART-001",
+      "next_chunk_id": "WS-ART-001-03A",
+      "next_chunk_title": "Guide Source Byte Ingest",
       "next_requires_explicit_start": true,
       "schema_version": 2
     },
     "gate": {
-      "next_chunk_id": "WS-AUTH-001-11A",
-      "next_chunk_title": "Project Read Catalogue And Projection Foundation",
+      "next_chunk_id": "WS-ART-001-03A",
+      "next_chunk_title": "Guide Source Byte Ingest",
       "next_requires_explicit_start": true,
       "status": "active"
     },
     "source": {
-      "first_parent_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
-      "head_ref": "codex/ws-auth-001-11-project-read-cutover",
-      "head_sha": "275a0ddc970e4b276801b0a5dfa04a316d82e400",
-      "intent_blob_sha": "0611666e75680b9696ab2960dbee2af83261dd4d",
-      "intent_path": ".agent-loop/merge-intents/WS-AUTH-001-11.json",
-      "main_sha": "f670b7058c71ad4d11a68c6e242e9fe501ae3aaf",
-      "merged_at": "2026-07-25T23:54:22Z",
+      "first_parent_sha": "bba4ba5f171a4438b072740707a5cf8bde49d9af",
+      "head_ref": "codex/ws-art-001-plan2-submission-bundle-reconciliation",
+      "head_sha": "be62b740e8476c11cca70b6dc66a8ad5dfd6cf92",
+      "intent_blob_sha": "679f1f704273cadfac195a8c93b0b970f3edbc44",
+      "intent_path": ".agent-loop/merge-intents/WS-ART-001-PLAN2.json",
+      "main_sha": "03a05eeb8f129e0d5f226cc5c058965f43590a81",
+      "merged_at": "2026-07-25T17:19:02Z",
       "merged_by": "abiorh-claw",
-      "pr_number": 201,
-      "pr_title": "WS-AUTH-001-11: split project read hard cutover",
-      "pr_url": "https://github.com/Flow-Research/workstream/pull/201"
+      "pr_number": 197,
+      "pr_title": "docs(artifacts): reconcile submission bundle plan",
+      "pr_url": "https://github.com/Flow-Research/workstream/pull/197"
     }
   },
   "checks": {
@@ -73,19 +73,19 @@
       "schema_version": 2,
       "type": "github_repository_permission"
     },
-    "chunk_id": "WS-AUTH-001-11A",
-    "created_at": "2026-07-26T06:56:33Z",
+    "chunk_id": "WS-ART-001-03A",
+    "created_at": "2026-07-26T06:57:44Z",
     "dispatcher": "Abiorh001",
-    "event_id": "github-actions:30191914627:start",
-    "initiative_id": "WS-AUTH-001",
+    "event_id": "github-actions:30191948289:start",
+    "initiative_id": "WS-ART-001",
     "main_sha": "bd2203d5e8a972d8afbf833805b92ed70dedee4a",
-    "prior_state_tip": "6923f9ed4a8e48327d3aa4d046c8a8dc3a31ea3a",
-    "reason": "Approved project read catalogue and projection foundation implementation",
-    "run_id": 30191914627,
+    "prior_state_tip": "4ee6ab43060f0468222b0713e5ea3326b589734c",
+    "reason": "User instructed ART to move forward after PLAN2 merge and signed recovery",
+    "run_id": 30191948289,
     "selection": {
-      "contract_blob_sha": "f740e726b694da1c1300519574c58412d753cd65",
-      "contract_path": ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-11A-project-read-catalogue-foundation.md",
-      "contract_title": "Project Read Catalogue And Projection Foundation",
+      "contract_blob_sha": "ce9e7f13909a64f992d1a411df79945b37ac1e98",
+      "contract_path": ".agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/chunks/WS-ART-001-03A-guide-source-byte-ingest.md",
+      "contract_title": "Guide Source Byte Ingest",
       "mode": "declared_successor",
       "phase": "implementation",
       "schema_version": 1
@@ -175,5 +175,5 @@
     "pr_url": "https://github.com/Flow-Research/workstream/pull/196"
   },
   "state_branch": "automation/loop-memory",
-  "updated_at": "2026-07-26T06:56:33Z"
+  "updated_at": "2026-07-26T06:57:44Z"
 }

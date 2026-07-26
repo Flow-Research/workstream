@@ -10,9 +10,9 @@
 - Merge intent: `.agent-loop/merge-intents/WS-ENG-008-PLAN.json` at blob `0ffe1d0158d896d069b771f9ff44d68c4e6d9fd5`
 - Completed chunk: `WS-ENG-008-PLAN` - Repository-Native SDLC Assurance Planning
 - Active planning chunks: none
-- Active implementation chunks: `WS-AUTH-001-11A`, `WS-ENG-008-01`, `WS-REV-001-03P`
-- Latest authority event: `start` for `WS-AUTH-001-11A`
-- Authority initiative: `WS-AUTH-001`
+- Active implementation chunks: `WS-ART-001-03A`, `WS-AUTH-001-11A`, `WS-ENG-008-01`, `WS-REV-001-03P`
+- Latest authority event: `start` for `WS-ART-001-03A`
+- Authority initiative: `WS-ART-001`
 - Current gate: `stopped_after_merge`
 - Next chunk: `WS-ENG-008-01` - Machine-Checkable Chunk Scope; requires a separate explicit start.
 - Required check evidence: passed
