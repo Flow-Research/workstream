@@ -20,9 +20,9 @@ valid findings addressed: yes
 
 ## Reviewed Revision
 
-Reviewed code SHA: `1ef5c3bd0bffedec684ae8b6cec2e6affbcb3b21`
+Reviewed code SHA: `848c6d972eba229478573faddb252eb534f8e5a8`
 
-Reviewed at: `2026-07-26T07:48:30Z`
+Reviewed at: `2026-07-26T08:29:21Z`
 
 Reviewer run IDs: `ci02b_lane_runner`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`, `ci02b_cr_reuse`, `ci02b_cr_test_delta`
 
@@ -81,8 +81,8 @@ git diff --check origin/main...HEAD
 
 ## Results
 
-- Machine scope tests: 27 passed.
-- Agent Gate regressions: 102 passed.
+- Machine scope tests: 28 passed.
+- Agent Gate regressions: 104 passed.
 - Exact signed-state scope selection: passed.
 - Schema-v2 merge intent: passed.
 - Ruff, Markdown links, stale wording, and diff checks: passed.

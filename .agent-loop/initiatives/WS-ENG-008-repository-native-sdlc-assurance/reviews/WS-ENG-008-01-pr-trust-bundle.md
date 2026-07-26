@@ -23,7 +23,7 @@ The approved contract is
 - Phase: `implementation`
 - Contract path: `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/chunks/WS-ENG-008-01-machine-checkable-chunk-scope.md`
 - Signed contract blob SHA: `2fb0afba71653e7aefcc074079fe98f44051c068`
-- Reviewed implementation SHA: `1ef5c3bd0bffedec684ae8b6cec2e6affbcb3b21`
+- Reviewed implementation SHA: `848c6d972eba229478573faddb252eb534f8e5a8`
 
 ## What changed
 
@@ -82,7 +82,7 @@ Result: all passed on the reviewed implementation plus evidence-only publication
 
 ## Test delta
 
-- Added 27 focused schema, signed-state, path, Git-mode, collision, and workflow tests.
+- Added 28 focused schema, signed-state, path, Git-mode, collision, and workflow tests.
 - Added Agent Gate regressions for trusted execution and evidence binding.
 - No test was removed, skipped, deselected, or weakened.
 
@@ -94,9 +94,9 @@ Result: all passed on the reviewed implementation plus evidence-only publication
 
 ## Reviewer results
 
-Reviewed code SHA: `1ef5c3bd0bffedec684ae8b6cec2e6affbcb3b21`
+Reviewed code SHA: `848c6d972eba229478573faddb252eb534f8e5a8`
 
-Reviewed at: `2026-07-26T07:48:30Z`
+Reviewed at: `2026-07-26T08:29:21Z`
 
 Reviewer run IDs: `ci02b_lane_runner`, `ci02b_cr_arch`, `ci02b_cr_ci`, `ci02b_cr_docs`, `ci02b_cr_reuse`, `ci02b_cr_test_delta`
 
@@ -123,8 +123,11 @@ contract and must not delay this closed enforcement cutover.
 
 ## External review
 
-- CodeRabbit: pending
-- GitHub checks: pending
+- CodeRabbit: ten threads triaged; nine valid or partially valid findings fixed,
+  one reviewed-SHA subclaim dismissed after exact 40-character object proof.
+- GitHub checks: prior exact head passed; repair-head rerun required after push.
+- Response evidence:
+  `.agent-loop/initiatives/WS-ENG-008-repository-native-sdlc-assurance/reviews/WS-ENG-008-01-external-review-response.md`
 
 ## Human ownership
 
