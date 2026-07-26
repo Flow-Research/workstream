@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "initiative_id": "WS-ENG-008",
+  "chunk_id": "WS-ENG-008-PLAN",
+  "chunk_title": "Repository-Native SDLC Assurance Planning",
+  "next_chunk_id": "WS-ENG-008-01",
+  "next_chunk_title": "Machine-Checkable Chunk Scope",
+  "next_requires_explicit_start": true
+}
