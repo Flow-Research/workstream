@@ -82,7 +82,7 @@ class ContractSchemaTests(unittest.TestCase):
             "authorization-property-tests", "authorization-property-lint",
             "mutation-policy-tests", "mutation-policy-lint",
             "review-log-archive-tests", "review-log-archive-check",
-            "loop-memory-state", "stale-artifact-contracts",
+            "loop-memory-state", "loop-memory-recovery-tests", "stale-artifact-contracts",
         }))
 
     def test_positive_schema_identity_reviewer_and_command(self) -> None:

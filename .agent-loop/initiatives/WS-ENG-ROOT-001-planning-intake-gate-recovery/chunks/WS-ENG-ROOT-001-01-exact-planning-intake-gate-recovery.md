@@ -36,7 +36,7 @@ L0
   ],
   "forbidden_paths": ["backend/**", "frontend/**", ".github/**"],
   "required_reviewers": ["senior engineering", "qa/test", "security/auth", "product/ops", "architecture", "ci integrity", "docs", "reuse/dedup", "test delta"],
-  "verification_commands": ["agent-gate-tests", "loop-memory-state", "chunk-scope-tests", "internal-review-evidence", "markdown-links", "stale-wording", "git-diff-check"]
+  "verification_commands": ["agent-gate-tests", "loop-memory-state", "loop-memory-recovery-tests", "chunk-scope-tests", "internal-review-evidence", "markdown-links", "stale-wording", "git-diff-check"]
 }
 ```
 
@@ -84,6 +84,7 @@ automatic start, merge, approval, cancellation, or AUTH implementation
 python3 scripts/test_check_chunk_contract.py
 python3 scripts/test_agent_gates.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py
+python3 scripts/check_loop_memory_state.py
 python3 scripts/check_internal_review_evidence.py
 python3 scripts/check_markdown_links.py
 python3 scripts/check_stale_workstream_wording.py

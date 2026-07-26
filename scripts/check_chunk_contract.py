@@ -40,6 +40,7 @@ VERIFICATION_COMMANDS = {
     "review-log-archive-tests": "python3 scripts/test_check_review_log_archive.py",
     "review-log-archive-check": "python3 scripts/check_review_log_archive.py",
     "loop-memory-state": "python3 scripts/check_loop_memory_state.py",
+    "loop-memory-recovery-tests": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q scripts/test_update_post_merge_memory.py scripts/test_check_loop_memory_state.py",
     "stale-artifact-contracts": "python3 scripts/check_stale_artifact_contracts.py",
 }
 VERIFICATION_COMMAND_IDS = frozenset(VERIFICATION_COMMANDS)
@@ -596,7 +597,7 @@ def root_recovery_scope(
             "architecture", "ci integrity", "docs", "reuse/dedup", "test delta",
         ],
         "verification_commands": [
-            "agent-gate-tests", "loop-memory-state", "chunk-scope-tests",
+            "agent-gate-tests", "loop-memory-state", "loop-memory-recovery-tests", "chunk-scope-tests",
             "internal-review-evidence", "markdown-links", "stale-wording",
             "git-diff-check",
         ],
