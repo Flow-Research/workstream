@@ -2,9 +2,9 @@
 
 ## Status
 
-Active for implementation. Signed automation run `30191914627` activated this
-exact child on protected main `bd2203d5`. Chat and local branch state are not
-authority; the signed automation projection is the canonical start proof.
+Active for implementation under the repository's simple engineering loop.
+The user approved resuming this bounded AUTH-owned change after reconciling it
+with current `main`.
 
 ## Goal
 

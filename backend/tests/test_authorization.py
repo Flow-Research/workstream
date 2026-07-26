@@ -7457,6 +7457,213 @@ async def authorization_factory(authorization_database_env: str):
 
 
 @pytest.mark.asyncio
+async def test_project_read_permissions_have_postgresql_role_scope_matrix(
+    authorization_factory,
+) -> None:
+    """Prove persisted grants confer only the reviewed read projections."""
+    now = datetime.now(UTC)
+    project_id, other_project_id = uuid4(), uuid4()
+    bootstrap_actor_id, bootstrap_link_id, bootstrap_grant_id = uuid4(), uuid4(), uuid4()
+    role_cases = (
+        (AdminRole.OPERATOR, AdminScope.SYSTEM, None, True),
+        (AdminRole.PROJECT_MANAGER, AdminScope.PROJECT, project_id, True),
+        (AdminRole.AUDIT_AUTHORITY, AdminScope.PROJECT, project_id, True),
+        (AdminRole.FINANCE_AUTHORITY, AdminScope.PROJECT, project_id, False),
+    )
+    actor_cases = [(role, uuid4(), uuid4(), uuid4()) for role, *_rest in role_cases]
+    contributor_cases = [(role, uuid4(), uuid4(), uuid4(), uuid4()) for role in ProjectRole]
+
+    async with authorization_factory() as session:
+        session.add_all(
+            [
+                Project(
+                    id=str(project_id),
+                    name="AUTH-11A role matrix",
+                    slug=f"auth-11a-role-matrix-{project_id}",
+                    status="draft",
+                ),
+                Project(
+                    id=str(other_project_id),
+                    name="AUTH-11A other project",
+                    slug=f"auth-11a-other-project-{other_project_id}",
+                    status="draft",
+                ),
+                ActorProfile(
+                    id=str(bootstrap_actor_id),
+                    actor_kind="human",
+                    status="active",
+                    provisioning_method="automatic_first_access",
+                    created_by=str(bootstrap_actor_id),
+                ),
+                ActorIdentityLink(
+                    id=str(bootstrap_link_id),
+                    actor_profile_id=str(bootstrap_actor_id),
+                    issuer="https://identity.flowresearch.tech",
+                    subject=f"auth-11a-bootstrap-{bootstrap_actor_id}",
+                    subject_kind="human",
+                    status="active",
+                    linked_by=str(bootstrap_actor_id),
+                    last_verified_at=now,
+                ),
+            ]
+        )
+        for _role, actor_id, link_id, _grant_id in actor_cases:
+            session.add_all(
+                [
+                    ActorProfile(
+                        id=str(actor_id),
+                        actor_kind="human",
+                        status="active",
+                        provisioning_method="automatic_first_access",
+                        created_by=str(actor_id),
+                    ),
+                    ActorIdentityLink(
+                        id=str(link_id),
+                        actor_profile_id=str(actor_id),
+                        issuer="https://identity.flowresearch.tech",
+                        subject=f"auth-11a-admin-{actor_id}",
+                        subject_kind="human",
+                        status="active",
+                        linked_by=str(actor_id),
+                        last_verified_at=now,
+                    ),
+                ]
+            )
+        for _role, actor_id, link_id, _snapshot_id, _grant_id in contributor_cases:
+            session.add_all(
+                [
+                    ActorProfile(
+                        id=str(actor_id),
+                        actor_kind="human",
+                        status="active",
+                        provisioning_method="automatic_first_access",
+                        created_by=str(actor_id),
+                    ),
+                    ActorIdentityLink(
+                        id=str(link_id),
+                        actor_profile_id=str(actor_id),
+                        issuer="https://identity.flowresearch.tech",
+                        subject=f"auth-11a-contributor-{actor_id}",
+                        subject_kind="human",
+                        status="active",
+                        linked_by=str(actor_id),
+                        last_verified_at=now,
+                    ),
+                ]
+            )
+        session.add(
+            AdminRoleGrant(
+                id=bootstrap_grant_id,
+                target_actor_profile_id=str(bootstrap_actor_id),
+                role=AdminRole.ACCESS_ADMINISTRATOR.value,
+                scope_type=AdminScope.SYSTEM.value,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="AUTH-11A PostgreSQL bootstrap proof",
+                granted_at=now,
+            )
+        )
+        await session.flush()
+        await session.execute(
+            text(
+                "update authority_control set bootstrap_completed=true, version=1, "
+                "bootstrap_grant_id=:grant_id, updated_at=clock_timestamp() where id=1"
+            ),
+            {"grant_id": str(bootstrap_grant_id)},
+        )
+        for (role, scope, scope_project_id, _allowed), (
+            _case_role,
+            actor_id,
+            _link_id,
+            grant_id,
+        ) in zip(role_cases, actor_cases, strict=True):
+            session.add(
+                AdminRoleGrant(
+                    id=grant_id,
+                    target_actor_profile_id=str(actor_id),
+                    role=role.value,
+                    scope_type=scope.value,
+                    scope_project_id=(str(scope_project_id) if scope_project_id else None),
+                    status="active",
+                    version=1,
+                    granted_by_actor_profile_id=str(bootstrap_actor_id),
+                    granted_by_admin_role_grant_id=bootstrap_grant_id,
+                    grant_reason=f"AUTH-11A PostgreSQL {role.value} proof",
+                    granted_at=now,
+                )
+            )
+        for role, actor_id, _link_id, snapshot_id, grant_id in contributor_cases:
+            session.add(
+                ProjectRoleQualificationSnapshot(
+                    id=snapshot_id,
+                    project_id=str(project_id),
+                    actor_profile_id=str(actor_id),
+                    requested_role=role.value,
+                    **_project_role_qualification(),
+                    captured_by_actor_profile_id=str(bootstrap_actor_id),
+                    captured_by_admin_role_grant_id=bootstrap_grant_id,
+                    captured_at=now,
+                )
+            )
+        await session.flush()
+        for role, actor_id, _link_id, snapshot_id, grant_id in contributor_cases:
+            session.add(
+                ProjectRoleGrant(
+                    id=grant_id,
+                    project_id=str(project_id),
+                    actor_profile_id=str(actor_id),
+                    role=role.value,
+                    qualification_snapshot_id=snapshot_id,
+                    granted_by_actor_profile_id=str(bootstrap_actor_id),
+                    granted_by_admin_role_grant_id=bootstrap_grant_id,
+                    grant_reason=f"AUTH-11A {role.value} exclusion proof",
+                    granted_at=now,
+                )
+            )
+        await session.commit()
+
+        repository = AdminAuthorizationRepository(session)
+        permissions = (
+            PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+            PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
+        )
+        for (_role, scope, _scope_project_id, allowed), (
+            _case_role,
+            actor_id,
+            _link_id,
+            _grant_id,
+        ) in zip(role_cases, actor_cases, strict=True):
+            for permission in permissions:
+                grant = await repository.find_effective_grant(
+                    actor_id, permission, scope_project_id=project_id
+                )
+                assert (grant is not None) is allowed
+                if allowed and scope is AdminScope.PROJECT:
+                    assert (
+                        await repository.find_effective_grant(
+                            actor_id, permission, scope_project_id=other_project_id
+                        )
+                        is None
+                    )
+        for _role, actor_id, _link_id, _snapshot_id, _grant_id in contributor_cases:
+            for permission in permissions:
+                assert (
+                    await repository.find_effective_grant(
+                        actor_id, permission, scope_project_id=project_id
+                    )
+                    is None
+                )
+        for permission in permissions:
+            assert (
+                await repository.find_effective_grant(
+                    bootstrap_actor_id, permission, scope_project_id=project_id
+                )
+                is None
+            )
+
+
+@pytest.mark.asyncio
 async def test_authorization_locks_refresh_cached_actor_lifecycle_state(
     authorization_factory,
 ) -> None:
