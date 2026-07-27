@@ -1995,6 +1995,7 @@ def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str
     for header_index, row in enumerate(rows):
         if row not in {
             "| AUTH activation custodian | Exact planned ActionIds |",
+            "| AUTH activation custodian | Exact ActionIds and current availability |",
             "| AUTH activation chunk | Exact planned ActionIds |",
         }:
             continue

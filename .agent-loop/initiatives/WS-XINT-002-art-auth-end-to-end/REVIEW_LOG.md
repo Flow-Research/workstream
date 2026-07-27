@@ -27,3 +27,12 @@ integrity, docs, and test-delta tracks passed after all valid findings were
 fixed. Reuse/dedup passed with low residual risk. The final review record and
 exact evidence are in `reviews/WS-XINT-002-03-internal-review.md`; no blocking
 finding remains before exact-head external review.
+
+## PR #212 external review
+
+The first hosted Backend run exposed three stale test expectations after all
+four semantic lanes executed. The tests were strengthened to prove exact
+claim/terminal capability consumption, terminal-only authority drift, and the
+accurate active custody-table header. The isolated four-test PostgreSQL rerun
+and QA, test-delta, and CI-integrity re-reviews passed. Details are in
+`reviews/WS-XINT-002-03-external-review-response.md`.

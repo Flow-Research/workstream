@@ -110,13 +110,18 @@ class _AllowArtifactAuthority:
         self.prepares = 0
         self.terminals = 0
         self.phase: str | None = None
+        self.prepared_phases: list[str] = []
+        self.consumed_phases: list[str] = []
 
     async def prepare(self, **values: object) -> None:
         self.prepares += 1
         self.phase = str(values["phase"])
+        self.prepared_phases.append(self.phase)
 
     async def consume(self, **_values: object) -> None:
         self.terminals += 1
+        assert self.phase is not None
+        self.consumed_phases.append(self.phase)
 
     def discard(self) -> None:
         self.phase = None
@@ -902,8 +907,10 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
                 assert scopes and {scope.counted_bytes for scope in scopes} == {0}
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
-                assert authority.prepares == 1
-                assert authority.terminals == 1
+                assert authority.prepares == 2
+                assert authority.terminals == 2
+                assert authority.prepared_phases == ["claim", "terminal"]
+                assert authority.consumed_phases == ["claim", "terminal"]
     finally:
         bootstrap.close()
         await engine.dispose()

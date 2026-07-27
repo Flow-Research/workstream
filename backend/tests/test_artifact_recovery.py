@@ -74,8 +74,17 @@ class _AllowArtifactAuthority:
 
 
 class _DenyTerminalArtifactAuthority(_AllowArtifactAuthority):
+    phase: str | None = None
+
+    async def prepare(self, **values: object) -> None:
+        self.phase = str(values["phase"])
+
     async def consume(self, **_values: object) -> None:
-        raise ArtifactAuthorityDeniedError("terminal authority changed")
+        if self.phase == "terminal":
+            raise ArtifactAuthorityDeniedError("terminal authority changed")
+
+    def discard(self) -> None:
+        self.phase = None
 
 
 class _AllowRecoveryAuthority:
