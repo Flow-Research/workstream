@@ -31,6 +31,7 @@ from app.modules.artifacts.service import (
     artifact_storage_namespace_spec,
 )
 from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
+from app.modules.authorization.runtime import AuthorizationDenied
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
@@ -317,6 +318,173 @@ async def test_process_runtime_shutdown_waits_for_active_lease(
     thread.join(timeout=1)
     assert not thread.is_alive()
     bootstrap.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_process_runtime_closes_bootstrap_when_namespace_claim_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    bootstrap = Mock()
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_settings",
+        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+    )
+    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "create_artifact_store_bootstrap",
+        Mock(return_value=bootstrap),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "artifact_storage_namespace_spec",
+        Mock(return_value=Mock()),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "validate_artifact_storage_namespace_at_startup",
+        AsyncMock(side_effect=RuntimeError("claim failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="claim failed"):
+        await internal_worker_adapter.initialize_artifact_internal_runtime()
+
+    bootstrap.close.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+async def test_internal_operation_rejects_kind_and_restages_denial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="unsupported artifact internal operation"):
+        await internal_worker_adapter.run_artifact_internal_operation("unknown", uuid4())
+
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "initialize_artifact_internal_runtime",
+        AsyncMock(return_value=None),
+    )
+
+    @contextmanager
+    def runtime():
+        yield Mock(), Mock()
+
+    monkeypatch.setattr(internal_worker_adapter, "_artifact_internal_runtime", runtime)
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
+    order: list[str] = []
+
+    async def rollback() -> None:
+        order.append("rollback")
+
+    async def persist_denial() -> None:
+        order.append("restage")
+
+    session = Mock()
+    session.rollback = AsyncMock(side_effect=rollback)
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_session_factory",
+        Mock(return_value=Mock(return_value=SessionContext())),
+    )
+    authority = Mock()
+    authority.persist_denial = AsyncMock(side_effect=persist_denial)
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "PreparedArtifactInternalAuthority",
+        Mock(return_value=authority),
+    )
+    orchestrator = Mock()
+    orchestrator.resolve_put_attempt = AsyncMock(
+        side_effect=AuthorizationDenied(
+            SimpleNamespace(allowed=False, denial_code="denied")  # type: ignore[arg-type]
+        )
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "ArtifactStorageOrchestrator",
+        Mock(return_value=orchestrator),
+    )
+
+    with pytest.raises(ArtifactAuthorityDeniedError, match="authority denied"):
+        await internal_worker_adapter.run_artifact_internal_operation("put", uuid4())
+
+    session.rollback.assert_awaited_once_with()
+    authority.persist_denial.assert_awaited_once_with()
+    assert order == ["rollback", "restage"]
+
+
+@pytest.mark.asyncio
+async def test_pending_scan_returns_count_and_restages_denial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+
+    async def rollback() -> None:
+        order.append("rollback")
+
+    async def persist_denial() -> None:
+        order.append("restage")
+
+    session = Mock()
+    session.rollback = AsyncMock(side_effect=rollback)
+
+    class SessionContext:
+        async def __aenter__(self):
+            return session
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_session_factory",
+        Mock(return_value=Mock(return_value=SessionContext())),
+    )
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
+    authority = Mock()
+    authority.persist_denial = AsyncMock(side_effect=persist_denial)
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "PreparedArtifactInternalAuthority",
+        Mock(return_value=authority),
+    )
+    scanner = Mock()
+    scanner.scan = AsyncMock(return_value=3)
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "ArtifactPendingWorkScanner",
+        Mock(return_value=scanner),
+    )
+    publish_put, publish_job = AsyncMock(), AsyncMock()
+
+    assert (
+        await internal_worker_adapter.scan_artifact_pending_work(
+            publish_put, publish_job
+        )
+        == 3
+    )
+
+    scanner.scan.side_effect = AuthorizationDenied(
+        SimpleNamespace(allowed=False, denial_code="denied")  # type: ignore[arg-type]
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="authority denied"):
+        await internal_worker_adapter.scan_artifact_pending_work(
+            publish_put, publish_job
+        )
+
+    session.rollback.assert_awaited_once_with()
+    authority.persist_denial.assert_awaited_once_with()
+    assert order == ["rollback", "restage"]
 
 
 def test_internal_artifact_actions_are_active() -> None:

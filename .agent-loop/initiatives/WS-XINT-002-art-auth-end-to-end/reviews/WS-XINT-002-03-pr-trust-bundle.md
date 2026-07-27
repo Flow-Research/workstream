@@ -46,8 +46,13 @@ expanded; all other ART service actions remain planned and issue no handle.
   diff checks passed.
 - Required internal reviewers passed; reuse/dedup recorded only low residual
   risk.
-- GitHub Actions will run the full repository suite and coverage at the exact PR
-  head; no local four-hour full run is required.
+- Hosted run 30290229205 passed every semantic lane, independent evidence
+  validation, combined coverage, API end-to-end tests, and full backend
+  coverage. Its sole failure was the unchanged artifact-foundation 90 percent
+  floor at 89.42 percent. The follow-up adds focused branch coverage without
+  changing CI configuration, thresholds, inclusion, selection, or skips.
+- GitHub Actions will rerun the full repository suite and coverage at the exact
+  PR head; no local four-hour full run is required.
 
 ## Human review focus
 

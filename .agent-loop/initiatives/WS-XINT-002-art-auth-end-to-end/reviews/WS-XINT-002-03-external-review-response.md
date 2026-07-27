@@ -59,3 +59,23 @@ prefork child shutdown signal. The real Celery task bodies run under eager mode
 in the focused regression; runtime, exact PREP action/context pairing, and
 direct-require denial tests passed. Architecture, security, and QA focused
 re-reviews passed.
+
+## Hosted Backend run 30290229205
+
+All semantic lanes, the independent evidence validator, combined coverage,
+API end-to-end tests, and the full backend coverage gate passed. The remaining
+artifact-foundation coverage gate correctly failed at 89.42 percent against
+its unchanged 90 percent floor.
+
+The repair adds branch coverage for process-runtime claim cleanup, unsupported
+operation rejection, rollback-before-denial-restage ordering, pending-work scan
+success and denial handling, invalid authority state, malformed pending-work
+scope, unavailable service principals, and invalid principal identifiers. It
+does not change workflow configuration, coverage targets, source inclusion,
+test selection, or skip behavior.
+
+Ruff, 18 focused unit tests, stale authorization and artifact-contract scans,
+Markdown links, and diff integrity passed locally. QA and test-delta reviews
+passed; the test-delta review specifically confirms the exact rollback then
+restage assertion and found no weakening. The full PostgreSQL and exact-head
+coverage proof remains assigned to GitHub Actions.

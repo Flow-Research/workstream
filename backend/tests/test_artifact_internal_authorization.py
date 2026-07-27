@@ -19,6 +19,7 @@ from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     ArtifactInternalAuthority,
     ArtifactInternalResourceType,
+    ArtifactPendingWorkAuthorityFacts,
     ArtifactPutAttemptAuthorityFacts,
 )
 from app.modules.authorization.catalogue import ActionId
@@ -111,6 +112,99 @@ async def test_adapter_normalizes_malformed_resource_selector_to_denial() -> Non
             action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
             facts=malformed,
             phase="claim",
+            idempotency_key=uuid4(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_adapter_fails_closed_for_invalid_state_and_service_principal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = PreparedArtifactInternalAuthority(
+        _Session(),  # type: ignore[arg-type]
+        service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="authority is invalid"):
+        await authority.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=_facts(),
+            phase="claim",
+            idempotency_key=uuid4(),
+        )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="evidence is unavailable"):
+        await authority.persist_denial()
+
+    pending = ArtifactPendingWorkAuthorityFacts(
+        resource_type=ArtifactInternalResourceType.PENDING_WORK,
+        resource_id="invalid",
+        scanner_kind="artifact_pending_work",
+        database_cutoff_iso="2026-07-27T00:00:00Z",
+        page_size=1,
+    )
+    scheduler = PreparedArtifactInternalAuthority(
+        _Session(),  # type: ignore[arg-type]
+        service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="resource is invalid"):
+        await scheduler.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
+            action_id=ActionId.ARTIFACT_PENDING_WORK_SCAN,
+            facts=pending,
+            phase="scan",
+            idempotency_key=uuid4(),
+        )
+
+    class MissingActors:
+        async def get_service_actor(self, _service_identity: str):
+            return None
+
+    monkeypatch.setattr(
+        artifact_authorization,
+        "ActorRepository",
+        lambda _session: MissingActors(),
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="principal is unavailable"):
+        await authority.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=_facts(),
+            phase="claim",
+            idempotency_key=uuid4(),
+        )
+
+    class InvalidActors:
+        async def get_service_actor(self, _service_identity: str):
+            return SimpleNamespace(
+                id="invalid",
+                actor_kind="service",
+                status="active",
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER.value,
+            )
+
+        async def get_identity_link_for_actor(self, _actor_profile_id: str):
+            return SimpleNamespace(
+                id="invalid",
+                actor_profile_id="invalid",
+                subject_kind="service",
+                status="active",
+            )
+
+    monkeypatch.setattr(
+        artifact_authorization,
+        "ActorRepository",
+        lambda _session: InvalidActors(),
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="principal is unavailable"):
+        await authority.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=_facts(),
+            phase="terminal",
             idempotency_key=uuid4(),
         )
 
