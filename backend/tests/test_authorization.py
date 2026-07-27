@@ -2640,26 +2640,30 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
         (ACTION_DEFINITIONS[:-1] + (ACTION_DEFINITIONS[0],), "incomplete"),
         (ACTION_DEFINITIONS + (ACTION_DEFINITIONS[0],), "incomplete"),
         (
-            ACTION_DEFINITIONS[:-1]
-            + (
+            tuple(
                 ActionDefinition(
-                    ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+                    definition.action_id,
+                    definition.permission_id,
                     ActionOwner.AUTH_ART_02D_OPERATOR,
-                    ActionAvailability.PLANNED,
-                ),
+                    definition.availability,
+                )
+                if definition.action_id is ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE
+                else definition
+                for definition in ACTION_DEFINITIONS
             ),
             "metadata mismatch",
         ),
         (
-            ACTION_DEFINITIONS[:-1]
-            + (
+            tuple(
                 ActionDefinition(
-                    ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.AUTH_ART_06B,
+                    definition.action_id,
+                    definition.permission_id,
+                    definition.owner,
                     ActionAvailability.ACTIVE,
-                ),
+                )
+                if definition.action_id is ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE
+                else definition
+                for definition in ACTION_DEFINITIONS
             ),
             "active action boundary mismatch",
         ),

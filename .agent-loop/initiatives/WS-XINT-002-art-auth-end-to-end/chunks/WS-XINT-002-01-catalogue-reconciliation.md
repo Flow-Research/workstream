@@ -17,6 +17,7 @@ backend/app/modules/authorization/admin_schemas.py
 backend/alembic/versions/<then-current-next>_*.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/STATUS.md

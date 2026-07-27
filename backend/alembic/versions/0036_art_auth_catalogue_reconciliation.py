@@ -73,12 +73,15 @@ def _rewrite_permission_registry(*, forward: bool) -> None:
             if definition.count(token) < 1:
                 raise RuntimeError(f"unexpected {name} removed permission definition")
             definition = definition.replace(", " + token, "")
-        additions = ", " + ", ".join(_permission_token(value) for value in add)
+            if token in definition:
+                raise RuntimeError(f"unexpected {name} removed permission definition")
+        additions = ", ".join(_permission_token(value) for value in add)
         if definition.count(marker) < 1 or any(
             _permission_token(value) in definition for value in add
         ):
             raise RuntimeError(f"unexpected {name} added permission definition")
-        definition = definition.replace(marker, marker + additions)
+        replacement = marker + ", " + additions if forward else additions + ", " + marker
+        definition = definition.replace(marker, replacement)
         _replace(name, definition)
 
 
@@ -92,7 +95,12 @@ def _rewrite_action_registry(*, forward: bool) -> None:
         if definition.count(token) != 2:
             raise RuntimeError("unexpected removed authorization action definition")
         definition = definition.replace(" OR " + token, "")
-    marker = _pair_token("artifact.guide_source.ingest", "artifact.guide_source.ingest")
+        if token in definition:
+            raise RuntimeError("unexpected removed authorization action definition")
+    marker = _pair_token(
+        "artifact.guide_source.ingest" if forward else "artifact.guide_source.read",
+        "artifact.guide_source.ingest" if forward else "artifact.guide_source.read",
+    )
     additions = " OR " + " OR ".join(_pair_token(*pair) for pair in add)
     if definition.count(marker) != 2 or any(_pair_token(*pair) in definition for pair in add):
         raise RuntimeError("unexpected added authorization action definition")
@@ -110,13 +118,16 @@ def _rewrite_action_permission_registry(*, forward: bool) -> None:
         if definition.count(token) != 1:
             raise RuntimeError("unexpected removed action permission definition")
         definition = definition.replace(", " + token, "")
+        if token in definition:
+            raise RuntimeError("unexpected removed action permission definition")
     marker = _permission_token("artifact.binding.create")
-    additions = ", " + ", ".join(_permission_token(value) for value in add)
+    additions = ", ".join(_permission_token(value) for value in add)
     if definition.count(marker) != 1 or any(
         _permission_token(value) in definition for value in add
     ):
         raise RuntimeError("unexpected added action permission definition")
-    definition = definition.replace(marker, marker + additions)
+    replacement = marker + ", " + additions if forward else additions + ", " + marker
+    definition = definition.replace(marker, replacement)
     _replace(name, definition)
 
 
@@ -126,22 +137,33 @@ def _lock_evidence() -> None:
     bind.execute(sa.text("lock table audit_events in access exclusive mode"))
 
 
+def _evidence_predicate(*, prefix: str, action_bind: str, permission_bind: str) -> str:
+    return (
+        f"{prefix}action_id = any(:{action_bind}) or "
+        f"{prefix}permission_id = any(:{permission_bind}) or "
+        f"({prefix}target_ref_kind='permission_registry' and "
+        f"{prefix}target_ref_id = any(:{permission_bind})) or "
+        f"({prefix}invalidation_target_kind='permission_registry' and "
+        f"{prefix}invalidation_target_ref = any(:{permission_bind}))"
+    )
+
+
 def _has_evidence(actions: tuple[str, ...], permissions: tuple[str, ...]) -> bool:
-    predicate = (
-        "action_id = any(:actions) or permission_id = any(:permissions) or "
-        "(target_ref_kind='permission_registry' and target_ref_id = any(:permissions)) or "
-        "(invalidation_target_kind='permission_registry' and "
-        "invalidation_target_ref = any(:permissions))"
+    direct = _evidence_predicate(prefix="", action_bind="actions", permission_bind="permissions")
+    linked = _evidence_predicate(
+        prefix="event.",
+        action_bind="linked_actions",
+        permission_bind="linked_permissions",
     )
     return bool(
         op.get_bind()
         .execute(
             sa.text(
                 "select exists(select 1 from audit_events where "
-                f"idempotency_reference is null and ({predicate})) or "
+                f"{direct}) or "
                 "exists(select 1 from authority_idempotency_records record "
                 "join audit_events event on event.idempotency_reference=record.id "
-                f"where {predicate.replace(':actions', ':linked_actions').replace(':permissions', ':linked_permissions')})"
+                f"where {linked})"
             ),
             {
                 "actions": list(actions),

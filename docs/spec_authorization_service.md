@@ -366,7 +366,7 @@ The paired artifact hidden-behavior matrix is closed:
 | `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
-| `WS-ART-001-06B` | `artifact.checker_output.write` and `artifact.checker_output.binding.create` mapped to `artifact.binding.create` using the checker-run resource |
+| `WS-ART-001-06B` | `artifact.checker_output.write` mapped to `artifact.checker_output.write`; `artifact.checker_output.binding.create` mapped to `artifact.binding.create`, both using the checker-run resource |
 
 WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation

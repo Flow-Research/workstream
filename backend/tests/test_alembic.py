@@ -56,6 +56,18 @@ from app.modules.actors.service_identity_migration import (
 
 pytestmark = pytest.mark.postgres_schema_contract
 
+_OBSOLETE_ART_UPLOAD_IDS = tuple(
+    "artifact.upload_" + value
+    for value in (
+        "session.create",
+        "session.read",
+        "item.write",
+        "session.seal",
+        "session.cancel",
+        "session.expire",
+    )
+)
+
 
 def _alembic_config() -> Config:
     project_root = Path(__file__).resolve().parents[1]
@@ -1753,7 +1765,7 @@ def test_0036_art_auth_catalogue_round_trip(isolated_database_env: str, migratio
                 )
             )
             asyncio.run(_assert_removed_art_authority_rejected(isolated_database_env))
-            command.downgrade(config, "0035_project_read_evidence")
+            command.downgrade(config, "0033_authorization_read_rate")
             command.upgrade(config, "head")
             asyncio.run(
                 _assert_authorization_action_sql_pairs(
@@ -1774,17 +1786,7 @@ def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
     record_id = str(uuid4())
     actor_id = str(uuid4())
     target_id = str(uuid4())
-    obsolete = tuple(
-        "artifact.upload_" + value
-        for value in (
-            "session.create",
-            "session.read",
-            "item.write",
-            "session.seal",
-            "session.cancel",
-            "session.expire",
-        )
-    )
+    obsolete = _OBSOLETE_ART_UPLOAD_IDS
     with migration_lock():
         try:
             command.downgrade(config, "base")
@@ -1950,17 +1952,7 @@ def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
 ) -> None:
     """Prove every removal predicate independently blocks the clean-cut upgrade."""
     config = _alembic_config()
-    obsolete = tuple(
-        "artifact.upload_" + value
-        for value in (
-            "session.create",
-            "session.read",
-            "item.write",
-            "session.seal",
-            "session.cancel",
-            "session.expire",
-        )
-    )
+    obsolete = _OBSOLETE_ART_UPLOAD_IDS
     with migration_lock():
         try:
             command.downgrade(config, "base")
@@ -1978,7 +1970,10 @@ def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
                         permissions=(identifier,),
                     )
                 )
-                with pytest.raises(RuntimeError):
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot remove non-empty obsolete artifact authority evidence",
+                ):
                     command.upgrade(config, "head")
                 assert (
                     asyncio.run(
@@ -2018,7 +2013,10 @@ def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
                         isolated_database_env, actions=(), permissions=(permission,)
                     )
                 )
-                with pytest.raises(RuntimeError):
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot remove non-empty obsolete artifact authority evidence",
+                ):
                     command.upgrade(config, "head")
                 assert (
                     asyncio.run(
@@ -2055,7 +2053,10 @@ def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
                     permissions=(obsolete[2],),
                 )
             )
-            with pytest.raises(RuntimeError):
+            with pytest.raises(
+                RuntimeError,
+                match="cannot remove non-empty obsolete artifact authority evidence",
+            ):
                 command.upgrade(config, "head")
             assert (
                 asyncio.run(
@@ -2072,6 +2073,39 @@ def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
                 _remove_authority_idempotency_fixture(
                     isolated_database_env, record_id, orphan_event=None
                 )
+            )
+
+            orphan_event_id = asyncio.run(
+                _insert_orphan_linked_authorization_action_event(
+                    isolated_database_env,
+                    action_id=obsolete[3],
+                    permission_id=obsolete[3],
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env,
+                    actions=(obsolete[3],),
+                    permissions=(obsolete[3],),
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot remove non-empty obsolete artifact authority evidence",
+            ):
+                command.upgrade(config, "head")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(obsolete[3],),
+                        permissions=(obsolete[3],),
+                    )
+                )
+                == before
+            )
+            asyncio.run(
+                _remove_authority_audit_fixture(isolated_database_env, event_id=orphan_event_id)
             )
         finally:
             command.downgrade(config, "base")
@@ -2107,7 +2141,10 @@ def test_0036_art_auth_catalogue_refuses_each_new_evidence_shape(
                         permissions=(definition.permission_id.value,),
                     )
                 )
-                with pytest.raises(RuntimeError):
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade non-empty ART authorization evidence",
+                ):
                     command.downgrade(config, "0035_project_read_evidence")
                 assert (
                     asyncio.run(
@@ -2146,7 +2183,10 @@ def test_0036_art_auth_catalogue_refuses_each_new_evidence_shape(
                         permissions=(review_permission,),
                     )
                 )
-                with pytest.raises(RuntimeError):
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade non-empty ART authorization evidence",
+                ):
                     command.downgrade(config, "0035_project_read_evidence")
                 assert (
                     asyncio.run(
@@ -2186,7 +2226,10 @@ def test_0036_art_auth_catalogue_refuses_each_new_evidence_shape(
                     permissions=(linked_definition.permission_id.value,),
                 )
             )
-            with pytest.raises(RuntimeError):
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade non-empty ART authorization evidence",
+            ):
                 command.downgrade(config, "0035_project_read_evidence")
             assert (
                 asyncio.run(
@@ -8291,17 +8334,7 @@ async def _assert_authorization_action_sql_pairs(
 
 async def _assert_removed_art_authority_rejected(database_url: str) -> None:
     """Prove current SQL rejects every deleted pair and permission reference."""
-    removed = tuple(
-        "artifact.upload_" + value
-        for value in (
-            "session.create",
-            "session.read",
-            "item.write",
-            "session.seal",
-            "session.cancel",
-            "session.expire",
-        )
-    )
+    removed = _OBSOLETE_ART_UPLOAD_IDS
     engine = create_async_engine(database_url)
     try:
         for identifier in removed:
@@ -9901,12 +9934,11 @@ async def _insert_linked_authorization_action_event(
                     "(id,entity_type,entity_id,event_type,actor_id,actor_roles,claim_snapshot,"
                     "auth_source,is_dev_auth,event_payload,event_domain,event_version,"
                     "actor_ref_kind,request_id,correlation_id,permission_id,action_id,reason,"
-                    "denial_code,idempotency_reference,after_facts) values "
-                    "(:id,'authorization_decision',:id,'SensitiveAuthorizationDenied',"
+                    "idempotency_reference,after_facts) values "
+                    "(:id,'authorization_decision',:id,'SensitiveAuthorizationAllowed',"
                     ":actor,'[]'::json,'{}'::json,'local_authority',false,'{}'::json,"
                     "'authority',1,'actor_profile',:request,:correlation,:permission,:action,"
-                    "'authorization_evaluation','permission_not_granted',:record,"
-                    "'{\"allowed\": false}'::json)"
+                    "'authorization_evaluation',:record,'{\"allowed\": true}'::json)"
                 ),
                 {
                     "id": event_id,
@@ -9917,6 +9949,63 @@ async def _insert_linked_authorization_action_event(
                     "action": action_id,
                     "record": record_id,
                 },
+            )
+            await connection.execute(
+                text("alter table audit_events enable trigger audit_events_validate_idempotency")
+            )
+        return event_id
+    finally:
+        await engine.dispose()
+
+
+async def _insert_orphan_linked_authorization_action_event(
+    database_url: str,
+    *,
+    action_id: str,
+    permission_id: str,
+) -> str:
+    """Seed historical action evidence whose non-null idempotency link is orphaned."""
+    event_id = str(uuid4())
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "alter table audit_events drop constraint fk_audit_events_authority_idempotency"
+                )
+            )
+            await connection.execute(
+                text("alter table audit_events disable trigger audit_events_validate_idempotency")
+            )
+            await connection.execute(
+                text(
+                    "insert into audit_events "
+                    "(id,entity_type,entity_id,event_type,actor_id,actor_roles,claim_snapshot,"
+                    "auth_source,is_dev_auth,event_payload,event_domain,event_version,"
+                    "actor_ref_kind,request_id,correlation_id,permission_id,action_id,reason,"
+                    "idempotency_reference,after_facts) values "
+                    "(:id,'authorization_decision',:id,'SensitiveAuthorizationAllowed',"
+                    ":actor,'[]'::json,'{}'::json,'local_authority',false,'{}'::json,"
+                    "'authority',1,'actor_profile',:request,:correlation,:permission,:action,"
+                    "'authorization_evaluation',:record,'{\"allowed\": true}'::json)"
+                ),
+                {
+                    "id": event_id,
+                    "actor": str(uuid4()),
+                    "request": str(uuid4()),
+                    "correlation": str(uuid4()),
+                    "permission": permission_id,
+                    "action": action_id,
+                    "record": str(uuid4()),
+                },
+            )
+            await connection.execute(
+                text(
+                    "alter table audit_events add constraint "
+                    "fk_audit_events_authority_idempotency foreign key "
+                    "(idempotency_reference,actor_ref_kind,actor_id) references "
+                    "authority_idempotency_records (id,actor_ref_kind,actor_ref) not valid"
+                )
             )
             await connection.execute(
                 text("alter table audit_events enable trigger audit_events_validate_idempotency")

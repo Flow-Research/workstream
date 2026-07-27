@@ -19,12 +19,15 @@ matrix, deterministic stale proof, live custody documentation, and merge intent.
   ambiguous historical handoff allowlist. Current SQL rejection covers every
   removed pair, target reference, and invalidation reference; the old handoff
   is explicitly marked immutable historical provenance.
-
+- Corrective security review found that narrowing the direct audit scan to null
+  idempotency references could miss orphaned historical evidence. The direct
+  predicate now covers every audit row, the linked scan remains additive, and
+  an orphaned non-null reference independently proves refusal without mutation.
 ## Final reviewer results
 
 - Senior engineering: PASS WITH LOW RISKS.
 - QA/test: PASS WITH LOW RISKS; later isolated predicate proof was added.
-- Security/auth: PASS.
+- Security/auth: PASS after the corrective orphan-evidence finding was fixed.
 - Product/ops: PASS WITH LOW RISKS; wording note resolved.
 - Architecture: PASS.
 - CI integrity: PASS WITH LOW RISKS.
@@ -33,4 +36,3 @@ matrix, deterministic stale proof, live custody documentation, and merge intent.
 - Test delta: PASS WITH LOW RISKS.
 
 No blocking finding remains.
-

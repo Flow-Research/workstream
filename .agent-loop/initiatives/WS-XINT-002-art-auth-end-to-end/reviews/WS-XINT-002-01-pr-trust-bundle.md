@@ -53,6 +53,8 @@ grant, service identity, submission, review, or artifact lifecycle changed.
 - Focused catalogue/custody/stale tests: passed.
 - Isolated PostgreSQL `0036_art_auth_catalogue` tests, including independent
   refusal predicates and round trip: passed with owned-database cleanup.
+- Focused hosted-failure reproduction proves the refreshed schema fingerprint
+  and exact downgrade through migration `0034` before re-upgrade to head.
 - Stale authorization docs, stale artifact contracts, markdown links, and
   `git diff --check`: passed.
 - A broader local AUTH/Alembic coverage run reached the 20-minute local runner
@@ -74,8 +76,13 @@ See `WS-XINT-002-01-internal-review.md`.
 
 ## External review
 
-CodeRabbit and exact-head GitHub checks are required after the PR opens. No
-external result is claimed in this pre-PR bundle.
+The first hosted Backend run exposed a stale public-schema fingerprint and
+non-canonical downgrade ordering across migration `0034`'s digest guard. Both
+are corrected with focused `0036 -> 0033 -> head` proof. CodeRabbit's valid
+documentation, mapping, and maintainability comments are addressed; the
+constraint-name suggestion was rejected against the executed Alembic naming
+convention. See `WS-XINT-002-01-external-review-response.md`. The corrective
+exact head must still pass hosted Backend, Agent Gates, and CodeRabbit checks.
 
 ## Remaining risks and follow-up
 
@@ -89,4 +96,3 @@ hidden feature evidence; this chunk grants no executable authority.
 Review the exact six-to-three clean cut, planned-only availability, fixed-service
 least privilege, and evidence-preserving migration refusal. Only the user may
 approve this specific PR for merge.
-
