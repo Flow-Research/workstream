@@ -39,3 +39,13 @@ threshold, skip, or coverage policy changed.
 Architecture, security, QA, and reuse/dedup focused re-reviews passed after the
 repairs. Ruff, focused tests, stale checks, markdown links, and diff checks
 passed.
+
+## Hosted Backend run 30287247882
+
+Three semantic lanes passed. The schema-contract lane exposed six existing
+Alembic tests that still named migration `0036` as repository head after this
+chunk added `0037`. Eight exact expected-revision values now name `0037`; all
+schema, downgrade-refusal, row-preservation, and trigger assertions remain
+unchanged. The same isolated six-test selection passed in 509.88 seconds, lane
+inventory passed, and CI-integrity plus test-delta re-reviews passed. No CI or
+coverage configuration changed.

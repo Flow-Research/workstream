@@ -23,6 +23,7 @@ backend/app/modules/artifacts/service.py
 backend/app/wor?ers/{artifacts,celery_app}.py
 backend/tests/test_authorization.py
 backend/tests/test_audit.py
+backend/tests/test_alembic.py
 backend/tests/test_ci_test_lanes.py
 backend/tests/conftest.py
 backend/tests/test_artifact_admission.py
