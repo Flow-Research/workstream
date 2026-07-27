@@ -56,6 +56,9 @@ expanded; all other ART service actions remain planned and issue no handle.
 - The first repair rerun reached 89.98 percent. A final deterministic race test
   now covers the only two missed worker lines and proves the losing concurrent
   provider bootstrap is closed before use.
+- Exact-head hosted run 30294890075 passed the artifact-foundation gate at
+  90.02 percent; `internal_workers.py` is 100 percent covered. Every Backend,
+  Agent Gates, and CodeRabbit status passed.
 
 ## Human review focus
 

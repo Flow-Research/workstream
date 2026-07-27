@@ -89,3 +89,10 @@ initializers at the same barrier, proves the losing bootstrap closes, and then
 proves shutdown closes the installed winner. This directly covers the remaining
 resource-leak safety branch; the focused test and all 14 verification tests
 passed with Ruff and diff integrity.
+
+## Hosted Backend run 30294890075
+
+The exact-head rerun passed every Backend step. Artifact-foundation coverage is
+90.02 percent (4,689 statements, 468 missed), satisfying the unchanged 90
+percent floor; `internal_workers.py` is 100 percent covered. Agent Gates passed,
+CodeRabbit is green, and no coverage or CI policy was weakened.
