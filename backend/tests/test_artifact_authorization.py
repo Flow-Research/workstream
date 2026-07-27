@@ -75,8 +75,19 @@ def _context() -> HumanAuthorizationContext:
     )
 
 
-@pytest.mark.parametrize("action", OPERATOR_ACTIONS + INTERNAL_ACTIONS)
-async def test_real_kernel_keeps_artifact_actions_unavailable(action: ActionId) -> None:
+@pytest.mark.parametrize("action", OPERATOR_ACTIONS)
+async def test_real_kernel_keeps_operator_artifact_actions_unavailable(action: ActionId) -> None:
+    service, _evidence = _runtime_service(_runtime_context())
+    with pytest.raises(AuthorizationDenied) as caught:
+        await service.require(
+            action,
+            SystemResourceContext(resource_type="system", resource_id="workstream:system"),
+        )
+    assert caught.value.decision.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
+
+
+@pytest.mark.parametrize("action", INTERNAL_ACTIONS)
+async def test_humans_cannot_reach_active_internal_actions(action: ActionId) -> None:
     service, _evidence = _runtime_service(_runtime_context())
     with pytest.raises(AuthorizationDenied) as caught:
         await service.require(

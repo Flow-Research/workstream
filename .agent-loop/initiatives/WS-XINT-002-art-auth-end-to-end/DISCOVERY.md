@@ -70,3 +70,50 @@
   materializer and review evidence binding uses the artifact binding service.
 - Operator artifact audit stays Operator-only unless a separately reviewed
   exact Audit Authority projection is approved.
+
+## WS-XINT-002-03 preimplementation reconciliation
+
+- Trusted `main` at `f4cebb08176be41214d2eee4cae076064974818f` contains the
+  merged ART 02C2 verification/publication fencing, ART 02C3 recovery chain,
+  and ART 02D bounded Operator surfaces required by the activation gate.
+- The implemented ART-owned authority protocol and facts are in
+  `backend/app/modules/artifacts/schemas.py`; no integration implementation yet
+  exists. This chunk deliberately creates
+  `backend/app/modules/artifacts/authorization.py` as the ART-owned adapter and
+  resource-composition boundary. It must implement the existing protocol (as
+  corrected for transaction-bound consumption), not duplicate its schemas or
+  move feature loading into AUTH.
+- Put resolution and verification currently call `preflight()` after a
+  candidate-reading transaction has ended, then claim a fence in a later
+  transaction. Pending-work scan similarly computes its cutoff, authorizes,
+  and loads the page in three separate phases. This cannot be connected safely
+  to `PreparedAuthorizationService`, which requires one exact active root
+  transaction and invalidates capabilities across replacement transactions.
+- A terminal revalidation already occurs after the exact fenced ART rows are
+  locked and before every terminal mutation. Activation must retain that
+  placement but replace it with a fresh prepare/consume in the same terminal
+  transaction; a capability must never span provider I/O.
+- The safe choreography is therefore two fresh decisions for put/verification:
+  claim authorization evidence commits atomically with the lease/fence, then
+  provider I/O occurs, then terminal authorization evidence commits atomically
+  with the fenced terminal mutation. The scanner uses one transaction for
+  cutoff, preparation, exact page composition/consumption, and decision
+  evidence, then publishes only those IDs after commit.
+- The fixed service matrix already binds verifier, resolver, and scheduler to
+  exactly one action each, but the three actions remain planned and the kernel
+  intentionally rejects every prepared service action. Activation must extend
+  the closed PREP scope/resource unions and kernel service branch; changing
+  catalogue availability alone would still deny every resource guard.
+- Production Celery tasks for put resolution and verification are registered
+  but intentionally deny without constructing an ART runtime. No pending-work
+  Beat entry exists. This chunk must provide an explicit executor composition
+  root and scheduler registration without importing feature repositories into
+  AUTH.
+- The shared authority-audit fact validator originally admitted only the
+  allowed boolean for authorization decisions. Exact ART operation/page
+  binding therefore requires a privacy-bounded resource-context digest in the
+  existing JSON evidence envelope; no schema migration is required.
+- `backend/tests/test_artifact_put_resolution.py` does not exist. Existing put
+  fencing proof is spread across artifact admission, verification, and recovery
+  suites, so the corrected contract names the actual tests and permits a new
+  focused activation test module rather than assuming a pre-existing file.

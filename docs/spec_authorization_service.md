@@ -237,8 +237,8 @@ permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 78 rows after WS-XINT-002-01: 22 active
-actions and 56 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 78 rows after WS-XINT-002-03: 25 active
+actions and 53 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
 planned project identity, context, setup, policy, and active-guide reads owned
@@ -250,7 +250,7 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
 other planned rows cover
-three Operator recovery actions, 22 artifact actions, canonical
+three Operator recovery actions, 19 artifact actions, canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
@@ -386,10 +386,11 @@ dynamically, or changes availability.
 The following table is the single source of truth for artifact ActionId-to-
 PermissionId mappings, principal/resource facts, and ART hidden-behavior
 ownership. AUTH-07A registered each row's stable `ActionId`, approved
-`PermissionId`, historical owner value, and `planned` availability.
+`PermissionId`, historical owner value, and initial `planned` availability.
 `WS-AUTH-001-ART-CUSTODY` has now replaced only those historical owner values
-with the exact AUTH activation custodians below; mappings, availability, and
-ART hidden-behavior ownership are unchanged. Its principal-class and
+with the exact AUTH activation custodians below; mappings and ART
+hidden-behavior ownership are unchanged, while reviewed activation chunks may
+change availability. Its principal-class and
 canonical-resource columns are not AUTH
 registry fields and are not executable authority; the owning WS-ART chunk adopts
 them with its hidden canonical resource composer, guards, surface declaration,
@@ -398,9 +399,9 @@ canonical in
 `.agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md`.
 A mapping is not a permission alias.
 
-| AUTH activation custodian | Exact planned ActionIds |
+| AUTH activation custodian | Exact ActionIds and current availability |
 |---|---|
-| `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
+| `WS-AUTH-001-ART-02D-INTERNAL` | Active: `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
@@ -411,7 +412,10 @@ A mapping is not a permission alias.
 | `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
 
 The `OPERATOR` suffix names future activation custody only; it creates no
-Operator grant or entitlement. All 22 actions remain planned and unavailable.
+Operator grant or entitlement. WS-XINT-002-03 activates only the three internal
+service actions; the other 19 ART actions remain planned and unavailable.
+Migration `0037` admits the exact privacy-bounded ART resource-context digest
+in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
 independent activation proof; read/status proof cannot activate retry. The
 historical ART transfer added no migration; WS-XINT-002-01 reconciles the
@@ -616,14 +620,16 @@ outbox/Celery payloads, provider interfaces, or serialized contracts. Exact
 feature contexts and session/root-bound composer proofs remain owned by the
 later evidence-backed activation chunks.
 
-PREP intentionally ships no feature consumer. Its PostgreSQL participant is a
-test-only neutral row proving that final facts, one decision event, participant
-work, and caller commit or rollback share the same transaction. Fixed services
-are locked and refreshed before their current planned-action denial, but no
-positive fixed-service prepared capability exists until the first separately
-activated consumer proves it. ProjectRoleGrant does not exist in PREP; AUTH-10
-must add its exact row lock, evaluator branch, and crossed-revocation evidence
-before an exact-project product consumer can use that authority source.
+PREP's neutral PostgreSQL participant remains a test proof that final facts, one
+decision event, participant work, and caller commit or rollback share the same
+transaction. WS-XINT-002-03 adds the first active feature consumer: exact typed
+prepared capabilities for the ART verifier, pending-work scanner, and
+put-attempt resolver. Fixed services are locked and refreshed before either an
+active-action decision or a still-planned `action_unavailable` denial;
+still-planned actions issue no handle. ProjectRoleGrant does not exist in PREP;
+AUTH-10 must add its exact row lock, evaluator branch, and crossed-revocation
+evidence before an exact-project product consumer can use that authority
+source.
 
 Service identity, static service-action matrix membership, and action
 availability are immutable code-owned validations after the service profile and

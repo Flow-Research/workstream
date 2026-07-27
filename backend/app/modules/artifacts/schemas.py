@@ -111,6 +111,8 @@ class ArtifactPendingWorkAuthorityFacts:
     scanner_kind: str
     database_cutoff_iso: str
     page_size: int
+    put_attempt_ids: tuple[UUID, ...] = ()
+    verification_job_ids: tuple[UUID, ...] = ()
 
 
 ArtifactInternalAuthorityFacts: TypeAlias = (
@@ -121,9 +123,19 @@ ArtifactInternalAuthorityFacts: TypeAlias = (
 
 
 class ArtifactInternalAuthority(Protocol):
-    """Two-phase authority seam owned by AUTH activation."""
+    """Transaction-bound authority seam implemented by the ART adapter."""
 
-    async def preflight(
+    async def prepare(
+        self,
+        *,
+        service_identity: ServiceIdentity,
+        action_id: ActionId,
+        facts: ArtifactInternalAuthorityFacts,
+        phase: str,
+        idempotency_key: UUID,
+    ) -> None: ...
+
+    async def consume(
         self,
         *,
         service_identity: ServiceIdentity,
@@ -131,19 +143,25 @@ class ArtifactInternalAuthority(Protocol):
         facts: ArtifactInternalAuthorityFacts,
     ) -> None: ...
 
-    async def revalidate_terminal(
-        self,
-        *,
-        service_identity: ServiceIdentity,
-        action_id: ActionId,
-        facts: ArtifactInternalAuthorityFacts,
-    ) -> None: ...
+    def discard(self) -> None: ...
 
 
 class DenyArtifactInternalAuthority:
     """Production-safe seam until AUTH activates exact artifact actions."""
 
-    async def preflight(
+    async def prepare(
+        self,
+        *,
+        service_identity: ServiceIdentity,
+        action_id: ActionId,
+        facts: ArtifactInternalAuthorityFacts,
+        phase: str,
+        idempotency_key: UUID,
+    ) -> None:
+        del service_identity, action_id, facts, phase, idempotency_key
+        raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
+
+    async def consume(
         self,
         *,
         service_identity: ServiceIdentity,
@@ -153,15 +171,8 @@ class DenyArtifactInternalAuthority:
         del service_identity, action_id, facts
         raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
 
-    async def revalidate_terminal(
-        self,
-        *,
-        service_identity: ServiceIdentity,
-        action_id: ActionId,
-        facts: ArtifactInternalAuthorityFacts,
-    ) -> None:
-        del service_identity, action_id, facts
-        raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
+    def discard(self) -> None:
+        return None
 
 
 @dataclass(frozen=True, slots=True)

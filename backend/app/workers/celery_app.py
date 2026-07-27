@@ -12,6 +12,8 @@ ARTIFACT_SCRATCH_CLEANUP_TASK = "workstream.artifacts.cleanup_stale_scratch"
 ARTIFACT_SCRATCH_CLEANUP_SCHEDULE = "artifact-scratch-cleanup"
 ARTIFACT_PUT_RESOLUTION_TASK = "workstream.artifacts.resolve_put_attempt"
 ARTIFACT_VERIFICATION_TASK = "workstream.artifacts.verify_object"
+ARTIFACT_PENDING_WORK_SCAN_TASK = "workstream.artifacts.scan_pending_work"
+ARTIFACT_PENDING_WORK_SCAN_SCHEDULE = "artifact-pending-work-scan"
 
 
 def create_celery_app() -> Celery:
@@ -52,7 +54,11 @@ def create_celery_app() -> Celery:
             ARTIFACT_SCRATCH_CLEANUP_SCHEDULE: {
                 "task": ARTIFACT_SCRATCH_CLEANUP_TASK,
                 "schedule": settings.artifact_scratch_cleanup_interval_seconds,
-            }
+            },
+            ARTIFACT_PENDING_WORK_SCAN_SCHEDULE: {
+                "task": ARTIFACT_PENDING_WORK_SCAN_TASK,
+                "schedule": settings.artifact_pending_work_scan_interval_seconds,
+            },
         },
     )
     return celery_app

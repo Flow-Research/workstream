@@ -182,7 +182,24 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     }
+    artifact_allowed = _authority_input(
+        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+        permission_id=PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
+        action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        after_facts={"allowed": True, "resource_context_digest": "sha256:" + "a" * 64},
+    )
+    assert artifact_allowed.after_facts["resource_context_digest"] == "sha256:" + "a" * 64
+    with pytest.raises(TypeError, match="invalid authority audit input"):
+        _authority_input(
+            AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+            permission_id=PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
+            action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+            after_facts={"allowed": True, "resource_context_digest": "not-a-digest"},
+        )
     with pytest.raises(TypeError, match="invalid authority audit input"):
         _authority_input(
             AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,

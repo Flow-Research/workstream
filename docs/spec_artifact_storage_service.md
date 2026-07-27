@@ -765,13 +765,12 @@ in the v2 clean cut. No compatibility adapter or dual format remains.
 No provider call occurs inside a PostgreSQL transaction. No product binding is
 created before independent verification.
 
-Chunk 02C1 implements step 3 only. Chunk 02C2 implements hidden steps 4 through
+Chunk 02C1 implements step 3 only. Chunk 02C2 implemented hidden steps 4 through
 9 with caller-only committed-source writes, read-only put resolution, durable
-verification jobs, typed receipts, and PostgreSQL fencing. Its production
-authority implementation remains deny-only, its scanner has no Beat schedule,
-and direct Celery invocation fails before claim, provider I/O, publication, or
-mutation while the three internal actions remain planned. Recovery, Operator
-routes, product cutover, and AUTH activation remain in later owning chunks.
+verification jobs, typed receipts, and PostgreSQL fencing. WS-XINT-002-03 now
+connects those paths to transaction-bound fixed-service authorization and one
+bounded pending-work Beat scan. Operator routes and product cutover remain
+independently gated.
 
 Acknowledgement loss leaves the durable put attempt and charges provisional.
 The attempt scanner publishes resolution after an ambiguous outcome or expired
@@ -833,7 +832,7 @@ The preparation settings use the standard `WORKSTREAM_` environment prefix:
 | `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` | `1800` | Total first-pass and provider-consumption deadline. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_MARGIN_SECONDS` | `300` | Required margin between the total deadline and reservation TTL. |
 | `WORKSTREAM_ARTIFACT_SCRATCH_CLEANUP_INTERVAL_SECONDS` | `300` | Celery Beat cadence for the named stale-scratch cleanup task; accepted range is 1 through 86400 seconds. |
-| `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_INTERVAL_SECONDS` | `60` | Retry/publication SLA used by hidden due-work mechanics; no 02C2 Beat schedule is active. |
+| `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_INTERVAL_SECONDS` | `60` | Celery Beat cadence for one authority-bound, database-cutoff pending-work page. |
 | `WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_PAGE_SIZE` | `100` | Hard combined put-attempt and verification-job publication page bound. |
 | `WORKSTREAM_ARTIFACT_EXECUTION_LEASE_SECONDS` | `900` | PostgreSQL-clock executor lease with no heartbeat. |
 | `WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS` | `600` | Total deadline covering provider-open acquisition and the complete stream. |

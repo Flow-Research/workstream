@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from enum import StrEnum
 import json
+import re
 from typing import Annotated, Any, Self
 from uuid import UUID
 
@@ -157,13 +158,19 @@ def _facts(value: object) -> dict[str, object] | None:
         return None
     data = dict(value)
     if len(data) > 8 or not set(data).issubset(
-        frozenset(_FACT_VALUES) | {"effective", "allowed", "scope_id"}
+        frozenset(_FACT_VALUES)
+        | {"effective", "allowed", "resource_context_digest", "scope_id"}
     ):
         return None
     for key, item in data.items():
         if key in {"effective", "allowed"} and type(item) is not bool:
             return None
         if key == "scope_id" and _uuid(item) is None:
+            return None
+        if key == "resource_context_digest" and (
+            not isinstance(item, str)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", item) is None
+        ):
             return None
         if key in _FACT_VALUES and (not isinstance(item, str) or item not in _FACT_VALUES[key]):
             return None
@@ -188,6 +195,20 @@ def _grant_facts(facts: dict[str, object] | None, roles: frozenset[str], status:
 
 
 def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | None, after: dict[str, object] | None) -> bool:
+    if event in {
+        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+        AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED,
+    }:
+        expected_allowed = event is AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED
+        return (
+            before is None
+            and after is not None
+            and after.get("allowed") is expected_allowed
+            and set(after) in (
+                {"allowed"},
+                {"allowed", "resource_context_digest"},
+            )
+        )
     exact = {
         AuthorityEventType.ACTOR_PROFILE_PROVISIONED: (None, {"status": "active", "subject_kind": "human", "provisioning_method": "automatic_first_access"}),
         AuthorityEventType.SERVICE_ACTOR_PROVISIONED: (None, {"status": "active", "subject_kind": "service", "provisioning_method": "manual_service_provisioning"}),
@@ -198,8 +219,6 @@ def _event_facts_valid(event: AuthorityEventType, before: dict[str, object] | No
         AuthorityEventType.PROJECT_ROLE_QUALIFICATION_CAPTURED: (None, {"status": "captured"}),
         AuthorityEventType.ADMIN_ROLE_GRANT_ISSUE_DENIED: (None, None),
         AuthorityEventType.LAST_ACCESS_ADMIN_OPERATION_DENIED: (None, None),
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED: (None, {"allowed": True}),
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_DENIED: (None, {"allowed": False}),
     }
     if event in exact:
         return (before, after) == exact[event]

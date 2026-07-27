@@ -1,6 +1,8 @@
-"""Database-independent artifact scratch maintenance tasks."""
+"""Artifact scratch maintenance and fixed-service execution tasks."""
 
 from __future__ import annotations
+
+from uuid import UUID
 
 from app.adapters.artifacts import (
     cleanup_stale_artifact_scratch,
@@ -8,9 +10,13 @@ from app.adapters.artifacts import (
 )
 from app.core.config import get_settings
 from app.workers.async_runner import run_async_task
-from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+from app.adapters.artifacts.internal_workers import (
+    run_artifact_internal_operation,
+    scan_artifact_pending_work,
+)
 from app.workers.celery_app import (
     ARTIFACT_PUT_RESOLUTION_TASK,
+    ARTIFACT_PENDING_WORK_SCAN_TASK,
     ARTIFACT_SCRATCH_CLEANUP_TASK,
     ARTIFACT_VERIFICATION_TASK,
     celery_app,
@@ -27,20 +33,30 @@ def cleanup_stale_scratch() -> int:
     return run_async_task(lambda: cleanup_stale_artifact_scratch(settings))
 
 
-def _deny_inactive_artifact_action() -> None:
-    """Keep registered hidden mechanics unreachable before AUTH activation."""
-    raise ArtifactAuthorityDeniedError("artifact internal action is unavailable")
-
-
 @celery_app.task(name=ARTIFACT_PUT_RESOLUTION_TASK)
 def resolve_put_attempt(attempt_id: str) -> None:
-    """Registered contract only; AUTH activation later supplies composition."""
-    del attempt_id
-    _deny_inactive_artifact_action()
+    """Resolve one exact put attempt as the fixed resolver service."""
+    run_async_task(lambda: run_artifact_internal_operation("put", UUID(attempt_id)))
 
 
 @celery_app.task(name=ARTIFACT_VERIFICATION_TASK)
 def verify_object(job_id: str) -> None:
-    """Registered contract only; AUTH activation later supplies composition."""
-    del job_id
-    _deny_inactive_artifact_action()
+    """Verify one exact object as the fixed verifier service."""
+    run_async_task(lambda: run_artifact_internal_operation("verification", UUID(job_id)))
+
+
+@celery_app.task(name=ARTIFACT_PENDING_WORK_SCAN_TASK)
+def scan_pending_work() -> int:
+    """Publish one authority-bound database-cutoff page of pending work."""
+    async def publish_put_attempt(attempt_id: str) -> None:
+        resolve_put_attempt.delay(attempt_id)
+
+    async def publish_verification_job(job_id: str) -> None:
+        verify_object.delay(job_id)
+
+    return run_async_task(
+        lambda: scan_artifact_pending_work(
+            publish_put_attempt,
+            publish_verification_job,
+        )
+    )

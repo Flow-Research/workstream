@@ -221,13 +221,26 @@ class ArtifactStorageOrchestrator:
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _put_authority_facts(candidate, executor_id, candidate_generation + 1)
-        await self._authority.preflight(
-            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
-            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-            facts=facts,
-        )
         async with self._session.begin() as claim_transaction:
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=facts,
+                phase="claim",
+                idempotency_key=executor_id,
+            )
             persisted_namespace = await self._claim_and_validate_namespace()
+            current = await self._repo.lock_put_attempt(str(attempt_id))
+            if current is None or _put_authority_facts(
+                current, executor_id, candidate_generation + 1
+            ) != facts:
+                self._authority.discard()
+                return "stale"
+            await self._authority.consume(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=facts,
+            )
             claimed_result = await self._repo.claim_put_attempt(
                 attempt_id=attempt_id,
                 executor_id=executor_id,
@@ -236,6 +249,7 @@ class ArtifactStorageOrchestrator:
                 expected_generation=candidate_generation,
             )
             if claimed_result is None:
+                await claim_transaction.rollback()
                 return "stale"
             claimed = await self._repo.lock_put_attempt(str(attempt_id))
             if not _matching_put_fence(claimed, executor_id, candidate_generation + 1):
@@ -299,13 +313,26 @@ class ArtifactStorageOrchestrator:
             candidate_generation = candidate.execution_generation
         executor_id = uuid4()
         facts = _put_authority_facts(candidate, executor_id, candidate_generation + 1)
-        await self._authority.preflight(
-            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
-            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-            facts=facts,
-        )
         async with self._session.begin() as claim_transaction:
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=facts,
+                phase="claim",
+                idempotency_key=executor_id,
+            )
             persisted_namespace = await self._claim_and_validate_namespace()
+            current = await self._repo.lock_put_attempt(str(attempt_id))
+            if current is None or _put_authority_facts(
+                current, executor_id, candidate_generation + 1
+            ) != facts:
+                self._authority.discard()
+                return "stale"
+            await self._authority.consume(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=facts,
+            )
             claimed_result = await self._repo.claim_put_attempt(
                 attempt_id=attempt_id,
                 executor_id=executor_id,
@@ -314,6 +341,7 @@ class ArtifactStorageOrchestrator:
                 expected_generation=candidate_generation,
             )
             if claimed_result is None:
+                await claim_transaction.rollback()
                 return "stale"
             claimed = await self._repo.lock_put_attempt(str(attempt_id))
             if not _matching_put_fence(claimed, executor_id, candidate_generation + 1):
@@ -389,13 +417,41 @@ class ArtifactStorageOrchestrator:
         facts = _verification_authority_facts(
             candidate, replica, attempt, executor_id, candidate_generation + 1
         )
-        await self._authority.preflight(
-            service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-            action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-            facts=facts,
-        )
         async with self._session.begin() as claim_transaction:
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                facts=facts,
+                phase="claim",
+                idempotency_key=executor_id,
+            )
             persisted_namespace = await self._claim_and_validate_namespace()
+            current = await self._repo.lock_verification_job(str(job_id))
+            if current is None or current.execution_generation != candidate_generation:
+                self._authority.discard()
+                return "stale"
+            current_replica = await self._repo.lock_replica(current.replica_id)
+            current_attempt = await self._repo.lock_put_attempt(
+                current.originating_put_attempt_id
+            )
+            if current_replica is None or current_attempt is None:
+                self._authority.discard()
+                return "conflict"
+            current_facts = _verification_authority_facts(
+                current,
+                current_replica,
+                current_attempt,
+                executor_id,
+                candidate_generation + 1,
+            )
+            if current_facts != facts:
+                self._authority.discard()
+                return "stale"
+            await self._authority.consume(
+                service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                facts=facts,
+            )
             claimed_result = await self._repo.claim_verification_job(
                 job_id=job_id,
                 executor_id=executor_id,
@@ -403,9 +459,11 @@ class ArtifactStorageOrchestrator:
                 expected_generation=candidate_generation,
             )
             if claimed_result is None:
+                await claim_transaction.rollback()
                 return "stale"
             claimed = await self._repo.lock_verification_job(str(job_id))
             if not _matching_job_fence(claimed, executor_id, candidate_generation + 1):
+                await claim_transaction.rollback()
                 return "stale"
             assert claimed is not None
             execution_replica = await self._repo.lock_replica(claimed.replica_id)
@@ -413,6 +471,7 @@ class ArtifactStorageOrchestrator:
                 claimed.originating_put_attempt_id
             )
             if execution_replica is None or execution_attempt is None:
+                await claim_transaction.rollback()
                 return "conflict"
             execution_content = await self._repo.lock_content(execution_replica.content_id)
             self._validate_put_execution_namespace(execution_attempt, persisted_namespace)
@@ -433,18 +492,13 @@ class ArtifactStorageOrchestrator:
                 execution_attempt,
                 execution_content,
             ):
-                await self._authority.revalidate_terminal(
-                    service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
-                    action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-                    facts=execution_facts,
-                )
-                now = await self._repo.database_now()
-                await self._terminalize_verification_conflict(claimed, now)
                 relationship_conflict = True
             else:
                 relationship_conflict = False
         if relationship_conflict:
-            return "conflict"
+            return await self._complete_verification(
+                claimed, executor_id, facts, "conflict", None, None
+            )
         try:
             observed_sha256, observed_size = await self._read_complete(
                 execution_replica.provider_object_ref
@@ -495,14 +549,23 @@ class ArtifactStorageOrchestrator:
         observed: bool,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert attempt is not None
             facts = _put_authority_facts(attempt, executor_id, claimed.execution_generation)
             if facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=facts,
@@ -640,16 +703,25 @@ class ArtifactStorageOrchestrator:
         expected_facts: ArtifactPutAttemptAuthorityFacts,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert attempt is not None
             terminal_facts = _put_authority_facts(
                 attempt, executor_id, claimed.execution_generation
             )
             if terminal_facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=terminal_facts,
@@ -675,16 +747,25 @@ class ArtifactStorageOrchestrator:
         expected_facts: ArtifactPutAttemptAuthorityFacts,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert attempt is not None
             terminal_facts = _put_authority_facts(
                 attempt, executor_id, claimed.execution_generation
             )
             if terminal_facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=terminal_facts,
@@ -774,16 +855,25 @@ class ArtifactStorageOrchestrator:
         provider_object_ref: str | None,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             attempt = await self._repo.lock_put_attempt(claimed.id)
             if not _matching_put_fence(attempt, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert attempt is not None
             terminal_facts = _put_authority_facts(
                 attempt, executor_id, claimed.execution_generation
             )
             if terminal_facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=terminal_facts,
@@ -874,21 +964,31 @@ class ArtifactStorageOrchestrator:
         expected_facts: ArtifactVerificationAuthorityFacts,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             job = await self._repo.lock_verification_job(claimed.id)
             if not _matching_job_fence(job, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert job is not None
             replica = await self._repo.lock_replica(job.replica_id)
             attempt = await self._repo.lock_put_attempt(job.originating_put_attempt_id)
             if replica is None or attempt is None:
+                self._authority.discard()
                 return "conflict"
             content = await self._repo.lock_content(replica.content_id)
             terminal_facts = _verification_authority_facts(
                 job, replica, attempt, executor_id, claimed.execution_generation
             )
             if terminal_facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
                 facts=terminal_facts,
@@ -922,21 +1022,31 @@ class ArtifactStorageOrchestrator:
         observed_size: int | None,
     ) -> str:
         async with self._session.begin():
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                facts=expected_facts,
+                phase="terminal",
+                idempotency_key=executor_id,
+            )
             job = await self._repo.lock_verification_job(claimed.id)
             if not _matching_job_fence(job, executor_id, claimed.execution_generation):
+                self._authority.discard()
                 return "stale"
             assert job is not None
             replica = await self._repo.lock_replica(job.replica_id)
             attempt = await self._repo.lock_put_attempt(job.originating_put_attempt_id)
             if replica is None or attempt is None:
+                self._authority.discard()
                 return "conflict"
             content = await self._repo.lock_content(replica.content_id)
             terminal_facts = _verification_authority_facts(
                 job, replica, attempt, executor_id, claimed.execution_generation
             )
             if terminal_facts != expected_facts:
+                self._authority.discard()
                 return "stale"
-            await self._authority.revalidate_terminal(
+            await self._authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
                 action_id=ActionId.ARTIFACT_VERIFICATION_EXECUTE,
                 facts=terminal_facts,
@@ -1136,19 +1246,21 @@ class ArtifactPendingWorkScanner:
         """Read one stable page then publish IDs outside the database transaction."""
         async with self._session.begin():
             cutoff = await self._repo.database_now()
-        facts = ArtifactPendingWorkAuthorityFacts(
-            resource_type=ArtifactInternalResourceType.PENDING_WORK,
-            resource_id="workstream:artifact_pending_work",
-            scanner_kind="put_resolution_and_verification",
-            database_cutoff_iso=cutoff.isoformat(),
-            page_size=self._settings.artifact_pending_work_scan_page_size,
-        )
-        await self._authority.preflight(
-            service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
-            action_id=ActionId.ARTIFACT_PENDING_WORK_SCAN,
-            facts=facts,
-        )
-        async with self._session.begin():
+            scan_id = uuid4()
+            initial_facts = ArtifactPendingWorkAuthorityFacts(
+                resource_type=ArtifactInternalResourceType.PENDING_WORK,
+                resource_id="workstream:artifact_pending_work",
+                scanner_kind="put_resolution_and_verification",
+                database_cutoff_iso=cutoff.isoformat(),
+                page_size=self._settings.artifact_pending_work_scan_page_size,
+            )
+            await self._authority.prepare(
+                service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
+                action_id=ActionId.ARTIFACT_PENDING_WORK_SCAN,
+                facts=initial_facts,
+                phase="scan",
+                idempotency_key=scan_id,
+            )
             put_ids = await self._repo.list_due_put_attempt_ids(
                 cutoff=cutoff,
                 limit=self._settings.artifact_pending_work_scan_page_size,
@@ -1157,6 +1269,20 @@ class ArtifactPendingWorkScanner:
             job_ids = await self._repo.list_due_verification_job_ids(
                 cutoff=cutoff,
                 limit=remaining,
+            )
+            facts = ArtifactPendingWorkAuthorityFacts(
+                resource_type=ArtifactInternalResourceType.PENDING_WORK,
+                resource_id="workstream:artifact_pending_work",
+                scanner_kind="put_resolution_and_verification",
+                database_cutoff_iso=cutoff.isoformat(),
+                page_size=self._settings.artifact_pending_work_scan_page_size,
+                put_attempt_ids=tuple(UUID(value) for value in put_ids),
+                verification_job_ids=tuple(UUID(value) for value in job_ids),
+            )
+            await self._authority.consume(
+                service_identity=ServiceIdentity.ARTIFACT_SCHEDULER,
+                action_id=ActionId.ARTIFACT_PENDING_WORK_SCAN,
+                facts=facts,
             )
         for attempt_id in put_ids:
             await self._publish_put_attempt(attempt_id)

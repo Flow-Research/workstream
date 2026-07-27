@@ -20,6 +20,9 @@ from app.modules.authorization.kernel import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorSelfResourceContext,
+    ArtifactPendingWorkResourceContext,
+    ArtifactPutAttemptResourceContext,
+    ArtifactVerificationJobResourceContext,
     AuthorizationContext,
     AuthorizationDecision,
     AuthorizationResourceContext,
@@ -240,5 +243,22 @@ class PreparedAuthorizationService:
                 target_actor_profile_id=target_actor_profile_id,
                 role=role,
                 grant_id=grant_id,
+            )
+        if action_id in {
+            ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+            ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        } and isinstance(
+            resource,
+            (
+                ArtifactPutAttemptResourceContext,
+                ArtifactVerificationJobResourceContext,
+                ArtifactPendingWorkResourceContext,
+            ),
+        ):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+                artifact_resource_type=resource.resource_type,
+                artifact_resource_id=resource.resource_id,
             )
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")

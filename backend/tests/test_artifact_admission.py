@@ -107,14 +107,19 @@ class _AllowArtifactAuthority:
     """Explicit test-only authority exercising both phases."""
 
     def __init__(self) -> None:
-        self.preflights = 0
+        self.prepares = 0
         self.terminals = 0
+        self.phase: str | None = None
 
-    async def preflight(self, **_values: object) -> None:
-        self.preflights += 1
+    async def prepare(self, **values: object) -> None:
+        self.prepares += 1
+        self.phase = str(values["phase"])
 
-    async def revalidate_terminal(self, **_values: object) -> None:
+    async def consume(self, **_values: object) -> None:
         self.terminals += 1
+
+    def discard(self) -> None:
+        self.phase = None
 
 
 class _RevokeTerminalArtifactAuthority(_AllowArtifactAuthority):
@@ -134,12 +139,13 @@ class _RevokeTerminalArtifactAuthority(_AllowArtifactAuthority):
         self.action_id = action_id
         self.resource_type = resource_type
 
-    async def revalidate_terminal(self, **values: object) -> None:
+    async def consume(self, **values: object) -> None:
         self.terminals += 1
         assert values["service_identity"] == self.service_identity
         assert values["action_id"] == self.action_id
         assert values["facts"].resource_type == self.resource_type
-        raise ArtifactAuthorityDeniedError(self.reason)
+        if self.phase == "terminal":
+            raise ArtifactAuthorityDeniedError(self.reason)
 
 
 def _alembic_config() -> Config:
@@ -760,8 +766,8 @@ async def test_committed_put_and_independent_verification_are_fenced(
                 assert await _count(session, ArtifactVerificationReceipt) == 1
                 await session.rollback()
                 assert await orchestrator.verify_object(job_id) == "stale"
-                assert authority.preflights == 3
-                assert authority.terminals == 2
+                assert authority.prepares == 5
+                assert authority.terminals == 5
                 for operation in ("update", "delete"):
                     statement = (
                         "update artifact_verification_receipts set execution_generation = "
@@ -896,7 +902,7 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
                 assert scopes and {scope.counted_bytes for scope in scopes} == {0}
                 assert await _count(session, ArtifactPutObservationReceipt) == 1
                 assert await _count(session, ArtifactOperationReceipt) == 0
-                assert authority.preflights == 1
+                assert authority.prepares == 1
                 assert authority.terminals == 1
     finally:
         bootstrap.close()
@@ -931,8 +937,8 @@ async def test_put_paths_recheck_authorized_facts_before_provider_io(
                 await session.commit()
 
                 class DriftPutFactsAuthority(_AllowArtifactAuthority):
-                    async def preflight(self, **_values: object) -> None:
-                        await super().preflight(**_values)
+                    async def prepare(self, **_values: object) -> None:
+                        await super().prepare(**_values)
                         async with factory() as drift_session, drift_session.begin():
                             drifted_attempt = await drift_session.get(
                                 ArtifactPutAttempt, str(attempt_id), with_for_update=True
@@ -1967,7 +1973,7 @@ async def test_verification_resource_drift_returns_stale_without_mutation(
         await engine.dispose()
 
 
-async def test_verification_rechecks_relationship_after_preflight_before_io(
+async def test_verification_rechecks_relationship_after_prepare_before_io(
     admission_database_env: str,
     tmp_path: Path,
 ) -> None:
@@ -2023,8 +2029,8 @@ async def test_verification_rechecks_relationship_after_preflight_before_io(
                 await session.commit()
 
                 class DriftBeforeClaimAuthority(_AllowArtifactAuthority):
-                    async def preflight(self, **_values: object) -> None:
-                        await super().preflight(**_values)
+                    async def prepare(self, **_values: object) -> None:
+                        await super().prepare(**_values)
                         async with factory() as drift_session, drift_session.begin():
                             drifted_job = await drift_session.get(
                                 ArtifactVerificationJob, str(job_id), with_for_update=True
@@ -2050,6 +2056,86 @@ async def test_verification_rechecks_relationship_after_preflight_before_io(
                 assert unrelated_replica.verification_state == "pending"
                 receipt = await session.scalar(select(ArtifactVerificationReceipt))
                 assert receipt is None
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    assert settings.artifact_local_root is not None
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=settings.artifact_local_root))
+    store = bootstrap.initialize_after_namespace_claim(
+        ArtifactStoreNamespaceClaim(
+            adapter_identity=bootstrap.identity,
+            namespace_identity=bootstrap.namespace_identity,
+            namespace_fingerprint=namespace.namespace_fingerprint,
+        )
+    )
+
+    class PhaseAuthority(_AllowArtifactAuthority):
+        def __init__(self) -> None:
+            super().__init__()
+            self.phases: list[str] = []
+
+        async def prepare(self, **values: object) -> None:
+            await super().prepare(**values)
+            self.phases.append(str(values["phase"]))
+
+    try:
+        async with factory() as session:
+            attempts: list[ArtifactPutAttempt] = []
+            for name, value in (("first", b"first"), ("second", b"second")):
+                async with minted_source(tmp_path / name, value) as source:
+                    admission = await _admit_guide_source(
+                        session, settings, namespace, _context(), source
+                    )
+                    await ArtifactStorageOrchestrator(
+                        session, store, namespace, settings, _AllowArtifactAuthority()
+                    ).execute_committed_put(
+                        attempt_id=admission.attempt_id,
+                        source=source,
+                    )
+                    attempt = await session.get(
+                        ArtifactPutAttempt, str(admission.attempt_id)
+                    )
+                    assert attempt is not None and attempt.replica_id is not None
+                    attempts.append(attempt)
+            job = await session.scalar(
+                select(ArtifactVerificationJob).where(
+                    ArtifactVerificationJob.originating_put_attempt_id == attempts[0].id
+                )
+            )
+            assert job is not None
+            job.replica_id = attempts[1].replica_id
+            await session.commit()
+
+            authority = PhaseAuthority()
+            verifying = ArtifactStorageOrchestrator(
+                session, store, namespace, settings, authority
+            )
+            verifying._read_complete = AsyncMock(
+                side_effect=AssertionError("relationship conflict must not read provider bytes")
+            )
+
+            assert await verifying.verify_object(UUID(job.id)) == "conflict"
+            verifying._read_complete.assert_not_awaited()
+            await session.refresh(job)
+            assert job.status == "conflict"
+            assert authority.phases == ["claim", "terminal"]
+            assert authority.terminals == 2
+            receipt = await session.scalar(
+                select(ArtifactVerificationReceipt).where(
+                    ArtifactVerificationReceipt.verification_job_id == job.id
+                )
+            )
+            assert receipt is not None and receipt.outcome == "conflict"
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -2090,8 +2176,8 @@ async def test_verification_rechecks_authorized_object_ref_before_io(
                 await session.commit()
 
                 class DriftObjectRefBeforeClaimAuthority(_AllowArtifactAuthority):
-                    async def preflight(self, **_values: object) -> None:
-                        await super().preflight(**_values)
+                    async def prepare(self, **_values: object) -> None:
+                        await super().prepare(**_values)
                         async with factory() as drift_session, drift_session.begin():
                             drifted_replica = await drift_session.get(
                                 ArtifactReplica, replica_id, with_for_update=True

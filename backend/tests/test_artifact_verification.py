@@ -1,13 +1,14 @@
-"""Focused proof for inactive verification, authority, and deadline contracts."""
+"""Focused proof for activated verification, authority, and deadline contracts."""
 
 from __future__ import annotations
 
 import asyncio
 import importlib
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from unittest.mock import AsyncMock, Mock
 
 import app.interfaces.artifact_operations  # noqa: F401 - cumulative contract coverage
 from app.core.config import Settings, get_settings
@@ -24,7 +25,7 @@ from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability
 
 
 @pytest.mark.asyncio
-async def test_production_authority_denies_preflight_and_terminal() -> None:
+async def test_production_authority_denies_prepare_and_consume() -> None:
     authority = DenyArtifactInternalAuthority()
     facts = ArtifactPutAttemptAuthorityFacts(
         resource_type=ArtifactInternalResourceType.PUT_ATTEMPT,
@@ -36,16 +37,23 @@ async def test_production_authority_denies_preflight_and_terminal() -> None:
         executor_id=uuid4(),
         execution_generation=1,
     )
-    for operation in (authority.preflight, authority.revalidate_terminal):
-        with pytest.raises(ArtifactAuthorityDeniedError):
-            await operation(
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=facts,
+            phase="claim",
+            idempotency_key=uuid4(),
+        )
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.consume(
                 service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
                 action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
                 facts=facts,
             )
 
 
-def test_hidden_celery_tasks_are_registered_but_fail_closed(monkeypatch) -> None:
+def test_internal_celery_tasks_and_pending_scan_are_registered_once(monkeypatch) -> None:
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
     celery_module = importlib.import_module("app.workers.celery_app")
@@ -53,22 +61,42 @@ def test_hidden_celery_tasks_are_registered_but_fail_closed(monkeypatch) -> None
     celery_app = celery_module.celery_app
     assert "workstream.artifacts.resolve_put_attempt" in celery_app.tasks
     assert "workstream.artifacts.verify_object" in celery_app.tasks
-    assert not any(
-        entry["task"]
-        in {
-            "workstream.artifacts.resolve_put_attempt",
-            "workstream.artifacts.verify_object",
-        }
-        for entry in celery_app.conf.beat_schedule.values()
-    )
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        worker_module.resolve_put_attempt(str(uuid4()))
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        worker_module.verify_object(str(uuid4()))
+    assert "workstream.artifacts.scan_pending_work" in celery_app.tasks
+    scheduled_tasks = [
+        entry["task"] for entry in celery_app.conf.beat_schedule.values()
+    ]
+    assert scheduled_tasks.count("workstream.artifacts.scan_pending_work") == 1
+    assert scheduled_tasks.count("workstream.artifacts.cleanup_stale_scratch") == 1
+    operation = AsyncMock(return_value=None)
+    scanned: list[str] = []
+
+    async def scan(publish_put, publish_job):
+        await publish_put("put-id")
+        await publish_job("job-id")
+        scanned.append("called")
+        return 2
+
+    monkeypatch.setattr(worker_module, "run_artifact_internal_operation", operation)
+    monkeypatch.setattr(worker_module, "scan_artifact_pending_work", scan)
+    put_delay = Mock()
+    job_delay = Mock()
+    monkeypatch.setattr(worker_module.resolve_put_attempt, "delay", put_delay)
+    monkeypatch.setattr(worker_module.verify_object, "delay", job_delay)
+    attempt_id = str(uuid4())
+    job_id = str(uuid4())
+    worker_module.resolve_put_attempt(attempt_id)
+    worker_module.verify_object(job_id)
+    assert operation.await_count == 2
+    assert operation.await_args_list[0].args == ("put", UUID(attempt_id))
+    assert operation.await_args_list[1].args == ("verification", UUID(job_id))
+    assert worker_module.scan_pending_work() == 2
+    assert scanned == ["called"]
+    put_delay.assert_called_once_with("put-id")
+    job_delay.assert_called_once_with("job-id")
     get_settings.cache_clear()
 
 
-def test_internal_artifact_actions_remain_planned() -> None:
+def test_internal_artifact_actions_are_active() -> None:
     assert {
         action_id: ACTION_BY_ID[action_id].availability
         for action_id in {
@@ -77,9 +105,9 @@ def test_internal_artifact_actions_remain_planned() -> None:
             ActionId.ARTIFACT_PENDING_WORK_SCAN,
         }
     } == {
-        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ActionAvailability.PLANNED,
-        ActionId.ARTIFACT_VERIFICATION_EXECUTE: ActionAvailability.PLANNED,
-        ActionId.ARTIFACT_PENDING_WORK_SCAN: ActionAvailability.PLANNED,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ActionAvailability.ACTIVE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE: ActionAvailability.ACTIVE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN: ActionAvailability.ACTIVE,
     }
 
 
