@@ -16,6 +16,7 @@ backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/admin_schemas.py
 backend/alembic/versions/<then-current-next>_*.py
 backend/tests/test_authorization.py
+backend/tests/test_auth.py
 backend/tests/test_alembic.py
 backend/tests/conftest.py
 docs/spec_authorization_service.md
