@@ -1,5 +1,10 @@
 # WS-ART-001 Authorization Handoff
 
+> The complete v0.1 dependency inventory and replacement sequencing are owned
+> by `../WS-XINT-002-art-auth-end-to-end/`. This handoff remains the historical
+> ART-03 through ART-06 baseline and must not be used to invent a missing AUTH
+> action or capability during implementation.
+
 ART owns hidden artifact behavior, canonical product resource facts, lifecycle
 guards, surface manifests, and feature tests. AUTH owns ActionId/PermissionId
 catalogues, service identities, fixed matrices, evaluator integration, grants,
@@ -89,3 +94,7 @@ An ART implementation contract stops if its required AUTH registration or
 activation contract is absent, unmerged, inactive, differently mapped, or
 targets a different resource fact shape. Planned catalogue presence, a local
 action string, or hidden feature code is never executable authority.
+
+Any dependency not enumerated by WS-XINT-002 is contract drift. Stop and amend
+the cross-initiative plan; do not add a local action string, permission alias,
+service identity, matrix row, or alternate prepared-capability path.
