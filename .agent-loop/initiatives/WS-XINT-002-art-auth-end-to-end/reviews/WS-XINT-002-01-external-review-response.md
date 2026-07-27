@@ -5,6 +5,7 @@
 - GitHub Backend: updated the expected public-schema fingerprint for migration 0036.
 - GitHub Backend: restored the historical permission and action ordering before crossing migration 0034's digest guard, and extended the round-trip test through revision 0033.
 - GitHub Backend: updated three integration assertions that still expected the pre-reconciliation 76-permission total; the exact affected lifecycle test now passes against the closed 71-permission catalogue.
+- GitHub Backend: kept 0036-only action owners out of migration-0021/0022 stage assertions; both exact historical-stage tests now pass while current-head 0036 coverage remains intact.
 - CodeRabbit: marked the complete superseded AUTH–ART handoff as historical rather than leaving later sections phrased as live direction.
 - CodeRabbit: corrected the 06B checker-output action-to-permission mapping.
 - CodeRabbit nits: centralized obsolete upload identifiers, tightened migration refusal assertions, asserted removed SQL tokens are absent, and qualified evidence predicates without string rewriting.

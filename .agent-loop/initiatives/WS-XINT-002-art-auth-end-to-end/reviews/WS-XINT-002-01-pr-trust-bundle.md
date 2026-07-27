@@ -80,7 +80,10 @@ The first hosted Backend run exposed a stale public-schema fingerprint and
 non-canonical downgrade ordering across migration `0034`'s digest guard. Both
 are corrected with focused `0036 -> 0033 -> head` proof. A later hosted run
 exposed three integration assertions that still expected 76 permissions; they
-now prove the closed 71-permission response. CodeRabbit's valid
+now prove the closed 71-permission response. The schema lane also exposed two
+historical-stage fixtures that expected 0036 actions at migrations 0021/0022;
+those fixtures now preserve the exact migration boundary and pass locally.
+CodeRabbit's valid
 documentation, mapping, and maintainability comments are addressed; the
 constraint-name suggestion was rejected against the executed Alembic naming
 convention. See `WS-XINT-002-01-external-review-response.md`. The corrective

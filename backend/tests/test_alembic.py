@@ -3045,6 +3045,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            ActionOwner.XINT_002_05A,
+                            ActionOwner.XINT_002_07,
                         }
                     ),
                 )
@@ -3202,6 +3204,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            ActionOwner.XINT_002_05A,
+                            ActionOwner.XINT_002_07,
                         }
                     ),
                 )
