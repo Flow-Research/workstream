@@ -672,18 +672,18 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 76 PermissionIds and 81 ActionIds after
-AUTH-11A. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+The catalogue contains exactly 71 PermissionIds and 78 ActionIds after
+WS-XINT-002-01. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
 identity-link lifecycle actions are active. The remaining five active actions
 are the AUTH-10B reads `project.contributor_candidate.list`,
 `project_role_grant.list`, and `project_role_grant.read`, plus the AUTH-10C
 mutations `project_role_grant.issue` and `project_role_grant.revoke`; the other
-59 entries remain planned and non-executable. The target post-custody
+56 entries remain planned and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
-transfers assign all 25 ART rows to eight exact AUTH custodians and all 19 REV
+reconciliation assigns all 22 ART rows to nine exact activation custodians and all 19 REV
 rows to seven exact AUTH custodians without changing mappings or planned
 availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
 `WS-AUTH-001-REV-05`, `WS-AUTH-001-REV-06`, `WS-AUTH-001-REV-07`,
@@ -698,26 +698,28 @@ transaction contract before registration or activation, but those foreign facts
 do not become free-form catalogue fields. Startup validation failure is a release
 blocker, not a reason to relax catalogue checks.
 
-PR #139 requires availability-neutral transfer of all 25 ART and 19 REV owner
-rows to exact AUTH chunks before feature activation. Both transfers are now
-complete. Counts and mappings remain unchanged. The ART transfer adds no migration.
+PR #139 historically required availability-neutral transfer of 25 ART and 19
+REV owner rows before feature activation. Both transfers completed;
+WS-XINT-002-01 then reconciles the live ART set to 22 planned rows by deleting
+six obsolete upload actions and adding three bundle/review actions. The ART
+transfer adds no migration; the later WS-XINT-002-01 catalogue
+reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 76 PermissionIds, 81 ActionIds, 22 active actions, and
-59 planned actions after AUTH-11A registers project-read actions without
-activating a route.
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 22 active actions, and
+56 planned actions after WS-XINT-002-01 replaces six obsolete upload actions
+with three planned bundle/review actions without activating a route.
 
 AUTH-11A adds read-only `project.setup_diagnostic.read` and
 `project.effective_policy.read`. Project Manager and Audit Authority receive
 them at system or exact-project scope; Operator receives them at system scope.
 Finance Authority and Access Administrator do not. The eleven AUTH-11 actions
 remain planned under 11B, 11C1, or 11C2 and cannot produce allowed evidence.
-Four later
-REV registrations add exactly four planned and zero active actions, while the
-review-evidence binding registration adds exactly one planned and zero active
-action, in either order. Neither addition is operational until its complete
-feature contract and separate reviewed AUTH registration exist.
+Four later REV registrations add exactly four planned and zero active actions.
+Review-evidence binding is already registered planned and unavailable under
+`WS-XINT-002-07`; it remains non-operational until exact feature proof and a
+separate reviewed activation gate exist.
 
 Migration `0021` preserves historical audit rows with null `action_id`. Inspect
 non-null action evidence only by bounded ActionId, request/correlation IDs, and

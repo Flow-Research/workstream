@@ -74,12 +74,6 @@ class PermissionId(StrEnum):
     ARTIFACT_RECOVERY_ATTEMPT_READ = "artifact.recovery_attempt.read"
     ARTIFACT_AUDIT_READ = "artifact.audit.read"
     ARTIFACT_GUIDE_SOURCE_INGEST = "artifact.guide_source.ingest"
-    ARTIFACT_UPLOAD_SESSION_CREATE = "artifact.upload_session.create"
-    ARTIFACT_UPLOAD_SESSION_READ = "artifact.upload_session.read"
-    ARTIFACT_UPLOAD_ITEM_WRITE = "artifact.upload_item.write"
-    ARTIFACT_UPLOAD_SESSION_SEAL = "artifact.upload_session.seal"
-    ARTIFACT_UPLOAD_SESSION_CANCEL = "artifact.upload_session.cancel"
-    ARTIFACT_UPLOAD_SESSION_EXPIRE = "artifact.upload_session.expire"
     ARTIFACT_BINDING_CREATE = "artifact.binding.create"
     ARTIFACT_VERIFICATION_EXECUTE = "artifact.verification.execute"
     ARTIFACT_PENDING_WORK_SCAN = "artifact.pending_work.scan"
@@ -87,6 +81,7 @@ class PermissionId(StrEnum):
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
     ARTIFACT_CHECKER_INPUT_MATERIALIZE = "artifact.checker_input.materialize"
     ARTIFACT_CHECKER_OUTPUT_WRITE = "artifact.checker_output.write"
+    ARTIFACT_REVIEW_PACKET_MATERIALIZE = "artifact.review_packet.materialize"
     AUDIT_READ = "audit.read"
     AUDIT_EXPORT = "audit.export"
 
@@ -163,12 +158,7 @@ class ActionId(StrEnum):
     OPERATIONS_ARTIFACT_STORAGE_ADMISSION_READ = "operations.artifact_storage_admission.read"
     ARTIFACT_GUIDE_SOURCE_INGEST = "artifact.guide_source.ingest"
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
-    ARTIFACT_UPLOAD_SESSION_CREATE = "artifact.upload_session.create"
-    ARTIFACT_UPLOAD_SESSION_READ = "artifact.upload_session.read"
-    ARTIFACT_UPLOAD_ITEM_WRITE = "artifact.upload_item.write"
-    ARTIFACT_UPLOAD_SESSION_SEAL = "artifact.upload_session.seal"
-    ARTIFACT_UPLOAD_SESSION_CANCEL = "artifact.upload_session.cancel"
-    ARTIFACT_UPLOAD_SESSION_EXPIRE = "artifact.upload_session.expire"
+    ARTIFACT_SUBMISSION_BUNDLE_PREPARE = "artifact.submission_bundle.prepare"
     ARTIFACT_GUIDE_SOURCE_BINDING_CREATE = "artifact.guide_source.binding.create"
     ARTIFACT_SUBMISSION_BINDING_CREATE = "artifact.submission.binding.create"
     ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE = "artifact.checker_output.binding.create"
@@ -180,6 +170,8 @@ class ActionId(StrEnum):
         "artifact.post_submit.checker_input.materialize"
     )
     ARTIFACT_CHECKER_OUTPUT_WRITE = "artifact.checker_output.write"
+    ARTIFACT_REVIEW_PACKET_MATERIALIZE = "artifact.review_packet.materialize"
+    ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE = "artifact.review_evidence.binding.create"
 
 
 @unique
@@ -209,11 +201,12 @@ class ActionOwner(StrEnum):
     AUTH_ART_02D_INTERNAL = "WS-AUTH-001-ART-02D-INTERNAL"
     AUTH_ART_02D_OPERATOR = "WS-AUTH-001-ART-02D-OPERATOR"
     AUTH_ART_03 = "WS-AUTH-001-ART-03"
-    AUTH_ART_04A = "WS-AUTH-001-ART-04A"
     AUTH_ART_04B = "WS-AUTH-001-ART-04B"
     AUTH_ART_05 = "WS-AUTH-001-ART-05"
     AUTH_ART_06A = "WS-AUTH-001-ART-06A"
     AUTH_ART_06B = "WS-AUTH-001-ART-06B"
+    XINT_002_05A = "WS-XINT-002-05A"
+    XINT_002_07 = "WS-XINT-002-07"
 
 
 @unique
@@ -552,34 +545,9 @@ ACTION_DEFINITIONS = (
         ActionOwner.AUTH_ART_03,
     ),
     _planned(
-        ActionId.ARTIFACT_UPLOAD_SESSION_CREATE,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_CREATE,
-        ActionOwner.AUTH_ART_04A,
-    ),
-    _planned(
-        ActionId.ARTIFACT_UPLOAD_SESSION_READ,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_READ,
-        ActionOwner.AUTH_ART_04A,
-    ),
-    _planned(
-        ActionId.ARTIFACT_UPLOAD_ITEM_WRITE,
-        PermissionId.ARTIFACT_UPLOAD_ITEM_WRITE,
-        ActionOwner.AUTH_ART_04A,
-    ),
-    _planned(
-        ActionId.ARTIFACT_UPLOAD_SESSION_SEAL,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_SEAL,
-        ActionOwner.AUTH_ART_04A,
-    ),
-    _planned(
-        ActionId.ARTIFACT_UPLOAD_SESSION_CANCEL,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_CANCEL,
-        ActionOwner.AUTH_ART_04A,
-    ),
-    _planned(
-        ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
-        ActionOwner.AUTH_ART_04A,
+        ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
+        PermissionId.SUBMISSION_CREATE,
+        ActionOwner.XINT_002_05A,
     ),
     _planned(
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
@@ -626,6 +594,16 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
         ActionOwner.AUTH_ART_06B,
     ),
+    _planned(
+        ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
+        PermissionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
+        ActionOwner.XINT_002_07,
+    ),
+    _planned(
+        ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
+        PermissionId.ARTIFACT_BINDING_CREATE,
+        ActionOwner.XINT_002_07,
+    ),
 )
 
 PERMISSION_IDS = frozenset(PermissionId)
@@ -646,12 +624,6 @@ NEW_PERMISSION_IDS = frozenset(
         PermissionId.ARTIFACT_RECOVERY_ATTEMPT_READ,
         PermissionId.ARTIFACT_AUDIT_READ,
         PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_CREATE,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_READ,
-        PermissionId.ARTIFACT_UPLOAD_ITEM_WRITE,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_SEAL,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_CANCEL,
-        PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
         PermissionId.ARTIFACT_BINDING_CREATE,
         PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
@@ -659,6 +631,7 @@ NEW_PERMISSION_IDS = frozenset(
         PermissionId.ARTIFACT_GUIDE_SOURCE_READ,
         PermissionId.ARTIFACT_CHECKER_INPUT_MATERIALIZE,
         PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+        PermissionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
     }
 )
 HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
@@ -677,11 +650,11 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 76 or len(ACTION_IDS) != 81:
+    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 78:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 27:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 22:
         raise RuntimeError("authorization permission boundary mismatch")
     active_actions = {
         ActionId.ACTOR_PROFILE_READ_SELF,
@@ -726,14 +699,13 @@ ACTION_BY_ID = _index_actions(ACTION_DEFINITIONS)
 _SERVICE_ACTIONS = {
     ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
     ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
-    ServiceIdentity.ARTIFACT_SCHEDULER: frozenset(
-        {ActionId.ARTIFACT_PENDING_WORK_SCAN, ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE}
-    ),
+    ServiceIdentity.ARTIFACT_SCHEDULER: frozenset({ActionId.ARTIFACT_PENDING_WORK_SCAN}),
     ServiceIdentity.ARTIFACT_BINDING: frozenset(
         {
             ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
             ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
             ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
+            ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
         }
     ),
     ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset({ActionId.ARTIFACT_GUIDE_SOURCE_READ}),
@@ -741,6 +713,7 @@ _SERVICE_ACTIONS = {
         {
             ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
             ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+            ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
         }
     ),
     ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset({ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}),
@@ -754,14 +727,13 @@ def _index_service_actions(
     expected_rows = {
         ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
         ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
-        ServiceIdentity.ARTIFACT_SCHEDULER: frozenset(
-            {ActionId.ARTIFACT_PENDING_WORK_SCAN, ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE}
-        ),
+        ServiceIdentity.ARTIFACT_SCHEDULER: frozenset({ActionId.ARTIFACT_PENDING_WORK_SCAN}),
         ServiceIdentity.ARTIFACT_BINDING: frozenset(
             {
                 ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE,
                 ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
                 ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
+                ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
             }
         ),
         ServiceIdentity.ARTIFACT_GUIDE_READER: frozenset({ActionId.ARTIFACT_GUIDE_SOURCE_READ}),
@@ -769,6 +741,7 @@ def _index_service_actions(
             {
                 ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
                 ActionId.ARTIFACT_POST_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+                ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
             }
         ),
         ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
@@ -787,10 +760,6 @@ def _index_service_actions(
         ActionId.ARTIFACT_PENDING_WORK_SCAN: (
             PermissionId.ARTIFACT_PENDING_WORK_SCAN,
             ActionOwner.AUTH_ART_02D_INTERNAL,
-        ),
-        ActionId.ARTIFACT_UPLOAD_SESSION_EXPIRE: (
-            PermissionId.ARTIFACT_UPLOAD_SESSION_EXPIRE,
-            ActionOwner.AUTH_ART_04A,
         ),
         ActionId.ARTIFACT_GUIDE_SOURCE_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
@@ -819,6 +788,14 @@ def _index_service_actions(
         ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE: (
             PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
             ActionOwner.AUTH_ART_06B,
+        ),
+        ActionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE: (
+            PermissionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE,
+            ActionOwner.XINT_002_07,
+        ),
+        ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE: (
+            PermissionId.ARTIFACT_BINDING_CREATE,
+            ActionOwner.XINT_002_07,
         ),
     }
     if set(rows) != SERVICE_IDENTITIES:

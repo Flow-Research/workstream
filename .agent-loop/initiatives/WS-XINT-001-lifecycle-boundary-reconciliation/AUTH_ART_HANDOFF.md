@@ -1,5 +1,9 @@
 # AUTH <-> ART Handoff
 
+> Historical immutable handoff provenance. WS-XINT-002-01 supersedes this
+> catalogue baseline; identifiers retained below are audit history, not live
+> activation guidance or compatibility authority.
+
 ## Boundary
 
 AUTH is the sole activation custodian. ART is the sole artifact resource and

@@ -36,14 +36,13 @@ contract, provisionally named
   active assignment, locked policy context, and operation generation;
 - keeps the action unavailable and adds no grant or evaluator activation;
 - records parity evidence in AUTH's closed catalogue/constraint/owner manifests;
-- explicitly retires the unused planned multi-step upload-session ActionIds or
-  proves they are unavailable and have no route/command manifest entry.
+- deletes the unused planned multi-step upload authority from the live closed
+  catalogue, constraints, and service matrix without compatibility aliases.
 
-Until that AUTH contract merges, current agent-gate catalogue assertions retain
-those strings only as an exact planned/unavailable discovery baseline. Their
-presence in the closed catalogue is not an active design, grant, route, or
-permission to implement a second intake path, and PLAN2 does not edit AUTH-owned
-catalogue or parity assertions.
+After that AUTH contract merges, the retired identifiers may remain only in
+immutable historical records and the deterministic deletion proof. They are
+not an active design, grant, route, compatibility alias, or permission to
+implement a second intake path.
 
 ART-04A through 04C then implement one hidden continuous surface and publish
 its exact route/resource/guard manifest. After 04C, a separate reviewed AUTH

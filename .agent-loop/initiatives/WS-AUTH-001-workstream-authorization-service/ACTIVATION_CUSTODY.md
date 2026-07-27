@@ -2,10 +2,11 @@
 
 The final v0.1 ART catalogue reconciliation, PREP extension, and activation
 waves are superseded prospectively by
-`../WS-XINT-002-art-auth-end-to-end/`. Existing rows below remain the trusted
-baseline until WS-XINT-002-01 merges; no prose in either plan changes runtime
-availability.
-The reconciliation baseline is trusted `main` commit
+`../WS-XINT-002-art-auth-end-to-end/`. The counts immediately below are the
+trusted pre-reconciliation entry evidence; WS-XINT-002-01 replaces them with
+the live 71/78/22/56 catalogue recorded in the ART custody section without
+changing runtime availability.
+The pre-reconciliation baseline is trusted `main` commit
 `2fb322bd2249a5fe9d3fa706dc63f033074e38ce`: 76 PermissionIds, 81 ActionIds,
 22 active actions, and 59 planned actions. Older counts below are explicitly
 historical snapshots at their named commits, not the WS-XINT-002 entry state.
@@ -41,22 +42,25 @@ mappings, and availability must remain identical.
 | `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
-| `WS-AUTH-001-ART-04A` | `artifact.upload_session.create`, `artifact.upload_session.read`, `artifact.upload_item.write`, `artifact.upload_session.seal`, `artifact.upload_session.cancel`, `artifact.upload_session.expire` |
+| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
 | `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
 
-`WS-AUTH-001-ART-CUSTODY` atomically transfers these 25 rows with exact owner
-cardinalities `3/8/3/6/1/1/1/2` in the table order above and removes the seven
-historical ART owner enum values. The `OPERATOR` suffix denotes only future
-activation custody; it grants no Operator entitlement. All 25 actions remain
-planned, including independently gated `artifact.verification_job.retry`, which
-cannot be activated by read/status proof. The transfer adds no migration because
-owner and availability are typed metadata, while PostgreSQL preserves the exact
-ActionId-to-PermissionId set. The catalogue remains at 74 PermissionIds,
-65 ActionIds, 17 active actions, and 48 planned actions; the seven-identity,
-eleven-membership service matrix is unchanged.
+`WS-AUTH-001-ART-CUSTODY` historically transferred 25 rows. WS-XINT-002-01
+reconciles the live catalogue by removing the six unused multi-step upload rows
+and registering three end-to-end bundle/review rows. The resulting 22 rows have
+exact owner cardinalities `3/8/3/1/1/1/1/2/2` in the table order above. The
+`OPERATOR` suffix denotes only future activation custody; it grants no Operator
+entitlement. All 22 actions remain planned, including independently gated
+`artifact.verification_job.retry`, which
+cannot be activated by read/status proof. The historical transfer added no
+migration because owner and availability are typed metadata. WS-XINT-002-01
+reconciles PostgreSQL parity through migration `0036`; the live catalogue has
+71 PermissionIds, 78 ActionIds, 22 active actions, and 56 planned actions, with
+seven fixed-service identities and twelve matrix memberships.
 
 ## REV custody transfer
 
@@ -86,7 +90,6 @@ actions on trusted `main`:
 | Registration chunk | Future activation chunk | Proposed ActionId -> PermissionId |
 |---|---|---|
 | `WS-AUTH-001-REV-REG` | `WS-AUTH-001-REV-LIFECYCLE` | `review.revision_context.repair` -> `project.task.manage`; `review.revision_context.legacy_close` -> `operations.reconcile.run`; `review.revision_obligation.close` -> `project.task.manage`; `review.lifecycle.activation.manage` -> `operations.reconcile.run` |
-| `WS-AUTH-001-ART-REV-EVIDENCE-REG` | `WS-AUTH-001-ART-REV-EVIDENCE` | `artifact.review_evidence.binding.create` -> `artifact.binding.create` |
 
 These are declared future registration gates, not executable chunk contracts.
 Neither may receive a full contract or start until the owning feature publishes exact
@@ -102,12 +105,10 @@ Its proof includes populated refusal, empty safe downgrade, re-upgrade, and
 fresh replay.
 
 Counts are derived from trusted `main` when a gate executes. REV registration
-adds exactly four planned actions and zero active actions; evidence registration
-adds exactly one planned action and zero active actions, in either order.
-PermissionIds remain 74. The evidence-binding
-registration also adds that exact action to the existing
-`workstream.artifact.binding` static row, increasing matrix membership from 11
-to 12 without adding an identity or database grant.
+adds exactly four planned actions and zero active actions. WS-XINT-002-01
+registers review-evidence binding under `WS-XINT-002-07` and adds it to the
+existing `workstream.artifact.binding` static row without adding an identity or
+database grant.
 
 ## Prepared mutation prerequisite
 

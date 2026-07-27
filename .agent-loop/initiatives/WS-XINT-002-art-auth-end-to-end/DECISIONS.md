@@ -1,12 +1,10 @@
 # Decisions: WS-XINT-002 ART-AUTH End-to-End Contract
 
 1. The dependency is owned end to end by a cross-initiative plan, not by ART-03A.
-2. One outer ZIP replaces the six upload-session actions with
+2. One outer ZIP replaces the six historical multi-step upload actions with
    `artifact.submission_bundle.prepare`; no compatibility aliases or retained
-   unavailable rows remain. The exact deleted ActionId and PermissionId values
-   are `artifact.upload_session.create`, `artifact.upload_session.read`,
-   `artifact.upload_item.write`, `artifact.upload_session.seal`,
-   `artifact.upload_session.cancel`, and `artifact.upload_session.expire`.
+   unavailable rows remain. The immutable chunk contract and migration record
+   the exact deleted ActionId and PermissionId values.
 3. Initial, checker-remediation, and human-review revision submissions share the
    public preparation/create actions; each has an exact closed typed context.
 4. Reviewer packet materialization is a fixed-service action plus a separate

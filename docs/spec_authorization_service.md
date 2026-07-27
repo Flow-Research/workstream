@@ -202,12 +202,6 @@ artifact.verification_job.retry
 artifact.recovery_attempt.read
 artifact.audit.read
 artifact.guide_source.ingest
-artifact.upload_session.create
-artifact.upload_session.read
-artifact.upload_item.write
-artifact.upload_session.seal
-artifact.upload_session.cancel
-artifact.upload_session.expire
 artifact.binding.create
 artifact.verification.execute
 artifact.pending_work.scan
@@ -215,6 +209,7 @@ artifact.put_attempt.resolve
 artifact.guide_source.read
 artifact.checker_input.materialize
 artifact.checker_output.write
+artifact.review_packet.materialize
 
 audit.read
 audit.export
@@ -233,16 +228,17 @@ registration, hidden ART behavior/resource composition, then dedicated AUTH
 evaluator integration and activation. ART never writes availability. AUTH-12,
 AUTH-14, and AUTH-15 are not alternate artifact activation paths.
 
-These are 76 approved `PermissionId` values. `ActionId` values are a separate
+These are 71 approved `PermissionId` values. `ActionId` values are a separate
 closed registry layer and are not included in that permission count. AUTH-05A's
 typed and PostgreSQL audit registry accepts the exact historical 49. The three
-approved Operator recovery identifiers, 21 artifact identifiers,
+approved Operator recovery identifiers, 16 artifact identifiers,
 `review.queue.override`, and the two AUTH-11A read-only project inspection
-permissions are the exact 27 post-`0020` permissions. AUTH-07A and AUTH-11A add
+permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
+WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 81 rows after AUTH-11A: 22 active actions
-and 59 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 78 rows after WS-XINT-002-01: 22 active
+actions and 56 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
 planned project identity, context, setup, policy, and active-guide reads owned
@@ -254,7 +250,7 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
 other planned rows cover
-three Operator recovery actions, 25 artifact actions, canonical
+three Operator recovery actions, 22 artifact actions, canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
@@ -262,13 +258,11 @@ required, and its dedicated AUTH activation custodian has integrated the exact
 evaluator and changed availability. Both halves are mandatory; registry or
 feature presence alone never grants authority.
 
-The four proposed REV lifecycle actions and
-`artifact.review_evidence.binding.create` are not part of the current runtime
-registry. Catalogue totals are derived from trusted `main` when each gate runs:
-REV registration adds exactly four planned and zero active actions, while the
-review-evidence registration adds exactly one planned and zero active action, in
-either order. Both retain 76 PermissionIds and stay blocked until complete
-feature-owned typed and transaction manifests exist.
+The four proposed REV lifecycle actions are not part of the current runtime
+registry. `artifact.review_evidence.binding.create` is registered but planned
+and unavailable. Any later REV registration adds exactly four planned and zero
+active actions while retaining 71 PermissionIds; it stays blocked until
+complete feature-owned typed and transaction manifests exist.
 
 AUTH-07B activates `actor.profile.read_self` and `actor.profile.update_self`.
 AUTH-08 activates exactly seven administrative actions through migration
@@ -367,20 +361,18 @@ The paired artifact hidden-behavior matrix is closed:
 |---|---|
 | `WS-ART-001-02D` | Operator binding/replica/receipt/verification-job/recovery-attempt/audit reads; the operations-domain `operations.artifact_storage_admission.read` action mapped to `operations.status.read`; verification retry; `artifact.verification.execute`; `artifact.pending_work.scan`; and `artifact.put_attempt.resolve` |
 | `WS-ART-001-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, and `artifact.guide_source.binding.create` mapped to `artifact.binding.create` |
-| `WS-ART-001-04A` legacy unavailable baseline | planned upload-session create/read/seal/cancel/expire and upload-item write have no route/command and must be retired by the separate AUTH registration contract before 04A starts |
-| `WS-ART-001-04A` through `04C` after AUTH registration | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; remains unavailable until 04C evidence and a later AUTH activation contract |
+| `WS-ART-001-04A` historical baseline | the former multi-step upload authority had no route/command and is deleted from the live catalogue by WS-XINT-002-01 without compatibility aliases |
+| `WS-ART-001-04A` through `04C` | one hidden `artifact.submission_bundle.prepare` surface mapped to `submission.create`; remains unavailable until 04C evidence and the later WS-XINT-002-05A activation contract |
 | `WS-ART-001-04B` | `artifact.pre_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-05` | `artifact.submission.binding.create` mapped to `artifact.binding.create` |
 | `WS-ART-001-06A` | `artifact.post_submit.checker_input.materialize` mapped to `artifact.checker_input.materialize` |
 | `WS-ART-001-06B` | `artifact.checker_output.write` and `artifact.checker_output.binding.create` mapped to `artifact.binding.create` using the checker-run resource |
 
-The `WS-ART-001-04A` row records the current planned/unavailable catalogue
-baseline only. ART PLAN2 proposes a separate AUTH-owned registration contract
-that retires those unused multi-step actions and registers planned
+WS-XINT-002-01 deletes the former multi-step authority and registers planned
 `artifact.submission_bundle.prepare -> submission.create`. No ART implementation
-may use that new ActionId before the AUTH contract merges; no action activates
-until ART-04A-C publish the complete hidden surface and a later AUTH activation
-contract consumes its exact evidence.
+may execute that ActionId while it remains planned; activation waits until
+ART-04A-C publish the complete hidden surface and WS-XINT-002-05A consumes its
+exact evidence.
 
 Every row requires AUTH-07A's registry and AUTH-07B's kernel first. A row with an Operator principal
 also requires its AUTH-08 grant definition; a row with a fixed service
@@ -411,19 +403,21 @@ A mapping is not a permission alias.
 | `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
 | `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
-| `WS-AUTH-001-ART-04A` | `artifact.upload_session.create`, `artifact.upload_session.read`, `artifact.upload_item.write`, `artifact.upload_session.seal`, `artifact.upload_session.cancel`, `artifact.upload_session.expire` |
+| `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
 | `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
 | `WS-AUTH-001-ART-06A` | `artifact.post_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-06B` | `artifact.checker_output.write`, `artifact.checker_output.binding.create` |
+| `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
 
 The `OPERATOR` suffix names future activation custody only; it creates no
-Operator grant or entitlement. All 25 actions remain planned and unavailable.
+Operator grant or entitlement. All 22 actions remain planned and unavailable.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
 independent activation proof; read/status proof cannot activate retry. The
-ART transfer adds no migration. The separately started REV custody transfer is
-also complete: all 19 REV rows now name exact AUTH custodians, remain planned
-and unavailable, and add no migration.
+historical ART transfer added no migration; WS-XINT-002-01 reconciles the
+closed catalogue through migration `0036`. The separately started REV custody
+transfer is also complete: all 19 REV rows now name exact AUTH custodians,
+remain planned and unavailable, and add no migration.
 
 | ActionId | PermissionId | Principal class | Canonical resource | Resource-owning WS-ART chunk |
 |---|---|---|---|---|
@@ -437,12 +431,7 @@ and unavailable, and add no migration.
 | `operations.artifact_storage_admission.read` | `operations.status.read` | Operator | deployment artifact-storage namespace | `02D` |
 | `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | authorized project actor | guide-source snapshot item | `03` |
 | `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source snapshot item | `03` |
-| `artifact.upload_session.create` | `artifact.upload_session.create` | assigned contributor | task | `04A` |
-| `artifact.upload_session.read` | `artifact.upload_session.read` | assigned contributor | upload session | `04A` |
-| `artifact.upload_item.write` | `artifact.upload_item.write` | assigned contributor | upload item | `04A` |
-| `artifact.upload_session.seal` | `artifact.upload_session.seal` | assigned contributor | upload session | `04A` |
-| `artifact.upload_session.cancel` | `artifact.upload_session.cancel` | assigned contributor | upload session | `04A` |
-| `artifact.upload_session.expire` | `artifact.upload_session.expire` | fixed scheduler service | upload session | `04A` |
+| `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `WS-XINT-002-05A` |
 | `artifact.guide_source.binding.create` | `artifact.binding.create` | fixed binding service | guide-source snapshot item | `03` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | fixed binding service | submission | `05` |
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | fixed binding service | checker run | `06B` |
@@ -452,6 +441,8 @@ and unavailable, and add no migration.
 | `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | task plus current process-local prepared-bundle generation; no scratch path/handle is serialized | `04B` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | fixed materializer service | checker run and immutable bindings | `06A` |
 | `artifact.checker_output.write` | `artifact.checker_output.write` | fixed checker-output service | checker run | `06B` |
+| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
+| `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | exact verified review evidence slot | `WS-XINT-002-07` |
 
 The fixed internal service identities and their complete artifact action sets
 are also closed:
@@ -460,10 +451,10 @@ are also closed:
 |---|---|
 | `workstream.artifact.verifier` | `artifact.verification.execute` |
 | `workstream.artifact.put_resolver` | `artifact.put_attempt.resolve` |
-| `workstream.artifact.scheduler` | `artifact.pending_work.scan`, `artifact.upload_session.expire` |
-| `workstream.artifact.binding` | `artifact.guide_source.binding.create`, `artifact.submission.binding.create`, `artifact.checker_output.binding.create` |
+| `workstream.artifact.scheduler` | `artifact.pending_work.scan` |
+| `workstream.artifact.binding` | `artifact.guide_source.binding.create`, `artifact.submission.binding.create`, `artifact.checker_output.binding.create`, `artifact.review_evidence.binding.create` |
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
-| `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize` |
+| `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
 
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer
