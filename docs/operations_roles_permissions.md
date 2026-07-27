@@ -28,6 +28,12 @@ product authority. Scopes are an outer request-class gate only.
 | Finance Authority | system or exact covered project | Contribution policy, compensation-adapter binding, and fulfillment observation under WS-CON-001. |
 | Audit Authority | system or exact covered project | Read-only evidence access and authorized export. |
 
+Project setup diagnostics and effective-policy inspection use the distinct
+read-only permissions `project.setup_diagnostic.read` and
+`project.effective_policy.read`. They are assigned to Project Manager,
+system-scoped Operator, and covered Audit Authority. They grant no mutation and
+are not assigned to Finance Authority or Access Administrator.
+
 Administrative grants do not imply contributor capability. Holding one does
 not permit claiming tasks, submitting work, or recording review decisions.
 

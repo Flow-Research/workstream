@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed and inactive. Requires a separate signed explicit start.
+Active for implementation under the repository's simple engineering loop.
+The user approved resuming this bounded AUTH-owned change after reconciling it
+with current `main`.
 
 ## Goal
 
@@ -20,12 +22,13 @@ backend/app/modules/authorization/**
 backend/app/modules/audit/**
 backend/alembic/versions/0035_project_read_action_evidence.py
 backend/tests/test_authorization.py
+backend/tests/test_auth.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
 docs/spec_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
-.agent-loop/merge-intents/WS-AUTH-001-11A.json
 ```
 
 ## Not allowed
@@ -71,7 +74,7 @@ compatibility aliases or fallback paths
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic downgrade -1)
 (cd backend && WORKSTREAM_DATABASE_URL=<isolated-test-db> .venv/bin/alembic upgrade head)
-python3 scripts/test_agent_gates.py
+python3 -m scripts.test_lightweight_agent_gates
 git diff --check
 ```
 

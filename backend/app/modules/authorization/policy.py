@@ -27,6 +27,8 @@ ADMIN_ROLE_PERMISSIONS = MappingProxyType(
         ),
         AdminRole.OPERATOR: (
             PermissionId.PROJECT_READ,
+            PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+            PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
             PermissionId.REVIEW_QUEUE_INSPECT,
             PermissionId.REVIEW_LEASE_FORCE_RELEASE,
             PermissionId.CONTRIBUTION_READ_PROJECT,
@@ -51,6 +53,8 @@ ADMIN_ROLE_PERMISSIONS = MappingProxyType(
         AdminRole.PROJECT_MANAGER: (
             PermissionId.PROJECT_CREATE,
             PermissionId.PROJECT_READ,
+            PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+            PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
             PermissionId.PROJECT_UPDATE,
             PermissionId.PROJECT_ARCHIVE,
             PermissionId.PROJECT_GUIDE_MANAGE,
@@ -78,6 +82,8 @@ ADMIN_ROLE_PERMISSIONS = MappingProxyType(
             PermissionId.ACTOR_IDENTITY_LINK_READ,
             PermissionId.ADMIN_ROLE_READ,
             PermissionId.PROJECT_READ,
+            PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
+            PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
             PermissionId.PROJECT_ROLE_GRANT_READ,
             PermissionId.REVIEW_QUEUE_INSPECT,
             PermissionId.REVIEW_CHAIN_READ,
