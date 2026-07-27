@@ -66,7 +66,9 @@ prepared-bundle materialization description now includes task and assignment
 context. Its docstring warning was not reproduced by the repository gate; the
 hosted Docstring Coverage step passed. Agent Gates passed. The first Backend
 run encountered one pre-existing lock-observation timeout under four-lane load
-after 1,596 tests in that lane passed; the same-head failed-job rerun is pending.
+after 1,596 tests in that lane passed. Transient rerun and merge-readiness state
+is intentionally not copied here; the PR's exact-head GitHub checks are the
+source of truth.
 
 ## Remaining risks and follow-up
 
