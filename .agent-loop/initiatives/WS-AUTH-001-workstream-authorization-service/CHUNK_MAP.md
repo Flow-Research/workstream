@@ -1,5 +1,10 @@
 # Chunk Map: WS-AUTH-001 - Workstream Authorization Service
 
+The complete ART-facing catalogue and runtime dependency is now planned in
+`../WS-XINT-002-art-auth-end-to-end/CHUNK_MAP.md`. The historical ART custody
+entries in this file remain baseline identifiers only until that planning
+amendment is approved and its first reconciliation chunk merges.
+
 ## Rule
 
 Only one chunk may be active at a time. Do not start the next chunk until the

@@ -1,5 +1,15 @@
 # Activation Custody: WS-AUTH-001
 
+The final v0.1 ART catalogue reconciliation, PREP extension, and activation
+waves are superseded prospectively by
+`../WS-XINT-002-art-auth-end-to-end/`. Existing rows below remain the trusted
+baseline until WS-XINT-002-01 merges; no prose in either plan changes runtime
+availability.
+The reconciliation baseline is trusted `main` commit
+`2fb322bd2249a5fe9d3fa706dc63f033074e38ce`: 76 PermissionIds, 81 ActionIds,
+22 active actions, and 59 planned actions. Older counts below are explicitly
+historical snapshots at their named commits, not the WS-XINT-002 entry state.
+
 ## Authority
 
 This plan applies the merged `WS-XINT-001` handoffs to AUTH. It distinguishes:
@@ -168,6 +178,11 @@ WS-AUTH-001-XINT planning reconciliation
 -> feature-gated registration and activation chunks as their manifests merge
 -> AUTH-16 aggregate conformance and live proof
 ```
+
+For ART dependencies, replace the generic final two steps with the exact
+WS-XINT-002 sequence: complete registration, prepared feature boundaries,
+fixed internal services, guide, submission, checker, review artifact access, and
+end-to-end conformance. AUTH-14 and AUTH-15 are not alternate activation paths.
 
 Only one WS-AUTH implementation chunk is active at a time. ART, REV, and CON
 may build hidden behavior in their own worktrees while real actions remain
