@@ -79,3 +79,13 @@ Markdown links, and diff integrity passed locally. QA and test-delta reviews
 passed; the test-delta review specifically confirms the exact rollback then
 restage assertion and found no weakening. The full PostgreSQL and exact-head
 coverage proof remains assigned to GitHub Actions.
+
+## Hosted Backend run 30293817200
+
+Every non-coverage gate passed again. Artifact-foundation coverage rose to
+89.98 percent, leaving only the two unexecuted lines in the concurrent
+process-runtime initializer branch. The final focused regression starts two
+initializers at the same barrier, proves the losing bootstrap closes, and then
+proves shutdown closes the installed winner. This directly covers the remaining
+resource-leak safety branch; the focused test and all 14 verification tests
+passed with Ruff and diff integrity.

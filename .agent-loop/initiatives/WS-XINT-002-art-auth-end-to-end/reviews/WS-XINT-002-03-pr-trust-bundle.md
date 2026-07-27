@@ -53,6 +53,9 @@ expanded; all other ART service actions remain planned and issue no handle.
   changing CI configuration, thresholds, inclusion, selection, or skips.
 - GitHub Actions will rerun the full repository suite and coverage at the exact
   PR head; no local four-hour full run is required.
+- The first repair rerun reached 89.98 percent. A final deterministic race test
+  now covers the only two missed worker lines and proves the losing concurrent
+  provider bootstrap is closed before use.
 
 ## Human review focus
 

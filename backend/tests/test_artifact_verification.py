@@ -355,6 +355,61 @@ async def test_process_runtime_closes_bootstrap_when_namespace_claim_fails(
 
 
 @pytest.mark.asyncio
+async def test_process_runtime_closes_losing_concurrent_bootstrap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    bootstraps = [Mock(), Mock()]
+    for bootstrap in bootstraps:
+        bootstrap.initialize_after_namespace_claim.return_value = Mock()
+    both_claiming = asyncio.Event()
+    release_claims = asyncio.Event()
+    claim_count = 0
+
+    async def claim_namespace(*_args: object) -> Mock:
+        nonlocal claim_count
+        claim_count += 1
+        if claim_count == 2:
+            both_claiming.set()
+        await release_claims.wait()
+        return Mock()
+
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_settings",
+        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+    )
+    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "create_artifact_store_bootstrap",
+        Mock(side_effect=bootstraps),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "artifact_storage_namespace_spec",
+        Mock(side_effect=[Mock(), Mock()]),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "validate_artifact_storage_namespace_at_startup",
+        AsyncMock(side_effect=claim_namespace),
+    )
+
+    initializers = [
+        asyncio.create_task(internal_worker_adapter.initialize_artifact_internal_runtime())
+        for _ in range(2)
+    ]
+    await asyncio.wait_for(both_claiming.wait(), timeout=1)
+    release_claims.set()
+    await asyncio.gather(*initializers)
+
+    assert sum(bootstrap.close.call_count for bootstrap in bootstraps) == 1
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    assert all(bootstrap.close.call_count == 1 for bootstrap in bootstraps)
+
+
+@pytest.mark.asyncio
 async def test_internal_operation_rejects_kind_and_restages_denial(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
