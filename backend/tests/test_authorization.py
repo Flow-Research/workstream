@@ -2802,6 +2802,7 @@ def _runtime_context(
     actor_status: ActorStatus = ActorStatus.ACTIVE,
     link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
     actor_kind: ActorKind = ActorKind.HUMAN,
+    service_identity: ServiceIdentity = ServiceIdentity.ARTIFACT_VERIFIER,
 ) -> AuthorizationContext:
     context_type = (
         ServiceAuthorizationContext
@@ -2809,9 +2810,7 @@ def _runtime_context(
         else HumanAuthorizationContext
     )
     service_fields = (
-        {"service_identity": ServiceIdentity.ARTIFACT_VERIFIER}
-        if actor_kind is ActorKind.SERVICE
-        else {}
+        {"service_identity": service_identity} if actor_kind is ActorKind.SERVICE else {}
     )
     return context_type(
         actor_profile_id=uuid4(),
@@ -3630,6 +3629,130 @@ async def test_prepared_fixed_service_refreshes_rows_before_planned_denial():
     assert evidence.events == []
 
 
+@pytest.mark.parametrize(
+    ("action_id", "service_identity"),
+    tuple(
+        (
+            definition.action_id,
+            next(
+                (
+                    identity
+                    for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
+                    if definition.action_id in actions
+                ),
+                None,
+            ),
+        )
+        for definition in ACTION_DEFINITIONS
+        if definition.availability is ActionAvailability.PLANNED
+        and definition.action_id.value.startswith("artifact.")
+    ),
+)
+@pytest.mark.asyncio
+async def test_prepared_issues_no_handle_or_evidence_for_every_planned_art_action(
+    action_id: ActionId,
+    service_identity: ServiceIdentity | None,
+):
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE if service_identity is not None else ActorKind.HUMAN,
+        service_identity=service_identity or ServiceIdentity.ARTIFACT_VERIFIER,
+    )
+
+    class LockedFacts:
+        calls = 0
+
+        async def lock_request_actor(self, identity_link_id, actor_profile_id):
+            self.calls += 1
+            return (
+                SimpleNamespace(
+                    id=str(identity_link_id),
+                    actor_profile_id=str(actor_profile_id),
+                    status="active",
+                ),
+                SimpleNamespace(
+                    id=str(actor_profile_id),
+                    actor_kind=context.actor_kind.value,
+                    status="active",
+                    service_identity=(
+                        service_identity.value if service_identity is not None else None
+                    ),
+                ),
+            )
+
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context, session=session)
+    facts = LockedFacts()
+    authorization._admin = facts  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
+        await prepared.prepare(
+            action_id,
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+    assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
+    assert facts.calls == (1 if service_identity is not None else 0)
+    assert prepared._issued == {}
+    assert evidence.events == []
+
+
+@pytest.mark.parametrize(
+    ("action_id", "owning_identity"),
+    tuple(
+        (action_id, identity)
+        for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
+        for action_id in actions
+        if action_id.value.startswith("artifact.")
+        and next(
+            definition for definition in ACTION_DEFINITIONS if definition.action_id is action_id
+        ).availability
+        is ActionAvailability.PLANNED
+    ),
+)
+@pytest.mark.asyncio
+async def test_prepared_wrong_fixed_service_denies_before_planned_availability(
+    action_id: ActionId,
+    owning_identity: ServiceIdentity,
+):
+    wrong_identity = next(
+        identity
+        for identity in ServiceIdentity
+        if identity is not owning_identity
+        and action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(identity, frozenset())
+    )
+    context = _runtime_context(
+        actor_kind=ActorKind.SERVICE,
+        service_identity=wrong_identity,
+    )
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context, session=session)
+    facts = _PreparedAdminFacts(context)
+    authorization._admin = facts  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,
+    )
+
+    with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
+        await prepared.prepare(
+            action_id,
+            PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+        )
+
+    assert exc_info.value.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    assert facts.calls == 0
+    assert prepared._issued == {}
+    assert evidence.events == []
+
+
 @pytest.mark.asyncio
 async def test_prepared_rejects_unsupported_scope_missing_grant_and_inactive_root():
     context = _runtime_context()
@@ -3744,6 +3867,41 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             requested_fields=("display_name",),
         )
 
+        async def assert_handle_burned_without_reentry(
+            handle: PreparedAuthorizationHandle,
+            caller_input: PreparedAuthorizationInput,
+        ) -> None:
+            require_calls = 0
+            evidence_calls = 0
+            original_require = authorization._require_prelocked
+            original_add_event = authorization._audit.add_authority_event
+
+            async def counted_require(*args, **kwargs):
+                nonlocal require_calls
+                require_calls += 1
+                return await original_require(*args, **kwargs)
+
+            async def counted_add_event(event):
+                nonlocal evidence_calls
+                evidence_calls += 1
+                return await original_add_event(event)
+
+            authorization._require_prelocked = counted_require  # type: ignore[method-assign]
+            authorization._audit.add_authority_event = counted_add_event  # type: ignore[method-assign]
+            try:
+                with pytest.raises(PreparedAuthorizationHandleInvalid):
+                    await prepared.consume(
+                        handle,
+                        ActionId.ACTOR_PROFILE_UPDATE_SELF,
+                        caller_input,
+                        resource,
+                    )
+            finally:
+                authorization._require_prelocked = original_require  # type: ignore[method-assign]
+                authorization._audit.add_authority_event = original_add_event  # type: ignore[method-assign]
+            assert require_calls == 0
+            assert evidence_calls == 0
+
         success_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "commit"}
         )
@@ -3803,6 +3961,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             == 0
         )
         await session.rollback()
+        await assert_handle_burned_without_reentry(participant_handle, participant_input)
 
         evidence_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "evidence"}
@@ -3827,13 +3986,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             )
         await session.rollback()
         authorization._audit = original_audit
-        with pytest.raises(PreparedAuthorizationHandleInvalid):
-            await prepared.consume(
-                evidence_handle,
-                ActionId.ACTOR_PROFILE_UPDATE_SELF,
-                evidence_input,
-                resource,
-            )
+        await assert_handle_burned_without_reentry(evidence_handle, evidence_input)
 
         cancellation_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "cancellation"}
@@ -3861,13 +4014,10 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             await cancellation_task
         assert await session.scalar(text("select 1")) == 1
         await session.rollback()
-        with pytest.raises(PreparedAuthorizationHandleInvalid):
-            await prepared.consume(
-                issued_holder["handle"],
-                ActionId.ACTOR_PROFILE_UPDATE_SELF,
-                cancellation_input,
-                resource,
-            )
+        await assert_handle_burned_without_reentry(
+            issued_holder["handle"],
+            cancellation_input,
+        )
 
         commit_failure_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "commit_failure"}
@@ -3905,6 +4055,10 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             == 0
         )
         await session.rollback()
+        await assert_handle_burned_without_reentry(
+            commit_failure_handle,
+            commit_failure_input,
+        )
 
         timeout_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "timeout"}
@@ -3936,6 +4090,7 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             == 0
         )
         await session.rollback()
+        await assert_handle_burned_without_reentry(timeout_handle, timeout_input)
 
         async def cancel_after_consume(phase: str):
             phase_input = PreparedAuthorizationInput(
@@ -3997,13 +4152,10 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
                 == 0
             )
             await session.rollback()
-            with pytest.raises(PreparedAuthorizationHandleInvalid):
-                await prepared.consume(
-                    phase_holder["handle"],
-                    ActionId.ACTOR_PROFILE_UPDATE_SELF,
-                    phase_input,
-                    resource,
-                )
+            await assert_handle_burned_without_reentry(
+                phase_holder["handle"],
+                phase_input,
+            )
 
         await cancel_after_consume("participant_cancel")
 
@@ -4054,13 +4206,10 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             == 0
         )
         await session.rollback()
-        with pytest.raises(PreparedAuthorizationHandleInvalid):
-            await prepared.consume(
-                evidence_holder["handle"],
-                ActionId.ACTOR_PROFILE_UPDATE_SELF,
-                evidence_cancel_input,
-                resource,
-            )
+        await assert_handle_burned_without_reentry(
+            evidence_holder["handle"],
+            evidence_cancel_input,
+        )
 
         commit_cancel_input = PreparedAuthorizationInput(
             idempotency_key=uuid4(), request_value={"case": "commit_cancel"}
@@ -4114,13 +4263,10 @@ async def test_prepared_postgresql_failure_and_cancellation_are_atomic(
             == 0
         )
         await session.rollback()
-        with pytest.raises(PreparedAuthorizationHandleInvalid):
-            await prepared.consume(
-                commit_holder["handle"],
-                ActionId.ACTOR_PROFILE_UPDATE_SELF,
-                commit_cancel_input,
-                resource,
-            )
+        await assert_handle_burned_without_reentry(
+            commit_holder["handle"],
+            commit_cancel_input,
+        )
 
         async with authorization_factory() as locker:
             await locker.begin()

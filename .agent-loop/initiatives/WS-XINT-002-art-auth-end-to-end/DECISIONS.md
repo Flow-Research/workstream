@@ -20,3 +20,9 @@
    evidence-gated and cannot be eliminated safely.
 9. The simple contribution loop applies: planning does not require a signed
    start/cancel event or merge-intent file.
+10. WS-XINT-002-02 closes the reusable operation interface only. It does not
+    issue production capabilities for planned actions or invent feature facts
+    ahead of merged behavior. Exact session/root-bound feature composers,
+    resource contexts, locks, and race proof belong to chunks 03-07 and 05A-D.
+11. Initiative status records durable merged facts and reviewed delivery order,
+    never transient “active” or “merge-pending” branch state.

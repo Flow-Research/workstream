@@ -6,7 +6,9 @@ Deliver the dependency in two front-loaded AUTH foundations followed by thin,
 evidence-gated activation waves:
 
 1. Reconcile the complete v0.1 catalogue and static service matrix once.
-2. Extend PREP once with closed typed feature integration contracts.
+2. Close the PREP-to-ART operation interface once: durable mutation requests
+   carry opaque prepared authority, while exact feature contexts remain with
+   their evidence-backed activation chunks.
 3. Activate fixed internal recovery services before any durable provider work.
 4. Activate guide ingest/use only after the matching hidden ART behavior.
 5. Activate initial contributor preparation, then atomic Submission/binding
@@ -62,7 +64,7 @@ initial submission; checker remediation rooted in the exact final
 `needs_revision` CheckerRun; and human-review revision rooted in the exact
 revision obligation. Checker remediation records the server-derived
 `remediation_source_checker_run_id`, immediate same-task predecessor, existing
-locked task context, and current `allow_review`; it has no ReviewFinding
+locked task context; it has no inherited `allow_review`, ReviewFinding
 response, revision preparation, human revision deadline/round consumption,
 reviewer contribution, or synthetic human actor.
 
@@ -85,9 +87,13 @@ replaced-transaction, revoked, stale, or already consumed handles deny.
 ## Ownership rule
 
 AUTH evaluates authority but does not load feature rows or encode product
-lifecycle. Feature modules expose closed typed composers/loaders and own their
-locks and invariants. ART orchestrates bytes and receives only opaque prepared
-handles plus typed decisions; it never imports AUTH repositories.
+lifecycle. Chunk 02 closes durable ART mutation ports around the existing
+opaque prepared handle and removes the obsolete upload-session interface.
+Each activation chunk then defines its closed typed composer/loader in the
+owning feature module, binds its proof to the same session and root
+transaction, and owns its locks and invariants. ART orchestrates bytes and
+receives only opaque prepared handles plus typed decisions; it never imports
+AUTH repositories.
 
 ## Verification
 

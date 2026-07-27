@@ -15,7 +15,7 @@ COMPOSITION_ROOT = APP_ROOT / "adapters" / "artifacts" / "__init__.py"
 S3_ADAPTER_MODULE = APP_ROOT / "adapters" / "artifacts" / "s3_compatible.py"
 CLOSED_PORTS = {
     "GuideArtifactIngestPort",
-    "ContributorArtifactUploadPort",
+    "SubmissionBundlePreparationPort",
     "ArtifactBindingPort",
     "ArtifactMaterializationPort",
     "CheckerArtifactOutputPort",
@@ -24,8 +24,11 @@ CLOSED_PORTS = {
 }
 CANONICAL_REQUESTS = {
     "GuideArtifactIngestRequest",
-    "ArtifactBindingCreateRequest",
-    "ReadyUploadSetRequest",
+    "GuideSourceBindingRequest",
+    "SubmissionBindingRequest",
+    "CheckerOutputBindingRequest",
+    "SubmissionBundlePreparationRequest",
+    "PreparedBundleMaterializationRequest",
     "BindingMaterializationRequest",
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
@@ -34,6 +37,14 @@ CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
 }
+PREPARED_MUTATION_REQUESTS = CANONICAL_REQUESTS - {"ArtifactRecoveryRequest"}
+PREPARED_HANDLE_FORBIDDEN_ROOTS = (
+    APP_ROOT / "adapters",
+    APP_ROOT / "api",
+    APP_ROOT / "modules" / "outbox",
+    APP_ROOT / "schemas",
+    APP_ROOT / "workers",
+)
 RAW_TYPES = {"ArtifactStore", "ArtifactStorageOrchestrator"}
 INTERNAL_ADMISSION_TYPES = {
     "ArtifactAdmissionService",
@@ -60,15 +71,30 @@ def _tree(path: Path) -> ast.Module:
 def _annotation_names(annotation: ast.expr | None) -> set[str]:
     if annotation is None:
         return set()
-    return {
-        node.id
-        for node in ast.walk(annotation)
-        if isinstance(node, ast.Name)
-    } | {
-        node.attr
-        for node in ast.walk(annotation)
-        if isinstance(node, ast.Attribute)
+    return {node.id for node in ast.walk(annotation) if isinstance(node, ast.Name)} | {
+        node.attr for node in ast.walk(annotation) if isinstance(node, ast.Attribute)
     }
+
+
+def _declared_annotation_names(tree: ast.AST) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AnnAssign):
+            names.update(_annotation_names(node.annotation))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            arguments = (
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+            )
+            for argument in arguments:
+                names.update(_annotation_names(argument.annotation))
+            if node.args.vararg is not None:
+                names.update(_annotation_names(node.args.vararg.annotation))
+            if node.args.kwarg is not None:
+                names.update(_annotation_names(node.args.kwarg.annotation))
+            names.update(_annotation_names(node.returns))
+    return names
 
 
 def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() -> None:
@@ -85,10 +111,11 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
                 imported = {alias.name for alias in node.names}
                 forbidden = imported & (RAW_TYPES | INTERNAL_ADMISSION_TYPES)
                 if forbidden:
-                    violations.append(f"{path.relative_to(BACKEND_ROOT)} imports {sorted(forbidden)}")
-                if (
-                    node.module == "app.modules.artifacts.service"
-                    and any(alias.name == "*" for alias in node.names)
+                    violations.append(
+                        f"{path.relative_to(BACKEND_ROOT)} imports {sorted(forbidden)}"
+                    )
+                if node.module == "app.modules.artifacts.service" and any(
+                    alias.name == "*" for alias in node.names
                 ):
                     violations.append(
                         f"{path.relative_to(BACKEND_ROOT)} imports broad artifact services"
@@ -120,8 +147,7 @@ def test_only_artifact_orchestrator_owns_provider_execution() -> None:
             (
                 node
                 for node in tree.body
-                if isinstance(node, ast.ClassDef)
-                and node.name == "ArtifactStorageOrchestrator"
+                if isinstance(node, ast.ClassDef) and node.name == "ArtifactStorageOrchestrator"
             ),
             None,
         )
@@ -141,9 +167,7 @@ def test_only_artifact_orchestrator_owns_provider_execution() -> None:
                     )
                 )
             ):
-                violations.append(
-                    f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}"
-                )
+                violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 
 
@@ -152,18 +176,14 @@ def test_artifact_domain_does_not_import_adapter_modules() -> None:
     violations: list[str] = []
     for path in _python_files(APP_ROOT / "modules" / "artifacts"):
         for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.ImportFrom) and (
-                node.module or ""
-            ).startswith("app.adapters.artifacts"):
-                violations.append(
-                    f"{path.relative_to(BACKEND_ROOT)} imports {node.module}"
-                )
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                "app.adapters.artifacts"
+            ):
+                violations.append(f"{path.relative_to(BACKEND_ROOT)} imports {node.module}")
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     if alias.name.startswith("app.adapters.artifacts"):
-                        violations.append(
-                            f"{path.relative_to(BACKEND_ROOT)} imports {alias.name}"
-                        )
+                        violations.append(f"{path.relative_to(BACKEND_ROOT)} imports {alias.name}")
     assert violations == []
 
 
@@ -342,6 +362,103 @@ def test_artifact_operations_exports_only_canonical_closed_contracts() -> None:
     }
 
 
+def test_durable_artifact_mutation_ports_require_process_local_prepared_authority() -> None:
+    tree = _tree(ARTIFACT_OPERATIONS)
+    request_classes = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name in PREPARED_MUTATION_REQUESTS
+    }
+    assert set(request_classes) == PREPARED_MUTATION_REQUESTS
+    for name, class_node in request_classes.items():
+        assert not any(
+            isinstance(base, ast.Name) and base.id == "BaseModel" for base in class_node.bases
+        ), name
+        fields = {
+            node.target.id: _annotation_names(node.annotation)
+            for node in class_node.body
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+        }
+        assert fields.get("prepared_authorization") == {"PreparedAuthorizationHandle"}, name
+        assert all("AuthorizationContext" not in types for types in fields.values()), name
+        assert {"action_id", "resource_context", "facts"}.isdisjoint(fields), name
+
+    source = ARTIFACT_OPERATIONS.read_text(encoding="utf-8")
+    assert "upload_session" not in source
+    assert "ContributorArtifactUploadPort" not in source
+    assert "ReadyUploadSetRequest" not in source
+    assert "ActionId" not in source
+
+    expected_methods = {
+        "GuideArtifactIngestPort": {"ingest"},
+        "SubmissionBundlePreparationPort": {"prepare"},
+        "ArtifactBindingPort": {
+            "bind_guide_source",
+            "bind_submission",
+            "bind_checker_output",
+        },
+        "ArtifactMaterializationPort": {
+            "materialize_prepared_bundle",
+            "materialize_bindings",
+        },
+        "CheckerArtifactOutputPort": {"store"},
+    }
+    expected_request_by_method = {
+        "ingest": "GuideArtifactIngestRequest",
+        "prepare": "SubmissionBundlePreparationRequest",
+        "bind_guide_source": "GuideSourceBindingRequest",
+        "bind_submission": "SubmissionBindingRequest",
+        "bind_checker_output": "CheckerOutputBindingRequest",
+        "materialize_prepared_bundle": "PreparedBundleMaterializationRequest",
+        "materialize_bindings": "BindingMaterializationRequest",
+        "store": "CheckerOutputArtifactRequest",
+    }
+    protocols = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name in expected_methods
+    }
+    for name, methods in expected_methods.items():
+        declared_methods = {
+            node.name
+            for node in protocols[name].body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        assert declared_methods == methods
+        for node in protocols[name].body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            assert node.args.posonlyargs == []
+            assert [argument.arg for argument in node.args.args] == ["self", "request"]
+            assert node.args.kwonlyargs == []
+            assert node.args.vararg is None
+            assert node.args.kwarg is None
+            request_argument = node.args.args[-1]
+            assert _annotation_names(request_argument.annotation) == {
+                expected_request_by_method[node.name]
+            }
+            assert "AuthorizationContext" not in _declared_annotation_names(node)
+
+
+def test_prepared_handle_never_enters_public_async_or_provider_contracts() -> None:
+    violations: list[str] = []
+    schema_files = tuple(APP_ROOT.glob("modules/**/schemas.py"))
+    route_files = tuple(APP_ROOT.glob("modules/**/router.py"))
+    provider_interface_files = tuple(
+        path for path in _python_files(APP_ROOT / "interfaces") if path != ARTIFACT_OPERATIONS
+    )
+    for path in (
+        _python_files(*PREPARED_HANDLE_FORBIDDEN_ROOTS)
+        + schema_files
+        + route_files
+        + provider_interface_files
+    ):
+        names = _declared_annotation_names(_tree(path))
+        if "PreparedAuthorizationHandle" in names:
+            violations.append(str(path.relative_to(BACKEND_ROOT)))
+    assert violations == []
+
+
 def test_scratch_cleanup_worker_has_no_product_or_database_state() -> None:
     path = APP_ROOT / "workers" / "artifacts.py"
     forbidden_import_prefixes = (
@@ -356,9 +473,7 @@ def test_scratch_cleanup_worker_has_no_product_or_database_state() -> None:
             imported_modules.add(node.module)
         elif isinstance(node, ast.Import):
             imported_modules.update(alias.name for alias in node.names)
-    assert not any(
-        module.startswith(forbidden_import_prefixes) for module in imported_modules
-    )
+    assert not any(module.startswith(forbidden_import_prefixes) for module in imported_modules)
 
 
 def test_artifact_repository_does_not_own_actor_persistence() -> None:

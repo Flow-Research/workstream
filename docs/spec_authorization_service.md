@@ -607,6 +607,15 @@ An exact-consume denial stages its decision only in the caller transaction; the
 required rollback removes that event with participant state. PREP never
 restages or commits denial evidence separately.
 
+WS-XINT-002-02 closes the process-local PREP-to-ART operation interface without
+activating an action. Durable ART mutation requests carry the opaque
+`PreparedAuthorizationHandle`, never a raw `AuthorizationContext`; each typed
+method fixes its expected action and accepts no caller-selected action or
+generic facts map. The handle is non-Pydantic and cannot enter route schemas,
+outbox/Celery payloads, provider interfaces, or serialized contracts. Exact
+feature contexts and session/root-bound composer proofs remain owned by the
+later evidence-backed activation chunks.
+
 PREP intentionally ships no feature consumer. Its PostgreSQL participant is a
 test-only neutral row proving that final facts, one decision event, participant
 work, and caller commit or rollback share the same transaction. Fixed services
