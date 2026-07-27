@@ -3,7 +3,7 @@
 | Chunk | Purpose | Risk | Dependency |
 |---|---|---|---|
 | `WS-XINT-002-01` | Reconcile the entire ART catalogue, permissions, owners, migration parity, and fixed-service matrix while every new action stays planned. | L1 | approved plan |
-| `WS-XINT-002-02` | Extend PREP with closed feature-owned typed composition contracts and ART lock plans; activate nothing. | L1 | 01 |
+| `WS-XINT-002-02` | Close the reusable PREP-to-ART operation interface: opaque prepared authority on durable mutation requests, no obsolete upload-session port, and no action activation. | L1 | 01 |
 | `WS-XINT-002-03` | Activate verifier, scheduler scan, and put resolver services from merged ART recovery evidence. | L1 | 02 plus ART 02C/02D evidence |
 | `WS-XINT-002-04` | Activate guide ingest, guide binding, and guide read in evidence-ordered substeps. | L1 | 02 plus ART 03A/03B evidence |
 | `WS-XINT-002-05A` | Activate initial contributor bundle preparation and durable ready admission. | L1 | 02 plus ART 04A-C evidence |
@@ -17,3 +17,7 @@
 Chunks 03-07 may be split only by the evidence boundaries named above. A split
 cannot add catalogue values, permissions, identities, matrix rows, or a second
 runtime protocol; such a discovery is contract drift and returns to planning.
+Each activation chunk owns its exact feature resource contexts, non-forgeable
+session/root-bound composer proof, lock order, stale-fact matrix, and crossed
+race tests. Those facts must not be front-loaded into AUTH before the owning
+feature behavior exists.

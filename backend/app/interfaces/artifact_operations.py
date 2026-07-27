@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
-from app.modules.artifacts.sources import ArtifactCommitment
+from app.modules.artifacts.sources import ArtifactCommitment, PreparedArtifact
+from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.runtime import AuthorizationContext
 
 __all__ = (
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
-    "ArtifactBindingCreateRequest",
     "ArtifactBindingPort",
     "ArtifactMaterializationPort",
     "ArtifactOperatorReadPort",
@@ -21,11 +21,15 @@ __all__ = (
     "ArtifactRecoveryRequest",
     "BindingMaterializationRequest",
     "CheckerArtifactOutputPort",
+    "CheckerOutputBindingRequest",
     "CheckerOutputArtifactRequest",
-    "ContributorArtifactUploadPort",
     "GuideArtifactIngestPort",
     "GuideArtifactIngestRequest",
-    "ReadyUploadSetRequest",
+    "GuideSourceBindingRequest",
+    "PreparedBundleMaterializationRequest",
+    "SubmissionBundlePreparationPort",
+    "SubmissionBundlePreparationRequest",
+    "SubmissionBindingRequest",
 )
 
 ArtifactBindingResourceType = Literal[
@@ -49,9 +53,9 @@ ArtifactAuditResourceType = Literal[
 
 @dataclass(frozen=True, slots=True)
 class GuideArtifactIngestRequest:
-    """Authorized guide-source bytes and their canonical product ownership."""
+    """Prepared guide-source authority and canonical product ownership."""
 
-    authorization_context: AuthorizationContext
+    prepared_authorization: PreparedAuthorizationHandle
     project_id: UUID
     guide_source_snapshot_id: UUID
     source_item_id: UUID
@@ -61,34 +65,71 @@ class GuideArtifactIngestRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class ArtifactBindingCreateRequest:
-    """Verified content and exact product facts for immutable binding."""
+class GuideSourceBindingRequest:
+    """Verified guide content and its exact setup-generation owner."""
 
-    authorization_context: AuthorizationContext
+    prepared_authorization: PreparedAuthorizationHandle
     project_id: UUID
-    task_id: UUID
-    submission_id: UUID | None
-    checker_run_id: UUID | None
+    guide_source_snapshot_id: UUID
+    source_item_id: UUID
+    project_setup_run_id: UUID
     logical_role: str
     verified_content_ids: tuple[UUID, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ReadyUploadSetRequest:
-    """One sealed upload set and its locked task policy context."""
+class SubmissionBindingRequest:
+    """Verified contributor content and its exact Submission owner."""
 
-    authorization_context: AuthorizationContext
+    prepared_authorization: PreparedAuthorizationHandle
+    project_id: UUID
     task_id: UUID
-    sealed_upload_session_id: UUID
+    submission_id: UUID
+    logical_role: str
+    verified_content_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class CheckerOutputBindingRequest:
+    """Verified checker output and its exact CheckerRun owner."""
+
+    prepared_authorization: PreparedAuthorizationHandle
+    project_id: UUID
+    task_id: UUID
+    submission_id: UUID
+    checker_run_id: UUID
+    logical_role: str
+    verified_content_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionBundlePreparationRequest:
+    """One prepared contributor authority and continuous outer ZIP source."""
+
+    prepared_authorization: PreparedAuthorizationHandle
+    task_id: UUID
+    assignment_id: UUID
+    byte_source: AsyncIterable[bytes]
+    client_commitment: ArtifactCommitment | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedBundleMaterializationRequest:
+    """Process-local prepared bytes and exact policy selectors."""
+
+    prepared_authorization: PreparedAuthorizationHandle
+    task_id: UUID
+    assignment_id: UUID
     submission_artifact_policy_id: UUID
     checker_policy_id: UUID
+    prepared_artifact: PreparedArtifact
 
 
 @dataclass(frozen=True, slots=True)
 class BindingMaterializationRequest:
     """Immutable bindings selected by exact execution context."""
 
-    authorization_context: AuthorizationContext
+    prepared_authorization: PreparedAuthorizationHandle
     task_id: UUID
     submission_id: UUID | None
     checker_run_id: UUID
@@ -99,7 +140,7 @@ class BindingMaterializationRequest:
 class CheckerOutputArtifactRequest:
     """Generated checker bytes bound to one fixed service execution."""
 
-    service_actor_context: AuthorizationContext
+    prepared_authorization: PreparedAuthorizationHandle
     task_id: UUID
     submission_id: UUID
     checker_run_id: UUID
@@ -128,72 +169,34 @@ class GuideArtifactIngestPort(Protocol):
         """Ingest one canonical guide source item."""
 
 
-class ContributorArtifactUploadPort(Protocol):
-    """Own the closed contributor upload-session lifecycle."""
+class SubmissionBundlePreparationPort(Protocol):
+    """Prepare one continuous contributor bundle without upload sessions."""
 
-    async def create(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-    ) -> object:
-        """Create one authorized task upload session."""
-
-    async def read(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        upload_session_id: UUID,
-    ) -> object:
-        """Read one authorized upload session."""
-
-    async def write(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        upload_session_id: UUID,
-        logical_role: str,
-        byte_source: AsyncIterable[bytes],
-        client_commitment: ArtifactCommitment | None = None,
-    ) -> object:
-        """Write one bounded item through artifact orchestration."""
-
-    async def seal(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        upload_session_id: UUID,
-    ) -> object:
-        """Seal one exact upload set."""
-
-    async def cancel(
-        self,
-        *,
-        authorization_context: AuthorizationContext,
-        task_id: UUID,
-        upload_session_id: UUID,
-    ) -> None:
-        """Cancel one unsealed upload session."""
+    async def prepare(self, request: SubmissionBundlePreparationRequest) -> object:
+        """Prepare one authorized outer ZIP in bounded private scratch."""
 
 
 class ArtifactBindingPort(Protocol):
-    """Create bindings only from orchestrator-verified content."""
+    """Create exact action-bound bindings from verified content."""
 
-    async def bind_verified(self, request: ArtifactBindingCreateRequest) -> object:
-        """Bind exact verified content to canonical product facts."""
+    async def bind_guide_source(self, request: GuideSourceBindingRequest) -> object:
+        """Bind verified guide content under the guide binding action."""
+
+    async def bind_submission(self, request: SubmissionBindingRequest) -> object:
+        """Bind verified submission content under the submission binding action."""
+
+    async def bind_checker_output(self, request: CheckerOutputBindingRequest) -> object:
+        """Bind verified checker output under the checker binding action."""
 
 
 class ArtifactMaterializationPort(Protocol):
     """Materialize only the two canonical immutable source forms."""
 
-    async def materialize_ready_upload_set(
+    async def materialize_prepared_bundle(
         self,
-        request: ReadyUploadSetRequest,
+        request: PreparedBundleMaterializationRequest,
     ) -> object:
-        """Materialize one sealed upload set whose items are ready."""
+        """Materialize one process-local prepared bundle generation."""
 
     async def materialize_bindings(
         self,
