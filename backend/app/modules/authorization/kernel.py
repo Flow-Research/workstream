@@ -608,7 +608,11 @@ class AuthorizationService:
         context: ServiceAuthorizationContext,
         resource: AuthorizationResourceContext,
     ) -> tuple[AuthorizationDenialCode | None, ServiceAuthorizationContext, bool]:
-        """Evaluate one fixed service before every human authority path."""
+        """Evaluate lifecycle/matrix state; direct feature access always denies.
+
+        The resource is intentionally not honored here. Active ART service
+        actions can allow only through a prepared capability consumption.
+        """
         lifecycle = self._lifecycle_denial(context)
         if lifecycle is not None:
             return lifecycle, context, False

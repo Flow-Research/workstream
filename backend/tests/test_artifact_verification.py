@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from threading import Event, Thread
 from types import SimpleNamespace
@@ -62,9 +63,66 @@ async def test_production_authority_denies_prepare_and_consume() -> None:
             )
 
 
-def test_internal_celery_tasks_and_pending_scan_are_registered_once(monkeypatch) -> None:
+def test_eager_internal_tasks_use_lazy_process_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
+    worker_module = importlib.import_module("app.workers.artifacts")
+    monkeypatch.setitem(worker_module.celery_app.conf, "task_always_eager", True)
+    monkeypatch.setitem(worker_module.celery_app.conf, "task_eager_propagates", True)
+    initialize = AsyncMock(return_value=None)
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "initialize_artifact_internal_runtime",
+        initialize,
+    )
+
+    @contextmanager
+    def runtime():
+        yield Mock(), Mock()
+
+    monkeypatch.setattr(internal_worker_adapter, "_artifact_internal_runtime", runtime)
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
+
+    class SessionContext:
+        async def __aenter__(self):
+            return Mock()
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_session_factory",
+        Mock(return_value=Mock(return_value=SessionContext())),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "PreparedArtifactInternalAuthority",
+        Mock(),
+    )
+    orchestrator = Mock()
+    orchestrator.resolve_put_attempt = AsyncMock(return_value="resolved")
+    orchestrator.verify_object = AsyncMock(return_value="verified")
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "ArtifactStorageOrchestrator",
+        Mock(return_value=orchestrator),
+    )
+    monkeypatch.setattr(
+        worker_module,
+        "run_artifact_internal_operation",
+        internal_worker_adapter.run_artifact_internal_operation,
+    )
+    attempt_id, job_id = uuid4(), uuid4()
+
+    worker_module.resolve_put_attempt.delay(str(attempt_id))
+    worker_module.verify_object.delay(str(job_id))
+
+    assert initialize.await_count == 2
+    orchestrator.resolve_put_attempt.assert_awaited_once_with(attempt_id)
+    orchestrator.verify_object.assert_awaited_once_with(job_id)
     celery_module = importlib.import_module("app.workers.celery_app")
     worker_module = importlib.import_module("app.workers.artifacts")
     celery_app = celery_module.celery_app
@@ -108,10 +166,9 @@ async def test_internal_artifact_store_is_initialized_once_per_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     internal_worker_adapter.shutdown_artifact_internal_runtime()
-    first_bootstrap, duplicate_bootstrap = Mock(), Mock()
-    first_store, duplicate_store = Mock(), Mock()
+    first_bootstrap = Mock()
+    first_store = Mock()
     first_bootstrap.initialize_after_namespace_claim.return_value = first_store
-    duplicate_bootstrap.initialize_after_namespace_claim.return_value = duplicate_store
     monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
     monkeypatch.setattr(
         internal_worker_adapter,
@@ -121,18 +178,18 @@ async def test_internal_artifact_store_is_initialized_once_per_process(
     monkeypatch.setattr(
         internal_worker_adapter,
         "create_artifact_store_bootstrap",
-        Mock(side_effect=[first_bootstrap, duplicate_bootstrap]),
+        Mock(return_value=first_bootstrap),
     )
     monkeypatch.setattr(
         internal_worker_adapter,
         "validate_artifact_storage_namespace_at_startup",
-        AsyncMock(side_effect=[Mock(), Mock()]),
+        AsyncMock(return_value=Mock()),
     )
-    first_namespace, duplicate_namespace = Mock(), Mock()
+    first_namespace = Mock()
     monkeypatch.setattr(
         internal_worker_adapter,
         "artifact_storage_namespace_spec",
-        Mock(side_effect=[first_namespace, duplicate_namespace]),
+        Mock(return_value=first_namespace),
     )
 
     try:
@@ -141,7 +198,6 @@ async def test_internal_artifact_store_is_initialized_once_per_process(
         with internal_worker_adapter._artifact_internal_runtime() as runtime:
             assert runtime == (first_store, first_namespace)
         first_bootstrap.close.assert_not_called()
-        duplicate_bootstrap.close.assert_called_once_with()
     finally:
         internal_worker_adapter.shutdown_artifact_internal_runtime()
 

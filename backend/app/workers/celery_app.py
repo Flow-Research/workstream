@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
-from celery.signals import worker_process_init, worker_process_shutdown
+from celery.signals import worker_process_init, worker_process_shutdown, worker_shutdown
 
 from app.adapters.artifacts import require_artifact_runtime_eligible
 from app.adapters.artifacts.internal_workers import (
@@ -29,8 +29,9 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
 
 
 @worker_process_shutdown.connect
+@worker_shutdown.connect
 def shutdown_artifact_runtime_for_process(**_kwargs: object) -> None:
-    """Close the artifact provider after the Celery child drains tasks."""
+    """Close the artifact provider after any Celery execution pool drains."""
     shutdown_artifact_internal_runtime()
 
 

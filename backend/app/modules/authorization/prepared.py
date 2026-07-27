@@ -244,17 +244,13 @@ class PreparedAuthorizationService:
                 role=role,
                 grant_id=grant_id,
             )
-        if action_id in {
-            ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
-            ActionId.ARTIFACT_VERIFICATION_EXECUTE,
-            ActionId.ARTIFACT_PENDING_WORK_SCAN,
-        } and isinstance(
-            resource,
-            (
-                ArtifactPutAttemptResourceContext,
-                ArtifactVerificationJobResourceContext,
-                ArtifactPendingWorkResourceContext,
-            ),
+        artifact_resource_type = {
+            ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ArtifactPutAttemptResourceContext,
+            ActionId.ARTIFACT_VERIFICATION_EXECUTE: ArtifactVerificationJobResourceContext,
+            ActionId.ARTIFACT_PENDING_WORK_SCAN: ArtifactPendingWorkResourceContext,
+        }.get(action_id)
+        if artifact_resource_type is not None and isinstance(
+            resource, artifact_resource_type
         ):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,

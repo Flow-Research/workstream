@@ -41,6 +41,9 @@ _runtime_shutting_down = False
 async def initialize_artifact_internal_runtime() -> None:
     """Initialize one provider store for this Celery child process."""
     global _runtime, _runtime_shutting_down
+    with _runtime_condition:
+        if _runtime is not None and not _runtime_shutting_down:
+            return
     settings = get_settings()
     if settings.artifact_store_backend == "disabled":
         return
@@ -105,6 +108,7 @@ async def run_artifact_internal_operation(kind: str, resource_id: UUID) -> None:
     except KeyError as exc:
         raise ValueError("unsupported artifact internal operation") from exc
     settings = get_settings()
+    await initialize_artifact_internal_runtime()
     with _artifact_internal_runtime() as (store, namespace):
         async with get_session_factory()() as session:
             request_id = uuid4()

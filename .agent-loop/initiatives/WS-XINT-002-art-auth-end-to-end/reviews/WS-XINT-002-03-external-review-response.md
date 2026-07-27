@@ -49,3 +49,13 @@ schema, downgrade-refusal, row-preservation, and trigger assertions remain
 unchanged. The same isolated six-test selection passed in 509.88 seconds, lane
 inventory passed, and CI-integrity plus test-delta re-reviews passed. No CI or
 coverage configuration changed.
+
+## CodeRabbit eager/non-prefork follow-up
+
+Accepted. Resolver and verifier task bodies now idempotently initialize the
+process runtime before leasing it, covering eager, solo, and thread execution
+without weakening prefork startup. General `worker_shutdown` complements the
+prefork child shutdown signal. The real Celery task bodies run under eager mode
+in the focused regression; runtime, exact PREP action/context pairing, and
+direct-require denial tests passed. Architecture, security, and QA focused
+re-reviews passed.
