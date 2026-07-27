@@ -379,8 +379,8 @@ optional client commitment. `SubmissionBundlePreparationRequest` contains
 prepared authority, contributor task/assignment selectors, and one outer ZIP
 byte source. There is no upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
-only prepared authority, the current `PreparedArtifact` generation, and exact
-policy/checker selectors.
+only prepared authority, the exact task/assignment context, the current
+`PreparedArtifact` generation, and exact policy/checker selectors.
 `BindingMaterializationRequest` contains task/submission/checker-run context and
 immutable binding IDs. `CheckerOutputArtifactRequest` contains the fixed
 service's prepared authority, task/submission/checker-run IDs, logical role,

@@ -61,7 +61,12 @@ focused test overlapping the new exhaustive regression.
 
 ## External review
 
-Pending GitHub Actions and CodeRabbit on the exact PR head.
+CodeRabbit's one actionable documentation comment was fixed: the exhaustive
+prepared-bundle materialization description now includes task and assignment
+context. Its docstring warning was not reproduced by the repository gate; the
+hosted Docstring Coverage step passed. Agent Gates passed. The first Backend
+run encountered one pre-existing lock-observation timeout under four-lane load
+after 1,596 tests in that lane passed; the same-head failed-job rerun is pending.
 
 ## Remaining risks and follow-up
 
