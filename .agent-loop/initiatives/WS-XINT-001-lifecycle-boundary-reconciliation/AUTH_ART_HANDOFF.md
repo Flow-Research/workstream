@@ -1,5 +1,10 @@
 # AUTH <-> ART Handoff
 
+> Historical immutable handoff provenance. WS-XINT-002-01 supersedes this
+> catalogue baseline; the entire document below is audit history, not live
+> activation guidance or compatibility authority. Every table, matrix, and
+> delivery step must be read only as the superseded pre-reconciliation state.
+
 ## Boundary
 
 AUTH is the sole activation custodian. ART is the sole artifact resource and
@@ -7,7 +12,7 @@ behavior owner. AUTH never performs artifact storage/lifecycle mutations; ART
 never registers grants, evaluates authority locally, or changes action
 availability.
 
-## Complete current custody transfer
+## Historical superseded custody transfer
 
 All mappings remain unchanged. `docs/spec_authorization_service.md` remains the
 canonical ActionId-to-PermissionId and principal/resource blueprint. The table
@@ -48,7 +53,7 @@ After transfer, AUTH removes unused `ART_02D`, `ART_03`, `ART_04A`, `ART_04B`,
 and definition-owner parity must reject partial transfer, dual writers, missing
 owners, extra owners, and changed mappings.
 
-## Fixed service-action matrix
+## Historical fixed service-action matrix
 
 `docs/spec_authorization_service.md` remains the canonical fixed service-action
 matrix source. This table is a non-authoritative repeat used only to bind the
@@ -70,7 +75,7 @@ actions are planned. After AUTH-09E, ART accepts only a canonical AUTH service
 context at its composition root and never derives identity from a Celery task,
 executor ID, queue, environment string, or provider credential.
 
-## Delivery order
+## Historical delivery order
 
 ```text
 AUTH-09A fixed service identity and static matrix foundation
@@ -93,7 +98,7 @@ is never implied by verifier, scheduler, or put-resolver activation. AWS provide
 release is also separate: an authorized action cannot instantiate AWS until ART
 live-provider proof is current.
 
-## Mutation protocol
+## Historical mutation protocol
 
 For a human caller, AUTH locks the actor, identity-link, and matched grant rows.
 For a fixed service, AUTH locks the service ActorProfile and ActorIdentityLink,
@@ -105,14 +110,14 @@ once. Terminal Celery writes additionally require the matching ART executor and
 execution generation. Authorization identity and execution fencing remain
 independent checks.
 
-## AUTH owner response
+## Historical AUTH owner response
 
 AUTH must add reviewed registration/transfer and activation chunk contracts,
 add the AUTH-09E service-admission contract, repair stale AUTH documents and
 catalogue descriptions, preserve every mapping, and prove no action becomes
 active without its merged ART behavior manifest.
 
-## ART owner response
+## Historical ART owner response
 
 ART must repair its plan/chunk sequencing, implement only hidden behavior before
 activation, publish exact resource/guard/surface manifests, and never edit AUTH

@@ -32,6 +32,7 @@ from app.modules.authorization.catalogue import (
     HISTORICAL_PERMISSION_IDS,
     NEW_PERMISSION_IDS,
     ActionOwner,
+    PermissionId,
 )
 from app.modules.actors.legacy_classification import (
     CLASSIFICATION_FILE_ENV,
@@ -54,6 +55,18 @@ from app.modules.actors.service_identity_migration import (
 )
 
 pytestmark = pytest.mark.postgres_schema_contract
+
+_OBSOLETE_ART_UPLOAD_IDS = tuple(
+    "artifact.upload_" + value
+    for value in (
+        "session.create",
+        "session.read",
+        "item.write",
+        "session.seal",
+        "session.cancel",
+        "session.expire",
+    )
+)
 
 
 def _alembic_config() -> Config:
@@ -1616,7 +1629,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0035_project_read_evidence",
+                "revision": "0036_art_auth_catalogue",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1690,6 +1703,7 @@ def test_0035_project_read_action_evidence_round_trip(
                     isolated_database_env, definitions=definitions
                 )
             )
+            asyncio.run(_assert_removed_art_authority_rejected(isolated_database_env))
             command.downgrade(config, "0034_project_role_issue_evidence")
             command.upgrade(config, "head")
             asyncio.run(
@@ -1697,6 +1711,7 @@ def test_0035_project_read_action_evidence_round_trip(
                     isolated_database_env, definitions=definitions
                 )
             )
+            asyncio.run(_assert_removed_art_authority_rejected(isolated_database_env))
         finally:
             command.downgrade(config, "base")
 
@@ -1724,12 +1739,515 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
             ):
                 command.downgrade(config, "0034_project_role_issue_evidence")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0035_project_read_evidence"
+                "0036_art_auth_catalogue"
             )
         finally:
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
+            command.downgrade(config, "base")
+
+
+def test_0036_art_auth_catalogue_round_trip(isolated_database_env: str, migration_lock) -> None:
+    """Prove the three replacement pairs and review permission round-trip exactly."""
+    config = _alembic_config()
+    definitions = tuple(
+        definition
+        for definition in ACTION_DEFINITIONS
+        if definition.owner in {ActionOwner.XINT_002_05A, ActionOwner.XINT_002_07}
+    )
+    assert len(definitions) == 3
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
             asyncio.run(
-                _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
             )
+            asyncio.run(_assert_removed_art_authority_rejected(isolated_database_env))
+            command.downgrade(config, "0033_authorization_read_rate")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
+            )
+            asyncio.run(_assert_removed_art_authority_rejected(isolated_database_env))
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Obsolete upload evidence must block catalogue deletion without mutation."""
+    config = _alembic_config()
+    event_ids: list[str] = []
+    record_id = str(uuid4())
+    actor_id = str(uuid4())
+    target_id = str(uuid4())
+    obsolete = _OBSOLETE_ART_UPLOAD_IDS
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0035_project_read_evidence")
+            event_ids.extend(
+                asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env, identifier, identifier
+                    )
+                )
+                for identifier in obsolete
+            )
+            event_ids.append(
+                asyncio.run(
+                    _insert_forward_permission_reference(
+                        isolated_database_env,
+                        event_ids[0],
+                        reference_field="target",
+                        permission=obsolete[0],
+                    )
+                )
+            )
+            event_ids.append(
+                asyncio.run(
+                    _insert_forward_permission_reference(
+                        isolated_database_env,
+                        event_ids[1],
+                        reference_field="invalidation",
+                        permission=obsolete[1],
+                    )
+                )
+            )
+            asyncio.run(
+                _insert_committed_authority_idempotency(
+                    isolated_database_env, record_id, actor_id, target_id
+                )
+            )
+            event_ids.append(
+                asyncio.run(
+                    _insert_linked_authorization_action_event(
+                        isolated_database_env,
+                        record_id=record_id,
+                        actor_id=actor_id,
+                        action_id=obsolete[2],
+                        permission_id=obsolete[2],
+                    )
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env, actions=obsolete, permissions=obsolete
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot remove non-empty obsolete artifact authority evidence",
+            ):
+                command.upgrade(config, "head")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env, actions=obsolete, permissions=obsolete
+                    )
+                )
+                == before
+            )
+            for event_id in reversed(event_ids):
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+            event_ids.clear()
+            asyncio.run(
+                _remove_authority_idempotency_fixture(
+                    isolated_database_env, record_id, orphan_event=None
+                )
+            )
+            record_id = ""
+            command.upgrade(config, "head")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0036_art_auth_catalogue"
+            )
+        finally:
+            for event_id in reversed(event_ids):
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+            if record_id:
+                asyncio.run(
+                    _remove_authority_idempotency_fixture(
+                        isolated_database_env, record_id, orphan_event=None
+                    )
+                )
+            command.downgrade(config, "base")
+
+
+def test_0036_art_auth_catalogue_refuses_new_evidence_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Committed replacement-action evidence must block restoration of old authority."""
+    config = _alembic_config()
+    definitions = tuple(
+        item
+        for item in ACTION_DEFINITIONS
+        if item.owner in {ActionOwner.XINT_002_05A, ActionOwner.XINT_002_07}
+    )
+    event_ids: list[str] = []
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            event_ids.extend(
+                asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env,
+                        definition.action_id.value,
+                        definition.permission_id.value,
+                    )
+                )
+                for definition in definitions
+            )
+            review_permission = PermissionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE.value
+            event_ids.append(
+                asyncio.run(
+                    _insert_forward_permission_reference(
+                        isolated_database_env,
+                        event_ids[0],
+                        reference_field="target",
+                        permission=review_permission,
+                    )
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env,
+                    actions=tuple(item.action_id.value for item in definitions),
+                    permissions=(review_permission,),
+                )
+            )
+            with pytest.raises(
+                RuntimeError, match="cannot downgrade non-empty ART authorization evidence"
+            ):
+                command.downgrade(config, "0035_project_read_evidence")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=tuple(item.action_id.value for item in definitions),
+                        permissions=(review_permission,),
+                    )
+                )
+                == before
+            )
+        finally:
+            for event_id in reversed(event_ids):
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+            command.downgrade(config, "base")
+
+
+def test_0036_art_auth_catalogue_refuses_each_obsolete_evidence_shape(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Prove every removal predicate independently blocks the clean-cut upgrade."""
+    config = _alembic_config()
+    obsolete = _OBSOLETE_ART_UPLOAD_IDS
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0035_project_read_evidence")
+            for identifier in obsolete:
+                event_id = asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env, identifier, identifier
+                    )
+                )
+                before = asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(identifier,),
+                        permissions=(identifier,),
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot remove non-empty obsolete artifact authority evidence",
+                ):
+                    command.upgrade(config, "head")
+                assert (
+                    asyncio.run(
+                        _art_catalogue_migration_state(
+                            isolated_database_env,
+                            actions=(identifier,),
+                            permissions=(identifier,),
+                        )
+                    )
+                    == before
+                )
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+
+            cause_id = asyncio.run(
+                _insert_authorization_action_event_for(
+                    isolated_database_env,
+                    "actor.profile.read_self",
+                    "actor.profile.read_self",
+                )
+            )
+            for reference_field, permission in (
+                ("target", obsolete[0]),
+                ("invalidation", obsolete[1]),
+            ):
+                event_id = asyncio.run(
+                    _insert_forward_permission_reference(
+                        isolated_database_env,
+                        cause_id,
+                        reference_field=reference_field,
+                        permission=permission,
+                    )
+                )
+                before = asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env, actions=(), permissions=(permission,)
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot remove non-empty obsolete artifact authority evidence",
+                ):
+                    command.upgrade(config, "head")
+                assert (
+                    asyncio.run(
+                        _art_catalogue_migration_state(
+                            isolated_database_env, actions=(), permissions=(permission,)
+                        )
+                    )
+                    == before
+                )
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=cause_id))
+
+            record_id, actor_id, target_id = str(uuid4()), str(uuid4()), str(uuid4())
+            asyncio.run(
+                _insert_committed_authority_idempotency(
+                    isolated_database_env, record_id, actor_id, target_id
+                )
+            )
+            event_id = asyncio.run(
+                _insert_linked_authorization_action_event(
+                    isolated_database_env,
+                    record_id=record_id,
+                    actor_id=actor_id,
+                    action_id=obsolete[2],
+                    permission_id=obsolete[2],
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env,
+                    actions=(obsolete[2],),
+                    permissions=(obsolete[2],),
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot remove non-empty obsolete artifact authority evidence",
+            ):
+                command.upgrade(config, "head")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(obsolete[2],),
+                        permissions=(obsolete[2],),
+                    )
+                )
+                == before
+            )
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
+            asyncio.run(
+                _remove_authority_idempotency_fixture(
+                    isolated_database_env, record_id, orphan_event=None
+                )
+            )
+
+            orphan_event_id = asyncio.run(
+                _insert_orphan_linked_authorization_action_event(
+                    isolated_database_env,
+                    action_id=obsolete[3],
+                    permission_id=obsolete[3],
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env,
+                    actions=(obsolete[3],),
+                    permissions=(obsolete[3],),
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot remove non-empty obsolete artifact authority evidence",
+            ):
+                command.upgrade(config, "head")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(obsolete[3],),
+                        permissions=(obsolete[3],),
+                    )
+                )
+                == before
+            )
+            asyncio.run(
+                _remove_authority_audit_fixture(isolated_database_env, event_id=orphan_event_id)
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0036_art_auth_catalogue_refuses_each_new_evidence_shape(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Prove each added action and permission independently blocks downgrade."""
+    config = _alembic_config()
+    definitions = tuple(
+        item
+        for item in ACTION_DEFINITIONS
+        if item.owner in {ActionOwner.XINT_002_05A, ActionOwner.XINT_002_07}
+    )
+    review_permission = PermissionId.ARTIFACT_REVIEW_PACKET_MATERIALIZE.value
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            for definition in definitions:
+                event_id = asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env,
+                        definition.action_id.value,
+                        definition.permission_id.value,
+                    )
+                )
+                before = asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(definition.action_id.value,),
+                        permissions=(definition.permission_id.value,),
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade non-empty ART authorization evidence",
+                ):
+                    command.downgrade(config, "0035_project_read_evidence")
+                assert (
+                    asyncio.run(
+                        _art_catalogue_migration_state(
+                            isolated_database_env,
+                            actions=(definition.action_id.value,),
+                            permissions=(definition.permission_id.value,),
+                        )
+                    )
+                    == before
+                )
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+
+            cause_id = asyncio.run(
+                _insert_authorization_action_event_for(
+                    isolated_database_env,
+                    "actor.profile.read_self",
+                    "actor.profile.read_self",
+                )
+            )
+            for reference_field in ("target", "invalidation"):
+                event_id = asyncio.run(
+                    _insert_forward_permission_reference(
+                        isolated_database_env,
+                        cause_id,
+                        reference_field=reference_field,
+                        permission=review_permission,
+                    )
+                )
+                before = asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(),
+                        permissions=(review_permission,),
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade non-empty ART authorization evidence",
+                ):
+                    command.downgrade(config, "0035_project_read_evidence")
+                assert (
+                    asyncio.run(
+                        _art_catalogue_migration_state(
+                            isolated_database_env,
+                            actions=(),
+                            permissions=(review_permission,),
+                        )
+                    )
+                    == before
+                )
+                asyncio.run(
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+                )
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=cause_id))
+
+            record_id, actor_id, target_id = str(uuid4()), str(uuid4()), str(uuid4())
+            asyncio.run(
+                _insert_committed_authority_idempotency(
+                    isolated_database_env, record_id, actor_id, target_id
+                )
+            )
+            linked_definition = definitions[0]
+            event_id = asyncio.run(
+                _insert_linked_authorization_action_event(
+                    isolated_database_env,
+                    record_id=record_id,
+                    actor_id=actor_id,
+                    action_id=linked_definition.action_id.value,
+                    permission_id=linked_definition.permission_id.value,
+                )
+            )
+            before = asyncio.run(
+                _art_catalogue_migration_state(
+                    isolated_database_env,
+                    actions=(linked_definition.action_id.value,),
+                    permissions=(linked_definition.permission_id.value,),
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade non-empty ART authorization evidence",
+            ):
+                command.downgrade(config, "0035_project_read_evidence")
+            assert (
+                asyncio.run(
+                    _art_catalogue_migration_state(
+                        isolated_database_env,
+                        actions=(linked_definition.action_id.value,),
+                        permissions=(linked_definition.permission_id.value,),
+                    )
+                )
+                == before
+            )
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
+            asyncio.run(
+                _remove_authority_idempotency_fixture(
+                    isolated_database_env, record_id, orphan_event=None
+                )
+            )
+        finally:
             command.downgrade(config, "base")
 
 
@@ -1745,7 +2263,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0035_project_read_evidence",
+                "revision": "0036_art_auth_catalogue",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -1957,7 +2475,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0035_project_read_evidence",
+                    "0036_art_auth_catalogue",
                     True,
                     True,
                 )
@@ -1984,7 +2502,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0035_project_read_evidence",
+                    "0036_art_auth_catalogue",
                     True,
                     True,
                 )
@@ -2012,7 +2530,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0035_project_read_evidence",
+                "revision": "0036_art_auth_catalogue",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -2072,7 +2590,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0035_project_read_evidence"
+                "0036_art_auth_catalogue"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
@@ -2527,6 +3045,8 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            ActionOwner.XINT_002_05A,
+                            ActionOwner.XINT_002_07,
                         }
                     ),
                 )
@@ -2684,6 +3204,8 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            ActionOwner.XINT_002_05A,
+                            ActionOwner.XINT_002_07,
                         }
                     ),
                 )
@@ -7814,6 +8336,89 @@ async def _assert_authorization_action_sql_pairs(
         await engine.dispose()
 
 
+async def _assert_removed_art_authority_rejected(database_url: str) -> None:
+    """Prove current SQL rejects every deleted pair and permission reference."""
+    removed = _OBSOLETE_ART_UPLOAD_IDS
+    engine = create_async_engine(database_url)
+    try:
+        for identifier in removed:
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                with pytest.raises(IntegrityError):
+                    await connection.execute(
+                        _ACTION_EVIDENCE_INSERT,
+                        _action_evidence_values(identifier, identifier),
+                    )
+                await transaction.rollback()
+
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                values = {
+                    "id": str(uuid4()),
+                    "request": str(uuid4()),
+                    "correlation": str(uuid4()),
+                    "permission": identifier,
+                }
+                with pytest.raises(IntegrityError):
+                    await connection.execute(
+                        text(
+                            "insert into audit_events "
+                            "(id,entity_type,entity_id,event_type,actor_id,actor_roles,"
+                            "claim_snapshot,auth_source,is_dev_auth,event_payload,event_domain,"
+                            "event_version,actor_ref_kind,request_id,correlation_id,permission_id,"
+                            "target_ref_kind,target_ref_id,reason,after_facts) values "
+                            "(:id,'authorization_decision',:id,'SensitiveAuthorizationAllowed',"
+                            "'workstream:system:bootstrap','[]'::json,'{}'::json,"
+                            "'local_authority',false,'{}'::json,'authority',1,"
+                            "'system_principal',:request,:correlation,'actor.profile.read_any',"
+                            "'permission_registry',:permission,'authorization_evaluation',"
+                            "'{\"allowed\": true}'::json)"
+                        ),
+                        values,
+                    )
+                await transaction.rollback()
+
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                cause = _action_evidence_values(
+                    "actor.profile.read_self", "actor.profile.read_self"
+                )
+                await connection.execute(_ACTION_EVIDENCE_INSERT, cause)
+                await connection.execute(
+                    text(
+                        "alter table audit_events disable trigger audit_events_validate_idempotency"
+                    )
+                )
+                with pytest.raises(IntegrityError):
+                    await connection.execute(
+                        text(
+                            "insert into audit_events "
+                            "(id,entity_type,entity_id,event_type,actor_id,actor_roles,"
+                            "claim_snapshot,auth_source,is_dev_auth,event_payload,event_domain,"
+                            "event_version,actor_ref_kind,request_id,correlation_id,"
+                            "invalidation_cause_event_id,invalidation_target_kind,"
+                            "invalidation_target_ref,reason,before_facts,after_facts) values "
+                            "(:id,'authority_invalidation',:id,"
+                            "'AuthorityInvalidationRequested','workstream:system:bootstrap',"
+                            "'[]'::json,'{}'::json,'local_authority',false,'{}'::json,"
+                            "'authority',1,'system_principal',:request,:correlation,:cause,"
+                            "'permission_registry',:permission,'authority_state_changed',"
+                            "'{\"effective\": true}'::json,"
+                            "'{\"effective\": false}'::json)"
+                        ),
+                        {
+                            "id": str(uuid4()),
+                            "request": str(uuid4()),
+                            "correlation": str(uuid4()),
+                            "cause": cause["id"],
+                            "permission": identifier,
+                        },
+                    )
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
 async def _insert_authorization_action_event(database_url: str) -> str:
     """Commit one valid planned-action denial fixture."""
     values = _action_evidence_values("artifact.binding.read", "artifact.binding.read")
@@ -7866,6 +8471,7 @@ async def _insert_forward_permission_reference(
     cause_event_id: str,
     *,
     reference_field: str,
+    permission: str = "artifact.binding.read",
 ) -> str:
     """Commit one new permission-registry reference without an action ID."""
     event_id = str(uuid4())
@@ -7873,7 +8479,7 @@ async def _insert_forward_permission_reference(
         "id": event_id,
         "request_id": str(uuid4()),
         "correlation_id": str(uuid4()),
-        "permission": "artifact.binding.read",
+        "permission": permission,
         "cause_id": cause_event_id,
     }
     if reference_field == "target":
@@ -9306,6 +9912,162 @@ async def _insert_authorization_action_event_for(
         async with engine.begin() as connection:
             await connection.execute(_ACTION_EVIDENCE_INSERT, values)
         return str(values["id"])
+    finally:
+        await engine.dispose()
+
+
+async def _insert_linked_authorization_action_event(
+    database_url: str,
+    *,
+    record_id: str,
+    actor_id: str,
+    action_id: str,
+    permission_id: str,
+) -> str:
+    """Seed one constraint-valid linked denial while bypassing only link policy."""
+    event_id = str(uuid4())
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("alter table audit_events disable trigger audit_events_validate_idempotency")
+            )
+            await connection.execute(
+                text(
+                    "insert into audit_events "
+                    "(id,entity_type,entity_id,event_type,actor_id,actor_roles,claim_snapshot,"
+                    "auth_source,is_dev_auth,event_payload,event_domain,event_version,"
+                    "actor_ref_kind,request_id,correlation_id,permission_id,action_id,reason,"
+                    "idempotency_reference,after_facts) values "
+                    "(:id,'authorization_decision',:id,'SensitiveAuthorizationAllowed',"
+                    ":actor,'[]'::json,'{}'::json,'local_authority',false,'{}'::json,"
+                    "'authority',1,'actor_profile',:request,:correlation,:permission,:action,"
+                    "'authorization_evaluation',:record,'{\"allowed\": true}'::json)"
+                ),
+                {
+                    "id": event_id,
+                    "actor": actor_id,
+                    "request": str(uuid4()),
+                    "correlation": str(uuid4()),
+                    "permission": permission_id,
+                    "action": action_id,
+                    "record": record_id,
+                },
+            )
+            await connection.execute(
+                text("alter table audit_events enable trigger audit_events_validate_idempotency")
+            )
+        return event_id
+    finally:
+        await engine.dispose()
+
+
+async def _insert_orphan_linked_authorization_action_event(
+    database_url: str,
+    *,
+    action_id: str,
+    permission_id: str,
+) -> str:
+    """Seed historical action evidence whose non-null idempotency link is orphaned."""
+    event_id = str(uuid4())
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "alter table audit_events drop constraint fk_audit_events_authority_idempotency"
+                )
+            )
+            await connection.execute(
+                text("alter table audit_events disable trigger audit_events_validate_idempotency")
+            )
+            await connection.execute(
+                text(
+                    "insert into audit_events "
+                    "(id,entity_type,entity_id,event_type,actor_id,actor_roles,claim_snapshot,"
+                    "auth_source,is_dev_auth,event_payload,event_domain,event_version,"
+                    "actor_ref_kind,request_id,correlation_id,permission_id,action_id,reason,"
+                    "idempotency_reference,after_facts) values "
+                    "(:id,'authorization_decision',:id,'SensitiveAuthorizationAllowed',"
+                    ":actor,'[]'::json,'{}'::json,'local_authority',false,'{}'::json,"
+                    "'authority',1,'actor_profile',:request,:correlation,:permission,:action,"
+                    "'authorization_evaluation',:record,'{\"allowed\": true}'::json)"
+                ),
+                {
+                    "id": event_id,
+                    "actor": str(uuid4()),
+                    "request": str(uuid4()),
+                    "correlation": str(uuid4()),
+                    "permission": permission_id,
+                    "action": action_id,
+                    "record": str(uuid4()),
+                },
+            )
+            await connection.execute(
+                text(
+                    "alter table audit_events add constraint "
+                    "fk_audit_events_authority_idempotency foreign key "
+                    "(idempotency_reference,actor_ref_kind,actor_id) references "
+                    "authority_idempotency_records (id,actor_ref_kind,actor_ref) not valid"
+                )
+            )
+            await connection.execute(
+                text("alter table audit_events enable trigger audit_events_validate_idempotency")
+            )
+        return event_id
+    finally:
+        await engine.dispose()
+
+
+async def _art_catalogue_migration_state(
+    database_url: str,
+    *,
+    actions: tuple[str, ...],
+    permissions: tuple[str, ...],
+) -> dict[str, object]:
+    """Snapshot revision, rewritten constraints, and all protected evidence counts."""
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            constraints = dict(
+                (
+                    await connection.execute(
+                        text(
+                            "select conname,pg_get_constraintdef(oid) from pg_constraint "
+                            "where conrelid='audit_events'::regclass and conname in "
+                            "('ck_audit_events_authority_registries',"
+                            "'ck_audit_events_authority_privacy_bounds',"
+                            "'ck_audit_events_authorization_action_evidence') order by conname"
+                        )
+                    )
+                ).all()
+            )
+            direct_count = await connection.scalar(
+                text(
+                    "select count(*) from audit_events where action_id=any(:actions) or "
+                    "permission_id=any(:permissions) or "
+                    "(target_ref_kind='permission_registry' and target_ref_id=any(:permissions)) "
+                    "or (invalidation_target_kind='permission_registry' and "
+                    "invalidation_target_ref=any(:permissions))"
+                ),
+                {"actions": list(actions), "permissions": list(permissions)},
+            )
+            linked_count = await connection.scalar(
+                text(
+                    "select count(*) from authority_idempotency_records record join "
+                    "audit_events event on event.idempotency_reference=record.id where "
+                    "event.action_id=any(:actions) or event.permission_id=any(:permissions)"
+                ),
+                {"actions": list(actions), "permissions": list(permissions)},
+            )
+            return {
+                "revision": await connection.scalar(
+                    text("select version_num from alembic_version")
+                ),
+                "constraints": constraints,
+                "direct_count": direct_count,
+                "linked_count": linked_count,
+            }
     finally:
         await engine.dispose()
 

@@ -1513,34 +1513,9 @@ ART_CUSTODY_EXPECTATIONS = {
         "WS-AUTH-001-ART-03",
         "planned",
     ),
-    "artifact.upload_session.create": (
-        "artifact.upload_session.create",
-        "WS-AUTH-001-ART-04A",
-        "planned",
-    ),
-    "artifact.upload_session.read": (
-        "artifact.upload_session.read",
-        "WS-AUTH-001-ART-04A",
-        "planned",
-    ),
-    "artifact.upload_item.write": (
-        "artifact.upload_item.write",
-        "WS-AUTH-001-ART-04A",
-        "planned",
-    ),
-    "artifact.upload_session.seal": (
-        "artifact.upload_session.seal",
-        "WS-AUTH-001-ART-04A",
-        "planned",
-    ),
-    "artifact.upload_session.cancel": (
-        "artifact.upload_session.cancel",
-        "WS-AUTH-001-ART-04A",
-        "planned",
-    ),
-    "artifact.upload_session.expire": (
-        "artifact.upload_session.expire",
-        "WS-AUTH-001-ART-04A",
+    "artifact.submission_bundle.prepare": (
+        "submission.create",
+        "WS-XINT-002-05A",
         "planned",
     ),
     "artifact.pre_submit.checker_input.materialize": (
@@ -1561,6 +1536,16 @@ ART_CUSTODY_EXPECTATIONS = {
     "artifact.checker_output.write": (
         "artifact.checker_output.write",
         "WS-AUTH-001-ART-06B",
+        "planned",
+    ),
+    "artifact.review_packet.materialize": (
+        "artifact.review_packet.materialize",
+        "WS-XINT-002-07",
+        "planned",
+    ),
+    "artifact.review_evidence.binding.create": (
+        "artifact.binding.create",
+        "WS-XINT-002-07",
         "planned",
     ),
     "artifact.checker_output.binding.create": (
@@ -1685,12 +1670,11 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         operations.checker.retry artifact.binding.read artifact.replica.read
         artifact.receipt.read artifact.verification_job.read
         artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
-        artifact.guide_source.ingest artifact.upload_session.create
-        artifact.upload_session.read artifact.upload_item.write artifact.upload_session.seal
-        artifact.upload_session.cancel artifact.upload_session.expire artifact.binding.create
+        artifact.guide_source.ingest artifact.binding.create
         artifact.verification.execute artifact.pending_work.scan artifact.put_attempt.resolve
         artifact.guide_source.read artifact.checker_input.materialize
-        artifact.checker_output.write review.queue.override""".split()
+        artifact.checker_output.write artifact.review_packet.materialize
+        review.queue.override""".split()
     )
     expected = {
         "actor.profile.read_self": ("actor.profile.read_self", "WS-AUTH-001-07B"),
@@ -1778,7 +1762,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 81
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 78
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -1838,21 +1822,23 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             ActionOwner.AUTH_ART_02D_OPERATOR,
             ActionOwner.AUTH_ART_02D_INTERNAL,
             ActionOwner.AUTH_ART_03,
-            ActionOwner.AUTH_ART_04A,
             ActionOwner.AUTH_ART_04B,
             ActionOwner.AUTH_ART_05,
             ActionOwner.AUTH_ART_06A,
             ActionOwner.AUTH_ART_06B,
+            ActionOwner.XINT_002_05A,
+            ActionOwner.XINT_002_07,
         }
     } == {
         ActionOwner.AUTH_ART_02D_OPERATOR: 8,
         ActionOwner.AUTH_ART_02D_INTERNAL: 3,
         ActionOwner.AUTH_ART_03: 3,
-        ActionOwner.AUTH_ART_04A: 6,
         ActionOwner.AUTH_ART_04B: 1,
         ActionOwner.AUTH_ART_05: 1,
         ActionOwner.AUTH_ART_06A: 1,
         ActionOwner.AUTH_ART_06B: 2,
+        ActionOwner.XINT_002_05A: 1,
+        ActionOwner.XINT_002_07: 2,
     }
     assert all(not owner.value.startswith("WS-ART-") for owner in ActionOwner)
     assert {
@@ -1894,7 +1880,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 59
+        == 56
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -1905,23 +1891,71 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
 
 
+def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
+    """Reject obsolete upload authority outside exact immutable/deletion evidence."""
+    repository_root = Path(__file__).resolve().parents[2]
+    obsolete = {
+        *(
+            f"artifact.upload_session.{suffix}"
+            for suffix in ("create", "read", "seal", "cancel", "expire")
+        ),
+        "artifact.upload_" + "item.write",
+    }
+    historical_handoff = (
+        ".agent-loop/initiatives/WS-XINT-001-lifecycle-boundary-reconciliation/AUTH_ART_HANDOFF.md"
+    )
+    allowed = {
+        "backend/alembic/versions/0021_authorization_action_evidence.py",
+        "backend/alembic/versions/0022_bootstrap_admin_grants.py",
+        "backend/alembic/versions/0023_service_actor_identity.py",
+        "backend/alembic/versions/0036_art_auth_catalogue_reconciliation.py",
+        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-07A-closed-permission-action-catalogue.md",
+        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09-actor-state-service-actors.md",
+        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-09A-service-identity-foundation.md",
+        historical_handoff,
+    }
+    assert "Historical immutable handoff provenance" in (
+        repository_root / historical_handoff
+    ).read_text(encoding="utf-8")
+    found: set[str] = set()
+    ignored_parts = {
+        ".git",
+        ".venv",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        "sheets",
+    }
+    for path in repository_root.rglob("*"):
+        if not path.is_file() or ignored_parts.intersection(path.parts):
+            continue
+        try:
+            text_value = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if any(identifier in text_value for identifier in obsolete):
+            found.add(path.relative_to(repository_root).as_posix())
+    assert found == allowed
+
+
 def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
     expected = {
         ServiceIdentity.ARTIFACT_VERIFIER: {"artifact.verification.execute"},
         ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
         ServiceIdentity.ARTIFACT_SCHEDULER: {
             "artifact.pending_work.scan",
-            "artifact.upload_session.expire",
         },
         ServiceIdentity.ARTIFACT_BINDING: {
             "artifact.guide_source.binding.create",
             "artifact.submission.binding.create",
             "artifact.checker_output.binding.create",
+            "artifact.review_evidence.binding.create",
         },
         ServiceIdentity.ARTIFACT_GUIDE_READER: {"artifact.guide_source.read"},
         ServiceIdentity.ARTIFACT_MATERIALIZER: {
             "artifact.pre_submit.checker_input.materialize",
             "artifact.post_submit.checker_input.materialize",
+            "artifact.review_packet.materialize",
         },
         ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: {"artifact.checker_output.write"},
     }
@@ -1930,7 +1964,7 @@ def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 11
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 12
     assert all(
         ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
         for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
@@ -1982,11 +2016,12 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
         "WS-AUTH-001-ART-03": 3,
-        "WS-AUTH-001-ART-04A": 6,
+        "WS-XINT-002-05A": 1,
         "WS-AUTH-001-ART-04B": 1,
         "WS-AUTH-001-ART-05": 1,
         "WS-AUTH-001-ART-06A": 1,
         "WS-AUTH-001-ART-06B": 2,
+        "WS-XINT-002-07": 2,
     }
 
     for document in custody_documents:
@@ -2019,13 +2054,13 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     operations = (repository_root / "docs/operations_authorization_service.md").read_text(
         encoding="utf-8"
     )
-    assert "all 25 ART rows to eight exact AUTH custodians" in operations
+    assert "all 22 ART rows to nine exact activation custodians" in operations
     assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
-    assert "The ART transfer adds no migration" in operations
+    assert "transfer adds no migration; the later WS-XINT-002-01" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "76 PermissionIds, 81 ActionIds, 22 active actions, and\n59 planned actions" in operations
+        "71 PermissionIds, 78 ActionIds, 22 active actions, and\n56 planned actions" in operations
     )
 
 
@@ -2181,7 +2216,7 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
 
     permission_response = AdminRoleGrantService.permission_definitions()
     role_response = AdminRoleGrantService.role_definitions()
-    assert permission_response.total == 76
+    assert permission_response.total == 71
     assert [item.permission_id.value for item in permission_response.items] == sorted(
         permission.value for permission in PermissionId
     )
@@ -2605,26 +2640,30 @@ async def test_identity_link_lifecycle_route_preserves_outcome_transaction_contr
         (ACTION_DEFINITIONS[:-1] + (ACTION_DEFINITIONS[0],), "incomplete"),
         (ACTION_DEFINITIONS + (ACTION_DEFINITIONS[0],), "incomplete"),
         (
-            ACTION_DEFINITIONS[:-1]
-            + (
+            tuple(
                 ActionDefinition(
-                    ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
+                    definition.action_id,
+                    definition.permission_id,
                     ActionOwner.AUTH_ART_02D_OPERATOR,
-                    ActionAvailability.PLANNED,
-                ),
+                    definition.availability,
+                )
+                if definition.action_id is ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE
+                else definition
+                for definition in ACTION_DEFINITIONS
             ),
             "metadata mismatch",
         ),
         (
-            ACTION_DEFINITIONS[:-1]
-            + (
+            tuple(
                 ActionDefinition(
-                    ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    PermissionId.ARTIFACT_CHECKER_OUTPUT_WRITE,
-                    ActionOwner.AUTH_ART_06B,
+                    definition.action_id,
+                    definition.permission_id,
+                    definition.owner,
                     ActionAvailability.ACTIVE,
-                ),
+                )
+                if definition.action_id is ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE
+                else definition
+                for definition in ACTION_DEFINITIONS
             ),
             "active action boundary mismatch",
         ),

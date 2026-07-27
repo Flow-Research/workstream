@@ -581,7 +581,7 @@ The review lifecycle currently depends on 24 unavailable actions:
 - 19 registered planned review actions; and
 - four approved but unregistered REV actions defined below.
 
-The proposed `artifact.review_evidence.binding.create ->
+The registered planned `artifact.review_evidence.binding.create ->
 artifact.binding.create` service action is separate and is not one of the 24.
 Future counts must be derived from trusted main at each AUTH gate; the four REV
 actions and separate ART action are never collapsed into a promised total.

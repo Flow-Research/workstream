@@ -42,7 +42,7 @@ stopped.
 | `WS-AUTH-001-09D-B` | Identity-Link Lifecycle And Race Closure | L1 | Merged through PR #152 as `93dd392`; signed memory `912a6254` passed |
 | `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` | Contributor Fields And Canonical-Human Lineage | L1 | Merged through PR #153 as `8d5eb15b`; signed memory `66ab58d` passed and stopped |
 | `WS-AUTH-001-09E` | Fixed Service Runtime Admission | L1 | Merged through PR #157 as `42a89b2d` on 2026-07-20 |
-| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; all 25 ART actions remain planned |
+| `WS-AUTH-001-ART-CUSTODY` | ART Activation Custody Transfer | L1 | Merged through PR #158 as `be2a79a2`; historical 25-row transfer later reconciled by WS-XINT-002-01 to 22 planned ART actions |
 | `WS-AUTH-001-REV-CUSTODY` | REV Activation Custody Transfer | L1 | Merged through PR #160 as `fe0e4492`; all 19 REV actions remain planned |
 | `WS-AUTH-001-PREP` | Prepared Mutation Authorization Protocol | L1 | Merged through PR #162 as `c559d556`; no feature consumer or activation |
 | `WS-AUTH-001-10` | Project Qualification And Contributor Role Grants | L1 | Active planning-only parent; split approved after failed L1 combined review |
@@ -71,11 +71,10 @@ feature manifest exists, then requires a separate explicit start.
 | Chunk | Title | Risk | Status |
 |---|---|---:|---|
 | `WS-AUTH-001-REV-REG` | REV Lifecycle Action Registration | L1 | Blocked on complete REV typed manifests |
-| `WS-AUTH-001-ART-REV-EVIDENCE-REG` | Review Evidence Binding Action Registration | L1 | Blocked on complete ART/REV dual-authority contract |
 | `WS-AUTH-001-ART-02D-INTERNAL` | ART 02D Internal Action Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-02D-OPERATOR` | ART 02D Operator Read/Status And Independently Evaluated Retry Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-03` | ART 03 Guide Source Action Activation | L1 | Feature-gated |
-| `WS-AUTH-001-ART-04A` | ART 04A Upload Action Activation | L1 | Feature-gated |
+| `WS-XINT-002-05A` | Submission Bundle Preparation Activation | L1 | Feature-gated on complete ART-04A-C hidden behavior |
 | `WS-AUTH-001-ART-04B` | ART 04B Pre-Submit Materialization Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-05` | ART 05 Submission Binding Activation | L1 | Feature-gated |
 | `WS-AUTH-001-ART-06A` | ART 06A Post-Submit Materialization Activation | L1 | Feature-gated |
@@ -88,7 +87,7 @@ feature manifest exists, then requires a separate explicit start.
 | `WS-AUTH-001-REV-11` | REV 11 Recovery And Reconciliation Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-12` | REV 12 Artifact Reconciliation And Projection Activation | L1 | Feature/service-gated |
 | `WS-AUTH-001-REV-LIFECYCLE` | REV Lifecycle Repair Action Activation | L1 | Blocked until REV-REG and four hidden manifests merge |
-| `WS-AUTH-001-ART-REV-EVIDENCE` | Review Evidence Binding Action Activation | L1 | Blocked until registration and hidden ART/REV behavior merge |
+| `WS-XINT-002-07` | Review Packet And Evidence Binding Activation | L1 | Feature-gated on exact REV lease/version and ART evidence behavior |
 
 ## Dependency order
 
@@ -237,6 +236,7 @@ review rejected the underspecified contract before runtime edits; PR #153 later
 merged its repaired implementation as `8d5eb15`. PR #157 merged AUTH-09E as
 `42a89b2d`, and PR #158 merged the availability-neutral ART custody transfer as
 `be2a79a2`, PR #160 merged the availability-neutral REV custody transfer as
-`fe0e4492`, and PR #162 merged AUTH-PREP as `c559d556`; all 25 ART and 19 REV
-actions remain planned and inactive, and PREP adds no feature consumer.
+`fe0e4492`, and PR #162 merged AUTH-PREP as `c559d556`; WS-XINT-002-01 later
+reconciles the historical 25 ART rows to 22 planned ART actions, while all 19
+REV actions remain planned and inactive, and PREP adds no feature consumer.
 POL-002-04 remains inactive pending its own gate and explicit start.

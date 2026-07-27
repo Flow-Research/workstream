@@ -21,9 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = (
-    "8853e81a2c3c2452dd236a5a691d568d9184379a78301172c096c8b33ef63890"
-)
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "a0271094a8db293e9c58d54ffc46f35e90c1a9d7e82187410b0089189e23000b"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -228,9 +226,9 @@ async def _assert_canonical_test_schema(
         "where n.nspname='public') "
         "select kind,name from parts order by kind,name"
     )
-    serialized_objects = "".join(
-        f"{row['kind']}|{row['name']}\n" for row in object_rows
-    ).encode("utf-8")
+    serialized_objects = "".join(f"{row['kind']}|{row['name']}\n" for row in object_rows).encode(
+        "utf-8"
+    )
     schema_sha256 = hashlib.sha256(serialized_objects).hexdigest()
     if schema_sha256 != EXPECTED_PUBLIC_SCHEMA_SHA256:
         raise RuntimeError(f"unexpected public schema object fingerprint: {schema_sha256}")
