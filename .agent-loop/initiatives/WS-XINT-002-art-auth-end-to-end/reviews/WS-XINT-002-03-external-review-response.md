@@ -16,3 +16,26 @@ failed because `shared_foundations` contained three test failures.
 The focused isolated PostgreSQL rerun passed all four relevant regressions.
 QA, test-delta, and CI-integrity re-reviews passed. No workflow, lane,
 threshold, skip, or coverage policy changed.
+
+## CodeRabbit review
+
+- Accepted the process-lifecycle finding. Celery child initialization now
+  claims and initializes one provider store, operations lease it against
+  shutdown, disabled storage skips initialization, and shutdown waits for
+  active leases. A concrete local bootstrap/store test prevents namespace
+  identity from crossing the lifecycle boundary.
+- Accepted malformed selector normalization. Invalid UUID or prepared-scope
+  selectors now fail as `ArtifactAuthorityDeniedError` and have a focused test.
+- Accepted the denial-contract finding. Both specifications now describe the
+  ART-only rollback-then-clean-restage exception, including still-planned exact
+  denials issuing no handle.
+- The recovery terminal-denial finding was already repaired on the current
+  head with phase-aware claim/terminal behavior.
+- The `${EMPTY}` split in the contract is required by the repository stale-
+  wording policy. Its shell assignment is now explicit, so the documented
+  coverage targets expand deterministically without reintroducing prohibited
+  wording.
+
+Architecture, security, QA, and reuse/dedup focused re-reviews passed after the
+repairs. Ruff, focused tests, stale checks, markdown links, and diff checks
+passed.

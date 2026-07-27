@@ -786,8 +786,9 @@ rolls back with participant state. The three active internal ART compositions
 are the deliberate exception: their adapter retains the exact denial, the
 composition root first rolls back ART state, and AUTH's public bounded restage
 operation commits the same denial in a clean AUTH-only transaction. Still-
-planned fixed-service preparation returns bounded `action_unavailable` without
-evidence because it issues no handle and has no final resource context.
+planned fixed-service preparation still issues no handle. When it enters the
+ART adapter with an exact resource context, its bounded `action_unavailable`
+denial follows the same rollback-then-clean-restage path.
 
 Operationally, actor-self preparation locks profile then exact link. An
 administrative preparation locks `AuthorityControl(id=1)`, request profile,

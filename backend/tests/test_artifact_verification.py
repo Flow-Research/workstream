@@ -5,13 +5,18 @@ from __future__ import annotations
 import asyncio
 import importlib
 from datetime import UTC, datetime
+from threading import Event, Thread
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
 from unittest.mock import AsyncMock, Mock
 
 import app.interfaces.artifact_operations  # noqa: F401 - cumulative contract coverage
+import app.adapters.artifacts.internal_workers as internal_worker_adapter
+from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings, get_settings
+from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
@@ -20,8 +25,12 @@ from app.modules.artifacts.schemas import (
     ArtifactPutAttemptAuthorityFacts,
     DenyArtifactInternalAuthority,
 )
-from app.modules.artifacts.service import ArtifactStorageOrchestrator
+from app.modules.artifacts.service import (
+    ArtifactStorageOrchestrator,
+    artifact_storage_namespace_spec,
+)
 from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
+from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
 @pytest.mark.asyncio
@@ -62,9 +71,7 @@ def test_internal_celery_tasks_and_pending_scan_are_registered_once(monkeypatch)
     assert "workstream.artifacts.resolve_put_attempt" in celery_app.tasks
     assert "workstream.artifacts.verify_object" in celery_app.tasks
     assert "workstream.artifacts.scan_pending_work" in celery_app.tasks
-    scheduled_tasks = [
-        entry["task"] for entry in celery_app.conf.beat_schedule.values()
-    ]
+    scheduled_tasks = [entry["task"] for entry in celery_app.conf.beat_schedule.values()]
     assert scheduled_tasks.count("workstream.artifacts.scan_pending_work") == 1
     assert scheduled_tasks.count("workstream.artifacts.cleanup_stale_scratch") == 1
     operation = AsyncMock(return_value=None)
@@ -94,6 +101,166 @@ def test_internal_celery_tasks_and_pending_scan_are_registered_once(monkeypatch)
     put_delay.assert_called_once_with("put-id")
     job_delay.assert_called_once_with("job-id")
     get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_internal_artifact_store_is_initialized_once_per_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    first_bootstrap, duplicate_bootstrap = Mock(), Mock()
+    first_store, duplicate_store = Mock(), Mock()
+    first_bootstrap.initialize_after_namespace_claim.return_value = first_store
+    duplicate_bootstrap.initialize_after_namespace_claim.return_value = duplicate_store
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=Mock()))
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "require_artifact_runtime_eligible",
+        Mock(),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "create_artifact_store_bootstrap",
+        Mock(side_effect=[first_bootstrap, duplicate_bootstrap]),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "validate_artifact_storage_namespace_at_startup",
+        AsyncMock(side_effect=[Mock(), Mock()]),
+    )
+    first_namespace, duplicate_namespace = Mock(), Mock()
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "artifact_storage_namespace_spec",
+        Mock(side_effect=[first_namespace, duplicate_namespace]),
+    )
+
+    try:
+        await internal_worker_adapter.initialize_artifact_internal_runtime()
+        await internal_worker_adapter.initialize_artifact_internal_runtime()
+        with internal_worker_adapter._artifact_internal_runtime() as runtime:
+            assert runtime == (first_store, first_namespace)
+        first_bootstrap.close.assert_not_called()
+        duplicate_bootstrap.close.assert_called_once_with()
+    finally:
+        internal_worker_adapter.shutdown_artifact_internal_runtime()
+
+    first_bootstrap.close.assert_called_once_with()
+    with pytest.raises(RuntimeError, match="not initialized"):
+        with internal_worker_adapter._artifact_internal_runtime():
+            pass
+
+
+@pytest.mark.asyncio
+async def test_disabled_artifact_store_skips_process_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_settings",
+        Mock(return_value=SimpleNamespace(artifact_store_backend="disabled")),
+    )
+    create = Mock(side_effect=AssertionError("disabled storage must not initialize"))
+    monkeypatch.setattr(internal_worker_adapter, "create_artifact_store_bootstrap", create)
+
+    await internal_worker_adapter.initialize_artifact_internal_runtime()
+
+    create.assert_not_called()
+    with pytest.raises(RuntimeError, match="not initialized"):
+        with internal_worker_adapter._artifact_internal_runtime():
+            pass
+
+
+@pytest.mark.asyncio
+async def test_process_runtime_uses_concrete_bootstrap_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    root = tmp_path / "artifacts"
+    root.mkdir(mode=0o700)
+    settings = Settings(
+        **artifact_admission_limit_settings(),
+        environment="test",
+        artifact_store_backend="local",
+        artifact_local_root=root,
+        artifact_scratch_root=tmp_path / "scratch",
+    )
+    bootstrap = LocalStorageBootstrap(LocalStorageAdapter(root=root))
+    namespace = artifact_storage_namespace_spec(settings, bootstrap)
+    claim = ArtifactStoreNamespaceClaim(
+        adapter_identity=bootstrap.identity,
+        namespace_identity=bootstrap.namespace_identity,
+        namespace_fingerprint=namespace.namespace_fingerprint,
+    )
+    monkeypatch.setattr(internal_worker_adapter, "get_settings", Mock(return_value=settings))
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "create_artifact_store_bootstrap",
+        Mock(return_value=bootstrap),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "validate_artifact_storage_namespace_at_startup",
+        AsyncMock(return_value=claim),
+    )
+
+    try:
+        await internal_worker_adapter.initialize_artifact_internal_runtime()
+        with internal_worker_adapter._artifact_internal_runtime() as runtime:
+            assert runtime[1] == namespace
+            assert not hasattr(runtime[0], "namespace_identity")
+    finally:
+        internal_worker_adapter.shutdown_artifact_internal_runtime()
+
+
+@pytest.mark.asyncio
+async def test_process_runtime_shutdown_waits_for_active_lease(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    internal_worker_adapter.shutdown_artifact_internal_runtime()
+    bootstrap, store, namespace = Mock(), Mock(), Mock()
+    bootstrap.initialize_after_namespace_claim.return_value = store
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "get_settings",
+        Mock(return_value=SimpleNamespace(artifact_store_backend="local")),
+    )
+    monkeypatch.setattr(internal_worker_adapter, "require_artifact_runtime_eligible", Mock())
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "create_artifact_store_bootstrap",
+        Mock(return_value=bootstrap),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "artifact_storage_namespace_spec",
+        Mock(return_value=namespace),
+    )
+    monkeypatch.setattr(
+        internal_worker_adapter,
+        "validate_artifact_storage_namespace_at_startup",
+        AsyncMock(return_value=Mock()),
+    )
+    await internal_worker_adapter.initialize_artifact_internal_runtime()
+    shutdown_started, shutdown_finished = Event(), Event()
+
+    def shutdown() -> None:
+        shutdown_started.set()
+        internal_worker_adapter.shutdown_artifact_internal_runtime()
+        shutdown_finished.set()
+
+    with internal_worker_adapter._artifact_internal_runtime():
+        thread = Thread(target=shutdown)
+        thread.start()
+        assert shutdown_started.wait(timeout=1)
+        assert not shutdown_finished.wait(timeout=0.05)
+
+    assert shutdown_finished.wait(timeout=1)
+    thread.join(timeout=1)
+    assert not thread.is_alive()
+    bootstrap.close.assert_called_once_with()
 
 
 def test_internal_artifact_actions_are_active() -> None:

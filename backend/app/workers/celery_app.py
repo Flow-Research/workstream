@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.signals import worker_process_init, worker_process_shutdown
 
 from app.adapters.artifacts import require_artifact_runtime_eligible
+from app.adapters.artifacts.internal_workers import (
+    initialize_artifact_internal_runtime,
+    shutdown_artifact_internal_runtime,
+)
 from app.core.config import get_settings
+from app.workers.async_runner import run_async_task
 from app.workers.errors import CeleryConfigurationError
 
 ARTIFACT_SCRATCH_CLEANUP_TASK = "workstream.artifacts.cleanup_stale_scratch"
@@ -14,6 +20,18 @@ ARTIFACT_PUT_RESOLUTION_TASK = "workstream.artifacts.resolve_put_attempt"
 ARTIFACT_VERIFICATION_TASK = "workstream.artifacts.verify_object"
 ARTIFACT_PENDING_WORK_SCAN_TASK = "workstream.artifacts.scan_pending_work"
 ARTIFACT_PENDING_WORK_SCAN_SCHEDULE = "artifact-pending-work-scan"
+
+
+@worker_process_init.connect
+def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
+    """Claim and initialize the artifact provider once per Celery child."""
+    run_async_task(initialize_artifact_internal_runtime)
+
+
+@worker_process_shutdown.connect
+def shutdown_artifact_runtime_for_process(**_kwargs: object) -> None:
+    """Close the artifact provider after the Celery child drains tasks."""
+    shutdown_artifact_internal_runtime()
 
 
 def create_celery_app() -> Celery:

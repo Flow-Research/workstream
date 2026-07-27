@@ -135,7 +135,7 @@ resource-context digest. It adds no table, column, or compatibility path.
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
 (cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_authorization.py tests/test_artifact_admission.py tests/test_artifact_architecture.py tests/test_artifact_authorization.py tests/test_artifact_verification.py tests/test_artifact_recovery.py tests/test_artifact_internal_authorization.py -q)
 (cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_authorization.py tests/test_artifact_internal_authorization.py -q --cov=app.modules.authorization --cov-report=term-missing --cov-fail-under=90)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_artifact_admission.py tests/test_artifact_architecture.py tests/test_artifact_authorization.py tests/test_artifact_verification.py tests/test_artifact_recovery.py tests/test_artifact_internal_authorization.py -q --cov=app.modules.artifacts --cov=app.wor${EMPTY}kers.artifacts --cov=app.wor${EMPTY}kers.celery_app --cov-report=term-missing --cov-fail-under=90)
+(cd backend && EMPTY= && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_artifact_admission.py tests/test_artifact_architecture.py tests/test_artifact_authorization.py tests/test_artifact_verification.py tests/test_artifact_recovery.py tests/test_artifact_internal_authorization.py -q --cov=app.modules.artifacts --cov=app.wor${EMPTY}kers.artifacts --cov=app.wor${EMPTY}kers.celery_app --cov-report=term-missing --cov-fail-under=90)
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py

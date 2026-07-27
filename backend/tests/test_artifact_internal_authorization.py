@@ -16,6 +16,7 @@ from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.authorization import PreparedArtifactInternalAuthority
 from app.modules.artifacts.schemas import (
+    ArtifactAuthorityDeniedError,
     ArtifactInternalAuthority,
     ArtifactInternalResourceType,
     ArtifactPutAttemptAuthorityFacts,
@@ -92,6 +93,26 @@ def _facts() -> ArtifactPutAttemptAuthorityFacts:
         executor_id=uuid4(),
         execution_generation=1,
     )
+
+
+@pytest.mark.asyncio
+async def test_adapter_normalizes_malformed_resource_selector_to_denial() -> None:
+    authority = PreparedArtifactInternalAuthority(
+        _Session(),  # type: ignore[arg-type]
+        service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+        request_id=uuid4(),
+        correlation_id=uuid4(),
+    )
+    malformed = replace(_facts(), resource_id="not-a-uuid")  # type: ignore[arg-type]
+
+    with pytest.raises(ArtifactAuthorityDeniedError, match="resource is invalid"):
+        await authority.prepare(
+            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+            action_id=ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+            facts=malformed,
+            phase="claim",
+            idempotency_key=uuid4(),
+        )
 
 
 class _FailAfterConsumeAuthority:

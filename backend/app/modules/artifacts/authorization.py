@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.actors.repository import ActorRepository
@@ -242,12 +243,22 @@ def _scope(
     if resource_type is ArtifactInternalResourceType.PENDING_WORK:
         normalized_id = resource_id
     else:
-        normalized_id = resource_id if isinstance(resource_id, UUID) else UUID(resource_id)
-    return PreparedAuthorityScope(
-        kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
-        artifact_resource_type=resource_type.value,
-        artifact_resource_id=normalized_id,
-    )
+        try:
+            normalized_id = resource_id if isinstance(resource_id, UUID) else UUID(resource_id)
+        except (TypeError, ValueError) as exc:
+            raise ArtifactAuthorityDeniedError(
+                "artifact internal resource is invalid"
+            ) from exc
+    try:
+        return PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
+            artifact_resource_type=resource_type.value,
+            artifact_resource_id=normalized_id,
+        )
+    except ValidationError as exc:
+        raise ArtifactAuthorityDeniedError(
+            "artifact internal resource is invalid"
+        ) from exc
 
 
 def _resource_context(facts: ArtifactInternalAuthorityFacts):

@@ -626,10 +626,13 @@ transaction. WS-XINT-002-03 adds the first active feature consumer: exact typed
 prepared capabilities for the ART verifier, pending-work scanner, and
 put-attempt resolver. Fixed services are locked and refreshed before either an
 active-action decision or a still-planned `action_unavailable` denial;
-still-planned actions issue no handle. ProjectRoleGrant does not exist in PREP;
-AUTH-10 must add its exact row lock, evaluator branch, and crossed-revocation
-evidence before an exact-project product consumer can use that authority
-source.
+still-planned actions issue no handle. For ART adapter calls only, any exact
+denial is retained across the caller rollback and restaged through AUTH's
+bounded public operation in a clean AUTH-only transaction. General PREP callers
+do not restage rolled-back denial evidence. ProjectRoleGrant does not exist in
+PREP; AUTH-10 must add its exact row lock, evaluator branch, and crossed-
+revocation evidence before an exact-project product consumer can use that
+authority source.
 
 Service identity, static service-action matrix membership, and action
 availability are immutable code-owned validations after the service profile and
