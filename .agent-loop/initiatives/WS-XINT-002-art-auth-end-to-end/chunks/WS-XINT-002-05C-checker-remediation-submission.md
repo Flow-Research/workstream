@@ -34,10 +34,19 @@ reviewer contribution, synthetic human actors, review decision changes, or new c
 
 - Bind exact final CheckerRun, server-derived immutable
   `remediation_source_checker_run_id`, immediate same-task predecessor, existing
-  locked task context, assignment, and current `allow_review` before routing.
-- Use the same prepare/create actions and dual binding transaction as 05A/05B.
+  locked task context, and assignment. No prior `allow_review` result carries
+  into the corrected Submission.
+- Reuse `artifact.submission_bundle.prepare` from 05A, then fresh
+  `submission.create` plus `artifact.submission.binding.create` from 05B.
+  Atomically consume the ready admission and locked remediation context while
+  committing final CheckerRun binding, immutable
+  `remediation_source_checker_run_id`, predecessor binding, task context,
+  assignment, corrected Submission, and artifact binding. The new Submission
+  then reruns the normal checker/finalization spine; only a later current
+  successful `allow_review` result may admit it to review routing.
 - Reject stale/non-final/wrong-task CheckerRun, predecessor advancement,
-  revocation, replay, and concurrency; success returns to open routing.
+  revocation, replay, and concurrency; success returns only to the normal
+  checker/finalization spine, not directly to review routing.
 
 ## Verification
 
@@ -61,4 +70,4 @@ integrity, docs, reuse/dedup, and test delta.
 
 ## Human review focus
 
-Checker provenance, absence of human-review facts, and open routing.
+Checker provenance, absence of human-review facts, and mandatory checker rerun.

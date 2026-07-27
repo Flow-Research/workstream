@@ -40,17 +40,17 @@ change its availability; it may not invent another action or permission.
 
 | ActionId | PermissionId | Service identity |
 |---|---|---|
-| `artifact.verification.execute` | same | `workstream.artifact.verifier` |
-| `artifact.pending_work.scan` | same | `workstream.artifact.scheduler` |
-| `artifact.put_attempt.resolve` | same | `workstream.artifact.put_resolver` |
-| `artifact.guide_source.read` | same | `workstream.artifact.guide_reader` |
+| `artifact.verification.execute` | `artifact.verification.execute` | `workstream.artifact.verifier` |
+| `artifact.pending_work.scan` | `artifact.pending_work.scan` | `workstream.artifact.scheduler` |
+| `artifact.put_attempt.resolve` | `artifact.put_attempt.resolve` | `workstream.artifact.put_resolver` |
+| `artifact.guide_source.read` | `artifact.guide_source.read` | `workstream.artifact.guide_reader` |
 | `artifact.guide_source.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
 | `artifact.pre_submit.checker_input.materialize` | `artifact.checker_input.materialize` | `workstream.artifact.materializer` |
 | `artifact.post_submit.checker_input.materialize` | `artifact.checker_input.materialize` | `workstream.artifact.materializer` |
-| `artifact.checker_output.write` | same | `workstream.artifact.checker_output` |
+| `artifact.checker_output.write` | `artifact.checker_output.write` | `workstream.artifact.checker_output` |
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
-| `artifact.review_packet.materialize` | same | `workstream.artifact.materializer` |
+| `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | `workstream.artifact.materializer` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | `workstream.artifact.binding` |
 
 The existing bounded Operator actions remain unchanged. Fixed recovery services execute

@@ -23,7 +23,9 @@ backend/tests/test_auth.py
 backend/tests/test_artifact_authorization.py
 docs/spec_authorization_service.md
 docs/spec_artifact_storage_service.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/STATUS.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/chunks/WS-XINT-002-02-prepared-feature-boundaries.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-02-*.md
 ```
 
 ## Not allowed
@@ -53,10 +55,14 @@ docs/spec_artifact_storage_service.md
   predecessor, preparation head/digest, obligation/findings/responses,
   replacement assignment, limits, deadline, and advancement fence.
 - Consume stages one final decision in the caller transaction; denial and any
-  participant failure roll back with no reusable handle.
+  participant failure roll back with no reusable handle. The service-local
+  issuance registry burns the handle before evaluation outside database
+  rollback semantics; denial, evidence failure, participant failure, caller
+  rollback, timeout, or cancellation cannot restore it.
 - PostgreSQL tests cover revoke/suspend, wrong action/resource/session/service,
   replay/concurrent consume, transaction replacement, stale feature facts, and
-  evidence failure.
+  evidence failure. Each rollback class retries the identical handle and proves
+  rejection before authority evaluation, evidence, or participant mutation.
 - No planned ART action becomes executable in this chunk.
 
 ## Verification

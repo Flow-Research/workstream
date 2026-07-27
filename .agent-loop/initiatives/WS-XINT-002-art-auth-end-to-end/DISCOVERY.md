@@ -2,8 +2,9 @@
 
 ## Observations on trusted main
 
-- `backend/app/modules/authorization/catalogue.py` contains 81 ActionIds and 76
-  PermissionIds. All current artifact actions are planned and unavailable.
+- Baseline commit `2fb322bd2249a5fe9d3fa706dc63f033074e38ce` contains
+  76 PermissionIds and 81 ActionIds: 22 active and 59 planned. All current
+  artifact actions are planned and unavailable.
 - The fixed service matrix has seven artifact identities and eleven memberships:
   verifier, put resolver, scheduler, binding, guide reader, materializer, and
   checker output.

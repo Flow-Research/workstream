@@ -5,6 +5,10 @@ waves are superseded prospectively by
 `../WS-XINT-002-art-auth-end-to-end/`. Existing rows below remain the trusted
 baseline until WS-XINT-002-01 merges; no prose in either plan changes runtime
 availability.
+The reconciliation baseline is trusted `main` commit
+`2fb322bd2249a5fe9d3fa706dc63f033074e38ce`: 76 PermissionIds, 81 ActionIds,
+22 active actions, and 59 planned actions. Older counts below are explicitly
+historical snapshots at their named commits, not the WS-XINT-002 entry state.
 
 ## Authority
 

@@ -3,7 +3,8 @@
 ## Goal
 
 Activate fresh human Submission creation and separate fixed artifact binding in
-one exactly-once ready-admission transaction.
+one exactly-once Submission/binding transaction. It consumes the durable ready
+admission created by 05A; it does not re-admit the work.
 
 ## Risk class
 

@@ -38,8 +38,10 @@ initial-submission behavior changes, provider redesign, or new catalogue values.
   deadline, and predecessor advancement fence.
 - Use the same public prepare/create actions with a closed revision context.
 - Deny stale/missing/expired/over-limit/invalid-replacement/revoked/replayed or
-  concurrent attempts. Success creates one immutable successor and atomically
-  consumes the exact obligation/admission without changing prior history.
+  concurrent attempts. The durable `needs_revision` obligation remains open
+  through preparation, storage, and retries. Only the transaction that creates
+  the immutable successor and binding may atomically close that obligation and
+  consume the exact admission; failure leaves it open without changing history.
 
 ## Verification
 

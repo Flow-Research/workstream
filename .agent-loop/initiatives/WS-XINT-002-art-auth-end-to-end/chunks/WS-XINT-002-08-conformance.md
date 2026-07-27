@@ -61,6 +61,7 @@ redesign, or gate weakening.
 (cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/pytest tests/test_authorization.py tests/test_artifact_recovery.py tests/test_submission_concurrency.py tests/test_checkers.py tests/test_review_artifacts.py tests/test_review_revision.py -q --cov=app.modules.authorization --cov=app.modules.artifacts --cov=app.modules.tasks --cov=app.modules.checkers --cov=app.modules.reviews --cov-report=term-missing --cov-fail-under=90)
 (cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python scripts/api_contract_e2e.py)
 (cd backend && WORKSTREAM_TEST_DATABASE_URL=<test-db> .venv/bin/python scripts/auth_api_e2e.py)
+python3 -m scripts.test_lightweight_agent_gates
 python3 scripts/check_stale_authorization_docs.py
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
@@ -68,7 +69,11 @@ git diff --check
 ```
 
 The exact PR head must pass `Backend / test` and `Agent Gates / agent-gates`,
-preserving the 78 percent global and 90 percent materially changed subsystem floors.
+preserving the full migration matrix, generated route/command/catalogue/service
+parity, API drills, the 78 percent global floor, and 90 percent materially
+changed subsystem floors. The two stale scanners must cover removed upload
+sessions, token-role fallbacks, generic downloads, direct ART-to-AUTH repository
+imports, alternate capabilities, and generated contract/documentation parity.
 
 ## Required reviewers
 

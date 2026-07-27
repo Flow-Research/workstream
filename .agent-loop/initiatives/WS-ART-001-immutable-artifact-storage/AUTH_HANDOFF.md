@@ -98,3 +98,6 @@ action string, or hidden feature code is never executable authority.
 Any dependency not enumerated by WS-XINT-002 is contract drift. Stop and amend
 the cross-initiative plan; do not add a local action string, permission alias,
 service identity, matrix row, or alternate prepared-capability path.
+`WS-XINT-002-01` must delete all six obsolete upload-session ActionIds and
+PermissionIds, plus scheduler expiry membership, with no unavailable retained
+row or compatibility alias; its enumerated deletion list is authoritative.
