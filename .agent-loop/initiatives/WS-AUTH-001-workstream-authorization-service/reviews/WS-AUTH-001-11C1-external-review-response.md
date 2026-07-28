@@ -19,6 +19,9 @@
 - Updated the stale real-API E2E Project Manager action projection reported by
   the second hosted Backend run; the production response already contained the
   correct six newly active actions.
+- Split the E2E policy-bundle helper's legacy mutation token from its locally
+  granted diagnostic-reader token after the third hosted run correctly denied
+  issuer-role-only access to the migrated GET routes.
 
 ## Comments deferred or rejected
 

@@ -117,6 +117,12 @@ probes, project creation, and the authorization-context request, then found one
 stale real-API E2E expected action list. That exact list was updated with the six
 11C1 actions; production behavior required no correction.
 
+The following hosted run advanced through that assertion and correctly denied
+the policy-bundle helper's issuer-role-only token on a migrated diagnostic GET.
+The E2E helper now uses its separately provisioned local Project Manager token
+for the four 11C1 diagnostic reads while retaining the legacy manager token only
+for not-yet-migrated setup mutations.
+
 ## Follow-Up And Human Review Focus
 
 AUTH-11C2 remains separate and unstarted. Review the canonical snapshot joins,
