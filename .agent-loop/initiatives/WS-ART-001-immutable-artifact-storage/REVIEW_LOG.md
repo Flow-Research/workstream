@@ -65,6 +65,10 @@
   coverage, raising artifact-foundation coverage to 89.98%. A focused boundary
   proof now covers fail-closed partial guide lineage claims; production and the
   90% threshold remain unchanged.
+- Hosted run `30369062154` remained at 89.98% after one repository branch varied
+  between runs. A deterministic deny-only seam test now proves the default 04A
+  selector rejects final PREP consumption, providing margin without changing
+  production or the threshold.
 
 ## WS-ART-001-02D
 

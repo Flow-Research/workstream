@@ -32,6 +32,7 @@ from app.modules.artifacts.schemas import (
 )
 from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthorization
 from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.artifacts.authorization import get_guide_artifact_prepared_authorization
 from app.modules.artifacts.service import (
     ArtifactAdmissionService,
     ArtifactStorageOrchestrator,
@@ -314,6 +315,31 @@ async def test_guide_ingest_denies_before_reading_bytes(tmp_path: Path) -> None:
         assert preparation.pending_cleanup_count == 0
     finally:
         manager.close()
+
+
+@pytest.mark.asyncio
+async def test_default_guide_authority_denies_final_consumption() -> None:
+    """Keep both PREP boundaries unavailable until AUTH installs 04A."""
+    authority = get_guide_artifact_prepared_authorization()
+    assert type(authority) is DenyGuideArtifactPreparedAuthorization
+    facts = GuideArtifactIngestAuthorityFacts(
+        project_id=PROJECT_ID,
+        guide_id=GUIDE_ID,
+        guide_source_snapshot_id=SNAPSHOT_ID,
+        guide_source_item_id=ITEM_ID,
+        operation_identity="operation",
+        request_digest="sha256:" + "a" * 64,
+        sha256="sha256:" + "b" * 64,
+        byte_count=5,
+        media_type="application/octet-stream",
+    )
+
+    with pytest.raises(ArtifactAuthorityDeniedError, match="ingest is unavailable"):
+        await authority.consume(
+            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+            facts=facts,
+        )
+    authority.close()
 
 
 @pytest.mark.asyncio

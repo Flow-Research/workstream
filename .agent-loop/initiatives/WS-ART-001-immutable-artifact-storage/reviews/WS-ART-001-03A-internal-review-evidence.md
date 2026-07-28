@@ -58,6 +58,10 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   coverage, raising artifact-foundation coverage to 89.98%. A final focused
   boundary proof exercises fail-closed rejection of partial guide lineage
   claims; production code and the 90% gate remain unchanged.
+- hosted run `30369062154` again measured 89.98% because one repository branch
+  varied between lane runs. A deterministic deny-only seam proof now verifies
+  that the default 04A selector rejects final PREP consumption, adding coverage
+  margin without changing production or the gate.
 
 ## Reviewer Results
 
