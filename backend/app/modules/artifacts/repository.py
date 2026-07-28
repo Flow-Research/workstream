@@ -33,6 +33,8 @@ from app.modules.projects.models import (
     GuideSourceArtifactIngest,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
+    Project,
+    ProjectGuide,
 )
 from app.modules.tasks.models import Submission, WorkstreamTask
 
@@ -226,8 +228,20 @@ class ArtifactRepository:
                     GuideSourceSnapshot,
                     GuideSourceSnapshot.id == GuideSourceSnapshotItem.source_snapshot_id,
                 )
+                .join(
+                    ProjectGuide,
+                    and_(
+                        ProjectGuide.id == GuideSourceSnapshot.guide_id,
+                        ProjectGuide.project_id == GuideSourceSnapshot.project_id,
+                        ProjectGuide.version == GuideSourceSnapshot.guide_version,
+                    ),
+                )
+                .join(Project, Project.id == GuideSourceSnapshot.project_id)
                 .where(GuideSourceSnapshotItem.id == guide_source_item_id)
-                .with_for_update(of=(GuideSourceSnapshotItem, GuideSourceSnapshot))
+                .where(ProjectGuide.status == "draft")
+                .with_for_update(
+                    of=(Project, ProjectGuide, GuideSourceSnapshot, GuideSourceSnapshotItem)
+                )
             )
         ).one_or_none()
         if lineage is None:

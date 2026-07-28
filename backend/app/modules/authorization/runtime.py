@@ -21,9 +21,7 @@ PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: "sufficiency_report",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: "submission_artifact_policy_collection",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: "submission_artifact_policy",
-    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
-        "post_submit_checker_policy_setup"
-    ),
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: ("post_submit_checker_policy_setup"),
 }
 
 
@@ -253,9 +251,7 @@ class ProjectDiagnosticReadResourceContext(BaseModel):
     target_exists: bool
     target_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     source_snapshot_id: UUID | None = None
-    source_snapshot_hash: str | None = Field(
-        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
-    )
+    source_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def require_canonical_shape(self):
@@ -525,6 +521,32 @@ class ArtifactPutAttemptResourceContext(BaseModel):
     execution_generation: int = Field(gt=0)
 
 
+class GuideSourceIngestResourceContext(BaseModel):
+    """Exact locked guide lineage and server-owned byte facts for ingest."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["project"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    operation_identity: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    byte_count: int = Field(ge=0)
+    media_type: str = Field(min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def require_exact_lineage(self):
+        """Keep the final resource bound to one concrete project lineage."""
+        if self.resource_id != self.scope_project_id:
+            raise ValueError("guide ingest project scope must match resource")
+        if len({self.guide_source_item_id, self.guide_source_snapshot_id, self.guide_id}) != 3:
+            raise ValueError("guide ingest lineage identifiers must be distinct")
+        return self
+
+
 class ArtifactVerificationJobResourceContext(BaseModel):
     """Exact fenced verification-job facts composed by ART from locked rows."""
 
@@ -581,6 +603,7 @@ AuthorizationResourceContext = (
     | ProjectRoleGrantReadResourceContext
     | ProjectRoleGrantIssueResourceContext
     | ProjectRoleGrantRevokeResourceContext
+    | GuideSourceIngestResourceContext
     | ArtifactPutAttemptResourceContext
     | ArtifactVerificationJobResourceContext
     | ArtifactPendingWorkResourceContext

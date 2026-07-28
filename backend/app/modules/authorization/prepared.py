@@ -23,6 +23,7 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
+    GuideSourceIngestResourceContext,
     AuthorizationContext,
     AuthorizationDecision,
     AuthorizationResourceContext,
@@ -256,5 +257,12 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
                 artifact_resource_type=resource.resource_type,
                 artifact_resource_id=resource.resource_id,
+            )
+        if action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST and isinstance(
+            resource, GuideSourceIngestResourceContext
+        ):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=resource.scope_project_id,
             )
         raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")

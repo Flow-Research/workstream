@@ -54,6 +54,10 @@ from app.interfaces.artifacts import (
     ArtifactStoreUnavailableError,
 )
 from app.modules.artifacts.repository import ArtifactRepository
+from app.modules.artifacts.authorization import (
+    PreparedGuideArtifactAuthorization,
+    guide_ingest_prepared_request_digest,
+)
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     ArtifactInternalResourceType,
@@ -84,6 +88,7 @@ from app.modules.authorization.runtime import (
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.models import AdminRoleGrant
 from app.modules.projects.models import (
     GuideSourceArtifactIngest,
     EffectiveProjectSubmissionArtifactPolicy,
@@ -2910,9 +2915,7 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                         GuideArtifactAdmissionRequest(
                             project_id=uuid4(),
                             guide_id=UUID(lineage.guide_id),
-                            guide_source_snapshot_id=UUID(
-                                lineage.guide_source_snapshot_id
-                            ),
+                            guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
                             guide_source_item_id=UUID(item_id),
                             source=source,
                             operation_identity=_guide_operation(item_id),
@@ -2935,9 +2938,7 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                         GuideArtifactAdmissionRequest(
                             project_id=UUID(lineage.project_id),
                             guide_id=UUID(lineage.guide_id),
-                            guide_source_snapshot_id=UUID(
-                                lineage.guide_source_snapshot_id
-                            ),
+                            guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
                             guide_source_item_id=UUID(item_id),
                             source=source,
                             operation_identity=_guide_operation(item_id),
@@ -3010,6 +3011,207 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
             assert await _count(session, ArtifactContent) == 0
             assert await _count(session, ArtifactReplica) == 0
             assert await _count(session, ArtifactOperationReceipt) == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_guide_admission_consumes_real_project_manager_prep_atomically(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    """Bind one real PM capability to locked lineage and server-owned bytes."""
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    context = _context()
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            project_id, item_id = await _seed_guide(
+                session,
+                context=context,
+                content_hash="sha256:" + "f" * 64,
+                media_type="application/octet-stream",
+            )
+            lineage = await ArtifactRepository(session).get_guide_lineage(item_id)
+            assert lineage is not None
+            await session.rollback()
+            bootstrap_grant_id = uuid4()
+            session.add(
+                AdminRoleGrant(
+                    id=bootstrap_grant_id,
+                    target_actor_profile_id=str(context.actor_profile_id),
+                    role="access_administrator",
+                    scope_type="system",
+                    scope_project_id=None,
+                    status="active",
+                    version=1,
+                    granted_by_system_principal="workstream:system:bootstrap",
+                    grant_reason="guide ingest fixture bootstrap",
+                    granted_at=datetime.now(UTC),
+                )
+            )
+            await session.flush()
+            await session.execute(
+                text(
+                    "update authority_control set bootstrap_completed=true, "
+                    "bootstrap_grant_id=:grant_id, version=1 where id=1"
+                ),
+                {"grant_id": bootstrap_grant_id},
+            )
+            project_manager_grant_id = uuid4()
+            session.add(
+                AdminRoleGrant(
+                    id=project_manager_grant_id,
+                    target_actor_profile_id=str(context.actor_profile_id),
+                    role="project_manager",
+                    scope_type="project",
+                    scope_project_id=project_id,
+                    status="active",
+                    version=1,
+                    granted_by_actor_profile_id=str(context.actor_profile_id),
+                    granted_by_admin_role_grant_id=bootstrap_grant_id,
+                    grant_reason="guide ingest authorization proof",
+                    granted_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+            idempotency_key = uuid4()
+            denied_authority = PreparedGuideArtifactAuthorization(session)
+            with pytest.raises(
+                ArtifactAuthorityDeniedError,
+                match="guide artifact ingest is unavailable",
+            ):
+                async with denied_authority.transaction():
+                    await denied_authority.prepare(
+                        authorization_context=context,
+                        project_id=uuid4(),
+                        guide_id=UUID(lineage.guide_id),
+                        guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                        guide_source_item_id=UUID(item_id),
+                        idempotency_key=uuid4(),
+                    )
+            assert await _count(session, ArtifactAdmissionScope) == 0
+            assert await _count(session, ArtifactAdmissionCharge) == 0
+            assert await _count(session, ArtifactPutAttempt) == 0
+            assert await _count(session, AuditEvent) == 0
+            await session.rollback()
+
+            link = await session.get(ActorIdentityLink, str(context.identity_link_id))
+            assert link is not None
+            link.status = "revoked"
+            link.revoked_by = str(context.actor_profile_id)
+            link.revoked_at = datetime.now(UTC)
+            link.revoked_reason = "guide ingest denial proof"
+            await session.commit()
+            revoked_link_authority = PreparedGuideArtifactAuthorization(session)
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                async with revoked_link_authority.transaction():
+                    await revoked_link_authority.prepare(
+                        authorization_context=context,
+                        project_id=UUID(project_id),
+                        guide_id=UUID(lineage.guide_id),
+                        guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                        guide_source_item_id=UUID(item_id),
+                        idempotency_key=uuid4(),
+                    )
+            assert await _count(session, ArtifactPutAttempt) == 0
+            assert await _count(session, AuditEvent) == 0
+            await session.rollback()
+            link = await session.get(ActorIdentityLink, str(context.identity_link_id))
+            assert link is not None
+            link.status = "active"
+            link.revoked_by = None
+            link.revoked_at = None
+            link.revoked_reason = None
+            link.reactivated_by = str(context.actor_profile_id)
+            link.reactivated_at = datetime.now(UTC)
+            link.reactivation_reason = "guide ingest test restoration"
+            await session.commit()
+
+            grant = await session.get(AdminRoleGrant, project_manager_grant_id)
+            assert grant is not None
+            grant.status = "revoked"
+            grant.version = 2
+            grant.revoked_by_actor_profile_id = str(context.actor_profile_id)
+            grant.revoked_by_admin_role_grant_id = bootstrap_grant_id
+            grant.revoked_reason = "guide ingest denial proof"
+            grant.revoked_at = datetime.now(UTC)
+            await session.commit()
+            revoked_grant_authority = PreparedGuideArtifactAuthorization(session)
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                async with revoked_grant_authority.transaction():
+                    await revoked_grant_authority.prepare(
+                        authorization_context=context,
+                        project_id=UUID(project_id),
+                        guide_id=UUID(lineage.guide_id),
+                        guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                        guide_source_item_id=UUID(item_id),
+                        idempotency_key=uuid4(),
+                    )
+            assert await _count(session, ArtifactPutAttempt) == 0
+            assert await _count(session, AuditEvent) == 0
+            await session.rollback()
+            session.add(
+                AdminRoleGrant(
+                    id=uuid4(),
+                    target_actor_profile_id=str(context.actor_profile_id),
+                    role="project_manager",
+                    scope_type="project",
+                    scope_project_id=project_id,
+                    status="active",
+                    version=1,
+                    granted_by_actor_profile_id=str(context.actor_profile_id),
+                    granted_by_admin_role_grant_id=bootstrap_grant_id,
+                    grant_reason="guide ingest authorization replacement",
+                    granted_at=datetime.now(UTC),
+                )
+            )
+            await session.commit()
+            authority = PreparedGuideArtifactAuthorization(session)
+            async with minted_source(
+                tmp_path / "real-guide-prep",
+                b"authorized guide",
+                media_type="application/octet-stream",
+            ) as source:
+                async with authority.transaction():
+                    handle = await authority.prepare(
+                        authorization_context=context,
+                        project_id=UUID(project_id),
+                        guide_id=UUID(lineage.guide_id),
+                        guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                        guide_source_item_id=UUID(item_id),
+                        idempotency_key=idempotency_key,
+                    )
+                    result = await ArtifactAdmissionService(session, settings, namespace).admit(
+                        GuideArtifactAdmissionRequest(
+                            project_id=UUID(project_id),
+                            guide_id=UUID(lineage.guide_id),
+                            guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                            guide_source_item_id=UUID(item_id),
+                            source=source,
+                            operation_identity=_guide_operation(item_id),
+                            request_digest=guide_ingest_prepared_request_digest(
+                                project_id=UUID(project_id),
+                                guide_id=UUID(lineage.guide_id),
+                                guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                                guide_source_item_id=UUID(item_id),
+                                idempotency_key=idempotency_key,
+                            ),
+                        ),
+                        guide_prepared_authorization=authority,
+                        prepared_authorization=handle,
+                        existing_transaction=True,
+                    )
+            assert not session.in_transaction()
+            assert await session.get(ArtifactPutAttempt, str(result.attempt_id)) is not None
+            staged = await session.scalar(
+                select(GuideSourceArtifactIngest).where(
+                    GuideSourceArtifactIngest.source_item_id == item_id
+                )
+            )
+            assert staged is not None
+            assert staged.actor_profile_id == str(context.actor_profile_id)
     finally:
         await engine.dispose()
 
@@ -3147,6 +3349,14 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
 
                 mutations = (
                     (
+                        "update projects set status = 'active' where id = :project_id",
+                        {"project_id": facts.project_id},
+                    ),
+                    (
+                        "update project_guides set status = 'active' where id = :guide_id",
+                        {"guide_id": facts.guide_id},
+                    ),
+                    (
                         "update guide_source_snapshot_items "
                         "set media_type = 'application/json' where id = :item_id",
                         {"item_id": item_id},
@@ -3178,6 +3388,13 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
             assert await _count(assertion_session, ArtifactAdmissionScope) == 0
             assert await _count(assertion_session, ArtifactAdmissionCharge) == 0
             assert await _count(assertion_session, ArtifactPutAttempt) == 0
+            await assertion_session.execute(
+                text("update project_guides set status = 'active' where id = :guide_id"),
+                {"guide_id": facts.guide_id},
+            )
+            await assertion_session.flush()
+            assert await ArtifactRepository(assertion_session).get_guide_lineage(item_id) is None
+            await assertion_session.rollback()
     finally:
         await engine.dispose()
 

@@ -41,7 +41,8 @@ mappings, and availability must remain identical.
 |---|---|
 | `WS-AUTH-001-ART-02D-INTERNAL` | `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
-| `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-AUTH-001-ART-03` | `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-XINT-002-04A` | `artifact.guide_source.ingest` |
 | `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
 | `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
@@ -52,10 +53,12 @@ mappings, and availability must remain identical.
 `WS-AUTH-001-ART-CUSTODY` historically transferred 25 rows. WS-XINT-002-01
 reconciles the live catalogue by removing the six unused multi-step upload rows
 and registering three end-to-end bundle/review rows. The resulting 22 rows have
-exact owner cardinalities `3/8/3/1/1/1/1/2/2` in the table order above. The
+exact owner cardinalities `3/8/2/1/1/1/1/1/2/2` in the table order above. The
 `OPERATOR` suffix denotes only future activation custody; it grants no Operator
-entitlement. All 22 actions remain planned, including independently gated
-`artifact.verification_job.retry`, which
+entitlement. Eighteen actions remain planned after the three fixed-service ART
+actions and `artifact.guide_source.ingest` activate. The independently
+gated `artifact.verification_job.retry`
+remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`; the live catalogue has

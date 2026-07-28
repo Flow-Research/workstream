@@ -708,11 +708,12 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 33 active actions, and
-45 planned actions after AUTH-11C1 activates three project setup-diagnostic and
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 34 active actions, and
+44 planned actions after AUTH-11C1 activates three project setup-diagnostic and
 three draft/effective-policy diagnostic read actions. The exact route mapping
-is in `docs/spec_authorization_service.md`. The other 19 ART actions remain planned, including every Operator
-artifact action.
+is in `docs/spec_authorization_service.md`. WS-XINT-002-04A activates only
+guide-source ingest; the other 18 ART actions remain planned, including every
+Operator artifact action.
 Migration `0037` keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
 
@@ -771,9 +772,10 @@ teardown commit it, or commit AUTH evidence separately from feature state. The
 existing `AuthorityClaimHandle` is a separate idempotency-reservation contract,
 not this prepared authorization handle.
 
-PREP currently supports actor-self profile update and the eight active
-AdminRoleGrant-backed administrative mutations only; it cuts over no production
-feature command. Callers begin and own one root transaction, call `prepare`,
+PREP currently supports actor-self profile update, the eight active
+AdminRoleGrant-backed administrative mutations, the three active fixed-service
+ART actions, and Project Manager `artifact.guide_source.ingest`. No other
+production feature command is cut over. Callers begin and own one root transaction, call `prepare`,
 lock their participant rows, compose final typed facts, call `consume` with the
 independently expected ActionId and the same strict request/idempotency input,
 flush participant work, and commit once. AUTH never commits in dependency

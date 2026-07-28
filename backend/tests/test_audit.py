@@ -193,6 +193,7 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
     }
     artifact_allowed = _authority_input(
         AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
