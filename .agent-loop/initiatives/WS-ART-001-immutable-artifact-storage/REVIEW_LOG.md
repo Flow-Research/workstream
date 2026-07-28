@@ -2,8 +2,9 @@
 
 ## WS-ART-001-03A
 
-- Reconciled on 2026-07-28 with trusted `main` `13d9d5d1`, after merged
-  WS-XINT-002-01 through 04 planning and internal-service activation.
+- Reconciled on 2026-07-28 with trusted `main` `033654ac`, after merged
+  WS-XINT-002-01 through 04 planning, internal-service activation, and AUTH 11B
+  project identity/read context.
 - Preimplementation reconciliation review rejected the preserved raw
   `AuthorizationContext`, custom evidence, and callback revalidation seam. The
   repair uses only the merged opaque `PreparedAuthorizationHandle` operation
@@ -48,6 +49,14 @@
   Its sole schema failure was the migration fixture omitting the identity link
   now required for every human actor. The fixture creates the canonical active,
   verified link, and the exact isolated migration test passes.
+- Hosted run `30364425613` passed every semantic lane, API E2E, and repository
+  coverage, then measured the unchanged artifact-foundation gate at 89.77%.
+  Focused tests now cover absent/missing/resolved replay selection and the
+  fail-closed missing PREP transaction boundary; no threshold or production
+  behavior changed.
+- The final rebase preserved AUTH 11B project-read dependencies alongside the
+  hidden ART route. Senior, QA, security/auth, and CI-integrity reconciliation
+  reviews passed with no blockers.
 
 ## WS-ART-001-02D
 

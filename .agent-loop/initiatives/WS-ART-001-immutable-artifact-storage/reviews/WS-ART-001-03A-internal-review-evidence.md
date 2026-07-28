@@ -1,6 +1,6 @@
 # Internal Review Evidence: WS-ART-001-03A
 
-Reviewed against trusted main: `13d9d5d1f462ab48a4dda4405ab2f4c1a426e710`
+Reviewed against trusted main: `033654ac129eea05e0f00176257c94e6b3447dcf`
 
 Reviewed at: `2026-07-28`
 
@@ -42,6 +42,14 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   fixture did not create the identity link now required for every human actor.
   The fixture now creates the canonical active, verified link, and the exact
   isolated migration proof passes.
+- hosted run `30364425613` passed all four semantic lanes, the API E2E proof,
+  and repository coverage. The unchanged 90% artifact-foundation gate measured
+  89.77%; focused production-path tests now cover absent/missing/resolved replay
+  selection and fail-closed missing PREP transaction behavior without changing
+  production code or the threshold.
+- The final rebase onto merged AUTH 11B preserved both the new project-read
+  authorization dependencies and hidden ART ingest wiring. Bounded senior,
+  QA, security/auth, and CI-integrity reconciliation reviews passed.
 
 ## Reviewer Results
 

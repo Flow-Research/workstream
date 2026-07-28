@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -30,8 +31,10 @@ from app.modules.artifacts.schemas import (
 from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthorization
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.service import (
+    ArtifactStorageOrchestrator,
     GuideArtifactIngestService,
     PreparedGuideArtifactIngestCommand,
+    _artifact_admission_transaction,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.runtime import (
@@ -222,6 +225,22 @@ class _MustNotCallCommand:
         raise AssertionError("ingest command must not run for invalid request metadata")
 
 
+class _TransactionSession:
+    @asynccontextmanager
+    async def begin(self):
+        yield
+
+
+class _PutAttemptRepository:
+    def __init__(self, status: str | None) -> None:
+        self.status = status
+
+    async def lock_put_attempt(self, _attempt_id: str):
+        if self.status is None:
+            return None
+        return SimpleNamespace(status=self.status)
+
+
 PROJECT_ID = uuid4()
 GUIDE_ID = uuid4()
 SNAPSHOT_ID = uuid4()
@@ -343,6 +362,66 @@ async def test_exact_replay_observes_without_second_provider_put(tmp_path: Path)
         assert orchestrator.puts == 0
     finally:
         manager.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("persisted_status", "resolved_status", "expected_status", "expected_execute"),
+    [
+        ("absent_replay_required", "unused", "stored_pending_verification", 1),
+        (None, "missing", "stored_pending_verification", 1),
+        ("ambiguous", "stale", "stale", 0),
+    ],
+)
+async def test_committed_put_replay_uses_persisted_resolution(
+    persisted_status: str | None,
+    resolved_status: str,
+    expected_status: str,
+    expected_execute: int,
+) -> None:
+    """Exercise the production replay selector for absent, missing, and resolved puts."""
+    orchestrator = object.__new__(ArtifactStorageOrchestrator)
+    orchestrator._session = _TransactionSession()  # type: ignore[attr-defined]
+    orchestrator._repo = _PutAttemptRepository(persisted_status)  # type: ignore[attr-defined]
+    executed = 0
+
+    async def execute_committed_put(*, attempt_id: UUID, source: Any) -> str:
+        nonlocal executed
+        assert attempt_id == ATTEMPT_ID
+        assert source == "source"
+        executed += 1
+        return "stored_pending_verification"
+
+    async def resolve_put_attempt(attempt_id: UUID) -> str:
+        assert attempt_id == ATTEMPT_ID
+        return resolved_status
+
+    orchestrator.execute_committed_put = execute_committed_put  # type: ignore[method-assign]
+    orchestrator.resolve_put_attempt = resolve_put_attempt  # type: ignore[method-assign]
+
+    result = await orchestrator.resume_committed_put(
+        attempt_id=ATTEMPT_ID,
+        source="source",  # type: ignore[arg-type]
+    )
+
+    assert result == expected_status
+    assert executed == expected_execute
+
+
+@pytest.mark.asyncio
+async def test_existing_guide_admission_requires_active_root_transaction() -> None:
+    """Fail closed when a PREP handle has no issuer-owned transaction to consume in."""
+    session = SimpleNamespace(
+        sync_session=SimpleNamespace(get_transaction=lambda: None),
+        in_nested_transaction=lambda: False,
+    )
+
+    with pytest.raises(
+        ArtifactAuthorityDeniedError,
+        match="prepared authorization transaction is unavailable",
+    ):
+        async with _artifact_admission_transaction(session, existing=True):  # type: ignore[arg-type]
+            pytest.fail("an unavailable PREP transaction must not admit bytes")
 
 
 @pytest.mark.asyncio

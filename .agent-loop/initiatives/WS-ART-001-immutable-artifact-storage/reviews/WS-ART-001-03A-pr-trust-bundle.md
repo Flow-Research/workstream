@@ -57,7 +57,11 @@ the exact isolated migration proof passes. The subsequent run again passed all
 shared/project/task tests and 91/92 schema tests; its sole failure exposed the
 human identity-link invariant in the migration fixture. The fixture now creates
 the required active, verified identity link, and the exact isolated migration
-proof passes.
+proof passes. The following hosted run passed all semantic lanes, API E2E, and
+repository coverage, then measured the unchanged artifact-foundation gate at
+89.77%. Focused production tests now exercise absent/missing/resolved committed
+put replay and fail-closed missing PREP transaction behavior; neither production
+code nor the 90% threshold changed.
 
 ## External Review
 
