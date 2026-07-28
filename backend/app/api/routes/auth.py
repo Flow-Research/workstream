@@ -30,7 +30,6 @@ from app.modules.authorization.admin_service import AdminRoleGrantService
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.read_service import ActorAuthorizationContextReadService
-from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import authorization_resource_selector_id
 from app.modules.projects.service import ProjectService
 from app.schemas.auth import ActorContext, ActorResponse
@@ -107,10 +106,7 @@ async def read_current_actor_authorization_context(
         if project is not None
         else authorization_resource_selector_id("project", project_id)
     )
-    service = ActorAuthorizationContextReadService(
-        authorization,
-        AdminAuthorizationRepository(session),
-    )
+    service = ActorAuthorizationContextReadService.from_session(authorization, session)
     response = await service.read(
         resolved=resolved,
         project=project,

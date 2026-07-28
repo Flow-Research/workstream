@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.schemas import ActorAuthorizationContextResponse
 from app.modules.actors.service import ResolvedActor
@@ -75,6 +77,15 @@ class ActorAuthorizationContextReadService:
     ) -> None:
         self._authorization = authorization
         self._grants = grants
+
+    @classmethod
+    def from_session(
+        cls,
+        authorization: AuthorizationService,
+        session: AsyncSession,
+    ) -> ActorAuthorizationContextReadService:
+        """Compose the read service without exposing persistence at the API boundary."""
+        return cls(authorization, AdminAuthorizationRepository(session))
 
     async def read(
         self,
