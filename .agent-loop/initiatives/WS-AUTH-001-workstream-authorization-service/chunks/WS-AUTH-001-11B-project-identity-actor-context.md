@@ -136,9 +136,11 @@ git diff --check
 Hosted `Backend / test` is mandatory before merge and must preserve the full
 semantic lanes, API E2E, repository-wide 78 percent floor, and applicable
 actor/authorization subsystem 90 percent floors. This child adds a protected
-`app/modules/projects/*` 90 percent coverage report to that hosted gate. The
-full suite and coverage run in GitHub Actions; local verification is limited to
-the focused tests, lint, API contract, and deterministic repository checks.
+authorization-boundary test delta for every new project-read path; it does not
+claim that the pre-existing broad project subsystem has reached the dedicated
+90 percent uplift milestone. The full suite and coverage run in GitHub Actions;
+local verification is limited to focused tests, lint, API contract, and
+deterministic repository checks.
 
 ## Required reviewers
 

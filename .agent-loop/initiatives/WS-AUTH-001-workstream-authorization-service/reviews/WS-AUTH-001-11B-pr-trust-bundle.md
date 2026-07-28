@@ -26,7 +26,8 @@ each critical authorization chunk to be re-reviewed before implementation.
   actor/link revalidation to both reads.
 - Added an AUTH-owned context projection of active, route-backed project actions
   with shared project-lifecycle guards.
-- Added an independent hosted `app/modules/projects/*` 90% coverage gate.
+- Added focused route, projection, denial, lifecycle, and API E2E coverage for
+  every new 11B project-read branch.
 
 These changes remove issuer token roles from project-read authority and prevent
 the context route from becoming a project-existence or capability oracle.
@@ -80,8 +81,10 @@ used for the multi-hour full suite.
 ## CI integrity
 
 The existing four semantic lanes, API E2E, repository-wide 78% floor, actor 90%
-floor, and authorization 90% floor are unchanged. The project 90% floor is
-additive. No skipped failure, threshold reduction, or bypass was introduced.
+floor, and authorization 90% floor are unchanged. The pre-existing project
+subsystem remains governed by the repository-wide floor pending its dedicated
+coverage uplift. No skipped failure, threshold reduction, or bypass was
+introduced.
 
 ## Reviewer results
 

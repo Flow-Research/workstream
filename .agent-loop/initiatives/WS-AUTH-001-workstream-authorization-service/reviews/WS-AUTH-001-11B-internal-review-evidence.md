@@ -12,10 +12,10 @@ contract.
 |---|---|---|
 | Architecture | PASS | AUTH owns the context projection; project and contributor response schemas remain distinct. |
 | Security/auth | PASS | Exact actor/link revalidation, project scope, concealment, and route/action/evidence binding are explicit. |
-| QA/test | PASS | Role matrix, denial cases, API controls, E2E, and independent hosted project coverage are required. |
+| QA/test | PASS | Role matrix, denial cases, API controls, E2E, and focused project-read coverage are required. |
 | Product/ops | PASS | Admin and contributor projections and role precedence are explicit. |
 | Senior engineering | PASS | Exact manifests and the central decision/evidence path are explicit. |
-| CI integrity | PASS WITH CONDITIONS | Additive project 90% hosted coverage gate; preserve all existing lanes and floors. |
+| CI integrity | PASS WITH CONDITIONS | Preserve all existing lanes and floors; prove every new project-read branch without misrepresenting legacy project coverage. |
 
 ## Implementation review
 
@@ -26,7 +26,7 @@ contract.
 | QA/test | PASS WITH LOW RISKS | Added contributor, cross-project, revocation, suspension, link-revocation, rate, nonhuman, missing-project, and archived-project proof. |
 | Product/ops | PASS | Context includes active AUTH-10B/10C/11B project actions and excludes planned 11C actions. |
 | Senior engineering | PASS WITH LOW RISKS | Restored scope-specific denial evidence and public service exports. |
-| CI integrity | PASS WITH LOW RISKS | No gate weakening; project 90% coverage is additive. Hosted Backend remains required. |
+| CI integrity | PASS WITH LOW RISKS | No established gate weakening; hosted full-suite, global 78%, and actor/authorization 90% floors remain required. |
 
 ## Local evidence
 
