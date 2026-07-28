@@ -147,6 +147,85 @@ class AdminAuthorizationRepository:
             )
         )
 
+    async def find_active_project_role_any(
+        self, *, project_id: UUID, actor_profile_id: UUID, for_update: bool = False
+    ) -> ProjectRoleGrant | None:
+        """Return one deterministic active exact-project contributor grant."""
+        query = (
+            select(ProjectRoleGrant)
+            .where(
+                ProjectRoleGrant.project_id == str(project_id),
+                ProjectRoleGrant.actor_profile_id == str(actor_profile_id),
+                ProjectRoleGrant.status == "active",
+            )
+            .order_by(ProjectRoleGrant.role, ProjectRoleGrant.id)
+            .limit(1)
+        )
+        if for_update:
+            query = query.with_for_update(of=ProjectRoleGrant)
+        return await self._session.scalar(query)
+
+    async def active_project_roles_for_actor(
+        self, *, project_id: UUID, actor_profile_id: UUID
+    ) -> tuple[str, ...]:
+        """Project sorted active contributor role names for one exact project."""
+        roles = await self._session.scalars(
+            select(ProjectRoleGrant.role)
+            .where(
+                ProjectRoleGrant.project_id == str(project_id),
+                ProjectRoleGrant.actor_profile_id == str(actor_profile_id),
+                ProjectRoleGrant.status == "active",
+            )
+            .distinct()
+            .order_by(ProjectRoleGrant.role)
+        )
+        return tuple(roles.all())
+
+    async def has_active_project_role_any_project(self, actor_profile_id: UUID) -> bool:
+        """Return whether the actor has contributor authority on any project."""
+        return (
+            await self._session.scalar(
+                select(ProjectRoleGrant.id)
+                .where(
+                    ProjectRoleGrant.actor_profile_id == str(actor_profile_id),
+                    ProjectRoleGrant.status == "active",
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    async def effective_admin_roles_for_project(
+        self, *, project_id: UUID, actor_profile_id: UUID
+    ) -> tuple[str, ...]:
+        """Project sorted effective admin role names for one exact project."""
+        roles = await self._session.scalars(
+            select(AdminRoleGrant.role)
+            .join(ActorProfile, ActorProfile.id == AdminRoleGrant.target_actor_profile_id)
+            .where(
+                AdminRoleGrant.target_actor_profile_id == str(actor_profile_id),
+                AdminRoleGrant.status == "active",
+                ActorProfile.actor_kind == "human",
+                ActorProfile.status == "active",
+                exists(
+                    select(ActorIdentityLink.id).where(
+                        ActorIdentityLink.actor_profile_id == ActorProfile.id,
+                        ActorIdentityLink.status == "active",
+                    )
+                ),
+                or_(
+                    AdminRoleGrant.scope_type == AdminScope.SYSTEM.value,
+                    and_(
+                        AdminRoleGrant.scope_type == AdminScope.PROJECT.value,
+                        AdminRoleGrant.scope_project_id == str(project_id),
+                    ),
+                ),
+            )
+            .distinct()
+            .order_by(AdminRoleGrant.role)
+        )
+        return tuple(roles.all())
+
     async def add_project_role_snapshot(
         self, snapshot: ProjectRoleQualificationSnapshot
     ) -> ProjectRoleQualificationSnapshot:

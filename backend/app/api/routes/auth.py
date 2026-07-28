@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,13 +14,24 @@ from app.api.deps.auth import (
     actor_registry_unavailable_error,
     get_registered_actor,
 )
-from app.api.deps.authorization import get_authorization_actor, get_authorization_service
+from app.api.deps.authorization import (
+    enforce_human_authorization_read,
+    get_authorization_actor,
+    get_authorization_service,
+)
 from app.db.session import get_db_session
-from app.modules.actors.schemas import ActorProfileSelfResponse, ActorProfileUpdateRequest
+from app.modules.actors.schemas import (
+    ActorAuthorizationContextResponse,
+    ActorProfileSelfResponse,
+    ActorProfileUpdateRequest,
+)
 from app.modules.actors.service import ActorRegistryError, ActorService, ResolvedActor
 from app.modules.authorization.admin_service import AdminRoleGrantService
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.read_service import ActorAuthorizationContextReadService
+from app.modules.authorization.runtime import authorization_resource_selector_id
+from app.modules.projects.service import ProjectService
 from app.schemas.auth import ActorContext, ActorResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,6 +74,45 @@ async def read_current_actor_profile(
             UUID(resolved.profile.id)
         )
         response = ActorService.self_response(resolved.profile, admin_roles=admin_roles)
+        await session.commit()
+        return response
+    except ActorRegistryError as exc:
+        await session.rollback()
+        raise actor_registry_http_error(exc) from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise actor_registry_unavailable_error() from exc
+
+
+@actors_router.get(
+    "/me/authorization-context",
+    response_model=ActorAuthorizationContextResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ.value
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
+)
+async def read_current_actor_authorization_context(
+    project_id: Annotated[str, Query(min_length=1, max_length=100)],
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ActorAuthorizationContextResponse:
+    """Return the caller's effective authority for one canonical project."""
+    try:
+        projects = ProjectService(session)
+        project = await projects.find_project(project_id)
+        selector_id = (
+            UUID(project.id)
+            if project is not None
+            else authorization_resource_selector_id("project", project_id)
+        )
+        service = ActorAuthorizationContextReadService.from_session(authorization, session)
+        response = await service.read(
+            resolved=resolved,
+            project=project,
+            project_selector_id=selector_id,
+        )
         await session.commit()
         return response
     except ActorRegistryError as exc:

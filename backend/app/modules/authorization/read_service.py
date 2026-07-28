@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.modules.actors.repository import ActorRepository
-from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.kernel import AuthorizationService
+from app.modules.actors.schemas import ActorAuthorizationContextResponse
+from app.modules.actors.service import ResolvedActor
+from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
+from app.modules.authorization.kernel import (
+    AuthorizationService,
+    project_action_available_for_status,
+)
 from app.modules.authorization.models import (
     ProjectRoleGrant,
     ProjectRoleQualificationSnapshot,
@@ -18,11 +25,13 @@ from app.modules.authorization.pagination import (
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
+    ActorAuthorizationContextResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantReadResourceContext,
 )
 from app.modules.authorization.schemas import (
+    AdminRole,
     ContributorCandidateListResponse,
     ContributorCandidateRead,
     ProjectRole,
@@ -32,10 +41,114 @@ from app.modules.authorization.schemas import (
     QualificationAvailabilitySnapshot,
 )
 from app.modules.projects.models import Project
+from app.modules.authorization.policy import permissions_for
+
+
+_PROJECT_CONTEXT_ACTIONS = (
+    ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+    ActionId.PROJECT_ROLE_GRANT_LIST,
+    ActionId.PROJECT_ROLE_GRANT_READ,
+    ActionId.PROJECT_ROLE_GRANT_ISSUE,
+    ActionId.PROJECT_ROLE_GRANT_REVOKE,
+    ActionId.PROJECT_READ,
+    ActionId.PROJECT_SETUP_RUN_READ,
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+    ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+    ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+    ActionId.PROJECT_ACTIVE_GUIDE_READ,
+)
 
 
 class ProjectRoleReadResourceNotFound(LookupError):
     """One concealed absence for project or project-role grant reads."""
+
+
+class ActorAuthorizationContextReadService:
+    """Build one bounded self authority projection from canonical local grants."""
+
+    def __init__(
+        self,
+        authorization: AuthorizationService,
+        grants: AdminAuthorizationRepository,
+    ) -> None:
+        self._authorization = authorization
+        self._grants = grants
+
+    @classmethod
+    def from_session(
+        cls,
+        authorization: AuthorizationService,
+        session: AsyncSession,
+    ) -> ActorAuthorizationContextReadService:
+        """Compose the read service without exposing persistence at the API boundary."""
+        return cls(authorization, AdminAuthorizationRepository(session))
+
+    async def read(
+        self,
+        *,
+        resolved: ResolvedActor,
+        project: Project | None,
+        project_selector_id: UUID,
+    ) -> ActorAuthorizationContextResponse:
+        """Authorize self access and derive effective exact-project actions."""
+        actor_profile_id = UUID(resolved.profile.id)
+        project_id = UUID(project.id) if project is not None else project_selector_id
+        await self._authorization.require(
+            ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+            ActorAuthorizationContextResourceContext(
+                resource_type="actor_authorization_context",
+                resource_id=actor_profile_id,
+                scope_project_id=project_id,
+                project_exists=project is not None,
+                project_status=project.status if project is not None else None,
+            ),
+        )
+        if project is None:
+            raise RuntimeError("missing project authorization unexpectedly allowed")
+        admin_roles = await self._grants.effective_admin_roles_for_project(
+            project_id=project_id,
+            actor_profile_id=actor_profile_id,
+        )
+        project_roles = await self._grants.active_project_roles_for_actor(
+            project_id=project_id,
+            actor_profile_id=actor_profile_id,
+        )
+        eligible_admin_roles = tuple(
+            role_name
+            for role_name in admin_roles
+            if any(
+                ACTION_BY_ID[action_id].availability is ActionAvailability.ACTIVE
+                and ACTION_BY_ID[action_id].permission_id
+                in permissions_for(AdminRole(role_name))
+                for action_id in _PROJECT_CONTEXT_ACTIONS
+            )
+        )
+        admin_permissions = {
+            permission
+            for role_name in eligible_admin_roles
+            for permission in permissions_for(AdminRole(role_name))
+        }
+        effective_actions = {
+            action_id
+            for action_id in _PROJECT_CONTEXT_ACTIONS
+            if ACTION_BY_ID[action_id].availability is ActionAvailability.ACTIVE
+            and ACTION_BY_ID[action_id].permission_id in admin_permissions
+            and project_action_available_for_status(action_id, project.status)
+        }
+        if project_roles:
+            effective_actions.add(ActionId.PROJECT_READ)
+        return ActorAuthorizationContextResponse(
+            actor_profile_id=actor_profile_id,
+            status=resolved.profile.status,
+            project_id=project_id,
+            admin_roles=eligible_admin_roles,
+            project_roles=project_roles,
+            effective_action_ids=tuple(sorted(effective_actions, key=str)),
+        )
 
 
 class ProjectRoleReadService:
@@ -223,6 +336,7 @@ def _grant_read(
 
 
 __all__ = [
+    "ActorAuthorizationContextReadService",
     "InvalidPaginationCursor",
     "ProjectRoleReadResourceNotFound",
     "ProjectRoleReadService",

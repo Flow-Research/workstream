@@ -61,7 +61,7 @@ or the exact project; own means record-level ownership still applies.
 | Actor/link administration | system | no | no | no | minimal read covered | no | no | no |
 | Administrative grants | system | no | no | no | history read covered | no | no | no |
 | Project create | no | no | system only | no | no | no | no | no |
-| Project read | authority-only | system operational | covered | covered finance projection | covered audit projection | exact project minimal | exact project minimal | exact project minimal |
+| Project identity read | no | system, full identity | covered, full identity | covered, full identity | covered, full identity | exact project minimal | exact project minimal | exact project minimal |
 | Project, guide, submission/checker, review, and revision configuration | no | recovery-only where registered | covered | no | no | no | no | no |
 | Contribution policy and compensation-adapter binding | no | no | no | covered | no | no | no | no |
 | Project contributor grants | no | no | covered | no | read covered | no | no | no |
@@ -79,9 +79,18 @@ through three independent exact-project grants. No grant adds administrative
 capability, and every ownership, assignment, no-self-review,
 separation-of-duties, and lifecycle guard applies to the selected action.
 
-Access Administrator's authority-only project view means the minimum resource
-identity necessary to administer grants; it is not general project-management
-visibility.
+`GET /api/v1/projects/{project_id}` returns id, name, slug, description,
+status, and timestamps to an effective Operator, Project Manager, Finance
+Authority, or Audit Authority grant. An exact-project Submitter, Reviewer, or
+Adjudicator sees only id, name, and status. Access Administrator alone is
+concealed because that role has no `project.read` permission.
+
+`GET /api/v1/actors/me/authorization-context?project_id=...` is self-only. It
+returns effective role names and active route-backed project actions for the
+exact canonical project, never grant identifiers, identity-link data, planned
+actions, or unrelated system authority. A caller without local authority for
+the project receives the concealed not-found response. Token roles do not
+affect either read.
 
 ## Separation Rules
 

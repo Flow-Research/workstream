@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.actors.service_identities import ServiceIdentity
+from app.modules.authorization.catalogue import ActionId
 
 
 def normalize_skill_tags(value: list[str]) -> list[str]:
@@ -68,6 +69,19 @@ class ActorProfileSelfResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_seen_at: datetime | None
+
+
+class ActorAuthorizationContextResponse(BaseModel):
+    """Self-only effective authority projected onto one canonical project."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    actor_profile_id: UUID
+    status: Literal["active", "suspended", "deactivated"]
+    project_id: UUID
+    admin_roles: tuple[str, ...]
+    project_roles: tuple[Literal["submitter", "reviewer", "adjudicator"], ...]
+    effective_action_ids: tuple[ActionId, ...]
 
 
 class ActorProfileAdminResponse(BaseModel):

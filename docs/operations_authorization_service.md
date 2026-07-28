@@ -708,8 +708,8 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 25 active actions, and
-53 planned actions after WS-XINT-002-03 activates the three internal ART service
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 27 active actions, and
+51 planned actions after AUTH-11B activates project identity and actor context
 actions. The other 19 ART actions remain planned, including every Operator
 artifact action.
 Migration `0037` keeps each allowed or denied internal ART decision bound to
@@ -1018,6 +1018,14 @@ Stop rollout when:
 
 Do not restore deleted authority through direct SQL or re-enable any obsolete
 token-role path.
+
+Project identity and self authorization-context reads are active under
+AUTH-11B. Both use a canonical project target and revalidate the current human
+profile and exact identity link. `project.read` accepts either an effective
+covered administrative grant or an active exact-project contributor grant and
+records which grant class authorized the decision. The context response is a
+derived read model, not an authority token: it contains no grant ids or
+identity-link fields and never advertises planned or unrelated actions.
 
 ## Recovery Permission Inventory
 

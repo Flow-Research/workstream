@@ -423,6 +423,16 @@ class ProjectResponse(BaseModel):
     updated_at: datetime
 
 
+class ContributorProjectResponse(BaseModel):
+    """Minimal project identity visible through an exact contributor grant."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: str
+    name: str
+    status: str
+
+
 class ProjectGuideCreate(BaseModel):
     """Request schema for guide material plus optional activation policies."""
 

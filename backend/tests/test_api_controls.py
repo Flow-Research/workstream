@@ -439,13 +439,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         for method, operation in path_item.items()
         if method in methods and operation.get("security")
     )
-    assert len(route_inventory) == 76
+    assert len(route_inventory) == 77
     assert sha256("\n".join(route_inventory).encode()).hexdigest() == (
-        "c8f9852035446ea59b0e929b1bd8c8cfc7df5bf838ceb544c04e899f90169318"
+        "e9d2f9074f61f3d464142515193514674e87f905d75c0b4d97fee6a7ea99f1fa"
     )
-    assert len(protected_inventory) == 74
+    assert len(protected_inventory) == 75
     assert sha256("\n".join(protected_inventory).encode()).hexdigest() == (
-        "9278d0183ffb87947ee4857e0325483ba7bf07feac0c38a88432840b10c2b0c3"
+        "b005b2516a43e90437c0035301b56f2100024a2ca3d770fb7025b6bab8ca7378"
     )
     assert set(schema["paths"]["/health"]["get"]["responses"]) == {"200", "400", "500"}
     assert {"401", "403", "503"} <= set(
@@ -473,6 +473,9 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     assert action_declarations == {
         "GET /api/v1/actors/me": "actor.profile.read_self",
         "PATCH /api/v1/actors/me": "actor.profile.update_self",
+        "GET /api/v1/actors/me/authorization-context": (
+            "actor.authorization_context.read"
+        ),
         "GET /api/v1/actors/{actor_profile_id}": "actor.profile.read",
         "GET /api/v1/actors/{actor_profile_id}/identity-links": "actor.identity_link.read",
         "POST /api/v1/actors/{actor_profile_id}/suspend": "actor.profile.suspend",
@@ -506,6 +509,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "POST /api/v1/projects/{project_id}/role-grants/{grant_id}/revoke": (
             "project_role_grant.revoke"
         ),
+        "GET /api/v1/projects/{project_id}": "project.read",
     }
     project_read_shapes = {
         "/api/v1/projects/{project_id}/contributor-candidates": (
@@ -520,7 +524,16 @@ def test_openapi_documents_request_error_and_response_context() -> None:
             "$ref": f"#/components/schemas/{schema_name}"
         }
         assert schema["components"]["schemas"][schema_name]["additionalProperties"] is False
-    assert not any("authorization-context" in path for path in schema["paths"])
+    context_operation = schema["paths"]["/api/v1/actors/me/authorization-context"]["get"]
+    assert context_operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ActorAuthorizationContextResponse"
+    }
+    assert (
+        schema["components"]["schemas"]["ActorAuthorizationContextResponse"][
+            "additionalProperties"
+        ]
+        is False
+    )
     for path in (
         "/api/v1/projects/{project_id}/role-grants",
         "/api/v1/projects/{project_id}/role-grants/{grant_id}/revoke",

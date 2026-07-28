@@ -237,12 +237,14 @@ permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 78 rows after WS-XINT-002-03: 25 active
-actions and 53 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 78 rows after AUTH-11B: 27 active actions
+and 51 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
-planned project identity, context, setup, policy, and active-guide reads owned
-by 11B, 11C1, and 11C2. AUTH-08 adds seven active administrative definition,
+project identity and actor-context read rows: two are active under 11B and nine
+setup, policy, and active-guide reads remain planned under 11C1 and 11C2.
+AUTH-08 adds seven
+active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
 provisioning actions without activating a route; AUTH-09B activates only
@@ -841,9 +843,15 @@ revoke mutations for covered Project Managers. Those mutations use
 canonical replay validation, and one route-owned commit. Issue requires a
 different active human with an active identity link; revoke remains available
 after target suspension or identity-link revocation so authority cannot become
-irremovable. Project-scoped
-`GET /api/v1/actors/me/authorization-context` begins in AUTH-11 after
-exact-project grant and canonical project capability composition exists.
+irremovable. AUTH-11B activates `GET /api/v1/projects/{project_id}` and
+project-scoped `GET /api/v1/actors/me/authorization-context?project_id=...`.
+Both resolve the canonical project and use current local grants only. Project
+identity returns the registered full identity projection to effective Operator,
+Project Manager, Finance Authority, or Audit Authority grants, and only id,
+name, and status to exact-project Submitter, Reviewer, or Adjudicator grants.
+The self context lists effective role names and active route-backed project
+actions; it exposes no grant ids, identity-link data, planned actions, or
+unrelated system authority.
 
 `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.
 It clean-cuts TaskAssignment and Submission attribution to `contributor_id`,

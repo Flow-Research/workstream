@@ -31,6 +31,7 @@ from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorKind,
+    ActorAuthorizationContextResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
     AuthorizationContext,
@@ -38,6 +39,7 @@ from app.modules.authorization.runtime import (
     AuthorizationEvidenceUnavailable,
     HumanAuthorizationContext,
     IdentityLinkStatus,
+    ProjectReadResourceContext,
     ServiceAuthorizationContext,
 )
 from app.modules.actors.service_identities import ServiceIdentity
@@ -125,6 +127,8 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_READ,
+        ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
     }
     if exc.decision.action_id in concealed_project_reads:
         return StructuredHTTPException(
@@ -218,10 +222,16 @@ def _compose_authorization_service(
 
     async def revalidate_actor_self(
         context: AuthorizationContext,
-        resource: ActorSelfResourceContext,
+        resource: (
+            ActorSelfResourceContext
+            | ActorAuthorizationContextResourceContext
+            | ProjectReadResourceContext
+        ),
     ) -> AuthorizationContext:
         """Rebuild actor state from exact rows locked in the caller transaction."""
-        if resource.resource_id != context.actor_profile_id:
+        if isinstance(
+            resource, (ActorSelfResourceContext, ActorAuthorizationContextResourceContext)
+        ) and resource.resource_id != context.actor_profile_id:
             return context
         locked = await actor_service.lock_actor_self_for_authorization(resolved)
         return _authorization_context(locked, request_id, correlation_id)

@@ -985,6 +985,8 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 "/api/v1/projects/{project_id}/contributor-candidates",
                 "/api/v1/projects/{project_id}/role-grants",
                 "/api/v1/projects/{project_id}/role-grants/{grant_id}",
+                "/api/v1/projects/{project_id}",
+                "/api/v1/actors/me/authorization-context",
             }
         }
         assert read_actions == {
@@ -995,8 +997,11 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "/api/v1/projects/{project_id}/role-grants/{grant_id}": (
                 "project_role_grant.read"
             ),
+            "/api/v1/projects/{project_id}": "project.read",
+            "/api/v1/actors/me/authorization-context": (
+                "actor.authorization_context.read"
+            ),
         }
-        assert not any("authorization-context" in path for path in openapi["paths"])
         assert openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
             "x-workstream-action-id"
         ] == "project_role_grant.issue"
@@ -1242,7 +1247,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             },
             201,
         )
-        await request_json(client, "GET", f"/api/v1/projects/{project['id']}", manager_token)
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}",
+            manager_token,
+            expected_status=404,
+        )
         project_manager_grant = await client.post(
             "/api/v1/admin-role-grants",
             headers=auth_headers(manager_token) | {"Idempotency-Key": str(uuid4())},
@@ -1255,6 +1266,30 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             },
         )
         assert project_manager_grant.status_code == 201, project_manager_grant.text
+        project_identity = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}",
+            project_reader_token,
+        )
+        assert project_identity == project
+        actor_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+            project_reader_token,
+        )
+        assert actor_context["project_id"] == project["id"]
+        assert actor_context["admin_roles"] == ["project_manager"]
+        assert actor_context["project_roles"] == []
+        assert actor_context["effective_action_ids"] == [
+            "project.contributor_candidate.list",
+            "project.read",
+            "project_role_grant.issue",
+            "project_role_grant.list",
+            "project_role_grant.read",
+            "project_role_grant.revoke",
+        ]
         candidates = await request_json(
             client,
             "GET",

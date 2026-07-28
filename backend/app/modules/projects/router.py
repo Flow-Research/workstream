@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.auth import get_registered_actor
+from app.api.deps.authorization import (
+    enforce_human_authorization_read,
+    get_authorization_service,
+)
 from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
 from app.modules.projects.schemas import (
@@ -20,6 +25,7 @@ from app.modules.projects.schemas import (
     GuideSufficiencyReportResponse,
     PreSubmitCheckerPolicySummaryResponse,
     ProjectCreate,
+    ContributorProjectResponse,
     ProjectGuideCreate,
     ProjectGuideResponse,
     ProjectGuideUpdate,
@@ -34,6 +40,13 @@ from app.modules.projects.schemas import (
     SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.runtime import (
+    MatchedAuthorityKind,
+    ProjectReadResourceContext,
+    authorization_resource_selector_id,
+)
 from app.schemas.auth import ActorContext
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -78,17 +91,46 @@ async def create_project(
         raise project_http_error(exc) from exc
 
 
-@router.get("/{project_id}", response_model=ProjectResponse)
+@router.get(
+    "/{project_id}",
+    response_model=ProjectResponse | ContributorProjectResponse,
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_READ.value},
+    dependencies=[Depends(enforce_human_authorization_read)],
+)
 async def get_project(
     project_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ProjectResponse:
+) -> ProjectResponse | ContributorProjectResponse:
     """Return one project by id."""
     try:
-        return await ProjectService(session).get_project(actor, project_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
+        service = ProjectService(session)
+        project = await service.find_project(project_id)
+        project_uuid = (
+            UUID(project.id)
+            if project is not None
+            else authorization_resource_selector_id("project", project_id)
+        )
+        decision = await authorization.require(
+            ActionId.PROJECT_READ,
+            ProjectReadResourceContext(
+                resource_type="project",
+                resource_id=project_uuid,
+                scope_project_id=project_uuid,
+                project_exists=project is not None,
+                project_status=project.status if project is not None else None,
+            ),
+        )
+        if project is None:
+            raise RuntimeError("missing project authorization unexpectedly allowed")
+        response = service.project_identity_response(
+            project,
+            contributor_only=(
+                decision.matched_authority_kind is MatchedAuthorityKind.PROJECT_ROLE_GRANT
+            ),
+        )
+        await session.commit()
+        return response
     except ProjectServiceError as exc:
         raise project_http_error(exc) from exc
 

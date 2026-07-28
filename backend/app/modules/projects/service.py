@@ -85,6 +85,7 @@ from app.modules.projects.schemas import (
     PostSubmitCheckerPolicySetupSummaryResponse,
     PreSubmitCheckerPolicySummaryResponse,
     ProjectCreate,
+    ContributorProjectResponse,
     ProjectGuideCreate,
     ProjectGuideResponse,
     ProjectGuideUpdate,
@@ -497,24 +498,24 @@ class ProjectService:
         await self._session.refresh(project)
         return ProjectResponse.model_validate(project)
 
-    async def get_project(self, actor: ActorContext, project_id: str) -> ProjectResponse:
-        """Return one project visible to project setup operators.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project identifier to load.
-
-        Returns:
-            Matching project response.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-            ProjectNotFound: If the project id is unknown.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
+    async def resolve_project(self, project_id: str) -> Project:
+        """Resolve one canonical project before authorization."""
         project = await self._repo.get_project(project_id)
         if project is None:
             raise ProjectNotFound("project not found")
+        return project
+
+    async def find_project(self, project_id: str) -> Project | None:
+        """Return one canonical project without inventing an absence response."""
+        return await self._repo.get_project(project_id)
+
+    @staticmethod
+    def project_identity_response(
+        project: Project, *, contributor_only: bool
+    ) -> ProjectResponse | ContributorProjectResponse:
+        """Select the server-owned project identity disclosure shape."""
+        if contributor_only:
+            return ContributorProjectResponse.model_validate(project)
         return ProjectResponse.model_validate(project)
 
     async def create_guide(
