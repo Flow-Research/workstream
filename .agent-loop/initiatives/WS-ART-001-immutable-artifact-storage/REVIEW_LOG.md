@@ -57,6 +57,10 @@
 - The final rebase preserved AUTH 11B project-read dependencies alongside the
   hidden ART route. Senior, QA, security/auth, and CI-integrity reconciliation
   reviews passed with no blockers.
+- Rebased hosted run `30366469273` passed all lanes, API E2E, and repository
+  coverage, raising artifact-foundation coverage to 89.87%. Additional focused
+  tests cover invalid-role rejection before preparation and cleanup when PREP
+  commit fails; production and the 90% threshold remain unchanged.
 
 ## WS-ART-001-02D
 

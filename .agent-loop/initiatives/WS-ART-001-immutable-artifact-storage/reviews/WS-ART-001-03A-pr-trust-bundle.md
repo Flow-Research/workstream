@@ -61,7 +61,9 @@ proof passes. The following hosted run passed all semantic lanes, API E2E, and
 repository coverage, then measured the unchanged artifact-foundation gate at
 89.77%. Focused production tests now exercise absent/missing/resolved committed
 put replay and fail-closed missing PREP transaction behavior; neither production
-code nor the 90% threshold changed.
+code nor the 90% threshold changed. After rebasing, those tests raised the gate
+to 89.87%. Further focused proof now covers invalid-role rejection before
+preparation and prepared-byte cleanup when PREP commit fails.
 
 ## External Review
 

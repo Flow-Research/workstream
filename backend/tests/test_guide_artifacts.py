@@ -16,6 +16,7 @@ from starlette.requests import Request
 
 from app.adapters.artifacts import get_guide_artifact_ingest_command
 from app.core.config import Settings
+from app.interfaces.artifact_operations import GuideArtifactIngestRequest
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
     ArtifactPreparationLimits,
@@ -122,6 +123,21 @@ class _AllowPreparedAuthority:
 
     def close(self) -> None:
         self.closed = True
+
+
+class _FailCommitAuthority(_AllowPreparedAuthority):
+    @asynccontextmanager
+    async def transaction(self):
+        assert not self.transaction_active
+        self.transaction_active = True
+        try:
+            yield
+        except BaseException:
+            raise
+        else:
+            raise RuntimeError("PREP commit failed")
+        finally:
+            self.transaction_active = False
 
 
 class _Admission:
@@ -329,6 +345,70 @@ async def test_guide_ingest_uses_server_commitment_and_existing_put_path(
         assert orchestrator.puts == 1
         assert orchestrator.resolutions == 0
         assert authority.intakes == [(PROJECT_ID, GUIDE_ID, SNAPSHOT_ID, ITEM_ID)]
+        assert authority.closed
+        assert preparation.pending_cleanup_count == 0
+    finally:
+        manager.close()
+
+
+@pytest.mark.asyncio
+async def test_guide_ingest_rejects_invalid_logical_role_before_preparation(
+    tmp_path: Path,
+) -> None:
+    preparation, manager = _preparation(tmp_path)
+    authority = _AllowPreparedAuthority()
+    service = _service(preparation, _Admission(), _Orchestrator(), authority)
+    read = False
+
+    async def source() -> AsyncIterator[bytes]:
+        nonlocal read
+        read = True
+        yield b"must not be prepared"
+
+    request = GuideArtifactIngestRequest(
+        prepared_authorization=authority.handle,
+        project_id=PROJECT_ID,
+        guide_id=GUIDE_ID,
+        guide_source_snapshot_id=SNAPSHOT_ID,
+        source_item_id=ITEM_ID,
+        operation_identity="operation",
+        request_digest="sha256:" + "a" * 64,
+        logical_role="not-guide-source",
+        media_type="application/octet-stream",
+        byte_source=source(),
+    )
+    try:
+        with pytest.raises(Exception, match="logical role is invalid"):
+            await service.prepare_and_admit(request, preparation, _Admission())
+        assert not read
+        assert preparation.pending_cleanup_count == 0
+    finally:
+        manager.close()
+
+
+@pytest.mark.asyncio
+async def test_guide_ingest_cleans_prepared_bytes_when_prep_commit_fails(
+    tmp_path: Path,
+) -> None:
+    preparation, manager = _preparation(tmp_path)
+    authority = _FailCommitAuthority()
+    orchestrator = _Orchestrator(authority=authority)
+    command = PreparedGuideArtifactIngestCommand(
+        _service(preparation, _Admission(authority=authority), orchestrator, authority),
+        authority,
+    )
+    try:
+        with pytest.raises(RuntimeError, match="PREP commit failed"):
+            await command.ingest(
+                authorization_context=authority.context,
+                project_id=PROJECT_ID,
+                guide_id=GUIDE_ID,
+                guide_source_snapshot_id=SNAPSHOT_ID,
+                source_item_id=ITEM_ID,
+                idempotency_key=uuid4(),
+                byte_source=_bytes(b"prepared then rolled back"),
+            )
+        assert orchestrator.puts == 0
         assert authority.closed
         assert preparation.pending_cleanup_count == 0
     finally:

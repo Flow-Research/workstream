@@ -50,6 +50,10 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
 - The final rebase onto merged AUTH 11B preserved both the new project-read
   authorization dependencies and hidden ART ingest wiring. Bounded senior,
   QA, security/auth, and CI-integrity reconciliation reviews passed.
+- rebased hosted run `30366469273` passed all semantic lanes, API E2E, and
+  repository coverage, and raised artifact-foundation coverage to 89.87%.
+  Additional focused proofs cover rejection before preparation for an invalid
+  guide logical role and scratch cleanup when PREP commit itself fails.
 
 ## Reviewer Results
 
