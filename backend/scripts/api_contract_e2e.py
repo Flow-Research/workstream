@@ -1284,7 +1284,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert actor_context["project_roles"] == []
         assert actor_context["effective_action_ids"] == [
             "project.contributor_candidate.list",
+            "project.guide_sufficiency_report.list",
+            "project.guide_sufficiency_report.read",
+            "project.post_submit_checker_policy_setup.read",
             "project.read",
+            "project.setup_run.read",
+            "project.submission_artifact_policy.list",
+            "project.submission_artifact_policy.read",
             "project_role_grant.issue",
             "project_role_grant.list",
             "project_role_grant.read",

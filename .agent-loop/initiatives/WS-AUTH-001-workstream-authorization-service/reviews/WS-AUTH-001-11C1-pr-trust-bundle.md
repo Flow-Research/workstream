@@ -112,6 +112,11 @@ they would hide a kernel defect or weaken the approved concurrent-revocation
 boundary. Full rationale is recorded in the 11C1 external-review response.
 Final-head Backend, Agent Gates, and CodeRabbit evidence remains mandatory.
 
+The next hosted run passed semantic lanes, migrations, health/OpenAPI/auth
+probes, project creation, and the authorization-context request, then found one
+stale real-API E2E expected action list. That exact list was updated with the six
+11C1 actions; production behavior required no correction.
+
 ## Follow-Up And Human Review Focus
 
 AUTH-11C2 remains separate and unstarted. Review the canonical snapshot joins,

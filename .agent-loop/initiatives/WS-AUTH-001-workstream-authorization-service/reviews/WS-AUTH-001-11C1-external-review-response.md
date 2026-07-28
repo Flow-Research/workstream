@@ -16,6 +16,9 @@
   Access Administrator bootstrap helper.
 - Updated the two stale full-suite active-action expectations reported by the
   first hosted Backend run.
+- Updated the stale real-API E2E Project Manager action projection reported by
+  the second hosted Backend run; the production response already contained the
+  correct six newly active actions.
 
 ## Comments deferred or rejected
 
