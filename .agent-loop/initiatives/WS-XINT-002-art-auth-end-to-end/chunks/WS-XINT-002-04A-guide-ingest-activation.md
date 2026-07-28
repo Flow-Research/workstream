@@ -21,14 +21,20 @@ L1.
 ## Allowed files
 
 ```text
-backend/app/modules/authorization/**
+backend/app/modules/authorization/catalogue.py
+backend/app/modules/authorization/kernel.py
+backend/app/modules/authorization/prepared.py
+backend/app/modules/authorization/repository.py
+backend/app/modules/authorization/runtime.py
 backend/app/modules/artifacts/authorization.py
 backend/tests/test_authorization.py
 backend/tests/test_guide_artifacts.py
 backend/tests/test_artifact_admission.py
 docs/spec_authorization_service.md
 docs/spec_artifact_storage_service.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04A-internal-review.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04A-pr-trust-bundle.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04A-external-review-response.md
 ```
 
 ## Not allowed
@@ -36,6 +42,8 @@ docs/spec_artifact_storage_service.md
 ART byte/admission implementation, project routes or lifecycle behavior,
 guide binding/read, submission/review behavior, provider redesign, token roles,
 generic guide download, new catalogue values, or a second authority protocol.
+This contract, the chunk map, and other planning files are not editable by the
+04A implementation PR; any required scope change returns to planning review.
 
 ## Acceptance criteria
 

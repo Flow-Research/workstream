@@ -18,13 +18,19 @@ L1.
 ## Allowed files
 
 ```text
-backend/app/modules/authorization/**
+backend/app/modules/authorization/catalogue.py
+backend/app/modules/authorization/kernel.py
+backend/app/modules/authorization/prepared.py
+backend/app/modules/authorization/repository.py
+backend/app/modules/authorization/runtime.py
 backend/app/modules/artifacts/authorization.py
 backend/tests/test_authorization.py
 backend/tests/test_guide_artifacts.py
 docs/spec_authorization_service.md
 docs/spec_artifact_storage_service.md
-.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/**
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-internal-review.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-pr-trust-bundle.md
+.agent-loop/initiatives/WS-XINT-002-art-auth-end-to-end/reviews/WS-XINT-002-04B-external-review-response.md
 ```
 
 ## Not allowed
@@ -32,6 +38,8 @@ docs/spec_artifact_storage_service.md
 Human ingest behavior, ART byte/admission implementation, project lifecycle
 changes, submission/review behavior, provider redesign, token roles, generic
 guide download, new catalogue values, or ART-03C legacy removal.
+This contract, the chunk map, and other planning files are not editable by the
+04B implementation PR; any required scope change returns to planning review.
 
 ## Acceptance criteria
 
@@ -40,6 +48,12 @@ guide download, new catalogue values, or ART-03C legacy removal.
   source item, and setup generation.
 - `artifact.guide_source.read` is available only to the fixed guide-reader
   identity for the exact bound guide content and setup generation.
+- Both actions require exact prepared-authority validation and single-use
+  consumption before any provider read or binding write. Stale, replayed,
+  revoked, mismatched, cross-session, cross-action, or cross-resource authority
+  denies before I/O.
+- Successful binding state and bounded authorization evidence commit atomically
+  in the caller-owned root transaction before later provider reads.
 - Replaced binding, stale setup generation, wrong identity, cross-guide,
   cross-project, replay, and revoked service authority deny atomically.
 - No generic artifact-download permission or human-to-service authority
