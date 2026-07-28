@@ -652,6 +652,7 @@ def submission_artifact_policy_body() -> dict:
 async def create_policy_bundle_for_guide(
     client: httpx.AsyncClient,
     manager_token: str,
+    diagnostic_reader_token: str,
     manager_subject: str,
     project_id: str,
     guide_id: str,
@@ -666,6 +667,7 @@ async def create_policy_bundle_for_guide(
     Args:
         client: HTTP client pointed at the running API.
         manager_token: Flow token with project manager role.
+        diagnostic_reader_token: Token bound to the local Project Manager grant.
         project_id: Project id that owns the guide.
         guide_id: Guide id to bind.
         run_id: Unique run id used for deterministic source hashes.
@@ -708,7 +710,7 @@ async def create_policy_bundle_for_guide(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
-        manager_token,
+        diagnostic_reader_token,
     )
     ensure(isinstance(reports, list), "sufficiency report list did not return a list")
     ensure(len(reports) == 1, f"expected one sufficiency report, got {len(reports)}")
@@ -717,7 +719,7 @@ async def create_policy_bundle_for_guide(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report['id']}",
-        manager_token,
+        diagnostic_reader_token,
     )
     policy = await request_json(
         client,
@@ -735,7 +737,7 @@ async def create_policy_bundle_for_guide(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
-        manager_token,
+        diagnostic_reader_token,
     )
     ensure(isinstance(policies, list), "submission artifact policy list did not return a list")
     ensure(len(policies) == 1, f"expected one submission artifact policy, got {len(policies)}")
@@ -744,7 +746,7 @@ async def create_policy_bundle_for_guide(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy['id']}",
-        manager_token,
+        diagnostic_reader_token,
     )
     effective_policy = await request_json(
         client,
@@ -1284,7 +1286,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert actor_context["project_roles"] == []
         assert actor_context["effective_action_ids"] == [
             "project.contributor_candidate.list",
+            "project.guide_sufficiency_report.list",
+            "project.guide_sufficiency_report.read",
+            "project.post_submit_checker_policy_setup.read",
             "project.read",
+            "project.setup_run.read",
+            "project.submission_artifact_policy.list",
+            "project.submission_artifact_policy.read",
             "project_role_grant.issue",
             "project_role_grant.list",
             "project_role_grant.read",
@@ -1340,6 +1348,7 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         await create_policy_bundle_for_guide(
             client,
             manager_token,
+            project_reader_token,
             manager_subject,
             project["id"],
             guide["id"],

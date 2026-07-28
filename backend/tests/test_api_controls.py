@@ -510,6 +510,24 @@ def test_openapi_documents_request_error_and_response_context() -> None:
             "project_role_grant.revoke"
         ),
         "GET /api/v1/projects/{project_id}": "project.read",
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest": (
+            "project.setup_run.read"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports": (
+            "project.guide_sufficiency_report.list"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}": (
+            "project.guide_sufficiency_report.read"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies": (
+            "project.submission_artifact_policy.list"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}": (
+            "project.submission_artifact_policy.read"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup": (
+            "project.post_submit_checker_policy_setup.read"
+        ),
     }
     project_read_shapes = {
         "/api/v1/projects/{project_id}/contributor-candidates": (

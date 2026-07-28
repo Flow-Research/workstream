@@ -693,74 +693,6 @@ class ProjectService:
             )
         return await self._source_snapshot_response(snapshot)
 
-    async def get_latest_project_setup_run(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> ProjectSetupRunResponse:
-        """Return the latest automatic setup run for one project guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        setup_run = await self._repo.get_latest_project_setup_run(project_id, guide.id)
-        if setup_run is None:
-            raise ProjectSetupRunNotFound("project setup run not found")
-        return ProjectSetupRunResponse.model_validate(setup_run)
-
-    async def list_guide_sufficiency_reports(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> list[GuideSufficiencyReportResponse]:
-        """List guide sufficiency reports for one project guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        reports = await self._repo.list_guide_sufficiency_reports(project_id, guide.id)
-        return [GuideSufficiencyReportResponse.model_validate(report) for report in reports]
-
-    async def get_guide_sufficiency_report(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        report_id: str,
-    ) -> GuideSufficiencyReportResponse:
-        """Return one guide sufficiency report scoped to a project guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        report = await self._repo.get_guide_sufficiency_report(report_id)
-        if report is None or report.project_id != project_id or report.guide_id != guide.id:
-            raise SufficiencyReportNotFound("guide sufficiency report not found")
-        return GuideSufficiencyReportResponse.model_validate(report)
-
-    async def list_submission_artifact_policies(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> list[SubmissionArtifactPolicyResponse]:
-        """List submission artifact policies for one project guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        policies = await self._repo.list_submission_artifact_policies(project_id, guide.id)
-        return [SubmissionArtifactPolicyResponse.model_validate(policy) for policy in policies]
-
-    async def get_submission_artifact_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-        policy_id: str,
-    ) -> SubmissionArtifactPolicyResponse:
-        """Return one submission artifact policy scoped to a project guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        policy = await self._repo.get_submission_artifact_policy(policy_id)
-        if policy is None or policy.project_id != project_id or policy.guide_id != guide.id:
-            raise SubmissionArtifactPolicyNotFound("submission artifact policy not found")
-        return SubmissionArtifactPolicyResponse.model_validate(policy)
-
     async def get_current_effective_submission_artifact_policy(
         self,
         actor: ActorContext,
@@ -833,21 +765,6 @@ class ProjectService:
         ):
             raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
         return PreSubmitCheckerPolicySummaryResponse.model_validate(policy)
-
-    async def get_current_post_submit_checker_policy_setup(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> PostSubmitCheckerPolicySetupResponse:
-        """Return the current generated post-submit setup status for operators."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        setup_run = await self._repo.get_latest_project_setup_run(project_id, guide.id)
-        if setup_run is None:
-            raise ProjectSetupRunNotFound("project setup run not found")
-        policy = await self._post_submit_policy_from_setup_run(setup_run)
-        return await self._post_submit_policy_setup_response(setup_run, policy)
 
     async def approve_current_post_submit_checker_policy(
         self,
@@ -2840,6 +2757,14 @@ class ProjectService:
             derivation_input_summary=await self._post_submit_derivation_input_summary(setup_run, policy),
             correction_history=await self._post_submit_policy_correction_history(setup_run),
         )
+
+    async def post_submit_policy_setup_response(
+        self,
+        setup_run: ProjectSetupRun,
+        policy: PostSubmitCheckerPolicy | None,
+    ) -> PostSubmitCheckerPolicySetupResponse:
+        """Project one already-authorized and transaction-locked setup result."""
+        return await self._post_submit_policy_setup_response(setup_run, policy)
 
     async def _post_submit_policy_correction_history(
         self,

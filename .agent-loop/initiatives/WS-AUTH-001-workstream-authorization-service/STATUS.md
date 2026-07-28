@@ -111,16 +111,16 @@ or consumer feature action is active.
 
 ## Active planning chunk
 
-None.
+None; `WS-AUTH-001-11C1` passed required L1 preimplementation review.
 
 ## Active implementation chunk
 
-None. `WS-AUTH-001-09E` merged through PR #157 as `42a89b2d` without changing
-feature action availability.
+`WS-AUTH-001-11C1`; bounded implementation and deterministic evidence are in
+progress on `codex/ws-auth-001-11c1-setup-diagnostic-reads`.
 
 ## Current review branch
 
-None.
+`codex/ws-auth-001-11c1-setup-diagnostic-reads` (implementation evidence).
 
 ## Chunk status
 
@@ -158,8 +158,8 @@ None.
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Planning split authored | `codex/ws-auth-001-11-project-read-cutover` | - | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2; signed automation remains the live-state authority. |
 | `WS-AUTH-001-11A` | Merged | `codex/ws-auth-001-11a-project-read-catalogue` | #208 | Registered the project-read catalogue and migration `0035`; no activation. |
-| `WS-AUTH-001-11B` | Implementation | `codex/ws-auth-001-11b-project-identity-context` | - | Project identity and self authorization-context hard cutover. |
-| `WS-AUTH-001-11C1` | Proposed | - | - | Setup and draft diagnostic read cutover. |
+| `WS-AUTH-001-11B` | Merged | `codex/ws-auth-001-11b-project-identity-context` | #214 | Project identity and self authorization-context hard cutover; merged as `033654ac`. |
+| `WS-AUTH-001-11C1` | Implementation | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | - | Started 2026-07-28; repaired contract passed all six required L1 plan-review tracks. |
 | `WS-AUTH-001-11C2` | Proposed | - | - | Effective policy and active-guide read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |

@@ -221,6 +221,16 @@ jobs:
         working-directory: backend
         run: coverage report --include='app/modules/authorization/*' --precision=2 --fail-under=90
 
+      - name: Project authorization-read composer coverage
+        working-directory: backend
+        run: |
+          COVERAGE_FILE=.coverage-project-auth-read pytest -q tests/test_projects.py \
+            -k 'project_diagnostic_read_composer' \
+            --cov=app.modules.projects.authorization_reads \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-fail-under=90
+
       - name: API controls coverage
         working-directory: backend
         run: >-

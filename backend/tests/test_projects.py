@@ -64,7 +64,9 @@ from app.modules.authorization.models import (
     ProjectRoleQualificationSnapshot,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import service as project_service_module
+from app.modules.projects.authorization_reads import authorize_project_diagnostic_read
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
@@ -86,6 +88,243 @@ from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
     compile_project_post_submit_checker_spec,
 )
+
+
+class _DiagnosticAuthorization:
+    def __init__(self) -> None:
+        self.calls: list[tuple[ActionId, Any]] = []
+
+    async def require(self, action_id: ActionId, resource: Any) -> None:
+        self.calls.append((action_id, resource))
+
+
+class _DiagnosticRepository:
+    def __init__(self, *, project_id: str, guide_id: str, target: Any) -> None:
+        self.project = types.SimpleNamespace(id=project_id)
+        self.guide = types.SimpleNamespace(id=guide_id, project_id=project_id, version="v1")
+        self.target = target
+        self.post_policy = None
+
+    async def get_project(self, _project_id: str, *, for_update: bool = False) -> Any:
+        assert for_update is True
+        return self.project
+
+    async def lock_project_guide(self, _guide_id: str) -> Any:
+        return self.guide
+
+    async def lock_latest_project_setup_run(self, *_args: Any) -> Any:
+        return self.target
+
+    async def lock_guide_sufficiency_reports(self, *_args: Any) -> list[Any]:
+        return [self.target]
+
+    async def lock_guide_sufficiency_report(self, *_args: Any) -> Any:
+        return self.target
+
+    async def lock_submission_artifact_policies(self, *_args: Any) -> list[Any]:
+        return [self.target]
+
+    async def lock_submission_artifact_policy(self, *_args: Any) -> Any:
+        return self.target
+
+    async def lock_submission_artifact_policy_diagnostic(self, *_args: Any) -> Any:
+        return self.target
+
+    async def lock_post_submit_checker_policy(self, *_args: Any) -> Any:
+        return self.post_policy
+
+
+class _DiagnosticStatementCaptureSession:
+    def __init__(self) -> None:
+        self.statements: list[Any] = []
+
+    async def execute(self, statement: Any) -> Any:
+        self.statements.append(statement)
+        return types.SimpleNamespace(
+            scalars=lambda: types.SimpleNamespace(all=lambda: [])
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method_name,locked_table",
+    [
+        ("lock_guide_sufficiency_reports", "guide_sufficiency_reports"),
+        ("lock_submission_artifact_policies", "submission_artifact_policies"),
+    ],
+)
+async def test_project_diagnostic_collection_locks_are_bounded(
+    method_name: str, locked_table: str
+) -> None:
+    session = _DiagnosticStatementCaptureSession()
+    repository = ProjectRepository(cast(Any, session))
+
+    await getattr(repository, method_name)(str(uuid4()), str(uuid4()), "v1")
+
+    assert len(session.statements) == 1
+    compiled = str(
+        session.statements[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "LIMIT 100" in compiled
+    assert f"FOR UPDATE OF {locked_table}" in compiled
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action_id,target_kind,is_collection",
+    [
+        (ActionId.PROJECT_SETUP_RUN_READ, "setup_run", False),
+        (
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+            "sufficiency_report_collection",
+            True,
+        ),
+        (ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ, "sufficiency_report", False),
+        (
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+            "submission_artifact_policy_collection",
+            True,
+        ),
+        (
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+            "submission_artifact_policy",
+            False,
+        ),
+        (
+            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+            "post_submit_checker_policy_setup",
+            False,
+        ),
+    ],
+)
+async def test_project_diagnostic_read_composer_binds_each_action(
+    action_id: ActionId, target_kind: str, is_collection: bool
+) -> None:
+    project_id, guide_id, target_id, snapshot_id = (str(uuid4()) for _ in range(4))
+    target = types.SimpleNamespace(
+        id=target_id,
+        project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+        output_post_submit_checker_policy_id=None,
+    )
+    repository = _DiagnosticRepository(
+        project_id=project_id, guide_id=guide_id, target=target
+    )
+    authorization = _DiagnosticAuthorization()
+
+    result = await authorize_project_diagnostic_read(
+        authorization=cast(Any, authorization),
+        repository=cast(Any, repository),
+        action_id=action_id,
+        project_id=project_id,
+        guide_id=guide_id,
+        target_id=target_id,
+    )
+
+    expected = (
+        (target, None)
+        if action_id is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ
+        else ([target] if is_collection else target)
+    )
+    assert result == expected
+    assert len(authorization.calls) == 1
+    called_action, context = authorization.calls[0]
+    assert called_action is action_id
+    assert context.target_kind == target_kind
+    assert context.target_exists is True
+    assert context.target_binding_digest.startswith("sha256:")
+
+
+@pytest.mark.asyncio
+async def test_project_diagnostic_read_composer_fails_closed_for_invalid_or_missing() -> None:
+    project_id, guide_id = str(uuid4()), str(uuid4())
+    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=None)
+    authorization = _DiagnosticAuthorization()
+    with pytest.raises(ValueError, match="unsupported"):
+        await authorize_project_diagnostic_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_READ,
+            project_id=project_id,
+            guide_id=guide_id,
+        )
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_diagnostic_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_SETUP_RUN_READ,
+            project_id=project_id,
+            guide_id=guide_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+    repository.project = None
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_diagnostic_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_SETUP_RUN_READ,
+            project_id=project_id,
+            guide_id=guide_id,
+        )
+    repository.project = types.SimpleNamespace(id=project_id)
+    repository.guide = types.SimpleNamespace(
+        id=guide_id, project_id=str(uuid4()), version="v1"
+    )
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_diagnostic_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_SETUP_RUN_READ,
+            project_id=project_id,
+            guide_id=guide_id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_project_diagnostic_read_composer_locks_post_submit_policy_binding() -> None:
+    project_id, guide_id, run_id, policy_id, snapshot_id = (str(uuid4()) for _ in range(5))
+    shared = {
+        "project_id": project_id,
+        "guide_id": guide_id,
+        "guide_version": "v1",
+        "source_snapshot_id": snapshot_id,
+        "source_snapshot_hash": f"sha256:{'c' * 64}",
+    }
+    run = types.SimpleNamespace(
+        id=run_id, output_post_submit_checker_policy_id=policy_id, **shared
+    )
+    policy = types.SimpleNamespace(id=policy_id, **shared)
+    repository = _DiagnosticRepository(project_id=project_id, guide_id=guide_id, target=run)
+    repository.post_policy = policy
+    authorization = _DiagnosticAuthorization()
+
+    result = await authorize_project_diagnostic_read(
+        authorization=cast(Any, authorization),
+        repository=cast(Any, repository),
+        action_id=ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    assert result == (run, policy)
+    assert authorization.calls[-1][1].target_binding_digest.startswith("sha256:")
+
+    repository.post_policy = types.SimpleNamespace(
+        id=policy_id, **{**shared, "guide_version": "stale"}
+    )
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_diagnostic_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+            project_id=project_id,
+            guide_id=guide_id,
+        )
 
 
 @pytest.fixture
@@ -127,9 +366,8 @@ def auth_headers(token: str = "project-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def add_project_role_for_default_actor(project_id: str, role: str) -> tuple[UUID, str]:
-    """Insert reviewed local-grant fixtures for project identity route tests."""
-    now = datetime.now(UTC)
+async def ensure_access_administrator_bootstrap() -> tuple[UUID, UUID, UUID]:
+    """Return the default actor and its idempotent bootstrap grant."""
     async with db_session.get_session_factory()() as session:
         link = await session.scalar(
             select(ActorIdentityLink).where(
@@ -138,32 +376,108 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             )
         )
         assert link is not None
-        actor_id = link.actor_profile_id
-        admin_grant = await session.scalar(
+        grant = await session.scalar(
             select(AdminRoleGrant).where(
-                AdminRoleGrant.target_actor_profile_id == actor_id,
+                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
                 AdminRoleGrant.role == "access_administrator",
+                AdminRoleGrant.status == "active",
             )
         )
-        if admin_grant is None:
-            admin_grant = AdminRoleGrant(
+        if grant is None:
+            grant = AdminRoleGrant(
                 id=uuid4(),
-                target_actor_profile_id=actor_id,
+                target_actor_profile_id=link.actor_profile_id,
                 role="access_administrator",
                 scope_type="system",
                 scope_project_id=None,
                 status="active",
                 version=1,
                 granted_by_system_principal="workstream:system:bootstrap",
-                grant_reason="AUTH-11B route fixture",
+                grant_reason="AUTH route fixture",
             )
-            session.add(admin_grant)
+            session.add(grant)
             control = await session.get(AuthorityControl, 1)
             assert control is not None
             control.bootstrap_completed = True
-            control.bootstrap_grant_id = admin_grant.id
+            control.bootstrap_grant_id = grant.id
             control.version = 1
-            await session.flush()
+            await session.commit()
+        return link.actor_profile_id, link.id, grant.id
+
+
+async def add_project_manager_admin_grant(project_id: str) -> UUID:
+    """Grant the default registered human exact project diagnostic authority."""
+    async with db_session.get_session_factory()() as session:
+        existing = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.role == "project_manager",
+                AdminRoleGrant.scope_project_id == project_id,
+                AdminRoleGrant.status == "active",
+            )
+        )
+        if existing is not None:
+            return existing.id
+    actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
+    async with db_session.get_session_factory()() as session:
+        grant = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=actor_id,
+            role="project_manager",
+            scope_type="project",
+            scope_project_id=project_id,
+            status="active",
+            version=1,
+            granted_by_actor_profile_id=actor_id,
+            granted_by_admin_role_grant_id=grantor_id,
+            grant_reason="AUTH-11C1 diagnostic read fixture",
+        )
+        session.add(grant)
+        await session.commit()
+        return grant.id
+
+
+async def add_local_admin_role_for_default_actor(
+    role: str, *, project_id: str | None
+) -> UUID:
+    """Add one valid local administrative grant through the fixture grantor."""
+    actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
+    async with db_session.get_session_factory()() as session:
+        grant = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=actor_id,
+            role=role,
+            scope_type="project" if project_id is not None else "system",
+            scope_project_id=project_id,
+            status="active",
+            version=1,
+            granted_by_actor_profile_id=actor_id,
+            granted_by_admin_role_grant_id=grantor_id,
+            grant_reason=f"AUTH-11C1 {role} route fixture",
+        )
+        session.add(grant)
+        await session.commit()
+        return grant.id
+
+
+async def revoke_local_admin_role(grant_id: UUID) -> None:
+    """Revoke one fixture grant with complete provenance."""
+    async with db_session.get_session_factory()() as session:
+        grant = await session.get(AdminRoleGrant, grant_id)
+        assert grant is not None
+        grant.status = "revoked"
+        grant.version = 2
+        grant.revoked_by_actor_profile_id = grant.target_actor_profile_id
+        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
+        grant.revoked_reason = "AUTH-11C1 role matrix proof"
+        grant.revoked_at = datetime.now(UTC)
+        await session.commit()
+
+
+async def add_project_role_for_default_actor(project_id: str, role: str) -> tuple[UUID, str]:
+    """Insert reviewed local-grant fixtures for project identity route tests."""
+    now = datetime.now(UTC)
+    actor_id, link_id, admin_grant_id = await ensure_access_administrator_bootstrap()
+    async with db_session.get_session_factory()() as session:
         snapshot = ProjectRoleQualificationSnapshot(
             id=uuid4(),
             project_id=project_id,
@@ -182,7 +496,7 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             prior_project_work_refs=[],
             external_expertise_refs=[],
             captured_by_actor_profile_id=actor_id,
-            captured_by_admin_role_grant_id=admin_grant.id,
+            captured_by_admin_role_grant_id=admin_grant_id,
             captured_at=now,
         )
         session.add(snapshot)
@@ -197,13 +511,13 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             grant_method="manual",
             qualification_snapshot_id=snapshot.id,
             granted_by_actor_profile_id=actor_id,
-            granted_by_admin_role_grant_id=admin_grant.id,
+            granted_by_admin_role_grant_id=admin_grant_id,
             grant_reason="AUTH-11B route fixture",
             granted_at=now,
         )
         session.add(grant)
         await session.commit()
-        return grant.id, str(link.id)
+        return grant.id, str(link_id)
 
 
 @pytest.mark.asyncio
@@ -813,6 +1127,7 @@ async def create_guide(client: AsyncClient, project_id: str, payload: dict) -> d
         json=payload,
     )
     assert response.status_code == 201, response.text
+    await add_project_manager_admin_grant(project_id)
     return response.json()
 
 
@@ -1017,9 +1332,7 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
     other = await create_project(project_client, name="Other project")
     grant_id, link_id = await add_project_role_for_default_actor(project["id"], "submitter")
 
-    identity = await project_client.get(
-        f"/api/v1/projects/{project['id']}", headers=auth_headers()
-    )
+    identity = await project_client.get(f"/api/v1/projects/{project['id']}", headers=auth_headers())
     assert identity.status_code == 200, identity.text
     assert identity.json() == {
         "id": project["id"],
@@ -1746,6 +2059,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
     project = await create_project(project_client)
+    await add_project_manager_admin_grant(project["id"])
     guide = await create_guide(
         project_client,
         project["id"],
@@ -1853,6 +2167,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
     )
     assert second_project_response.status_code == 201, second_project_response.text
     second_project = second_project_response.json()
+    await add_project_manager_admin_grant(second_project["id"])
     second_guide = await create_guide(
         project_client,
         second_project["id"],
@@ -3473,7 +3788,7 @@ async def test_project_setup_run_rejects_cross_context_worker_updates(
             )
 
 
-async def test_project_setup_visibility_apis_require_project_setup_role(
+async def test_project_setup_visibility_apis_require_active_local_grant(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     deterministic_project_agent_runtime: None,
@@ -3505,9 +3820,6 @@ async def test_project_setup_visibility_apis_require_project_setup_role(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies",
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/submission-artifact-policies/"
         f"{setup_run['output_submission_artifact_policy_id']}",
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-        "effective-submission-artifact-policy",
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/post-submit-checker-policy/setup",
     ]
     monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", "admin")
@@ -3515,25 +3827,61 @@ async def test_project_setup_visibility_apis_require_project_setup_role(
     admin_responses = [
         await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
     ]
-    assert [response.status_code for response in admin_responses] == [
-        200,
-        200,
-        200,
-        200,
-        200,
-        404,
-        404,
-        200,
+    assert [response.status_code for response in admin_responses] == [200] * len(endpoints)
+
+    async with db_session.get_session_factory()() as session:
+        grant = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.role == "project_manager",
+                AdminRoleGrant.scope_project_id == project["id"],
+                AdminRoleGrant.status == "active",
+            )
+        )
+        assert grant is not None
+        grant.status = "revoked"
+        grant.version = 2
+        grant.revoked_by_actor_profile_id = grant.target_actor_profile_id
+        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
+        grant.revoked_reason = "AUTH-11C1 revocation proof"
+        grant.revoked_at = datetime.now(UTC)
+        await session.commit()
+
+    denied = [await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints]
+    assert [response.status_code for response in denied] == [404] * len(endpoints)
+
+    other_project = await create_project(project_client, name="Wrong Scope")
+    wrong_scope_grant = await add_local_admin_role_for_default_actor(
+        "project_manager", project_id=other_project["id"]
+    )
+    wrong_scope = [
+        await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
     ]
+    assert [response.status_code for response in wrong_scope] == [404] * len(endpoints)
+    await revoke_local_admin_role(wrong_scope_grant)
 
-    for role in ("worker", "reviewer", "finance", "auditor"):
-        monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", role)
-        get_settings.cache_clear()
-        responses = [
-            await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
-        ]
+    operator_grant = await add_local_admin_role_for_default_actor(
+        "operator", project_id=None
+    )
+    operator = [
+        await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
+    ]
+    assert [response.status_code for response in operator] == [200] * len(endpoints)
+    await revoke_local_admin_role(operator_grant)
 
-        assert [response.status_code for response in responses] == [403] * len(endpoints)
+    audit_grant = await add_local_admin_role_for_default_actor(
+        "audit_authority", project_id=project["id"]
+    )
+    audit = [await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints]
+    assert [response.status_code for response in audit] == [200] * len(endpoints)
+    await revoke_local_admin_role(audit_grant)
+
+    await add_local_admin_role_for_default_actor(
+        "finance_authority", project_id=project["id"]
+    )
+    finance = [
+        await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints
+    ]
+    assert [response.status_code for response in finance] == [404] * len(endpoints)
 
 
 async def test_project_can_be_created(project_client: AsyncClient) -> None:
@@ -7187,7 +7535,7 @@ async def test_post_submit_checker_policy_correction_preserves_audit_and_guides_
     assert "post-submit checker policy" in activation.json()["detail"]
 
 
-async def test_post_submit_checker_policy_setup_apis_require_setup_role(
+async def test_post_submit_checker_policy_mutations_still_require_legacy_setup_role(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -7199,13 +7547,13 @@ async def test_post_submit_checker_policy_setup_apis_require_setup_role(
         guide["id"],
         approve_post_submit_checker=False,
     )
+    diagnostic = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "post-submit-checker-policy/setup",
+        headers=auth_headers(),
+    )
+    assert diagnostic.status_code == 200, diagnostic.text
     endpoints = [
-        (
-            "get",
-            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
-            "post-submit-checker-policy/setup",
-            None,
-        ),
         (
             "post",
             f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
@@ -7224,17 +7572,11 @@ async def test_post_submit_checker_policy_setup_apis_require_setup_role(
         monkeypatch.setenv("WORKSTREAM_DEV_AUTH_ROLES", role)
         get_settings.cache_clear()
         for method, endpoint, payload in endpoints:
-            if payload is None:
-                response = await getattr(project_client, method)(
-                    endpoint,
-                    headers=auth_headers(),
-                )
-            else:
-                response = await getattr(project_client, method)(
-                    endpoint,
-                    headers=auth_headers(),
-                    json=payload,
-                )
+            response = await getattr(project_client, method)(
+                endpoint,
+                headers=auth_headers(),
+                json=payload,
+            )
             assert response.status_code == 403
 
 

@@ -122,9 +122,7 @@ class ProjectRepository:
     async def lock_project_guide(self, guide_id: str) -> ProjectGuide | None:
         """Load one project guide with a transactional row lock."""
         result = await self._session.execute(
-            select(ProjectGuide)
-            .where(ProjectGuide.id == guide_id)
-            .with_for_update()
+            select(ProjectGuide).where(ProjectGuide.id == guide_id).with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -295,9 +293,7 @@ class ProjectRepository:
     async def lock_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
         """Load one project setup run with a transactional row lock."""
         result = await self._session.execute(
-            select(ProjectSetupRun)
-            .where(ProjectSetupRun.id == setup_run_id)
-            .with_for_update()
+            select(ProjectSetupRun).where(ProjectSetupRun.id == setup_run_id).with_for_update()
         )
         return result.scalar_one_or_none()
 
@@ -309,7 +305,10 @@ class ProjectRepository:
         """Load the latest setup run for one project guide."""
         result = await self._session.execute(
             select(ProjectSetupRun)
-            .join(GuideSourceSnapshot, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 ProjectSetupRun.project_id == project_id,
                 ProjectSetupRun.guide_id == guide_id,
@@ -320,6 +319,35 @@ class ProjectRepository:
                 ProjectSetupRun.id.desc(),
             )
             .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def lock_latest_project_setup_run(
+        self, project_id: str, guide_id: str, guide_version: str
+    ) -> ProjectSetupRun | None:
+        """Lock the latest setup-run row selected for diagnostic projection."""
+        result = await self._session.execute(
+            select(ProjectSetupRun)
+            .join(
+                GuideSourceSnapshot,
+                ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id,
+            )
+            .where(
+                ProjectSetupRun.project_id == project_id,
+                ProjectSetupRun.guide_id == guide_id,
+                ProjectSetupRun.guide_version == guide_version,
+                GuideSourceSnapshot.project_id == ProjectSetupRun.project_id,
+                GuideSourceSnapshot.guide_id == ProjectSetupRun.guide_id,
+                GuideSourceSnapshot.guide_version == ProjectSetupRun.guide_version,
+                GuideSourceSnapshot.bundle_hash == ProjectSetupRun.source_snapshot_hash,
+            )
+            .order_by(
+                GuideSourceSnapshot.captured_at.desc(),
+                ProjectSetupRun.created_at.desc(),
+                ProjectSetupRun.id.desc(),
+            )
+            .limit(1)
+            .with_for_update(of=ProjectSetupRun)
         )
         return result.scalar_one_or_none()
 
@@ -347,6 +375,30 @@ class ProjectRepository:
         """Load one guide sufficiency report by primary key."""
         return await self._session.get(GuideSufficiencyReport, report_id)
 
+    async def lock_guide_sufficiency_report(
+        self, report_id: str, project_id: str, guide_id: str, guide_version: str
+    ) -> GuideSufficiencyReport | None:
+        """Lock one sufficiency report for authorization and projection."""
+        result = await self._session.execute(
+            select(GuideSufficiencyReport)
+            .join(
+                GuideSourceSnapshot,
+                GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id,
+            )
+            .where(
+                GuideSufficiencyReport.id == report_id,
+                GuideSufficiencyReport.project_id == project_id,
+                GuideSufficiencyReport.guide_id == guide_id,
+                GuideSufficiencyReport.guide_version == guide_version,
+                GuideSourceSnapshot.project_id == GuideSufficiencyReport.project_id,
+                GuideSourceSnapshot.guide_id == GuideSufficiencyReport.guide_id,
+                GuideSourceSnapshot.guide_version == GuideSufficiencyReport.guide_version,
+                GuideSourceSnapshot.bundle_hash == GuideSufficiencyReport.source_snapshot_hash,
+            )
+            .with_for_update(of=GuideSufficiencyReport)
+        )
+        return result.scalar_one_or_none()
+
     async def list_guide_sufficiency_reports(
         self,
         project_id: str,
@@ -360,6 +412,31 @@ class ProjectRepository:
                 GuideSufficiencyReport.guide_id == guide_id,
             )
             .order_by(GuideSufficiencyReport.created_at.desc(), GuideSufficiencyReport.id.desc())
+        )
+        return result.scalars().all()
+
+    async def lock_guide_sufficiency_reports(
+        self, project_id: str, guide_id: str, guide_version: str
+    ) -> Sequence[GuideSufficiencyReport]:
+        """Lock the bounded report collection used by a diagnostic list."""
+        result = await self._session.execute(
+            select(GuideSufficiencyReport)
+            .join(
+                GuideSourceSnapshot,
+                GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id,
+            )
+            .where(
+                GuideSufficiencyReport.project_id == project_id,
+                GuideSufficiencyReport.guide_id == guide_id,
+                GuideSufficiencyReport.guide_version == guide_version,
+                GuideSourceSnapshot.project_id == GuideSufficiencyReport.project_id,
+                GuideSourceSnapshot.guide_id == GuideSufficiencyReport.guide_id,
+                GuideSourceSnapshot.guide_version == GuideSufficiencyReport.guide_version,
+                GuideSourceSnapshot.bundle_hash == GuideSufficiencyReport.source_snapshot_hash,
+            )
+            .order_by(GuideSufficiencyReport.created_at.desc(), GuideSufficiencyReport.id.desc())
+            .limit(100)
+            .with_for_update(of=GuideSufficiencyReport)
         )
         return result.scalars().all()
 
@@ -418,6 +495,33 @@ class ProjectRepository:
         )
         return result.scalars().all()
 
+    async def lock_submission_artifact_policies(
+        self, project_id: str, guide_id: str, guide_version: str
+    ) -> Sequence[SubmissionArtifactPolicy]:
+        """Lock the bounded draft-policy collection used by a diagnostic list."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy)
+            .join(
+                GuideSourceSnapshot,
+                SubmissionArtifactPolicy.source_snapshot_id == GuideSourceSnapshot.id,
+            )
+            .where(
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_id == guide_id,
+                SubmissionArtifactPolicy.guide_version == guide_version,
+                GuideSourceSnapshot.project_id == SubmissionArtifactPolicy.project_id,
+                GuideSourceSnapshot.guide_id == SubmissionArtifactPolicy.guide_id,
+                GuideSourceSnapshot.guide_version == SubmissionArtifactPolicy.guide_version,
+                GuideSourceSnapshot.bundle_hash == SubmissionArtifactPolicy.source_snapshot_hash,
+            )
+            .order_by(
+                SubmissionArtifactPolicy.created_at.desc(), SubmissionArtifactPolicy.id.desc()
+            )
+            .limit(100)
+            .with_for_update(of=SubmissionArtifactPolicy)
+        )
+        return result.scalars().all()
+
     async def get_agent_derived_submission_artifact_policy_for_snapshot(
         self,
         project_id: str,
@@ -452,6 +556,30 @@ class ProjectRepository:
             select(SubmissionArtifactPolicy)
             .where(SubmissionArtifactPolicy.id == policy_id)
             .with_for_update()
+        )
+        return result.scalar_one_or_none()
+
+    async def lock_submission_artifact_policy_diagnostic(
+        self, policy_id: str, project_id: str, guide_id: str, guide_version: str
+    ) -> SubmissionArtifactPolicy | None:
+        """Lock one policy only when its complete snapshot binding is canonical."""
+        result = await self._session.execute(
+            select(SubmissionArtifactPolicy)
+            .join(
+                GuideSourceSnapshot,
+                SubmissionArtifactPolicy.source_snapshot_id == GuideSourceSnapshot.id,
+            )
+            .where(
+                SubmissionArtifactPolicy.id == policy_id,
+                SubmissionArtifactPolicy.project_id == project_id,
+                SubmissionArtifactPolicy.guide_id == guide_id,
+                SubmissionArtifactPolicy.guide_version == guide_version,
+                GuideSourceSnapshot.project_id == SubmissionArtifactPolicy.project_id,
+                GuideSourceSnapshot.guide_id == SubmissionArtifactPolicy.guide_id,
+                GuideSourceSnapshot.guide_version == SubmissionArtifactPolicy.guide_version,
+                GuideSourceSnapshot.bundle_hash == SubmissionArtifactPolicy.source_snapshot_hash,
+            )
+            .with_for_update(of=SubmissionArtifactPolicy)
         )
         return result.scalar_one_or_none()
 
@@ -566,9 +694,7 @@ class ProjectRepository:
         result = await self._session.execute(
             select(PreSubmitCheckerPolicy).where(
                 PreSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
-                PreSubmitCheckerPolicy.lifecycle_status.in_(
-                    ["pending_compilation", "compiled"]
-                ),
+                PreSubmitCheckerPolicy.lifecycle_status.in_(["pending_compilation", "compiled"]),
             )
         )
         rows = result.scalars().all()
@@ -597,9 +723,7 @@ class ProjectRepository:
             select(PreSubmitCheckerPolicy).where(
                 PreSubmitCheckerPolicy.project_id == project_id,
                 PreSubmitCheckerPolicy.guide_version == guide_version,
-                PreSubmitCheckerPolicy.lifecycle_status.in_(
-                    ["pending_compilation", "compiled"]
-                ),
+                PreSubmitCheckerPolicy.lifecycle_status.in_(["pending_compilation", "compiled"]),
             )
         )
         return self._resolve_current_append_only_row(

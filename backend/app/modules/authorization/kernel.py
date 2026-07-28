@@ -23,6 +23,7 @@ from app.modules.authorization.catalogue import (
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
+    PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
     ActorAdminRoleGrantHistoryResourceContext,
     ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
@@ -51,6 +52,7 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectReadResourceContext,
+    ProjectDiagnosticReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
@@ -66,7 +68,9 @@ from app.modules.authorization.runtime import (
 ContextRevalidator = Callable[
     [
         HumanAuthorizationContext,
-        ActorSelfResourceContext | ActorAuthorizationContextResourceContext | ProjectReadResourceContext,
+        ActorSelfResourceContext
+        | ActorAuthorizationContextResourceContext
+        | ProjectReadResourceContext,
     ],
     Awaitable[HumanAuthorizationContext],
 ]
@@ -97,12 +101,24 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
     {
         ActionId.ACTOR_PROFILE_READ,
         ActionId.ACTOR_IDENTITY_LINK_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
     }
 )
 _ADMIN_MUTATIONS = frozenset(
@@ -121,7 +137,10 @@ _ADMIN_MUTATIONS = frozenset(
 )
 
 _ARTIFACT_INTERNAL_RESOURCES = {
-    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ("artifact_put_attempt", ArtifactPutAttemptResourceContext),
+    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
+        "artifact_put_attempt",
+        ArtifactPutAttemptResourceContext,
+    ),
     ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
         "artifact_verification_job",
         ArtifactVerificationJobResourceContext,
@@ -344,12 +363,10 @@ class AuthorizationService:
                     raise PreparedAuthorizationUnsupported(
                         AuthorizationDenialCode.RESOURCE_GUARD_DENIED
                     )
-                locked, _target_eligible = (
-                    await self._admin.lock_project_role_issue_principals(
-                        caller_actor_profile_id=context.actor_profile_id,
-                        caller_identity_link_id=context.identity_link_id,
-                        target_actor_profile_id=scope.target_actor_profile_id,
-                    )
+                locked, _target_eligible = await self._admin.lock_project_role_issue_principals(
+                    caller_actor_profile_id=context.actor_profile_id,
+                    caller_identity_link_id=context.identity_link_id,
+                    target_actor_profile_id=scope.target_actor_profile_id,
                 )
             else:
                 locked = await self._admin.lock_request_actor(
@@ -708,7 +725,10 @@ class AuthorizationService:
             expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
             if denial is None and action.availability is not ActionAvailability.ACTIVE:
                 denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if denial is None and action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
+            if (
+                denial is None
+                and action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]
+            ):
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if denial is None and (
                 expected_resource is None
@@ -968,6 +988,9 @@ class AuthorizationService:
         elif isinstance(resource, ProjectContributorCandidateCollectionResourceContext):
             if not project_action_available_for_status(action_id, resource.project_status):
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+        elif isinstance(resource, ProjectDiagnosticReadResourceContext):
+            if not (resource.project_exists and resource.guide_exists and resource.target_exists):
+                return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         return None
 
     @staticmethod
@@ -997,8 +1020,19 @@ class AuthorizationService:
             ActionId.PROJECT_ROLE_GRANT_READ: ProjectRoleGrantReadResourceContext,
             ActionId.PROJECT_ROLE_GRANT_ISSUE: ProjectRoleGrantIssueResourceContext,
             ActionId.PROJECT_ROLE_GRANT_REVOKE: ProjectRoleGrantRevokeResourceContext,
+            ActionId.PROJECT_SETUP_RUN_READ: ProjectDiagnosticReadResourceContext,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST: ProjectDiagnosticReadResourceContext,
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: ProjectDiagnosticReadResourceContext,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: ProjectDiagnosticReadResourceContext,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: ProjectDiagnosticReadResourceContext,
+            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
+                ProjectDiagnosticReadResourceContext
+            ),
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
+            return False
+        diagnostic_kind = PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION.get(action_id)
+        if diagnostic_kind is not None and resource.target_kind != diagnostic_kind:
             return False
         transition = {
             ActionId.ACTOR_PROFILE_SUSPEND: "suspend",
@@ -1121,6 +1155,7 @@ class AuthorizationService:
             "artifact_put_attempt",
             "artifact_verification_job",
             "artifact_pending_work",
+            "project_diagnostic",
         }:
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:

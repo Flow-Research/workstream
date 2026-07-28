@@ -49,6 +49,8 @@ from app.modules.projects.schemas import (
     SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import ProjectService, ProjectServiceError
+from app.modules.projects.authorization_reads import authorize_project_diagnostic_read
+from app.modules.projects.repository import ProjectRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.runtime import (
@@ -260,72 +262,78 @@ async def ingest_guide_source_artifact(
 @router.get(
     "/{project_id}/guides/{guide_id}/setup-runs/latest",
     response_model=ProjectSetupRunResponse,
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_SETUP_RUN_READ.value},
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_latest_project_setup_run(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> ProjectSetupRunResponse:
     """Return the latest automatic setup run for one project guide."""
-    try:
-        return await ProjectService(session).get_latest_project_setup_run(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    run = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_SETUP_RUN_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = ProjectSetupRunResponse.model_validate(run)
+    await session.commit()
+    return response
 
 
 @router.get(
     "/{project_id}/guides/{guide_id}/sufficiency-reports",
     response_model=list[GuideSufficiencyReportResponse],
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST.value},
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def list_guide_sufficiency_reports(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> list[GuideSufficiencyReportResponse]:
     """List guide sufficiency reports for one project guide."""
-    try:
-        return await ProjectService(session).list_guide_sufficiency_reports(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    reports = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = [GuideSufficiencyReportResponse.model_validate(report) for report in reports]
+    await session.commit()
+    return response
 
 
 @router.get(
     "/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}",
     response_model=GuideSufficiencyReportResponse,
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ.value},
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_guide_sufficiency_report(
     project_id: str,
     guide_id: str,
     report_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> GuideSufficiencyReportResponse:
     """Return one guide sufficiency report for one project guide."""
-    try:
-        return await ProjectService(session).get_guide_sufficiency_report(
-            actor,
-            project_id,
-            guide_id,
-            report_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    report = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+        target_id=report_id,
+    )
+    response = GuideSufficiencyReportResponse.model_validate(report)
+    await session.commit()
+    return response
 
 
 @router.post(
@@ -357,49 +365,57 @@ async def create_guide_sufficiency_report(
 @router.get(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies",
     response_model=list[SubmissionArtifactPolicyResponse],
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST.value
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def list_submission_artifact_policies(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> list[SubmissionArtifactPolicyResponse]:
     """List submission artifact policies for one project guide."""
-    try:
-        return await ProjectService(session).list_submission_artifact_policies(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    policies = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = [SubmissionArtifactPolicyResponse.model_validate(policy) for policy in policies]
+    await session.commit()
+    return response
 
 
 @router.get(
     "/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
     response_model=SubmissionArtifactPolicyResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ.value
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_submission_artifact_policy(
     project_id: str,
     guide_id: str,
     policy_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> SubmissionArtifactPolicyResponse:
     """Return one submission artifact policy for one project guide."""
-    try:
-        return await ProjectService(session).get_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-            policy_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    policy = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+        target_id=policy_id,
+    )
+    response = SubmissionArtifactPolicyResponse.model_validate(policy)
+    await session.commit()
+    return response
 
 
 @router.post(
@@ -630,24 +646,28 @@ async def get_current_pre_submit_checker_policy(
 @router.get(
     "/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup",
     response_model=PostSubmitCheckerPolicySetupResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ.value
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_current_post_submit_checker_policy_setup(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> PostSubmitCheckerPolicySetupResponse:
     """Return current generated post-submit checker setup status."""
-    try:
-        return await ProjectService(session).get_current_post_submit_checker_policy_setup(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    run, policy = await authorize_project_diagnostic_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = await ProjectService(session).post_submit_policy_setup_response(run, policy)
+    await session.commit()
+    return response
 
 
 @router.post(
