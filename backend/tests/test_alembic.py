@@ -1629,7 +1629,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0037_art_auth_context_evidence",
+                "revision": "0038_guide_source_ingest",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1646,6 +1646,108 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             )
         finally:
             command.downgrade(config, "base")
+
+
+def test_guide_source_artifact_ingest_schema_and_replay(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Prove 0038 installs one linear server-owned guide-ingest staging table."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            assert "guide_source_artifact_ingests" in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+            asyncio.run(_seed_populated_guide_source_ingest(isolated_database_env))
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade populated guide source artifact ingests",
+            ):
+                command.downgrade(config, "0037_art_auth_context_evidence")
+            asyncio.run(_clear_populated_guide_source_ingest(isolated_database_env))
+            command.downgrade(config, "0037_art_auth_context_evidence")
+            assert "guide_source_artifact_ingests" not in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+            command.upgrade(config, "head")
+            assert "guide_source_artifact_ingests" in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+async def _seed_populated_guide_source_ingest(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    ids = {
+        name: str(uuid4())
+        for name in ("actor", "identity_link", "project", "guide", "snapshot", "item")
+    }
+    try:
+        async with engine.begin() as connection:
+            parameters = {
+                **ids,
+                "ingest": str(uuid4()),
+                "slug": f"migration-{ids['project']}",
+                "sha256": "sha256:" + "a" * 64,
+            }
+            statements = (
+                (
+                    "insert into actor_profiles "
+                    "(id, actor_kind, status, provisioning_method, created_by) "
+                    "values (:actor, 'human', 'active', 'automatic_first_access', 'migration-test')"
+                ),
+                (
+                    "insert into actor_identity_links "
+                    "(id, actor_profile_id, issuer, subject, subject_kind, status, "
+                    "linked_by, last_verified_at) values "
+                    "(:identity_link, :actor, 'https://identity.test', :actor, 'human', "
+                    "'active', 'migration-test', clock_timestamp())"
+                ),
+                (
+                    "insert into projects (id, name, slug, status) "
+                    "values (:project, 'Migration project', :slug, 'draft')"
+                ),
+                (
+                    "insert into project_guides "
+                    "(id, project_id, version, status, content_markdown, created_by) "
+                    "values (:guide, :project, 'v1', 'draft', '# Guide', 'migration-test')"
+                ),
+                (
+                    "insert into guide_source_snapshots "
+                    "(id, project_id, guide_id, guide_version, manifest_schema_version, "
+                    "manifest_json, bundle_hash, captured_by) values "
+                    "(:snapshot, :project, :guide, 'v1', '1', '{}'::json, :sha256, 'migration-test')"
+                ),
+                (
+                    "insert into guide_source_snapshot_items "
+                    "(id, source_snapshot_id, item_order, source_kind, durable_ref, "
+                    "ingestion_adapter, content_hash, media_type) values "
+                    "(:item, :snapshot, 0, 'upload', 'migration-test', 'upload', :sha256, "
+                    "'application/octet-stream')"
+                ),
+                (
+                    "insert into guide_source_artifact_ingests "
+                    "(id, source_item_id, actor_profile_id, sha256, byte_count, media_type) "
+                    "values (:ingest, :item, :actor, :sha256, 1, 'application/octet-stream')"
+                ),
+            )
+            for statement in statements:
+                await connection.execute(text(statement), parameters)
+    finally:
+        await engine.dispose()
+
+
+async def _clear_populated_guide_source_ingest(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("delete from guide_source_artifact_ingests"))
+    finally:
+        await engine.dispose()
 
 
 async def _artifact_recovery_schema(database_url: str) -> dict[str, object]:
@@ -1739,7 +1841,7 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
             ):
                 command.downgrade(config, "0034_project_role_issue_evidence")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0037_art_auth_context_evidence"
+                "0038_guide_source_ingest"
             )
         finally:
             asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
@@ -1866,7 +1968,7 @@ def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
             record_id = ""
             command.upgrade(config, "head")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0037_art_auth_context_evidence"
+                "0038_guide_source_ingest"
             )
         finally:
             for event_id in reversed(event_ids):
@@ -2263,7 +2365,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0037_art_auth_context_evidence",
+                "revision": "0038_guide_source_ingest",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -2475,7 +2577,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0037_art_auth_context_evidence",
+                    "0038_guide_source_ingest",
                     True,
                     True,
                 )
@@ -2502,7 +2604,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0037_art_auth_context_evidence",
+                    "0038_guide_source_ingest",
                     True,
                     True,
                 )
@@ -2530,7 +2632,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0037_art_auth_context_evidence",
+                "revision": "0038_guide_source_ingest",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -2590,7 +2692,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0037_art_auth_context_evidence"
+                "0038_guide_source_ingest"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")

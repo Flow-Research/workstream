@@ -1,5 +1,83 @@
 # Review Log: WS-ART-001 Immutable Artifact Storage
 
+## WS-ART-001-03A
+
+- Reconciled on 2026-07-28 with trusted `main` `033654ac`, after merged
+  WS-XINT-002-01 through 04 planning, internal-service activation, and AUTH 11B
+  project identity/read context.
+- Preimplementation reconciliation review rejected the preserved raw
+  `AuthorizationContext`, custom evidence, and callback revalidation seam. The
+  repair uses only the merged opaque `PreparedAuthorizationHandle` operation
+  contract and one request-local PREP adapter lifecycle.
+- The route-facing command performs Project Manager preflight before body read,
+  scratch construction, or provider runtime. Production remains deny-only
+  while `artifact.guide_source.ingest` is planned.
+- Transaction A locks canonical project/guide/snapshot/item lineage, consumes
+  the issuer-local handle against server-computed digest, byte count, and media
+  type, stages non-authoritative `GuideSourceArtifactIngest`, reserves capacity,
+  and creates put intent atomically. Provider I/O remains after commit.
+- Migration `0038_guide_source_ingest` follows the merged `0037`
+  authorization evidence head. Binding, reads, setup activation,
+  materialization, and action availability remain outside 03A.
+- Final internal review: senior engineering PASS WITH LOW RISKS; architecture
+  PASS WITH LOW RISKS; QA PASS WITH LOW RISKS; security/auth PASS WITH LOW
+  RISKS; product/ops PASS; reuse/dedup PASS WITH LOW RISKS; CI integrity PASS
+  WITH LOW RISKS; test delta PASS; docs PASS. All blocking findings were
+  repaired before PR creation.
+- Repairs include commit-before-provider execution, activated fixed-service
+  put-resolver composition, confirmed-missing replay with capacity
+  reacquisition, concealed request-metadata validation, populated downgrade
+  refusal, and preservation of existing hosted coverage gates.
+- Initial hosted Backend run `30360132709` failed before execution because the
+  new guide test module lacked semantic-lane custody. The bounded repair assigns
+  it to `shared_foundations` and makes that ownership an exact regression;
+  local canonical lane collection and CI/test-delta re-review pass.
+- Hosted rerun `30360448433` cleared lane collection/validation and executed all
+  lanes, then schema custody rejected the pre-constraint expected fingerprint.
+  The exact hosted canonical fingerprint after the SHA-256 check constraint is
+  now recorded; no schema or runtime behavior changed in that repair.
+- Hosted run `30360906515` then executed 1,618 tests: 1,615 passed and three
+  stale test fixtures failed. The bounded repair supplies complete guide
+  lineage to the real admission proof, uses the pre-staging lineage lock helper
+  for its intended test, and adds the new optional lineage fields to the quota
+  unit fixture. Production code is unchanged by this repair.
+- Hosted run `30361748346` proved all 1,618 shared, 236 project, and 217 task
+  tests pass. Its sole failure was asyncpg rejecting the populated-downgrade
+  test's multi-command prepared seed. The seed now executes six parameterized
+  statements in one transaction; the exact isolated migration test passes.
+- Hosted run `30363061162` again proved all shared, project, and task tests pass.
+  Its sole schema failure was the migration fixture omitting the identity link
+  now required for every human actor. The fixture creates the canonical active,
+  verified link, and the exact isolated migration test passes.
+- Hosted run `30364425613` passed every semantic lane, API E2E, and repository
+  coverage, then measured the unchanged artifact-foundation gate at 89.77%.
+  Focused tests now cover absent/missing/resolved replay selection and the
+  fail-closed missing PREP transaction boundary; no threshold or production
+  behavior changed.
+- The final rebase preserved AUTH 11B project-read dependencies alongside the
+  hidden ART route. Senior, QA, security/auth, and CI-integrity reconciliation
+  reviews passed with no blockers.
+- Rebased hosted run `30366469273` passed all lanes, API E2E, and repository
+  coverage, raising artifact-foundation coverage to 89.87%. Additional focused
+  tests cover invalid-role rejection before preparation and cleanup when PREP
+  commit fails; production and the 90% threshold remain unchanged.
+- Hosted run `30367711119` again passed all lanes, API E2E, and repository
+  coverage, raising artifact-foundation coverage to 89.98%. A focused boundary
+  proof now covers fail-closed partial guide lineage claims; production and the
+  90% threshold remain unchanged.
+- Hosted run `30369062154` remained at 89.98% after one repository branch varied
+  between runs. A deterministic deny-only seam test now proves the default 04A
+  selector rejects final PREP consumption, providing margin without changing
+  production or the threshold.
+- Hosted run `30370291310` passed artifact-foundation coverage, then failed only
+  the ART-added whole-projects gate against merged AUTH 11B's unrelated 71.54%
+  project coverage. The new out-of-scope gate and its self-test were removed;
+  repository and every pre-existing subsystem gate remain unchanged.
+- Final CodeRabbit review findings were triaged separately. Valid bootstrap
+  cleanup, route exception-boundary, exact exception, typed digest, and result
+  contract findings were repaired with focused tests. Reuse/query optimizations
+  were deferred; PREP transaction duration remains an AUTH 04A activation gate.
+
 ## WS-ART-001-02D
 
 - Signed explicit start verified on 2026-07-22 against trusted main

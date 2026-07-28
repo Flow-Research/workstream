@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.artifacts import get_guide_artifact_ingest_command
 from app.api.deps.auth import get_registered_actor
 from app.api.deps.authorization import (
     enforce_human_authorization_read,
@@ -15,10 +16,18 @@ from app.api.deps.authorization import (
 )
 from app.core.permissions import PermissionDenied
 from app.db.session import get_db_session
+from app.interfaces.artifact_operations import (
+    GuideArtifactIngestCommand,
+)
+from app.modules.artifacts.authorization import get_artifact_authorization_context
+from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
+from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
     GuideSourceSnapshotCreate,
+    GuideArtifactIngestResponse,
     GuideSourceSnapshotResponse,
     GuideSufficiencyAcknowledgement,
     GuideSufficiencyReportCreate,
@@ -199,6 +208,55 @@ async def create_guide_source_snapshot(
         raise permission_http_error(exc) from exc
     except ProjectServiceError as exc:
         raise project_http_error(exc) from exc
+
+
+@router.post(
+    "/{project_id}/guides/{guide_id}/source-snapshots/{source_snapshot_id}/items/"
+    "{source_item_id}/artifact",
+    response_model=GuideArtifactIngestResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    include_in_schema=False,
+)
+async def ingest_guide_source_artifact(
+    project_id: str,
+    guide_id: str,
+    source_snapshot_id: str,
+    source_item_id: str,
+    request: Request,
+    context: Annotated[AuthorizationContext, Depends(get_artifact_authorization_context)],
+    ingest: Annotated[
+        GuideArtifactIngestCommand,
+        Depends(get_guide_artifact_ingest_command),
+    ],
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+) -> GuideArtifactIngestResponse:
+    """Stream one guide source through hidden, fail-closed ART ingestion."""
+    try:
+        identifiers = (
+            UUID(project_id),
+            UUID(guide_id),
+            UUID(source_snapshot_id),
+            UUID(source_item_id),
+            UUID(idempotency_key or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Guide source not found") from exc
+    try:
+        result = await ingest.ingest(
+            authorization_context=context,
+            project_id=identifiers[0],
+            guide_id=identifiers[1],
+            guide_source_snapshot_id=identifiers[2],
+            source_item_id=identifiers[3],
+            idempotency_key=identifiers[4],
+            byte_source=request.stream(),
+        )
+    except (
+        ArtifactAdmissionRelationshipError,
+        ArtifactAuthorityDeniedError,
+    ) as exc:
+        raise HTTPException(status_code=404, detail="Guide source not found") from exc
+    return GuideArtifactIngestResponse.model_validate(result, from_attributes=True)
 
 
 @router.get(

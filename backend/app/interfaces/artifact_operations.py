@@ -24,7 +24,9 @@ __all__ = (
     "CheckerOutputBindingRequest",
     "CheckerOutputArtifactRequest",
     "GuideArtifactIngestPort",
+    "GuideArtifactIngestCommand",
     "GuideArtifactIngestRequest",
+    "GuideArtifactIngestResult",
     "GuideSourceBindingRequest",
     "PreparedBundleMaterializationRequest",
     "SubmissionBundlePreparationPort",
@@ -57,11 +59,26 @@ class GuideArtifactIngestRequest:
 
     prepared_authorization: PreparedAuthorizationHandle
     project_id: UUID
+    guide_id: UUID
     guide_source_snapshot_id: UUID
     source_item_id: UUID
+    operation_identity: str
+    request_digest: str
     logical_role: str
+    media_type: str
     byte_source: AsyncIterable[bytes]
-    client_commitment: ArtifactCommitment | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GuideArtifactIngestResult:
+    """Durable identity returned without exposing provider coordinates."""
+
+    put_attempt_id: UUID
+    operation_identity: str
+    sha256: str
+    byte_count: int
+    status: str
+    replayed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,8 +182,25 @@ class ArtifactRecoveryRequest:
 class GuideArtifactIngestPort(Protocol):
     """Ingest authorized guide bytes without exposing provider operations."""
 
-    async def ingest(self, request: GuideArtifactIngestRequest) -> object:
+    async def ingest(self, request: GuideArtifactIngestRequest) -> GuideArtifactIngestResult:
         """Ingest one canonical guide source item."""
+
+
+class GuideArtifactIngestCommand(Protocol):
+    """Route-facing preflight that owns one request-local PREP lifecycle."""
+
+    async def ingest(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        project_id: UUID,
+        guide_id: UUID,
+        guide_source_snapshot_id: UUID,
+        source_item_id: UUID,
+        idempotency_key: UUID,
+        byte_source: AsyncIterable[bytes],
+    ) -> GuideArtifactIngestResult:
+        """Prepare authority before delegating to durable byte ingestion."""
 
 
 class SubmissionBundlePreparationPort(Protocol):
