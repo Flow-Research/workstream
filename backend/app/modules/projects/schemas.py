@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -101,6 +102,19 @@ class GuideSourceSnapshotResponse(BaseModel):
     captured_by: str
     captured_at: datetime
     items: list[GuideSourceSnapshotItemResponse] = Field(default_factory=list)
+
+
+class GuideArtifactIngestResponse(BaseModel):
+    """Provider-neutral result for one hidden guide byte ingest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    put_attempt_id: UUID
+    operation_identity: str
+    sha256: str
+    byte_count: int
+    status: str
+    replayed: bool
 
 
 class ProjectSetupRunResponse(BaseModel):

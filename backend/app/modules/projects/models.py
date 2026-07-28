@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -342,6 +343,31 @@ class GuideSourceSnapshotItem(Base):
     content_hash: Mapped[str] = mapped_column(String(71), nullable=False)
     content_cid: Mapped[str | None] = mapped_column(String(200))
     media_type: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceArtifactIngest(Base):
+    """Server-owned prepared-byte facts for one not-yet-bound guide item."""
+
+    __tablename__ = "guide_source_artifact_ingests"
+    __table_args__ = (
+        CheckConstraint("byte_count >= 0", name="ck_guide_source_artifact_ingests_bytes"),
+        CheckConstraint(
+            "sha256 ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_guide_source_artifact_ingests_sha256",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    source_item_id: Mapped[str] = mapped_column(
+        ForeignKey("guide_source_snapshot_items.id"), nullable=False, unique=True, index=True
+    )
+    actor_profile_id: Mapped[str] = mapped_column(
+        ForeignKey("actor_profiles.id"), nullable=False, index=True
+    )
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

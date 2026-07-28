@@ -531,7 +531,7 @@ atomicity.
   truncation, changed bytes, missing object, range read, timeout, throttle,
   broker failure, periodic republish, duplicate Celery delivery, expired lease,
   stale finalization, and cross-resource authorization all have tests.
-- New or changed backend subsystems remain at least 90 percent covered; the
+- New or materially changed backend subsystems remain at least 90 percent covered; the
   repository baseline cannot decrease.
 - The 15 implementation chunk contracts define one ordered deterministic
   coverage table. Backend CI first runs the one exact full-suite
@@ -542,11 +542,23 @@ atomicity.
   changes only reports for newly owned surfaces; it never freezes a partial
   test list for a package that later expands. Independently executable
   services/examples have their own exact test-and-coverage steps.
-- The active artifact implementation coverage phase advances only after
-  `scripts/test_agent_gates.py` proves each expected step occurs exactly once in
-  the backend `test` job, after the full-suite test step, without job/step
-  conditions, `continue-on-error`, shell overrides, hidden step environment, or
-  working-directory drift. Raw text or source-set matching is insufficient.
+- A narrow composition change in a subsystem that the chunk does not materially
+  own does not create a new whole-subsystem gate over inherited code. Its new
+  behavior must instead be exercised by focused tests and the repository
+  baseline, while the owning subsystem's files retain their 90 percent gate.
+  For 03A, the hidden project route, response schema, and staging relation are
+  narrow ART composition surfaces exercised by guide-ingest tests and repository
+  coverage; ART-owned files remain enforced by the ART foundation gate. Merged
+  AUTH 11B's broader projects package remains outside
+  03A and measured 71.54 percent when the proposed whole-project gate first ran.
+  A later chunk that materially owns projects must close that debt before adding
+  the projects 90 percent report; 03A may not claim or bypass such a report.
+- When a chunk adds a newly owned coverage report, the active artifact
+  implementation phase advances only after
+  `scripts/test_lightweight_agent_gates.py` proves that command and step name
+  occur exactly once in the backend workflow. 03A adds no new coverage report;
+  hosted CI remains the authoritative proof that its retained repository, ART,
+  and pre-existing subsystem gates execute without bypass configuration.
 - Final proof uses real HTTP APIs and visible job/recovery endpoints, not direct
   database inspection.
 

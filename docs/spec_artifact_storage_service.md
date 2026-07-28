@@ -373,9 +373,10 @@ typed method fixes the expected action; requests contain no caller-selected
 ActionId, generic resource context, or facts map. Handles never enter route
 schemas, outbox/Celery payloads, provider interfaces, or serialized contracts.
 
-`GuideArtifactIngestRequest` contains prepared authority, project and
-guide-source snapshot item IDs, logical role, authorized byte source, and
-optional client commitment. `SubmissionBundlePreparationRequest` contains
+`GuideArtifactIngestRequest` contains prepared authority, exact project, guide,
+guide-source snapshot and item IDs, logical role, media type, and authorized
+byte source. It accepts no caller digest, size, content ID, or provider
+reference. `SubmissionBundlePreparationRequest` contains
 prepared authority, contributor task/assignment selectors, and one outer ZIP
 byte source. There is no upload-session compatibility port.
 `PreparedBundleMaterializationRequest` is internal and process-local; it wraps
@@ -790,8 +791,20 @@ They all use a
 bounded two-pass `PreparedArtifact`
 boundary: first write to a private process-owned ephemeral scratch file while
 hashing/counting and enforcing the same 512 MiB per-object limit; close the
-file; compare any supplied commitment; then seal the computed commitment and
+file; compare a commitment only for producer contracts that explicitly permit
+one; then seal the computed commitment and
 second-pass stream together as `CommittedArtifactSource`.
+
+Guide ingest never permits such a caller commitment. Its raw-body v0.1 route
+assigns the server-owned canonical media type
+`application/octet-stream`; it does not trust the request `Content-Type` header.
+After preparation, its
+durable admission transaction locks the exact project/guide/snapshot/item
+lineage, revalidates `artifact.guide_source.ingest`, and records a
+non-authoritative `GuideSourceArtifactIngest` from the server-computed digest,
+byte count, and media type. Legacy snapshot-item hashes are descriptors during
+the phased cutover and are not admission truth. The staged row cannot activate
+setup, materialize bytes, or substitute for a verified binding.
 
 v0.1 does not fetch guide URLs. A URL may be retained as a durable source
 reference only when authorized bytes are supplied separately. Server-side URL

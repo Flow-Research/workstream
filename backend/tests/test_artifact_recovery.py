@@ -54,6 +54,7 @@ from app.modules.authorization.runtime import (
     HumanAuthorizationContext,
     IdentityLinkStatus,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.projects.models import (
     GuideSourceSnapshot,
@@ -71,6 +72,17 @@ class _AllowArtifactAuthority:
     async def consume(self, **_values: object) -> None: ...
 
     def discard(self) -> None: ...
+
+
+class _AllowGuidePreparedAuthorization:
+    def __init__(self, actor_profile_id: UUID) -> None:
+        self.actor_profile_id = actor_profile_id
+        self.handle = object.__new__(PreparedAuthorizationHandle)
+
+    async def consume(self, *, prepared_authorization, facts) -> UUID:
+        assert prepared_authorization is self.handle
+        assert facts.byte_count >= 0
+        return self.actor_profile_id
 
 
 class _DenyTerminalArtifactAuthority(_AllowArtifactAuthority):
@@ -321,12 +333,18 @@ async def _exhausted_guide_job(session, settings, tmp_path, context):
         )
     )
     await session.commit()
+    prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
     admission = await ArtifactAdmissionService(session, settings, namespace).admit(
         GuideArtifactAdmissionRequest(
-            authorization_context=context,
             guide_source_item_id=UUID(item_id),
             source=source,
-        )
+            operation_identity=canonical_json_hash(
+                {"request_type": "guide", "guide_source_item_id": item_id}
+            ),
+            request_digest="sha256:" + "a" * 64,
+        ),
+        guide_prepared_authorization=prepared,  # type: ignore[arg-type]
+        prepared_authorization=prepared.handle,
     )
     orchestrator = ArtifactStorageOrchestrator(
         session, store, namespace, settings, _AllowArtifactAuthority()

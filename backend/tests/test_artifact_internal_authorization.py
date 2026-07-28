@@ -46,7 +46,28 @@ from app.modules.artifacts.service import (
 )
 from app.modules.artifacts.schemas import GuideArtifactAdmissionRequest
 from tests.artifact_store_helpers import minted_source
-from tests.test_artifact_admission import _context, _namespace, _seed_guide, _settings
+from tests.test_artifact_admission import (
+    _AllowGuidePreparedAuthorization,
+    _context,
+    _guide_operation,
+    _namespace,
+    _seed_guide,
+    _settings,
+)
+
+
+async def _admit_guide(session, settings, namespace, actor_context, guide_item_id, source):
+    prepared = _AllowGuidePreparedAuthorization(actor_context.actor_profile_id)
+    return await ArtifactAdmissionService(session, settings, namespace).admit(
+        GuideArtifactAdmissionRequest(
+            guide_source_item_id=UUID(guide_item_id),
+            source=source,
+            operation_identity=_guide_operation(guide_item_id),
+            request_digest="sha256:" + "a" * 64,
+        ),
+        guide_prepared_authorization=prepared,  # type: ignore[arg-type]
+        prepared_authorization=prepared.handle,
+    )
 
 
 class _Session:
@@ -529,14 +550,8 @@ async def test_scanner_failure_after_consume_rolls_back_evidence_and_publishes_n
                     content_hash=source.commitment.sha256,
                     media_type=source.commitment.media_type,
                 )
-                admission = await ArtifactAdmissionService(
-                    session, settings, namespace
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=actor_context,
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                    )
+                admission = await _admit_guide(
+                    session, settings, namespace, actor_context, guide_item_id, source
                 )
 
             request_id = uuid4()
@@ -647,14 +662,8 @@ async def test_put_claim_and_terminal_injected_failures_roll_back_both_sides(
                     content_hash=source.commitment.sha256,
                     media_type=source.commitment.media_type,
                 )
-                admission = await ArtifactAdmissionService(
-                    session, settings, namespace
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=actor_context,
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                    )
+                admission = await _admit_guide(
+                    session, settings, namespace, actor_context, guide_item_id, source
                 )
                 request_id = uuid4()
                 authority = PreparedArtifactInternalAuthority(
@@ -815,14 +824,8 @@ async def test_claim_and_scanner_denials_persist_without_art_side_effects(
                     content_hash=source.commitment.sha256,
                     media_type=source.commitment.media_type,
                 )
-                admission = await ArtifactAdmissionService(
-                    session, settings, namespace
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=actor_context,
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                    )
+                admission = await _admit_guide(
+                    session, settings, namespace, actor_context, guide_item_id, source
                 )
                 claim_request_id = uuid4()
                 claim_authority = PreparedArtifactInternalAuthority(
@@ -927,14 +930,8 @@ async def test_verification_claim_and_terminal_failures_roll_back_both_sides(
                     content_hash=source.commitment.sha256,
                     media_type=source.commitment.media_type,
                 )
-                admission = await ArtifactAdmissionService(
-                    session, settings, namespace
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=actor_context,
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                    )
+                admission = await _admit_guide(
+                    session, settings, namespace, actor_context, guide_item_id, source
                 )
                 put_request_id = uuid4()
                 assert (
@@ -1161,14 +1158,8 @@ async def test_post_provider_revocation_commits_denial_but_no_terminal_artifact_
                     content_hash=source.commitment.sha256,
                     media_type=source.commitment.media_type,
                 )
-                admission = await ArtifactAdmissionService(
-                    session, settings, namespace
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=actor_context,
-                        guide_source_item_id=UUID(guide_item_id),
-                        source=source,
-                    )
+                admission = await _admit_guide(
+                    session, settings, namespace, actor_context, guide_item_id, source
                 )
                 request_id = uuid4()
                 authority = PreparedArtifactInternalAuthority(

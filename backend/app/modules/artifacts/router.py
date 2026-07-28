@@ -10,11 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps.authorization import (
-    _authorization_context,
-    get_authorization_actor,
-)
-from app.core.api_controls import request_ids
 from app.db.session import get_db_session
 from app.interfaces.artifact_operations import (
     ArtifactAuditResourceType,
@@ -22,7 +17,7 @@ from app.interfaces.artifact_operations import (
     ArtifactOperatorRecoveryPort,
     ArtifactRecoveryRequest,
 )
-from app.modules.actors.service import ResolvedActor
+from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.operator import (
     ArtifactOperatorEvidenceError,
     ArtifactOperatorInputError,
@@ -198,15 +193,6 @@ def get_artifact_recovery_port(
 ) -> ArtifactOperatorRecoveryPort:
     """Compose the approved recovery port without a second factory path."""
     return ArtifactRecoveryService(session, request.app.state.settings, authority)
-
-
-async def get_artifact_authorization_context(
-    request: Request,
-    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
-) -> AuthorizationContext:
-    """Project the request's canonical actor rows into exact authority facts."""
-    request_id, correlation_id = (UUID(value) for value in request_ids(request))
-    return _authorization_context(resolved, request_id, correlation_id)
 
 
 def _service(

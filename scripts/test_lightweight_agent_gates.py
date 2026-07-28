@@ -51,6 +51,5 @@ class LightweightAgentGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             phase_index("unknown")
 
-
 if __name__ == "__main__":
     unittest.main()
