@@ -157,8 +157,8 @@ None.
 | `WS-AUTH-001-PREP` | Merged | `codex/ws-auth-001-prep` | #162 | Merged as `c559d556` on 2026-07-21; adds no feature consumer or activation. |
 | `WS-AUTH-001-10` | Proposed | - | - | Project contributor grants. |
 | `WS-AUTH-001-11` | Planning split authored | `codex/ws-auth-001-11-project-read-cutover` | - | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2; signed automation remains the live-state authority. |
-| `WS-AUTH-001-11A` | Proposed | - | - | Project-read action catalogue and migration `0035`; no activation. |
-| `WS-AUTH-001-11B` | Proposed | - | - | Project identity and self authorization-context cutover. |
+| `WS-AUTH-001-11A` | Merged | `codex/ws-auth-001-11a-project-read-catalogue` | #208 | Registered the project-read catalogue and migration `0035`; no activation. |
+| `WS-AUTH-001-11B` | Implementation | `codex/ws-auth-001-11b-project-identity-context` | - | Project identity and self authorization-context hard cutover. |
 | `WS-AUTH-001-11C1` | Proposed | - | - | Setup and draft diagnostic read cutover. |
 | `WS-AUTH-001-11C2` | Proposed | - | - | Effective policy and active-guide read cutover. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
@@ -168,8 +168,9 @@ None.
 | `WS-AUTH-001-16` | Proposed | - | - | Conformance and live proof. |
 
 Feature-gated registration and activation chunks are enumerated in
-`CHUNK_MAP.md` and `ACTIVATION_CUSTODY.md`. They remain inactive until exact
-merged feature manifests and separate human starts exist.
+`CHUNK_MAP.md` and `ACTIVATION_CUSTODY.md`. Actions remain inactive until their
+bounded implementation and required evidence are reviewed and human-merged;
+planning artifacts do not activate or lock work.
 
 ## Blockers
 

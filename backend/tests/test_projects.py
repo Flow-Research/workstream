@@ -9,7 +9,7 @@ import types
 from collections.abc import AsyncIterator, Iterator
 from datetime import UTC, datetime
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest  # type: ignore[import-not-found]
 from httpx import ASGITransport, AsyncClient
@@ -125,6 +125,83 @@ async def project_client(project_database_env: str) -> AsyncIterator[AsyncClient
 
 def auth_headers(token: str = "project-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+async def add_project_role_for_default_actor(project_id: str, role: str) -> tuple[UUID, str]:
+    """Insert reviewed local-grant fixtures for project identity route tests."""
+    now = datetime.now(UTC)
+    async with db_session.get_session_factory()() as session:
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        assert link is not None
+        actor_id = link.actor_profile_id
+        admin_grant = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.target_actor_profile_id == actor_id,
+                AdminRoleGrant.role == "access_administrator",
+            )
+        )
+        if admin_grant is None:
+            admin_grant = AdminRoleGrant(
+                id=uuid4(),
+                target_actor_profile_id=actor_id,
+                role="access_administrator",
+                scope_type="system",
+                scope_project_id=None,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="AUTH-11B route fixture",
+            )
+            session.add(admin_grant)
+            control = await session.get(AuthorityControl, 1)
+            assert control is not None
+            control.bootstrap_completed = True
+            control.bootstrap_grant_id = admin_grant.id
+            control.version = 1
+            await session.flush()
+        snapshot = ProjectRoleQualificationSnapshot(
+            id=uuid4(),
+            project_id=project_id,
+            actor_profile_id=actor_id,
+            requested_role=role,
+            skills_snapshot={
+                "availability": "unavailable",
+                "reference_ids": [],
+                "unavailable_reason": "no_record",
+            },
+            reputation_snapshot={
+                "availability": "unavailable",
+                "reference_ids": [],
+                "unavailable_reason": "no_record",
+            },
+            prior_project_work_refs=[],
+            external_expertise_refs=[],
+            captured_by_actor_profile_id=actor_id,
+            captured_by_admin_role_grant_id=admin_grant.id,
+            captured_at=now,
+        )
+        grant = ProjectRoleGrant(
+            id=uuid4(),
+            project_id=project_id,
+            actor_profile_id=actor_id,
+            role=role,
+            status="active",
+            version=1,
+            grant_method="manual",
+            qualification_snapshot_id=snapshot.id,
+            granted_by_actor_profile_id=actor_id,
+            granted_by_admin_role_grant_id=admin_grant.id,
+            grant_reason="AUTH-11B route fixture",
+            granted_at=now,
+        )
+        session.add_all([snapshot, grant])
+        await session.commit()
+        return grant.id, str(link.id)
 
 
 @pytest.mark.asyncio
@@ -680,13 +757,14 @@ def complete_guide_payload(version: str = "v1") -> dict:
     }
 
 
-async def create_project(client: AsyncClient) -> dict:
+async def create_project(client: AsyncClient, *, name: str = "STEM Eval") -> dict:
+    slug = f"{name.lower().replace(' ', '-')}-{uuid4()}"
     response = await client.post(
         "/api/v1/projects",
         headers=auth_headers(),
         json={
-            "name": "STEM Eval",
-            "slug": "stem-eval",
+            "name": name,
+            "slug": slug,
             "description": "Internal STEM evaluation tasks",
         },
     )
@@ -890,11 +968,11 @@ def test_project_setup_queue_syncs_all_setup_task_settings(
         get_settings.cache_clear()
 
 
-async def test_get_project_does_not_require_project_setup_queue(
+async def test_get_project_rejects_token_role_when_setup_queue_is_unavailable(
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Read paths stay available even when automatic setup cannot enqueue work."""
+    """A token role cannot authorize project identity under any queue state."""
     project = await create_project(project_client)
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
@@ -906,8 +984,119 @@ async def test_get_project_does_not_require_project_setup_queue(
         headers=auth_headers(),
     )
 
-    assert response.status_code == 200, response.text
-    assert response.json()["id"] == project["id"]
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "project_authorization_resource_not_found"
+
+
+def test_project_identity_projection_is_structurally_minimal_for_contributors() -> None:
+    """Contributor selection cannot serialize admin-only project fields."""
+    project = Project(
+        id=str(uuid4()),
+        name="Projection proof",
+        slug="projection-proof",
+        description="Admin-only project description",
+        status="active",
+    )
+    contributor = ProjectService.project_identity_response(project, contributor_only=True)
+    assert contributor.model_dump() == {
+        "id": project.id,
+        "name": "Projection proof",
+        "status": "active",
+    }
+    assert "slug" not in contributor.model_dump()
+    assert "description" not in contributor.model_dump()
+
+
+async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
+    project_client: AsyncClient,
+) -> None:
+    """Live routes conceal cross-project, revoked, suspended, and revoked-link access."""
+    project = await create_project(project_client, name="Visible project")
+    other = await create_project(project_client, name="Other project")
+    grant_id, link_id = await add_project_role_for_default_actor(project["id"], "submitter")
+
+    identity = await project_client.get(
+        f"/api/v1/projects/{project['id']}", headers=auth_headers()
+    )
+    assert identity.status_code == 200, identity.text
+    assert identity.json() == {
+        "id": project["id"],
+        "name": "Visible project",
+        "status": "draft",
+    }
+    context = await project_client.get(
+        f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+        headers=auth_headers(),
+    )
+    assert context.status_code == 200, context.text
+    assert context.json()["project_roles"] == ["submitter"]
+    assert context.json()["admin_roles"] == []
+    assert context.json()["effective_action_ids"] == ["project.read"]
+
+    for path in (
+        f"/api/v1/projects/{other['id']}",
+        f"/api/v1/actors/me/authorization-context?project_id={other['id']}",
+    ):
+        denied = await project_client.get(path, headers=auth_headers())
+        assert denied.status_code == 404
+        assert denied.json()["error"]["code"] == "project_authorization_resource_not_found"
+
+    now = datetime.now(UTC)
+    async with db_session.get_session_factory()() as session:
+        grant = await session.get(ProjectRoleGrant, grant_id)
+        assert grant is not None
+        grant.status = "revoked"
+        grant.version = 2
+        grant.revoked_by_actor_profile_id = grant.actor_profile_id
+        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
+        grant.revoked_reason = "AUTH-11B revocation proof"
+        grant.revoked_at = now
+        await session.commit()
+    for path in (
+        f"/api/v1/projects/{project['id']}",
+        f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+    ):
+        denied = await project_client.get(path, headers=auth_headers())
+        assert denied.status_code == 404
+
+    await add_project_role_for_default_actor(project["id"], "reviewer")
+    async with db_session.get_session_factory()() as session:
+        link = await session.get(ActorIdentityLink, link_id)
+        assert link is not None
+        profile = await session.get(ActorProfile, link.actor_profile_id)
+        assert profile is not None
+        profile.status = "suspended"
+        profile.suspended_by = profile.id
+        profile.suspended_at = now
+        profile.suspension_reason = "AUTH-11B stale actor proof"
+        await session.commit()
+    for path in (
+        f"/api/v1/projects/{project['id']}",
+        f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+    ):
+        denied = await project_client.get(path, headers=auth_headers())
+        assert denied.status_code == 404
+
+    async with db_session.get_session_factory()() as session:
+        link = await session.get(ActorIdentityLink, link_id)
+        assert link is not None
+        profile = await session.get(ActorProfile, link.actor_profile_id)
+        assert profile is not None
+        profile.status = "active"
+        profile.suspended_by = None
+        profile.suspended_at = None
+        profile.suspension_reason = None
+        link.status = "revoked"
+        link.revoked_by = profile.id
+        link.revoked_at = now
+        link.revoked_reason = "AUTH-11B stale link proof"
+        await session.commit()
+    for path in (
+        f"/api/v1/projects/{project['id']}",
+        f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+    ):
+        denied = await project_client.get(path, headers=auth_headers())
+        assert denied.status_code == 404
 
 
 async def test_create_guide_returns_created_when_post_commit_enqueue_fails(

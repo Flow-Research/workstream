@@ -52,8 +52,8 @@ stopped.
 | `WS-AUTH-001-10B2` | Privacy-Safe Project Role Grant Reads | L1 | Proposed after 10B1 |
 | `WS-AUTH-001-10C` | Project Role Grant Mutations | L1 | Proposed after 10B2 |
 | `WS-AUTH-001-11` | Project Read Cutover Planning Parent | L1 | Signed start run `30167274426`; planning split authored, no runtime implementation |
-| `WS-AUTH-001-11A` | Project Read Catalogue And Projection Foundation | L1 | Proposed successor; migration `0035`, no active surface |
-| `WS-AUTH-001-11B` | Project Identity And Actor Context Cutover | L1 | Proposed after 11A |
+| `WS-AUTH-001-11A` | Project Read Catalogue And Projection Foundation | L1 | Merged in PR #208; migration `0035`, no active surface |
+| `WS-AUTH-001-11B` | Project Identity And Actor Context Cutover | L1 | Implementation after merged 11A |
 | `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Proposed after 11B |
 | `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Proposed after 11C1 |
 | `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |

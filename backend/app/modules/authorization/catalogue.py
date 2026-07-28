@@ -352,8 +352,8 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_ROLE_GRANT_MANAGE,
         ActionOwner.AUTH_10C,
     ),
-    _planned(ActionId.PROJECT_READ, PermissionId.PROJECT_READ, ActionOwner.AUTH_11B),
-    _planned(
+    _active(ActionId.PROJECT_READ, PermissionId.PROJECT_READ, ActionOwner.AUTH_11B),
+    _active(
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         PermissionId.ACTOR_PROFILE_READ_SELF,
         ActionOwner.AUTH_11B,
@@ -679,6 +679,8 @@ def _index_actions(
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.PROJECT_READ,
+        ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,

@@ -24,6 +24,7 @@ from app.modules.authorization.catalogue import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
+    ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
     ActorIdentityLinkLifecycleResourceContext,
     ActorKind,
@@ -49,6 +50,7 @@ from app.modules.authorization.runtime import (
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
+    ProjectReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
@@ -62,7 +64,11 @@ from app.modules.authorization.runtime import (
 )
 
 ContextRevalidator = Callable[
-    [HumanAuthorizationContext, ActorSelfResourceContext], Awaitable[HumanAuthorizationContext]
+    [
+        HumanAuthorizationContext,
+        ActorSelfResourceContext | ActorAuthorizationContextResourceContext | ProjectReadResourceContext,
+    ],
+    Awaitable[HumanAuthorizationContext],
 ]
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
@@ -125,6 +131,16 @@ _ARTIFACT_INTERNAL_RESOURCES = {
         ArtifactPendingWorkResourceContext,
     ),
 }
+
+
+def project_action_available_for_status(action_id: ActionId, project_status: str) -> bool:
+    """Apply project-only lifecycle guards shared by decisions and projections."""
+    if action_id in {
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+    }:
+        return project_status in {"draft", "active", "paused"}
+    return True
 
 
 class _PrelockedAuthority:
@@ -455,6 +471,31 @@ class AuthorizationService:
             ) = await self._admin_denial(action, resource_context, context)
             if denial is None:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
+        elif action is not None and action.action_id is ActionId.PROJECT_READ:
+            (
+                denial,
+                context,
+                matched_kind,
+                matched_grant_id,
+                matched_project_id,
+                revalidated,
+            ) = await self._project_read_denial(action, resource_context, context)
+        elif action is not None and action.action_id is ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ:
+            if (
+                isinstance(context, HumanAuthorizationContext)
+                and isinstance(resource_context, ActorAuthorizationContextResourceContext)
+                and self._revalidate_actor_self is not None
+            ):
+                context = await self._revalidate_actor_self(context, resource_context)
+                revalidated = True
+            (
+                denial,
+                matched_kind,
+                matched_grant_id,
+                matched_project_id,
+            ) = await self._authorization_context_denial(
+                action, resource_context, context, revalidated
+            )
         else:
             if (
                 action is not None
@@ -480,6 +521,150 @@ class AuthorizationService:
             matched_grant_id=matched_grant_id,
             matched_project_id=matched_project_id,
             revalidated=revalidated,
+        )
+
+    async def _project_read_denial(
+        self,
+        action,
+        resource: AuthorizationResourceContext,
+        context: AuthorizationContext,
+    ) -> tuple[
+        AuthorizationDenialCode | None,
+        AuthorizationContext,
+        MatchedAuthorityKind | None,
+        UUID | None,
+        UUID | None,
+        bool,
+    ]:
+        """Authorize one canonical project through admin or contributor grants."""
+        if not isinstance(context, HumanAuthorizationContext) or not isinstance(
+            resource, ProjectReadResourceContext
+        ):
+            return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, context, None, None, None, False
+        if action.availability is not ActionAvailability.ACTIVE:
+            return AuthorizationDenialCode.ACTION_UNAVAILABLE, context, None, None, None, False
+        if self._revalidate_actor_self is None:
+            return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, context, None, None, None, False
+        context = await self._revalidate_actor_self(context, resource)
+        lifecycle = self._lifecycle_denial(context)
+        if lifecycle is not None:
+            return lifecycle, context, None, None, None, True
+        if not resource.project_exists:
+            return (
+                AuthorizationDenialCode.RESOURCE_NOT_FOUND,
+                context,
+                None,
+                None,
+                None,
+                True,
+            )
+        admin_grant = await self._admin.find_effective_grant(
+            context.actor_profile_id,
+            action.permission_id,
+            scope_project_id=resource.scope_project_id,
+            system_scope_only=False,
+            for_update=True,
+        )
+        if admin_grant is not None:
+            return (
+                None,
+                context,
+                MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                admin_grant.id,
+                resource.scope_project_id,
+                True,
+            )
+        project_grant = await self._admin.find_active_project_role_any(
+            project_id=resource.scope_project_id,
+            actor_profile_id=context.actor_profile_id,
+            for_update=True,
+        )
+        if project_grant is not None:
+            return (
+                None,
+                context,
+                MatchedAuthorityKind.PROJECT_ROLE_GRANT,
+                project_grant.id,
+                resource.scope_project_id,
+                True,
+            )
+        out_of_scope = await self._admin.has_effective_permission_any_scope(
+            context.actor_profile_id, action.permission_id
+        ) or await self._admin.has_active_project_role_any_project(context.actor_profile_id)
+        return (
+            AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+            if out_of_scope
+            else AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+            context,
+            None,
+            None,
+            None,
+            True,
+        )
+
+    async def _authorization_context_denial(
+        self,
+        action,
+        resource: AuthorizationResourceContext,
+        context: AuthorizationContext,
+        revalidated: bool,
+    ) -> tuple[
+        AuthorizationDenialCode | None,
+        MatchedAuthorityKind | None,
+        UUID | None,
+        UUID | None,
+    ]:
+        """Authorize a caller-owned context projection for one exact project."""
+        lifecycle = self._lifecycle_denial(context)
+        if lifecycle is not None:
+            return lifecycle, None, None, None
+        if action.availability is not ActionAvailability.ACTIVE:
+            return AuthorizationDenialCode.ACTION_UNAVAILABLE, None, None, None
+        if (
+            not isinstance(context, HumanAuthorizationContext)
+            or not isinstance(resource, ActorAuthorizationContextResourceContext)
+            or resource.resource_id != context.actor_profile_id
+            or not revalidated
+        ):
+            return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, None, None, None
+        if not resource.project_exists:
+            return AuthorizationDenialCode.RESOURCE_NOT_FOUND, None, None, None
+        admin_grant = await self._admin.find_effective_grant(
+            context.actor_profile_id,
+            PermissionId.PROJECT_READ,
+            scope_project_id=resource.scope_project_id,
+            system_scope_only=False,
+            for_update=True,
+        )
+        if admin_grant is not None:
+            return (
+                None,
+                MatchedAuthorityKind.ADMIN_ROLE_GRANT,
+                admin_grant.id,
+                resource.scope_project_id,
+            )
+        project_grant = await self._admin.find_active_project_role_any(
+            project_id=resource.scope_project_id,
+            actor_profile_id=context.actor_profile_id,
+            for_update=True,
+        )
+        if project_grant is None:
+            out_of_scope = await self._admin.has_effective_permission_any_scope(
+                context.actor_profile_id, PermissionId.PROJECT_READ
+            ) or await self._admin.has_active_project_role_any_project(context.actor_profile_id)
+            return (
+                AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+                if out_of_scope
+                else AuthorizationDenialCode.PERMISSION_NOT_GRANTED,
+                None,
+                None,
+                None,
+            )
+        return (
+            None,
+            MatchedAuthorityKind.PROJECT_ROLE_GRANT,
+            project_grant.id,
+            resource.scope_project_id,
         )
 
     async def _require_prelocked(
@@ -744,7 +929,7 @@ class AuthorizationService:
         elif isinstance(resource, ProjectRoleGrantIssueResourceContext):
             if resource.target_actor_profile_id == context.actor_profile_id:
                 return AuthorizationDenialCode.SELF_GRANT_FORBIDDEN
-            if resource.project_status not in {"draft", "active", "paused"}:
+            if not project_action_available_for_status(action_id, resource.project_status):
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if not resource.target_eligible:
                 return AuthorizationDenialCode.ACTOR_NOT_FOUND
@@ -777,7 +962,7 @@ class AuthorizationService:
             ) and not await self._admin.actor_exists(resource.resource_id):
                 return AuthorizationDenialCode.ACTOR_NOT_FOUND
         elif isinstance(resource, ProjectContributorCandidateCollectionResourceContext):
-            if resource.project_status not in {"draft", "active", "paused"}:
+            if not project_action_available_for_status(action_id, resource.project_status):
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
         return None
 

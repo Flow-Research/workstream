@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from typing import Literal
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
@@ -195,6 +195,46 @@ class ActorSelfResourceContext(BaseModel):
         """Reject ambiguous duplicate update-field facts."""
         if len(set(self.requested_fields)) != len(self.requested_fields):
             raise ValueError("requested fields must be unique")
+        return self
+
+
+class ProjectReadResourceContext(BaseModel):
+    """Canonical project facts for one project identity read."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_exists: bool = True
+    project_status: str | None
+
+    @model_validator(mode="after")
+    def require_exact_project(self):
+        """Bind the resource and authority scope to one project."""
+        if self.resource_id != self.scope_project_id:
+            raise ValueError("project read scope must match resource")
+        if self.project_exists != (self.project_status is not None):
+            raise ValueError("project existence and status are inconsistent")
+        return self
+
+
+class ActorAuthorizationContextResourceContext(BaseModel):
+    """Self-owned selector for authority projected onto one project."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["actor_authorization_context"]
+    resource_id: UUID
+    scope_project_id: UUID
+    project_exists: bool = True
+    project_status: str | None
+
+    @model_validator(mode="after")
+    def require_project_existence_shape(self):
+        """Keep missing-project selectors free of fabricated lifecycle facts."""
+        if self.project_exists != (self.project_status is not None):
+            raise ValueError("project existence and status are inconsistent")
         return self
 
 
@@ -459,6 +499,8 @@ class ArtifactPendingWorkResourceContext(BaseModel):
 
 AuthorizationResourceContext = (
     ActorSelfResourceContext
+    | ProjectReadResourceContext
+    | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
     | ActorProfileLifecycleResourceContext
@@ -489,6 +531,14 @@ def authorization_resource_digest(resource: AuthorizationResourceContext) -> str
     )
 
 
+def authorization_resource_selector_id(resource_type: str, raw_id: str) -> UUID:
+    """Return a bounded UUID selector for missing-resource decision evidence."""
+    try:
+        return UUID(raw_id)
+    except (TypeError, ValueError, AttributeError):
+        return uuid5(NAMESPACE_URL, f"workstream:{resource_type}-selector:{raw_id}")
+
+
 class AuthorizationDenialCode(StrEnum):
     """Closed internal authorization outcomes."""
 
@@ -512,6 +562,7 @@ class MatchedAuthorityKind(StrEnum):
 
     ACTOR_SELF = "actor_self"
     ADMIN_ROLE_GRANT = "admin_role_grant"
+    PROJECT_ROLE_GRANT = "project_role_grant"
     FIXED_SERVICE = "fixed_service"
 
 
@@ -527,6 +578,8 @@ class AuthorizationDecision(BaseModel):
     denial_code: AuthorizationDenialCode | None
     resource_type: Literal[
         "actor_profile",
+        "actor_authorization_context",
+        "project",
         "actor_identity_link",
         "system",
         "permission_catalogue",
@@ -579,6 +632,9 @@ class AuthorizationDecision(BaseModel):
         elif self.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT:
             if self.matched_grant_id is None:
                 raise ValueError("grant decisions require matched grant")
+        elif self.matched_authority_kind is MatchedAuthorityKind.PROJECT_ROLE_GRANT:
+            if self.matched_grant_id is None or self.matched_scope_project_id is None:
+                raise ValueError("project-role decisions require matched grant and scope")
         elif self.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE:
             if self.matched_grant_id is not None or self.matched_scope_project_id is not None:
                 raise ValueError("fixed-service decisions cannot carry grant scope")

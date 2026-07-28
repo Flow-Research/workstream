@@ -84,7 +84,10 @@ from app.modules.authorization.pagination import (
     InvalidPaginationCursor,
     authorization_read_query_digest,
 )
-from app.modules.authorization.read_service import ProjectRoleReadService
+from app.modules.authorization.read_service import (
+    ActorAuthorizationContextReadService,
+    ProjectRoleReadService,
+)
 from app.modules.authorization.catalogue import (
     ACTION_BY_ID,
     ACTION_DEFINITIONS,
@@ -162,6 +165,7 @@ from app.modules.authorization.admin_service import (
 from app.modules.authorization.policy import ADMIN_ROLE_PERMISSIONS, ADMIN_ROLE_SCOPES
 from app.modules.authorization.runtime import (
     ActorAdminRoleGrantHistoryResourceContext,
+    ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
     ActorIdentityLinkLifecycleResourceContext,
     ActorKind,
@@ -189,6 +193,7 @@ from app.modules.authorization.runtime import (
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
+    ProjectReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
@@ -680,9 +685,18 @@ async def test_candidate_service_cursor_uses_last_visible_equal_timestamp_bounda
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status_code", [429, 503])
+@pytest.mark.parametrize(
+    "path",
+    (
+        "/api/v1/projects/{project_id}/role-grants",
+        "/api/v1/projects/{project_id}",
+        "/api/v1/actors/me/authorization-context?project_id={project_id}",
+    ),
+)
 async def test_authorization_read_rate_failure_precedes_project_lookup(
     monkeypatch: pytest.MonkeyPatch,
     status_code: int,
+    path: str,
 ) -> None:
     app = create_app(Settings(environment="test"))
     lookups = 0
@@ -717,7 +731,7 @@ async def test_authorization_read_rate_failure_precedes_project_lookup(
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            f"/api/v1/projects/{uuid4()}/role-grants",
+            path.format(project_id=uuid4()),
             headers={"Authorization": "Bearer test"},
         )
 
@@ -758,11 +772,18 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
             transport=ASGITransport(app=app),
             base_url="http://testserver",
         ) as client:
-            response = await client.get(f"/api/v1/projects/{uuid4()}/role-grants")
+            for path in (
+                f"/api/v1/projects/{uuid4()}/role-grants",
+                f"/api/v1/projects/{uuid4()}",
+                f"/api/v1/actors/me/authorization-context?project_id={uuid4()}",
+            ):
+                response = await client.get(path)
+                assert response.status_code == 404
+                assert response.json()["error"]["code"] == (
+                    "project_authorization_resource_not_found"
+                )
 
-        assert response.status_code == 404
-        assert response.json()["error"]["code"] == ("project_authorization_resource_not_found")
-        assert consumptions == 1
+        assert consumptions == 3
         assert lookups == 0
 
 
@@ -1793,6 +1814,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.PROJECT_READ,
+        ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1877,14 +1900,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 25
+        == 27
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 53
+        == 51
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2077,7 +2100,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 78 ActionIds, 25 active actions, and\n53 planned actions" in operations
+        "71 PermissionIds, 78 ActionIds, 27 active actions, and\n51 planned actions" in operations
     )
 
 
@@ -2890,6 +2913,157 @@ class _PreparedTestSession:
 
     def in_nested_transaction(self) -> bool:
         return self.nested
+
+
+class _ProjectReadAuthorityFacts:
+    """Minimal grant repository used by project-read kernel tests."""
+
+    def __init__(self, *, admin_grant=None, project_grant=None) -> None:
+        self.admin_grant = admin_grant
+        self.project_grant = project_grant
+
+    async def find_effective_grant(self, *_args, **_kwargs):
+        return self.admin_grant
+
+    async def find_active_project_role_any(self, **_kwargs):
+        return self.project_grant
+
+    async def has_effective_permission_any_scope(self, *_args, **_kwargs):
+        return False
+
+    async def has_active_project_role_any_project(self, *_args, **_kwargs):
+        return False
+
+
+class _ContextProjectionFacts:
+    async def effective_admin_roles_for_project(self, **_kwargs):
+        return ("access_administrator", "project_manager")
+
+    async def active_project_roles_for_actor(self, **_kwargs):
+        return ("reviewer", "submitter")
+
+
+class _ContextProjectionAuthorization:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def require(self, action_id, resource):
+        self.calls.append((action_id, resource))
+
+
+@pytest.mark.asyncio
+async def test_project_read_kernel_prefers_admin_and_records_project_role_authority() -> None:
+    context = _runtime_context()
+    project_id = uuid4()
+    resource = ProjectReadResourceContext(
+        resource_type="project",
+        resource_id=project_id,
+        scope_project_id=project_id,
+        project_status="active",
+    )
+    admin_grant = SimpleNamespace(id=uuid4())
+    service, _ = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(
+            admin_grant=admin_grant,
+            project_grant=SimpleNamespace(id=uuid4()),
+        ),
+    )
+    decision = await service.require(ActionId.PROJECT_READ, resource)
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+    assert decision.matched_grant_id == admin_grant.id
+    assert decision.matched_scope_project_id == project_id
+    assert decision.revalidated is True
+
+    project_grant = SimpleNamespace(id=uuid4())
+    service, _ = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(project_grant=project_grant),
+    )
+    decision = await service.require(ActionId.PROJECT_READ, resource)
+    assert decision.matched_authority_kind is MatchedAuthorityKind.PROJECT_ROLE_GRANT
+    assert decision.matched_grant_id == project_grant.id
+    assert decision.matched_scope_project_id == project_id
+
+    missing = resource.model_copy(update={"project_exists": False, "project_status": None})
+    service, evidence = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(admin_grant=admin_grant),
+    )
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.PROJECT_READ, missing)
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+    assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_actor_authorization_context_is_self_only_and_revalidated() -> None:
+    context = _runtime_context()
+    resource = ActorAuthorizationContextResourceContext(
+        resource_type="actor_authorization_context",
+        resource_id=context.actor_profile_id,
+        scope_project_id=uuid4(),
+        project_status="active",
+    )
+    service, _ = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(project_grant=SimpleNamespace(id=uuid4())),
+    )
+    decision = await service.require(ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ, resource)
+    assert decision.matched_authority_kind is MatchedAuthorityKind.PROJECT_ROLE_GRANT
+    assert decision.matched_scope_project_id == resource.scope_project_id
+    assert decision.revalidated is True
+
+    service, _ = _runtime_service(context, admin_repository=_ProjectReadAuthorityFacts())
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ, resource)
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+
+    service, _ = _runtime_service(context, admin_repository=_ProjectReadAuthorityFacts())
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(
+            ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+            resource.model_copy(update={"resource_id": uuid4()}),
+        )
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+
+
+@pytest.mark.asyncio
+async def test_context_projection_excludes_planned_and_unrelated_actions() -> None:
+    actor_id, project_id = uuid4(), uuid4()
+    authorization = _ContextProjectionAuthorization()
+    service = ActorAuthorizationContextReadService(
+        authorization,  # type: ignore[arg-type]
+        _ContextProjectionFacts(),  # type: ignore[arg-type]
+    )
+    response = await service.read(
+        resolved=SimpleNamespace(profile=SimpleNamespace(id=str(actor_id), status="active")),
+        project=SimpleNamespace(id=str(project_id), status="active"),
+        project_selector_id=project_id,
+    )
+    assert len(authorization.calls) == 1
+    assert authorization.calls[0][0] is ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ
+    assert response.admin_roles == ("project_manager",)
+    assert response.project_roles == ("reviewer", "submitter")
+    assert response.effective_action_ids == (
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_READ,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
+    )
+    archived = await service.read(
+        resolved=SimpleNamespace(profile=SimpleNamespace(id=str(actor_id), status="active")),
+        project=SimpleNamespace(id=str(project_id), status="archived"),
+        project_selector_id=project_id,
+    )
+    assert archived.effective_action_ids == (
+        ActionId.PROJECT_READ,
+        ActionId.PROJECT_ROLE_GRANT_LIST,
+        ActionId.PROJECT_ROLE_GRANT_READ,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE,
+    )
 
 
 class _PreparedActorFacts:
