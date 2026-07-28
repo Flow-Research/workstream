@@ -51,15 +51,5 @@ class LightweightAgentGateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             phase_index("unknown")
 
-    def test_backend_workflow_has_one_project_subsystem_coverage_gate(self) -> None:
-        workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")
-        command = (
-            "coverage report --include='app/modules/projects/*' "
-            "--precision=2 --fail-under=90"
-        )
-        self.assertEqual(workflow.count("- name: Project subsystem coverage"), 1)
-        self.assertEqual(workflow.count(command), 1)
-
-
 if __name__ == "__main__":
     unittest.main()

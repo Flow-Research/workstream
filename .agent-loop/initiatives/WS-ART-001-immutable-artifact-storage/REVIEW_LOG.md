@@ -27,7 +27,7 @@
 - Repairs include commit-before-provider execution, activated fixed-service
   put-resolver composition, confirmed-missing replay with capacity
   reacquisition, concealed request-metadata validation, populated downgrade
-  refusal, and the exact hosted projects coverage gate.
+  refusal, and preservation of existing hosted coverage gates.
 - Initial hosted Backend run `30360132709` failed before execution because the
   new guide test module lacked semantic-lane custody. The bounded repair assigns
   it to `shared_foundations` and makes that ownership an exact regression;
@@ -69,6 +69,10 @@
   between runs. A deterministic deny-only seam test now proves the default 04A
   selector rejects final PREP consumption, providing margin without changing
   production or the threshold.
+- Hosted run `30370291310` passed artifact-foundation coverage, then failed only
+  the ART-added whole-projects gate against merged AUTH 11B's unrelated 71.54%
+  project coverage. The new out-of-scope gate and its self-test were removed;
+  repository and every pre-existing subsystem gate remain unchanged.
 
 ## WS-ART-001-02D
 

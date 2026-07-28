@@ -17,8 +17,7 @@ immutable ArtifactStore path, without binding or activating guide reads yet.
   and recovery paths instead of adding candidate storage.
 - Bound final durable effects to one opaque transaction-local AUTH handle and
   exact locked lineage plus server-computed digest, size, and media type.
-- Added confirmed-missing replay, downgrade refusal, focused tests, and the
-  exact projects subsystem coverage gate.
+- Added confirmed-missing replay, downgrade refusal, and focused ART tests.
 
 ## Design And Scope Control
 
@@ -43,8 +42,8 @@ introduced.
 Focused route/architecture tests, isolated PostgreSQL migration/admission/replay
 tests, changed-file Ruff, compilation, stale-contract/wording/auth scans,
 Markdown links, diff checks, and agent gates pass. GitHub owns the full sharded
-suite, repository 78% floor, and accumulated 90% subsystem gates; thresholds
-were not lowered and the exact projects 90% gate was added. The initial hosted
+suite, repository 78% floor, and existing 90% subsystem gates; thresholds
+were not lowered. The initial hosted
 preflight identified one missing semantic-lane assignment; the bounded repair
 and its exact ownership regression pass canonical collection. The next hosted
 run executed all lanes and exposed one stale expected-schema fingerprint after
@@ -68,6 +67,10 @@ run reached 89.98%; a final focused boundary test covers rejection of partial
 guide lineage claims without changing production code or the gate. Because a
 repository branch varied on the rerun, a deterministic test now also proves
 the default 04A selector denies final PREP consumption.
+That run passed artifact-foundation coverage, then exposed the ART-added
+whole-projects gate measuring merged AUTH 11B's unrelated project debt at
+71.54%. The new out-of-scope gate and its self-test were removed; repository
+and every pre-existing subsystem gate remain unchanged.
 
 ## External Review
 

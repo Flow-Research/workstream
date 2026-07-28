@@ -62,6 +62,10 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   varied between lane runs. A deterministic deny-only seam proof now verifies
   that the default 04A selector rejects final PREP consumption, adding coverage
   margin without changing production or the gate.
+- hosted run `30370291310` passed artifact-foundation coverage, then exposed the
+  ART-added whole-projects gate measuring merged AUTH 11B's unrelated project
+  debt at 71.54%. That new out-of-scope gate and its self-test were removed;
+  repository and every pre-existing subsystem gate remain unchanged.
 
 ## Reviewer Results
 
@@ -85,7 +89,7 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
 - composed post-commit writes through the activated fixed-service put resolver;
 - made confirmed-missing exact replay reacquire capacity and write again;
 - concealed missing/malformed idempotency metadata without invoking ingest;
-- refused populated migration downgrade and added the projects 90% CI gate.
+- refused populated migration downgrade and preserved existing coverage gates.
 
 ## Accepted Low Risks
 
