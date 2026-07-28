@@ -31,6 +31,10 @@
   new guide test module lacked semantic-lane custody. The bounded repair assigns
   it to `shared_foundations` and makes that ownership an exact regression;
   local canonical lane collection and CI/test-delta re-review pass.
+- Hosted rerun `30360448433` cleared lane collection/validation and executed all
+  lanes, then schema custody rejected the pre-constraint expected fingerprint.
+  The exact hosted canonical fingerprint after the SHA-256 check constraint is
+  now recorded; no schema or runtime behavior changed in that repair.
 
 ## WS-ART-001-02D
 

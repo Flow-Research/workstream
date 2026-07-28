@@ -46,7 +46,9 @@ Markdown links, diff checks, and agent gates pass. GitHub owns the full sharded
 suite, repository 78% floor, and accumulated 90% subsystem gates; thresholds
 were not lowered and the exact projects 90% gate was added. The initial hosted
 preflight identified one missing semantic-lane assignment; the bounded repair
-and its exact ownership regression pass local canonical collection.
+and its exact ownership regression pass canonical collection. The next hosted
+run executed all lanes and exposed one stale expected-schema fingerprint after
+the SHA-256 constraint hardening; the guard now uses the hosted canonical value.
 
 ## External Review
 

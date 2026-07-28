@@ -28,6 +28,9 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   ownership for the new test module; the repair assigns it to
   `shared_foundations`, strengthens the lane regression, and passes canonical
   collect-only validation.
+- hosted rerun `30360448433` reached lane execution and identified only the
+  expected-schema fingerprint stale after the SHA-256 constraint was added;
+  the guard now records GitHub's canonical migrated-schema fingerprint.
 
 ## Reviewer Results
 
