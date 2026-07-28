@@ -3093,6 +3093,22 @@ async def test_project_diagnostic_read_requires_exact_active_admin_grant_and_chi
         source_snapshot_id=uuid4(),
         source_snapshot_hash=f"sha256:{'a' * 64}",
     )
+    with pytest.raises(ValidationError, match="source_snapshot_hash"):
+        ProjectDiagnosticReadResourceContext(
+            **resource.model_dump(exclude={"source_snapshot_hash"}),
+            source_snapshot_hash="malformed",
+        )
+    with pytest.raises(ValidationError, match="requires snapshot facts"):
+        ProjectDiagnosticReadResourceContext(
+            **resource.model_dump(exclude={"source_snapshot_id", "source_snapshot_hash"})
+        )
+    collection = ProjectDiagnosticReadResourceContext(
+        **resource.model_dump(
+            exclude={"source_snapshot_id", "source_snapshot_hash", "target_kind"},
+        ),
+        target_kind="sufficiency_report_collection",
+    )
+    assert collection.source_snapshot_id is None
     service, evidence = _runtime_service(
         context,
         admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant),

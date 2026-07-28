@@ -874,6 +874,10 @@ authority.
 | `/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` | `project.submission_artifact_policy.read` | `project.effective_policy.read` |
 | `/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup` | `project.post_submit_checker_policy_setup.read` | `project.effective_policy.read` |
 
+The two collection routes return and transactionally bind at most the newest
+100 canonical rows in deterministic newest-first order. Older retained records
+remain available only through their exact individually authorized read route.
+
 `WS-AUTH-001-CONTRIBUTOR-FOUNDATION` adds no permission or authorization path.
 It clean-cuts TaskAssignment and Submission attribution to `contributor_id`,
 binds both fields to canonical human ActorProfiles in PostgreSQL, and exposes

@@ -305,7 +305,10 @@ class ProjectRepository:
         """Load the latest setup run for one project guide."""
         result = await self._session.execute(
             select(ProjectSetupRun)
-            .join(GuideSourceSnapshot, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 ProjectSetupRun.project_id == project_id,
                 ProjectSetupRun.guide_id == guide_id,
@@ -325,7 +328,10 @@ class ProjectRepository:
         """Lock the latest setup-run row selected for diagnostic projection."""
         result = await self._session.execute(
             select(ProjectSetupRun)
-            .join(GuideSourceSnapshot, ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                ProjectSetupRun.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 ProjectSetupRun.project_id == project_id,
                 ProjectSetupRun.guide_id == guide_id,
@@ -375,7 +381,10 @@ class ProjectRepository:
         """Lock one sufficiency report for authorization and projection."""
         result = await self._session.execute(
             select(GuideSufficiencyReport)
-            .join(GuideSourceSnapshot, GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 GuideSufficiencyReport.id == report_id,
                 GuideSufficiencyReport.project_id == project_id,
@@ -412,7 +421,10 @@ class ProjectRepository:
         """Lock the bounded report collection used by a diagnostic list."""
         result = await self._session.execute(
             select(GuideSufficiencyReport)
-            .join(GuideSourceSnapshot, GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                GuideSufficiencyReport.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 GuideSufficiencyReport.project_id == project_id,
                 GuideSufficiencyReport.guide_id == guide_id,
@@ -423,6 +435,7 @@ class ProjectRepository:
                 GuideSourceSnapshot.bundle_hash == GuideSufficiencyReport.source_snapshot_hash,
             )
             .order_by(GuideSufficiencyReport.created_at.desc(), GuideSufficiencyReport.id.desc())
+            .limit(100)
             .with_for_update(of=GuideSufficiencyReport)
         )
         return result.scalars().all()
@@ -488,7 +501,10 @@ class ProjectRepository:
         """Lock the bounded draft-policy collection used by a diagnostic list."""
         result = await self._session.execute(
             select(SubmissionArtifactPolicy)
-            .join(GuideSourceSnapshot, SubmissionArtifactPolicy.source_snapshot_id == GuideSourceSnapshot.id)
+            .join(
+                GuideSourceSnapshot,
+                SubmissionArtifactPolicy.source_snapshot_id == GuideSourceSnapshot.id,
+            )
             .where(
                 SubmissionArtifactPolicy.project_id == project_id,
                 SubmissionArtifactPolicy.guide_id == guide_id,
@@ -501,6 +517,7 @@ class ProjectRepository:
             .order_by(
                 SubmissionArtifactPolicy.created_at.desc(), SubmissionArtifactPolicy.id.desc()
             )
+            .limit(100)
             .with_for_update(of=SubmissionArtifactPolicy)
         )
         return result.scalars().all()

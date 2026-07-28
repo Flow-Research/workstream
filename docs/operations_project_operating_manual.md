@@ -87,6 +87,9 @@ grants are non-authoritative for these reads:
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}`
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup`
 
+The two collection routes return the newest 100 canonical rows. Use the exact
+single-record route for an older retained report or policy identifier.
+
 The remaining policy and mutation endpoints follow their separately owned
 activation chunks:
 

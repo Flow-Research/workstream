@@ -134,6 +134,43 @@ class _DiagnosticRepository:
         return self.post_policy
 
 
+class _DiagnosticStatementCaptureSession:
+    def __init__(self) -> None:
+        self.statements: list[Any] = []
+
+    async def execute(self, statement: Any) -> Any:
+        self.statements.append(statement)
+        return types.SimpleNamespace(
+            scalars=lambda: types.SimpleNamespace(all=lambda: [])
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "method_name,locked_table",
+    [
+        ("lock_guide_sufficiency_reports", "guide_sufficiency_reports"),
+        ("lock_submission_artifact_policies", "submission_artifact_policies"),
+    ],
+)
+async def test_project_diagnostic_collection_locks_are_bounded(
+    method_name: str, locked_table: str
+) -> None:
+    session = _DiagnosticStatementCaptureSession()
+    repository = ProjectRepository(cast(Any, session))
+
+    await getattr(repository, method_name)(str(uuid4()), str(uuid4()), "v1")
+
+    assert len(session.statements) == 1
+    compiled = str(
+        session.statements[0].compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "LIMIT 100" in compiled
+    assert f"FOR UPDATE OF {locked_table}" in compiled
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "action_id,target_kind,is_collection",
@@ -329,6 +366,45 @@ def auth_headers(token: str = "project-token") -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+async def ensure_access_administrator_bootstrap() -> tuple[UUID, UUID, UUID]:
+    """Return the default actor and its idempotent bootstrap grant."""
+    async with db_session.get_session_factory()() as session:
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        assert link is not None
+        grant = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
+                AdminRoleGrant.role == "access_administrator",
+                AdminRoleGrant.status == "active",
+            )
+        )
+        if grant is None:
+            grant = AdminRoleGrant(
+                id=uuid4(),
+                target_actor_profile_id=link.actor_profile_id,
+                role="access_administrator",
+                scope_type="system",
+                scope_project_id=None,
+                status="active",
+                version=1,
+                granted_by_system_principal="workstream:system:bootstrap",
+                grant_reason="AUTH route fixture",
+            )
+            session.add(grant)
+            control = await session.get(AuthorityControl, 1)
+            assert control is not None
+            control.bootstrap_completed = True
+            control.bootstrap_grant_id = grant.id
+            control.version = 1
+            await session.commit()
+        return link.actor_profile_id, link.id, grant.id
+
+
 async def add_project_manager_admin_grant(project_id: str) -> UUID:
     """Grant the default registered human exact project diagnostic authority."""
     async with db_session.get_session_factory()() as session:
@@ -341,33 +417,18 @@ async def add_project_manager_admin_grant(project_id: str) -> UUID:
         )
         if existing is not None:
             return existing.id
-    await add_project_role_for_default_actor(project_id, "submitter")
+    actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
     async with db_session.get_session_factory()() as session:
-        link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.issuer == "flow-test",
-                ActorIdentityLink.subject == "project-manager-subject",
-            )
-        )
-        assert link is not None
-        grantor = await session.scalar(
-            select(AdminRoleGrant).where(
-                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
-                AdminRoleGrant.role == "access_administrator",
-                AdminRoleGrant.status == "active",
-            )
-        )
-        assert grantor is not None
         grant = AdminRoleGrant(
             id=uuid4(),
-            target_actor_profile_id=link.actor_profile_id,
+            target_actor_profile_id=actor_id,
             role="project_manager",
             scope_type="project",
             scope_project_id=project_id,
             status="active",
             version=1,
-            granted_by_actor_profile_id=link.actor_profile_id,
-            granted_by_admin_role_grant_id=grantor.id,
+            granted_by_actor_profile_id=actor_id,
+            granted_by_admin_role_grant_id=grantor_id,
             grant_reason="AUTH-11C1 diagnostic read fixture",
         )
         session.add(grant)
@@ -379,32 +440,18 @@ async def add_local_admin_role_for_default_actor(
     role: str, *, project_id: str | None
 ) -> UUID:
     """Add one valid local administrative grant through the fixture grantor."""
+    actor_id, _, grantor_id = await ensure_access_administrator_bootstrap()
     async with db_session.get_session_factory()() as session:
-        link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.issuer == "flow-test",
-                ActorIdentityLink.subject == "project-manager-subject",
-            )
-        )
-        assert link is not None
-        grantor = await session.scalar(
-            select(AdminRoleGrant).where(
-                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
-                AdminRoleGrant.role == "access_administrator",
-                AdminRoleGrant.status == "active",
-            )
-        )
-        assert grantor is not None
         grant = AdminRoleGrant(
             id=uuid4(),
-            target_actor_profile_id=link.actor_profile_id,
+            target_actor_profile_id=actor_id,
             role=role,
             scope_type="project" if project_id is not None else "system",
             scope_project_id=project_id,
             status="active",
             version=1,
-            granted_by_actor_profile_id=link.actor_profile_id,
-            granted_by_admin_role_grant_id=grantor.id,
+            granted_by_actor_profile_id=actor_id,
+            granted_by_admin_role_grant_id=grantor_id,
             grant_reason=f"AUTH-11C1 {role} route fixture",
         )
         session.add(grant)
@@ -429,40 +476,8 @@ async def revoke_local_admin_role(grant_id: UUID) -> None:
 async def add_project_role_for_default_actor(project_id: str, role: str) -> tuple[UUID, str]:
     """Insert reviewed local-grant fixtures for project identity route tests."""
     now = datetime.now(UTC)
+    actor_id, link_id, admin_grant_id = await ensure_access_administrator_bootstrap()
     async with db_session.get_session_factory()() as session:
-        link = await session.scalar(
-            select(ActorIdentityLink).where(
-                ActorIdentityLink.issuer == "flow-test",
-                ActorIdentityLink.subject == "project-manager-subject",
-            )
-        )
-        assert link is not None
-        actor_id = link.actor_profile_id
-        admin_grant = await session.scalar(
-            select(AdminRoleGrant).where(
-                AdminRoleGrant.target_actor_profile_id == actor_id,
-                AdminRoleGrant.role == "access_administrator",
-            )
-        )
-        if admin_grant is None:
-            admin_grant = AdminRoleGrant(
-                id=uuid4(),
-                target_actor_profile_id=actor_id,
-                role="access_administrator",
-                scope_type="system",
-                scope_project_id=None,
-                status="active",
-                version=1,
-                granted_by_system_principal="workstream:system:bootstrap",
-                grant_reason="AUTH-11B route fixture",
-            )
-            session.add(admin_grant)
-            control = await session.get(AuthorityControl, 1)
-            assert control is not None
-            control.bootstrap_completed = True
-            control.bootstrap_grant_id = admin_grant.id
-            control.version = 1
-            await session.flush()
         snapshot = ProjectRoleQualificationSnapshot(
             id=uuid4(),
             project_id=project_id,
@@ -481,7 +496,7 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             prior_project_work_refs=[],
             external_expertise_refs=[],
             captured_by_actor_profile_id=actor_id,
-            captured_by_admin_role_grant_id=admin_grant.id,
+            captured_by_admin_role_grant_id=admin_grant_id,
             captured_at=now,
         )
         session.add(snapshot)
@@ -496,13 +511,13 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             grant_method="manual",
             qualification_snapshot_id=snapshot.id,
             granted_by_actor_profile_id=actor_id,
-            granted_by_admin_role_grant_id=admin_grant.id,
+            granted_by_admin_role_grant_id=admin_grant_id,
             grant_reason="AUTH-11B route fixture",
             granted_at=now,
         )
         session.add(grant)
         await session.commit()
-        return grant.id, str(link.id)
+        return grant.id, str(link_id)
 
 
 @pytest.mark.asyncio

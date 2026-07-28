@@ -253,7 +253,9 @@ class ProjectDiagnosticReadResourceContext(BaseModel):
     target_exists: bool
     target_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     source_snapshot_id: UUID | None = None
-    source_snapshot_hash: str | None = None
+    source_snapshot_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
 
     @model_validator(mode="after")
     def require_canonical_shape(self):
@@ -268,6 +270,12 @@ class ProjectDiagnosticReadResourceContext(BaseModel):
             raise ValueError("source snapshot id and hash must be bound together")
         if not self.target_exists and self.source_snapshot_id is not None:
             raise ValueError("missing diagnostic target cannot carry snapshot facts")
+        if (
+            self.target_exists
+            and not self.target_kind.endswith("_collection")
+            and self.source_snapshot_id is None
+        ):
+            raise ValueError("existing diagnostic target requires snapshot facts")
         if self.target_exists != (self.target_binding_digest is not None):
             raise ValueError("target existence and binding digest are inconsistent")
         return self

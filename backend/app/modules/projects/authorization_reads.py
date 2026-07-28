@@ -54,19 +54,20 @@ async def authorize_project_diagnostic_read(
             ActionId.PROJECT_SETUP_RUN_READ,
             ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         }:
-            target = await repository.lock_latest_project_setup_run(
+            setup_run = await repository.lock_latest_project_setup_run(
                 project_id, guide_id, guide.version
             )
+            target = setup_run
             if (
                 action_id is ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ
-                and target is not None
-                and target.output_post_submit_checker_policy_id is not None
+                and setup_run is not None
+                and setup_run.output_post_submit_checker_policy_id is not None
             ):
                 post_submit_policy = await repository.lock_post_submit_checker_policy(
-                    target.output_post_submit_checker_policy_id
+                    setup_run.output_post_submit_checker_policy_id
                 )
                 if post_submit_policy is None or any(
-                    getattr(post_submit_policy, field) != getattr(target, field)
+                    getattr(post_submit_policy, field) != getattr(setup_run, field)
                     for field in (
                         "project_id",
                         "guide_id",

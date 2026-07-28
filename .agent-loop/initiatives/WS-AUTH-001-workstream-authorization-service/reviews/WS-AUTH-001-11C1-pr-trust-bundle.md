@@ -94,12 +94,23 @@ architecture, security, product/ops, senior-engineering, CI-integrity, docs,
 reuse/dedup, and test-delta reviews pass. QA passes with the condition that
 hosted Backend/API E2E evidence be recorded before completion.
 
+The CodeRabbit correction received focused architecture and security passes;
+QA and test-delta passed with only the low residual risk that the 100-row cap is
+proved at compiled-SQL rather than a 101-row live route fixture. Exact SQL shape,
+ordering, lock target, and cap are asserted, and hosted PostgreSQL lanes remain
+mandatory.
+
 ## External Review And Remaining Risk
 
-GitHub Backend, Agent Gates, and CodeRabbit have not run yet. The principal
-remaining risk is an integration failure visible only in the hosted full suite;
-the PR must not be marked merge-ready until those exact-head checks pass and
-all valid external findings are resolved.
+The first hosted Backend run found two stale explicit active-action test
+expectations; both were corrected without weakening exact equality. CodeRabbit's
+valid findings were addressed with canonical snapshot validation, bounded
+newest-first collection locks, setup-run type narrowing, an explicit fixture
+bootstrap helper, repository formatting, and corrected contract wording. The
+invariant-failure and authority-serialization suggestions were rejected because
+they would hide a kernel defect or weaken the approved concurrent-revocation
+boundary. Full rationale is recorded in the 11C1 external-review response.
+Final-head Backend, Agent Gates, and CodeRabbit evidence remains mandatory.
 
 ## Follow-Up And Human Review Focus
 

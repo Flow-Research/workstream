@@ -116,8 +116,8 @@ database schema or migration changes
   revoked links, and suspended/deactivated actors deny.
 - Admission-order tests prove that rate exhaustion preserves canonical 429 with
   retry metadata, rate-store failure preserves canonical 503, missing/invalid
-  bearer authentication preserves canonical 401 (and verifier outage its
-  canonical 503), and a verified non-human subject receives concealed 404,
+  bearer authentication preserves canonical 401 (and a verifier outage
+  preserves its canonical 503), and a verified non-human subject receives concealed 404,
   all before any project, guide, or child lookup.
 - Read permissions grant no mutation authority, and mutation permissions do not
   imply diagnostic read authority.
