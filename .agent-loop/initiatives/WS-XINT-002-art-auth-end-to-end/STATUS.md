@@ -12,10 +12,12 @@
   scheduler scan, and put-resolver authority are active with hosted artifact
   coverage at 90.02 percent.
 - Guide activation is split into `WS-XINT-002-04A` ingest and
-  `WS-XINT-002-04B` read/binding. 04A cannot implement or activate until
-  ART-03A is rebased onto the merged opaque PREP interface and merged; the
-  preserved ART worktree's raw-context/local-authority seam is not activation
-  evidence.
+  `WS-XINT-002-04B` read/binding. ART-03A merged through PR #215 at `bb9082a7`
+  and provides the PREP-compatible guide-ingest seam. Pre-implementation review
+  for 04A found two required corrections: add the existing ingest permission to
+  the canonical Project Manager policy, and complete ART-owned final lineage
+  locking across the project, draft guide, snapshot, and item. The corrected
+  04A contract owns those narrow changes before activating guide ingest.
 
 This file records only durable merged state and reviewed delivery order. It
 does not describe a branch as “in progress”, “merge-pending”, or “active”;

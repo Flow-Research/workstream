@@ -31,7 +31,7 @@ change its availability; it may not invent another action or permission.
 
 | ActionId | PermissionId | Authority |
 |---|---|---|
-| `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | exact Project Manager project grant |
+| `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | covered Project Manager grant |
 | `artifact.submission_bundle.prepare` | `submission.create` | active assigned contributor |
 | `submission.create` | `submission.create` | fresh active assigned contributor |
 | `review.context.read` | `submission.read_for_review` | exact active reviewer lease |
