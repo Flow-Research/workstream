@@ -201,9 +201,18 @@ class AdminAuthorizationRepository:
         """Project sorted effective admin role names for one exact project."""
         roles = await self._session.scalars(
             select(AdminRoleGrant.role)
+            .join(ActorProfile, ActorProfile.id == AdminRoleGrant.target_actor_profile_id)
             .where(
                 AdminRoleGrant.target_actor_profile_id == str(actor_profile_id),
                 AdminRoleGrant.status == "active",
+                ActorProfile.actor_kind == "human",
+                ActorProfile.status == "active",
+                exists(
+                    select(ActorIdentityLink.id).where(
+                        ActorIdentityLink.actor_profile_id == ActorProfile.id,
+                        ActorIdentityLink.status == "active",
+                    )
+                ),
                 or_(
                     AdminRoleGrant.scope_type == AdminScope.SYSTEM.value,
                     and_(

@@ -91,7 +91,7 @@ all passed after their findings were fixed. Detailed evidence is in
 
 ## External review
 
-GitHub Actions and CodeRabbit are pending until the PR is opened.
+GitHub Actions and the remaining external-review remediation are pending completion.
 
 ## Remaining risks and follow-up
 

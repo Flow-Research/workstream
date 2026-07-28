@@ -558,6 +558,8 @@ class AuthorizationService:
                 None,
                 True,
             )
+        # Keep the matched grant stable through response projection and commit so a
+        # concurrent revoke cannot authorize a stale read from this transaction.
         admin_grant = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
@@ -615,11 +617,6 @@ class AuthorizationService:
         UUID | None,
     ]:
         """Authorize a caller-owned context projection for one exact project."""
-        lifecycle = self._lifecycle_denial(context)
-        if lifecycle is not None:
-            return lifecycle, None, None, None
-        if action.availability is not ActionAvailability.ACTIVE:
-            return AuthorizationDenialCode.ACTION_UNAVAILABLE, None, None, None
         if (
             not isinstance(context, HumanAuthorizationContext)
             or not isinstance(resource, ActorAuthorizationContextResourceContext)
@@ -627,8 +624,15 @@ class AuthorizationService:
             or not revalidated
         ):
             return AuthorizationDenialCode.RESOURCE_GUARD_DENIED, None, None, None
+        if action.availability is not ActionAvailability.ACTIVE:
+            return AuthorizationDenialCode.ACTION_UNAVAILABLE, None, None, None
+        lifecycle = self._lifecycle_denial(context)
+        if lifecycle is not None:
+            return lifecycle, None, None, None
         if not resource.project_exists:
             return AuthorizationDenialCode.RESOURCE_NOT_FOUND, None, None, None
+        # The context projection reuses these rows after authorization; lock the
+        # matched grant until commit so its advertised authority cannot go stale.
         admin_grant = await self._admin.find_effective_grant(
             context.actor_profile_id,
             PermissionId.PROJECT_READ,

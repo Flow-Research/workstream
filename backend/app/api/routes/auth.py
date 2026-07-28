@@ -99,21 +99,28 @@ async def read_current_actor_authorization_context(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> ActorAuthorizationContextResponse:
     """Return the caller's effective authority for one canonical project."""
-    projects = ProjectService(session)
-    project = await projects.find_project(project_id)
-    selector_id = (
-        UUID(project.id)
-        if project is not None
-        else authorization_resource_selector_id("project", project_id)
-    )
-    service = ActorAuthorizationContextReadService.from_session(authorization, session)
-    response = await service.read(
-        resolved=resolved,
-        project=project,
-        project_selector_id=selector_id,
-    )
-    await session.commit()
-    return response
+    try:
+        projects = ProjectService(session)
+        project = await projects.find_project(project_id)
+        selector_id = (
+            UUID(project.id)
+            if project is not None
+            else authorization_resource_selector_id("project", project_id)
+        )
+        service = ActorAuthorizationContextReadService.from_session(authorization, session)
+        response = await service.read(
+            resolved=resolved,
+            project=project,
+            project_selector_id=selector_id,
+        )
+        await session.commit()
+        return response
+    except ActorRegistryError as exc:
+        await session.rollback()
+        raise actor_registry_http_error(exc) from exc
+    except SQLAlchemyError as exc:
+        await session.rollback()
+        raise actor_registry_unavailable_error() from exc
 
 
 @actors_router.patch(

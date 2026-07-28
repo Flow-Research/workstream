@@ -241,8 +241,9 @@ The closed action registry contains 78 rows after AUTH-11B: 27 active actions
 and 51 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
-project identity and actor-context reads now active under 11B plus nine planned
-setup, policy, and active-guide reads owned by 11C1 and 11C2. AUTH-08 adds seven
+project identity and actor-context read rows: two are active under 11B and nine
+setup, policy, and active-guide reads remain planned under 11C1 and 11C2.
+AUTH-08 adds seven
 active administrative definition,
 grant-history, issue, revoke, and local-bootstrap actions without adding a
 permission. AUTH-09A adds eight planned actor, identity-link, and service
