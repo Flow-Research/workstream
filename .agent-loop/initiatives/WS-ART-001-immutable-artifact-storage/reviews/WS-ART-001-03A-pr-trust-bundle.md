@@ -53,7 +53,11 @@ The following run executed 1,618 tests (1,615 pass) and identified three stale
 lineage/unit fixtures, now corrected without production changes. The next run
 passed all shared/project/task tests and 91/92 schema tests; its sole asyncpg
 multi-command seed issue is split into individual transactional statements and
-the exact isolated migration proof passes.
+the exact isolated migration proof passes. The subsequent run again passed all
+shared/project/task tests and 91/92 schema tests; its sole failure exposed the
+human identity-link invariant in the migration fixture. The fixture now creates
+the required active, verified identity link, and the exact isolated migration
+proof passes.
 
 ## External Review
 

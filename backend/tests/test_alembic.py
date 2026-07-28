@@ -1682,7 +1682,10 @@ def test_guide_source_artifact_ingest_schema_and_replay(
 
 async def _seed_populated_guide_source_ingest(database_url: str) -> None:
     engine = create_async_engine(database_url)
-    ids = {name: str(uuid4()) for name in ("actor", "project", "guide", "snapshot", "item")}
+    ids = {
+        name: str(uuid4())
+        for name in ("actor", "identity_link", "project", "guide", "snapshot", "item")
+    }
     try:
         async with engine.begin() as connection:
             parameters = {
@@ -1696,6 +1699,13 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
                     "insert into actor_profiles "
                     "(id, actor_kind, status, provisioning_method, created_by) "
                     "values (:actor, 'human', 'active', 'automatic_first_access', 'migration-test')"
+                ),
+                (
+                    "insert into actor_identity_links "
+                    "(id, actor_profile_id, issuer, subject, subject_kind, status, "
+                    "linked_by, last_verified_at) values "
+                    "(:identity_link, :actor, 'https://identity.test', :actor, 'human', "
+                    "'active', 'migration-test', clock_timestamp())"
                 ),
                 (
                     "insert into projects (id, name, slug, status) "

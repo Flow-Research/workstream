@@ -37,6 +37,11 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
 - hosted run `30361748346` passed all shared (1,618), project (236), and task
   (217) tests. Schema passed 91/92; the sole failure was a multi-command asyncpg
   test seed, now split into six transactional statements with isolated proof.
+- hosted run `30363061162` again passed all shared (1,618), project (236), and
+  task (217) tests. Schema passed 91/92; its sole failure was that the migration
+  fixture did not create the identity link now required for every human actor.
+  The fixture now creates the canonical active, verified link, and the exact
+  isolated migration proof passes.
 
 ## Reviewer Results
 

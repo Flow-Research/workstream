@@ -44,6 +44,10 @@
   tests pass. Its sole failure was asyncpg rejecting the populated-downgrade
   test's multi-command prepared seed. The seed now executes six parameterized
   statements in one transaction; the exact isolated migration test passes.
+- Hosted run `30363061162` again proved all shared, project, and task tests pass.
+  Its sole schema failure was the migration fixture omitting the identity link
+  now required for every human actor. The fixture creates the canonical active,
+  verified link, and the exact isolated migration test passes.
 
 ## WS-ART-001-02D
 
