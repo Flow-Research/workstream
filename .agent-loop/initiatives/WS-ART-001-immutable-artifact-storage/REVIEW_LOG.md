@@ -35,6 +35,11 @@
   lanes, then schema custody rejected the pre-constraint expected fingerprint.
   The exact hosted canonical fingerprint after the SHA-256 check constraint is
   now recorded; no schema or runtime behavior changed in that repair.
+- Hosted run `30360906515` then executed 1,618 tests: 1,615 passed and three
+  stale test fixtures failed. The bounded repair supplies complete guide
+  lineage to the real admission proof, uses the pre-staging lineage lock helper
+  for its intended test, and adds the new optional lineage fields to the quota
+  unit fixture. Production code is unchanged by this repair.
 
 ## WS-ART-001-02D
 

@@ -49,6 +49,8 @@ preflight identified one missing semantic-lane assignment; the bounded repair
 and its exact ownership regression pass canonical collection. The next hosted
 run executed all lanes and exposed one stale expected-schema fingerprint after
 the SHA-256 constraint hardening; the guard now uses the hosted canonical value.
+The following run executed 1,618 tests (1,615 pass) and identified three stale
+lineage/unit fixtures, now corrected without production changes.
 
 ## External Review
 

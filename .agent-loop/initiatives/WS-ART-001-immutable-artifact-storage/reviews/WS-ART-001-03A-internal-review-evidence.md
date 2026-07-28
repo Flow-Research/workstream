@@ -31,6 +31,9 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
 - hosted rerun `30360448433` reached lane execution and identified only the
   expected-schema fingerprint stale after the SHA-256 constraint was added;
   the guard now records GitHub's canonical migrated-schema fingerprint.
+- hosted run `30360906515` executed 1,618 tests with 1,615 passing and exposed
+  three stale fixtures for complete guide lineage/staged facts. Those fixtures
+  now exercise the intended exact-lineage boundaries; production is unchanged.
 
 ## Reviewer Results
 

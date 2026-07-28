@@ -2874,6 +2874,9 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                     content_hash="sha256:" + "f" * 64,
                     media_type=source.commitment.media_type,
                 )
+                lineage = await ArtifactRepository(session).get_guide_lineage(item_id)
+                assert lineage is not None
+                await session.rollback()
                 with pytest.raises(
                     ArtifactAuthorityDeniedError,
                     match="guide artifact ingest is unavailable",
@@ -2906,6 +2909,10 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                     await ArtifactAdmissionService(session, settings, namespace).admit(
                         GuideArtifactAdmissionRequest(
                             project_id=uuid4(),
+                            guide_id=UUID(lineage.guide_id),
+                            guide_source_snapshot_id=UUID(
+                                lineage.guide_source_snapshot_id
+                            ),
                             guide_source_item_id=UUID(item_id),
                             source=source,
                             operation_identity=_guide_operation(item_id),
@@ -2926,6 +2933,11 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                         namespace,
                     ).admit(
                         GuideArtifactAdmissionRequest(
+                            project_id=UUID(lineage.project_id),
+                            guide_id=UUID(lineage.guide_id),
+                            guide_source_snapshot_id=UUID(
+                                lineage.guide_source_snapshot_id
+                            ),
                             guide_source_item_id=UUID(item_id),
                             source=source,
                             operation_identity=_guide_operation(item_id),
@@ -3130,7 +3142,7 @@ async def test_guide_admission_facts_lock_snapshot_and_item(
 
         async with factory() as lock_session:
             async with lock_session.begin():
-                facts = await ArtifactRepository(lock_session).get_guide_admission_facts(item_id)
+                facts = await ArtifactRepository(lock_session).get_guide_lineage(item_id)
                 assert facts is not None
 
                 mutations = (
