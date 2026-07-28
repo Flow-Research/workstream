@@ -37,8 +37,9 @@ contract.
 - Python compile and docstring gate: passed.
 - Stale wording, stale authorization docs, Markdown links, lightweight agent
   gates, and `git diff --check`: passed.
-- Database-backed route tests and the complete suite/coverage are intentionally
-  delegated to the mandatory hosted Backend workflow.
+- Hosted Backend run `30360376315` passed the database-backed route tests, four
+  semantic lanes, independent custody validation, API E2E, full-suite 78%
+  coverage floor, and every established subsystem coverage floor.
 
 ## Residual review focus
 

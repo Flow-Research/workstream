@@ -94,7 +94,11 @@ all passed after their findings were fixed. Detailed evidence is in
 
 ## External review
 
-GitHub Actions and the remaining external-review remediation are pending completion.
+PR #214 Agent Gates and Backend passed on the final implementation tree;
+Backend run `30360376315` passed the four semantic lanes, independent custody
+validation, real API E2E, full-suite 78% coverage floor, and every established
+subsystem coverage floor. All CodeRabbit findings were fixed or answered with
+contract-backed rationale, and all review threads are resolved.
 
 ## Remaining risks and follow-up
 
