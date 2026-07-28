@@ -24,6 +24,10 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   F821 findings already present on trusted main; no ART file fails Ruff;
 - full sharded suite and 78/90 percent coverage remain hosted GitHub gates to
   avoid loading the user's machine.
+- initial hosted Backend run `30360132709` exposed missing semantic-lane
+  ownership for the new test module; the repair assigns it to
+  `shared_foundations`, strengthens the lane regression, and passes canonical
+  collect-only validation.
 
 ## Reviewer Results
 

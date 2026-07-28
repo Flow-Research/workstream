@@ -27,6 +27,10 @@
   put-resolver composition, confirmed-missing replay with capacity
   reacquisition, concealed request-metadata validation, populated downgrade
   refusal, and the exact hosted projects coverage gate.
+- Initial hosted Backend run `30360132709` failed before execution because the
+  new guide test module lacked semantic-lane custody. The bounded repair assigns
+  it to `shared_foundations` and makes that ownership an exact regression;
+  local canonical lane collection and CI/test-delta re-review pass.
 
 ## WS-ART-001-02D
 

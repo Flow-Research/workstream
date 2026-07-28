@@ -44,7 +44,15 @@ Focused route/architecture tests, isolated PostgreSQL migration/admission/replay
 tests, changed-file Ruff, compilation, stale-contract/wording/auth scans,
 Markdown links, diff checks, and agent gates pass. GitHub owns the full sharded
 suite, repository 78% floor, and accumulated 90% subsystem gates; thresholds
-were not lowered and the exact projects 90% gate was added.
+were not lowered and the exact projects 90% gate was added. The initial hosted
+preflight identified one missing semantic-lane assignment; the bounded repair
+and its exact ownership regression pass local canonical collection.
+
+## External Review
+
+CodeRabbit was rate-limited and reported no code findings. GitHub Agent Gates
+passed; Backend preflight produced the semantic-lane finding above, which was
+repaired and internally re-reviewed before rerun.
 
 ## Remaining Risks And Follow-Up
 
