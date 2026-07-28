@@ -40,6 +40,7 @@ from app.modules.authorization.runtime import (
     HumanAuthorizationContext,
     IdentityLinkStatus,
     ProjectReadResourceContext,
+    ProjectDiagnosticReadResourceContext,
     ServiceAuthorizationContext,
 )
 from app.modules.actors.service_identities import ServiceIdentity
@@ -129,6 +130,12 @@ def authorization_http_error(exc: AuthorizationDenied) -> StructuredHTTPExceptio
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
     }
     if exc.decision.action_id in concealed_project_reads:
         return StructuredHTTPException(
@@ -173,9 +180,7 @@ async def get_authorization_service(
 ) -> AsyncIterator[AuthorizationService]:
     """Yield one service and own final decision transaction cleanup."""
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
-    service = _compose_authorization_service(
-        resolved, session, request_id, correlation_id
-    )
+    service = _compose_authorization_service(resolved, session, request_id, correlation_id)
     actor_service = ActorService(session)
 
     context = _authorization_context(resolved, request_id, correlation_id)
@@ -226,12 +231,16 @@ def _compose_authorization_service(
             ActorSelfResourceContext
             | ActorAuthorizationContextResourceContext
             | ProjectReadResourceContext
+            | ProjectDiagnosticReadResourceContext
         ),
     ) -> AuthorizationContext:
         """Rebuild actor state from exact rows locked in the caller transaction."""
-        if isinstance(
-            resource, (ActorSelfResourceContext, ActorAuthorizationContextResourceContext)
-        ) and resource.resource_id != context.actor_profile_id:
+        if (
+            isinstance(
+                resource, (ActorSelfResourceContext, ActorAuthorizationContextResourceContext)
+            )
+            and resource.resource_id != context.actor_profile_id
+        ):
             return context
         locked = await actor_service.lock_actor_self_for_authorization(resolved)
         return _authorization_context(locked, request_id, correlation_id)

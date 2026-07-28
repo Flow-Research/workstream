@@ -708,9 +708,10 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 27 active actions, and
-51 planned actions after AUTH-11B activates project identity and actor context
-actions. The other 19 ART actions remain planned, including every Operator
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 33 active actions, and
+45 planned actions after AUTH-11C1 activates three project setup-diagnostic and
+three draft/effective-policy diagnostic read actions. The exact route mapping
+is in `docs/spec_authorization_service.md`. The other 19 ART actions remain planned, including every Operator
 artifact action.
 Migration `0037` keeps each allowed or denied internal ART decision bound to
 the exact privacy-bounded resource-context digest in append-only audit facts.
@@ -718,8 +719,10 @@ the exact privacy-bounded resource-context digest in append-only audit facts.
 AUTH-11A adds read-only `project.setup_diagnostic.read` and
 `project.effective_policy.read`. Project Manager and Audit Authority receive
 them at system or exact-project scope; Operator receives them at system scope.
-Finance Authority and Access Administrator do not. The eleven AUTH-11 actions
-remain planned under 11B, 11C1, or 11C2 and cannot produce allowed evidence.
+Finance Authority and Access Administrator do not. The two AUTH-11B
+identity/context actions and six AUTH-11C1 diagnostic-read actions are active;
+the three AUTH-11C2 effective-policy/active-guide actions remain planned and
+cannot produce allowed evidence.
 Four later REV registrations add exactly four planned and zero active actions.
 Review-evidence binding is already registered planned and unavailable under
 `WS-XINT-002-07`; it remains non-operational until exact feature proof and a
@@ -1026,6 +1029,16 @@ covered administrative grant or an active exact-project contributor grant and
 records which grant class authorized the decision. The context response is a
 derived read model, not an authority token: it contains no grant ids or
 identity-link fields and never advertises planned or unrelated actions.
+
+The six AUTH-11C1 diagnostic GET routes use the same rate-first human-read
+admission and concealed authorization response. They lock the exact project,
+guide/version, selected child or collection, source snapshot, current actor and
+identity link, and matched administrative grant through projection/commit.
+Only a covered Project Manager, scoped Audit Authority, or system Operator may
+read them. Finance Authority, Access Administrator, contributor, non-human,
+revoked, wrong-scope, and cross-guide/cross-project requests do not disclose
+whether the target exists. Authentication and rate-control failures retain
+their canonical 401/503 and 429/503 behavior before private lookup.
 
 ## Recovery Permission Inventory
 

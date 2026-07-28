@@ -358,32 +358,32 @@ ACTION_DEFINITIONS = (
         PermissionId.ACTOR_PROFILE_READ_SELF,
         ActionOwner.AUTH_11B,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SETUP_RUN_READ,
         PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
         PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
         PermissionId.PROJECT_SETUP_DIAGNOSTIC_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C1,
@@ -681,6 +681,12 @@ def _index_actions(
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,

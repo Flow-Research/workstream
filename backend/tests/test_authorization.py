@@ -193,6 +193,7 @@ from app.modules.authorization.runtime import (
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
+    ProjectDiagnosticReadResourceContext,
     ProjectReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
@@ -691,6 +692,12 @@ async def test_candidate_service_cursor_uses_last_visible_equal_timestamp_bounda
         "/api/v1/projects/{project_id}/role-grants",
         "/api/v1/projects/{project_id}",
         "/api/v1/actors/me/authorization-context?project_id={project_id}",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{report_id}",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup",
     ),
 )
 async def test_authorization_read_rate_failure_precedes_project_lookup(
@@ -731,7 +738,9 @@ async def test_authorization_read_rate_failure_precedes_project_lookup(
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            path.format(project_id=uuid4()),
+            path.format(
+                project_id=uuid4(), guide_id=uuid4(), report_id=uuid4(), policy_id=uuid4()
+            ),
             headers={"Authorization": "Bearer test"},
         )
 
@@ -776,6 +785,12 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
                 f"/api/v1/projects/{uuid4()}/role-grants",
                 f"/api/v1/projects/{uuid4()}",
                 f"/api/v1/actors/me/authorization-context?project_id={uuid4()}",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/setup-runs/latest",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/sufficiency-reports",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/sufficiency-reports/{uuid4()}",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/submission-artifact-policies/{uuid4()}",
+                f"/api/v1/projects/{uuid4()}/guides/{uuid4()}/post-submit-checker-policy/setup",
             ):
                 response = await client.get(path)
                 assert response.status_code == 404
@@ -783,8 +798,51 @@ async def test_human_read_admission_conceals_every_nonhuman_kind(
                     "project_authorization_resource_not_found"
                 )
 
-        assert consumptions == 3
+        assert consumptions == 9
         assert lookups == 0
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_authentication_failure_precedes_private_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = create_app(Settings(environment="test"))
+    lookups = 0
+
+    async def consume_once() -> None:
+        return None
+
+    async def invalid_bearer():
+        raise StructuredHTTPException(
+            status_code=401,
+            detail="Invalid authentication credentials",
+            error_code="invalid_authentication",
+            error_message="Invalid authentication credentials",
+        )
+
+    async def forbidden_project_lookup(*_args, **_kwargs):
+        nonlocal lookups
+        lookups += 1
+        raise AssertionError("project lookup must not run")
+
+    app.dependency_overrides[enforce_authorization_read_rate_limit] = consume_once
+    app.dependency_overrides[get_auth_verification_result] = invalid_bearer
+    monkeypatch.setattr(ProjectRepository, "get_project", forbidden_project_lookup)
+    project_id, guide_id = uuid4(), uuid4()
+    paths = (
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/setup-runs/latest",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/sufficiency-reports/{uuid4()}",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{uuid4()}",
+        f"/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup",
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://testserver"
+    ) as client:
+        responses = [await client.get(path) for path in paths]
+    assert [response.status_code for response in responses] == [401] * 6
+    assert lookups == 0
 
 
 @pytest.mark.asyncio
@@ -1816,6 +1874,12 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
         ActionId.PROJECT_READ,
         ActionId.ACTOR_AUTHORIZATION_CONTEXT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1900,14 +1964,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 27
+        == 33
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 51
+        == 45
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2100,7 +2164,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 78 ActionIds, 27 active actions, and\n51 planned actions" in operations
+        "71 PermissionIds, 78 ActionIds, 33 active actions, and\n45 planned actions" in operations
     )
 
 
@@ -2928,6 +2992,20 @@ class _ProjectReadAuthorityFacts:
     async def find_active_project_role_any(self, **_kwargs):
         return self.project_grant
 
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        return (
+            SimpleNamespace(
+                id=str(identity_link_id),
+                actor_profile_id=str(actor_profile_id),
+                status="active",
+            ),
+            SimpleNamespace(
+                id=str(actor_profile_id),
+                actor_kind="human",
+                status="active",
+            ),
+        )
+
     async def has_effective_permission_any_scope(self, *_args, **_kwargs):
         return False
 
@@ -2994,6 +3072,71 @@ async def test_project_read_kernel_prefers_admin_and_records_project_role_author
         await service.require(ActionId.PROJECT_READ, missing)
     assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
     assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_project_diagnostic_read_requires_exact_active_admin_grant_and_child() -> None:
+    context = _runtime_context()
+    project_id = uuid4()
+    grant = SimpleNamespace(id=uuid4())
+    resource = ProjectDiagnosticReadResourceContext(
+        resource_type="project_diagnostic",
+        resource_id=uuid4(),
+        scope_project_id=project_id,
+        guide_id=uuid4(),
+        guide_version="v1",
+        target_kind="sufficiency_report",
+        project_exists=True,
+        guide_exists=True,
+        target_exists=True,
+        target_binding_digest=f"sha256:{'b' * 64}",
+        source_snapshot_id=uuid4(),
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+    )
+    service, evidence = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant),
+    )
+    decision = await service.require(ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ, resource)
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+    assert decision.matched_grant_id == grant.id
+    assert decision.matched_scope_project_id == project_id
+    assert decision.revalidated is True
+    assert decision.resource_context_digest == authorization_resource_digest(resource)
+    assert len(evidence.events) == 1
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
+
+    service, _ = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant),
+    )
+    with pytest.raises(AuthorizationDenied) as wrong_kind:
+        await service.require(
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+            resource.model_copy(update={"target_kind": "submission_artifact_policy"}),
+        )
+    assert wrong_kind.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+
+    missing = resource.model_copy(
+        update={
+            "target_exists": False,
+            "target_binding_digest": None,
+            "source_snapshot_id": None,
+            "source_snapshot_hash": None,
+        }
+    )
+    service, denied_evidence = _runtime_service(
+        context,
+        admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant),
+    )
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ, missing)
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+    assert denied_evidence.events[0].after_facts["resource_context_digest"] == (
+        exc_info.value.decision.resource_context_digest
+    )
 
 
 @pytest.mark.asyncio

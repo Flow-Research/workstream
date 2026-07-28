@@ -15,6 +15,17 @@ from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 
+PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
+    ActionId.PROJECT_SETUP_RUN_READ: "setup_run",
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST: "sufficiency_report_collection",
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: "sufficiency_report",
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: "submission_artifact_policy_collection",
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: "submission_artifact_policy",
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
+        "post_submit_checker_policy_setup"
+    ),
+}
+
 
 class ActorKind(StrEnum):
     """Canonical actor kinds visible to authorization."""
@@ -90,11 +101,14 @@ class PreparedAuthorityScope(BaseModel):
     target_actor_profile_id: UUID | None = None
     role: ProjectRole | None = None
     grant_id: UUID | None = None
-    artifact_resource_type: Literal[
-        "artifact_put_attempt",
-        "artifact_verification_job",
-        "artifact_pending_work",
-    ] | None = None
+    artifact_resource_type: (
+        Literal[
+            "artifact_put_attempt",
+            "artifact_verification_job",
+            "artifact_pending_work",
+        ]
+        | None
+    ) = None
     artifact_resource_id: UUID | Literal["workstream:artifact_pending_work"] | None = None
 
     @model_validator(mode="after")
@@ -125,10 +139,7 @@ class PreparedAuthorityScope(BaseModel):
                 self.kind is PreparedAuthorityScopeKind.PROJECT
                 and self.actor_profile_id is None
                 and self.project_id is not None
-                and not (
-                    self.target_actor_profile_id is not None
-                    and self.grant_id is not None
-                )
+                and not (self.target_actor_profile_id is not None and self.grant_id is not None)
                 and ((self.target_actor_profile_id is None) == (self.role is None))
                 and self.artifact_resource_type is None
                 and self.artifact_resource_id is None
@@ -216,6 +227,49 @@ class ProjectReadResourceContext(BaseModel):
             raise ValueError("project read scope must match resource")
         if self.project_exists != (self.project_status is not None):
             raise ValueError("project existence and status are inconsistent")
+        return self
+
+
+class ProjectDiagnosticReadResourceContext(BaseModel):
+    """Canonical project-guide diagnostic facts for one bounded read."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_diagnostic"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str | None
+    target_kind: Literal[
+        "setup_run",
+        "sufficiency_report_collection",
+        "sufficiency_report",
+        "submission_artifact_policy_collection",
+        "submission_artifact_policy",
+        "post_submit_checker_policy_setup",
+    ]
+    project_exists: bool
+    guide_exists: bool
+    target_exists: bool
+    target_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    source_snapshot_id: UUID | None = None
+    source_snapshot_hash: str | None = None
+
+    @model_validator(mode="after")
+    def require_canonical_shape(self):
+        """Reject fabricated child facts and partially bound snapshots."""
+        if self.guide_exists and not self.project_exists:
+            raise ValueError("guide cannot exist without its project")
+        if self.target_exists and not self.guide_exists:
+            raise ValueError("diagnostic target cannot exist without its guide")
+        if self.guide_exists != (self.guide_version is not None):
+            raise ValueError("guide existence and version are inconsistent")
+        if (self.source_snapshot_id is None) != (self.source_snapshot_hash is None):
+            raise ValueError("source snapshot id and hash must be bound together")
+        if not self.target_exists and self.source_snapshot_id is not None:
+            raise ValueError("missing diagnostic target cannot carry snapshot facts")
+        if self.target_exists != (self.target_binding_digest is not None):
+            raise ValueError("target existence and binding digest are inconsistent")
         return self
 
 
@@ -500,6 +554,7 @@ class ArtifactPendingWorkResourceContext(BaseModel):
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ProjectReadResourceContext
+    | ProjectDiagnosticReadResourceContext
     | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
@@ -580,6 +635,7 @@ class AuthorizationDecision(BaseModel):
         "actor_profile",
         "actor_authorization_context",
         "project",
+        "project_diagnostic",
         "actor_identity_link",
         "system",
         "permission_catalogue",
