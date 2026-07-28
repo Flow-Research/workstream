@@ -54,6 +54,10 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
   repository coverage, and raised artifact-foundation coverage to 89.87%.
   Additional focused proofs cover rejection before preparation for an invalid
   guide logical role and scratch cleanup when PREP commit itself fails.
+- hosted run `30367711119` passed all semantic lanes, API E2E, and repository
+  coverage, raising artifact-foundation coverage to 89.98%. A final focused
+  boundary proof exercises fail-closed rejection of partial guide lineage
+  claims; production code and the 90% gate remain unchanged.
 
 ## Reviewer Results
 

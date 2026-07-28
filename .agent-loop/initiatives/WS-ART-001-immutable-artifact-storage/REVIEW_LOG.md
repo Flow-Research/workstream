@@ -61,6 +61,10 @@
   coverage, raising artifact-foundation coverage to 89.87%. Additional focused
   tests cover invalid-role rejection before preparation and cleanup when PREP
   commit fails; production and the 90% threshold remain unchanged.
+- Hosted run `30367711119` again passed all lanes, API E2E, and repository
+  coverage, raising artifact-foundation coverage to 89.98%. A focused boundary
+  proof now covers fail-closed partial guide lineage claims; production and the
+  90% threshold remain unchanged.
 
 ## WS-ART-001-02D
 

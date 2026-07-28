@@ -27,11 +27,13 @@ from app.modules.artifacts.schemas import (
     ArtifactAdmissionResult,
     ArtifactAuthorityDeniedError,
     DenyArtifactInternalAuthority,
+    GuideArtifactAdmissionRequest,
     GuideArtifactIngestAuthorityFacts,
 )
 from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthorization
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.service import (
+    ArtifactAdmissionService,
     ArtifactStorageOrchestrator,
     GuideArtifactIngestService,
     PreparedGuideArtifactIngestCommand,
@@ -502,6 +504,31 @@ async def test_existing_guide_admission_requires_active_root_transaction() -> No
     ):
         async with _artifact_admission_transaction(session, existing=True):  # type: ignore[arg-type]
             pytest.fail("an unavailable PREP transaction must not admit bytes")
+
+
+@pytest.mark.asyncio
+async def test_guide_admission_rejects_partial_lineage_claims(tmp_path: Path) -> None:
+    """Require all three caller lineage claims together or none of them."""
+    preparation, manager = _preparation(tmp_path)
+    prepared = await preparation.prepare(
+        _bytes(b"guide"),
+        media_type="application/octet-stream",
+    )
+    try:
+        request = GuideArtifactAdmissionRequest(
+            project_id=PROJECT_ID,
+            guide_id=None,
+            guide_source_snapshot_id=None,
+            guide_source_item_id=ITEM_ID,
+            source=prepared.committed_source,
+            operation_identity="operation",
+            request_digest="sha256:" + "a" * 64,
+        )
+        with pytest.raises(TypeError, match="lineage claims are incomplete"):
+            ArtifactAdmissionService._validate_request_boundary(request)
+    finally:
+        await prepared.close()
+        manager.close()
 
 
 @pytest.mark.asyncio

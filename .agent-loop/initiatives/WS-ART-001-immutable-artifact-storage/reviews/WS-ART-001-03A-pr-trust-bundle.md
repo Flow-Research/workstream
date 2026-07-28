@@ -63,7 +63,9 @@ repository coverage, then measured the unchanged artifact-foundation gate at
 put replay and fail-closed missing PREP transaction behavior; neither production
 code nor the 90% threshold changed. After rebasing, those tests raised the gate
 to 89.87%. Further focused proof now covers invalid-role rejection before
-preparation and prepared-byte cleanup when PREP commit fails.
+preparation and prepared-byte cleanup when PREP commit fails. The next hosted
+run reached 89.98%; a final focused boundary test covers rejection of partial
+guide lineage claims without changing production code or the gate.
 
 ## External Review
 
