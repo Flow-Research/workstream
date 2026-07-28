@@ -50,7 +50,10 @@ and its exact ownership regression pass canonical collection. The next hosted
 run executed all lanes and exposed one stale expected-schema fingerprint after
 the SHA-256 constraint hardening; the guard now uses the hosted canonical value.
 The following run executed 1,618 tests (1,615 pass) and identified three stale
-lineage/unit fixtures, now corrected without production changes.
+lineage/unit fixtures, now corrected without production changes. The next run
+passed all shared/project/task tests and 91/92 schema tests; its sole asyncpg
+multi-command seed issue is split into individual transactional statements and
+the exact isolated migration proof passes.
 
 ## External Review
 

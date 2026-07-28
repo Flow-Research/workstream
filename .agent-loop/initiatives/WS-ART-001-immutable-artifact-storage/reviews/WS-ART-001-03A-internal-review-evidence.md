@@ -34,6 +34,9 @@ guide ingest action remains planned and unavailable pending AUTH 04A.
 - hosted run `30360906515` executed 1,618 tests with 1,615 passing and exposed
   three stale fixtures for complete guide lineage/staged facts. Those fixtures
   now exercise the intended exact-lineage boundaries; production is unchanged.
+- hosted run `30361748346` passed all shared (1,618), project (236), and task
+  (217) tests. Schema passed 91/92; the sole failure was a multi-command asyncpg
+  test seed, now split into six transactional statements with isolated proof.
 
 ## Reviewer Results
 

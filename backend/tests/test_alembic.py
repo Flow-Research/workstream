@@ -1685,36 +1685,48 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
     ids = {name: str(uuid4()) for name in ("actor", "project", "guide", "snapshot", "item")}
     try:
         async with engine.begin() as connection:
-            await connection.execute(
-                text(
+            parameters = {
+                **ids,
+                "ingest": str(uuid4()),
+                "slug": f"migration-{ids['project']}",
+                "sha256": "sha256:" + "a" * 64,
+            }
+            statements = (
+                (
                     "insert into actor_profiles "
                     "(id, actor_kind, status, provisioning_method, created_by) "
-                    "values (:actor, 'human', 'active', 'automatic_first_access', 'migration-test'); "
+                    "values (:actor, 'human', 'active', 'automatic_first_access', 'migration-test')"
+                ),
+                (
                     "insert into projects (id, name, slug, status) "
-                    "values (:project, 'Migration project', :slug, 'draft'); "
+                    "values (:project, 'Migration project', :slug, 'draft')"
+                ),
+                (
                     "insert into project_guides "
                     "(id, project_id, version, status, content_markdown, created_by) "
-                    "values (:guide, :project, 'v1', 'draft', '# Guide', 'migration-test'); "
+                    "values (:guide, :project, 'v1', 'draft', '# Guide', 'migration-test')"
+                ),
+                (
                     "insert into guide_source_snapshots "
                     "(id, project_id, guide_id, guide_version, manifest_schema_version, "
                     "manifest_json, bundle_hash, captured_by) values "
-                    "(:snapshot, :project, :guide, 'v1', '1', '{}'::json, :sha256, 'migration-test'); "
+                    "(:snapshot, :project, :guide, 'v1', '1', '{}'::json, :sha256, 'migration-test')"
+                ),
+                (
                     "insert into guide_source_snapshot_items "
                     "(id, source_snapshot_id, item_order, source_kind, durable_ref, "
                     "ingestion_adapter, content_hash, media_type) values "
                     "(:item, :snapshot, 0, 'upload', 'migration-test', 'upload', :sha256, "
-                    "'application/octet-stream'); "
+                    "'application/octet-stream')"
+                ),
+                (
                     "insert into guide_source_artifact_ingests "
                     "(id, source_item_id, actor_profile_id, sha256, byte_count, media_type) "
                     "values (:ingest, :item, :actor, :sha256, 1, 'application/octet-stream')"
                 ),
-                {
-                    **ids,
-                    "ingest": str(uuid4()),
-                    "slug": f"migration-{ids['project']}",
-                    "sha256": "sha256:" + "a" * 64,
-                },
             )
+            for statement in statements:
+                await connection.execute(text(statement), parameters)
     finally:
         await engine.dispose()
 

@@ -40,6 +40,10 @@
   lineage to the real admission proof, uses the pre-staging lineage lock helper
   for its intended test, and adds the new optional lineage fields to the quota
   unit fixture. Production code is unchanged by this repair.
+- Hosted run `30361748346` proved all 1,618 shared, 236 project, and 217 task
+  tests pass. Its sole failure was asyncpg rejecting the populated-downgrade
+  test's multi-command prepared seed. The seed now executes six parameterized
+  statements in one transaction; the exact isolated migration test passes.
 
 ## WS-ART-001-02D
 
