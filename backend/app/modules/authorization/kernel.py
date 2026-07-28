@@ -31,6 +31,9 @@ from app.modules.authorization.runtime import (
     ActorProfileLifecycleResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
+    ArtifactPendingWorkResourceContext,
+    ArtifactPutAttemptResourceContext,
+    ArtifactVerificationJobResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -111,12 +114,26 @@ _ADMIN_MUTATIONS = frozenset(
     }
 )
 
+_ARTIFACT_INTERNAL_RESOURCES = {
+    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ("artifact_put_attempt", ArtifactPutAttemptResourceContext),
+    ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
+        "artifact_verification_job",
+        ArtifactVerificationJobResourceContext,
+    ),
+    ActionId.ARTIFACT_PENDING_WORK_SCAN: (
+        "artifact_pending_work",
+        ArtifactPendingWorkResourceContext,
+    ),
+}
+
 
 class _PrelockedAuthority:
     """AUTH-private authority facts locked by the prepared protocol."""
 
     __slots__ = (
         "action_id",
+        "artifact_resource_id",
+        "artifact_resource_type",
         "context",
         "_frozen",
         "issuer",
@@ -144,6 +161,8 @@ class _PrelockedAuthority:
         matched_grant_id: UUID | None,
         matched_grant_status: str | None,
         permission_id: PermissionId,
+        artifact_resource_type: str | None = None,
+        artifact_resource_id: UUID | str | None = None,
     ) -> None:
         object.__setattr__(self, "issuer", issuer)
         object.__setattr__(self, "transaction", transaction)
@@ -153,6 +172,8 @@ class _PrelockedAuthority:
         object.__setattr__(self, "matched_grant_id", matched_grant_id)
         object.__setattr__(self, "matched_grant_status", matched_grant_status)
         object.__setattr__(self, "permission_id", permission_id)
+        object.__setattr__(self, "artifact_resource_type", artifact_resource_type)
+        object.__setattr__(self, "artifact_resource_id", artifact_resource_id)
         object.__setattr__(self, "_frozen", True)
 
     def __setattr__(self, _name: str, _value: object) -> None:
@@ -238,6 +259,17 @@ class AuthorizationService:
                 raise PreparedAuthorizationUnsupported(
                     AuthorizationDenialCode.PERMISSION_NOT_GRANTED
                 )
+            if action.availability is not ActionAvailability.ACTIVE:
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+            expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
+            if (
+                expected_resource is None
+                or scope.kind is not PreparedAuthorityScopeKind.ARTIFACT_INTERNAL
+                or scope.artifact_resource_type != expected_resource[0]
+            ):
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                )
             locked = await self._admin.lock_request_actor(
                 context.identity_link_id, context.actor_profile_id
             )
@@ -245,7 +277,21 @@ class AuthorizationService:
             lifecycle = self._lifecycle_denial(context)
             if lifecycle is not None:
                 raise PreparedAuthorizationUnsupported(lifecycle)
-            raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
+            authority = _PrelockedAuthority(
+                _PRELOCKED_CONSTRUCTOR_TOKEN,
+                issuer=self,
+                transaction=transaction,
+                context=context,
+                action_id=action_id,
+                scope_project_id=None,
+                matched_grant_id=None,
+                matched_grant_status=None,
+                permission_id=action.permission_id,
+                artifact_resource_type=scope.artifact_resource_type,
+                artifact_resource_id=scope.artifact_resource_id,
+            )
+            self._sealed_prelocked.add(authority)
+            return authority
         if action.availability is not ActionAvailability.ACTIVE:
             raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.ACTION_UNAVAILABLE)
         if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF:
@@ -397,6 +443,7 @@ class AuthorizationService:
                 action_id,
                 action,
                 context,
+                resource_context,
             )
         elif action is not None and action.action_id in _ADMIN_ACTIONS:
             (
@@ -467,6 +514,22 @@ class AuthorizationService:
             denial = AuthorizationDenialCode.UNKNOWN_ACTION
         elif authority.permission_id != action.permission_id:
             denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+        elif isinstance(context, ServiceAuthorizationContext):
+            denial = self._lifecycle_denial(context)
+            expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
+            if denial is None and action.availability is not ActionAvailability.ACTIVE:
+                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+            if denial is None and action_id not in SERVICE_ACTIONS_BY_IDENTITY[context.service_identity]:
+                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            if denial is None and (
+                expected_resource is None
+                or not isinstance(resource_context, expected_resource[1])
+                or resource_context.resource_type != authority.artifact_resource_type
+                or resource_context.resource_id != authority.artifact_resource_id
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.FIXED_SERVICE
         elif action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF:
             denial = self._denial(action_id, action, resource_context, context, True)
             if denial is None:
@@ -543,8 +606,13 @@ class AuthorizationService:
         requested_action: object,
         action,
         context: ServiceAuthorizationContext,
+        resource: AuthorizationResourceContext,
     ) -> tuple[AuthorizationDenialCode | None, ServiceAuthorizationContext, bool]:
-        """Evaluate one fixed service before every human authority path."""
+        """Evaluate lifecycle/matrix state; direct feature access always denies.
+
+        The resource is intentionally not honored here. Active ART service
+        actions can allow only through a prepared capability consumption.
+        """
         lifecycle = self._lifecycle_denial(context)
         if lifecycle is not None:
             return lifecycle, context, False
@@ -768,7 +836,7 @@ class AuthorizationService:
             return AuthorizationDenialCode.ACTOR_SUSPENDED
         return None
 
-    async def _restage_denial(self, decision: AuthorizationDecision) -> None:
+    async def restage_denial(self, decision: AuthorizationDecision) -> None:
         """Restage the exact pending denial after composition-root rollback."""
         if (
             decision.allowed
@@ -779,6 +847,10 @@ class AuthorizationService:
             raise TypeError("invalid authorization denial evidence")
         await self._stage_decision(decision, self._context.actor_profile_id)
         self._pending_denial = None
+
+    async def _restage_denial(self, decision: AuthorizationDecision) -> None:
+        """Retain the existing AUTH-internal dependency seam."""
+        await self.restage_denial(decision)
 
     @staticmethod
     def _denial(
@@ -855,6 +927,13 @@ class AuthorizationService:
             audit_resource_type = "actor_profile"
         elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
             audit_resource_type = decision.resource_type
+        after_facts: dict[str, object] = {"allowed": decision.allowed}
+        if decision.resource_type in {
+            "artifact_put_attempt",
+            "artifact_verification_job",
+            "artifact_pending_work",
+        }:
+            after_facts["resource_context_digest"] = decision.resource_context_digest
         try:
             await self._audit.add_authority_event(
                 AuthorityAuditEventInput(
@@ -892,7 +971,7 @@ class AuthorizationService:
                     target_ref_id=(str(decision.resource_id) if audit_resource_type else None),
                     reason="authorization_evaluation",
                     denial_code=stored_denial,
-                    after_facts={"allowed": decision.allowed},
+                    after_facts=after_facts,
                 )
             )
         except SQLAlchemyError as exc:

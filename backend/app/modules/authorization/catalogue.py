@@ -564,17 +564,17 @@ ACTION_DEFINITIONS = (
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.AUTH_ART_06B,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionOwner.AUTH_ART_02D_INTERNAL,
     ),
-    _planned(
+    _active(
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         PermissionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionOwner.AUTH_ART_02D_INTERNAL,
@@ -679,6 +679,9 @@ def _index_actions(
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     }
     if {
         definition.action_id
@@ -804,10 +807,20 @@ def _index_service_actions(
         raise RuntimeError("service action matrix row mismatch")
     for action, (permission, owner) in expected_metadata.items():
         definition = ACTION_BY_ID[action]
+        expected_availability = (
+            ActionAvailability.ACTIVE
+            if action
+            in {
+                ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+                ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+                ActionId.ARTIFACT_PENDING_WORK_SCAN,
+            }
+            else ActionAvailability.PLANNED
+        )
         if (
             definition.permission_id is not permission
             or definition.owner is not owner
-            or definition.availability is not ActionAvailability.PLANNED
+            or definition.availability is not expected_availability
         ):
             raise RuntimeError("service action matrix metadata mismatch")
     return MappingProxyType(dict(rows))

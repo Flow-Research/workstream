@@ -169,6 +169,7 @@ from app.modules.authorization.runtime import (
     ActorProfileLifecycleResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
+    ArtifactVerificationJobResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -1486,17 +1487,17 @@ ART_CUSTODY_EXPECTATIONS = {
     "artifact.verification.execute": (
         "artifact.verification.execute",
         "WS-AUTH-001-ART-02D-INTERNAL",
-        "planned",
+        "active",
     ),
     "artifact.pending_work.scan": (
         "artifact.pending_work.scan",
         "WS-AUTH-001-ART-02D-INTERNAL",
-        "planned",
+        "active",
     ),
     "artifact.put_attempt.resolve": (
         "artifact.put_attempt.resolve",
         "WS-AUTH-001-ART-02D-INTERNAL",
-        "planned",
+        "active",
     ),
     "artifact.guide_source.ingest": (
         "artifact.guide_source.ingest",
@@ -1792,6 +1793,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     }
     assert {
         definition.action_id.value: (
@@ -1873,14 +1877,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 22
+        == 25
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 56
+        == 53
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -1938,7 +1942,7 @@ def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
     assert found == allowed
 
 
-def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
+def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() -> None:
     expected = {
         ServiceIdentity.ARTIFACT_VERIFIER: {"artifact.verification.execute"},
         ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
@@ -1965,10 +1969,22 @@ def test_fixed_service_action_matrix_is_exact_planned_and_immutable() -> None:
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
     assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 12
+    active_internal = {
+        ActionId.ARTIFACT_VERIFICATION_EXECUTE,
+        ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
+        ActionId.ARTIFACT_PENDING_WORK_SCAN,
+    }
+    assert {
+        action
+        for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
+        for action in actions
+        if ACTION_BY_ID[action].availability is ActionAvailability.ACTIVE
+    } == active_internal
     assert all(
         ACTION_BY_ID[action].availability is ActionAvailability.PLANNED
         for actions in SERVICE_ACTIONS_BY_IDENTITY.values()
         for action in actions
+        if action not in active_internal
     )
     with pytest.raises(TypeError):
         SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.ARTIFACT_VERIFIER] = frozenset()  # type: ignore[index]
@@ -1979,6 +1995,7 @@ def _parse_custody_table(document: Path, expected_actions: set[str]) -> dict[str
     for header_index, row in enumerate(rows):
         if row not in {
             "| AUTH activation custodian | Exact planned ActionIds |",
+            "| AUTH activation custodian | Exact ActionIds and current availability |",
             "| AUTH activation chunk | Exact planned ActionIds |",
         }:
             continue
@@ -2060,7 +2077,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 78 ActionIds, 22 active actions, and\n56 planned actions" in operations
+        "71 PermissionIds, 78 ActionIds, 25 active actions, and\n53 planned actions" in operations
     )
 
 
@@ -2158,7 +2175,7 @@ def test_fixed_service_action_matrix_rejects_metadata_drift(
     elif metadata == "owner":
         changed = replace(definition, owner=ActionOwner.AUTH_ART_03)
     else:
-        changed = replace(definition, availability=ActionAvailability.ACTIVE)
+        changed = replace(definition, availability=ActionAvailability.PLANNED)
     action_index = dict(ACTION_BY_ID)
     action_index[action] = changed
     monkeypatch.setattr(authorization_catalogue, "ACTION_BY_ID", action_index)
@@ -3585,7 +3602,7 @@ async def test_prepared_exact_consume_remains_spent_after_cancellation():
 
 
 @pytest.mark.asyncio
-async def test_prepared_fixed_service_refreshes_rows_before_planned_denial():
+async def test_prepared_fixed_service_rejects_generic_scope_before_actor_lock():
     context = _runtime_context(actor_kind=ActorKind.SERVICE)
     assert isinstance(context, ServiceAuthorizationContext)
 
@@ -3624,8 +3641,8 @@ async def test_prepared_fixed_service_refreshes_rows_before_planned_denial():
             PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
             PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
         )
-    assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
-    assert facts.calls == 1
+    assert exc_info.value.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+    assert facts.calls == 0
     assert evidence.events == []
 
 
@@ -3696,7 +3713,7 @@ async def test_prepared_issues_no_handle_or_evidence_for_every_planned_art_actio
             PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
         )
     assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
-    assert facts.calls == (1 if service_identity is not None else 0)
+    assert facts.calls == 0
     assert prepared._issued == {}
     assert evidence.events == []
 
@@ -6753,7 +6770,7 @@ async def test_service_denial_rolls_back_observations_before_clean_restage(
             id=str(actor_id),
             actor_kind="service",
             status="active",
-            service_identity=ServiceIdentity.ARTIFACT_VERIFIER.value,
+            service_identity=ServiceIdentity.ARTIFACT_SCHEDULER.value,
         ),
         identity_link=SimpleNamespace(id=str(link_id), status="active"),
     )
@@ -6876,7 +6893,7 @@ def test_authorization_runtime_contracts_are_strict_and_two_argument() -> None:
         for name, member in inspect.getmembers(AuthorizationService, inspect.isfunction)
         if not name.startswith("_")
     }
-    assert public_methods == {"require"}
+    assert public_methods == {"require", "restage_denial"}
     assert tuple(inspect.signature(AuthorizationService.require).parameters) == (
         "self",
         "action_id",
@@ -7002,11 +7019,13 @@ async def test_fixed_service_kernel_selects_exact_action_before_availability() -
         for action in set().union(*SERVICE_ACTIONS_BY_IDENTITY.values()):
             with pytest.raises(AuthorizationDenied) as exc_info:
                 await service.require(action, resource)
-            expected = (
-                AuthorizationDenialCode.ACTION_UNAVAILABLE
-                if action in own_actions
-                else AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            )
+            expected = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+            if action in own_actions:
+                expected = (
+                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+                    if ACTION_BY_ID[action].availability is ActionAvailability.ACTIVE
+                    else AuthorizationDenialCode.ACTION_UNAVAILABLE
+                )
             assert exc_info.value.decision.denial_code is expected
 
 
@@ -7057,6 +7076,36 @@ async def test_fixed_service_active_candidate_uses_one_revalidation_seam(
     assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
     assert exc_info.value.decision.revalidated is True
     assert calls == [(ServiceIdentity.ARTIFACT_VERIFIER, action)]
+
+
+async def test_fixed_service_active_artifact_action_requires_prepared_consumption() -> None:
+    context = _runtime_context(actor_kind=ActorKind.SERVICE)
+
+    async def revalidate(current: ServiceAuthorizationContext, _action: ActionId):
+        return current
+
+    service, evidence = _runtime_service(context, revalidate_service=revalidate)
+    resource = ArtifactVerificationJobResourceContext(
+        resource_type="artifact_verification_job",
+        resource_id=uuid4(),
+        replica_id=uuid4(),
+        namespace_fingerprint="sha256:" + "1" * 64,
+        provider_object_ref="provider/object",
+        sha256="sha256:" + "2" * 64,
+        byte_count=1,
+        executor_id=uuid4(),
+        execution_generation=1,
+    )
+
+    with pytest.raises(AuthorizationDenied) as exc_info:
+        await service.require(ActionId.ARTIFACT_VERIFICATION_EXECUTE, resource)
+
+    assert exc_info.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+    assert exc_info.value.decision.allowed is False
+    assert evidence.events[-1].after_facts["allowed"] is False
+    assert evidence.events[-1].after_facts["resource_context_digest"] == (
+        authorization_resource_digest(resource)
+    )
 
 
 @pytest.mark.parametrize(
@@ -7274,7 +7323,14 @@ async def test_authorization_kernel_denies_active_action_without_implemented_aut
 
 @pytest.mark.parametrize(
     ("action_id", "expected_metadata"),
-    {**ART_CUSTODY_EXPECTATIONS, **REV_CUSTODY_EXPECTATIONS}.items(),
+    {
+        action_id: metadata
+        for action_id, metadata in {
+            **ART_CUSTODY_EXPECTATIONS,
+            **REV_CUSTODY_EXPECTATIONS,
+        }.items()
+        if metadata[2] == "planned"
+    }.items(),
 )
 async def test_custody_actions_remain_unavailable_without_runtime_dispatch(
     action_id: str,
@@ -7340,7 +7396,7 @@ async def test_denial_is_restaged_with_the_same_bounded_identity() -> None:
         await service.require(ActionId.REVIEW_QUEUE_READ, resource)
     original = evidence.events.pop()
 
-    await service._restage_denial(exc_info.value.decision)
+    await service.restage_denial(exc_info.value.decision)
 
     assert len(evidence.events) == 1
     assert evidence.events[0].event_id == original.event_id
@@ -7355,11 +7411,11 @@ async def test_denial_is_restaged_with_the_same_bounded_identity() -> None:
     )
     allowed = await allowed_service.require(ActionId.ACTOR_PROFILE_READ_SELF, allowed_resource)
     with pytest.raises(TypeError, match="invalid authorization denial evidence"):
-        await allowed_service._restage_denial(allowed)
+        await allowed_service.restage_denial(allowed)
 
     other_service, _ = _runtime_service(context)
     with pytest.raises(TypeError, match="invalid authorization denial evidence"):
-        await other_service._restage_denial(exc_info.value.decision)
+        await other_service.restage_denial(exc_info.value.decision)
 
 
 @pytest.mark.parametrize(

@@ -679,8 +679,9 @@ actions, `actor.service.provision`, `actor.profile.read`,
 identity-link lifecycle actions are active. The remaining five active actions
 are the AUTH-10B reads `project.contributor_candidate.list`,
 `project_role_grant.list`, and `project_role_grant.read`, plus the AUTH-10C
-mutations `project_role_grant.issue` and `project_role_grant.revoke`; the other
-56 entries remain planned and non-executable. The target post-custody
+mutations `project_role_grant.issue` and `project_role_grant.revoke`. WS-XINT-002-03
+also activates only the fixed verifier, pending-work scanner, and put resolver;
+the other 53 entries remain planned and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
 reconciliation assigns all 22 ART rows to nine exact activation custodians and all 19 REV
@@ -707,9 +708,12 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 22 active actions, and
-56 planned actions after WS-XINT-002-01 replaces six obsolete upload actions
-with three planned bundle/review actions without activating a route.
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 25 active actions, and
+53 planned actions after WS-XINT-002-03 activates the three internal ART service
+actions. The other 19 ART actions remain planned, including every Operator
+artifact action.
+Migration `0037` keeps each allowed or denied internal ART decision bound to
+the exact privacy-bounded resource-context digest in append-only audit facts.
 
 AUTH-11A adds read-only `project.setup_diagnostic.read` and
 `project.effective_policy.read`. Project Manager and Audit Authority receive
@@ -776,17 +780,25 @@ unchanged. The handle remains consumed after every exact attempt, including a
 rolled-back or cancelled attempt, and dependency teardown invalidates all
 outstanding handles.
 
-Do not restage a prepared denial after rollback. Its staged decision belongs to
-the failed caller transaction and rolls back with participant state. Planned
-fixed-service preparation returns bounded `action_unavailable` without evidence
-because it issues no handle and has no final resource context.
+General human and administrative PREP callers do not restage a denial after
+rollback; its staged decision belongs to the failed caller transaction and
+rolls back with participant state. The three active internal ART compositions
+are the deliberate exception: their adapter retains the exact denial, the
+composition root first rolls back ART state, and AUTH's public bounded restage
+operation commits the same denial in a clean AUTH-only transaction. Still-
+planned fixed-service preparation still issues no handle. When it enters the
+ART adapter with an exact resource context, its bounded `action_unavailable`
+denial follows the same rollback-then-clean-restage path.
 
 Operationally, actor-self preparation locks profile then exact link. An
 administrative preparation locks `AuthorityControl(id=1)`, request profile,
 exact request link, and deterministic matched AdminRoleGrant before participant
-locks. Do not add a feature lock ahead of that order. Current fixed-service
-actions remain planned and can produce no handle. ProjectRoleGrant preparation
-is unsupported until AUTH-10 supplies and proves its canonical lock path.
+locks. Do not add a feature lock ahead of that order. WS-XINT-002-03 is the
+first active ART fixed-service PREP consumer: the verifier, pending-work
+scanner, and put-attempt resolver can receive only their exact typed handles.
+Still-planned fixed-service actions produce no handle. ProjectRoleGrant
+preparation is unsupported until AUTH-10 supplies and proves its canonical lock
+path.
 
 Downgrade is allowed only while every action ID remains null and no permission
 outside migration `0018`'s historical 49-value set exists in the decision,

@@ -66,14 +66,25 @@ from tests.artifact_store_helpers import artifact_admission_limit_settings, mint
 
 
 class _AllowArtifactAuthority:
-    async def preflight(self, **_values: object) -> None: ...
+    async def prepare(self, **_values: object) -> None: ...
 
-    async def revalidate_terminal(self, **_values: object) -> None: ...
+    async def consume(self, **_values: object) -> None: ...
+
+    def discard(self) -> None: ...
 
 
 class _DenyTerminalArtifactAuthority(_AllowArtifactAuthority):
-    async def revalidate_terminal(self, **_values: object) -> None:
-        raise ArtifactAuthorityDeniedError("terminal authority changed")
+    phase: str | None = None
+
+    async def prepare(self, **values: object) -> None:
+        self.phase = str(values["phase"])
+
+    async def consume(self, **_values: object) -> None:
+        if self.phase == "terminal":
+            raise ArtifactAuthorityDeniedError("terminal authority changed")
+
+    def discard(self) -> None:
+        self.phase = None
 
 
 class _AllowRecoveryAuthority:

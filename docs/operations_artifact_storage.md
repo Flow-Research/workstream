@@ -9,9 +9,10 @@ responses.
 
 The routes are composed under `/api/v1/operator/artifacts`, but production
 authority remains deny-only while the corresponding Authorization Service
-actions are planned. A later AUTH-owned activation chunk must connect the
-typed ART resource facts to the exact action decisions. Do not add role checks,
-fallback constructors, or artifact-owned grant evaluation.
+Operator actions are planned. WS-XINT-002-03 activates only the fixed verifier,
+pending-work scanner, and put resolver through transaction-bound prepared
+authority. It grants no Operator route. Do not add role checks, fallback
+constructors, or artifact-owned grant evaluation.
 
 AWS S3 readiness is configuration-only and remains
 `inactive_live_proof_required`. This check does not instantiate an adapter or

@@ -76,6 +76,7 @@ class PreparedAuthorityScopeKind(StrEnum):
     ACTOR_SELF = "actor_self"
     SYSTEM = "system"
     PROJECT = "project"
+    ARTIFACT_INTERNAL = "artifact_internal"
 
 
 class PreparedAuthorityScope(BaseModel):
@@ -89,6 +90,12 @@ class PreparedAuthorityScope(BaseModel):
     target_actor_profile_id: UUID | None = None
     role: ProjectRole | None = None
     grant_id: UUID | None = None
+    artifact_resource_type: Literal[
+        "artifact_put_attempt",
+        "artifact_verification_job",
+        "artifact_pending_work",
+    ] | None = None
+    artifact_resource_id: UUID | Literal["workstream:artifact_pending_work"] | None = None
 
     @model_validator(mode="after")
     def validate_selector(self):
@@ -101,6 +108,8 @@ class PreparedAuthorityScope(BaseModel):
                 and self.target_actor_profile_id is None
                 and self.role is None
                 and self.grant_id is None
+                and self.artifact_resource_type is None
+                and self.artifact_resource_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.SYSTEM
@@ -109,6 +118,8 @@ class PreparedAuthorityScope(BaseModel):
                 and self.target_actor_profile_id is None
                 and self.role is None
                 and self.grant_id is None
+                and self.artifact_resource_type is None
+                and self.artifact_resource_id is None
             )
             or (
                 self.kind is PreparedAuthorityScopeKind.PROJECT
@@ -119,6 +130,29 @@ class PreparedAuthorityScope(BaseModel):
                     and self.grant_id is not None
                 )
                 and ((self.target_actor_profile_id is None) == (self.role is None))
+                and self.artifact_resource_type is None
+                and self.artifact_resource_id is None
+            )
+            or (
+                self.kind is PreparedAuthorityScopeKind.ARTIFACT_INTERNAL
+                and self.actor_profile_id is None
+                and self.project_id is None
+                and self.target_actor_profile_id is None
+                and self.role is None
+                and self.grant_id is None
+                and self.artifact_resource_type is not None
+                and self.artifact_resource_id is not None
+                and (
+                    (
+                        self.artifact_resource_type == "artifact_pending_work"
+                        and self.artifact_resource_id == "workstream:artifact_pending_work"
+                    )
+                    or (
+                        self.artifact_resource_type
+                        in {"artifact_put_attempt", "artifact_verification_job"}
+                        and isinstance(self.artifact_resource_id, UUID)
+                    )
+                )
             )
         )
         if not valid:
@@ -375,6 +409,54 @@ class ProjectRoleGrantRevokeResourceContext(BaseModel):
     version: Literal[1, 2]
 
 
+class ArtifactPutAttemptResourceContext(BaseModel):
+    """Exact fenced put-attempt facts composed by ART from locked rows."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["artifact_put_attempt"]
+    resource_id: UUID
+    operation_identity: str
+    namespace_fingerprint: str
+    sha256: str
+    byte_count: int = Field(ge=0)
+    executor_id: UUID
+    execution_generation: int = Field(gt=0)
+
+
+class ArtifactVerificationJobResourceContext(BaseModel):
+    """Exact fenced verification-job facts composed by ART from locked rows."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["artifact_verification_job"]
+    resource_id: UUID
+    replica_id: UUID
+    namespace_fingerprint: str
+    provider_object_ref: str
+    sha256: str
+    byte_count: int = Field(ge=0)
+    executor_id: UUID
+    execution_generation: int = Field(gt=0)
+
+
+class ArtifactPendingWorkResourceContext(BaseModel):
+    """One database-cutoff pending-work page composed only by ART."""
+
+    model_config = _STRICT_FROZEN
+    resource_type: Literal["artifact_pending_work"]
+    resource_id: Literal["workstream:artifact_pending_work"]
+    scanner_kind: Literal["put_resolution_and_verification"]
+    database_cutoff_iso: str
+    page_size: int = Field(gt=0, le=1000)
+    put_attempt_ids: tuple[UUID, ...] = Field(max_length=1000)
+    verification_job_ids: tuple[UUID, ...] = Field(max_length=1000)
+
+    @model_validator(mode="after")
+    def bind_page_size(self):
+        if len(self.put_attempt_ids) + len(self.verification_job_ids) > self.page_size:
+            raise ValueError("artifact pending-work page exceeds its bound")
+        return self
+
+
 AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ActorProfileAdminReadResourceContext
@@ -394,6 +476,9 @@ AuthorizationResourceContext = (
     | ProjectRoleGrantReadResourceContext
     | ProjectRoleGrantIssueResourceContext
     | ProjectRoleGrantRevokeResourceContext
+    | ArtifactPutAttemptResourceContext
+    | ArtifactVerificationJobResourceContext
+    | ArtifactPendingWorkResourceContext
 )
 
 
@@ -427,6 +512,7 @@ class MatchedAuthorityKind(StrEnum):
 
     ACTOR_SELF = "actor_self"
     ADMIN_ROLE_GRANT = "admin_role_grant"
+    FIXED_SERVICE = "fixed_service"
 
 
 class AuthorizationDecision(BaseModel):
@@ -453,6 +539,9 @@ class AuthorizationDecision(BaseModel):
         "project_contributor_candidate_collection",
         "project_role_grant_collection",
         "project_role_grant",
+        "artifact_put_attempt",
+        "artifact_verification_job",
+        "artifact_pending_work",
     ]
     resource_id: (
         UUID
@@ -462,6 +551,7 @@ class AuthorizationDecision(BaseModel):
             "workstream:permission_catalogue",
             "workstream:admin_role_definitions",
             "workstream:admin_role_grants",
+            "workstream:artifact_pending_work",
         ]
     )
     resource_context_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
@@ -489,6 +579,9 @@ class AuthorizationDecision(BaseModel):
         elif self.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT:
             if self.matched_grant_id is None:
                 raise ValueError("grant decisions require matched grant")
+        elif self.matched_authority_kind is MatchedAuthorityKind.FIXED_SERVICE:
+            if self.matched_grant_id is not None or self.matched_scope_project_id is not None:
+                raise ValueError("fixed-service decisions cannot carry grant scope")
         elif self.matched_grant_id is not None or self.matched_scope_project_id is not None:
             raise ValueError("denied decisions cannot carry authority matches")
         return self
