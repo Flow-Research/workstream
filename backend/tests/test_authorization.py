@@ -3190,7 +3190,13 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
     assert response.project_roles == ("reviewer", "submitter")
     assert response.effective_action_ids == (
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
@@ -3202,7 +3208,13 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
         project_selector_id=project_id,
     )
     assert archived.effective_action_ids == (
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_READ,
+        ActionId.PROJECT_SETUP_RUN_READ,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
