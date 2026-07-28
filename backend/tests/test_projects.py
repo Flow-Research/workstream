@@ -185,6 +185,8 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             captured_by_admin_role_grant_id=admin_grant.id,
             captured_at=now,
         )
+        session.add(snapshot)
+        await session.flush()
         grant = ProjectRoleGrant(
             id=uuid4(),
             project_id=project_id,
@@ -199,7 +201,7 @@ async def add_project_role_for_default_actor(project_id: str, role: str) -> tupl
             grant_reason="AUTH-11B route fixture",
             granted_at=now,
         )
-        session.add_all([snapshot, grant])
+        session.add(grant)
         await session.commit()
         return grant.id, str(link.id)
 
