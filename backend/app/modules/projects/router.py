@@ -230,19 +230,28 @@ async def ingest_guide_source_artifact(
 ) -> GuideArtifactIngestResponse:
     """Stream one guide source through hidden, fail-closed ART ingestion."""
     try:
+        identifiers = (
+            UUID(project_id),
+            UUID(guide_id),
+            UUID(source_snapshot_id),
+            UUID(source_item_id),
+            UUID(idempotency_key or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Guide source not found") from exc
+    try:
         result = await ingest.ingest(
             authorization_context=context,
-            project_id=UUID(project_id),
-            guide_id=UUID(guide_id),
-            guide_source_snapshot_id=UUID(source_snapshot_id),
-            source_item_id=UUID(source_item_id),
-            idempotency_key=UUID(idempotency_key or ""),
+            project_id=identifiers[0],
+            guide_id=identifiers[1],
+            guide_source_snapshot_id=identifiers[2],
+            source_item_id=identifiers[3],
+            idempotency_key=identifiers[4],
             byte_source=request.stream(),
         )
     except (
         ArtifactAdmissionRelationshipError,
         ArtifactAuthorityDeniedError,
-        ValueError,
     ) as exc:
         raise HTTPException(status_code=404, detail="Guide source not found") from exc
     return GuideArtifactIngestResponse.model_validate(result, from_attributes=True)

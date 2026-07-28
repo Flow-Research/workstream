@@ -73,6 +73,10 @@
   the ART-added whole-projects gate against merged AUTH 11B's unrelated 71.54%
   project coverage. The new out-of-scope gate and its self-test were removed;
   repository and every pre-existing subsystem gate remain unchanged.
+- Final CodeRabbit review findings were triaged separately. Valid bootstrap
+  cleanup, route exception-boundary, exact exception, typed digest, and result
+  contract findings were repaired with focused tests. Reuse/query optimizations
+  were deferred; PREP transaction duration remains an AUTH 04A activation gate.
 
 ## WS-ART-001-02D
 

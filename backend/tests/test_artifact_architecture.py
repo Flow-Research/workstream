@@ -300,8 +300,14 @@ def test_artifact_operations_exports_only_canonical_closed_contracts() -> None:
         for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name.endswith("Request")
     }
+    result_names = {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name.endswith("Result")
+    }
     assert protocol_names == CLOSED_PORTS
     assert request_names == CANONICAL_REQUESTS
+    assert result_names == CANONICAL_RESULTS
 
     exported_names = {
         element.value
@@ -326,7 +332,8 @@ def test_artifact_operations_exports_only_canonical_closed_contracts() -> None:
     fields = {
         node.target.id
         for class_node in tree.body
-        if isinstance(class_node, ast.ClassDef) and class_node.name in CANONICAL_REQUESTS
+        if isinstance(class_node, ast.ClassDef)
+        and class_node.name in (CANONICAL_REQUESTS | CANONICAL_RESULTS)
         for node in class_node.body
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     }

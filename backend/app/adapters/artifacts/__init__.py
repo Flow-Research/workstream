@@ -154,7 +154,11 @@ def get_guide_artifact_ingest_command(
     @asynccontextmanager
     async def runtime():
         bootstrap = create_artifact_store_bootstrap(settings)
-        manager = create_artifact_scratch_manager(settings)
+        try:
+            manager = create_artifact_scratch_manager(settings)
+        except BaseException:
+            bootstrap.close()
+            raise
         try:
             namespace = artifact_storage_namespace_spec(settings, bootstrap)
             store = bootstrap.initialize_after_namespace_claim(

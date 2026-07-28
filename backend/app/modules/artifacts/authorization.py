@@ -77,12 +77,25 @@ def guide_ingest_prepared_request_value(
     }
 
 
-def guide_ingest_prepared_request_digest(**values: UUID) -> str:
+def guide_ingest_prepared_request_digest(
+    *,
+    project_id: UUID,
+    guide_id: UUID,
+    guide_source_snapshot_id: UUID,
+    guide_source_item_id: UUID,
+    idempotency_key: UUID,
+) -> str:
     """Match PreparedAuthorizationService's canonical request binding."""
     return canonical_json_hash(
         {
             "domain": "workstream.prepared_authorization.request.v1",
-            "request": guide_ingest_prepared_request_value(**values),
+            "request": guide_ingest_prepared_request_value(
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_source_snapshot_id=guide_source_snapshot_id,
+                guide_source_item_id=guide_source_item_id,
+                idempotency_key=idempotency_key,
+            ),
         }
     )
 

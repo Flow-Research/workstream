@@ -14,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 
+import app.adapters.artifacts as artifact_adapters
 from app.adapters.artifacts import get_guide_artifact_ingest_command
 from app.core.config import Settings
 from app.interfaces.artifact_operations import GuideArtifactIngestRequest
@@ -34,6 +35,7 @@ from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthori
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.authorization import get_guide_artifact_prepared_authorization
 from app.modules.artifacts.service import (
+    ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
     ArtifactStorageOrchestrator,
     GuideArtifactIngestService,
@@ -235,6 +237,11 @@ class _UnavailableCommand:
         raise ArtifactAuthorityDeniedError("unavailable")
 
 
+class _UnexpectedValueErrorCommand:
+    async def ingest(self, **_values: Any):
+        raise ValueError("unexpected implementation failure")
+
+
 class _MustNotCallCommand:
     def __init__(self) -> None:
         self.called = False
@@ -406,7 +413,10 @@ async def test_guide_ingest_rejects_invalid_logical_role_before_preparation(
         byte_source=source(),
     )
     try:
-        with pytest.raises(Exception, match="logical role is invalid"):
+        with pytest.raises(
+            ArtifactAdmissionRelationshipError,
+            match="logical role is invalid",
+        ):
             await service.prepare_and_admit(request, preparation, _Admission())
         assert not read
         assert preparation.pending_cleanup_count == 0
@@ -618,6 +628,55 @@ async def test_production_composition_denies_before_disabled_runtime_is_opened()
 
 
 @pytest.mark.asyncio
+async def test_guide_runtime_closes_bootstrap_when_scratch_construction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = Request({"type": "http", "method": "POST", "path": "/hidden", "headers": []})
+    request.scope["app"] = type("App", (), {"state": type("State", (), {})()})()
+    request.app.state.settings = Settings()
+    authority = _AllowPreparedAuthority()
+    closed = 0
+
+    class _Bootstrap:
+        def close(self) -> None:
+            nonlocal closed
+            closed += 1
+
+    monkeypatch.setattr(
+        artifact_adapters,
+        "create_artifact_store_bootstrap",
+        lambda _settings: _Bootstrap(),
+    )
+
+    def fail_scratch(_settings: Settings):
+        raise RuntimeError("scratch construction failed")
+
+    monkeypatch.setattr(
+        artifact_adapters,
+        "create_artifact_scratch_manager",
+        fail_scratch,
+    )
+    command = get_guide_artifact_ingest_command(
+        request,
+        object(),  # type: ignore[arg-type]
+        authority,
+        DenyArtifactInternalAuthority(),
+    )
+    with pytest.raises(RuntimeError, match="scratch construction failed"):
+        await command.ingest(
+            authorization_context=authority.context,
+            project_id=PROJECT_ID,
+            guide_id=GUIDE_ID,
+            guide_source_snapshot_id=SNAPSHOT_ID,
+            source_item_id=ITEM_ID,
+            idempotency_key=uuid4(),
+            byte_source=_bytes(b"never read"),
+        )
+    assert closed == 1
+    assert authority.closed
+
+
+@pytest.mark.asyncio
 async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
     body_read = False
 
@@ -648,6 +707,22 @@ async def test_hidden_http_route_conceals_fail_closed_authority() -> None:
         )
     assert denied.value.status_code == 404
     assert not body_read
+
+
+@pytest.mark.asyncio
+async def test_hidden_http_route_does_not_conceal_unexpected_value_error() -> None:
+    request = Request({"type": "http", "method": "POST", "path": "/hidden", "headers": []})
+    with pytest.raises(ValueError, match="unexpected implementation failure"):
+        await ingest_guide_source_artifact(
+            project_id=str(PROJECT_ID),
+            guide_id=str(GUIDE_ID),
+            source_snapshot_id=str(SNAPSHOT_ID),
+            source_item_id=str(ITEM_ID),
+            request=request,
+            context=_context(),
+            ingest=_UnexpectedValueErrorCommand(),  # type: ignore[arg-type]
+            idempotency_key=str(uuid4()),
+        )
 
 
 @pytest.mark.asyncio

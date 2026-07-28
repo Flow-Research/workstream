@@ -74,9 +74,12 @@ and every pre-existing subsystem gate remain unchanged.
 
 ## External Review
 
-CodeRabbit was rate-limited and reported no code findings. GitHub Agent Gates
-passed; Backend preflight produced the semantic-lane finding above, which was
-repaired and internally re-reviewed before rerun.
+CodeRabbit's final review findings were triaged in the dedicated external-review
+response. Valid cleanup, exception-boundary, exact-test, typed-digest, and
+result-contract findings were repaired. Reuse and query optimizations were
+documented as non-blocking; transaction duration remains an AUTH 04A activation
+concern while 03A stays hidden and deny-only. GitHub Agent Gates and Backend
+passed on `ab90c602` before the final external-review repair.
 
 ## Remaining Risks And Follow-Up
 
