@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from collections.abc import Awaitable, Callable
+import sys
+from collections.abc import AsyncIterable, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID, uuid4
@@ -28,7 +30,12 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
-from app.interfaces.artifact_operations import ArtifactRecoveryRequest
+from app.interfaces.artifact_operations import (
+    ArtifactRecoveryRequest,
+    GuideArtifactIngestCommand,
+    GuideArtifactIngestRequest,
+    GuideArtifactIngestResult,
+)
 from app.modules.actors.service import ActorService
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.models import (
@@ -49,6 +56,11 @@ from app.modules.artifacts.metrics import (
     artifact_admission_metrics,
 )
 from app.modules.artifacts.repository import ArtifactRepository
+from app.modules.artifacts.authorization import (
+    GuideArtifactPreparedAuthorization,
+    guide_ingest_prepared_request_digest,
+)
+from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.schemas import (
     ArtifactAdmissionRequest,
     ArtifactAdmissionResult,
@@ -68,8 +80,9 @@ from app.modules.artifacts.schemas import (
     CheckerOutputArtifactAdmissionRequest,
     ContributorArtifactAdmissionRequest,
     GuideArtifactAdmissionRequest,
+    GuideArtifactIngestAuthorityFacts,
 )
-from app.modules.artifacts.sources import CommittedArtifactSource
+from app.modules.artifacts.sources import CommittedArtifactSource, PreparedArtifact
 from app.modules.authorization.runtime import (
     ActorKind,
     ActorStatus,
@@ -78,6 +91,7 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     ServiceAuthorizationContext,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId, PermissionId
 from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.models import AuditEvent
@@ -142,8 +156,10 @@ class _AdmissionFacts:
     producer_type: str
     producer_ref: str
     project_id: str
+    guide_id: str | None
     task_id: str | None
     guide_source_item_id: str | None
+    guide_source_snapshot_id: str | None
     upload_item_id: str | None
     checker_run_id: str | None
     logical_role: str | None
@@ -177,6 +193,171 @@ def artifact_storage_namespace_spec(
     )
 
 
+class GuideArtifactIngestService:
+    """Hidden guide byte intake composed only from closed ART capabilities."""
+
+    def __init__(
+        self,
+        runtime_factory: Callable[
+            [],
+            AbstractAsyncContextManager[
+                tuple[
+                    ArtifactPreparationService,
+                    ArtifactAdmissionService,
+                    ArtifactStorageOrchestrator,
+                ]
+            ],
+        ],
+        authority: GuideArtifactPreparedAuthorization,
+    ) -> None:
+        self._runtime_factory = runtime_factory
+        self._authority = authority
+
+    def runtime(self):
+        """Open the bounded scratch and provider runtime for one request."""
+        return self._runtime_factory()
+
+    async def prepare_and_admit(
+        self,
+        request: GuideArtifactIngestRequest,
+        preparation: ArtifactPreparationService,
+        admission_service: ArtifactAdmissionService,
+    ) -> tuple[PreparedArtifact, ArtifactAdmissionResult]:
+        """Prepare bytes and admit them inside the caller's PREP transaction."""
+        if request.logical_role != "guide_source":
+            raise ArtifactAdmissionRelationshipError("guide artifact logical role is invalid")
+        prepared = await preparation.prepare(
+            request.byte_source,
+            media_type=request.media_type,
+        )
+        try:
+            admission = await admission_service.admit(
+                GuideArtifactAdmissionRequest(
+                    project_id=request.project_id,
+                    guide_id=request.guide_id,
+                    guide_source_snapshot_id=request.guide_source_snapshot_id,
+                    guide_source_item_id=request.source_item_id,
+                    source=prepared.committed_source,
+                    operation_identity=request.operation_identity,
+                    request_digest=request.request_digest,
+                ),
+                guide_prepared_authorization=self._authority,
+                prepared_authorization=request.prepared_authorization,
+                existing_transaction=True,
+            )
+            return prepared, admission
+        except BaseException:
+            await prepared.close()
+            raise
+
+    @staticmethod
+    async def publish(
+        prepared: PreparedArtifact,
+        admission: ArtifactAdmissionResult,
+        orchestrator: ArtifactStorageOrchestrator,
+    ) -> GuideArtifactIngestResult:
+        """Execute provider work only after the admission transaction commits."""
+        source = prepared.committed_source
+        try:
+            if admission.replayed:
+                status = await orchestrator.resume_committed_put(
+                    attempt_id=admission.attempt_id,
+                    source=source,
+                )
+            else:
+                status = await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id,
+                    source=source,
+                )
+            return GuideArtifactIngestResult(
+                put_attempt_id=admission.attempt_id,
+                operation_identity=admission.operation_identity,
+                sha256=source.commitment.sha256,
+                byte_count=source.commitment.byte_count,
+                status=status,
+                replayed=admission.replayed,
+            )
+        finally:
+            await prepared.close()
+
+
+class PreparedGuideArtifactIngestCommand(GuideArtifactIngestCommand):
+    """Own preflight and the issuer-local capability through final consumption."""
+
+    def __init__(
+        self,
+        service: GuideArtifactIngestService,
+        authority: GuideArtifactPreparedAuthorization,
+    ) -> None:
+        self._service = service
+        self._authority = authority
+
+    async def ingest(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        project_id: UUID,
+        guide_id: UUID,
+        guide_source_snapshot_id: UUID,
+        source_item_id: UUID,
+        idempotency_key: UUID,
+        byte_source: AsyncIterable[bytes],
+    ) -> GuideArtifactIngestResult:
+        authority_transaction = self._authority.transaction()
+        transaction_open = False
+        try:
+            await authority_transaction.__aenter__()
+            transaction_open = True
+            prepared_authorization = await self._authority.prepare(
+                authorization_context=authorization_context,
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_source_snapshot_id=guide_source_snapshot_id,
+                guide_source_item_id=source_item_id,
+                idempotency_key=idempotency_key,
+            )
+            async with self._service.runtime() as runtime:
+                preparation, admission_service, orchestrator = runtime
+                prepared, admission = await self._service.prepare_and_admit(
+                    GuideArtifactIngestRequest(
+                        prepared_authorization=prepared_authorization,
+                        project_id=project_id,
+                        guide_id=guide_id,
+                        guide_source_snapshot_id=guide_source_snapshot_id,
+                        source_item_id=source_item_id,
+                        operation_identity=canonical_json_hash(
+                            {
+                                "request_type": "guide",
+                                "guide_source_item_id": str(source_item_id),
+                            }
+                        ),
+                        request_digest=guide_ingest_prepared_request_digest(
+                            project_id=project_id,
+                            guide_id=guide_id,
+                            guide_source_snapshot_id=guide_source_snapshot_id,
+                            guide_source_item_id=source_item_id,
+                            idempotency_key=idempotency_key,
+                        ),
+                        logical_role="guide_source",
+                        media_type="application/octet-stream",
+                        byte_source=byte_source,
+                    ),
+                    preparation,
+                    admission_service,
+                )
+                transaction_open = False
+                try:
+                    await authority_transaction.__aexit__(None, None, None)
+                except BaseException:
+                    await prepared.close()
+                    raise
+                return await self._service.publish(prepared, admission, orchestrator)
+        finally:
+            if transaction_open:
+                await authority_transaction.__aexit__(*sys.exc_info())
+            self._authority.close()
+
+
 class ArtifactStorageOrchestrator:
     """Sole owner of writable storage and fenced provider observation."""
 
@@ -200,6 +381,25 @@ class ArtifactStorageOrchestrator:
         """Claim or validate the immutable singleton before provider access."""
         async with self._session.begin():
             return await self._claim_and_validate_namespace()
+
+    async def resume_committed_put(
+        self,
+        *,
+        attempt_id: UUID,
+        source: CommittedArtifactSource,
+    ) -> str:
+        """Replay absent bytes or observe an otherwise ambiguous prior put."""
+        async with self._session.begin():
+            attempt = await self._repo.lock_put_attempt(str(attempt_id))
+            replay_required = (
+                attempt is not None and attempt.status == "absent_replay_required"
+            )
+        if replay_required:
+            return await self.execute_committed_put(attempt_id=attempt_id, source=source)
+        status = await self.resolve_put_attempt(attempt_id)
+        if status == "missing":
+            return await self.execute_committed_put(attempt_id=attempt_id, source=source)
+        return status
 
     async def execute_committed_put(
         self,
@@ -231,9 +431,10 @@ class ArtifactStorageOrchestrator:
             )
             persisted_namespace = await self._claim_and_validate_namespace()
             current = await self._repo.lock_put_attempt(str(attempt_id))
-            if current is None or _put_authority_facts(
-                current, executor_id, candidate_generation + 1
-            ) != facts:
+            if (
+                current is None
+                or _put_authority_facts(current, executor_id, candidate_generation + 1) != facts
+            ):
                 self._authority.discard()
                 return "stale"
             await self._authority.consume(
@@ -323,9 +524,10 @@ class ArtifactStorageOrchestrator:
             )
             persisted_namespace = await self._claim_and_validate_namespace()
             current = await self._repo.lock_put_attempt(str(attempt_id))
-            if current is None or _put_authority_facts(
-                current, executor_id, candidate_generation + 1
-            ) != facts:
+            if (
+                current is None
+                or _put_authority_facts(current, executor_id, candidate_generation + 1) != facts
+            ):
                 self._authority.discard()
                 return "stale"
             await self._authority.consume(
@@ -431,9 +633,7 @@ class ArtifactStorageOrchestrator:
                 self._authority.discard()
                 return "stale"
             current_replica = await self._repo.lock_replica(current.replica_id)
-            current_attempt = await self._repo.lock_put_attempt(
-                current.originating_put_attempt_id
-            )
+            current_attempt = await self._repo.lock_put_attempt(current.originating_put_attempt_id)
             if current_replica is None or current_attempt is None:
                 self._authority.discard()
                 return "conflict"
@@ -1604,6 +1804,25 @@ class ArtifactRecoveryService:
         )
 
 
+@asynccontextmanager
+async def _artifact_admission_transaction(
+    session: AsyncSession,
+    *,
+    existing: bool,
+):
+    """Use the issuer's root transaction for guide PREP, otherwise own one."""
+    if existing:
+        transaction = session.sync_session.get_transaction()
+        if transaction is None or not transaction.is_active or session.in_nested_transaction():
+            raise ArtifactAuthorityDeniedError(
+                "guide prepared authorization transaction is unavailable"
+            )
+        yield
+        return
+    async with session.begin():
+        yield
+
+
 class ArtifactAdmissionService:
     """Create one fully admitted put attempt without provider execution."""
 
@@ -1625,15 +1844,80 @@ class ArtifactAdmissionService:
     async def admit(
         self,
         request: ArtifactAdmissionRequest,
+        *,
+        guide_prepared_authorization: GuideArtifactPreparedAuthorization | None = None,
+        prepared_authorization: PreparedAuthorizationHandle | None = None,
+        existing_transaction: bool = False,
     ) -> ArtifactAdmissionResult:
         """Reserve every derived scope and persist one prepared attempt atomically."""
         self._validate_request_boundary(request)
         commitment = request.source.commitment
-        async with self._session.begin():
+        async with _artifact_admission_transaction(
+            self._session,
+            existing=existing_transaction,
+        ):
             namespace = await _claim_and_validate_storage_namespace(
                 self._repo,
                 self._namespace,
             )
+            if type(request) is GuideArtifactAdmissionRequest:
+                if (
+                    guide_prepared_authorization is None
+                    or type(prepared_authorization) is not PreparedAuthorizationHandle
+                ):
+                    raise ArtifactAuthorityDeniedError(
+                        "guide artifact ingest admission is unavailable"
+                    )
+                lineage = await self._repo.get_guide_lineage(str(request.guide_source_item_id))
+                if lineage is None:
+                    raise ArtifactAdmissionRelationshipError("guide source lineage is unavailable")
+                facts = GuideArtifactIngestAuthorityFacts(
+                    project_id=UUID(lineage.project_id),
+                    guide_id=UUID(lineage.guide_id),
+                    guide_source_snapshot_id=UUID(lineage.guide_source_snapshot_id),
+                    guide_source_item_id=request.guide_source_item_id,
+                    operation_identity=request.operation_identity,
+                    request_digest=request.request_digest,
+                    sha256=commitment.sha256,
+                    byte_count=commitment.byte_count,
+                    media_type=commitment.media_type,
+                )
+                if (
+                    (request.project_id is not None and facts.project_id != request.project_id)
+                    or (request.guide_id is not None and facts.guide_id != request.guide_id)
+                    or (
+                        request.guide_source_snapshot_id is not None
+                        and facts.guide_source_snapshot_id != request.guide_source_snapshot_id
+                    )
+                    or facts.operation_identity
+                    != canonical_json_hash(
+                        {
+                            "request_type": "guide",
+                            "guide_source_item_id": str(request.guide_source_item_id),
+                        }
+                    )
+                    or not facts.request_digest.startswith("sha256:")
+                ):
+                    raise ArtifactAdmissionRelationshipError(
+                        "guide source request does not match canonical lineage"
+                    )
+                actor_profile_id = await guide_prepared_authorization.consume(
+                    prepared_authorization=prepared_authorization,
+                    facts=facts,
+                )
+                try:
+                    await self._repo.stage_guide_source_ingest(
+                        project_id=request.project_id,
+                        guide_id=request.guide_id,
+                        guide_source_snapshot_id=request.guide_source_snapshot_id,
+                        guide_source_item_id=request.guide_source_item_id,
+                        actor_profile_id=actor_profile_id,
+                        sha256=commitment.sha256,
+                        byte_count=commitment.byte_count,
+                        media_type=commitment.media_type,
+                    )
+                except ValueError as exc:
+                    raise ArtifactAdmissionRelationshipError(str(exc)) from exc
             facts = await self._derive_admission_facts(request)
             scopes = self._derive_scopes(facts)
             request_digest = canonical_json_hash(
@@ -1738,16 +2022,24 @@ class ArtifactAdmissionService:
             CheckerOutputArtifactAdmissionRequest,
         }:
             raise TypeError("invalid artifact admission request")
-        if type(request.authorization_context) not in {
-            HumanAuthorizationContext,
-            ServiceAuthorizationContext,
-        }:
-            raise TypeError("invalid artifact admission authorization context")
         if type(request.source) is not CommittedArtifactSource:
             raise TypeError("invalid artifact admission source")
         if type(request) is CheckerOutputArtifactAdmissionRequest:
             ArtifactAdmissionService._validate_logical_role(request.logical_role)
+        if type(request) is GuideArtifactAdmissionRequest:
+            lineage_claims = (
+                request.project_id,
+                request.guide_id,
+                request.guide_source_snapshot_id,
+            )
+            if any(value is None for value in lineage_claims) and any(
+                value is not None for value in lineage_claims
+            ):
+                raise TypeError("guide artifact lineage claims are incomplete")
+            return
         context = request.authorization_context
+        if type(context) not in {HumanAuthorizationContext, ServiceAuthorizationContext}:
+            raise TypeError("invalid artifact admission authorization context")
         if (
             context.actor_status is not ActorStatus.ACTIVE
             or context.identity_link_status is not IdentityLinkStatus.ACTIVE
@@ -1766,19 +2058,13 @@ class ArtifactAdmissionService:
 
     async def _guide_facts(self, request: GuideArtifactAdmissionRequest) -> _AdmissionFacts:
         """Bind committed bytes to one authoritative guide source item."""
-        context = request.authorization_context
-        if context.actor_kind is not ActorKind.HUMAN:
-            raise ArtifactAdmissionRelationshipError(
-                "guide artifact producer must be a human actor"
-            )
-        await self._require_active_human_actor(context)
         item_id = str(request.guide_source_item_id)
         row = await self._repo.get_guide_admission_facts(item_id)
         commitment = request.source.commitment
         if (
             row is None
-            or row.captured_by != str(context.actor_profile_id)
             or row.content_hash != commitment.sha256
+            or row.byte_count != commitment.byte_count
             or row.media_type != commitment.media_type
         ):
             raise ArtifactAdmissionRelationshipError(
@@ -1792,8 +2078,10 @@ class ArtifactAdmissionService:
             producer_type="actor_profile",
             producer_ref=row.captured_by,
             project_id=row.project_id,
+            guide_id=row.guide_id,
             task_id=None,
             guide_source_item_id=item_id,
+            guide_source_snapshot_id=row.guide_source_snapshot_id,
             upload_item_id=None,
             checker_run_id=None,
             logical_role=None,
@@ -1834,8 +2122,10 @@ class ArtifactAdmissionService:
             producer_type="actor_profile",
             producer_ref=str(context.actor_profile_id),
             project_id=row.project_id,
+            guide_id=None,
             task_id=row.task_id,
             guide_source_item_id=None,
+            guide_source_snapshot_id=None,
             upload_item_id=item_id,
             checker_run_id=None,
             logical_role=None,
@@ -1884,8 +2174,10 @@ class ArtifactAdmissionService:
             producer_type="service_identity",
             producer_ref=ServiceIdentity.ARTIFACT_CHECKER_OUTPUT.value,
             project_id=row.project_id,
+            guide_id=None,
             task_id=row.task_id,
             guide_source_item_id=None,
+            guide_source_snapshot_id=None,
             upload_item_id=None,
             checker_run_id=checker_run_id,
             logical_role=logical_role,

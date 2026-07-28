@@ -1,5 +1,33 @@
 # Review Log: WS-ART-001 Immutable Artifact Storage
 
+## WS-ART-001-03A
+
+- Reconciled on 2026-07-28 with trusted `main` `13d9d5d1`, after merged
+  WS-XINT-002-01 through 04 planning and internal-service activation.
+- Preimplementation reconciliation review rejected the preserved raw
+  `AuthorizationContext`, custom evidence, and callback revalidation seam. The
+  repair uses only the merged opaque `PreparedAuthorizationHandle` operation
+  contract and one request-local PREP adapter lifecycle.
+- The route-facing command performs Project Manager preflight before body read,
+  scratch construction, or provider runtime. Production remains deny-only
+  while `artifact.guide_source.ingest` is planned.
+- Transaction A locks canonical project/guide/snapshot/item lineage, consumes
+  the issuer-local handle against server-computed digest, byte count, and media
+  type, stages non-authoritative `GuideSourceArtifactIngest`, reserves capacity,
+  and creates put intent atomically. Provider I/O remains after commit.
+- Migration `0038_guide_source_ingest` follows the merged `0037`
+  authorization evidence head. Binding, reads, setup activation,
+  materialization, and action availability remain outside 03A.
+- Final internal review: senior engineering PASS WITH LOW RISKS; architecture
+  PASS WITH LOW RISKS; QA PASS WITH LOW RISKS; security/auth PASS WITH LOW
+  RISKS; product/ops PASS; reuse/dedup PASS WITH LOW RISKS; CI integrity PASS
+  WITH LOW RISKS; test delta PASS; docs PASS. All blocking findings were
+  repaired before PR creation.
+- Repairs include commit-before-provider execution, activated fixed-service
+  put-resolver composition, confirmed-missing replay with capacity
+  reacquisition, concealed request-metadata validation, populated downgrade
+  refusal, and the exact hosted projects coverage gate.
+
 ## WS-ART-001-02D
 
 - Signed explicit start verified on 2026-07-22 against trusted main

@@ -543,10 +543,10 @@ atomicity.
   test list for a package that later expands. Independently executable
   services/examples have their own exact test-and-coverage steps.
 - The active artifact implementation coverage phase advances only after
-  `scripts/test_agent_gates.py` proves each expected step occurs exactly once in
-  the backend `test` job, after the full-suite test step, without job/step
-  conditions, `continue-on-error`, shell overrides, hidden step environment, or
-  working-directory drift. Raw text or source-set matching is insufficient.
+  `scripts/test_lightweight_agent_gates.py` proves the newly owned coverage
+  command and step name occur exactly once in the backend workflow. Hosted CI
+  remains the authoritative proof that the step executes after the full-suite
+  coverage run without bypass configuration.
 - Final proof uses real HTTP APIs and visible job/recovery endpoints, not direct
   database inspection.
 

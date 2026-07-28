@@ -18,9 +18,13 @@ from app.modules.actors.service_identities import ServiceIdentity
 class GuideArtifactAdmissionRequest:
     """One prepared guide source item admitted under its canonical project."""
 
-    authorization_context: AuthorizationContext
     guide_source_item_id: UUID
     source: CommittedArtifactSource
+    operation_identity: str
+    request_digest: str
+    project_id: UUID | None = None
+    guide_id: UUID | None = None
+    guide_source_snapshot_id: UUID | None = None
 
 
 @final
@@ -66,6 +70,22 @@ class ArtifactAdmissionResult:
 
 class ArtifactAuthorityDeniedError(RuntimeError):
     """Raised while internal artifact actions remain unavailable."""
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class GuideArtifactIngestAuthorityFacts:
+    """Canonical guide lineage bound to the exact ingest action."""
+
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    operation_identity: str
+    request_digest: str
+    sha256: str
+    byte_count: int
+    media_type: str
 
 
 class ArtifactInternalResourceType(StrEnum):

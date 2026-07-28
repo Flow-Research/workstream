@@ -2,18 +2,39 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import Settings
+from app.core.api_controls import request_ids
+from app.db.session import get_db_session
+from app.interfaces.artifact_operations import GuideArtifactIngestCommand
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactConfigurationError,
     ArtifactProviderLiveProofRequiredError,
     ArtifactStoreBootstrap,
+    ArtifactStoreNamespaceClaim,
 )
 from app.interfaces.external_services import ExternalServiceAdapterFactory
 from app.modules.artifacts.preparation import (
     ArtifactPreparationLimits,
+    ArtifactPreparationService,
     ArtifactScratchManager,
 )
+from app.modules.artifacts.schemas import (
+    ArtifactInternalAuthority,
+)
+from app.modules.artifacts.authorization import (
+    GuideArtifactPreparedAuthorization,
+    PreparedArtifactInternalAuthority,
+    get_guide_artifact_prepared_authorization,
+)
+from app.modules.actors.service_identities import ServiceIdentity
 
 
 def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstrap:
@@ -35,9 +56,7 @@ def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstra
         create_minio_artifact_store_bootstrap,
     )
 
-    factory = ExternalServiceAdapterFactory[ArtifactStoreBootstrap](
-        ARTIFACT_STORE_CAPABILITY_KEY
-    )
+    factory = ExternalServiceAdapterFactory[ArtifactStoreBootstrap](ARTIFACT_STORE_CAPABILITY_KEY)
 
     def create_local_store() -> ArtifactStoreBootstrap:
         """Pin the configured development-only LocalStorage provider root."""
@@ -93,6 +112,75 @@ def create_artifact_scratch_manager(settings: Settings) -> ArtifactScratchManage
         root=settings.artifact_scratch_root,
         limits=artifact_preparation_limits(settings),
     )
+
+
+def get_artifact_internal_authority(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ArtifactInternalAuthority:
+    """Use the activated fixed-service resolver for post-commit provider work."""
+    request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    return PreparedArtifactInternalAuthority(
+        session,
+        service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+        request_id=request_id,
+        correlation_id=correlation_id,
+    )
+
+
+def get_guide_artifact_ingest_command(
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    authority: Annotated[
+        GuideArtifactPreparedAuthorization,
+        Depends(get_guide_artifact_prepared_authorization),
+    ],
+    internal_authority: Annotated[
+        ArtifactInternalAuthority,
+        Depends(get_artifact_internal_authority),
+    ],
+) -> GuideArtifactIngestCommand:
+    """Compose real guide ingest lazily so denial performs no provider I/O."""
+    from app.modules.artifacts.service import (
+        ArtifactAdmissionService,
+        ArtifactStorageOrchestrator,
+        GuideArtifactIngestService,
+        PreparedGuideArtifactIngestCommand,
+        artifact_storage_namespace_spec,
+    )
+
+    settings = request.app.state.settings
+
+    @asynccontextmanager
+    async def runtime():
+        bootstrap = create_artifact_store_bootstrap(settings)
+        manager = create_artifact_scratch_manager(settings)
+        try:
+            namespace = artifact_storage_namespace_spec(settings, bootstrap)
+            store = bootstrap.initialize_after_namespace_claim(
+                ArtifactStoreNamespaceClaim(
+                    adapter_identity=bootstrap.identity,
+                    namespace_identity=bootstrap.namespace_identity,
+                    namespace_fingerprint=namespace.namespace_fingerprint,
+                )
+            )
+            yield (
+                ArtifactPreparationService(manager),
+                ArtifactAdmissionService(session, settings, namespace),
+                ArtifactStorageOrchestrator(
+                    session,
+                    store,
+                    namespace,
+                    settings,
+                    internal_authority,
+                ),
+            )
+        finally:
+            manager.close()
+            bootstrap.close()
+
+    service = GuideArtifactIngestService(runtime, authority)
+    return PreparedGuideArtifactIngestCommand(service, authority)
 
 
 async def cleanup_stale_artifact_scratch(settings: Settings) -> int:

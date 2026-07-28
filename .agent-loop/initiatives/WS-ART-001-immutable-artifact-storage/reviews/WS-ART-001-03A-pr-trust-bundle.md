@@ -1,0 +1,59 @@
+# PR Trust Bundle: WS-ART-001-03A
+
+## Chunk
+
+`WS-ART-001-03A` — Guide Source Byte Ingest (L1)
+
+## Goal And Human-Approved Intent
+
+Accept exact guide-source bytes through bounded private scratch and the existing
+immutable ArtifactStore path, without binding or activating guide reads yet.
+
+## What Changed And Why
+
+- Added a hidden guide item artifact route that defaults to concealed denial.
+- Added server-owned guide ingest staging facts and migration `0038`.
+- Reused preparation, capacity admission, put attempt, verification, ambiguity,
+  and recovery paths instead of adding candidate storage.
+- Bound final durable effects to one opaque transaction-local AUTH handle and
+  exact locked lineage plus server-computed digest, size, and media type.
+- Added confirmed-missing replay, downgrade refusal, focused tests, and the
+  exact projects subsystem coverage gate.
+
+## Design And Scope Control
+
+Preflight occurs before runtime construction or byte reads. Final PREP consume,
+staging, capacity reservation, and put intent commit together. Provider I/O
+runs afterward through the already-activated fixed-service put resolver.
+Binding, materialization, setup continuation, legacy removal, and guide action
+activation remain outside 03A. No provider/factory or public API expansion was
+introduced.
+
+## Acceptance Proof
+
+- Server bytes, not caller hashes or provider references, define identity.
+- Exact replay reuses the attempt; confirmed absence reacquires released
+  capacity before another conditional write.
+- Hidden malformed/missing idempotency metadata returns 404 without ingest.
+- Populated guide-ingest evidence cannot be destroyed by downgrade.
+- Nine internal reviewer tracks pass after all blocking repairs.
+
+## Tests And CI Integrity
+
+Focused route/architecture tests, isolated PostgreSQL migration/admission/replay
+tests, changed-file Ruff, compilation, stale-contract/wording/auth scans,
+Markdown links, diff checks, and agent gates pass. GitHub owns the full sharded
+suite, repository 78% floor, and accumulated 90% subsystem gates; thresholds
+were not lowered and the exact projects 90% gate was added.
+
+## Remaining Risks And Follow-Up
+
+The guide ingest action intentionally remains unavailable. After this PR merges,
+AUTH `WS-XINT-002-04A` installs the exact Project Manager adapter and activates
+only guide ingestion. ART-03B remains a separate explicit-start successor.
+
+## Human Review Focus And Merge Ownership
+
+Confirm the two authorization points, commit-before-provider boundary,
+confirmed-missing replay, and strict 03A scope. The user retains approval and
+merge ownership for this specific PR.

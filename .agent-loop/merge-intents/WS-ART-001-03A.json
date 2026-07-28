@@ -1,0 +1,9 @@
+{
+  "chunk_id": "WS-ART-001-03A",
+  "chunk_title": "Guide Source Byte Ingest",
+  "initiative_id": "WS-ART-001",
+  "next_chunk_id": "WS-ART-001-03B",
+  "next_chunk_title": "Guide Source Binding And Materialization",
+  "next_requires_explicit_start": true,
+  "schema_version": 2
+}

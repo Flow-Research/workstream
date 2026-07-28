@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import and_, case, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
@@ -29,7 +29,11 @@ from app.modules.artifacts.models import (
     ArtifactUploadSession,
 )
 from app.modules.checkers.models import CheckerRun
-from app.modules.projects.models import GuideSourceSnapshot, GuideSourceSnapshotItem
+from app.modules.projects.models import (
+    GuideSourceArtifactIngest,
+    GuideSourceSnapshot,
+    GuideSourceSnapshotItem,
+)
 from app.modules.tasks.models import Submission, WorkstreamTask
 
 
@@ -38,10 +42,23 @@ class GuideAdmissionFacts:
     """Authoritative project ownership for one guide source item."""
 
     guide_source_item_id: str
+    guide_source_snapshot_id: str
+    guide_id: str
     project_id: str
     captured_by: str
     content_hash: str
+    byte_count: int
     media_type: str
+
+
+@dataclass(frozen=True, slots=True)
+class GuideLineageFacts:
+    """Locked canonical ownership for a not-yet-staged guide item."""
+
+    guide_source_item_id: str
+    guide_source_snapshot_id: str
+    guide_id: str
+    project_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,14 +129,21 @@ class ArtifactRepository:
             await self._session.execute(
                 select(
                     GuideSourceSnapshotItem.id,
+                    GuideSourceSnapshotItem.source_snapshot_id,
+                    GuideSourceSnapshot.guide_id,
                     GuideSourceSnapshot.project_id,
-                    GuideSourceSnapshot.captured_by,
-                    GuideSourceSnapshotItem.content_hash,
-                    GuideSourceSnapshotItem.media_type,
+                    GuideSourceArtifactIngest.actor_profile_id,
+                    GuideSourceArtifactIngest.sha256,
+                    GuideSourceArtifactIngest.byte_count,
+                    GuideSourceArtifactIngest.media_type,
                 )
                 .join(
                     GuideSourceSnapshot,
                     GuideSourceSnapshot.id == GuideSourceSnapshotItem.source_snapshot_id,
+                )
+                .join(
+                    GuideSourceArtifactIngest,
+                    GuideSourceArtifactIngest.source_item_id == GuideSourceSnapshotItem.id,
                 )
                 .where(GuideSourceSnapshotItem.id == guide_source_item_id)
                 .with_for_update(of=(GuideSourceSnapshotItem, GuideSourceSnapshot))
@@ -129,10 +153,90 @@ class ArtifactRepository:
             return None
         return GuideAdmissionFacts(
             guide_source_item_id=row.id,
+            guide_source_snapshot_id=row.source_snapshot_id,
+            guide_id=row.guide_id,
             project_id=row.project_id,
-            captured_by=row.captured_by,
-            content_hash=row.content_hash,
+            captured_by=row.actor_profile_id,
+            content_hash=row.sha256,
+            byte_count=row.byte_count,
             media_type=row.media_type,
+        )
+
+    async def stage_guide_source_ingest(
+        self,
+        *,
+        project_id: UUID | None,
+        guide_id: UUID | None,
+        guide_source_snapshot_id: UUID | None,
+        guide_source_item_id: UUID,
+        actor_profile_id: UUID,
+        sha256: str,
+        byte_count: int,
+        media_type: str,
+    ) -> GuideSourceArtifactIngest:
+        """Persist server-prepared facts after locking exact legacy descriptor lineage."""
+        lineage = await self.get_guide_lineage(str(guide_source_item_id))
+        if (
+            lineage is None
+            or (
+                guide_source_snapshot_id is not None
+                and lineage.guide_source_snapshot_id != str(guide_source_snapshot_id)
+            )
+            or (guide_id is not None and lineage.guide_id != str(guide_id))
+            or (project_id is not None and lineage.project_id != str(project_id))
+        ):
+            raise ValueError("guide source lineage is unavailable")
+        existing = await self._session.scalar(
+            select(GuideSourceArtifactIngest)
+            .where(GuideSourceArtifactIngest.source_item_id == str(guide_source_item_id))
+            .with_for_update()
+        )
+        if existing is not None:
+            if (
+                existing.actor_profile_id != str(actor_profile_id)
+                or existing.sha256 != sha256
+                or existing.byte_count != byte_count
+                or existing.media_type != media_type
+            ):
+                raise ValueError("guide source ingest conflicts with prepared bytes")
+            return existing
+        ingest = GuideSourceArtifactIngest(
+            id=str(uuid4()),
+            source_item_id=str(guide_source_item_id),
+            actor_profile_id=str(actor_profile_id),
+            sha256=sha256,
+            byte_count=byte_count,
+            media_type=media_type,
+        )
+        self._session.add(ingest)
+        await self._session.flush()
+        return ingest
+
+    async def get_guide_lineage(self, guide_source_item_id: str) -> GuideLineageFacts | None:
+        """Lock and return canonical snapshot lineage without trusting caller hashes."""
+        lineage = (
+            await self._session.execute(
+                select(
+                    GuideSourceSnapshotItem.id,
+                    GuideSourceSnapshotItem.source_snapshot_id,
+                    GuideSourceSnapshot.guide_id,
+                    GuideSourceSnapshot.project_id,
+                )
+                .join(
+                    GuideSourceSnapshot,
+                    GuideSourceSnapshot.id == GuideSourceSnapshotItem.source_snapshot_id,
+                )
+                .where(GuideSourceSnapshotItem.id == guide_source_item_id)
+                .with_for_update(of=(GuideSourceSnapshotItem, GuideSourceSnapshot))
+            )
+        ).one_or_none()
+        if lineage is None:
+            return None
+        return GuideLineageFacts(
+            guide_source_item_id=lineage.id,
+            guide_source_snapshot_id=lineage.source_snapshot_id,
+            guide_id=lineage.guide_id,
+            project_id=lineage.project_id,
         )
 
     async def get_contributor_admission_facts(
@@ -388,9 +492,7 @@ class ArtifactRepository:
         await self._session.flush()
         return attempt
 
-    async def lock_recovery_by_source(
-        self, source_job_id: str
-    ) -> ArtifactRecoveryAttempt | None:
+    async def lock_recovery_by_source(self, source_job_id: str) -> ArtifactRecoveryAttempt | None:
         """Lock the lifetime recovery owner for one source verification job."""
         return await self._session.scalar(
             select(ArtifactRecoveryAttempt)
@@ -399,9 +501,7 @@ class ArtifactRepository:
             .execution_options(populate_existing=True)
         )
 
-    async def lock_recovery_by_retry(
-        self, retry_job_id: str
-    ) -> ArtifactRecoveryAttempt | None:
+    async def lock_recovery_by_retry(self, retry_job_id: str) -> ArtifactRecoveryAttempt | None:
         """Lock the envelope finalized by one retry verification job."""
         return await self._session.scalar(
             select(ArtifactRecoveryAttempt)

@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Annotated, Protocol
 from uuid import UUID
 
+from fastapi import Depends, Request
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps.authorization import _authorization_context, get_authorization_actor
+from app.core.api_controls import request_ids
+from app.core.hashing import canonical_json_hash
 from app.modules.actors.repository import ActorRepository
+from app.modules.actors.service import ResolvedActor
 from app.modules.actors.service_identities import ServiceIdentity
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
+    GuideArtifactIngestAuthorityFacts,
     ArtifactInternalAuthorityFacts,
     ArtifactInternalResourceType,
     ArtifactPendingWorkAuthorityFacts,
@@ -38,7 +46,117 @@ from app.modules.authorization.runtime import (
     AuthorizationDenied,
     PreparedAuthorizationUnsupported,
     ServiceAuthorizationContext,
+    AuthorizationContext,
 )
+
+
+async def get_artifact_authorization_context(
+    request: Request,
+    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
+) -> AuthorizationContext:
+    """Project canonical actor rows into request-scoped ART preflight facts."""
+    request_id, correlation_id = (UUID(value) for value in request_ids(request))
+    return _authorization_context(resolved, request_id, correlation_id)
+
+
+def guide_ingest_prepared_request_value(
+    *,
+    project_id: UUID,
+    guide_id: UUID,
+    guide_source_snapshot_id: UUID,
+    guide_source_item_id: UUID,
+    idempotency_key: UUID,
+) -> dict[str, str]:
+    """Compose the one canonical caller input shared with AUTH activation."""
+    return {
+        "project_id": str(project_id),
+        "guide_id": str(guide_id),
+        "guide_source_snapshot_id": str(guide_source_snapshot_id),
+        "guide_source_item_id": str(guide_source_item_id),
+        "idempotency_key": str(idempotency_key),
+    }
+
+
+def guide_ingest_prepared_request_digest(**values: UUID) -> str:
+    """Match PreparedAuthorizationService's canonical request binding."""
+    return canonical_json_hash(
+        {
+            "domain": "workstream.prepared_authorization.request.v1",
+            "request": guide_ingest_prepared_request_value(**values),
+        }
+    )
+
+
+class GuideArtifactPreparedAuthorization(Protocol):
+    """Request-local adapter over AUTH's one opaque PREP capability."""
+
+    def transaction(self) -> AbstractAsyncContextManager[None]: ...
+
+    async def prepare(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        project_id: UUID,
+        guide_id: UUID,
+        guide_source_snapshot_id: UUID,
+        guide_source_item_id: UUID,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle: ...
+
+    async def consume(
+        self,
+        *,
+        prepared_authorization: PreparedAuthorizationHandle,
+        facts: GuideArtifactIngestAuthorityFacts,
+    ) -> UUID: ...
+
+    def close(self) -> None: ...
+
+
+class DenyGuideArtifactPreparedAuthorization:
+    """Keep guide byte ingest unavailable until exact AUTH activation."""
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Provide no durable state while the action remains unavailable."""
+        yield
+
+    async def prepare(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        project_id: UUID,
+        guide_id: UUID,
+        guide_source_snapshot_id: UUID,
+        guide_source_item_id: UUID,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle:
+        del (
+            authorization_context,
+            project_id,
+            guide_id,
+            guide_source_snapshot_id,
+            guide_source_item_id,
+            idempotency_key,
+        )
+        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+
+    async def consume(
+        self,
+        *,
+        prepared_authorization: PreparedAuthorizationHandle,
+        facts: GuideArtifactIngestAuthorityFacts,
+    ) -> UUID:
+        del prepared_authorization, facts
+        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+
+    def close(self) -> None:
+        """Deny-only adapters hold no capability state."""
+
+
+def get_guide_artifact_prepared_authorization() -> GuideArtifactPreparedAuthorization:
+    """Stable 04A activation selector; deny while guide ingest is planned."""
+    return DenyGuideArtifactPreparedAuthorization()
 
 
 class PreparedArtifactInternalAuthority:
@@ -117,9 +235,7 @@ class PreparedArtifactInternalAuthority:
             revalidate_service=revalidate_service,
             admin_repository=repository,
         )
-        prepared = PreparedAuthorizationService(
-            self._session, context, authorization, repository
-        )
+        prepared = PreparedAuthorizationService(self._session, context, authorization, repository)
         caller_input = PreparedAuthorizationInput(
             idempotency_key=idempotency_key,
             request_value=_prepared_request_value(facts, phase),
@@ -230,9 +346,7 @@ class PreparedArtifactInternalAuthority:
                 correlation_id=self._correlation_id,
             )
         except (TypeError, ValueError) as exc:
-            raise ArtifactAuthorityDeniedError(
-                "artifact service principal is unavailable"
-            ) from exc
+            raise ArtifactAuthorityDeniedError("artifact service principal is unavailable") from exc
 
 
 def _scope(
@@ -246,9 +360,7 @@ def _scope(
         try:
             normalized_id = resource_id if isinstance(resource_id, UUID) else UUID(resource_id)
         except (TypeError, ValueError) as exc:
-            raise ArtifactAuthorityDeniedError(
-                "artifact internal resource is invalid"
-            ) from exc
+            raise ArtifactAuthorityDeniedError("artifact internal resource is invalid") from exc
     try:
         return PreparedAuthorityScope(
             kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
@@ -256,9 +368,7 @@ def _scope(
             artifact_resource_id=normalized_id,
         )
     except ValidationError as exc:
-        raise ArtifactAuthorityDeniedError(
-            "artifact internal resource is invalid"
-        ) from exc
+        raise ArtifactAuthorityDeniedError("artifact internal resource is invalid") from exc
 
 
 def _resource_context(facts: ArtifactInternalAuthorityFacts):

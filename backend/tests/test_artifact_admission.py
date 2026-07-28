@@ -82,8 +82,10 @@ from app.modules.authorization.runtime import (
     IdentityLinkStatus,
     ServiceAuthorizationContext,
 )
+from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects.models import (
+    GuideSourceArtifactIngest,
     EffectiveProjectSubmissionArtifactPolicy,
     GuideSourceSnapshot,
     GuideSourceSnapshotItem,
@@ -675,6 +677,29 @@ async def _count(session, model: type) -> int:
     return value
 
 
+def _guide_operation(item_id: str) -> str:
+    return canonical_json_hash({"request_type": "guide", "guide_source_item_id": item_id})
+
+
+class _AllowGuidePreparedAuthorization:
+    """Stand in for the issuer-local PREP consumer in lower-level ART tests."""
+
+    def __init__(self, actor_profile_id: UUID) -> None:
+        self.actor_profile_id = actor_profile_id
+        self.handle = object.__new__(PreparedAuthorizationHandle)
+
+    async def consume(self, *, prepared_authorization, facts) -> UUID:
+        assert prepared_authorization is self.handle
+        assert facts.byte_count >= 0
+        return self.actor_profile_id
+
+
+class _DenyGuidePreparedAuthorization(_AllowGuidePreparedAuthorization):
+    async def consume(self, *, prepared_authorization, facts) -> UUID:
+        del prepared_authorization, facts
+        raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+
+
 async def _admit_guide_source(session, settings, namespace, context, source):
     """Create one guide attempt for execution/fencing tests."""
     _, guide_item_id = await _seed_guide(
@@ -683,12 +708,16 @@ async def _admit_guide_source(session, settings, namespace, context, source):
         content_hash=source.commitment.sha256,
         media_type=source.commitment.media_type,
     )
+    prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
     return await ArtifactAdmissionService(session, settings, namespace).admit(
         GuideArtifactAdmissionRequest(
-            authorization_context=context,
             guide_source_item_id=UUID(guide_item_id),
             source=source,
-        )
+            operation_identity=_guide_operation(guide_item_id),
+            request_digest="sha256:" + "a" * 64,
+        ),
+        guide_prepared_authorization=prepared,  # type: ignore[arg-type]
+        prepared_authorization=prepared.handle,
     )
 
 
@@ -726,10 +755,15 @@ async def test_committed_put_and_independent_verification_are_fenced(
                 )
                 admission = await ArtifactAdmissionService(session, settings, namespace).admit(
                     GuideArtifactAdmissionRequest(
-                        authorization_context=context,
                         guide_source_item_id=UUID(guide_item_id),
                         source=source,
-                    )
+                        operation_identity=_guide_operation(guide_item_id),
+                        request_digest="sha256:" + "a" * 64,
+                    ),
+                    guide_prepared_authorization=(
+                        prepared := _AllowGuidePreparedAuthorization(context.actor_profile_id)
+                    ),  # type: ignore[arg-type]
+                    prepared_authorization=prepared.handle,
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, authority
@@ -888,10 +922,15 @@ async def test_preacknowledgement_absence_releases_capacity_without_write(
                 )
                 admission = await ArtifactAdmissionService(session, settings, namespace).admit(
                     GuideArtifactAdmissionRequest(
-                        authorization_context=context,
                         guide_source_item_id=UUID(guide_item_id),
                         source=source,
-                    )
+                        operation_identity=_guide_operation(guide_item_id),
+                        request_digest="sha256:" + "a" * 64,
+                    ),
+                    guide_prepared_authorization=(
+                        prepared := _AllowGuidePreparedAuthorization(context.actor_profile_id)
+                    ),  # type: ignore[arg-type]
+                    prepared_authorization=prepared.handle,
                 )
                 orchestrator = ArtifactStorageOrchestrator(
                     session, store, namespace, settings, authority
@@ -1783,7 +1822,7 @@ async def test_caller_replay_reacquires_released_capacity_before_put(
                 )
                 assert await orchestrator.resolve_put_attempt(admission.attempt_id) == "missing"
                 assert (
-                    await orchestrator.execute_committed_put(
+                    await orchestrator.resume_committed_put(
                         attempt_id=admission.attempt_id,
                         source=source,
                     )
@@ -1799,6 +1838,8 @@ async def test_caller_replay_reacquires_released_capacity_before_put(
                 assert attempt is not None
                 assert attempt.execution_generation == 2
                 assert attempt.status == "object_confirmed"
+                assert await _count(session, ArtifactOperationReceipt) == 1
+                assert await _count(session, ArtifactVerificationJob) == 1
     finally:
         bootstrap.close()
         await engine.dispose()
@@ -2109,9 +2150,7 @@ async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
                         attempt_id=admission.attempt_id,
                         source=source,
                     )
-                    attempt = await session.get(
-                        ArtifactPutAttempt, str(admission.attempt_id)
-                    )
+                    attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
                     assert attempt is not None and attempt.replica_id is not None
                     attempts.append(attempt)
             job = await session.scalar(
@@ -2124,9 +2163,7 @@ async def test_verification_relationship_conflict_uses_fresh_terminal_authority(
             await session.commit()
 
             authority = PhaseAuthority()
-            verifying = ArtifactStorageOrchestrator(
-                session, store, namespace, settings, authority
-            )
+            verifying = ArtifactStorageOrchestrator(session, store, namespace, settings, authority)
             verifying._read_complete = AsyncMock(
                 side_effect=AssertionError("relationship conflict must not read provider bytes")
             )
@@ -2829,43 +2866,76 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                 b"guide",
                 media_type="text/markdown",
             ) as source:
+                expected_sha256 = source.commitment.sha256
+                expected_byte_count = source.commitment.byte_count
                 project_id, item_id = await _seed_guide(
                     session,
                     context=context,
-                    content_hash=source.commitment.sha256,
+                    content_hash="sha256:" + "f" * 64,
                     media_type=source.commitment.media_type,
                 )
                 with pytest.raises(
-                    ArtifactAdmissionRelationshipError,
-                    match="artifact admission human identity is unavailable",
+                    ArtifactAuthorityDeniedError,
+                    match="guide artifact ingest is unavailable",
                 ):
+                    denied = _DenyGuidePreparedAuthorization(uuid4())
                     await ArtifactAdmissionService(
                         session,
                         settings,
                         namespace,
                     ).admit(
                         GuideArtifactAdmissionRequest(
-                            authorization_context=_context(),
                             guide_source_item_id=UUID(item_id),
                             source=source,
-                        )
+                            operation_identity=_guide_operation(item_id),
+                            request_digest="sha256:" + "a" * 64,
+                        ),
+                        guide_prepared_authorization=denied,  # type: ignore[arg-type]
+                        prepared_authorization=denied.handle,
                     )
                 assert await _count(session, ArtifactStorageNamespace) == 0
                 assert await _count(session, ArtifactAdmissionScope) == 0
                 assert await _count(session, ArtifactAdmissionCharge) == 0
                 assert await _count(session, ArtifactPutAttempt) == 0
                 await session.rollback()
-                result = await ArtifactAdmissionService(
-                    session,
-                    settings,
-                    namespace,
-                ).admit(
-                    GuideArtifactAdmissionRequest(
-                        authorization_context=context,
-                        guide_source_item_id=UUID(item_id),
-                        source=source,
+                mismatched = _AllowGuidePreparedAuthorization(context.actor_profile_id)
+                with pytest.raises(
+                    ArtifactAdmissionRelationshipError,
+                    match="canonical lineage",
+                ):
+                    await ArtifactAdmissionService(session, settings, namespace).admit(
+                        GuideArtifactAdmissionRequest(
+                            project_id=uuid4(),
+                            guide_source_item_id=UUID(item_id),
+                            source=source,
+                            operation_identity=_guide_operation(item_id),
+                            request_digest="sha256:" + "a" * 64,
+                        ),
+                        guide_prepared_authorization=mismatched,  # type: ignore[arg-type]
+                        prepared_authorization=mismatched.handle,
                     )
-                )
+                assert await _count(session, ArtifactAdmissionScope) == 0
+                assert await _count(session, ArtifactAdmissionCharge) == 0
+                assert await _count(session, ArtifactPutAttempt) == 0
+                await session.rollback()
+                prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
+                async with session.begin():
+                    result = await ArtifactAdmissionService(
+                        session,
+                        settings,
+                        namespace,
+                    ).admit(
+                        GuideArtifactAdmissionRequest(
+                            guide_source_item_id=UUID(item_id),
+                            source=source,
+                            operation_identity=_guide_operation(item_id),
+                            request_digest="sha256:" + "a" * 64,
+                        ),
+                        guide_prepared_authorization=prepared,  # type: ignore[arg-type]
+                        prepared_authorization=prepared.handle,
+                        existing_transaction=True,
+                    )
+                assert not session.in_transaction()
 
             async with minted_source(
                 tmp_path / "wrong-source",
@@ -2874,21 +2944,30 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
             ) as wrong_source:
                 with pytest.raises(
                     ArtifactAdmissionRelationshipError,
-                    match="guide source item relationship is unavailable",
+                    match="guide source ingest conflicts with prepared bytes",
                 ):
+                    wrong_prepared = _AllowGuidePreparedAuthorization(context.actor_profile_id)
                     await ArtifactAdmissionService(
                         session,
                         settings,
                         namespace,
                     ).admit(
                         GuideArtifactAdmissionRequest(
-                            authorization_context=context,
                             guide_source_item_id=UUID(item_id),
                             source=wrong_source,
-                        )
+                            operation_identity=_guide_operation(item_id),
+                            request_digest="sha256:" + "a" * 64,
+                        ),
+                        guide_prepared_authorization=wrong_prepared,  # type: ignore[arg-type]
+                        prepared_authorization=wrong_prepared.handle,
                     )
 
             attempt = await session.get(ArtifactPutAttempt, str(result.attempt_id))
+            staged = await session.scalar(
+                select(GuideSourceArtifactIngest).where(
+                    GuideSourceArtifactIngest.source_item_id == item_id
+                )
+            )
             scopes = (
                 (
                     await session.execute(
@@ -2899,6 +2978,9 @@ async def test_guide_admission_derives_three_scopes_without_provider_evidence(
                 .all()
             )
             assert attempt is not None
+            assert staged is not None
+            assert staged.sha256 == expected_sha256
+            assert staged.byte_count == expected_byte_count
             assert attempt.status == "prepared"
             assert attempt.project_id == project_id
             assert attempt.task_id is None
@@ -2936,7 +3018,7 @@ async def test_human_admission_revalidates_exact_active_profile_and_link(
                 b"guide",
                 media_type="text/markdown",
             ) as guide_source:
-                _, guide_item_id = await _seed_guide(
+                _, _guide_item_id = await _seed_guide(
                     session,
                     context=context,
                     content_hash=guide_source.commitment.sha256,
@@ -2958,11 +3040,6 @@ async def test_human_admission_revalidates_exact_active_profile_and_link(
                         ),
                     )
                     requests = (
-                        GuideArtifactAdmissionRequest(
-                            authorization_context=context,
-                            guide_source_item_id=UUID(guide_item_id),
-                            source=guide_source,
-                        ),
                         ContributorArtifactAdmissionRequest(
                             authorization_context=context,
                             upload_item_id=UUID(upload_item_ids[0]),
