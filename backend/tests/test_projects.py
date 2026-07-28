@@ -1088,6 +1088,9 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
         profile.suspended_by = None
         profile.suspended_at = None
         profile.suspension_reason = None
+        profile.reactivated_by = profile.id
+        profile.reactivated_at = now
+        profile.reactivation_reason = "AUTH-11B stale link proof setup"
         link.status = "revoked"
         link.revoked_by = profile.id
         link.revoked_at = now
