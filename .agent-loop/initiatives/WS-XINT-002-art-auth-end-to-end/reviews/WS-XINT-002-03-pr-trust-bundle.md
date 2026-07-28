@@ -68,5 +68,6 @@ digest persistence. The user retains merge approval for this specific PR.
 
 ## Next gate
 
-`WS-XINT-002-04` is only the declared same-initiative successor. It does not
-start automatically and requires a fresh explicit trusted-main event.
+`WS-XINT-002-04A` is the next bounded implementation contract. It activates
+only guide ingest after merged PREP-compatible ART-03A evidence; guide read and
+binding remain separately gated by `WS-XINT-002-04B` and ART-03B evidence.
