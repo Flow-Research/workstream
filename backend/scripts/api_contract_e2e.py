@@ -1390,7 +1390,12 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             {"change_summary": "Illegal active guide edit"},
             409,
         )
-        await request_json(client, "GET", f"/api/v1/projects/{project['id']}/active-guide", manager_token)
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/active-guide",
+            project_reader_token,
+        )
         visible_effective_policy = await request_json(
             client,
             "GET",
