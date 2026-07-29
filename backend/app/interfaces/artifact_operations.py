@@ -29,6 +29,8 @@ __all__ = (
     "GuideArtifactIngestResult",
     "GuideSourceBindingRequest",
     "GuideSourceBindingResult",
+    "GuideSourceMaterializationRequest",
+    "GuideSourceMaterializationResult",
     "PreparedBundleMaterializationRequest",
     "SubmissionBundlePreparationPort",
     "SubmissionBundlePreparationRequest",
@@ -104,6 +106,33 @@ class GuideSourceBindingResult:
     binding_id: UUID
     content_id: UUID
     setup_generation: int
+    replayed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSourceMaterializationRequest:
+    """Exact guide binding selected for one authorized verified read."""
+
+    prepared_authorization: PreparedAuthorizationHandle
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    source_item_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int
+    binding_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSourceMaterializationResult:
+    """Bounded syntactic classification of independently verified guide bytes."""
+
+    classification_id: UUID
+    binding_id: UUID
+    content_id: UUID
+    setup_generation: int
+    detected_format: str
+    status: str
     replayed: bool
 
 
@@ -226,7 +255,9 @@ class SubmissionBundlePreparationPort(Protocol):
 class ArtifactBindingPort(Protocol):
     """Create exact action-bound bindings from verified content."""
 
-    async def bind_guide_source(self, request: GuideSourceBindingRequest) -> GuideSourceBindingResult:
+    async def bind_guide_source(
+        self, request: GuideSourceBindingRequest
+    ) -> GuideSourceBindingResult:
         """Bind verified guide content under the guide binding action."""
 
     async def bind_submission(self, request: SubmissionBindingRequest) -> object:
@@ -237,13 +268,19 @@ class ArtifactBindingPort(Protocol):
 
 
 class ArtifactMaterializationPort(Protocol):
-    """Materialize only the two canonical immutable source forms."""
+    """Materialize only canonical immutable source forms."""
 
     async def materialize_prepared_bundle(
         self,
         request: PreparedBundleMaterializationRequest,
     ) -> object:
         """Materialize one process-local prepared bundle generation."""
+
+    async def materialize_guide_source(
+        self,
+        request: GuideSourceMaterializationRequest,
+    ) -> GuideSourceMaterializationResult:
+        """Materialize and classify one exact verified guide binding."""
 
     async def materialize_bindings(
         self,

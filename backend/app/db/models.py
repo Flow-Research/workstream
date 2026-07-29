@@ -11,6 +11,8 @@ from app.modules.artifacts.models import (  # noqa: F401
     ArtifactBinding,
     ArtifactContent,
     GuideSourceArtifactBinding,
+    GuideSourceArtifactIncident,
+    GuideSourceFormatClassification,
     ArtifactOperationReceipt,
     ArtifactReplica,
     ArtifactRecoveryAttempt,

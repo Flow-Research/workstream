@@ -104,6 +104,7 @@ LANES = (
             "tests/test_external_service_adapters.py",
             "tests/test_guide_artifacts.py",
             "tests/test_guide_bindings.py",
+            "tests/test_guide_formats.py",
             "tests/test_local_artifact_store.py",
             "tests/test_s3_artifact_store.py",
             "tests/test_test_lane_evidence.py",
