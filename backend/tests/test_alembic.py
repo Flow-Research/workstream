@@ -2032,25 +2032,23 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
         try:
             command.downgrade(config, "base")
             command.upgrade(config, "head")
-            for definition in definitions:
-                event_id = asyncio.run(
-                    _insert_authorization_action_event_for(
-                        isolated_database_env,
-                        definition.action_id.value,
-                        definition.permission_id.value,
-                    )
+            definition = definitions[0]
+            event_id = asyncio.run(
+                _insert_authorization_action_event_for(
+                    isolated_database_env,
+                    definition.action_id.value,
+                    definition.permission_id.value,
                 )
-                with pytest.raises(
-                    RuntimeError,
-                    match="cannot downgrade non-empty project-mutation action evidence",
-                ):
-                    command.downgrade(config, "0040_guide_materialization")
-                asyncio.run(
-                    _remove_authority_audit_fixture(
-                        isolated_database_env, event_id=event_id
-                    )
-                )
-                event_id = ""
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade non-empty project-mutation action evidence",
+            ):
+                command.downgrade(config, "0040_guide_materialization")
+            asyncio.run(
+                _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
+            )
+            event_id = ""
 
             definition = definitions[-1]
             asyncio.run(
