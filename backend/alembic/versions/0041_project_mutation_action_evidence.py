@@ -56,7 +56,7 @@ def _definition() -> str:
 
 def _replace(definition: str) -> None:
     op.drop_constraint(
-        "ck_audit_events_authorization_action_evidence",
+        "authorization_action_evidence",
         "audit_events",
         type_="check",
     )
