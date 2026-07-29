@@ -2,7 +2,15 @@
 
 Reviewed branch: `codex/ws-auth-001-12-project-mutation-cutover`
 
-Reviewed against trusted main: `3fc323d7`
+Pre-integration reviewed planning HEAD:
+`4116a46973895e0a491480f7fbb3a998e7ebce6e`
+
+Pre-integration reviewed base SHA:
+`3fc323d79eb2969e3284f05a2fcf204832a28e77`
+
+External-review integration head: `480abc17da96272070314a5f90c0a460cfe940ec`
+
+External-review base SHA: `93ec3fbb1601eb5eb1c3f28e707137256dc08a9a`
 
 Reviewed at: `2026-07-29`
 

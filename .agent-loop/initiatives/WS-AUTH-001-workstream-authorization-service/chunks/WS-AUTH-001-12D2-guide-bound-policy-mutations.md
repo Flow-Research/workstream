@@ -76,8 +76,9 @@ compatibility.
 ## Verification commands
 
 Before start, freeze exact isolated-runner, Ruff, migration round-trip,
-changed-project/authorization 90% coverage, API drill, stale-doc, link, and diff
-commands. Final pushed head SHA must pass `Backend / test` and `Agent Gates`.
+changed-project/authorization 90% coverage, repository-wide 78% coverage
+baseline, API drill, stale-doc, link, and diff commands. Final pushed head SHA
+must pass `Backend / test` and `Agent Gates`.
 
 ## Required reviewers
 

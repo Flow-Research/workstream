@@ -12,8 +12,8 @@
 - The Celery setup service currently fabricates human roles. 12B provisions one
   exact fixed identity with four planned memberships; 12B2 performs the runtime
   cut only after 12E/12F/12G own the product actions and provenance.
-- ART-03B2 is concurrently creating migration `0040`. AUTH-12 must allocate
-  from merged trusted main and must not race or duplicate that migration.
+- ART-03B2 migration `0040` is merged on trusted main. AUTH-12 must allocate
+  the next revision from that exact head and must not reuse `0040`.
 
 ## Classification
 

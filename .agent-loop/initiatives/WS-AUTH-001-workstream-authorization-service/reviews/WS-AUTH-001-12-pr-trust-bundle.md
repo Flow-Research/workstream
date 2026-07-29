@@ -60,14 +60,18 @@ test, or CI workflow.
 
 No workflow, test selection, package script, coverage floor, lint/typecheck
 rule, or dependency changed. The scanner exemption uses full-line matching for
-one path in one planning file. GitHub full checks and CodeRabbit remain pending
-until the branch is pushed.
+one path in one planning file. CodeRabbit completed a full external review on
+integration head `480abc17` and posted six threads. All valid findings were
+fixed; the sufficiency-principal thread was resolved by clarifying the existing
+dual human-request/internal-service boundary. GitHub full checks rerun on the
+reviewed integration head and must rerun on the pushed repair head.
 
 ## Remaining risks and follow-up
 
 Implementation correctness remains intentionally deferred to the children.
-12A cannot allocate a migration until ART-owned migration `0040` merges. 12H
-also waits for the CON-owned removal of the retired guide-bound economic-policy
+ART-owned migration `0040` is now merged, so 12A may allocate the next revision
+only after this planning PR merges and the user separately starts 12A. 12H
+still waits for the CON-owned removal of the retired guide-bound economic-policy
 dependency. Planning artifacts do not activate or lock either dependency.
 
 After this planning PR merges, a child requires a separate user start. The

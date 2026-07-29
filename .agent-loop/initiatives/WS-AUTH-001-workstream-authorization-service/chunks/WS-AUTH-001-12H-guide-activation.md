@@ -75,8 +75,8 @@ or award redesign, task/submission/review activation, or issuer-claim fallback.
 ## Verification commands
 
 Before start, freeze exact isolated-runner, seeded migration round-trip,
-authorization/project 90% coverage, activation/concurrency, API drill, Ruff,
-stale-doc, link, and diff commands.
+authorization/project 90% coverage, repository-wide 78% coverage baseline,
+activation/concurrency, API drill, Ruff, stale-doc, link, and diff commands.
 
 ## Required reviewers
 

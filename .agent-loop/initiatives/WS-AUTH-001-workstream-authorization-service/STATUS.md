@@ -168,7 +168,7 @@ until its repaired split passes review and a child receives a separate start.
 | `WS-AUTH-001-11C1` | Merged | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | #216 | Setup-diagnostic read hard cutover merged as `2965a9f9` on 2026-07-28. |
 | `WS-AUTH-001-11C2` | Merged | `codex/ws-auth-001-11c2-effective-policy-active-guide-reads` | #221 | Effective-policy and active-guide read cutover merged as `3fc323d7` on 2026-07-29. |
 | `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
-| `WS-AUTH-001-12A` | Proposed | - | - | Planned action/evidence/PREP foundation; waits for ART-owned migration `0040` to merge before allocating the next migration. |
+| `WS-AUTH-001-12A` | Proposed | - | - | Planned action/evidence/PREP foundation; ART-owned migration `0040` is merged, so only planning merge and a separate start remain before allocation. |
 | `WS-AUTH-001-12B` | Proposed | - | - | Fixed project-setup service identity and planned matrix only; zero activation. |
 | `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after exact product actions activate. |
 | `WS-AUTH-001-12C` | Proposed | - | - | System-scoped project creation cutover. |

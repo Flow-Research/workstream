@@ -208,7 +208,8 @@ proving the same issuer role metadata alone no longer authorizes.
     identity, cut project/guide/sufficiency/policy families separately, leave
     retired guide-bound economic policy to CON ownership, cut the Celery call
     graph only after its product actions are active, and finish with guide
-    activation. AUTH allocates no migration until ART-owned `0040` merges.
+    activation only after the owning CON clean cut. ART-owned `0040` is now
+    merged; the first AUTH migration is allocated from that trusted head.
 15. Cut task management, queue, assignment, claim, and start operations over.
 16. Cut submission, pre-submit, checker trigger/read, and task audit visibility
     over.

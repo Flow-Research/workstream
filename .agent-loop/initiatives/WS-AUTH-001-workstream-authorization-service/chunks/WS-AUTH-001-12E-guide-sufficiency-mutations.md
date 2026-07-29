@@ -10,8 +10,9 @@ Proposed and inactive after 12D2.
 
 ## Goal
 
-Activate manual sufficiency creation, agent-run request, and warning
-acknowledgement for the covered Project Manager.
+Activate manual sufficiency creation, the HTTP agent-run request, and warning
+acknowledgement for the covered Project Manager, plus the same run action for
+the fixed setup service only through internal command resolution.
 
 ## Why this chunk exists
 
@@ -59,9 +60,10 @@ activation, checker execution, or token-role fallback.
   setup generation, report where applicable, actor/link, and
   grant-or-service authority.
 - Report creation and warning acknowledgement are human Project Manager only.
-  `project.guide_sufficiency.run` also admits only the fixed
-  `workstream.project.setup` service through its closed matrix membership; the
-  service receives no other human action.
+  `project.guide_sufficiency.run` admits the covered Project Manager only over
+  HTTP and also admits the fixed `workstream.project.setup` service only
+  through internal command resolution and its closed matrix membership. The
+  service receives no other human action and cannot invoke the public route.
 - Service execution additionally locks and binds the active setup run, expected
   sufficiency step, task/correlation identity, project, guide, snapshot,
   generation, and stale-output digest. It records service profile, identity

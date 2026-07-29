@@ -19,10 +19,9 @@ contexts. Agent-backed commands roll back before external work, so an opaque
 prepared handle cannot span their external call; final persistence needs a
 fresh transaction and fresh PREP consumption after stale-output revalidation.
 
-Current migration head is `0039_guide_source_bindings`. Concurrent ART-03B2
-work already owns unmerged `0040_guide_materialization_classification`, so
-AUTH-12 must not allocate `0040`. Its first schema child allocates only after
-that ART migration merges.
+Current trusted-main migration head is ART-owned
+`0040_guide_materialization`. AUTH-12 does not allocate `0040`; its first
+schema child allocates the next revision from this merged head.
 
 Required architecture, security, product, QA, senior, and CI plan reviews all
 rejected the inherited combined runtime contract before code. It lacked the

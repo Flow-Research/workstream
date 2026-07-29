@@ -87,8 +87,8 @@ review/revision/retired-economic/contribution policy, or issuer-claim fallback.
 ## Verification commands
 
 Before start, freeze exact isolated-runner, seeded migration round-trip,
-authorization/project 90% coverage, Ruff, API drill, stale-doc, link, and diff
-commands.
+authorization/project 90% coverage, repository-wide 78% coverage baseline,
+Ruff, API drill, stale-doc, link, and diff commands.
 
 ## Required reviewers
 

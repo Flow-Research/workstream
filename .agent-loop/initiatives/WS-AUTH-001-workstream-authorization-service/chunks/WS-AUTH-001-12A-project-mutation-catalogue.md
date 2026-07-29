@@ -2,7 +2,8 @@
 
 ## Status and prerequisite
 
-Proposed and inactive. Requires merged AUTH-12 planning and ART-owned `0040`;
+Proposed and inactive. AUTH-12 planning must be merged; ART-owned `0040` is
+merged on trusted main.
 the exact AUTH migration revision is frozen from the resulting trusted main.
 
 ## Parent initiative
@@ -62,7 +63,7 @@ project-table provenance columns, ART behavior, or token-role compatibility.
 - PREP scope derivation is explicit for system project creation and exact
   project resources. Handles remain opaque, request/session/transaction bound,
   non-copyable, non-serializable, and single-use.
-- The migration follows the then-current merged head; ART's in-progress `0040`
+- The migration follows merged ART-owned `0040_guide_materialization`; `0040`
   is not duplicated or edited.
 - Upgrade, downgrade, re-upgrade, typed/SQL parity, and zero-active-delta tests
   pass.

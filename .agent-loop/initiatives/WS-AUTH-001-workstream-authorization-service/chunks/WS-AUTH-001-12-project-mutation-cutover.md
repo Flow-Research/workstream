@@ -62,8 +62,8 @@ provider access, extraction, and later ART activation remain outside AUTH-12.
 ## Child order
 
 1. 12A registers all eighteen actions as planned, adds exact typed resource
-   contracts, and adds PostgreSQL action-evidence parity after ART-owned
-   migration `0040` merges. It activates nothing.
+   contracts, and adds PostgreSQL action-evidence parity in the next revision
+   after merged ART-owned `0040_guide_materialization`. It activates nothing.
 2. 12B establishes the fixed project-setup identity and four planned matrix
    memberships without activating the Celery path.
 3. 12C cuts over project-shell creation.
@@ -76,7 +76,9 @@ provider access, extraction, and later ART activation remain outside AUTH-12.
    changing checker execution, visibility, or `WS-POL-002-03` behavior.
 9. 12B2 activates setup-run ledger authority and cuts both Celery entry points
    only after 12E/12F/12G have activated the exact product actions they call.
-10. 12H cuts over guide activation after every prerequisite family is local.
+10. 12H cuts over guide activation after every prerequisite family is local
+    and the owning CON clean cut has removed the retired economic-policy
+    dependency.
 
 Agent-backed commands may perform an authorization preflight before external
 work, but no prepared handle may cross a rollback, commit, agent call, Celery
@@ -123,8 +125,9 @@ routes, schemas, project lifecycle state, ART behavior, or CI configuration.
   supplies only separate review/revision routes before guide activation.
 - No child treats token roles, combined contributor roles, uploader authority,
   or a generic policy resource as authority.
-- Migration custody acknowledges ART-03B2's active `0040` work and allocates
-  only from the trusted merged head.
+- Migration custody acknowledges merged ART-owned
+  `0040_guide_materialization` and allocates only the next revision from that
+  trusted head.
 - Fixed setup-service execution is not generic project authority: exact active
   run/step/task lineage and service provenance are required and directly
   invocable or cross-lineage requests fail closed.
