@@ -1629,7 +1629,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0040_guide_materialization",
+                "revision": "0041_project_mutation_evidence",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1953,10 +1953,146 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
             ):
                 command.downgrade(config, "0034_project_role_issue_evidence")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0040_guide_materialization"
+                "0041_project_mutation_evidence"
             )
         finally:
             asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
+            command.downgrade(config, "base")
+
+
+def test_0041_project_mutation_action_evidence_round_trip(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Prove all eighteen planned action pairs round-trip without new permissions."""
+    config = _alembic_config()
+    definitions = tuple(
+        definition
+        for definition in ACTION_DEFINITIONS
+        if definition.owner
+        in {
+            ActionOwner.AUTH_12B2,
+            ActionOwner.AUTH_12C,
+            ActionOwner.AUTH_12D,
+            ActionOwner.AUTH_12D2,
+            ActionOwner.AUTH_12E,
+            ActionOwner.AUTH_12F,
+            ActionOwner.AUTH_12G,
+            ActionOwner.AUTH_12H,
+        }
+    )
+    assert len(definitions) == 18
+    assert {definition.permission_id for definition in definitions} <= set(PermissionId)
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
+            )
+            command.downgrade(config, "0040_guide_materialization")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _assert_authorization_action_sql_pairs(
+                    isolated_database_env, definitions=definitions
+                )
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0041_project_mutation_action_evidence_refuses_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """Committed direct and idempotency-linked evidence must preserve vocabulary."""
+    config = _alembic_config()
+    definitions = tuple(
+        item
+        for item in ACTION_DEFINITIONS
+        if item.owner
+        in {
+            ActionOwner.AUTH_12B2,
+            ActionOwner.AUTH_12C,
+            ActionOwner.AUTH_12D,
+            ActionOwner.AUTH_12D2,
+            ActionOwner.AUTH_12E,
+            ActionOwner.AUTH_12F,
+            ActionOwner.AUTH_12G,
+            ActionOwner.AUTH_12H,
+        }
+    )
+    assert len(definitions) == 18
+    event_id = ""
+    linked_event_id = ""
+    record_id = str(uuid4())
+    actor_id = str(uuid4())
+    target_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            for definition in definitions:
+                event_id = asyncio.run(
+                    _insert_authorization_action_event_for(
+                        isolated_database_env,
+                        definition.action_id.value,
+                        definition.permission_id.value,
+                    )
+                )
+                with pytest.raises(
+                    RuntimeError,
+                    match="cannot downgrade non-empty project-mutation action evidence",
+                ):
+                    command.downgrade(config, "0040_guide_materialization")
+                asyncio.run(
+                    _remove_authority_audit_fixture(
+                        isolated_database_env, event_id=event_id
+                    )
+                )
+                event_id = ""
+
+            definition = definitions[-1]
+            asyncio.run(
+                _insert_committed_authority_idempotency(
+                    isolated_database_env, record_id, actor_id, target_id
+                )
+            )
+            linked_event_id = asyncio.run(
+                _insert_linked_authorization_action_event(
+                    isolated_database_env,
+                    record_id=record_id,
+                    actor_id=actor_id,
+                    action_id=definition.action_id.value,
+                    permission_id=definition.permission_id.value,
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade non-empty project-mutation action evidence",
+            ):
+                command.downgrade(config, "0040_guide_materialization")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                "0041_project_mutation_evidence"
+            )
+        finally:
+            if event_id:
+                asyncio.run(
+                    _remove_authority_audit_fixture(
+                        isolated_database_env, event_id=event_id
+                    )
+                )
+            if linked_event_id:
+                asyncio.run(
+                    _remove_authority_audit_fixture(
+                        isolated_database_env, event_id=linked_event_id
+                    )
+                )
+            asyncio.run(
+                _remove_authority_idempotency_fixture(
+                    isolated_database_env, record_id, orphan_event=None
+                )
+            )
             command.downgrade(config, "base")
 
 
@@ -2080,7 +2216,7 @@ def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
             record_id = ""
             command.upgrade(config, "head")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0040_guide_materialization"
+                "0041_project_mutation_evidence"
             )
         finally:
             for event_id in reversed(event_ids):
@@ -2477,7 +2613,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0040_guide_materialization",
+                "revision": "0041_project_mutation_evidence",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -2689,7 +2825,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0040_guide_materialization",
+                    "0041_project_mutation_evidence",
                     True,
                     True,
                 )
@@ -2716,7 +2852,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0040_guide_materialization",
+                    "0041_project_mutation_evidence",
                     True,
                     True,
                 )
@@ -2744,7 +2880,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0040_guide_materialization",
+                "revision": "0041_project_mutation_evidence",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -2804,7 +2940,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0040_guide_materialization"
+                "0041_project_mutation_evidence"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")

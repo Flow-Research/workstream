@@ -238,7 +238,9 @@ WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
 The closed action registry contains 78 rows after AUTH-11C2: 37 active actions
-and 41 planned rows. AUTH-10A added five project-role read/manage rows;
+and 41 planned rows before AUTH-12A. AUTH-12A adds eighteen planned
+project-mutation rows, producing 96 total actions: 37 active and 59 planned.
+AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
 project identity and actor-context read rows: two are active under 11B, three
@@ -914,6 +916,39 @@ and source item is locked and hash-revalidated through projection and commit.
 Draft, superseded, replaced, incomplete, ambiguous, corrupt, or stale bindings
 conceal. Contributor guide requirements remain on task work-context and
 submission-requirements surfaces.
+
+AUTH-12A registers the complete project-mutation vocabulary below as planned
+and unavailable. It adds distinct typed resource contexts and PostgreSQL
+action-evidence parity, but activates no route, setup command, or service. A
+planned action fails with `action_unavailable` before a prepared handle or
+allowed decision evidence can exist. `project.create` alone derives system
+scope; every other action derives the exact project from its typed resource.
+
+| Planned ActionId | PermissionId | Activation owner |
+|---|---|---|
+| `project.create` | `project.create` | `WS-AUTH-001-12C` |
+| `project.guide.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide.update` | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.guide_source_snapshot.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
+| `project.review_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
+| `project.revision_policy.update` | `project.review_policy.manage` | `WS-AUTH-001-12D2` |
+| `project.guide_sufficiency_report.create` | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_sufficiency.run` | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.guide_sufficiency.warnings.acknowledge` | `project.guide.manage` | `WS-AUTH-001-12E` |
+| `project.submission_artifact_policy.create` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
+| `project.submission_artifact_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
+| `project.submission_artifact_policy.update` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
+| `project.submission_artifact_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12F` |
+| `project.post_submit_checker_policy.approve` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
+| `project.post_submit_checker_policy.correction.request` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
+| `project.post_submit_checker_policy.derive` | `project.effective_policy.manage` | `WS-AUTH-001-12G` |
+| `project.setup_run.update` | `project.guide.manage` | `WS-AUTH-001-12B2` |
+| `project.guide.activate` | `project.guide.manage` | `WS-AUTH-001-12H` |
+
+Migration `0041_project_mutation_evidence` extends only the closed audit
+action-to-permission evidence constraint. It follows ART migration
+`0040_guide_materialization`, adds no permission, and refuses downgrade after
+direct or idempotency-linked evidence uses any new action.
 
 The two collection routes return and transactionally bind at most the newest
 100 canonical rows in deterministic newest-first order. Older retained records

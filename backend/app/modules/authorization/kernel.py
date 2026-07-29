@@ -25,7 +25,12 @@ from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
+    PROJECT_GUIDE_TARGET_KIND_BY_ACTION,
+    PROJECT_MUTATION_RESOURCE_BY_ACTION,
+    PROJECT_POST_SUBMIT_POLICY_TARGET_KIND_BY_ACTION,
     PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION,
+    PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION,
+    PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION,
     ActorAdminRoleGrantHistoryResourceContext,
     ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
@@ -1105,6 +1110,7 @@ class AuthorizationService:
             ),
             ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
             ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
+            **PROJECT_MUTATION_RESOURCE_BY_ACTION,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
@@ -1113,6 +1119,18 @@ class AuthorizationService:
             return False
         policy_kind = PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION.get(action_id)
         if policy_kind is not None and resource.target_kind != policy_kind:
+            return False
+        sufficiency_kind = PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION.get(action_id)
+        if sufficiency_kind is not None and resource.target_kind != sufficiency_kind:
+            return False
+        guide_kind = PROJECT_GUIDE_TARGET_KIND_BY_ACTION.get(action_id)
+        if guide_kind is not None and resource.target_kind != guide_kind:
+            return False
+        submission_policy_kind = PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION.get(action_id)
+        if submission_policy_kind is not None and resource.target_kind != submission_policy_kind:
+            return False
+        post_submit_policy_kind = PROJECT_POST_SUBMIT_POLICY_TARGET_KIND_BY_ACTION.get(action_id)
+        if post_submit_policy_kind is not None and resource.target_kind != post_submit_policy_kind:
             return False
         transition = {
             ActionId.ACTOR_PROFILE_SUSPEND: "suspend",

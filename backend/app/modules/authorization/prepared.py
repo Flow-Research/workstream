@@ -31,6 +31,8 @@ from app.modules.authorization.runtime import (
     PreparedAuthorizationInput,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
+    PROJECT_MUTATION_RESOURCE_BY_ACTION,
+    ProjectCreateResourceContext,
 )
 
 
@@ -244,6 +246,16 @@ class PreparedAuthorizationService:
                 target_actor_profile_id=target_actor_profile_id,
                 role=role,
                 grant_id=grant_id,
+            )
+        expected_project_mutation = PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
+        if expected_project_mutation is not None and isinstance(
+            resource, expected_project_mutation
+        ):
+            if isinstance(resource, ProjectCreateResourceContext):
+                return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=resource.scope_project_id,
             )
         artifact_resource_type = {
             ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: ArtifactPutAttemptResourceContext,
