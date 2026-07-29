@@ -529,8 +529,18 @@ def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None
     for path in extraction_paths:
         imported_modules: set[str] = set()
         for node in ast.walk(_tree(path)):
-            if isinstance(node, ast.ImportFrom) and node.module is not None:
-                imported_modules.add(node.module)
+            if isinstance(node, ast.ImportFrom):
+                if node.level:
+                    package = "app.modules.artifacts".split(".")
+                    base = package[: len(package) - node.level + 1]
+                    if node.module is not None:
+                        imported_modules.add(".".join((*base, *node.module.split("."))))
+                    else:
+                        imported_modules.update(
+                            ".".join((*base, alias.name)) for alias in node.names
+                        )
+                elif node.module is not None:
+                    imported_modules.add(node.module)
             elif isinstance(node, ast.Import):
                 imported_modules.update(alias.name for alias in node.names)
         assert not any(module.startswith(forbidden_prefixes) for module in imported_modules), (

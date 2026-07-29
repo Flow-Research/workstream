@@ -131,20 +131,22 @@ def test_csv_cell_boundary_is_exact(runner: GuideExtractionRunner, tmp_path: Pat
 def test_csv_row_and_total_cell_boundaries_are_exact(
     runner: GuideExtractionRunner, tmp_path: Path
 ) -> None:
-    assert runner.extract(
-        BytesIO(b"\n" * 100_000), detected_format="csv", workspace=tmp_path
-    ).status == "extracted"
-    row_over = runner.extract(
-        BytesIO(b"\n" * 100_001), detected_format="csv", workspace=tmp_path
+    assert (
+        runner.extract(BytesIO(b"\n" * 100_000), detected_format="csv", workspace=tmp_path).status
+        == "extracted"
     )
+    row_over = runner.extract(BytesIO(b"\n" * 100_001), detected_format="csv", workspace=tmp_path)
     assert (row_over.status, row_over.error_code) == (
         "limit_exceeded",
         "csv_row_limit",
     )
     million_cells = (("," * 999) + "\n") * 1000
-    assert runner.extract(
-        BytesIO(million_cells.encode()), detected_format="csv", workspace=tmp_path
-    ).status == "extracted"
+    assert (
+        runner.extract(
+            BytesIO(million_cells.encode()), detected_format="csv", workspace=tmp_path
+        ).status
+        == "extracted"
+    )
     cell_over = runner.extract(
         BytesIO((million_cells + ",\n").encode()),
         detected_format="csv",
@@ -205,6 +207,7 @@ def test_worker_kernel_isolation_denies_network_process_and_filesystem(
     assert json.loads(envelope["output"]) == {
         "network": True,
         "outside_read": True,
+        "outside_write": True,
         "process": True,
         "workspace_write": True,
     }
@@ -229,9 +232,7 @@ def test_real_executor_resource_and_loss_outcomes(
     monkeypatch.setattr(extraction_module, "_SUPPORTED", frozenset({probe}))
     runner = GuideExtractionRunner()
     runner._worker_path = Path(__file__).parent / "fixtures/guide_extraction_probe_worker.py"
-    result = runner.extract(
-        BytesIO(b""), detected_format=probe, workspace=tmp_path
-    )
+    result = runner.extract(BytesIO(b""), detected_format=probe, workspace=tmp_path)
     assert (result.status, result.error_code) == (status, error_code)
 
 
@@ -242,9 +243,7 @@ def test_wall_timeout_kills_and_reaps_executor(
     monkeypatch.setattr(extraction_module, "WALL_TIMEOUT_SECONDS", 0.05)
     runner = GuideExtractionRunner()
     runner._worker_path = Path(__file__).parent / "fixtures/guide_extraction_probe_worker.py"
-    result = runner.extract(
-        BytesIO(b""), detected_format="__wall_probe__", workspace=tmp_path
-    )
+    result = runner.extract(BytesIO(b""), detected_format="__wall_probe__", workspace=tmp_path)
     assert (result.status, result.error_code) == (
         "limit_exceeded",
         "wall_time_limit",
@@ -425,6 +424,39 @@ async def test_failed_extractor_residue_is_removed_before_workspace_release(
 
 
 @pytest.mark.asyncio
+async def test_stale_cleanup_reaps_crashed_extraction_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(
+            aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
+            maximum_files=2,
+            maximum_concurrency=1,
+            minimum_free_bytes=0,
+            reservation_ttl_seconds=30,
+            total_deadline_seconds=10,
+            cleanup_margin_seconds=1,
+            stream_buffer_bytes=1024,
+            maximum_source_bytes=1024,
+        ),
+    )
+    workspace_name = "extract_" + "a" * 32
+    manager._reserve_workspace_sync(workspace_name)
+    workspace = tmp_path / "scratch" / "workspaces" / workspace_name
+    workspace.mkdir(mode=0o700)
+    (workspace / "partial").write_bytes(b"untrusted")
+    monkeypatch.setattr(manager, "_owner_process_matches", lambda *_: False)
+
+    cleaned = await manager.cleanup_stale(now_unix_ns=2**63)
+
+    assert cleaned == 1
+    assert not workspace.exists()
+    assert manager._read_ledger()["workspaces"] == []
+    manager.close()
+
+
+@pytest.mark.asyncio
 async def test_executor_failure_retries_once_with_fresh_authority_and_materialization() -> None:
     request = GuideExtractionRequest(*(uuid4() for _ in range(5)), 1, uuid4(), uuid4())
     prepared_sources: list[SimpleNamespace] = []
@@ -463,7 +495,8 @@ async def test_executor_failure_retries_once_with_fresh_authority_and_materializ
 
     service = Service()
     result = await GuideExtractionCoordinator(  # type: ignore[arg-type]
-        service, Materializer()  # type: ignore[arg-type]
+        service,
+        Materializer(),  # type: ignore[arg-type]
     ).extract(request)
 
     assert result.status == "extracted"
@@ -495,6 +528,7 @@ async def test_terminal_extraction_replay_does_not_materialize_again(status: str
             raise AssertionError("terminal extraction must not materialize again")
 
     result = await GuideExtractionCoordinator(  # type: ignore[arg-type]
-        Service(), Materializer()  # type: ignore[arg-type]
+        Service(),
+        Materializer(),  # type: ignore[arg-type]
     ).extract(request)
     assert result is terminal

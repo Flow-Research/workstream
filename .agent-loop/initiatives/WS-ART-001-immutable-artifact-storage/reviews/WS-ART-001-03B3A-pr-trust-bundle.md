@@ -29,10 +29,12 @@ is included.
 
 ## Tests And CI Integrity
 
-Focused extraction and architecture tests pass locally. Ruff, mapper setup,
+Focused extraction and architecture tests pass locally, including real
+outside-scratch write denial and stale workspace crash recovery. Ruff, mapper setup,
 static migration rendering, stale-contract scan, Markdown links, and diff
-integrity pass. No workflow or coverage threshold was weakened. Exact hosted
-Backend and Agent Gates remain required before review publication.
+integrity pass. CodeRabbit's valid findings and the first hosted database-test
+failures were repaired without weakening a workflow, threshold, or assertion.
+Exact hosted Backend and Agent Gates remain required before review publication.
 
 ## Internal Review
 

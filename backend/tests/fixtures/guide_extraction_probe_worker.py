@@ -44,6 +44,11 @@ def main() -> int:
                     "workspace_write": _denied(
                         lambda: os.open("probe", os.O_WRONLY | os.O_CREAT, 0o600)
                     ),
+                    "outside_write": _denied(
+                        lambda: os.open(
+                            "/tmp/workstream-extraction-probe", os.O_WRONLY | os.O_CREAT, 0o600
+                        )
+                    ),
                     "process": _denied(os.fork),
                 },
                 sort_keys=True,

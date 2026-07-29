@@ -8,7 +8,10 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.core.cancellation import await_cancellation_resistant
 
 from app.modules.artifacts.guide_extraction import GuideExtractionRegistry
 from app.modules.artifacts.guide_formats import DETECTOR_NAME, DETECTOR_VERSION
@@ -113,20 +116,26 @@ class GuideExtractionService:
         ):
             raise GuideExtractionError("guide extraction is unavailable")
         try:
-            extracted = await prepared.extract_guide(
-                self._registry.resolve(before.detected_format)
-            )
-        except asyncio.CancelledError:
-            async with self._session_factory() as session, session.begin():
-                after = await self._load_facts(session, request)
-                if after == before:
-                    await self._persist_failure(
-                        session,
-                        before,
-                        status="cancelled",
-                        error_code="extraction_cancelled",
-                    )
-            raise
+            extracted = await prepared.extract_guide(self._registry.resolve(before.detected_format))
+        except asyncio.CancelledError as cancellation:
+
+            async def record_cancellation() -> None:
+                async with self._session_factory() as session, session.begin():
+                    after = await self._load_facts(session, request)
+                    if after == before:
+                        await self._persist_failure(
+                            session,
+                            before,
+                            status="cancelled",
+                            error_code="extraction_cancelled",
+                        )
+
+            recovery = asyncio.create_task(asyncio.wait_for(record_cancellation(), timeout=5.0))
+            try:
+                await await_cancellation_resistant(recovery)
+            except (TimeoutError, Exception):
+                pass
+            raise cancellation from None
         async with self._session_factory() as session, session.begin():
             after = await self._load_facts(session, request)
             if after != before:
@@ -176,23 +185,42 @@ class GuideExtractionService:
             )
             replayed = content is not None
             if content is None:
-                content = GuideSourceExtractedContent(
-                    id=str(uuid4()),
-                    content_id=before.content_id,
-                    detected_format=before.detected_format,
-                    extractor_name=extracted.extractor_name,
-                    extractor_version=extracted.extractor_version,
-                    policy_version=extracted.policy_version,
-                    source_sha256=before.sha256,
-                    source_byte_count=before.byte_count,
-                    status="extracted",
-                    output_sha256=extracted.output_sha256,
-                    canonical_output=extracted.canonical_output,
-                    omission_facts={"truncated": False, "omitted": False},
+                content_id = str(uuid4())
+                inserted_id = await session.scalar(
+                    insert(GuideSourceExtractedContent)
+                    .values(
+                        id=content_id,
+                        content_id=before.content_id,
+                        detected_format=before.detected_format,
+                        extractor_name=extracted.extractor_name,
+                        extractor_version=extracted.extractor_version,
+                        policy_version=extracted.policy_version,
+                        source_sha256=before.sha256,
+                        source_byte_count=before.byte_count,
+                        status="extracted",
+                        output_sha256=extracted.output_sha256,
+                        canonical_output=extracted.canonical_output,
+                        omission_facts={"truncated": False, "omitted": False},
+                    )
+                    .on_conflict_do_nothing(constraint="uq_guide_extracted_contents_identity")
+                    .returning(GuideSourceExtractedContent.id)
                 )
-                session.add(content)
-                await session.flush()
-            elif (
+                replayed = inserted_id is None
+                content = await session.scalar(
+                    select(GuideSourceExtractedContent)
+                    .where(
+                        GuideSourceExtractedContent.content_id == before.content_id,
+                        GuideSourceExtractedContent.detected_format == before.detected_format,
+                        GuideSourceExtractedContent.extractor_name == extracted.extractor_name,
+                        GuideSourceExtractedContent.extractor_version
+                        == extracted.extractor_version,
+                        GuideSourceExtractedContent.policy_version == extracted.policy_version,
+                    )
+                    .with_for_update()
+                )
+                if content is None:
+                    raise GuideExtractionError("guide extraction result conflicts")
+            if (
                 content.source_sha256 != before.sha256
                 or content.source_byte_count != before.byte_count
                 or content.output_sha256 != extracted.output_sha256
@@ -254,20 +282,15 @@ class GuideExtractionService:
             ).one_or_none()
             if successful is not None:
                 attempt, content, usage = successful
-                return self._result(
-                    attempt, content=content, usage=usage, replayed=True
-                )
+                return self._result(attempt, content=content, usage=usage, replayed=True)
             latest_attempt = await session.scalar(
                 select(GuideSourceExtractionAttempt)
                 .where(
                     GuideSourceExtractionAttempt.binding_id == facts.binding_id,
                     GuideSourceExtractionAttempt.content_id == facts.content_id,
-                    GuideSourceExtractionAttempt.classification_id
-                    == facts.classification_id,
-                    GuideSourceExtractionAttempt.setup_generation
-                    == facts.setup_generation,
-                    GuideSourceExtractionAttempt.policy_version
-                    == "guide-extraction-v1",
+                    GuideSourceExtractionAttempt.classification_id == facts.classification_id,
+                    GuideSourceExtractionAttempt.setup_generation == facts.setup_generation,
+                    GuideSourceExtractionAttempt.policy_version == "guide-extraction-v1",
                 )
                 .order_by(GuideSourceExtractionAttempt.attempt_number.desc())
                 .limit(1)
@@ -277,9 +300,7 @@ class GuideExtractionService:
                 "cancelled",
             }:
                 return self._result(latest_attempt)
-            budget = await session.get(
-                GuideSourceExtractionRetryBudget, facts.binding_id
-            )
+            budget = await session.get(GuideSourceExtractionRetryBudget, facts.binding_id)
             if budget is None:
                 session.add(
                     GuideSourceExtractionRetryBudget(
@@ -463,9 +484,7 @@ class GuideExtractionCoordinator:
         self._service = service
         self._materializer = materializer
 
-    async def extract(
-        self, request: GuideExtractionRequest
-    ) -> GuideExtractionPersistenceResult:
+    async def extract(self, request: GuideExtractionRequest) -> GuideExtractionPersistenceResult:
         """Retry one executor failure only after obtaining a completely fresh source."""
         for attempt_index in range(2):
             exhausted = await self._service.claim_materialization_slot(request)

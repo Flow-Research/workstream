@@ -518,10 +518,13 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
         config.set_main_option(
             "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
         )
-        with migration_lock(), pytest.raises(
-            RuntimeError, match="cannot downgrade populated guide extraction evidence"
+        with (
+            migration_lock(),
+            pytest.raises(
+                RuntimeError, match="cannot downgrade populated guide extraction evidence"
+            ),
         ):
-            command.downgrade(config, "0040_guide_materialization")
+            await asyncio.to_thread(command.downgrade, config, "0040_guide_materialization")
     finally:
         if prepared is not None:
             await prepared.close()
@@ -559,23 +562,26 @@ async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_
         classification_id = uuid4()
         attempt_id = uuid4()
         async with factory() as session, session.begin():
+            session.add(
+                GuideSourceFormatClassification(
+                    id=str(classification_id),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    sha256=digest,
+                    byte_count=len(payload),
+                    media_type="text/plain",
+                    detected_format="plain_text",
+                    status="classified",
+                    detector_name="workstream.guide_format",
+                    detector_version="1",
+                    classification_facts={},
+                )
+            )
+            await session.flush()
             session.add_all(
                 [
-                    GuideSourceFormatClassification(
-                        id=str(classification_id),
-                        binding_id=str(binding_id),
-                        content_id=str(ids["content"]),
-                        verified_replica_id=str(ids["replica"]),
-                        setup_generation=1,
-                        sha256=digest,
-                        byte_count=len(payload),
-                        media_type="text/plain",
-                        detected_format="plain_text",
-                        status="classified",
-                        detector_name="workstream.guide_format",
-                        detector_version="1",
-                        classification_facts={},
-                    ),
                     GuideSourceExtractionRetryBudget(
                         binding_id=str(binding_id),
                         content_id=str(ids["content"]),

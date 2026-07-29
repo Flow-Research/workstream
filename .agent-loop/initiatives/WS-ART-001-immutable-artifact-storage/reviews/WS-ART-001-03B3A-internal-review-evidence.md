@@ -37,6 +37,11 @@ provider-write, Celery, submission, or AUTH activation behavior.
 | test delta | PASS WITH LOW RISKS | none |
 | docs | PASS | none |
 
+The CodeRabbit/hosted-CI repair delta was re-reviewed by senior engineering,
+architecture/reuse, QA/test-delta, security, product/ops, and CI/docs. All
+tracks pass after one valid legacy-ledger compatibility blocker was repaired
+with exact prior-v2 normalization and restart coverage.
+
 ## Material Repairs
 
 - replaced default-allow syscall denial with a default-deny allowlist;
