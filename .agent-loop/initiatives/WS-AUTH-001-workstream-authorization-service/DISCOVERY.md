@@ -3,6 +3,34 @@
 Discovery is read-only. No application code was changed while producing this
 artifact.
 
+## AUTH-12 exact mutation delta — 2026-07-29
+
+Trusted main after AUTH-11C2 is `3fc323d7`. The project router has fourteen
+human mutation routes in AUTH-12 scope plus two internal Celery setup commands.
+None has a mutation `ActionId`; human routes still enter through
+the legacy registered-actor dependency and role-claim helper. The Celery setup
+service fabricates an `ActorContext` carrying obsolete human management roles,
+and no fixed project-setup service identity exists.
+
+The merged PREP implementation supports existing administrative/project-role
+mutations and selected ART actions, but has no project create, guide,
+source-snapshot, sufficiency, project-policy, setup-run, or activation resource
+contexts. Agent-backed commands roll back before external work, so an opaque
+prepared handle cannot span their external call; final persistence needs a
+fresh transaction and fresh PREP consumption after stale-output revalidation.
+
+Current trusted-main migration head is ART-owned
+`0040_guide_materialization`. AUTH-12 does not allocate `0040`; its first
+schema child allocates the next revision from this merged head.
+
+Required architecture, security, product, QA, senior, and CI plan reviews all
+rejected the inherited combined runtime contract before code. It lacked the
+exact action/resource table, combined unrelated mutation families, misstated
+the already-active XINT guide-ingest boundary, used stale database verification
+environment variables, omitted changed-project coverage, and did not define
+service identity, provenance columns, PREP lock order, denial semantics, or
+external-work transaction breaks. D35 records the planning-only split.
+
 ## AUTH-10 delta discovery - 2026-07-21
 
 Trusted `main` is `5a8a924d`; Alembic head is

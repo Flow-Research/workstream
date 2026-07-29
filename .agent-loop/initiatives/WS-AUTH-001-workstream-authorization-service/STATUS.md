@@ -111,19 +111,22 @@ or consumer feature action is active.
 
 ## Active planning chunk
 
-None; `WS-AUTH-001-11C2` planning passed required L1 preimplementation review
-and merged through PR #219 as `8bb0094f`.
+`WS-AUTH-001-12`; the user started it on 2026-07-29. Required L1
+preimplementation review rejected the inherited combined runtime contract
+before application-code edits. The repaired planning parent now splits runtime
+work into 12A through 12H plus 12B2 and 12D2. All nine exact-plan reviewer
+tracks passed after action-custody, canonical-lineage reuse, and fixed-service
+setup-run binding findings were repaired.
 
 ## Active implementation chunk
 
-`WS-AUTH-001-11C2`; bounded implementation, repair, focused deterministic
-evidence, and implementation review are in progress on
-`codex/ws-auth-001-11c2-effective-policy-active-guide-reads` in PR #221.
+None. `WS-AUTH-001-11C2` merged through PR #221 as `3fc323d7` after Backend,
+Agent Gates, and required internal review passed. AUTH-12 is planning-only
+until its repaired split passes review and a child receives a separate start.
 
 ## Current review branch
 
-`codex/ws-auth-001-11c2-effective-policy-active-guide-reads` (PR #221
-implementation evidence).
+`codex/ws-auth-001-12-project-mutation-cutover` (planning repair).
 
 ## Chunk status
 
@@ -163,8 +166,18 @@ implementation evidence).
 | `WS-AUTH-001-11A` | Merged | `codex/ws-auth-001-11a-project-read-catalogue` | #208 | Registered the project-read catalogue and migration `0035`; no activation. |
 | `WS-AUTH-001-11B` | Merged | `codex/ws-auth-001-11b-project-identity-context` | #214 | Project identity and self authorization-context hard cutover; merged as `033654ac`. |
 | `WS-AUTH-001-11C1` | Merged | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | #216 | Setup-diagnostic read hard cutover merged as `2965a9f9` on 2026-07-28. |
-| `WS-AUTH-001-11C2` | Implementation review | `codex/ws-auth-001-11c2-effective-policy-active-guide-reads` | #221 | Planning repair merged in #219 as `8bb0094f`; bounded implementation and review repair are awaiting exact-head hosted Backend and final external review. |
-| `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
+| `WS-AUTH-001-11C2` | Merged | `codex/ws-auth-001-11c2-effective-policy-active-guide-reads` | #221 | Effective-policy and active-guide read cutover merged as `3fc323d7` on 2026-07-29. |
+| `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
+| `WS-AUTH-001-12A` | Proposed | - | - | Planned action/evidence/PREP foundation; ART-owned migration `0040` is merged, so only planning merge and a separate start remain before allocation. |
+| `WS-AUTH-001-12B` | Proposed | - | - | Fixed project-setup service identity and planned matrix only; zero activation. |
+| `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after exact product actions activate. |
+| `WS-AUTH-001-12C` | Proposed | - | - | System-scoped project creation cutover. |
+| `WS-AUTH-001-12D` | Proposed | - | - | Draft guide and source metadata mutation cutover. |
+| `WS-AUTH-001-12D2` | Proposed | - | - | Separate review/revision authority; retired economic policy remains CON-owned. |
+| `WS-AUTH-001-12E` | Proposed | - | - | Guide sufficiency mutation cutover. |
+| `WS-AUTH-001-12F` | Proposed | - | - | Submission artifact policy mutation/provenance cutover. |
+| `WS-AUTH-001-12G` | Proposed | - | - | Post-submit checker policy approval/correction cutover. |
+| `WS-AUTH-001-12H` | Proposed | - | - | Terminal guide activation after 12B2 and the owning CON clean cut. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |
 | `WS-AUTH-001-15` | Proposed | - | - | Remaining internal service and obsolete authority removal. |
