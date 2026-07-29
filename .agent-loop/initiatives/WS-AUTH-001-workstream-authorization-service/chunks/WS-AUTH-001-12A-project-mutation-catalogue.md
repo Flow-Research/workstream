@@ -40,6 +40,7 @@ backend/app/modules/audit/schemas.py
 backend/alembic/versions/<next-after-merged-ART-0040>_project_mutation_action_evidence.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
