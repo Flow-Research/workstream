@@ -299,6 +299,12 @@ class GuideSourceSnapshot(Base):
         ),
         UniqueConstraint("id", "bundle_hash", name="uq_guide_source_snapshots_id_hash"),
         UniqueConstraint(
+            "id",
+            "project_id",
+            "guide_id",
+            name="uq_guide_source_snapshots_exact_lineage",
+        ),
+        UniqueConstraint(
             "project_id",
             "guide_version",
             "bundle_hash",
@@ -327,6 +333,11 @@ class GuideSourceSnapshotItem(Base):
             "source_kind",
             "durable_ref",
             name="uq_guide_source_snapshot_items_snapshot_kind_ref",
+        ),
+        UniqueConstraint(
+            "id",
+            "source_snapshot_id",
+            name="uq_guide_source_snapshot_items_exact_lineage",
         ),
     )
 
@@ -402,6 +413,20 @@ class ProjectSetupRun(Base):
             ["guide_source_snapshots.id", "guide_source_snapshots.bundle_hash"],
             name="fk_project_setup_runs_source_snapshot_hash",
         ),
+        UniqueConstraint(
+            "guide_id",
+            "setup_generation",
+            name="uq_project_setup_runs_guide_generation",
+        ),
+        UniqueConstraint(
+            "id",
+            "project_id",
+            "guide_id",
+            "source_snapshot_id",
+            "setup_generation",
+            name="uq_project_setup_runs_exact_generation",
+        ),
+        CheckConstraint("setup_generation > 0", name="ck_project_setup_runs_generation_positive"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -414,6 +439,7 @@ class ProjectSetupRun(Base):
         index=True,
     )
     source_snapshot_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(155), index=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     current_step: Mapped[str] = mapped_column(String(100), nullable=False)

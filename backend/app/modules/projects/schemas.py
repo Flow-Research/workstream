@@ -127,6 +127,7 @@ class ProjectSetupRunResponse(BaseModel):
     guide_id: str
     guide_version: str
     source_snapshot_id: str
+    setup_generation: int
     celery_task_id: str | None
     status: str
     current_step: str

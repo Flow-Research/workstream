@@ -207,6 +207,76 @@ class ArtifactBinding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class GuideSourceArtifactBinding(Base):
+    """Immutable verified content bound to one exact guide setup generation."""
+
+    __tablename__ = "guide_source_artifact_bindings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_snapshot_id", "project_id", "guide_id"],
+            [
+                "guide_source_snapshots.id",
+                "guide_source_snapshots.project_id",
+                "guide_source_snapshots.guide_id",
+            ],
+            name="fk_guide_bindings_exact_snapshot",
+        ),
+        ForeignKeyConstraint(
+            ["source_item_id", "source_snapshot_id"],
+            ["guide_source_snapshot_items.id", "guide_source_snapshot_items.source_snapshot_id"],
+            name="fk_guide_bindings_exact_item",
+        ),
+        ForeignKeyConstraint(
+            [
+                "project_setup_run_id",
+                "project_id",
+                "guide_id",
+                "source_snapshot_id",
+                "setup_generation",
+            ],
+            [
+                "project_setup_runs.id",
+                "project_setup_runs.project_id",
+                "project_setup_runs.guide_id",
+                "project_setup_runs.source_snapshot_id",
+                "project_setup_runs.setup_generation",
+            ],
+            name="fk_guide_bindings_exact_setup_generation",
+        ),
+        ForeignKeyConstraint(
+            ["verified_replica_id", "content_id"],
+            ["artifact_replicas.id", "artifact_replicas.content_id"],
+            name="fk_guide_bindings_verified_replica_content",
+        ),
+        UniqueConstraint(
+            "source_item_id",
+            "setup_generation",
+            name="uq_guide_bindings_item_generation",
+        ),
+        UniqueConstraint("supersedes_binding_id", name="uq_guide_bindings_supersedes"),
+        CheckConstraint("setup_generation > 0", name="ck_guide_bindings_generation_positive"),
+        CheckConstraint("logical_role = 'guide_source_original'", name="ck_guide_bindings_role"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    guide_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    source_snapshot_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    source_item_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    project_setup_run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    verified_replica_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    logical_role: Mapped[str] = mapped_column(String(100), nullable=False)
+    supersedes_binding_id: Mapped[str | None] = mapped_column(
+        ForeignKey("guide_source_artifact_bindings.id", ondelete="RESTRICT"), index=True
+    )
+    created_by_service: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ArtifactStorageNamespace(Base):
     """Immutable singleton fencing one deployment to one storage namespace."""
 
@@ -501,6 +571,7 @@ class ArtifactReplica(Base):
             "provider_object_ref",
             name="uq_artifact_replica_provider_object",
         ),
+        UniqueConstraint("id", "content_id", name="uq_artifact_replicas_id_content"),
         CheckConstraint(
             "verification_state in ('pending', 'verified', 'missing', 'integrity_mismatch')",
             name="verification_state",

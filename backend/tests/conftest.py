@@ -55,6 +55,7 @@ RESETTABLE_TEST_TABLES = (
     "effective_project_submission_artifact_policies",
     "evidence_items",
     "guide_source_artifact_ingests",
+    "guide_source_artifact_bindings",
     "guide_source_snapshot_items",
     "guide_source_snapshots",
     "guide_sufficiency_reports",
