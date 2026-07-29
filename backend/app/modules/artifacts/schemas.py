@@ -106,6 +106,29 @@ class GuideSourceBindingAuthorityFacts:
     logical_role: str
 
 
+@final
+@dataclass(frozen=True, slots=True)
+class GuideSourceReadAuthorityFacts:
+    """Canonical fixed-reader facts for one verified guide materialization."""
+
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int
+    binding_id: UUID
+    content_id: UUID
+    verified_replica_id: UUID
+    storage_namespace_id: str
+    namespace_fingerprint: str
+    verification_receipt_id: UUID
+    verification_generation: int
+    sha256: str
+    byte_count: int
+    media_type: str
+
+
 class ArtifactInternalResourceType(StrEnum):
     """Closed artifact-owned resource types for internal actions."""
 

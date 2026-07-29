@@ -1229,6 +1229,18 @@ through `ArtifactStore` into `ArtifactScratchManager`, and recomputes complete
 SHA-256 and byte count. Missing, changed, truncated, or unavailable content is
 an artifact incident and never a guide-insufficiency result.
 
+The hidden v0.1 reader authorizes and locks the exact project, draft guide,
+source snapshot/item, setup run/generation, binding, content, verified replica,
+storage-namespace fingerprint, and terminal verification receipt/generation
+before opening the provider object. It releases database locks during the full
+provider read, then relocks and recomposes the same facts before persisting one
+immutable format classification. Any drift records only a bounded ART incident.
+Classification records contain the server-observed digest, size, canonical
+media type, detector identity/version, detected format, outcome, and bounded
+structural facts; they contain no source filenames, provider references, raw
+document text, or parser exception strings. `artifact.guide_source.read`
+remains unavailable until AUTH-04B installs the fixed guide-reader adapter.
+
 Typed extractors run in a bounded no-network isolation boundary. One immutable
 content-derived record identifies original content, format, extractor/version,
 policy version, output digest, omission facts, status, and error code; a
@@ -1337,6 +1349,14 @@ Implementation is a clean cut:
   constraints, and creates immutable guide-source bindings. Downgrade is
   permitted only while the binding table is empty; populated binding evidence
   is never discarded.
+- migration `0040_guide_materialization` adds immutable exact-binding format
+  classifications and bounded ART custody incidents. Composite foreign keys
+  prevent either table from naming different binding/content/replica/generation
+  facts, and closed status/code checks reject unknown outcomes. Downgrade locks
+  both tables and refuses while either contains evidence. This hidden chunk
+  adds no Operator route or generic artifact-read API; future authorized
+  operational visibility must project these bounded records without exposing
+  provider references or document content.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

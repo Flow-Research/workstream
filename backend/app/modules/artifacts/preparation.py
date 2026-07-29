@@ -17,7 +17,7 @@ import re
 import stat as stat_module
 import threading
 import time
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, TypeVar
 from uuid import uuid4
 
 from app.interfaces.artifacts import (
@@ -36,10 +36,12 @@ from app.modules.artifacts.sources import (
     ArtifactCommitment,
     CommittedArtifactSource,
     PreparedArtifact,
+    PreparedArtifactInspector,
 )
 
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
+_InspectionResult = TypeVar("_InspectionResult")
 _LEDGER_VERSION = 2
 _LEDGER_MAXIMUM_BYTES = 1024 * 1024
 _RESERVATION_ID = re.compile(r"^[0-9a-f]{32}$")
@@ -1359,6 +1361,31 @@ class ArtifactPreparationService:
         await self._run_io(active.reader.close)
         await self._manager.release(active.reservation)
         self._active.pop(binding, None)
+
+    async def inspect_prepared_artifact(
+        self,
+        binding: object,
+        inspector: PreparedArtifactInspector[_InspectionResult],
+    ) -> _InspectionResult:
+        """Run one trusted inspector while retaining scratch lifecycle custody."""
+        active = self._active.get(binding)
+        if active is None or not active.handle_issued or active.stream_claimed:
+            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+
+        def inspect_and_rewind() -> _InspectionResult:
+            active.reader.seek(0)
+            try:
+                return inspector.inspect(active.reader)
+            finally:
+                active.reader.seek(0)
+
+        try:
+            async with asyncio.timeout_at(active.deadline):
+                return await self._run_io(inspect_and_rewind)
+        except TimeoutError:
+            raise ArtifactPreparationDeadlineError(
+                "artifact preparation deadline exceeded"
+            ) from None
 
     async def _release_unhanded_preparation(
         self,

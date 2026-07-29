@@ -183,3 +183,23 @@
   and memory termination are now non-retryable limit failures; executor loss
   receives one bounded fresh-authority/materialization retry, then a stable
   extraction-failed outcome with only redacted diagnostics.
+
+## WS-ART-001-03B2
+
+- Implemented the hidden fixed-reader materialization and syntactic
+  classification slice after merged 03B1.
+- Initial internal review found active namespace drift, a broad scratch
+  callback, unsafe external-relationship matching, and missing incident,
+  boundary, cancellation, image, and downgrade tests.
+- Repairs share the canonical replica namespace/store validator, use the
+  canonical materializer facade and typed scratch inspector, parse bounded
+  relationship XML fail closed, and add the complete focused proof set.
+- Final architecture, security, QA, product/ops, CI-integrity, docs,
+  reuse/dedup, test-delta, and senior-engineering reviews pass. Exact hosted
+  PR-head checks remain the publication gate.
+- CodeRabbit's six low-severity comments were repaired with naming and wording
+  alignment, protocol variance, bounded nested buffering, JPEG marker handling,
+  and immutable-conflict proof. Its generic docstring warning is superseded by
+  the passing repository-owned hosted docstring gate.
+- Senior-engineering, security, and QA repair-delta re-reviews pass with no
+  blockers before the repaired PR head is published.

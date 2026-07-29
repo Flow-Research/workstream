@@ -5,12 +5,21 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Protocol, final
+from typing import BinaryIO, Protocol, TypeVar, final
 
 from app.core.cancellation import await_completion_preserving_cancellation
 
 
 _COMMITTED_SOURCE_SEAL = object()
+_InspectionResult = TypeVar("_InspectionResult")
+_InspectionResultCo = TypeVar("_InspectionResultCo", covariant=True)
+
+
+class PreparedArtifactInspector(Protocol[_InspectionResultCo]):
+    """Typed artifact-owned inspection capability over one scratch reader."""
+
+    def inspect(self, reader: BinaryIO) -> _InspectionResultCo:
+        """Return bounded structural facts without retaining the reader."""
 
 
 class _PreparedArtifactOwner(Protocol):
@@ -25,6 +34,13 @@ class _PreparedArtifactOwner(Protocol):
 
     async def release_prepared_artifact(self, binding: object) -> None:
         """Release one preparation and its scratch reservation."""
+
+    async def inspect_prepared_artifact(
+        self,
+        binding: object,
+        inspector: PreparedArtifactInspector[_InspectionResult],
+    ) -> _InspectionResult:
+        """Run a trusted bounded inspector against the owned scratch reader."""
 
     def claim_prepared_commitment(self, binding: object) -> ArtifactCommitment:
         """Claim the server-computed commitment for one registered binding."""
@@ -191,6 +207,15 @@ class PreparedArtifact:
             raise
         else:
             self._closed = True
+
+    async def inspect(
+        self,
+        inspector: PreparedArtifactInspector[_InspectionResult],
+    ) -> _InspectionResult:
+        """Inspect read-only scratch bytes without exposing a path or handle."""
+        if self._closed:
+            raise RuntimeError("prepared artifact is closed")
+        return await self._owner.inspect_prepared_artifact(self._binding, inspector)
 
     async def __aenter__(self) -> CommittedArtifactSource:
         """Enter the bounded provider-I/O lifetime."""

@@ -26,6 +26,7 @@ CLOSED_PORTS = {
 CANONICAL_REQUESTS = {
     "GuideArtifactIngestRequest",
     "GuideSourceBindingRequest",
+    "GuideSourceMaterializationRequest",
     "SubmissionBindingRequest",
     "CheckerOutputBindingRequest",
     "SubmissionBundlePreparationRequest",
@@ -34,7 +35,11 @@ CANONICAL_REQUESTS = {
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
 }
-CANONICAL_RESULTS = {"GuideArtifactIngestResult", "GuideSourceBindingResult"}
+CANONICAL_RESULTS = {
+    "GuideArtifactIngestResult",
+    "GuideSourceBindingResult",
+    "GuideSourceMaterializationResult",
+}
 CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
@@ -140,19 +145,17 @@ def test_product_api_and_workers_cannot_import_or_inject_raw_artifact_types() ->
     assert violations == []
 
 
-def test_only_artifact_orchestrator_owns_provider_execution() -> None:
-    """Fence every raw store call to the artifact service owner."""
+def test_only_artifact_custody_services_own_provider_execution() -> None:
+    """Fence store calls to the orchestrator and narrow guide reader."""
     violations: list[str] = []
     for path in _python_files(APP_ROOT / "modules" / "artifacts"):
         tree = _tree(path)
-        orchestrator = next(
-            (
-                node
-                for node in tree.body
-                if isinstance(node, ast.ClassDef) and node.name == "ArtifactStorageOrchestrator"
-            ),
-            None,
-        )
+        owners = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name in {"ArtifactStorageOrchestrator", "ArtifactMaterializationService"}
+        }
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Call)
@@ -160,16 +163,21 @@ def test_only_artifact_orchestrator_owns_provider_execution() -> None:
                 and node.func.attr in PROVIDER_METHODS
                 and isinstance(node.func.value, ast.Attribute)
                 and node.func.value.attr == "_store"
-                and (
-                    orchestrator is None
-                    or not (
-                        orchestrator.lineno
-                        <= node.lineno
-                        <= (orchestrator.end_lineno or orchestrator.lineno)
-                    )
-                )
             ):
-                violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
+                owner = next(
+                    (
+                        candidate
+                        for candidate in owners.values()
+                        if candidate.lineno
+                        <= node.lineno
+                        <= (candidate.end_lineno or candidate.lineno)
+                    ),
+                    None,
+                )
+                if owner is None or (
+                    owner.name == "ArtifactMaterializationService" and node.func.attr != "open"
+                ):
+                    violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 
 
@@ -410,6 +418,7 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
         },
         "ArtifactMaterializationPort": {
             "materialize_prepared_bundle",
+            "materialize_guide_source",
             "materialize_bindings",
         },
         "CheckerArtifactOutputPort": {"store"},
@@ -421,6 +430,7 @@ def test_durable_artifact_mutation_ports_require_process_local_prepared_authorit
         "bind_submission": "SubmissionBindingRequest",
         "bind_checker_output": "CheckerOutputBindingRequest",
         "materialize_prepared_bundle": "PreparedBundleMaterializationRequest",
+        "materialize_guide_source": "GuideSourceMaterializationRequest",
         "materialize_bindings": "BindingMaterializationRequest",
         "store": "CheckerOutputArtifactRequest",
     }

@@ -1412,16 +1412,12 @@ class ArtifactStorageOrchestrator:
         persisted: ArtifactStorageNamespace,
     ) -> None:
         """Reject reads when replica identity differs from active composition."""
-        if (
-            replica.storage_namespace_id != persisted.id
-            or replica.namespace_fingerprint != persisted.namespace_fingerprint
-            or replica.adapter != persisted.adapter
-            or replica.provider_profile != persisted.provider_profile
-            or self._store.identity.provider_key != persisted.adapter
-        ):
-            raise ArtifactStorageNamespaceError(
-                "artifact replica does not match the active storage namespace"
-            )
+        validate_artifact_replica_execution_namespace(
+            replica=replica,
+            persisted=persisted,
+            namespace=self._namespace,
+            store=self._store,
+        )
 
 
 class ArtifactPendingWorkScanner:
@@ -2485,3 +2481,27 @@ async def _claim_and_validate_storage_namespace(
     ):
         raise ArtifactStorageNamespaceError("artifact storage namespace does not match")
     return persisted
+
+
+def validate_artifact_replica_execution_namespace(
+    *,
+    replica: ArtifactReplica,
+    persisted: ArtifactStorageNamespace,
+    namespace: ArtifactStorageNamespaceSpec,
+    store: ArtifactStore,
+) -> None:
+    """Reject provider reads outside the exact active deployment namespace."""
+    if (
+        persisted.id != ARTIFACT_STORAGE_NAMESPACE_ID
+        or replica.storage_namespace_id != persisted.id
+        or replica.namespace_fingerprint != persisted.namespace_fingerprint
+        or replica.adapter != persisted.adapter
+        or replica.provider_profile != persisted.provider_profile
+        or namespace.adapter != persisted.adapter
+        or namespace.provider_profile != persisted.provider_profile
+        or namespace.namespace_fingerprint != persisted.namespace_fingerprint
+        or store.identity.provider_key != persisted.adapter
+    ):
+        raise ArtifactStorageNamespaceError(
+            "artifact replica does not match the active storage namespace"
+        )
