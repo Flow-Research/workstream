@@ -868,6 +868,7 @@ async def create_approved_post_submit_policy_ci_bridge(
             guide_version=guide_version,
             source_snapshot_id=source_snapshot["id"],
             source_snapshot_hash=source_snapshot["bundle_hash"],
+            setup_generation=1,
             status="post_submit_policy_compiled",
             current_step="post_submit_checker_policy_compilation",
             output_sufficiency_report_id=sufficiency_report["id"],

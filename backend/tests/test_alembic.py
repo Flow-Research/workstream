@@ -1680,6 +1680,118 @@ def test_guide_source_artifact_ingest_schema_and_replay(
             command.downgrade(config, "base")
 
 
+def test_0039_backfills_setup_generations_per_guide(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Existing setup runs receive deterministic guide-local generations."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0038_guide_source_ingest")
+            expected = asyncio.run(_seed_setup_runs_before_0039(isolated_database_env))
+
+            command.upgrade(config, "0039_guide_source_bindings")
+            actual = asyncio.run(_setup_generations_after_0039(isolated_database_env))
+            assert actual == expected
+            assert "guide_source_artifact_bindings" in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+
+            command.downgrade(config, "0038_guide_source_ingest")
+            assert "guide_source_artifact_bindings" not in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+async def _seed_setup_runs_before_0039(database_url: str) -> list[tuple[str, int]]:
+    engine = create_async_engine(database_url)
+    project_ids = (str(uuid4()), str(uuid4()))
+    guide_ids = (str(uuid4()), str(uuid4()))
+    snapshot_ids = (str(uuid4()), str(uuid4()))
+    run_ids = (str(uuid4()), str(uuid4()), str(uuid4()))
+    digest = "sha256:" + "b" * 64
+    try:
+        async with engine.begin() as connection:
+            for index in range(2):
+                parameters = {
+                    "project": project_ids[index],
+                    "guide": guide_ids[index],
+                    "snapshot": snapshot_ids[index],
+                    "slug": f"generation-{project_ids[index]}",
+                    "digest": digest,
+                }
+                await connection.execute(
+                    text(
+                        "insert into projects (id, name, slug, status) "
+                        "values (:project, 'Generation project', :slug, 'draft')"
+                    ),
+                    parameters,
+                )
+                await connection.execute(
+                    text(
+                        "insert into project_guides "
+                        "(id, project_id, version, status, content_markdown, created_by) "
+                        "values (:guide, :project, 'v1', 'draft', '# Guide', 'migration-test')"
+                    ),
+                    parameters,
+                )
+                await connection.execute(
+                    text(
+                        "insert into guide_source_snapshots "
+                        "(id, project_id, guide_id, guide_version, manifest_schema_version, "
+                        "manifest_json, bundle_hash, captured_by) values "
+                        "(:snapshot, :project, :guide, 'v1', '1', '{}'::json, :digest, "
+                        "'migration-test')"
+                    ),
+                    parameters,
+                )
+
+            for run_id, guide_index, created_at in (
+                (run_ids[1], 0, "2026-01-02T00:00:00+00:00"),
+                (run_ids[0], 0, "2026-01-01T00:00:00+00:00"),
+                (run_ids[2], 1, "2026-01-01T00:00:00+00:00"),
+            ):
+                await connection.execute(
+                    text(
+                        "insert into project_setup_runs "
+                        "(id, project_id, guide_id, guide_version, source_snapshot_id, "
+                        "source_snapshot_hash, status, current_step, created_by, created_at) "
+                        "values (:run, :project, :guide, 'v1', :snapshot, :digest, "
+                        "'queued', 'queued', 'migration-test', :created_at)"
+                    ),
+                    {
+                        "run": run_id,
+                        "project": project_ids[guide_index],
+                        "guide": guide_ids[guide_index],
+                        "snapshot": snapshot_ids[guide_index],
+                        "digest": digest,
+                        "created_at": created_at,
+                    },
+                )
+        return sorted([(run_ids[0], 1), (run_ids[1], 2), (run_ids[2], 1)])
+    finally:
+        await engine.dispose()
+
+
+async def _setup_generations_after_0039(database_url: str) -> list[tuple[str, int]]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.execute(
+                text(
+                    "select id, setup_generation from project_setup_runs "
+                    "order by id"
+                )
+            )
+            return sorted((str(row.id), int(row.setup_generation)) for row in rows)
+    finally:
+        await engine.dispose()
+
+
 async def _seed_populated_guide_source_ingest(database_url: str) -> None:
     engine = create_async_engine(database_url)
     ids = {
