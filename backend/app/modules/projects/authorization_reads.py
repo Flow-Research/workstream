@@ -32,7 +32,11 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
-from app.modules.projects.service import GuideActivationBlocked, ProjectService
+from app.modules.projects.service import (
+    GuideActivationBlocked,
+    ProjectService,
+    ProjectServiceError,
+)
 
 DiagnosticRecord: TypeAlias = ProjectSetupRun | GuideSufficiencyReport | SubmissionArtifactPolicy
 DiagnosticResult: TypeAlias = (
@@ -361,7 +365,7 @@ async def authorize_project_active_guide_read(
                 None,
                 require_payment_policy=False,
             )
-        except GuideActivationBlocked:
+        except ProjectServiceError:
             target_exists = False
     binding_digest = (
         canonical_json_hash(

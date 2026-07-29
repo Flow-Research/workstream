@@ -446,6 +446,24 @@ async def test_project_active_guide_read_composer_binds_non_compensation_bundle(
         )
     assert authorization.calls[-1][1].target_exists is False
 
+    repository.post_submit.pre_submit_checker_bundle_hash = (
+        repository.checker.compiled_bundle_hash
+    )
+
+    def raise_policy_setup_blocked(*_args: Any, **_kwargs: Any) -> None:
+        raise PolicySetupBlocked("invalid canonical policy")
+
+    project_service.validate_activation_ready = raise_policy_setup_blocked
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_active_guide_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            project_service=cast(Any, project_service),
+            project_id=repository.project_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "method_name,locked_table",
