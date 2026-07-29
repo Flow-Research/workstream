@@ -32,6 +32,7 @@ from app.modules.projects.models import (
     SubmissionArtifactPolicy,
 )
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
+from app.modules.projects.service import GuideActivationBlocked, ProjectService
 
 DiagnosticRecord: TypeAlias = ProjectSetupRun | GuideSufficiencyReport | SubmissionArtifactPolicy
 DiagnosticResult: TypeAlias = (
@@ -39,57 +40,6 @@ DiagnosticResult: TypeAlias = (
     | Sequence[DiagnosticRecord]
     | tuple[ProjectSetupRun, PostSubmitCheckerPolicy | None]
 )
-
-
-def _active_bundle_hashes_match(
-    snapshot: GuideSourceSnapshot,
-    source_items: tuple[GuideSourceSnapshotItem, ...],
-    submission: SubmissionArtifactPolicy,
-    effective: EffectiveProjectSubmissionArtifactPolicy,
-    checker: PreSubmitCheckerPolicy,
-    post_submit: PostSubmitCheckerPolicy,
-) -> bool:
-    """Recompute immutable JSON hashes before any active-guide disclosure."""
-    try:
-        if canonical_json_hash(snapshot.manifest_json) != snapshot.bundle_hash:
-            return False
-        manifest_items = snapshot.manifest_json.get("items")
-        if not isinstance(manifest_items, list) or len(manifest_items) != len(source_items):
-            return False
-        persisted = [
-            {
-                "source_kind": item.source_kind,
-                "durable_ref": item.durable_ref,
-                "ingestion_adapter": item.ingestion_adapter,
-                "content_hash": item.content_hash,
-                "content_cid": item.content_cid,
-                "media_type": item.media_type,
-            }
-            for item in source_items
-        ]
-        manifest_rows = [
-            {key: item.get(key) for key in persisted[0]}
-            for item in manifest_items
-            if isinstance(item, dict)
-        ] if persisted else []
-        if manifest_rows != persisted:
-            return False
-        if canonical_json_hash(submission.policy_body) != submission.policy_hash:
-            return False
-        if canonical_json_hash(effective.effective_policy) != effective.effective_policy_hash:
-            return False
-        if (
-            not isinstance(checker.compiled_bundle, dict)
-            or canonical_json_hash(checker.compiled_bundle) != checker.compiled_bundle_hash
-        ):
-            return False
-        return (
-            isinstance(post_submit.policy_body, dict)
-            and post_submit.policy_hash is not None
-            and canonical_json_hash(post_submit.policy_body) == post_submit.policy_hash
-        )
-    except (AttributeError, TypeError, ValueError):
-        return False
 
 
 @dataclass(frozen=True)
@@ -277,7 +227,11 @@ async def authorize_project_policy_read(
 
 
 async def authorize_project_active_guide_read(
-    *, authorization: AuthorizationService, repository: ProjectRepository, project_id: str
+    *,
+    authorization: AuthorizationService,
+    repository: ProjectRepository,
+    project_service: ProjectService,
+    project_id: str,
 ) -> ActiveGuideReadBundle:
     """Lock and authorize the current active guide's non-compensation bundle."""
     project = await repository.get_project(project_id, for_update=True)
@@ -387,9 +341,28 @@ async def authorize_project_active_guide_read(
                 revision.max_revision_rounds >= 0,
             )
         ) and all(item.source_snapshot_id == snapshot.id for item in source_items)
-        target_exists = target_exists and _active_bundle_hashes_match(
-            snapshot, source_items, submission, effective, checker, post_submit
-        )
+    if target_exists:
+        try:
+            await project_service.validate_source_snapshot_integrity(
+                snapshot,
+                GuideActivationBlocked,
+                persisted_items=source_items,
+            )
+            project_service.validate_activation_ready(
+                guide,
+                snapshot,
+                sufficiency,
+                submission,
+                effective,
+                checker,
+                post_submit,
+                review,
+                revision,
+                None,
+                require_payment_policy=False,
+            )
+        except GuideActivationBlocked:
+            target_exists = False
     binding_digest = (
         canonical_json_hash(
             [

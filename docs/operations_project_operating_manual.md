@@ -88,8 +88,13 @@ grants are non-authoritative for these reads:
 - `GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup`
 
 AUTH-11C2 separately exposes current active-guide configuration through the
-effective submission artifact policy, pre-submit checker summary, and
-active-guide GET endpoints. They require covered Project Manager/Audit
+following endpoints:
+
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy`
+- `GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy`
+- `GET /api/v1/projects/{project_id}/active-guide`
+
+They require covered Project Manager/Audit
 Authority or system Operator authority. Finance, Access Administrator,
 contributors, and services receive concealed denial. The active-guide response
 excludes retired compensation configuration; contributor guide requirements
@@ -102,8 +107,6 @@ The remaining policy and mutation endpoints follow their separately owned
 activation chunks:
 
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}/approve`
-- `GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy`
-- `GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/approve`
 - `POST /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/request-correction`
 

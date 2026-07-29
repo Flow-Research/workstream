@@ -6,6 +6,7 @@ import asyncio
 import fnmatch
 import logging
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -838,7 +839,7 @@ class ProjectService:
         guide = await self._lock_project_guide_for_setup(project_id, guide_id)
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         self._validate_sufficiency_report_payload(payload)
         report = GuideSufficiencyReport(
             id=str(uuid4()),
@@ -889,7 +890,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can run sufficiency analysis")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         if existing is not None:
             return GuideSufficiencyReportResponse.model_validate(existing), False
@@ -915,7 +916,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can run sufficiency analysis")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         existing = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         if existing is not None:
             return GuideSufficiencyReportResponse.model_validate(existing), False
@@ -1008,7 +1009,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can receive submission artifact policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, payload.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         policy_body = self._canonical_policy_body(payload.policy_body.model_dump(mode="json"))
         self._merge_effective_submission_artifact_policy(policy_body)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
@@ -1070,7 +1071,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can derive submission artifact policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         self._validate_sufficiency_report_allows_policy_derivation(
             sufficiency_report,
@@ -1118,7 +1119,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can derive submission artifact policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         self._validate_sufficiency_report_allows_policy_derivation(
             sufficiency_report,
@@ -1203,7 +1204,7 @@ class ProjectService:
         guide_version = guide.version
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(snapshot.id)
         self._validate_sufficiency_report_allows_policy_derivation(
             sufficiency_report,
@@ -1362,7 +1363,7 @@ class ProjectService:
             raise GuideEditBlocked("only draft guides can derive post-submit checker policies")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         effective_policy = await self._repo.get_effective_submission_artifact_policy_by_id(
             effective_policy_id
         )
@@ -1541,7 +1542,7 @@ class ProjectService:
             raise PolicyEditBlocked("only draft policies can be approved")
         snapshot = await self._get_snapshot_for_guide(project_id, guide, policy.source_snapshot_id)
         await self._ensure_snapshot_is_latest(project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         if policy.source_snapshot_hash != snapshot.bundle_hash:
             raise PolicySetupBlocked("submission artifact policy is bound to a stale source snapshot")
         if self._hash_canonical_json(policy.policy_body) != policy.policy_hash:
@@ -1790,7 +1791,7 @@ class ProjectService:
             submission_artifact_policy.source_snapshot_id,
         )
         await self._ensure_snapshot_is_latest(project_id, guide, source_snapshot)
-        await self._validate_source_snapshot_integrity(source_snapshot, GuideActivationBlocked)
+        await self.validate_source_snapshot_integrity(source_snapshot, GuideActivationBlocked)
         sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(
             source_snapshot.id
         )
@@ -1807,7 +1808,7 @@ class ProjectService:
             )
         except ProjectRepositoryIntegrityError as exc:
             raise GuideActivationBlocked("guide policy context is ambiguous") from exc
-        self._validate_activation_ready(
+        self.validate_activation_ready(
             guide,
             source_snapshot,
             sufficiency_report,
@@ -2564,7 +2565,7 @@ class ProjectService:
             setup_run.source_snapshot_id,
         )
         await self._ensure_snapshot_is_latest(setup_run.project_id, guide, snapshot)
-        await self._validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
+        await self.validate_source_snapshot_integrity(snapshot, PolicySetupBlocked)
         if setup_run.source_snapshot_hash != snapshot.bundle_hash:
             raise PolicySetupBlocked("project setup run snapshot hash mismatch")
         await self._validate_post_submit_continuation_payload(
@@ -2954,12 +2955,23 @@ class ProjectService:
         """Normalize optional source manifest fields introduced during v0.1."""
         return {**item, "content_excerpt": item.get("content_excerpt")}
 
-    async def _validate_source_snapshot_integrity(
+    async def validate_source_snapshot_integrity(
         self,
         snapshot: GuideSourceSnapshot,
         exception_type: type[ProjectServiceError],
+        *,
+        persisted_items: Sequence[GuideSourceSnapshotItem] | None = None,
     ) -> None:
-        """Recompute and verify an immutable guide-source snapshot bundle."""
+        """Recompute and verify an immutable guide-source snapshot bundle.
+
+        Args:
+            snapshot: Snapshot whose manifest and bundle hash must match.
+            exception_type: Domain error raised for invalid snapshot state.
+            persisted_items: Already locked rows, or ``None`` to load canonical rows.
+
+        Raises:
+            ProjectServiceError: Through the caller-selected domain error type.
+        """
 
         def fail() -> None:
             """Raise the caller-specific snapshot integrity error."""
@@ -2978,7 +2990,8 @@ class ProjectService:
         if self._hash_canonical_json(manifest) != snapshot.bundle_hash:
             fail()
 
-        persisted_items = await self._repo.list_guide_source_snapshot_items(snapshot.id)
+        if persisted_items is None:
+            persisted_items = await self._repo.list_guide_source_snapshot_items(snapshot.id)
         if len(persisted_items) != len(manifest_items):
             fail()
 
@@ -3890,7 +3903,7 @@ class ProjectService:
             if not SAFE_POST_SUBMIT_EVIDENCE_REF_PATTERN.fullmatch(ref):
                 raise PolicySetupBlocked("post-submit checker derivation evidence refs are invalid")
 
-    def _validate_activation_ready(
+    def validate_activation_ready(
         self,
         guide: ProjectGuide,
         source_snapshot: GuideSourceSnapshot,
@@ -3902,6 +3915,8 @@ class ProjectService:
         review_policy: ReviewPolicy | None,
         revision_policy: RevisionPolicy | None,
         payment_policy: PaymentPolicy | None,
+        *,
+        require_payment_policy: bool = True,
     ) -> None:
         """Enforce the minimum guide and policy contract required to activate.
 
@@ -3916,6 +3931,7 @@ class ProjectService:
             review_policy: Review policy for the guide version.
             revision_policy: Revision policy for the guide version.
             payment_policy: Payment policy for the guide version.
+            require_payment_policy: Whether payment completeness is part of readiness.
 
         Raises:
             GuideActivationBlocked: If a required field or policy is missing.
@@ -4098,6 +4114,8 @@ class ProjectService:
             ALLOWED_REVISION_RESUBMISSION_STATES
         ):
             raise GuideActivationBlocked("revision policy contains invalid resubmission states")
+        if not require_payment_policy:
+            return
         if payment_policy is None:
             raise GuideActivationBlocked("payment policy is required")
         if (

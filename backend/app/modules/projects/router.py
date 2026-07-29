@@ -763,12 +763,14 @@ async def get_active_guide(
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> ActiveGuideReadResponse:
     """Return the current active guide and policy context for a project."""
+    project_service = ProjectService(session)
     bundle = await authorize_project_active_guide_read(
         authorization=authorization,
         repository=ProjectRepository(session),
+        project_service=project_service,
         project_id=project_id,
     )
-    response = await ProjectService(session).active_guide_read_response(
+    response = await project_service.active_guide_read_response(
         bundle.guide,
         bundle.source_snapshot,
         bundle.source_items,

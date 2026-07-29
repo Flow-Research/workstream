@@ -73,6 +73,7 @@ docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
 docs/operations_project_operating_manual.md
 docs/spec_authorization_service.md
+docs/spec_chunk_3_project_guide_foundation.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-11C2-effective-policy-active-guide-reads.md
 ```

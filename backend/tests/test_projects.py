@@ -80,6 +80,7 @@ from app.modules.projects.service import (
     POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_VERSION,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+    GuideActivationBlocked,
     PolicySetupBlocked,
     ProjectSetupQueueError,
     ProjectService,
@@ -392,14 +393,33 @@ async def test_project_active_guide_read_composer_binds_non_compensation_bundle(
     repository = _PolicyReadRepository()
     authorization = _DiagnosticAuthorization()
 
+    class ActiveBundleValidator:
+        source_validated = False
+        bundle_validated = False
+
+        async def validate_source_snapshot_integrity(self, *_args: Any, **_kwargs: Any) -> None:
+            self.source_validated = True
+
+        def validate_activation_ready(self, *args: Any, **kwargs: Any) -> None:
+            self.bundle_validated = True
+            checker, post_submit = args[5], args[6]
+            if post_submit.pre_submit_checker_bundle_hash != checker.compiled_bundle_hash:
+                raise GuideActivationBlocked("stale pre-submit checker binding")
+            assert kwargs["require_payment_policy"] is False
+
+    project_service = ActiveBundleValidator()
+
     bundle = await authorize_project_active_guide_read(
         authorization=cast(Any, authorization),
         repository=cast(Any, repository),
+        project_service=project_service,
         project_id=repository.project_id,
     )
 
     assert bundle.guide is repository.guide
     assert bundle.revision_policy is repository.revision
+    assert project_service.source_validated is True
+    assert project_service.bundle_validated is True
     called_action, context = authorization.calls[-1]
     assert called_action is ActionId.PROJECT_ACTIVE_GUIDE_READ
     assert context.target_exists is True
@@ -421,6 +441,7 @@ async def test_project_active_guide_read_composer_binds_non_compensation_bundle(
         await authorize_project_active_guide_read(
             authorization=cast(Any, authorization),
             repository=cast(Any, repository),
+            project_service=project_service,
             project_id=repository.project_id,
         )
     assert authorization.calls[-1][1].target_exists is False
@@ -8257,6 +8278,53 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     assert active.status_code == 200, active.text
     assert effective_read.status_code == 200, effective_read.text
     assert checker_read.status_code == 200, checker_read.text
+    assert set(effective_read.json()) == {
+        "id",
+        "project_id",
+        "guide_id",
+        "guide_version",
+        "source_snapshot_id",
+        "source_snapshot_hash",
+        "submission_artifact_policy_id",
+        "submission_artifact_policy_hash",
+        "lifecycle_status",
+        "merge_algorithm_version",
+        "effective_policy",
+        "effective_policy_hash",
+        "created_by",
+        "created_at",
+        "supersedes_effective_policy_id",
+        "superseded_at",
+    }
+    assert set(checker_read.json()) == {
+        "id",
+        "project_id",
+        "guide_id",
+        "guide_version",
+        "source_snapshot_id",
+        "source_snapshot_hash",
+        "effective_policy_id",
+        "effective_policy_hash",
+        "lifecycle_status",
+        "compiler_version",
+        "compiled_bundle_hash",
+        "checker_names",
+        "created_by",
+        "created_at",
+        "supersedes_pre_submit_checker_policy_id",
+        "superseded_at",
+    }
+    assert set(active.json()) == {
+        "guide",
+        "guide_source_snapshot",
+        "guide_sufficiency_report",
+        "submission_artifact_policy",
+        "effective_submission_artifact_policy",
+        "pre_submit_checker_policy",
+        "post_submit_checker_policy",
+        "review_policy",
+        "revision_policy",
+    }
     assert effective_read.json()["id"] == bundle["effective_policy"]["id"]
     assert checker_read.json()["effective_policy_id"] == bundle["effective_policy"]["id"]
     assert "compiled_bundle" not in checker_read.json()
@@ -8291,6 +8359,7 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     )
     assert "compiled_bundle" not in active.json()["pre_submit_checker_policy"]
     assert "payment_policy" not in active.json()
+    assert "review_policy" in active.json()
     assert (
         active.json()["pre_submit_checker_policy"]["checker_names"]
         == (bundle["pre_submit_checker_policy"]["checker_names"])
