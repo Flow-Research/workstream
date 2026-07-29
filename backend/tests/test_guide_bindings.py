@@ -24,6 +24,7 @@ from app.modules.artifacts.models import (
     ArtifactReplica,
     ArtifactStorageNamespace,
     ArtifactVerificationJob,
+    ArtifactVerificationReceipt,
     GuideSourceArtifactBinding,
 )
 from app.modules.artifacts.schemas import (
@@ -56,7 +57,12 @@ class _AllowBindingAuthority:
             raise ArtifactAuthorityDeniedError("binding denied")
 
 
-async def _seed_binding_lineage(session, *, verified: bool = True) -> dict[str, UUID]:
+async def _seed_binding_lineage(
+    session,
+    *,
+    verified: bool = True,
+    verification_receipt: bool = True,
+) -> dict[str, UUID]:
     ids = {
         name: uuid4()
         for name in (
@@ -222,6 +228,17 @@ async def _seed_binding_lineage(session, *, verified: bool = True) -> dict[str, 
             terminal_at=datetime.now(UTC) if verified else None,
         )
     )
+    if verified and verification_receipt:
+        session.add(
+            ArtifactVerificationReceipt(
+                id=str(uuid4()),
+                verification_job_id=str(ids["job"]),
+                execution_generation=0,
+                outcome="verified",
+                observed_sha256=digest,
+                observed_byte_count=42,
+            )
+        )
     await session.commit()
     return ids
 
@@ -270,7 +287,18 @@ async def test_binding_is_exact_immutable_and_idempotent(isolated_database_env: 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["unverified", "cross_project", "stale_generation"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "missing_item",
+        "unverified",
+        "status_only",
+        "cross_project",
+        "cross_guide",
+        "wrong_run",
+        "stale_generation",
+    ],
+)
 async def test_binding_fails_closed_before_authority_or_effect(
     isolated_database_env: str,
     failure: str,
@@ -279,7 +307,11 @@ async def test_binding_fails_closed_before_authority_or_effect(
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            ids = await _seed_binding_lineage(session, verified=failure != "unverified")
+            ids = await _seed_binding_lineage(
+                session,
+                verified=failure != "unverified",
+                verification_receipt=failure != "status_only",
+            )
             if failure == "stale_generation":
                 session.add(
                     ProjectSetupRun(
@@ -303,6 +335,9 @@ async def test_binding_fails_closed_before_authority_or_effect(
             ids,
             authority,
             project_id=uuid4() if failure == "cross_project" else ids["project"],
+            guide_id=uuid4() if failure == "cross_guide" else ids["guide"],
+            source_item_id=uuid4() if failure == "missing_item" else ids["item"],
+            project_setup_run_id=uuid4() if failure == "wrong_run" else ids["run"],
         )
         with pytest.raises(GuideSourceBindingError):
             async with factory() as session, session.begin():

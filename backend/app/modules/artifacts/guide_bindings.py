@@ -18,6 +18,7 @@ from app.modules.artifacts.models import (
     ArtifactPutAttempt,
     ArtifactReplica,
     ArtifactVerificationJob,
+    ArtifactVerificationReceipt,
     GuideSourceArtifactBinding,
 )
 from app.modules.artifacts.schemas import (
@@ -145,6 +146,10 @@ class GuideSourceBindingService:
                 ArtifactVerificationJob,
                 ArtifactVerificationJob.originating_put_attempt_id == ArtifactPutAttempt.id,
             )
+            .join(
+                ArtifactVerificationReceipt,
+                ArtifactVerificationReceipt.verification_job_id == ArtifactVerificationJob.id,
+            )
             .where(
                 ArtifactReplica.content_id == content.id,
                 ArtifactReplica.verification_state == "verified",
@@ -156,6 +161,13 @@ class GuideSourceBindingService:
                 ArtifactPutAttempt.replica_id == ArtifactReplica.id,
                 ArtifactVerificationJob.replica_id == ArtifactReplica.id,
                 ArtifactVerificationJob.status == "verified",
+                ArtifactVerificationJob.terminal_result_code == "verified",
+                ArtifactVerificationJob.terminal_at.is_not(None),
+                ArtifactVerificationReceipt.execution_generation
+                == ArtifactVerificationJob.execution_generation,
+                ArtifactVerificationReceipt.outcome == "verified",
+                ArtifactVerificationReceipt.observed_sha256 == content.sha256,
+                ArtifactVerificationReceipt.observed_byte_count == content.byte_count,
             )
             .order_by(ArtifactReplica.id)
             .limit(1)
