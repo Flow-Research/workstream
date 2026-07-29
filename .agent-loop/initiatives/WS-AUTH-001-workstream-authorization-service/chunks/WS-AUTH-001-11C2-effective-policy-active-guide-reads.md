@@ -20,9 +20,9 @@ prefix.
 
 | Route | Action | Permission | Target | Response |
 |---|---|---|---|---|
-| `GET /projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | `project.effective_submission_artifact_policy.read` | `PROJECT_EFFECTIVE_POLICY_READ` | current approved effective policy for the exact guide and latest canonical source snapshot | `EffectiveProjectSubmissionArtifactPolicyResponse` |
-| `GET /projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | `project.pre_submit_checker_policy.read` | `PROJECT_EFFECTIVE_POLICY_READ` | current compiled pre-submit checker policy for that exact effective policy | `PreSubmitCheckerPolicySummaryResponse` |
-| `GET /projects/{project_id}/active-guide` | `project.active_guide.read` | `PROJECT_READ` | current active guide and its exact locked context, excluding the retired compensation configuration member | new strict `ActiveGuideReadResponse` |
+| `GET /projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | `ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ` (`project.effective_submission_artifact_policy.read`) | `PermissionId.PROJECT_EFFECTIVE_POLICY_READ` | current approved effective policy for the exact guide and latest canonical source snapshot | `EffectiveProjectSubmissionArtifactPolicyResponse` |
+| `GET /projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | `ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ` (`project.pre_submit_checker_policy.read`) | `PermissionId.PROJECT_EFFECTIVE_POLICY_READ` | current compiled pre-submit checker policy for that exact effective policy | `PreSubmitCheckerPolicySummaryResponse` |
+| `GET /projects/{project_id}/active-guide` | `ActionId.PROJECT_ACTIVE_GUIDE_READ` (`project.active_guide.read`) | `PermissionId.PROJECT_READ` | current active guide and its exact locked context, excluding the retired compensation configuration member | new strict `ActiveGuideReadResponse` |
 
 All three routes allow only a covered Project Manager, a covered Audit
 Authority, or a system-scoped Operator. Finance Authority, Access
@@ -140,8 +140,9 @@ audit subsystem changes
 
 - Activate exactly the three inventory actions and no other planned action.
 - The allowed/denied principal matrix and exact response schemas above are
-  enforced. In particular, `PROJECT_READ` held by Finance or a project-role
-  contributor does not authorize `PROJECT_ACTIVE_GUIDE_READ`; mutation
+  enforced. In particular, `PermissionId.PROJECT_READ` held by Finance or a
+  project-role contributor does not authorize
+  `ActionId.PROJECT_ACTIVE_GUIDE_READ`; mutation
   permissions do not imply any of these reads, and these reads imply no
   mutation.
 - Unauthorized and nonexistent projects/guides share the same action-aware
