@@ -29,6 +29,9 @@ remains unavailable pending AUTH `WS-XINT-002-04B`.
   provider-key shape in the new fixture; the seed now uses that exact shape;
 - hosted Backend run `30441301337` enforced the canonical one-active-identity
   invariant for human fixture actors; the seed now creates that verified link;
+- hosted Backend run `30441960786` passed all shared, project, and task tests;
+  its schema lane required typed migration timestamps and explicit ownership
+  marking for the populated-downgrade mutator, now corrected;
 - the exact final PR head must pass the hosted Backend workflow's four semantic
   lanes, API E2E, repository 78% floor, and existing subsystem 90% gates.
 

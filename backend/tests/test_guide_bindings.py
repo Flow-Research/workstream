@@ -366,6 +366,7 @@ async def test_next_generation_explicitly_supersedes_prior_binding(
         await engine.dispose()
 
 
+@pytest.mark.postgres_schema_contract
 def test_0039_refuses_populated_binding_downgrade(
     isolated_database_env: str,
     migration_lock,

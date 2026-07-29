@@ -1751,9 +1751,9 @@ async def _seed_setup_runs_before_0039(database_url: str) -> list[tuple[str, int
                 )
 
             for run_id, guide_index, created_at in (
-                (run_ids[1], 0, "2026-01-02T00:00:00+00:00"),
-                (run_ids[0], 0, "2026-01-01T00:00:00+00:00"),
-                (run_ids[2], 1, "2026-01-01T00:00:00+00:00"),
+                (run_ids[1], 0, datetime(2026, 1, 2, tzinfo=UTC)),
+                (run_ids[0], 0, datetime(2026, 1, 1, tzinfo=UTC)),
+                (run_ids[2], 1, datetime(2026, 1, 1, tzinfo=UTC)),
             ):
                 await connection.execute(
                     text(
