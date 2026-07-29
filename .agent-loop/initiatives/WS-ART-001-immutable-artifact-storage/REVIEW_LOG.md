@@ -155,3 +155,31 @@
   over-broad lineage trigger and an incomplete integrity-mismatch upload-item
   transition. Both received bounded repairs and their three failing tests pass
   locally; final internal re-review and hosted rerun remain.
+
+## WS-ART-001-03B-PLAN
+
+- Planning correction reviewed after ART-03A and AUTH-04A merged.
+- Initial architecture, senior, QA, CI, and product/ops reviews found blocking
+  scope, provenance, parser-boundary, verification, image-semantics, and
+  operational-outcome gaps.
+- Repairs split implementation into 03B1, 03B2, 03B3A, 03B3B, and 03B4;
+  separated content extraction from binding/generation usage; defined isolated
+  parsing, prompt-injection handling, stable setup errors, exact commands, and
+  the later parser dependency approval gate.
+- Final results: architecture PASS WITH LOW RISKS; senior engineering PASS WITH
+  LOW RISKS; QA PASS WITH LOW RISKS; security PASS; product/ops PASS; CI PASS
+  WITH CONDITIONS; docs PASS WITH LOW RISKS; reuse PASS WITH LOW RISKS; test
+  delta PASS WITH CONDITIONS. Planning-PR conditions are resolved by committing
+  the new contracts; the dependency checker remains a future 03B3B criterion.
+- First external run: CodeRabbit was rate-limited and produced no findings.
+  Agent Gates found five valid retired-vocabulary occurrences, now repaired.
+  Backend recorded one unrelated AUTH PostgreSQL concurrency failure after
+  1,651 passes; the repaired documentation head requires a fresh hosted rerun.
+- CodeRabbit later posted five valid findings. The repair makes repository and
+  scoped coverage gates explicit, fixes concrete extraction bounds and their
+  adversarial proof, exhaustively maps failure statuses, normalizes guide-read
+  wording, and adds locked revalidation immediately before report commit.
+- The repaired-head review found one remaining recovery-semantics gap. Timeout
+  and memory termination are now non-retryable limit failures; executor loss
+  receives one bounded fresh-authority/materialization retry, then a stable
+  extraction-failed outcome with only redacted diagnostics.

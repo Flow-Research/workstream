@@ -2,8 +2,8 @@
 
 ## Goal
 
-Activate fixed-service guide binding and guide read only after merged ART-03B
-evidence, without weakening the ART-03C clean cut.
+Activate fixed-service guide binding and guide-read actions only after merged ART-03B1,
+03B2, 03B3A, 03B3B, and 03B4 evidence, without weakening ART-03C.
 
 ## Risk class
 
@@ -12,8 +12,8 @@ L1.
 ## Entry gate
 
 - WS-XINT-002-04A is merged.
-- ART-03B hidden binding/materialization behavior and exact resource manifest
-  are merged and reviewed.
+- The complete split-03B hidden behavior and exact resource manifest are merged
+  and reviewed.
 
 ## Allowed files
 

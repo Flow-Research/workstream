@@ -362,3 +362,117 @@ Contributor authority never implies fixed service authority. Checker
 materialization, verification execution, pending-work scanning, ambiguous-put
 resolution, and binding retain their distinct fixed actions. No compatibility
 alias exposes the obsolete multi-step session actions.
+
+## D39 - Guide Upload And Understanding Are Separate
+
+Guide upload stores and verifies opaque original bytes. HTTP ingest does not
+parse, extract, render, OCR, transcode, or wait for submission prechecks.
+Understanding begins asynchronously only after an exact verified binding.
+Unlike contributor submissions, guide-source items are not wrapped in one
+mandatory outer ZIP. Each item retains its own verified format identity.
+
+## D40 - Exact Setup Generation Is A Durable Fence
+
+Every binding, extraction, agent input, and report identifies one project,
+draft guide, source snapshot, setup run, and monotonic setup generation. Celery
+carries only those identifiers and generation. Bytes, extracted text, scratch
+handles, prepared authority, and provider credentials never enter Redis.
+
+## D41 - Canonical Guide Materialization
+
+The fixed guide-reader obtains fresh prepared authority, resolves an exact
+verified binding, and streams through `ArtifactStore` into the existing
+`ArtifactScratchManager`. Every full read recomputes SHA-256 and byte count.
+Missing, changed, or truncated content is an ART incident, not guide
+insufficiency. Project services and agents never access providers directly.
+
+## D42 - Typed, Bounded Guide Extraction
+
+One detector and typed extractor registry validates signatures and bounded
+container markers. Initial text semantics cover PDF, DOCX, PPTX, CSV, XLSX,
+Markdown, plain text, and JSON. PNG, JPEG, and WebP yield bounded structural
+metadata only. Without OCR, image pixels cannot satisfy required textual guide
+semantics. Audio/video and ambiguous binaries are unsupported in v0.1 and never
+sent raw to agents. OOXML formats are distinguished from ordinary ZIPs.
+
+Extraction runs asynchronously in a strongly isolated no-network subprocess
+under fixed input, output, container, time, memory, and document limits using
+only scratch-manager paths. Parser crash, malformed input, macros, external
+relationships, embedded executables, cancellation, timeout, and executor loss
+have bounded outcomes and cleanup. Production parser dependencies require
+explicit human approval before implementation.
+
+The v0.1 extraction-policy limits are fixed, not caller-selectable:
+
+| Limit | Value | Enforcement owner | Breach outcome |
+|---|---:|---|---|
+| parser input per item | 32 MiB | 03B3A framework before dispatch | `limit_exceeded` |
+| canonical output per item | 4 MiB | 03B3A streaming output collector | `limit_exceeded` |
+| aggregate agent material | 12 MiB | 03B4 input assembler | `limit_exceeded` |
+| subprocess wall time per item | 60 seconds | 03B3A process supervisor | `limit_exceeded` |
+| subprocess address space | 512 MiB | 03B3A OS isolation boundary | `limit_exceeded` |
+| container entries | 2,000 | 03B2 container inspector | `limit_exceeded` |
+| decompressed container bytes | 128 MiB | 03B2 container inspector | `limit_exceeded` |
+| container nesting depth | 8 | 03B2 container inspector | `limit_exceeded` |
+| compression ratio | 100:1 | 03B2 container inspector | `limit_exceeded` |
+| PDF pages | 500 | 03B3B PDF adapter | `limit_exceeded` |
+| PPTX slides | 300 | 03B3B PPTX adapter | `limit_exceeded` |
+| XLSX sheets | 100 | 03B3B XLSX adapter | `limit_exceeded` |
+| table rows per item | 100,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
+| table cells per item | 1,000,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
+| characters per cell | 32,768 | CSV/XLSX adapter | `limit_exceeded` |
+| image pixels | 40 megapixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
+| image width or height | 16,384 pixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
+
+Exact-boundary, one-over-boundary, cleanup, cancellation, timeout, memory-
+termination, and executor-loss tests are mandatory. Executor loss leaves no
+successful extraction usage record; a current-generation retry starts from
+fresh materialization and authority.
+
+## D43 - Canonical Extraction Records, Not Implicit Provider Writes
+
+v0.1 persists an immutable content-derived extraction representation in
+PostgreSQL keyed by original content, format, extractor/version, and policy
+version, with output digest, omission facts, status, and bounded error code. A
+separate immutable usage record binds it to the exact guide binding, source
+item, setup run, and generation. AUTH-04B grants read and binding only, so ART
+does not use read authority to create a provider object.
+
+## D44 - Sufficiency Consumes Complete Verified Material
+
+The agent receives only bounded extraction records for all required items in
+the current generation. Missing, corrupt, stale, ambiguous, unsupported, or
+failed content stops policy derivation without creating a guide-insufficiency
+decision. Reports preserve exact content and extraction provenance. Legacy
+excerpts and durable refs are not authoritative after ART-03C.
+
+## D45 - Extracted Guide Content Is Untrusted Agent Data
+
+Canonical extraction proves byte provenance, not instruction authority. Agent
+assembly labels and delimits source material as untrusted data, excludes tools,
+provider access, credentials, and hidden instructions from that material, and
+accepts only the typed sufficiency output contract. Prompt-injection text inside
+a guide cannot alter system/developer policy or authorize an action.
+
+## D46 - Setup Failures Have Stable Operational Outcomes
+
+Existing `ProjectSetupRun.status=setup_blocked` uses this exhaustive stable,
+redacted mapping: `unsupported` -> `guide_source_format_unsupported`;
+`ambiguous` -> `guide_source_format_ambiguous`; `malformed` ->
+`guide_source_malformed`; `limit_exceeded` -> `guide_source_limit_exceeded`;
+`parser_failure` -> `guide_source_extraction_failed`; `cancelled` ->
+`guide_source_extraction_cancelled`; and `artifact_incident` ->
+`guide_artifact_incident`. An observed 60-second timeout or 512-MiB
+address-space termination is a deterministic `limit_exceeded` outcome: it does
+not retry automatically, and the Project Manager must provide a smaller or
+simpler item in a new snapshot. Limits are never raised inline. Executor loss
+before a classified limit breach is `parser_failure`: it receives one bounded
+current-generation automatic retry from fresh materialization and fresh
+authority; repeated loss remains `guide_source_extraction_failed`, creates no
+successful usage/report, and requires a corrected/new snapshot while an
+authorized Operator may inspect only bounded redacted runtime diagnostics.
+Recoverable artifact incidents wait for ART recovery and expose a bounded
+incident reference to authorized Operators. A current-generation transient
+cancellation may retry; stale-generation cancellation commits no report. All
+other terminal source-format or content failures require a corrected item in a
+new snapshot. None creates a sufficiency decision.

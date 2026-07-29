@@ -471,6 +471,92 @@ exact resource/content/job/attempt filters.
 
 ## Product Cutover
 
+### Guide Materialization And Extraction Boundary
+
+ART-03A upload remains a byte-custody request: authorize before intake, compute
+the server digest and size, admit once, store opaque bytes, and verify them. It
+does not parse content or wait for contributor submission checkers.
+
+The expanded ART-03B work is delivered as five hidden PR-sized subchunks before
+AUTH-04B activates fixed-service binding/read:
+
+1. `03B1` creates an authoritative one-item/one-content guide binding tied to
+   the exact setup run and explicit setup generation. Item metadata cannot
+   assert content identity, and replaced or cross-lineage facts fail closed.
+2. `03B2` performs fresh authorized full reads through `ArtifactStore`, writes
+   only through `ArtifactScratchManager`, recomputes digest/size, records ART
+   incidents, and classifies formats using signatures and bounded container
+   markers.
+3. `03B3A` installs the isolated no-network extraction framework, immutable
+   content/usage provenance, and text, Markdown, JSON, and CSV extractors
+   without new parser dependencies.
+4. `03B3B` adds explicitly approved PDF, DOCX, PPTX, XLSX, and PNG/JPEG/WebP
+   metadata extractors on that proven framework.
+5. `03B4` adds `setup_generation` to the identifier-only Celery payload,
+   reloads current state, assembles all required canonical extracted sources,
+   invokes sufficiency, and persists exact provenance.
+
+The canonical extraction status set is:
+
+```text
+extracted | unsupported | ambiguous | malformed | limit_exceeded |
+parser_failure | cancelled | artifact_incident
+```
+
+Only `extracted` records enter agent input. Truncation or omission is explicit
+and may be allowed only by the versioned extraction policy; required missing
+semantics stop setup internally. Artifact incidents never become sufficiency
+findings.
+
+Stable setup mappings are exact:
+
+| Extraction status | Redacted setup code | Recovery/remediation |
+|---|---|---|
+| `extracted` | none | Continue only when every required item is complete. |
+| `unsupported` | `guide_source_format_unsupported` | Project Manager supplies a supported item in a new snapshot. |
+| `ambiguous` | `guide_source_format_ambiguous` | Project Manager supplies an unambiguous item in a new snapshot. |
+| `malformed` | `guide_source_malformed` | Project Manager supplies a corrected item in a new snapshot. |
+| `limit_exceeded` | `guide_source_limit_exceeded` | Project Manager supplies a smaller/simpler item; limits are not raised inline. |
+| `parser_failure` | `guide_source_extraction_failed` | Bounded automatic retry; after exhaustion, PM replaces the item and Operator may inspect redacted diagnostics. |
+| `cancelled` | `guide_source_extraction_cancelled` | Current-generation transient cancellation may retry; stale-generation cancellation commits no report. |
+| `artifact_incident` | `guide_artifact_incident` | Recoverable custody failure waits for ART recovery; terminal corruption requires a new item/snapshot. |
+
+The configured 60-second timeout and 512-MiB address-space termination are
+`limit_exceeded`, are not automatically retried, and require a smaller/simpler
+item in a new snapshot. Executor loss before a classified limit breach is
+`parser_failure`: it receives one bounded current-generation retry from fresh
+materialization and fresh authority; repeated loss exposes only
+`guide_source_extraction_failed` plus bounded redacted Operator diagnostics and
+requires a corrected/new snapshot. No failed attempt creates a successful usage
+record or report.
+
+Guide-source items are not required to be ZIP files. The initial semantic
+extractors are PDF, DOCX, PPTX, CSV, XLSX, Markdown, plain text, JSON, and
+PNG, JPEG, and WebP metadata. Images are accepted and classified, but without
+OCR their pixels cannot satisfy required textual guide semantics. Audio/video
+and opaque/ordinary ZIP input are unsupported in v0.1. ZIP-
+container classification rejects macros, external relationships, embedded
+executables, ambiguous markers, excessive entries, decompressed bytes, depth,
+or compression ratio before a document parser runs.
+
+v0.1 stores bounded canonical extraction JSON/text in PostgreSQL rather than
+creating an unapproved provider write under guide-read authority. It records
+source digest/size, detected format, extractor and version, extraction-policy
+version, output digest, truncation/omission facts, status, and bounded error
+code. A separate immutable usage record binds that result to the exact binding,
+source item, setup run, and generation. Original bytes remain authoritative. A
+later derived-artifact store path requires a distinct AUTH action.
+
+The existing `ProjectSetupRun.status=setup_blocked` remains the public state for
+every terminal current-generation failure above. API, Operator, and Project
+Manager projections use only the exact redacted mapping and remediation table.
+None is a guide-insufficiency decision.
+
+Any production parser dependency in 03B3B requires explicit human approval. Candidate
+libraries must undergo current security, maintenance, license, transitive-
+dependency, malformed-input, and cancellation review before `03B3B` may add
+them; no runtime plugin discovery or parser fallback is permitted.
+
 1. Guide-source delivery is split into hidden byte ingest, AUTH activation,
    verified snapshot binding/materialization, AUTH activation, and the legacy
    identity/continuation clean cut.

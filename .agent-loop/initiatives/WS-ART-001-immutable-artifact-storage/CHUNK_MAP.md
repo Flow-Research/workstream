@@ -17,9 +17,13 @@ Each chunk is one PR. No later chunk starts automatically.
 | `WS-ART-001-02D` | Add hidden Operator content/job/retry/recovery/audit APIs, canonical resource composition, and production-readiness checks while actions and provider profiles remain inactive. | L1 | Merged through PR #177 as `93c14181` |
 | `WS-ART-001-03` | Original combined guide-source cutover. | L1 | Cancelled before implementation; no runtime changes |
 | `WS-ART-001-PLAN2` | Reconcile guide and one-ZIP submission planning with bounded scratch, existing immutable admission/recovery, exact AUTH sequencing, and downstream ownership. | L1 | Planning-only successor proposed after cancellation |
-| `WS-ART-001-03A` | Add hidden guide-source byte ingest through existing preparation, admission, verification, and publication. | L1 | Proposed after PLAN2 |
-| `WS-ART-001-03B` | Bind verified guide-source content and provide authorized integrity-checking setup materialization. | L1 | Proposed after 03A and exact AUTH activation |
-| `WS-ART-001-03C` | Remove legacy guide-source identity and add exact same-generation setup continuation. | L1 | Proposed after 03B and exact AUTH activation |
+| `WS-ART-001-03A` | Add hidden guide-source byte ingest through existing preparation, admission, verification, and publication. | L1 | Merged through PR #215 as `bb9082a7` |
+| `WS-ART-001-03B1` | Add authoritative verified guide-source bindings and an exact setup-generation fence while fixed-service binding remains unavailable. | L1 | Proposed after 03A and AUTH-04A |
+| `WS-ART-001-03B2` | Add fixed-reader verified materialization, artifact incidents, and canonical format detection in bounded ART scratch. | L1 | Proposed after 03B1 |
+| `WS-ART-001-03B3A` | Add the isolated extraction framework, canonical records, and text/Markdown/JSON/CSV extractors. | L1 | Proposed after 03B2 |
+| `WS-ART-001-03B3B` | Add explicitly approved PDF/OOXML/image-metadata extractors on the proven framework. | L1 | Proposed after 03B3A and dependency approval |
+| `WS-ART-001-03B4` | Feed only complete same-generation canonical extracted material into the existing Celery sufficiency pipeline. | L1 | Proposed after 03B3B |
+| `WS-ART-001-03C` | Remove legacy guide-source identity and add exact same-generation setup continuation. | L1 | Proposed after 03B1-03B4 and AUTH-04B |
 | `WS-ART-001-04A` | Accept one outer ZIP in bounded scratch, safely inspect its tree, normalize executable intent, produce canonical identities, and reject unchanged work before provider I/O. | L1 | Proposed after 03C and AUTH planned action registration |
 | `WS-ART-001-04B` | Run mandatory platform and locked Project Guide pre-submit checks against the same scratch-bound tree and executable semantics without durable storage. | L1 | Proposed after 04A |
 | `WS-ART-001-04C` | Reauthorize at durable intent, admit/verify the passing ZIP once, and publish one capacity-charged `ready` admission that may remain unbound. | L1 | Proposed after 04B; AUTH activation follows hidden completion |
@@ -43,7 +47,11 @@ OBJECT-STORAGE-AMENDMENT
 -> PLAN2 planning reconciliation
 -> 03A guide-source byte ingest
 -> AUTH activation for exact 03A actions
--> 03B guide-source binding/materialization
+-> 03B1 authoritative guide binding/setup generation
+-> 03B2 verified materialization/format detection
+-> 03B3A isolated extraction framework/text formats
+-> 03B3B approved complex document/image-metadata extractors
+-> 03B4 same-generation Celery sufficiency integration
 -> AUTH activation for exact 03B actions
 -> 03C guide-source clean cut/continuation
 -> AUTH planned registration of `artifact.submission_bundle.prepare`
