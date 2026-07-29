@@ -3188,7 +3188,7 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
         effective_policy_status="approved",
         target_binding_digest=f"sha256:{'c' * 64}",
     )
-    service, _ = _runtime_service(
+    service, policy_evidence = _runtime_service(
         context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
     )
     decision = await service.require(
@@ -3196,6 +3196,50 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
     )
     assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
     assert decision.matched_grant_id == grant.id
+    assert policy_evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
+
+    checker_policy = policy.model_copy(
+        update={
+            "resource_id": uuid4(),
+            "target_kind": "pre_submit_checker_policy",
+            "checker_policy_id": uuid4(),
+            "checker_policy_status": "compiled",
+            "checker_bundle_hash": f"sha256:{'e' * 64}",
+        }
+    )
+    service, checker_evidence = _runtime_service(
+        context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
+    )
+    checker_decision = await service.require(
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ, checker_policy
+    )
+    assert checker_evidence.events[0].after_facts["resource_context_digest"] == (
+        checker_decision.resource_context_digest
+    )
+
+    missing_policy = policy.model_copy(
+        update={
+            "target_exists": False,
+            "source_snapshot_id": None,
+            "source_snapshot_hash": None,
+            "effective_policy_id": None,
+            "effective_policy_hash": None,
+            "effective_policy_status": None,
+            "target_binding_digest": None,
+        }
+    )
+    service, denied_policy_evidence = _runtime_service(
+        context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
+    )
+    with pytest.raises(AuthorizationDenied) as denied_policy:
+        await service.require(
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ, missing_policy
+        )
+    assert denied_policy_evidence.events[0].after_facts["resource_context_digest"] == (
+        denied_policy.value.decision.resource_context_digest
+    )
 
     active = ProjectActiveGuideReadResourceContext(
         resource_type="project_active_guide_read",
@@ -3210,6 +3254,21 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
         target_exists=True,
         source_snapshot_id=snapshot_id,
         source_snapshot_hash=f"sha256:{'a' * 64}",
+        sufficiency_report_id=uuid4(),
+        sufficiency_report_status="passed",
+        submission_artifact_policy_id=uuid4(),
+        submission_artifact_policy_hash=f"sha256:{'b' * 64}",
+        submission_artifact_policy_status="approved",
+        effective_policy_id=effective_id,
+        effective_policy_hash=f"sha256:{'c' * 64}",
+        effective_policy_status="approved",
+        pre_submit_checker_policy_id=uuid4(),
+        pre_submit_checker_bundle_hash=f"sha256:{'d' * 64}",
+        pre_submit_checker_policy_status="compiled",
+        post_submit_checker_policy_id=uuid4(),
+        post_submit_checker_policy_status="approved",
+        review_policy_id=uuid4(),
+        revision_policy_id=uuid4(),
         policy_binding_digest=f"sha256:{'d' * 64}",
     )
 
@@ -3221,13 +3280,16 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
             return self.admin_grant
 
     facts = RoleRecordingFacts(admin_grant=grant)
-    service, _ = _runtime_service(context, admin_repository=facts)
-    await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, active)
+    service, evidence = _runtime_service(context, admin_repository=facts)
+    active_decision = await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, active)
     assert facts.allowed_roles == {
         AdminRole.OPERATOR,
         AdminRole.PROJECT_MANAGER,
         AdminRole.AUDIT_AUTHORITY,
     }
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        active_decision.resource_context_digest
+    )
 
     missing = active.model_copy(
         update={
@@ -3237,12 +3299,15 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
             "policy_binding_digest": None,
         }
     )
-    service, _ = _runtime_service(
+    service, denied_evidence = _runtime_service(
         context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
     )
     with pytest.raises(AuthorizationDenied) as denied:
         await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, missing)
     assert denied.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+    assert denied_evidence.events[0].after_facts["resource_context_digest"] == (
+        denied.value.decision.resource_context_digest
+    )
 
 
 @pytest.mark.asyncio

@@ -1295,13 +1295,10 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
         assert actor_context["admin_roles"] == ["project_manager"]
         assert actor_context["project_roles"] == []
         assert actor_context["effective_action_ids"] == [
-            "project.active_guide.read",
             "project.contributor_candidate.list",
-            "project.effective_submission_artifact_policy.read",
             "project.guide_sufficiency_report.list",
             "project.guide_sufficiency_report.read",
             "project.post_submit_checker_policy_setup.read",
-            "project.pre_submit_checker_policy.read",
             "project.read",
             "project.setup_run.read",
             "project.submission_artifact_policy.list",
@@ -1374,6 +1371,17 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert active["guide"]["version"] == "v1"
+        active_actor_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+            project_reader_token,
+        )
+        assert {
+            "project.active_guide.read",
+            "project.effective_submission_artifact_policy.read",
+            "project.pre_submit_checker_policy.read",
+        }.issubset(active_actor_context["effective_action_ids"])
         await request_json(
             client,
             "PATCH",

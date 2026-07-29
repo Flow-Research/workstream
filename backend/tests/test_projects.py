@@ -392,6 +392,17 @@ async def test_project_active_guide_read_composer_binds_non_compensation_bundle(
     assert called_action is ActionId.PROJECT_ACTIVE_GUIDE_READ
     assert context.target_exists is True
     assert context.policy_binding_digest.startswith("sha256:")
+    assert str(context.sufficiency_report_id) == repository.sufficiency.id
+    assert context.sufficiency_report_status == repository.sufficiency.status
+    assert str(context.submission_artifact_policy_id) == repository.submission.id
+    assert context.submission_artifact_policy_hash == repository.submission.policy_hash
+    assert str(context.effective_policy_id) == repository.effective.id
+    assert context.effective_policy_hash == repository.effective.effective_policy_hash
+    assert str(context.pre_submit_checker_policy_id) == repository.checker.id
+    assert context.pre_submit_checker_bundle_hash == repository.checker.compiled_bundle_hash
+    assert str(context.post_submit_checker_policy_id) == repository.post_submit.id
+    assert str(context.review_policy_id) == repository.review.id
+    assert str(context.revision_policy_id) == repository.revision.id
 
     repository.post_submit.pre_submit_checker_bundle_hash = f"sha256:{'f' * 64}"
     with pytest.raises(RuntimeError, match="unexpectedly allowed"):

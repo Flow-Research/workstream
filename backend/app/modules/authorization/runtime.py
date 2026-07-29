@@ -366,6 +366,25 @@ class ProjectActiveGuideReadResourceContext(BaseModel):
     target_exists: bool
     source_snapshot_id: UUID | None = None
     source_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    sufficiency_report_id: UUID | None = None
+    sufficiency_report_status: str | None = None
+    submission_artifact_policy_id: UUID | None = None
+    submission_artifact_policy_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    submission_artifact_policy_status: str | None = None
+    effective_policy_id: UUID | None = None
+    effective_policy_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_policy_status: str | None = None
+    pre_submit_checker_policy_id: UUID | None = None
+    pre_submit_checker_bundle_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    pre_submit_checker_policy_status: str | None = None
+    post_submit_checker_policy_id: UUID | None = None
+    post_submit_checker_policy_status: str | None = None
+    review_policy_id: UUID | None = None
+    revision_policy_id: UUID | None = None
     policy_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
 
     @model_validator(mode="after")
@@ -384,10 +403,46 @@ class ProjectActiveGuideReadResourceContext(BaseModel):
             and self.guide_status == "active"
             and self.source_snapshot_id is not None
             and self.source_snapshot_hash is not None
+            and self.sufficiency_report_id is not None
+            and self.sufficiency_report_status in {"passed", "passed_with_warnings"}
+            and self.submission_artifact_policy_id is not None
+            and self.submission_artifact_policy_hash is not None
+            and self.submission_artifact_policy_status == "approved"
+            and self.effective_policy_id is not None
+            and self.effective_policy_hash is not None
+            and self.effective_policy_status == "approved"
+            and self.pre_submit_checker_policy_id is not None
+            and self.pre_submit_checker_bundle_hash is not None
+            and self.pre_submit_checker_policy_status == "compiled"
+            and self.post_submit_checker_policy_id is not None
+            and self.post_submit_checker_policy_status == "approved"
+            and self.review_policy_id is not None
+            and self.revision_policy_id is not None
             and self.policy_binding_digest is not None
         )
         if self.target_exists != bound:
             raise ValueError("active-guide existence and bundle facts are inconsistent")
+        if not self.target_exists and any(
+            value is not None
+            for value in (
+                self.sufficiency_report_id,
+                self.sufficiency_report_status,
+                self.submission_artifact_policy_id,
+                self.submission_artifact_policy_hash,
+                self.submission_artifact_policy_status,
+                self.effective_policy_id,
+                self.effective_policy_hash,
+                self.effective_policy_status,
+                self.pre_submit_checker_policy_id,
+                self.pre_submit_checker_bundle_hash,
+                self.pre_submit_checker_policy_status,
+                self.post_submit_checker_policy_id,
+                self.post_submit_checker_policy_status,
+                self.review_policy_id,
+                self.revision_policy_id,
+            )
+        ):
+            raise ValueError("missing active-guide target cannot carry policy facts")
         return self
 
 

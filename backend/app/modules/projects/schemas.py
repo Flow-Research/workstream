@@ -73,7 +73,7 @@ class GuideSourceSnapshotCreate(BaseModel):
 class GuideSourceSnapshotItemResponse(BaseModel):
     """Response schema for a sanitized guide-source snapshot item."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     source_snapshot_id: str
@@ -476,7 +476,7 @@ class ProjectGuideUpdate(BaseModel):
 class ProjectGuideResponse(BaseModel):
     """Response schema for project guide records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -495,7 +495,7 @@ class ProjectGuideResponse(BaseModel):
 class PostSubmitCheckerPolicyResponse(BaseModel):
     """Response schema for post-submit checker policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -588,7 +588,7 @@ class PostSubmitCheckerPolicySetupResponse(BaseModel):
 class ReviewPolicyResponse(BaseModel):
     """Response schema for review policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -603,7 +603,7 @@ class ReviewPolicyResponse(BaseModel):
 class RevisionPolicyResponse(BaseModel):
     """Response schema for revision policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str

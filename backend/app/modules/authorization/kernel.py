@@ -1237,6 +1237,8 @@ class AuthorizationService:
                 "artifact_verification_job",
                 "artifact_pending_work",
                 "project_diagnostic",
+                "project_policy_read",
+                "project_active_guide_read",
             }
             or decision.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST
         ):

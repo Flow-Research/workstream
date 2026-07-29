@@ -153,6 +153,9 @@ async def authorize_project_policy_read(
     target_exists = (
         project is not None
         and project.status == "active"
+        and guide is not None
+        and guide.project_id == project_id
+        and guide.status == "active"
         and target is not None
         and submission is not None
         and effective is not None
@@ -175,6 +178,12 @@ async def authorize_project_policy_read(
         try:
             target_exists = all(
                 (
+                    effective.project_id == project_id,
+                    effective.guide_id == guide_id,
+                    effective.guide_version == guide.version,
+                    effective.source_snapshot_id == snapshot.id,
+                    effective.source_snapshot_hash == snapshot.bundle_hash,
+                    effective.lifecycle_status == "approved",
                     submission.project_id == project_id,
                     submission.guide_id == guide_id,
                     submission.guide_version == guide.version,
@@ -429,6 +438,27 @@ async def authorize_project_active_guide_read(
             target_exists=target_exists,
             source_snapshot_id=UUID(snapshot.id) if target_exists else None,
             source_snapshot_hash=snapshot.bundle_hash if target_exists else None,
+            sufficiency_report_id=UUID(sufficiency.id) if target_exists else None,
+            sufficiency_report_status=sufficiency.status if target_exists else None,
+            submission_artifact_policy_id=UUID(submission.id) if target_exists else None,
+            submission_artifact_policy_hash=submission.policy_hash if target_exists else None,
+            submission_artifact_policy_status=(
+                submission.lifecycle_status if target_exists else None
+            ),
+            effective_policy_id=UUID(effective.id) if target_exists else None,
+            effective_policy_hash=effective.effective_policy_hash if target_exists else None,
+            effective_policy_status=effective.lifecycle_status if target_exists else None,
+            pre_submit_checker_policy_id=UUID(checker.id) if target_exists else None,
+            pre_submit_checker_bundle_hash=(
+                checker.compiled_bundle_hash if target_exists else None
+            ),
+            pre_submit_checker_policy_status=(checker.lifecycle_status if target_exists else None),
+            post_submit_checker_policy_id=UUID(post_submit.id) if target_exists else None,
+            post_submit_checker_policy_status=(
+                post_submit.lifecycle_status if target_exists else None
+            ),
+            review_policy_id=UUID(review.id) if target_exists else None,
+            revision_policy_id=UUID(revision.id) if target_exists else None,
             policy_binding_digest=binding_digest,
         ),
     )
