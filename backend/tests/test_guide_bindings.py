@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifact_operations import GuideSourceBindingRequest
-from app.modules.actors.models import ActorProfile
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.guide_bindings import (
     GuideSourceBindingError,
     GuideSourceBindingService,
@@ -90,6 +90,19 @@ async def _seed_binding_lineage(
             status="active",
             provisioning_method="automatic_first_access",
             created_by="test",
+        )
+    )
+    await session.flush()
+    session.add(
+        ActorIdentityLink(
+            id=str(uuid4()),
+            actor_profile_id=str(ids["actor"]),
+            issuer="https://issuer.example.test",
+            subject=f"human-{ids['actor']}",
+            subject_kind="human",
+            status="active",
+            linked_by="test",
+            last_verified_at=datetime.now(UTC),
         )
     )
     session.add(

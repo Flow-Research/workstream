@@ -27,6 +27,8 @@ remains unavailable pending AUTH `WS-XINT-002-04B`.
   threshold changes;
 - hosted Backend run `30440684668` enforced the canonical sharded SHA-256
   provider-key shape in the new fixture; the seed now uses that exact shape;
+- hosted Backend run `30441301337` enforced the canonical one-active-identity
+  invariant for human fixture actors; the seed now creates that verified link;
 - the exact final PR head must pass the hosted Backend workflow's four semantic
   lanes, API E2E, repository 78% floor, and existing subsystem 90% gates.
 
