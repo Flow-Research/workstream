@@ -21,6 +21,7 @@ Project
   ProjectGuide
   GuideSourceSnapshot
   GuideSourceSnapshotItem
+  GuideSourceArtifactBinding
   ProjectSetupRun
   GuideSufficiencyReport
   SubmissionArtifactPolicy
@@ -345,6 +346,7 @@ Fields:
 - `guide_version`
 - `source_snapshot_id`
 - `source_snapshot_hash`
+- `setup_generation`
 - `celery_task_id`
 - `status`
 - `current_step`
@@ -367,6 +369,10 @@ policy derivation continuations for one guide source snapshot. It does not
 replace the source snapshot, sufficiency report, submission artifact policy,
 effective project policy, pre-submit checker policy, or post-submit checker
 policy rows.
+
+`setup_generation` is a positive, guide-local monotonic identity. It prevents
+an earlier setup run from continuing after a newer run exists for the same
+draft guide; it is not a user-visible revision number.
 
 Current step values are stable setup diagnostics, not product lifecycle states:
 
@@ -403,6 +409,33 @@ The default setup-run API returns the source snapshot id for correlation, but
 does not return the exact source snapshot hash; exact hashes remain available
 through source-snapshot and policy records when an authorized workflow needs
 provenance inspection.
+
+## GuideSourceArtifactBinding
+
+Fields:
+
+- `id`
+- `project_id`
+- `guide_id`
+- `source_snapshot_id`
+- `source_item_id`
+- `project_setup_run_id`
+- `setup_generation`
+- `content_id`
+- `verified_replica_id`
+- `logical_role`
+- `supersedes_binding_id`
+- `created_by_service`
+- `created_at`
+
+`GuideSourceArtifactBinding` is the immutable, authoritative link from one
+guide-source item and exact setup generation to one independently verified
+`ArtifactContent` and replica. Composite foreign keys preserve the exact
+project, guide, snapshot, item, setup-run, generation, content, and replica
+lineage. One binding may exist per source item and generation. A later
+generation explicitly references the prior binding through
+`supersedes_binding_id`; it never overwrites the earlier fact. Source-item
+metadata alone cannot establish artifact identity.
 
 ## GuideSufficiencyReport
 

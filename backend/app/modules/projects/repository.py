@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
@@ -285,6 +285,15 @@ class ProjectRepository:
         await self._session.flush()
         await self._session.refresh(setup_run)
         return setup_run
+
+    async def next_project_setup_generation(self, guide_id: str) -> int:
+        """Allocate the next generation while the caller holds the guide row lock."""
+        latest = await self._session.scalar(
+            select(func.max(ProjectSetupRun.setup_generation)).where(
+                ProjectSetupRun.guide_id == guide_id
+            )
+        )
+        return int(latest or 0) + 1
 
     async def get_project_setup_run(self, setup_run_id: str) -> ProjectSetupRun | None:
         """Load one project setup run by primary key."""

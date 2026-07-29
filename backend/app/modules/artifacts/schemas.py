@@ -88,6 +88,24 @@ class GuideArtifactIngestAuthorityFacts:
     media_type: str
 
 
+@final
+@dataclass(frozen=True, slots=True)
+class GuideSourceBindingAuthorityFacts:
+    """Canonical verified guide lineage bound to one setup generation."""
+
+    project_id: UUID
+    guide_id: UUID
+    guide_source_snapshot_id: UUID
+    guide_source_item_id: UUID
+    project_setup_run_id: UUID
+    setup_generation: int
+    content_id: UUID
+    verified_replica_id: UUID
+    sha256: str
+    byte_count: int
+    logical_role: str
+
+
 class ArtifactInternalResourceType(StrEnum):
     """Closed artifact-owned resource types for internal actions."""
 

@@ -28,6 +28,7 @@ __all__ = (
     "GuideArtifactIngestRequest",
     "GuideArtifactIngestResult",
     "GuideSourceBindingRequest",
+    "GuideSourceBindingResult",
     "PreparedBundleMaterializationRequest",
     "SubmissionBundlePreparationPort",
     "SubmissionBundlePreparationRequest",
@@ -87,11 +88,23 @@ class GuideSourceBindingRequest:
 
     prepared_authorization: PreparedAuthorizationHandle
     project_id: UUID
+    guide_id: UUID
     guide_source_snapshot_id: UUID
     source_item_id: UUID
     project_setup_run_id: UUID
+    setup_generation: int
     logical_role: str
-    verified_content_ids: tuple[UUID, ...]
+    verified_content_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GuideSourceBindingResult:
+    """One immutable authoritative guide-source binding."""
+
+    binding_id: UUID
+    content_id: UUID
+    setup_generation: int
+    replayed: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +226,7 @@ class SubmissionBundlePreparationPort(Protocol):
 class ArtifactBindingPort(Protocol):
     """Create exact action-bound bindings from verified content."""
 
-    async def bind_guide_source(self, request: GuideSourceBindingRequest) -> object:
+    async def bind_guide_source(self, request: GuideSourceBindingRequest) -> GuideSourceBindingResult:
         """Bind verified guide content under the guide binding action."""
 
     async def bind_submission(self, request: SubmissionBindingRequest) -> object:

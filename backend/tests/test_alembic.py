@@ -1629,7 +1629,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0038_guide_source_ingest",
+                "revision": "0039_guide_source_bindings",
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1678,6 +1678,118 @@ def test_guide_source_artifact_ingest_schema_and_replay(
             )
         finally:
             command.downgrade(config, "base")
+
+
+def test_0039_backfills_setup_generations_per_guide(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    """Existing setup runs receive deterministic guide-local generations."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0038_guide_source_ingest")
+            expected = asyncio.run(_seed_setup_runs_before_0039(isolated_database_env))
+
+            command.upgrade(config, "0039_guide_source_bindings")
+            actual = asyncio.run(_setup_generations_after_0039(isolated_database_env))
+            assert actual == expected
+            assert "guide_source_artifact_bindings" in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+
+            command.downgrade(config, "0038_guide_source_ingest")
+            assert "guide_source_artifact_bindings" not in asyncio.run(
+                _fetch_table_names(isolated_database_env)
+            )
+        finally:
+            command.downgrade(config, "base")
+
+
+async def _seed_setup_runs_before_0039(database_url: str) -> list[tuple[str, int]]:
+    engine = create_async_engine(database_url)
+    project_ids = (str(uuid4()), str(uuid4()))
+    guide_ids = (str(uuid4()), str(uuid4()))
+    snapshot_ids = (str(uuid4()), str(uuid4()))
+    run_ids = (str(uuid4()), str(uuid4()), str(uuid4()))
+    digest = "sha256:" + "b" * 64
+    try:
+        async with engine.begin() as connection:
+            for index in range(2):
+                parameters = {
+                    "project": project_ids[index],
+                    "guide": guide_ids[index],
+                    "snapshot": snapshot_ids[index],
+                    "slug": f"generation-{project_ids[index]}",
+                    "digest": digest,
+                }
+                await connection.execute(
+                    text(
+                        "insert into projects (id, name, slug, status) "
+                        "values (:project, 'Generation project', :slug, 'draft')"
+                    ),
+                    parameters,
+                )
+                await connection.execute(
+                    text(
+                        "insert into project_guides "
+                        "(id, project_id, version, status, content_markdown, created_by) "
+                        "values (:guide, :project, 'v1', 'draft', '# Guide', 'migration-test')"
+                    ),
+                    parameters,
+                )
+                await connection.execute(
+                    text(
+                        "insert into guide_source_snapshots "
+                        "(id, project_id, guide_id, guide_version, manifest_schema_version, "
+                        "manifest_json, bundle_hash, captured_by) values "
+                        "(:snapshot, :project, :guide, 'v1', '1', '{}'::json, :digest, "
+                        "'migration-test')"
+                    ),
+                    parameters,
+                )
+
+            for run_id, guide_index, created_at in (
+                (run_ids[1], 0, datetime(2026, 1, 2, tzinfo=UTC)),
+                (run_ids[0], 0, datetime(2026, 1, 1, tzinfo=UTC)),
+                (run_ids[2], 1, datetime(2026, 1, 1, tzinfo=UTC)),
+            ):
+                await connection.execute(
+                    text(
+                        "insert into project_setup_runs "
+                        "(id, project_id, guide_id, guide_version, source_snapshot_id, "
+                        "source_snapshot_hash, status, current_step, created_by, created_at) "
+                        "values (:run, :project, :guide, 'v1', :snapshot, :digest, "
+                        "'queued', 'queued', 'migration-test', :created_at)"
+                    ),
+                    {
+                        "run": run_id,
+                        "project": project_ids[guide_index],
+                        "guide": guide_ids[guide_index],
+                        "snapshot": snapshot_ids[guide_index],
+                        "digest": digest,
+                        "created_at": created_at,
+                    },
+                )
+        return sorted([(run_ids[0], 1), (run_ids[1], 2), (run_ids[2], 1)])
+    finally:
+        await engine.dispose()
+
+
+async def _setup_generations_after_0039(database_url: str) -> list[tuple[str, int]]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            rows = await connection.execute(
+                text(
+                    "select id, setup_generation from project_setup_runs "
+                    "order by id"
+                )
+            )
+            return sorted((str(row.id), int(row.setup_generation)) for row in rows)
+    finally:
+        await engine.dispose()
 
 
 async def _seed_populated_guide_source_ingest(database_url: str) -> None:
@@ -1841,7 +1953,7 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
             ):
                 command.downgrade(config, "0034_project_role_issue_evidence")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0038_guide_source_ingest"
+                "0039_guide_source_bindings"
             )
         finally:
             asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
@@ -1968,7 +2080,7 @@ def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
             record_id = ""
             command.upgrade(config, "head")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0038_guide_source_ingest"
+                "0039_guide_source_bindings"
             )
         finally:
             for event_id in reversed(event_ids):
@@ -2365,7 +2477,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0038_guide_source_ingest",
+                "revision": "0039_guide_source_bindings",
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -2577,7 +2689,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0038_guide_source_ingest",
+                    "0039_guide_source_bindings",
                     True,
                     True,
                 )
@@ -2604,7 +2716,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0038_guide_source_ingest",
+                    "0039_guide_source_bindings",
                     True,
                     True,
                 )
@@ -2632,7 +2744,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0038_guide_source_ingest",
+                "revision": "0039_guide_source_bindings",
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -2692,7 +2804,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             )
             assert committed == "refused_after_commit"
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0038_guide_source_ingest"
+                "0039_guide_source_bindings"
             )
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")

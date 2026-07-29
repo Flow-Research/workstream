@@ -2188,6 +2188,7 @@ class ProjectService:
             guide_version=guide.version,
             source_snapshot_id=snapshot.id,
             source_snapshot_hash=snapshot.bundle_hash,
+            setup_generation=await self._repo.next_project_setup_generation(guide.id),
             status="queued",
             current_step="queued",
             created_by=actor.actor_id,
