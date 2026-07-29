@@ -152,6 +152,7 @@ async def _seed_binding_lineage(
             created_by="test",
         )
     )
+    await session.flush()
     session.add(
         GuideSourceArtifactIngest(
             id=str(uuid4()),
