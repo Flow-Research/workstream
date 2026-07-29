@@ -8268,6 +8268,46 @@ async def test_active_guide_read_revalidates_policy_context(
     assert response.json()["error_code"] == "project_authorization_resource_not_found"
 
 
+async def test_active_guide_read_conceals_hash_valid_malformed_submission_policy(
+    project_client: AsyncClient,
+) -> None:
+    project = await create_project(project_client)
+    await add_project_manager_admin_grant(project["id"])
+    guide = await create_guide(project_client, project["id"], complete_guide_payload())
+    bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
+    activation = await project_client.post(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/activate",
+        headers=auth_headers(),
+    )
+    assert activation.status_code == 200, activation.text
+
+    malformed_body = {"schema_version": "malformed.v1"}
+    malformed_hash = canonical_json_hash(malformed_body)
+    async with db_session.get_session_factory()() as session:
+        submission_policy = await session.get(
+            SubmissionArtifactPolicy,
+            bundle["submission_artifact_policy"]["id"],
+        )
+        effective_policy = await session.get(
+            EffectiveProjectSubmissionArtifactPolicy,
+            bundle["effective_policy"]["id"],
+        )
+        assert submission_policy is not None
+        assert effective_policy is not None
+        submission_policy.policy_body = malformed_body
+        submission_policy.policy_hash = malformed_hash
+        effective_policy.submission_artifact_policy_hash = malformed_hash
+        await session.commit()
+
+    response = await project_client.get(
+        f"/api/v1/projects/{project['id']}/active-guide",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error_code"] == "project_authorization_resource_not_found"
+
+
 async def test_guide_activation_and_active_guide_retrieval(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     await add_project_manager_admin_grant(project["id"])

@@ -3996,9 +3996,14 @@ class ProjectService:
             raise GuideActivationBlocked(
                 "effective project submission artifact policy body hash mismatch"
             )
-        expected_effective_policy = self._merge_effective_submission_artifact_policy(
-            submission_artifact_policy.policy_body
-        )
+        try:
+            expected_effective_policy = self._merge_effective_submission_artifact_policy(
+                submission_artifact_policy.policy_body
+            )
+        except (KeyError, TypeError, ValueError, ProjectServiceError) as exc:
+            raise GuideActivationBlocked(
+                "submission artifact policy body is invalid"
+            ) from exc
         if self._hash_canonical_json(expected_effective_policy) != effective_policy.effective_policy_hash:
             raise GuideActivationBlocked(
                 "effective project submission artifact policy no longer matches submission policy"
