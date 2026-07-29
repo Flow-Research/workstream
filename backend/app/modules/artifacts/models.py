@@ -253,6 +253,13 @@ class GuideSourceArtifactBinding(Base):
             "setup_generation",
             name="uq_guide_bindings_item_generation",
         ),
+        UniqueConstraint(
+            "id",
+            "content_id",
+            "verified_replica_id",
+            "setup_generation",
+            name="uq_guide_bindings_exact_read",
+        ),
         UniqueConstraint("supersedes_binding_id", name="uq_guide_bindings_supersedes"),
         CheckConstraint("setup_generation > 0", name="ck_guide_bindings_generation_positive"),
         CheckConstraint("logical_role = 'guide_source_original'", name="ck_guide_bindings_role"),
@@ -274,6 +281,93 @@ class GuideSourceArtifactBinding(Base):
         ForeignKey("guide_source_artifact_bindings.id", ondelete="RESTRICT"), index=True
     )
     created_by_service: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceFormatClassification(Base):
+    """Immutable syntactic classification of one verified guide binding."""
+
+    __tablename__ = "guide_source_format_classifications"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["binding_id", "content_id", "verified_replica_id", "setup_generation"],
+            [
+                "guide_source_artifact_bindings.id",
+                "guide_source_artifact_bindings.content_id",
+                "guide_source_artifact_bindings.verified_replica_id",
+                "guide_source_artifact_bindings.setup_generation",
+            ],
+            name="fk_guide_classifications_exact_binding",
+        ),
+        UniqueConstraint("binding_id", name="uq_guide_classifications_binding"),
+        CheckConstraint(
+            "status in ('classified', 'unsupported', 'ambiguous', 'malformed', 'limit_exceeded')",
+            name="ck_guide_classifications_status",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="sha256"),
+            name="ck_guide_source_format_classifications_sha256_shape",
+        ),
+        CheckConstraint(
+            "byte_count >= 0",
+            name="ck_guide_source_format_classifications_byte_count_nonnegative",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    binding_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    verified_replica_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    media_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    detected_format: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    detector_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    detector_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    classification_facts: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceArtifactIncident(Base):
+    """Bounded ART-owned custody failure for one exact guide read."""
+
+    __tablename__ = "guide_source_artifact_incidents"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["binding_id", "content_id", "verified_replica_id", "setup_generation"],
+            [
+                "guide_source_artifact_bindings.id",
+                "guide_source_artifact_bindings.content_id",
+                "guide_source_artifact_bindings.verified_replica_id",
+                "guide_source_artifact_bindings.setup_generation",
+            ],
+            name="fk_guide_incidents_exact_binding",
+        ),
+        CheckConstraint(
+            "code in ('missing', 'changed', 'truncated', 'unavailable', 'stale', 'conflict')",
+            name="ck_guide_incidents_code",
+        ),
+        CheckConstraint(
+            "observed_byte_count is null or observed_byte_count >= 0",
+            name="ck_guide_source_artifact_incidents_size",
+        ),
+        CheckConstraint(
+            "observed_sha256 is null or " + SHA256_CHECK.format(column="observed_sha256"),
+            name="ck_guide_source_artifact_incidents_sha256",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    binding_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    verified_replica_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    code: Mapped[str] = mapped_column(String(40), nullable=False)
+    observed_sha256: Mapped[str | None] = mapped_column(String(71))
+    observed_byte_count: Mapped[int | None] = mapped_column(BigInteger)
+    bounded_facts: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

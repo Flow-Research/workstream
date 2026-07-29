@@ -218,6 +218,58 @@ async def test_preparation_seals_exact_commitment_and_single_stream(tmp_path: Pa
     manager.close()
 
 
+@pytest.mark.asyncio
+async def test_prepared_inspection_is_scratch_owned_bounded_and_pre_stream(
+    tmp_path: Path,
+) -> None:
+    """Expose bytes only to one trusted callback while lifecycle custody remains sealed."""
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=preparation_limits())
+    service = ArtifactPreparationService(manager)
+    prepared = await service.prepare(byte_stream(b"guide"), media_type="text/plain")
+
+    class ReadAllInspector:
+        def inspect(self, reader: BinaryIO) -> bytes:
+            return reader.read()
+
+    observed = await prepared.inspect(ReadAllInspector())
+
+    assert observed == b"guide"
+    async with prepared as source:
+        assert b"".join([chunk async for chunk in source.stream()]) == b"guide"
+        with pytest.raises(ArtifactScratchIntegrityError, match="unavailable"):
+            await prepared.inspect(ReadAllInspector())
+    manager.close()
+
+
+@pytest.mark.asyncio
+async def test_prepared_inspection_deadline_releases_scratch(tmp_path: Path) -> None:
+    """Map an over-deadline inspector to the canonical timeout and retain cleanup custody."""
+    limits = preparation_limits()
+    manager = ArtifactScratchManager(root=tmp_path / "scratch", limits=limits)
+    service = ArtifactPreparationService(manager)
+    prepared = await service.prepare(byte_stream(b"guide"), media_type="text/plain")
+
+    class ReadInspector:
+        def inspect(self, reader: BinaryIO) -> bytes:
+            return reader.read()
+
+    original_run_io = service._run_io
+
+    async def deterministic_timeout(*_args: Any, **_kwargs: Any) -> None:
+        raise TimeoutError
+
+    service._run_io = deterministic_timeout  # type: ignore[method-assign]
+    try:
+        with pytest.raises(ArtifactPreparationDeadlineError, match="deadline"):
+            await prepared.inspect(ReadInspector())
+    finally:
+        service._run_io = original_run_io  # type: ignore[method-assign]
+        await prepared.close()
+
+    assert (await manager.usage()).reservation_count == 0
+    manager.close()
+
+
 def test_committed_sources_cannot_be_publicly_assembled() -> None:
     """Reject caller-selected commitment and stream pairing."""
     from app.modules.artifacts.sources import _COMMITTED_SOURCE_SEAL

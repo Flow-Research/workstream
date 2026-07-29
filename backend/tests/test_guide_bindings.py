@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -15,11 +18,20 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
-from app.interfaces.artifact_operations import GuideSourceBindingRequest
+from app.interfaces.artifact_operations import (
+    GuideSourceBindingRequest,
+    GuideSourceMaterializationRequest,
+)
+from app.interfaces.artifacts import ArtifactObjectMissingError, ArtifactStoreUnavailableError
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.artifacts.guide_bindings import (
     GuideSourceBindingError,
     GuideSourceBindingService,
+)
+from app.modules.artifacts.guide_formats import GuideFormatDetector, GuideFormatLimits
+from app.modules.artifacts.guide_materialization import (
+    ArtifactMaterializationService,
+    GuideSourceMaterializationError,
 )
 from app.modules.artifacts.models import (
     ArtifactContent,
@@ -29,10 +41,21 @@ from app.modules.artifacts.models import (
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
     GuideSourceArtifactBinding,
+    GuideSourceArtifactIncident,
+    GuideSourceFormatClassification,
 )
+from app.modules.artifacts.preparation import (
+    HARD_MAXIMUM_ARTIFACT_BYTES,
+    ArtifactPreparationDeadlineError,
+    ArtifactPreparationLimits,
+    ArtifactPreparationService,
+    ArtifactScratchManager,
+)
+from app.modules.artifacts.service import ArtifactStorageNamespaceError, ArtifactStorageNamespaceSpec
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideSourceBindingAuthorityFacts,
+    GuideSourceReadAuthorityFacts,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.projects.models import (
@@ -60,11 +83,105 @@ class _AllowBindingAuthority:
             raise ArtifactAuthorityDeniedError("binding denied")
 
 
+class _AllowReadAuthority:
+    """Test-only fixed guide reader authority."""
+
+    def __init__(self, *, handle: PreparedAuthorizationHandle | None = None) -> None:
+        self.handle = handle or object.__new__(PreparedAuthorizationHandle)
+        self.facts: list[GuideSourceReadAuthorityFacts] = []
+
+    async def consume(self, **values: Any) -> None:
+        assert values["prepared_authorization"] is self.handle
+        self.facts.append(values["facts"])
+
+
+class _ReadStore:
+    """Provider-neutral test read probe."""
+
+    def __init__(self, payload: bytes, *, after_read=None) -> None:
+        self.payload = payload
+        self.after_read = after_read
+        self.open_count = 0
+        self.identity = SimpleNamespace(provider_key="local")
+
+    async def open(self, provider_object_ref: str) -> AsyncIterator[bytes]:
+        assert provider_object_ref.startswith("objects/")
+        self.open_count += 1
+        yield self.payload
+        if self.after_read is not None:
+            await self.after_read()
+
+
+class _FailingReadStore:
+    """Raise one sanitized provider failure only when the read begins."""
+
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+        self.open_count = 0
+        self.identity = SimpleNamespace(provider_key="local")
+
+    async def open(self, provider_object_ref: str) -> AsyncIterator[bytes]:
+        del provider_object_ref
+        self.open_count += 1
+        raise self.error
+        yield b""  # pragma: no cover - retain the async-iterator contract
+
+
+class _BlockingReadStore(_ReadStore):
+    """Hold one provider read until the calling task is cancelled."""
+
+    def __init__(self, payload: bytes) -> None:
+        super().__init__(payload)
+        self.started = asyncio.Event()
+
+    async def open(self, provider_object_ref: str) -> AsyncIterator[bytes]:
+        assert provider_object_ref.startswith("objects/")
+        self.open_count += 1
+        self.started.set()
+        await asyncio.Event().wait()
+        yield self.payload
+
+
+def _preparation(
+    tmp_path: Path, **limit_changes: Any
+) -> tuple[ArtifactPreparationService, ArtifactScratchManager]:
+    limit_values = {
+        "aggregate_reserved_bytes": 2 * HARD_MAXIMUM_ARTIFACT_BYTES,
+        "maximum_files": 2,
+        "maximum_concurrency": 2,
+        "minimum_free_bytes": 0,
+        "reservation_ttl_seconds": 30,
+        "total_deadline_seconds": 10,
+        "cleanup_margin_seconds": 5,
+        "stream_buffer_bytes": 1024,
+        "maximum_source_bytes": 1024 * 1024,
+    }
+    limit_values.update(limit_changes)
+    manager = ArtifactScratchManager(
+        root=tmp_path / "scratch",
+        limits=ArtifactPreparationLimits(**limit_values),
+    )
+    return ArtifactPreparationService(manager), manager
+
+
+def _namespace() -> ArtifactStorageNamespaceSpec:
+    return ArtifactStorageNamespaceSpec(
+        backend="local",
+        adapter="local",
+        provider_profile="test",
+        namespace_descriptor={"root": "test"},
+        namespace_fingerprint="sha256:" + "b" * 64,
+    )
+
+
 async def _seed_binding_lineage(
     session,
     *,
     verified: bool = True,
     verification_receipt: bool = True,
+    sha256: str | None = None,
+    byte_count: int = 42,
+    media_type: str = "application/pdf",
 ) -> dict[str, UUID]:
     ids = {
         name: uuid4()
@@ -81,7 +198,7 @@ async def _seed_binding_lineage(
             "job",
         )
     }
-    digest = "sha256:" + "a" * 64
+    digest = sha256 or "sha256:" + "a" * 64
     namespace_fingerprint = "sha256:" + "b" * 64
     session.add(
         ActorProfile(
@@ -148,7 +265,7 @@ async def _seed_binding_lineage(
             durable_ref="guide.pdf",
             ingestion_adapter="pdf",
             content_hash="caller-metadata-is-not-authority",
-            media_type="application/pdf",
+            media_type=media_type,
         )
     )
     session.add(
@@ -172,8 +289,8 @@ async def _seed_binding_lineage(
             source_item_id=str(ids["item"]),
             actor_profile_id=str(ids["actor"]),
             sha256=digest,
-            byte_count=42,
-            media_type="application/pdf",
+            byte_count=byte_count,
+            media_type=media_type,
         )
     )
     session.add(
@@ -190,8 +307,8 @@ async def _seed_binding_lineage(
         ArtifactContent(
             id=str(ids["content"]),
             sha256=digest,
-            byte_count=42,
-            media_type="application/pdf",
+            byte_count=byte_count,
+            media_type=media_type,
         )
     )
     await session.flush()
@@ -219,8 +336,8 @@ async def _seed_binding_lineage(
             project_id=str(ids["project"]),
             guide_source_item_id=str(ids["item"]),
             sha256=digest,
-            byte_count=42,
-            media_type="application/pdf",
+            byte_count=byte_count,
+            media_type=media_type,
             storage_namespace_id="primary",
             namespace_fingerprint=namespace_fingerprint,
             canonical_target="sha256/aa/" + "a" * 62,
@@ -253,7 +370,7 @@ async def _seed_binding_lineage(
                 execution_generation=0,
                 outcome="verified",
                 observed_sha256=digest,
-                observed_byte_count=42,
+                observed_byte_count=byte_count,
             )
         )
     await session.commit()
@@ -274,6 +391,523 @@ def _request(ids: dict[str, UUID], authority: _AllowBindingAuthority, **changes:
     }
     values.update(changes)
     return GuideSourceBindingRequest(**values)
+
+
+def _materialization_request(
+    ids: dict[str, UUID],
+    *,
+    binding_id: UUID,
+    authority: _AllowReadAuthority,
+    **changes: Any,
+) -> GuideSourceMaterializationRequest:
+    values = {
+        "prepared_authorization": authority.handle,
+        "project_id": ids["project"],
+        "guide_id": ids["guide"],
+        "guide_source_snapshot_id": ids["snapshot"],
+        "source_item_id": ids["item"],
+        "project_setup_run_id": ids["run"],
+        "setup_generation": 1,
+        "binding_id": binding_id,
+    }
+    values.update(changes)
+    return GuideSourceMaterializationRequest(**values)
+
+
+async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
+    authority = _AllowBindingAuthority()
+    async with factory() as session, session.begin():
+        result = await GuideSourceBindingService(session, authority).bind_guide_source(
+            _request(ids, authority)
+        )
+    return result.binding_id
+
+
+@pytest.mark.asyncio
+async def test_materialization_denies_before_provider_read(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _ReadStore(payload)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        authority = _AllowReadAuthority()
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+        )
+
+        with pytest.raises(ArtifactAuthorityDeniedError, match="unavailable"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        assert store.open_count == 0
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _ReadStore(payload)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+        request = _materialization_request(ids, binding_id=binding_id, authority=authority)
+
+        first = await service.materialize_guide_source(request)
+        replay = await service.materialize_guide_source(request)
+
+        assert (first.detected_format, first.status, first.replayed) == (
+            "pdf",
+            "classified",
+            False,
+        )
+        assert replay.classification_id == first.classification_id
+        assert replay.replayed
+        assert store.open_count == 2
+        assert authority.facts[0].namespace_fingerprint == "sha256:" + "b" * 64
+        assert authority.facts[0].verification_generation == 0
+        assert (await scratch.usage()).reservation_count == 0
+        assert list((tmp_path / "scratch" / "files").iterdir()) == []
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 1
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_truncated_materialization_records_incident_without_classification(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    expected = b"%PDF-1.7\ncomplete"
+    digest = "sha256:" + hashlib.sha256(expected).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _ReadStore(expected[:-4])
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(expected), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        async with factory() as session:
+            incident = await session.scalar(select(GuideSourceArtifactIncident))
+            assert incident is not None
+            assert incident.code == "truncated"
+            assert incident.observed_byte_count == len(expected) - 4
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+        assert (await scratch.usage()).reservation_count == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_same_size_changed_materialization_records_incident(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    expected = b"%PDF-1.7\nexpected"
+    observed = b"%PDF-1.7\nobserved"
+    assert len(expected) == len(observed)
+    digest = "sha256:" + hashlib.sha256(expected).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(expected), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            _ReadStore(observed),  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        async with factory() as session:
+            incident = await session.scalar(select(GuideSourceArtifactIncident))
+            assert incident is not None
+            assert incident.code == "changed"
+            assert incident.observed_byte_count == len(observed)
+            assert incident.observed_sha256 == "sha256:" + hashlib.sha256(observed).hexdigest()
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_post_read_lineage_drift_records_stale_incident(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+
+        async def advance_setup_generation() -> None:
+            async with factory() as session, session.begin():
+                session.add(
+                    ProjectSetupRun(
+                        id=str(uuid4()),
+                        project_id=str(ids["project"]),
+                        guide_id=str(ids["guide"]),
+                        guide_version="v1",
+                        source_snapshot_id=str(ids["snapshot"]),
+                        source_snapshot_hash=canonical_json_hash(
+                            {"item": str(ids["item"])}
+                        ),
+                        setup_generation=2,
+                        status="queued",
+                        current_step="queued",
+                        created_by="test",
+                    )
+                )
+
+        service = ArtifactMaterializationService(
+            factory,
+            _ReadStore(payload, after_read=advance_setup_generation),  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        async with factory() as session:
+            incident = await session.scalar(select(GuideSourceArtifactIncident))
+            assert incident is not None
+            assert incident.code == "stale"
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changed_field",
+    [
+        "project_id",
+        "guide_id",
+        "guide_source_snapshot_id",
+        "source_item_id",
+        "project_setup_run_id",
+        "binding_id",
+        "setup_generation",
+    ],
+)
+async def test_cross_resource_materialization_denies_before_authority_and_provider_read(
+    isolated_database_env: str,
+    tmp_path: Path,
+    changed_field: str,
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    store = _ReadStore(payload)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        wrong_value: UUID | int = 2 if changed_field == "setup_generation" else uuid4()
+        request_binding_id = (
+            wrong_value if changed_field == "binding_id" else binding_id
+        )
+        request_changes = (
+            {} if changed_field == "binding_id" else {changed_field: wrong_value}
+        )
+        with pytest.raises(GuideSourceMaterializationError, match="unavailable"):
+            await service.materialize_guide_source(
+                _materialization_request(
+                    ids,
+                    binding_id=request_binding_id,
+                    authority=authority,
+                    **request_changes,
+                )
+            )
+
+        assert store.open_count == 0
+        assert authority.facts == []
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_composed_namespace_drift_denies_before_authority_and_provider_read(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    store = _ReadStore(payload)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        drifted = ArtifactStorageNamespaceSpec(
+            backend="local",
+            adapter="other",
+            provider_profile="test",
+            namespace_descriptor={"root": "test"},
+            namespace_fingerprint="sha256:" + "b" * 64,
+        )
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            drifted,
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(ArtifactStorageNamespaceError, match="active storage namespace"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        assert store.open_count == 0
+        assert authority.facts == []
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_cancellation_cleans_scratch_without_effect(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    store = _BlockingReadStore(payload)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+        task = asyncio.create_task(
+            service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+        )
+        await asyncio.wait_for(store.started.wait(), timeout=5)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert (await scratch.usage()).reservation_count == 0
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+            assert await session.scalar(select(func.count(GuideSourceArtifactIncident.id))) == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_materialization_inspection_timeout_cleans_scratch_and_records_incident(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        async def deterministic_timeout(*_args: Any, **_kwargs: Any) -> None:
+            raise ArtifactPreparationDeadlineError("artifact preparation deadline exceeded")
+
+        preparation.inspect_prepared_artifact = deterministic_timeout  # type: ignore[method-assign]
+        service = ArtifactMaterializationService(
+            factory,
+            _ReadStore(payload),  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        assert (await scratch.usage()).reservation_count == 0
+        async with factory() as session:
+            incident = await session.scalar(select(GuideSourceArtifactIncident))
+            assert incident is not None
+            assert incident.code == "unavailable"
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("provider_error", "expected_code"),
+    [
+        (ArtifactObjectMissingError("missing"), "missing"),
+        (ArtifactStoreUnavailableError("unavailable"), "unavailable"),
+    ],
+)
+async def test_provider_failure_records_only_bounded_artifact_incident(
+    isolated_database_env: str,
+    tmp_path: Path,
+    provider_error: Exception,
+    expected_code: str,
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _FailingReadStore(provider_error)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+
+        with pytest.raises(GuideSourceMaterializationError, match="incident"):
+            await service.materialize_guide_source(
+                _materialization_request(ids, binding_id=binding_id, authority=authority)
+            )
+
+        async with factory() as session:
+            incident = await session.scalar(select(GuideSourceArtifactIncident))
+            assert incident is not None
+            assert incident.code == expected_code
+            assert incident.observed_sha256 is None
+            assert incident.bounded_facts == {"verification_generation": 0}
+        assert store.open_count == 1
+        assert (await scratch.usage()).reservation_count == 0
+    finally:
+        scratch.close()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
@@ -394,6 +1028,96 @@ async def _create_populated_binding(database_url: str) -> None:
         async with factory() as session, session.begin():
             await GuideSourceBindingService(session, authority).bind_guide_source(
                 _request(ids, authority)
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.postgres_schema_contract
+def test_0040_refuses_populated_classification_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parents[1] / "alembic"),
+    )
+    asyncio.run(_create_populated_classification(isolated_database_env))
+    with migration_lock(), pytest.raises(
+        RuntimeError,
+        match="cannot downgrade populated guide materialization evidence",
+    ):
+        command.downgrade(config, "0039_guide_source_bindings")
+
+
+async def _create_populated_classification(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(session)
+        binding_id = await _create_binding(factory, ids)
+        async with factory() as session, session.begin():
+            session.add(
+                GuideSourceFormatClassification(
+                    id=str(uuid4()),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    sha256="sha256:" + "a" * 64,
+                    byte_count=42,
+                    media_type="application/pdf",
+                    detected_format="pdf",
+                    status="classified",
+                    detector_name="workstream.guide_format",
+                    detector_version="1",
+                    classification_facts={},
+                )
+            )
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.postgres_schema_contract
+def test_0040_refuses_incident_only_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parents[1] / "alembic"),
+    )
+    asyncio.run(_create_populated_incident(isolated_database_env))
+    with migration_lock(), pytest.raises(
+        RuntimeError,
+        match="cannot downgrade populated guide materialization evidence",
+    ):
+        command.downgrade(config, "0039_guide_source_bindings")
+
+
+async def _create_populated_incident(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(session)
+        binding_id = await _create_binding(factory, ids)
+        async with factory() as session, session.begin():
+            session.add(
+                GuideSourceArtifactIncident(
+                    id=str(uuid4()),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    code="missing",
+                    observed_sha256=None,
+                    observed_byte_count=None,
+                    bounded_facts={"verification_generation": 0},
+                )
             )
     finally:
         await engine.dispose()

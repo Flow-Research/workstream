@@ -47,6 +47,9 @@ scratch without extracting semantic content.
   either image dimension; every exact-boundary case succeeds, every one-over
   case returns `limit_exceeded`, and no partial classification survives;
 - cleanup occurs on success, denial, mismatch, cancellation, and timeout;
+- migration `0040_guide_materialization_classification` preserves exact-binding classification
+  and incident custody, refuses populated downgrade, and introduces no new
+  Operator or generic artifact-read route;
 - changed subsystems remain at least 90% covered and repository coverage stays
   at least 78%.
 
@@ -54,12 +57,12 @@ scratch without extracting semantic content.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_guide_artifacts.py tests/test_artifact_scratch_manager.py tests/test_guide_format_detection.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_guide_bindings.py tests/test_artifact_preparation.py tests/test_guide_formats.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
 (cd backend && .venv/bin/coverage report --precision=2 --fail-under=78)
 (cd backend && .venv/bin/coverage report --include='app/modules/artifacts/*' --precision=2 --fail-under=90)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
-python3 scripts/test_agent_gates.py
+PYTHONPATH=. python3 scripts/test_lightweight_agent_gates.py
 git diff --check
 ```
 
