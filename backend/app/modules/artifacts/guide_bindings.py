@@ -21,15 +21,14 @@ from app.modules.artifacts.models import (
     ArtifactVerificationReceipt,
     GuideSourceArtifactBinding,
 )
+from app.modules.artifacts.repository import ArtifactRepository
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideSourceBindingAuthorityFacts,
 )
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from app.modules.projects.models import (
-    GuideSourceArtifactIngest,
     GuideSourceSnapshot,
-    GuideSourceSnapshotItem,
     ProjectGuide,
     ProjectSetupRun,
 )
@@ -72,6 +71,7 @@ class GuideSourceBindingService:
         authority: GuideSourceBindingPreparedAuthorization | None = None,
     ) -> None:
         self._session = session
+        self._repository = ArtifactRepository(session)
         self._authority = authority or DenyGuideSourceBindingPreparedAuthorization()
 
     async def bind_guide_source(
@@ -88,6 +88,21 @@ class GuideSourceBindingService:
         ):
             raise GuideSourceBindingError("guide source binding is unavailable")
 
+        lineage = await self._repository.get_guide_lineage(str(request.source_item_id))
+        admission = await self._repository.get_guide_admission_facts(str(request.source_item_id))
+        if (
+            lineage is None
+            or admission is None
+            or lineage.project_id != str(request.project_id)
+            or lineage.guide_id != str(request.guide_id)
+            or lineage.guide_source_snapshot_id != str(request.guide_source_snapshot_id)
+            or admission.guide_source_item_id != lineage.guide_source_item_id
+            or admission.guide_source_snapshot_id != lineage.guide_source_snapshot_id
+            or admission.guide_id != lineage.guide_id
+            or admission.project_id != lineage.project_id
+        ):
+            raise GuideSourceBindingError("guide source binding is unavailable")
+
         guide = await self._session.scalar(
             select(ProjectGuide)
             .where(ProjectGuide.id == str(request.guide_id))
@@ -98,19 +113,9 @@ class GuideSourceBindingService:
             .where(GuideSourceSnapshot.id == str(request.guide_source_snapshot_id))
             .with_for_update()
         )
-        item = await self._session.scalar(
-            select(GuideSourceSnapshotItem)
-            .where(GuideSourceSnapshotItem.id == str(request.source_item_id))
-            .with_for_update()
-        )
         setup_run = await self._session.scalar(
             select(ProjectSetupRun)
             .where(ProjectSetupRun.id == str(request.project_setup_run_id))
-            .with_for_update()
-        )
-        ingest = await self._session.scalar(
-            select(GuideSourceArtifactIngest)
-            .where(GuideSourceArtifactIngest.source_item_id == str(request.source_item_id))
             .with_for_update()
         )
         content = await self._session.scalar(
@@ -127,14 +132,14 @@ class GuideSourceBindingService:
             request,
             guide=guide,
             snapshot=snapshot,
-            item=item,
             setup_run=setup_run,
-            ingest=ingest,
             content=content,
+            expected_sha256=admission.content_hash,
+            expected_byte_count=admission.byte_count,
             latest_generation=latest_generation,
         ):
             raise GuideSourceBindingError("guide source binding is unavailable")
-        assert ingest is not None and content is not None
+        assert content is not None
 
         replica = await self._session.scalar(
             select(ArtifactReplica)
@@ -155,9 +160,9 @@ class GuideSourceBindingService:
                 ArtifactReplica.verification_state == "verified",
                 ArtifactReplica.availability_state == "available",
                 ArtifactReplica.integrity_state == "valid",
-                ArtifactPutAttempt.guide_source_item_id == item.id,
-                ArtifactPutAttempt.sha256 == ingest.sha256,
-                ArtifactPutAttempt.byte_count == ingest.byte_count,
+                ArtifactPutAttempt.guide_source_item_id == admission.guide_source_item_id,
+                ArtifactPutAttempt.sha256 == admission.content_hash,
+                ArtifactPutAttempt.byte_count == admission.byte_count,
                 ArtifactPutAttempt.replica_id == ArtifactReplica.id,
                 ArtifactVerificationJob.replica_id == ArtifactReplica.id,
                 ArtifactVerificationJob.status == "verified",
@@ -251,10 +256,10 @@ class GuideSourceBindingService:
         *,
         guide: ProjectGuide | None,
         snapshot: GuideSourceSnapshot | None,
-        item: GuideSourceSnapshotItem | None,
         setup_run: ProjectSetupRun | None,
-        ingest: GuideSourceArtifactIngest | None,
         content: ArtifactContent | None,
+        expected_sha256: str,
+        expected_byte_count: int,
         latest_generation: int | None,
     ) -> bool:
         project_id = str(request.project_id)
@@ -268,8 +273,6 @@ class GuideSourceBindingService:
             and snapshot.project_id == project_id
             and snapshot.guide_id == guide_id
             and snapshot.guide_version == guide.version
-            and item is not None
-            and item.source_snapshot_id == snapshot_id
             and setup_run is not None
             and setup_run.project_id == project_id
             and setup_run.guide_id == guide_id
@@ -278,11 +281,9 @@ class GuideSourceBindingService:
             and setup_run.source_snapshot_hash == snapshot.bundle_hash
             and setup_run.setup_generation == request.setup_generation
             and latest_generation == request.setup_generation
-            and ingest is not None
-            and ingest.source_item_id == item.id
             and content is not None
-            and content.sha256 == ingest.sha256
-            and content.byte_count == ingest.byte_count
+            and content.sha256 == expected_sha256
+            and content.byte_count == expected_byte_count
         )
 
     @staticmethod

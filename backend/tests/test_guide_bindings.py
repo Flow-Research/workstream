@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -282,6 +285,101 @@ async def test_binding_is_exact_immutable_and_idempotent(isolated_database_env: 
         assert first_authority.facts[0].verified_replica_id == ids["replica"]
         async with factory() as session:
             assert await session.scalar(select(func.count(GuideSourceArtifactBinding.id))) == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_next_generation_explicitly_supersedes_prior_binding(
+    isolated_database_env: str,
+) -> None:
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(session)
+        first_authority = _AllowBindingAuthority()
+        async with factory() as session, session.begin():
+            first = await GuideSourceBindingService(session, first_authority).bind_guide_source(
+                _request(ids, first_authority)
+            )
+        second_run_id = uuid4()
+        async with factory() as session, session.begin():
+            snapshot = await session.get(GuideSourceSnapshot, str(ids["snapshot"]))
+            assert snapshot is not None
+            session.add(
+                ProjectSetupRun(
+                    id=str(second_run_id),
+                    project_id=str(ids["project"]),
+                    guide_id=str(ids["guide"]),
+                    guide_version="v1",
+                    source_snapshot_id=str(ids["snapshot"]),
+                    source_snapshot_hash=snapshot.bundle_hash,
+                    setup_generation=2,
+                    status="queued",
+                    current_step="queued",
+                    created_by="test",
+                )
+            )
+        second_authority = _AllowBindingAuthority()
+        async with factory() as session, session.begin():
+            second = await GuideSourceBindingService(session, second_authority).bind_guide_source(
+                _request(
+                    ids,
+                    second_authority,
+                    project_setup_run_id=second_run_id,
+                    setup_generation=2,
+                )
+            )
+        replay_authority = _AllowBindingAuthority()
+        async with factory() as session, session.begin():
+            replay = await GuideSourceBindingService(session, replay_authority).bind_guide_source(
+                _request(
+                    ids,
+                    replay_authority,
+                    project_setup_run_id=second_run_id,
+                    setup_generation=2,
+                )
+            )
+        async with factory() as session:
+            successor = await session.get(GuideSourceArtifactBinding, str(second.binding_id))
+            assert successor is not None
+            assert successor.supersedes_binding_id == str(first.binding_id)
+            assert replay.binding_id == second.binding_id
+            assert replay.replayed
+            assert await session.scalar(select(func.count(GuideSourceArtifactBinding.id))) == 2
+    finally:
+        await engine.dispose()
+
+
+def test_0039_refuses_populated_binding_downgrade(
+    isolated_database_env: str,
+    migration_lock,
+) -> None:
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option(
+        "script_location",
+        str(Path(__file__).resolve().parents[1] / "alembic"),
+    )
+    asyncio.run(_create_populated_binding(isolated_database_env))
+    with migration_lock(), pytest.raises(
+        RuntimeError,
+        match="cannot downgrade populated guide source artifact bindings",
+    ):
+        command.downgrade(config, "0038_guide_source_ingest")
+
+
+async def _create_populated_binding(database_url: str) -> None:
+    engine = create_async_engine(database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(session)
+        authority = _AllowBindingAuthority()
+        async with factory() as session, session.begin():
+            await GuideSourceBindingService(session, authority).bind_guide_source(
+                _request(ids, authority)
+            )
     finally:
         await engine.dispose()
 
