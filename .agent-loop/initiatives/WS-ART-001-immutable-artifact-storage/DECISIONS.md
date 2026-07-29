@@ -402,6 +402,33 @@ relationships, embedded executables, cancellation, timeout, and executor loss
 have bounded outcomes and cleanup. Production parser dependencies require
 explicit human approval before implementation.
 
+The v0.1 extraction-policy limits are fixed, not caller-selectable:
+
+| Limit | Value | Enforcement owner | Breach outcome |
+|---|---:|---|---|
+| parser input per item | 32 MiB | 03B3A framework before dispatch | `limit_exceeded` |
+| canonical output per item | 4 MiB | 03B3A streaming output collector | `limit_exceeded` |
+| aggregate agent material | 12 MiB | 03B4 input assembler | `limit_exceeded` |
+| subprocess wall time per item | 60 seconds | 03B3A process supervisor | `limit_exceeded` |
+| subprocess address space | 512 MiB | 03B3A OS isolation boundary | `limit_exceeded` |
+| container entries | 2,000 | 03B2 container inspector | `limit_exceeded` |
+| decompressed container bytes | 128 MiB | 03B2 container inspector | `limit_exceeded` |
+| container nesting depth | 8 | 03B2 container inspector | `limit_exceeded` |
+| compression ratio | 100:1 | 03B2 container inspector | `limit_exceeded` |
+| PDF pages | 500 | 03B3B PDF adapter | `limit_exceeded` |
+| PPTX slides | 300 | 03B3B PPTX adapter | `limit_exceeded` |
+| XLSX sheets | 100 | 03B3B XLSX adapter | `limit_exceeded` |
+| table rows per item | 100,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
+| table cells per item | 1,000,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
+| characters per cell | 32,768 | CSV/XLSX adapter | `limit_exceeded` |
+| image pixels | 40 megapixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
+| image width or height | 16,384 pixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
+
+Exact-boundary, one-over-boundary, cleanup, cancellation, timeout, memory-
+termination, and executor-loss tests are mandatory. Executor loss leaves no
+successful extraction usage record; a current-generation retry starts from
+fresh materialization and authority.
+
 ## D43 - Canonical Extraction Records, Not Implicit Provider Writes
 
 v0.1 persists an immutable content-derived extraction representation in
@@ -429,9 +456,15 @@ a guide cannot alter system/developer policy or authorize an action.
 
 ## D46 - Setup Failures Have Stable Operational Outcomes
 
-Existing `ProjectSetupRun.status=setup_blocked` uses stable redacted error codes
-for artifact incident, unsupported format, malformed content, and extraction
-failure. Recoverable incidents wait for ART recovery and expose a bounded
-incident reference to authorized Operators. Terminal corruption or source
-format/content failure requires the Project Manager to upload a corrected item
-into a new snapshot. None creates a sufficiency decision.
+Existing `ProjectSetupRun.status=setup_blocked` uses this exhaustive stable,
+redacted mapping: `unsupported` -> `guide_source_format_unsupported`;
+`ambiguous` -> `guide_source_format_ambiguous`; `malformed` ->
+`guide_source_malformed`; `limit_exceeded` -> `guide_source_limit_exceeded`;
+`parser_failure` -> `guide_source_extraction_failed`; `cancelled` ->
+`guide_source_extraction_cancelled`; and `artifact_incident` ->
+`guide_artifact_incident`. Recoverable incidents wait for ART recovery and
+expose a bounded incident reference to authorized Operators. A current-
+generation transient cancellation may retry; all other terminal source-format,
+content, or limit failures require the Project Manager to upload a corrected or
+smaller item into a new snapshot. Limits are never raised inline. None creates
+a sufficiency decision.

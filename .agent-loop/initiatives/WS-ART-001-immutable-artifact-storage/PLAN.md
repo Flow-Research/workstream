@@ -508,6 +508,19 @@ and may be allowed only by the versioned extraction policy; required missing
 semantics stop setup internally. Artifact incidents never become sufficiency
 findings.
 
+Stable setup mappings are exact:
+
+| Extraction status | Redacted setup code | Recovery/remediation |
+|---|---|---|
+| `extracted` | none | Continue only when every required item is complete. |
+| `unsupported` | `guide_source_format_unsupported` | Project Manager supplies a supported item in a new snapshot. |
+| `ambiguous` | `guide_source_format_ambiguous` | Project Manager supplies an unambiguous item in a new snapshot. |
+| `malformed` | `guide_source_malformed` | Project Manager supplies a corrected item in a new snapshot. |
+| `limit_exceeded` | `guide_source_limit_exceeded` | Project Manager supplies a smaller/simpler item; limits are not raised inline. |
+| `parser_failure` | `guide_source_extraction_failed` | Bounded automatic retry; after exhaustion, PM replaces the item and Operator may inspect redacted diagnostics. |
+| `cancelled` | `guide_source_extraction_cancelled` | Current-generation transient cancellation may retry; stale-generation cancellation commits no report. |
+| `artifact_incident` | `guide_artifact_incident` | Recoverable custody failure waits for ART recovery; terminal corruption requires a new item/snapshot. |
+
 Guide-source items are not required to be ZIP files. The initial semantic
 extractors are PDF, DOCX, PPTX, CSV, XLSX, Markdown, plain text, JSON, and
 PNG, JPEG, and WebP metadata. Images are accepted and classified, but without
@@ -525,15 +538,10 @@ code. A separate immutable usage record binds that result to the exact binding,
 source item, setup run, and generation. Original bytes remain authoritative. A
 later derived-artifact store path requires a distinct AUTH action.
 
-The existing `ProjectSetupRun.status=setup_blocked` remains the public state;
-stable redacted error codes distinguish `guide_artifact_incident`,
-`guide_source_format_unsupported`, `guide_source_malformed`, and
-`guide_source_extraction_failed`. Artifact incidents expose a bounded incident
-identifier to authorized Operators and wait for ART recovery when recoverable;
-terminal corruption requires a Project Manager to create a new source item and
-snapshot. Unsupported, malformed, limit-exceeded, or extraction-failed content
-asks the Project Manager to upload a corrected supported source item. None is a
-guide-insufficiency decision.
+The existing `ProjectSetupRun.status=setup_blocked` remains the public state for
+every terminal current-generation failure above. API, Operator, and Project
+Manager projections use only the exact redacted mapping and remediation table.
+None is a guide-insufficiency decision.
 
 Any production parser dependency in 03B3B requires explicit human approval. Candidate
 libraries must undergo current security, maintenance, license, transitive-

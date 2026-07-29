@@ -26,6 +26,13 @@ and standard-library text, Markdown, JSON, and CSV extraction.
 
 - no-network subprocess enforces input/output, CPU/time/memory, row/cell,
   encoding, nesting, cancellation, and cleanup limits;
+- the framework rejects parser input above 32 MiB, canonical output above
+  4 MiB, execution beyond 60 seconds, or address-space use above 512 MiB;
+  CSV rejects more than 100,000 rows, 1,000,000 cells, or 32,768 characters in
+  one cell; every breach deterministically records `limit_exceeded`;
+- tests cover each exact boundary and one-over boundary, timeout and memory
+  termination, cancellation, executor loss, scratch cleanup, and retry through
+  fresh materialization and fresh authority with no partial durable output;
 - extraction revalidates exact 03B2 digest/binding/format/policy provenance;
 - deterministic content records are keyed by content, format, extractor/version,
   and policy; separate usage records name item, binding, run, and generation;
@@ -37,7 +44,9 @@ and standard-library text, Markdown, JSON, and CSV extraction.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_guide_extraction.py -q --cov=app.modules.artifacts.guide_extraction --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_guide_extraction.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
+(cd backend && .venv/bin/coverage report --precision=2 --fail-under=78)
+(cd backend && .venv/bin/coverage report --include='app/modules/artifacts/*,app/core/config.py,app/interfaces/artifacts.py' --precision=2 --fail-under=90)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 python3 scripts/test_agent_gates.py

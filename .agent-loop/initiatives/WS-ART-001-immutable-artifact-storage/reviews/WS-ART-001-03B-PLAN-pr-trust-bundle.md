@@ -58,12 +58,15 @@ All nine tracks passed after repairs. Details are in
 
 ## External Review
 
-CodeRabbit reached its review-rate limit before producing findings. Agent Gates
-found and prompted repair of five retired-vocabulary occurrences. The first
-Backend run had one unrelated existing AUTH concurrency failure after 1,651
-passes. Disposition is recorded in
+CodeRabbit's later review produced five valid contract findings, now repaired:
+explicit 78% plus scoped 90% coverage gates, concrete v0.1 extraction limits
+and boundary proofs, exhaustive stable failure mappings, consistent guide-read
+wording, and locked pre-report-commit lineage/integrity/provenance revalidation.
+Agent Gates separately prompted repair of five retired-vocabulary occurrences.
+The first Backend run had one unrelated existing AUTH concurrency failure after
+1,651 passes. Disposition is recorded in
 `WS-ART-001-03B-PLAN-external-review-response.md`; repaired-head hosted checks
-and CodeRabbit review remain required.
+and thread verification remain required.
 
 ## Remaining Risks And Follow-Up
 

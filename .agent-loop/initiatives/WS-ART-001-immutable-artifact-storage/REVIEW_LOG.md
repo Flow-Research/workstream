@@ -175,3 +175,7 @@
   Agent Gates found five valid retired-vocabulary occurrences, now repaired.
   Backend recorded one unrelated AUTH PostgreSQL concurrency failure after
   1,651 passes; the repaired documentation head requires a fresh hosted rerun.
+- CodeRabbit later posted five valid findings. The repair makes repository and
+  scoped coverage gates explicit, fixes concrete extraction bounds and their
+  adversarial proof, exhaustively maps failure statuses, normalizes guide-read
+  wording, and adds locked revalidation immediately before report commit.

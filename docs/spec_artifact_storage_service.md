@@ -1238,9 +1238,16 @@ generation extraction reaches the agent, delimited as untrusted source data
 with no tool, secret, provider, or instruction authority. Unsupported,
 ambiguous, malformed, stale, or failed required material stops setup internally.
 
-The public run remains `setup_blocked` with redacted stable codes
-`guide_artifact_incident`, `guide_source_format_unsupported`,
-`guide_source_malformed`, or `guide_source_extraction_failed`. Recoverable ART
+Immediately before committing a sufficiency report, the setup transaction must
+lock, reload, and revalidate the exact project, draft guide, source snapshot,
+setup run and generation, guide-source binding, observed content-integrity
+facts, and extraction-usage provenance used for the agent input. Any drift,
+replacement, integrity mismatch, or incomplete provenance rolls back the report
+commit and produces the applicable bounded internal failure; an earlier
+pre-agent validation is not sufficient authority for this durable mutation.
+
+The public run remains `setup_blocked` with the redacted stable code defined for
+the exact extraction outcome in D46. Recoverable ART
 incidents wait for recovery and expose only a bounded incident reference to an
 authorized Operator. Terminal corruption or source-content failure requires a
 new corrected Project Manager source item/snapshot; no outcome is a sufficiency

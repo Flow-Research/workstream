@@ -2,9 +2,13 @@
 
 ## Comments Addressed
 
-- CodeRabbit produced no findings because the organization review limit was
-  reached before review started. There are no inline CodeRabbit comments to
-  accept, reject, or defer on the current head.
+- CodeRabbit's later review produced five valid findings. The contracts now
+  preserve repository-wide 78% coverage before their scoped 90% reports; name
+  exact v0.1 extraction limits, enforcement points, stable outcomes, boundary
+  tests, cleanup, and executor-loss proof; exhaustively map every extraction
+  status to a redacted public code and remediation; use consistent
+  `guide-read` wording; and require a second locked lineage/integrity/provenance
+  validation immediately before report commit.
 - Agent Gates correctly found five uses of retired human `worker` vocabulary in
   new planning text. They were replaced with parser runtime, executor, and
   project-setup executor wording. The future coverage command now avoids
@@ -18,7 +22,6 @@
 
 ## Comments Deferred
 
-- CodeRabbit review itself remains pending until its rate limit permits a run.
 - No backend product-code repair is justified from the isolated AUTH concurrency
   failure without reproduction on the new head; it is outside this planning
   diff.
@@ -38,5 +41,5 @@ Both pass. The full documentation/stale-contract suite is rerun before push.
 
 ## Remaining Risks
 
-- CodeRabbit has not reviewed the PR yet.
-- Hosted Backend and Agent Gates must pass the repaired exact head.
+- Hosted Backend and Agent Gates must pass the repaired exact head, and the five
+  CodeRabbit threads must be verified against that head.

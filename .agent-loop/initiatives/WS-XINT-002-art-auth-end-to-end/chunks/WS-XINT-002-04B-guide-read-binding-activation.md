@@ -2,7 +2,7 @@
 
 ## Goal
 
-Activate fixed-service guide binding and guide read only after merged ART-03B1,
+Activate fixed-service guide binding and guide-read actions only after merged ART-03B1,
 03B2, 03B3A, 03B3B, and 03B4 evidence, without weakening ART-03C.
 
 ## Risk class

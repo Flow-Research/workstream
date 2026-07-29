@@ -42,6 +42,10 @@ scratch without extracting semantic content.
   unsupported outcome and never dispatch a parser;
 - DOCX/PPTX/XLSX require bounded internal markers; symlinks, macros, external
   relationships, embedded executables, bombs, and malformed containers reject;
+- container inspection enforces 2,000 entries, 128 MiB decompressed bytes,
+  nesting depth 8, compression ratio 100:1, 40 megapixels, and 16,384 pixels on
+  either image dimension; every exact-boundary case succeeds, every one-over
+  case returns `limit_exceeded`, and no partial classification survives;
 - cleanup occurs on success, denial, mismatch, cancellation, and timeout;
 - changed subsystems remain at least 90% covered and repository coverage stays
   at least 78%.
@@ -50,7 +54,9 @@ scratch without extracting semantic content.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_guide_artifacts.py tests/test_artifact_scratch_manager.py tests/test_guide_format_detection.py -q --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_guide_artifacts.py tests/test_artifact_scratch_manager.py tests/test_guide_format_detection.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
+(cd backend && .venv/bin/coverage report --precision=2 --fail-under=78)
+(cd backend && .venv/bin/coverage report --include='app/modules/artifacts/*' --precision=2 --fail-under=90)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 python3 scripts/test_agent_gates.py
