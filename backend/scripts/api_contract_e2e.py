@@ -21,7 +21,7 @@ import httpx
 from alembic import command
 from alembic.config import Config
 from pydantic import SecretStr
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.db import session as db_session
 from app.modules.api_controls.service import (
@@ -29,7 +29,11 @@ from app.modules.api_controls.service import (
     RateControlService,
     rate_key_digest,
 )
-from app.modules.projects.models import PostSubmitCheckerPolicy, ProjectSetupRun
+from app.modules.projects.models import (
+    PostSubmitCheckerPolicy,
+    PreSubmitCheckerPolicy,
+    ProjectSetupRun,
+)
 from app.modules.projects.post_submit_policy import (
     build_project_post_submit_checker_spec,
     compile_project_post_submit_checker_spec,
@@ -756,29 +760,19 @@ async def create_policy_bundle_for_guide(
         manager_token,
         {"approval_note": "Approved for API contract real API drill."},
     )
-    visible_effective_policy = await request_json(
+    await request_json(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
         manager_token,
+        expected_status=404,
     )
-    ensure(
-        visible_effective_policy["id"] == effective_policy["id"],
-        "effective policy visibility endpoint returned the wrong policy",
-    )
-    pre_submit_checker_policy = await request_json(
+    await request_json(
         client,
         "GET",
         f"/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
         manager_token,
-    )
-    ensure(
-        pre_submit_checker_policy["lifecycle_status"] == "compiled",
-        "pre-submit checker policy was not compiled during approval",
-    )
-    ensure(
-        pre_submit_checker_policy["effective_policy_id"] == effective_policy["id"],
-        "pre-submit checker visibility endpoint returned the wrong effective policy",
+        expected_status=404,
     )
     await create_approved_post_submit_policy_ci_bridge(
         project_id=project_id,
@@ -788,7 +782,6 @@ async def create_policy_bundle_for_guide(
         sufficiency_report=report,
         submission_artifact_policy=policy,
         effective_policy=effective_policy,
-        pre_submit_checker_policy=pre_submit_checker_policy,
         required_checkers=post_submit_required_checkers,
         warning_checkers=post_submit_warning_checkers,
         blocking_severities=post_submit_blocking_severities,
@@ -805,7 +798,6 @@ async def create_approved_post_submit_policy_ci_bridge(
     sufficiency_report: dict,
     submission_artifact_policy: dict,
     effective_policy: dict,
-    pre_submit_checker_policy: dict,
     required_checkers: list[str] | None = None,
     warning_checkers: list[str] | None = None,
     blocking_severities: list[str] | None = None,
@@ -837,6 +829,16 @@ async def create_approved_post_submit_policy_ci_bridge(
         spec=spec,
     )
     async with db_session.get_session_factory()() as session:
+        pre_submit_checker_policy = await session.scalar(
+            select(PreSubmitCheckerPolicy).where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy["id"],
+                PreSubmitCheckerPolicy.lifecycle_status == "compiled",
+            )
+        )
+        ensure(
+            pre_submit_checker_policy is not None,
+            "compiled pre-submit checker policy was not created during approval",
+        )
         post_submit_policy = PostSubmitCheckerPolicy(
             id=str(uuid4()),
             project_id=project_id,
@@ -846,10 +848,8 @@ async def create_approved_post_submit_policy_ci_bridge(
             source_snapshot_hash=source_snapshot["bundle_hash"],
             effective_policy_id=effective_policy["id"],
             effective_policy_hash=effective_policy["effective_policy_hash"],
-            pre_submit_checker_policy_id=pre_submit_checker_policy["id"],
-            pre_submit_checker_bundle_hash=pre_submit_checker_policy[
-                "compiled_bundle_hash"
-            ],
+            pre_submit_checker_policy_id=pre_submit_checker_policy.id,
+            pre_submit_checker_bundle_hash=pre_submit_checker_policy.compiled_bundle_hash,
             required_checkers=compiled.required_checkers,
             warning_checkers=compiled.warning_checkers,
             blocking_severities=compiled.blocking_severities,
@@ -990,6 +990,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
                 "/api/v1/projects/{project_id}/role-grants/{grant_id}",
                 "/api/v1/projects/{project_id}",
                 "/api/v1/actors/me/authorization-context",
+                "/api/v1/projects/{project_id}/active-guide",
+                "/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
+                "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
             }
         }
         assert read_actions == {
@@ -1003,6 +1006,13 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             "/api/v1/projects/{project_id}": "project.read",
             "/api/v1/actors/me/authorization-context": (
                 "actor.authorization_context.read"
+            ),
+            "/api/v1/projects/{project_id}/active-guide": "project.active_guide.read",
+            "/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy": (
+                "project.effective_submission_artifact_policy.read"
+            ),
+            "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy": (
+                "project.pre_submit_checker_policy.read"
             ),
         }
         assert openapi["paths"]["/api/v1/projects/{project_id}/role-grants"]["post"][
@@ -1362,6 +1372,17 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             manager_token,
         )
         assert active["guide"]["version"] == "v1"
+        active_actor_context = await request_json(
+            client,
+            "GET",
+            f"/api/v1/actors/me/authorization-context?project_id={project['id']}",
+            project_reader_token,
+        )
+        assert {
+            "project.active_guide.read",
+            "project.effective_submission_artifact_policy.read",
+            "project.pre_submit_checker_policy.read",
+        }.issubset(active_actor_context["effective_action_ids"])
         await request_json(
             client,
             "PATCH",
@@ -1370,7 +1391,34 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             {"change_summary": "Illegal active guide edit"},
             409,
         )
-        await request_json(client, "GET", f"/api/v1/projects/{project['id']}/active-guide", manager_token)
+        await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/active-guide",
+            project_reader_token,
+        )
+        visible_effective_policy = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+            "effective-submission-artifact-policy",
+            project_reader_token,
+        )
+        ensure(
+            visible_effective_policy["guide_id"] == guide["id"],
+            "active effective policy read returned the wrong guide",
+        )
+        visible_checker_policy = await request_json(
+            client,
+            "GET",
+            f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+            "pre-submit-checker-policy",
+            project_reader_token,
+        )
+        ensure(
+            visible_checker_policy["effective_policy_id"] == visible_effective_policy["id"],
+            "active checker policy read returned the wrong effective policy",
+        )
         await request_json(
             client,
             "POST",

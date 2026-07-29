@@ -176,8 +176,8 @@ project-scoped `PreSubmitCheckerPolicy` contract with lifecycle status
 same approval path. Guide activation fails unless the compiled project
 pre-submit checker policy exists.
 
-`POST /activate` and `GET /active-guide` return the active guide with the full
-setup bundle:
+`POST /activate` returns the lifecycle activation result with the full setup
+bundle:
 
 - `guide_source_snapshot`
 - `guide_sufficiency_report`
@@ -188,6 +188,12 @@ setup bundle:
 - `review_policy`
 - `revision_policy`
 - `payment_policy`
+
+The AUTH-11C2 administrative `GET /active-guide` projection returns the same
+current guide context except `payment_policy`. Compensation configuration is
+not part of this read authority. The GET is available only to a covered Project
+Manager or Audit Authority grant, or a system-scoped Operator grant; other
+principals receive concealed denial.
 
 ## Lifecycle Impact
 

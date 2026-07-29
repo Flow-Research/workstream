@@ -56,6 +56,7 @@ project configuration or silently retain obsolete token-role authority.
 backend/app/api/deps/authorization.py
 backend/app/modules/authorization/catalogue.py
 backend/app/modules/authorization/kernel.py
+backend/app/modules/authorization/policy.py
 backend/app/modules/authorization/repository.py
 backend/app/modules/authorization/runtime.py
 backend/app/modules/authorization/read_service.py
@@ -65,6 +66,7 @@ backend/app/modules/projects/router.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/tests/test_api_controls.py
+backend/tests/test_audit.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/scripts/api_contract_e2e.py
@@ -73,8 +75,10 @@ docs/operations_authorization_service.md
 docs/operations_roles_permissions.md
 docs/operations_project_operating_manual.md
 docs/spec_authorization_service.md
+docs/spec_chunk_3_project_guide_foundation.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/STATUS.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/chunks/WS-AUTH-001-11C2-effective-policy-active-guide-reads.md
+.agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/reviews/WS-AUTH-001-11C2-external-review-response.md
 ```
 
 An allowed file may change only for these three actions and their shared narrow

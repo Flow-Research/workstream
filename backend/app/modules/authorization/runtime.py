@@ -24,6 +24,11 @@ PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION = {
     ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: ("post_submit_checker_policy_setup"),
 }
 
+PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION = {
+    ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: "effective_policy",
+    ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: "pre_submit_checker_policy",
+}
+
 
 class ActorKind(StrEnum):
     """Canonical actor kinds visible to authorization."""
@@ -274,6 +279,170 @@ class ProjectDiagnosticReadResourceContext(BaseModel):
             raise ValueError("existing diagnostic target requires snapshot facts")
         if self.target_exists != (self.target_binding_digest is not None):
             raise ValueError("target existence and binding digest are inconsistent")
+        return self
+
+
+class ProjectPolicyReadResourceContext(BaseModel):
+    """Canonical current policy-chain facts for one guide-bound read."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_policy_read"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str | None
+    guide_status: str | None
+    target_kind: Literal["effective_policy", "pre_submit_checker_policy"]
+    project_exists: bool
+    project_status: str | None
+    guide_exists: bool
+    target_exists: bool
+    source_snapshot_id: UUID | None = None
+    source_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_policy_id: UUID | None = None
+    effective_policy_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_policy_status: str | None = None
+    checker_policy_id: UUID | None = None
+    checker_policy_status: str | None = None
+    checker_bundle_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    target_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_current_policy_shape(self):
+        """Reject partial, stale, or action-incompatible policy bindings."""
+        if self.guide_exists and not self.project_exists:
+            raise ValueError("guide cannot exist without its project")
+        if self.guide_exists != (self.guide_version is not None and self.guide_status is not None):
+            raise ValueError("guide existence and lifecycle facts are inconsistent")
+        if self.project_exists != (self.project_status is not None):
+            raise ValueError("project existence and lifecycle facts are inconsistent")
+        bound = (
+            self.project_status == "active"
+            and self.guide_status == "active"
+            and self.source_snapshot_id is not None
+            and self.source_snapshot_hash is not None
+            and self.effective_policy_id is not None
+            and self.effective_policy_hash is not None
+            and self.effective_policy_status == "approved"
+            and self.target_binding_digest is not None
+        )
+        if self.target_exists != bound:
+            raise ValueError("policy target existence and binding facts are inconsistent")
+        checker_bound = (
+            self.checker_policy_id is not None
+            and self.checker_policy_status == "compiled"
+            and self.checker_bundle_hash is not None
+        )
+        if self.target_kind == "pre_submit_checker_policy":
+            if self.target_exists != checker_bound:
+                raise ValueError("checker target existence and binding facts are inconsistent")
+        elif any(
+            value is not None
+            for value in (
+                self.checker_policy_id,
+                self.checker_policy_status,
+                self.checker_bundle_hash,
+            )
+        ):
+            raise ValueError("effective policy target cannot carry checker facts")
+        return self
+
+
+class ProjectActiveGuideReadResourceContext(BaseModel):
+    """Canonical active-guide and non-compensation policy bundle facts."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_active_guide_read"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str | None
+    guide_status: str | None
+    project_exists: bool
+    project_status: str | None
+    guide_exists: bool
+    target_exists: bool
+    source_snapshot_id: UUID | None = None
+    source_snapshot_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    sufficiency_report_id: UUID | None = None
+    sufficiency_report_status: str | None = None
+    submission_artifact_policy_id: UUID | None = None
+    submission_artifact_policy_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    submission_artifact_policy_status: str | None = None
+    effective_policy_id: UUID | None = None
+    effective_policy_hash: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_policy_status: str | None = None
+    pre_submit_checker_policy_id: UUID | None = None
+    pre_submit_checker_bundle_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    pre_submit_checker_policy_status: str | None = None
+    post_submit_checker_policy_id: UUID | None = None
+    post_submit_checker_policy_status: str | None = None
+    review_policy_id: UUID | None = None
+    revision_policy_id: UUID | None = None
+    policy_binding_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_active_bundle_shape(self):
+        """Reject missing or partially bound active-guide facts."""
+        if self.resource_id != self.guide_id:
+            raise ValueError("active-guide resource must match guide")
+        if self.guide_exists and not self.project_exists:
+            raise ValueError("active guide cannot exist without its project")
+        if self.guide_exists != (self.guide_version is not None and self.guide_status is not None):
+            raise ValueError("active-guide lifecycle facts are inconsistent")
+        if self.project_exists != (self.project_status is not None):
+            raise ValueError("project existence and lifecycle facts are inconsistent")
+        bound = (
+            self.project_status == "active"
+            and self.guide_status == "active"
+            and self.source_snapshot_id is not None
+            and self.source_snapshot_hash is not None
+            and self.sufficiency_report_id is not None
+            and self.sufficiency_report_status in {"passed", "passed_with_warnings"}
+            and self.submission_artifact_policy_id is not None
+            and self.submission_artifact_policy_hash is not None
+            and self.submission_artifact_policy_status == "approved"
+            and self.effective_policy_id is not None
+            and self.effective_policy_hash is not None
+            and self.effective_policy_status == "approved"
+            and self.pre_submit_checker_policy_id is not None
+            and self.pre_submit_checker_bundle_hash is not None
+            and self.pre_submit_checker_policy_status == "compiled"
+            and self.post_submit_checker_policy_id is not None
+            and self.post_submit_checker_policy_status == "approved"
+            and self.review_policy_id is not None
+            and self.revision_policy_id is not None
+            and self.policy_binding_digest is not None
+        )
+        if self.target_exists != bound:
+            raise ValueError("active-guide existence and bundle facts are inconsistent")
+        if not self.target_exists and any(
+            value is not None
+            for value in (
+                self.sufficiency_report_id,
+                self.sufficiency_report_status,
+                self.submission_artifact_policy_id,
+                self.submission_artifact_policy_hash,
+                self.submission_artifact_policy_status,
+                self.effective_policy_id,
+                self.effective_policy_hash,
+                self.effective_policy_status,
+                self.pre_submit_checker_policy_id,
+                self.pre_submit_checker_bundle_hash,
+                self.pre_submit_checker_policy_status,
+                self.post_submit_checker_policy_id,
+                self.post_submit_checker_policy_status,
+                self.review_policy_id,
+                self.revision_policy_id,
+            )
+        ):
+            raise ValueError("missing active-guide target cannot carry policy facts")
         return self
 
 
@@ -585,6 +754,8 @@ AuthorizationResourceContext = (
     ActorSelfResourceContext
     | ProjectReadResourceContext
     | ProjectDiagnosticReadResourceContext
+    | ProjectPolicyReadResourceContext
+    | ProjectActiveGuideReadResourceContext
     | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext
@@ -667,6 +838,8 @@ class AuthorizationDecision(BaseModel):
         "actor_authorization_context",
         "project",
         "project_diagnostic",
+        "project_policy_read",
+        "project_active_guide_read",
         "actor_identity_link",
         "system",
         "permission_catalogue",
@@ -726,7 +899,17 @@ class AuthorizationDecision(BaseModel):
             if self.matched_grant_id is not None or self.matched_scope_project_id is not None:
                 raise ValueError("fixed-service decisions cannot carry grant scope")
         elif self.matched_grant_id is not None or self.matched_scope_project_id is not None:
-            raise ValueError("denied decisions cannot carry authority matches")
+            if (
+                self.action_id
+                not in {
+                    ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+                    ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+                    ActionId.PROJECT_ACTIVE_GUIDE_READ,
+                }
+                or self.matched_grant_id is None
+                or self.matched_scope_project_id is None
+            ):
+                raise ValueError("denied decision carries invalid matched-grant provenance")
         return self
 
 

@@ -389,17 +389,17 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C1,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C2,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         PermissionId.PROJECT_EFFECTIVE_POLICY_READ,
         ActionOwner.AUTH_11C2,
     ),
-    _planned(
+    _active(
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         PermissionId.PROJECT_READ,
         ActionOwner.AUTH_11C2,
@@ -688,6 +688,9 @@ def _index_actions(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,

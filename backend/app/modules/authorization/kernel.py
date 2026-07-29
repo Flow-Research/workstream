@@ -21,9 +21,11 @@ from app.modules.authorization.catalogue import (
     ActionId,
     PermissionId,
 )
+from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
     PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
+    PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION,
     ActorAdminRoleGrantHistoryResourceContext,
     ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
@@ -54,6 +56,8 @@ from app.modules.authorization.runtime import (
     ProjectContributorCandidateCollectionResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
+    ProjectPolicyReadResourceContext,
+    ProjectActiveGuideReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
@@ -75,6 +79,7 @@ ContextRevalidator = Callable[
     ],
     Awaitable[HumanAuthorizationContext],
 ]
+
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
     Awaitable[ServiceAuthorizationContext | None],
@@ -108,6 +113,9 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
@@ -120,6 +128,9 @@ _SERIALIZED_ADMIN_READS = frozenset(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
 )
 _ADMIN_MUTATIONS = frozenset(
@@ -160,6 +171,12 @@ def project_action_available_for_status(action_id: ActionId, project_status: str
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
     }:
         return project_status in {"draft", "active", "paused"}
+    if action_id in {
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
+    }:
+        return project_status == "active"
     return True
 
 
@@ -939,12 +956,16 @@ class AuthorizationService:
 
         project_id = self._resource_project_id(resource)
         system_only = project_id is None
+        grant_filters: dict[str, object] = {}
+        if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ:
+            grant_filters["allowed_roles"] = ACTIVE_GUIDE_ADMIN_ROLES
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
             scope_project_id=project_id,
             system_scope_only=system_only,
             for_update=serialized,
+            **grant_filters,
         )
         if matched is None:
             if project_id is not None and await self._admin.has_effective_permission_any_scope(
@@ -957,11 +978,16 @@ class AuthorizationService:
             return denial, context, None, None, serialized
 
         denial = await self._admin_guard(action.action_id, resource, context)
+        preserve_denied_match = action.action_id in {
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+            ActionId.PROJECT_ACTIVE_GUIDE_READ,
+        }
         return (
             denial,
             context,
-            matched.id if denial is None else None,
-            project_id if denial is None else None,
+            matched.id if denial is None or preserve_denied_match else None,
+            project_id if denial is None or preserve_denied_match else None,
             serialized,
         )
 
@@ -1031,6 +1057,12 @@ class AuthorizationService:
         elif isinstance(resource, ProjectDiagnosticReadResourceContext):
             if not (resource.project_exists and resource.guide_exists and resource.target_exists):
                 return AuthorizationDenialCode.RESOURCE_NOT_FOUND
+        elif isinstance(
+            resource,
+            (ProjectPolicyReadResourceContext, ProjectActiveGuideReadResourceContext),
+        ):
+            if not (resource.project_exists and resource.guide_exists and resource.target_exists):
+                return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         return None
 
     @staticmethod
@@ -1068,11 +1100,19 @@ class AuthorizationService:
             ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
                 ProjectDiagnosticReadResourceContext
             ),
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: (
+                ProjectPolicyReadResourceContext
+            ),
+            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
+            ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
         diagnostic_kind = PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION.get(action_id)
         if diagnostic_kind is not None and resource.target_kind != diagnostic_kind:
+            return False
+        policy_kind = PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION.get(action_id)
+        if policy_kind is not None and resource.target_kind != policy_kind:
             return False
         transition = {
             ActionId.ACTOR_PROFILE_SUSPEND: "suspend",
@@ -1198,6 +1238,8 @@ class AuthorizationService:
                 "artifact_verification_job",
                 "artifact_pending_work",
                 "project_diagnostic",
+                "project_policy_read",
+                "project_active_guide_read",
             }
             or decision.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST
         ):
@@ -1223,7 +1265,7 @@ class AuthorizationService:
                     target_actor_ref=str(decision.resource_id) if target_is_actor else None,
                     matched_grant_id=(
                         str(decision.matched_grant_id)
-                        if decision.allowed and decision.matched_grant_id is not None
+                        if decision.matched_grant_id is not None
                         else None
                     ),
                     permission_id=decision.permission_id,

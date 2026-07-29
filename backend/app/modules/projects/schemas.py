@@ -73,7 +73,7 @@ class GuideSourceSnapshotCreate(BaseModel):
 class GuideSourceSnapshotItemResponse(BaseModel):
     """Response schema for a sanitized guide-source snapshot item."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     source_snapshot_id: str
@@ -90,7 +90,7 @@ class GuideSourceSnapshotItemResponse(BaseModel):
 class GuideSourceSnapshotResponse(BaseModel):
     """Response schema for immutable guide-source snapshots."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -177,7 +177,7 @@ class GuideSufficiencyAcknowledgement(BaseModel):
 class GuideSufficiencyReportResponse(BaseModel):
     """Response schema for guide sufficiency reports."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -310,7 +310,7 @@ class SubmissionArtifactPolicyApprove(BaseModel):
 class SubmissionArtifactPolicyResponse(BaseModel):
     """Response schema for project submission artifact policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -340,7 +340,7 @@ class SubmissionArtifactPolicyResponse(BaseModel):
 class EffectiveProjectSubmissionArtifactPolicyResponse(BaseModel):
     """Response schema for merged effective project submission artifact policy."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -388,7 +388,7 @@ class PreSubmitCheckerPolicyResponse(BaseModel):
 class PreSubmitCheckerPolicySummaryResponse(BaseModel):
     """Project API summary for a pre-submit checker bundle contract."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -477,7 +477,7 @@ class ProjectGuideUpdate(BaseModel):
 class ProjectGuideResponse(BaseModel):
     """Response schema for project guide records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -496,7 +496,7 @@ class ProjectGuideResponse(BaseModel):
 class PostSubmitCheckerPolicyResponse(BaseModel):
     """Response schema for post-submit checker policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -589,7 +589,7 @@ class PostSubmitCheckerPolicySetupResponse(BaseModel):
 class ReviewPolicyResponse(BaseModel):
     """Response schema for review policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -604,7 +604,7 @@ class ReviewPolicyResponse(BaseModel):
 class RevisionPolicyResponse(BaseModel):
     """Response schema for revision policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -647,3 +647,19 @@ class ActiveGuideResponse(BaseModel):
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse
     payment_policy: PaymentPolicyResponse
+
+
+class ActiveGuideReadResponse(BaseModel):
+    """Strict administrative read projection for one active guide."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    guide: ProjectGuideResponse
+    guide_source_snapshot: GuideSourceSnapshotResponse
+    guide_sufficiency_report: GuideSufficiencyReportResponse
+    submission_artifact_policy: SubmissionArtifactPolicyResponse
+    effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
+    pre_submit_checker_policy: ActiveGuidePreSubmitCheckerPolicyResponse
+    post_submit_checker_policy: PostSubmitCheckerPolicyResponse
+    review_policy: ReviewPolicyResponse
+    revision_policy: RevisionPolicyResponse

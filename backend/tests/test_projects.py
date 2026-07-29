@@ -66,7 +66,11 @@ from app.modules.authorization.models import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import service as project_service_module
-from app.modules.projects.authorization_reads import authorize_project_diagnostic_read
+from app.modules.projects.authorization_reads import (
+    authorize_project_active_guide_read,
+    authorize_project_diagnostic_read,
+    authorize_project_policy_read,
+)
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.service import (
     GUIDE_SOURCE_MATERIAL_FIELDS,
@@ -76,6 +80,7 @@ from app.modules.projects.service import (
     POST_SUBMIT_CHECKER_POLICY_DERIVATION_AGENT_VERSION,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_NAME,
     SUBMISSION_ARTIFACT_POLICY_DERIVATION_AGENT_VERSION,
+    GuideActivationBlocked,
     PolicySetupBlocked,
     ProjectSetupQueueError,
     ProjectService,
@@ -142,6 +147,341 @@ class _DiagnosticStatementCaptureSession:
         self.statements.append(statement)
         return types.SimpleNamespace(
             scalars=lambda: types.SimpleNamespace(all=lambda: [])
+        )
+
+
+class _PolicyReadRepository:
+    def __init__(self) -> None:
+        self.project_id, self.guide_id, self.snapshot_id = (str(uuid4()) for _ in range(3))
+        self.project = types.SimpleNamespace(id=self.project_id, status="active")
+        self.guide = types.SimpleNamespace(
+            id=self.guide_id,
+            project_id=self.project_id,
+            version="v1",
+            status="active",
+        )
+        source_row = {
+            "source_kind": "guide",
+            "durable_ref": "https://example.test/guide",
+            "ingestion_adapter": "test",
+            "content_hash": f"sha256:{'9' * 64}",
+            "content_cid": None,
+            "media_type": "text/markdown",
+        }
+        manifest = {"items": [{**source_row, "content_excerpt": None}]}
+        self.snapshot = types.SimpleNamespace(
+            id=self.snapshot_id,
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            manifest_json=manifest,
+            bundle_hash=canonical_json_hash(manifest),
+        )
+        self.source_items = (
+            types.SimpleNamespace(
+                id=str(uuid4()), source_snapshot_id=self.snapshot_id, **source_row
+            ),
+        )
+        submission_body = {"allowed": ["zip"]}
+        effective_body = {"allowed": ["zip"], "max_bytes": 10}
+        checker_bundle = {"checkers": ["safe"]}
+        self.effective = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            source_snapshot_id=self.snapshot_id,
+            source_snapshot_hash=self.snapshot.bundle_hash,
+            submission_artifact_policy_id=str(uuid4()),
+            submission_artifact_policy_hash=canonical_json_hash(submission_body),
+            effective_policy=effective_body,
+            effective_policy_hash=canonical_json_hash(effective_body),
+            lifecycle_status="approved",
+        )
+        self.checker = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            source_snapshot_id=self.snapshot_id,
+            source_snapshot_hash=self.snapshot.bundle_hash,
+            effective_policy_id=self.effective.id,
+            effective_policy_hash=self.effective.effective_policy_hash,
+            lifecycle_status="compiled",
+            compiled_bundle=checker_bundle,
+            compiled_bundle_hash=canonical_json_hash(checker_bundle),
+        )
+        self.submission = types.SimpleNamespace(
+            id=self.effective.submission_artifact_policy_id,
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            source_snapshot_id=self.snapshot_id,
+            source_snapshot_hash=self.snapshot.bundle_hash,
+            policy_body=submission_body,
+            policy_hash=self.effective.submission_artifact_policy_hash,
+            lifecycle_status="approved",
+            approved_by_actor="actor",
+            approved_at=datetime.now(UTC),
+            approved_by_role="project_manager",
+        )
+        self.sufficiency = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            source_snapshot_id=self.snapshot_id,
+            source_snapshot_hash=self.snapshot.bundle_hash,
+            status="passed",
+            warnings_acknowledged_by_actor=None,
+            warnings_acknowledged_at=None,
+            warnings_acknowledged_by_role=None,
+        )
+        post_body = {"required_checkers": ["safe"]}
+        self.post_submit = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_id=self.guide_id,
+            guide_version="v1",
+            source_snapshot_id=self.snapshot_id,
+            source_snapshot_hash=self.snapshot.bundle_hash,
+            effective_policy_id=self.effective.id,
+            effective_policy_hash=self.effective.effective_policy_hash,
+            pre_submit_checker_policy_id=self.checker.id,
+            pre_submit_checker_bundle_hash=self.checker.compiled_bundle_hash,
+            lifecycle_status="approved",
+            approved_by_actor="actor",
+            approved_at=datetime.now(UTC),
+            approved_by_role="project_manager",
+            policy_body=post_body,
+            policy_hash=canonical_json_hash(post_body),
+        )
+        self.review = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_version="v1",
+            allowed_decisions=["accept", "needs_revision", "reject"],
+        )
+        self.revision = types.SimpleNamespace(
+            id=str(uuid4()),
+            project_id=self.project_id,
+            guide_version="v1",
+            max_revision_rounds=2,
+        )
+
+    async def get_project(self, _project_id: str, *, for_update: bool = False) -> Any:
+        assert for_update is True
+        return self.project
+
+    async def lock_project_guide(self, _guide_id: str) -> Any:
+        return self.guide
+
+    async def lock_latest_guide_source_snapshot(self, *_args: Any) -> Any:
+        return self.snapshot
+
+    async def lock_effective_submission_artifact_policy(self, *_args: Any) -> Any:
+        return self.effective
+
+    async def lock_guide_source_snapshot_items(self, *_args: Any) -> Any:
+        return self.source_items
+
+    async def lock_compiled_pre_submit_checker_policy(self, *_args: Any) -> Any:
+        return self.checker
+
+    async def lock_active_guide(self, *_args: Any) -> Any:
+        return self.guide
+
+    async def get_sufficiency_report_for_snapshot(self, *_args: Any) -> Any:
+        return self.sufficiency
+
+    async def lock_guide_sufficiency_report(self, *_args: Any) -> Any:
+        return self.sufficiency
+
+    async def lock_submission_artifact_policy(self, *_args: Any) -> Any:
+        return self.submission
+
+    async def lock_post_submit_checker_policy_for_guide(self, *_args: Any) -> Any:
+        return self.post_submit
+
+    async def lock_review_policy(self, *_args: Any) -> Any:
+        return self.review
+
+    async def lock_revision_policy(self, *_args: Any) -> Any:
+        return self.revision
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action_id,target_attribute,target_kind",
+    [
+        (
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            "effective",
+            "effective_policy",
+        ),
+        (
+            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+            "checker",
+            "pre_submit_checker_policy",
+        ),
+    ],
+)
+async def test_project_policy_read_composer_binds_current_active_chain(
+    action_id: ActionId, target_attribute: str, target_kind: str
+) -> None:
+    repository = _PolicyReadRepository()
+    authorization = _DiagnosticAuthorization()
+
+    result = await authorize_project_policy_read(
+        authorization=cast(Any, authorization),
+        repository=cast(Any, repository),
+        action_id=action_id,
+        project_id=repository.project_id,
+        guide_id=repository.guide_id,
+    )
+
+    assert result is getattr(repository, target_attribute)
+    called_action, context = authorization.calls[-1]
+    assert called_action is action_id
+    assert context.target_kind == target_kind
+    assert context.target_exists is True
+    assert context.target_binding_digest.startswith("sha256:")
+
+
+@pytest.mark.asyncio
+async def test_project_policy_read_composer_conceals_draft_and_stale_chain() -> None:
+    repository = _PolicyReadRepository()
+    authorization = _DiagnosticAuthorization()
+    repository.guide.status = "draft"
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_policy_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            project_id=repository.project_id,
+            guide_id=repository.guide_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+    repository.guide.status = "active"
+    repository.effective.guide_id = str(uuid4())
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_policy_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            project_id=repository.project_id,
+            guide_id=repository.guide_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+    repository.effective.guide_id = repository.guide_id
+    repository.checker.source_snapshot_hash = f"sha256:{'f' * 64}"
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_policy_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+            project_id=repository.project_id,
+            guide_id=repository.guide_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+
+@pytest.mark.asyncio
+async def test_project_active_guide_read_composer_binds_non_compensation_bundle() -> None:
+    repository = _PolicyReadRepository()
+    authorization = _DiagnosticAuthorization()
+
+    class ActiveBundleValidator:
+        source_validated = False
+        bundle_validated = False
+
+        async def validate_source_snapshot_integrity(self, *_args: Any, **_kwargs: Any) -> None:
+            self.source_validated = True
+
+        def validate_activation_ready(self, *args: Any, **kwargs: Any) -> None:
+            self.bundle_validated = True
+            checker, post_submit = args[5], args[6]
+            if post_submit.pre_submit_checker_bundle_hash != checker.compiled_bundle_hash:
+                raise GuideActivationBlocked("stale pre-submit checker binding")
+            assert kwargs["require_payment_policy"] is False
+
+    project_service = ActiveBundleValidator()
+
+    bundle = await authorize_project_active_guide_read(
+        authorization=cast(Any, authorization),
+        repository=cast(Any, repository),
+        project_service=project_service,
+        project_id=repository.project_id,
+    )
+
+    assert bundle.guide is repository.guide
+    assert bundle.revision_policy is repository.revision
+    assert project_service.source_validated is True
+    assert project_service.bundle_validated is True
+    called_action, context = authorization.calls[-1]
+    assert called_action is ActionId.PROJECT_ACTIVE_GUIDE_READ
+    assert context.target_exists is True
+    assert context.policy_binding_digest.startswith("sha256:")
+    assert str(context.sufficiency_report_id) == repository.sufficiency.id
+    assert context.sufficiency_report_status == repository.sufficiency.status
+    assert str(context.submission_artifact_policy_id) == repository.submission.id
+    assert context.submission_artifact_policy_hash == repository.submission.policy_hash
+    assert str(context.effective_policy_id) == repository.effective.id
+    assert context.effective_policy_hash == repository.effective.effective_policy_hash
+    assert str(context.pre_submit_checker_policy_id) == repository.checker.id
+    assert context.pre_submit_checker_bundle_hash == repository.checker.compiled_bundle_hash
+    assert str(context.post_submit_checker_policy_id) == repository.post_submit.id
+    assert str(context.review_policy_id) == repository.review.id
+    assert str(context.revision_policy_id) == repository.revision.id
+
+    repository.post_submit.pre_submit_checker_bundle_hash = f"sha256:{'f' * 64}"
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_active_guide_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            project_service=project_service,
+            project_id=repository.project_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+    repository.post_submit.pre_submit_checker_bundle_hash = (
+        repository.checker.compiled_bundle_hash
+    )
+
+    def raise_policy_setup_blocked(*_args: Any, **_kwargs: Any) -> None:
+        raise PolicySetupBlocked("invalid canonical policy")
+
+    project_service.validate_activation_ready = raise_policy_setup_blocked
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_active_guide_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            project_service=cast(Any, project_service),
+            project_id=repository.project_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+
+def test_activation_readiness_normalizes_hash_valid_malformed_policy_body() -> None:
+    repository = _PolicyReadRepository()
+    repository.submission.derivation_source = "manual"
+    service = ProjectService(cast(Any, None))
+
+    with pytest.raises(GuideActivationBlocked, match="policy body is invalid"):
+        service.validate_activation_ready(
+            repository.guide,
+            repository.snapshot,
+            repository.sufficiency,
+            repository.submission,
+            repository.effective,
+            repository.checker,
+            repository.post_submit,
+            repository.review,
+            repository.revision,
+            None,
+            require_payment_policy=False,
         )
 
 
@@ -2132,7 +2472,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
     assert missing_effective.status_code == 404
     assert missing_pre_submit.status_code == 404
 
-    effective = await approve_submission_artifact_policy(
+    await approve_submission_artifact_policy(
         project_client,
         project["id"],
         guide["id"],
@@ -2143,19 +2483,13 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         "effective-submission-artifact-policy",
         headers=auth_headers(),
     )
-    assert effective_response.status_code == 200, effective_response.text
-    assert effective_response.json()["id"] == effective["id"]
+    assert effective_response.status_code == 404
 
     checker_response = await project_client.get(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
         headers=auth_headers(),
     )
-    assert checker_response.status_code == 200, checker_response.text
-    checker_policy = checker_response.json()
-    assert checker_policy["effective_policy_id"] == effective["id"]
-    assert checker_policy["compiled_bundle_hash"].startswith("sha256:")
-    assert "compiled_bundle" not in checker_policy
-    assert "checker_configs" not in checker_policy
+    assert checker_response.status_code == 404
 
     second_project_response = await project_client.post(
         "/api/v1/projects",
@@ -2192,7 +2526,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
     )
     assert second_policies_response.status_code == 200, second_policies_response.text
     second_policy = second_policies_response.json()[0]
-    second_effective = await approve_submission_artifact_policy(
+    await approve_submission_artifact_policy(
         project_client,
         second_project["id"],
         second_guide["id"],
@@ -2238,15 +2572,13 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         "effective-submission-artifact-policy",
         headers=auth_headers(),
     )
-    assert second_effective_response.status_code == 200, second_effective_response.text
-    assert second_effective_response.json()["id"] == second_effective["id"]
+    assert second_effective_response.status_code == 404
     second_checker_response = await project_client.get(
         f"/api/v1/projects/{second_project['id']}/guides/{second_guide['id']}/"
         "pre-submit-checker-policy",
         headers=auth_headers(),
     )
-    assert second_checker_response.status_code == 200, second_checker_response.text
-    assert second_checker_response.json()["effective_policy_id"] == second_effective["id"]
+    assert second_checker_response.status_code == 404
 
     same_project_other_guide = await create_guide(
         project_client,
@@ -2276,7 +2608,7 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         same_project_other_policies_response.text
     )
     same_project_other_policy = same_project_other_policies_response.json()[0]
-    same_project_other_effective = await approve_submission_artifact_policy(
+    await approve_submission_artifact_policy(
         project_client,
         project["id"],
         same_project_other_guide["id"],
@@ -2307,22 +2639,13 @@ async def test_project_setup_visibility_apis_show_automatic_setup_outputs(
         "effective-submission-artifact-policy",
         headers=auth_headers(),
     )
-    assert same_project_other_effective_response.status_code == 200, (
-        same_project_other_effective_response.text
-    )
-    assert same_project_other_effective_response.json()["id"] == same_project_other_effective["id"]
+    assert same_project_other_effective_response.status_code == 404
     same_project_other_checker_response = await project_client.get(
         f"/api/v1/projects/{project['id']}/guides/{same_project_other_guide['id']}/"
         "pre-submit-checker-policy",
         headers=auth_headers(),
     )
-    assert same_project_other_checker_response.status_code == 200, (
-        same_project_other_checker_response.text
-    )
-    assert (
-        same_project_other_checker_response.json()["effective_policy_id"]
-        == same_project_other_effective["id"]
-    )
+    assert same_project_other_checker_response.status_code == 404
 
     newer_snapshot_response = await project_client.post(
         f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots",
@@ -7913,6 +8236,7 @@ async def test_active_guide_read_rejects_mismatched_effective_policy_body_hash(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
+    await add_project_manager_admin_grant(project["id"])
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
     activation = await project_client.post(
@@ -7937,17 +8261,15 @@ async def test_active_guide_read_rejects_mismatched_effective_policy_body_hash(
         headers=auth_headers(),
     )
 
-    assert response.status_code == 422
-    assert (
-        "effective project submission artifact policy body hash mismatch"
-        in (response.json()["detail"])
-    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "project_authorization_resource_not_found"
 
 
 async def test_active_guide_read_revalidates_policy_context(
     project_client: AsyncClient,
 ) -> None:
     project = await create_project(project_client)
+    await add_project_manager_admin_grant(project["id"])
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
     activation = await project_client.post(
@@ -7971,12 +8293,13 @@ async def test_active_guide_read_revalidates_policy_context(
         headers=auth_headers(),
     )
 
-    assert response.status_code == 422
-    assert "compiled project pre-submit checker policy" in response.json()["detail"]
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "project_authorization_resource_not_found"
 
 
 async def test_guide_activation_and_active_guide_retrieval(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
+    await add_project_manager_admin_grant(project["id"])
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
     bundle = await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 
@@ -7988,9 +8311,71 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
         f"/api/v1/projects/{project['id']}/active-guide",
         headers=auth_headers(),
     )
+    effective_read = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/"
+        "effective-submission-artifact-policy",
+        headers=auth_headers(),
+    )
+    checker_read = await project_client.get(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/pre-submit-checker-policy",
+        headers=auth_headers(),
+    )
 
     assert activation.status_code == 200, activation.text
     assert active.status_code == 200, active.text
+    assert effective_read.status_code == 200, effective_read.text
+    assert checker_read.status_code == 200, checker_read.text
+    assert set(effective_read.json()) == {
+        "id",
+        "project_id",
+        "guide_id",
+        "guide_version",
+        "source_snapshot_id",
+        "source_snapshot_hash",
+        "submission_artifact_policy_id",
+        "submission_artifact_policy_hash",
+        "lifecycle_status",
+        "merge_algorithm_version",
+        "effective_policy",
+        "effective_policy_hash",
+        "created_by",
+        "created_at",
+        "supersedes_effective_policy_id",
+        "superseded_at",
+    }
+    assert set(checker_read.json()) == {
+        "id",
+        "project_id",
+        "guide_id",
+        "guide_version",
+        "source_snapshot_id",
+        "source_snapshot_hash",
+        "effective_policy_id",
+        "effective_policy_hash",
+        "lifecycle_status",
+        "compiler_version",
+        "compiled_bundle_hash",
+        "checker_names",
+        "created_by",
+        "created_at",
+        "supersedes_pre_submit_checker_policy_id",
+        "superseded_at",
+    }
+    assert set(active.json()) == {
+        "guide",
+        "guide_source_snapshot",
+        "guide_sufficiency_report",
+        "submission_artifact_policy",
+        "effective_submission_artifact_policy",
+        "pre_submit_checker_policy",
+        "post_submit_checker_policy",
+        "review_policy",
+        "revision_policy",
+    }
+    assert effective_read.json()["id"] == bundle["effective_policy"]["id"]
+    assert checker_read.json()["effective_policy_id"] == bundle["effective_policy"]["id"]
+    assert "compiled_bundle" not in checker_read.json()
+    assert "checker_configs" not in checker_read.json()
     assert active.json()["guide"]["status"] == "active"
     assert active.json()["guide"]["version"] == "v1"
     assert active.json()["guide"]["approved_by"] == guide["created_by"]
@@ -8020,6 +8405,8 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
         == (bundle["pre_submit_checker_policy"]["compiled_bundle_hash"])
     )
     assert "compiled_bundle" not in active.json()["pre_submit_checker_policy"]
+    assert "payment_policy" not in active.json()
+    assert "review_policy" in active.json()
     assert (
         active.json()["pre_submit_checker_policy"]["checker_names"]
         == (bundle["pre_submit_checker_policy"]["checker_names"])
@@ -8030,7 +8417,6 @@ async def test_guide_activation_and_active_guide_retrieval(project_client: Async
     )
     assert active.json()["revision_policy"]["max_revision_rounds"] == 7
     assert active.json()["revision_policy"]["auto_reject_after_limit"] is True
-    assert active.json()["payment_policy"]["base_amount"] == "25.00"
 
 
 async def test_draft_guide_edit_and_active_guide_edit_block(project_client: AsyncClient) -> None:

@@ -41,7 +41,7 @@ from app.modules.authorization.schemas import (
     QualificationAvailabilitySnapshot,
 )
 from app.modules.projects.models import Project
-from app.modules.authorization.policy import permissions_for
+from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES, permissions_for
 
 
 _PROJECT_CONTEXT_ACTIONS = (
@@ -61,7 +61,6 @@ _PROJECT_CONTEXT_ACTIONS = (
     ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
     ActionId.PROJECT_ACTIVE_GUIDE_READ,
 )
-
 
 class ProjectRoleReadResourceNotFound(LookupError):
     """One concealed absence for project or project-role grant reads."""
@@ -137,6 +136,10 @@ class ActorAuthorizationContextReadService:
             for action_id in _PROJECT_CONTEXT_ACTIONS
             if ACTION_BY_ID[action_id].availability is ActionAvailability.ACTIVE
             and ACTION_BY_ID[action_id].permission_id in admin_permissions
+            and (
+                action_id is not ActionId.PROJECT_ACTIVE_GUIDE_READ
+                or any(AdminRole(role_name) in ACTIVE_GUIDE_ADMIN_ROLES for role_name in admin_roles)
+            )
             and project_action_available_for_status(action_id, project.status)
         }
         if project_roles:
