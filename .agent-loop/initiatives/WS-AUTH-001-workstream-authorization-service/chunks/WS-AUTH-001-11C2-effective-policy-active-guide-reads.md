@@ -66,6 +66,7 @@ backend/app/modules/projects/router.py
 backend/app/modules/projects/schemas.py
 backend/app/modules/projects/service.py
 backend/tests/test_api_controls.py
+backend/tests/test_audit.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/scripts/api_contract_e2e.py
