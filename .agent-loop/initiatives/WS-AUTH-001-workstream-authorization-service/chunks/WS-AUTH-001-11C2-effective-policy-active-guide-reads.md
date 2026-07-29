@@ -22,7 +22,7 @@ prefix.
 |---|---|---|---|---|
 | `GET /projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | `project.effective_submission_artifact_policy.read` | `PROJECT_EFFECTIVE_POLICY_READ` | current approved effective policy for the exact guide and latest canonical source snapshot | `EffectiveProjectSubmissionArtifactPolicyResponse` |
 | `GET /projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | `project.pre_submit_checker_policy.read` | `PROJECT_EFFECTIVE_POLICY_READ` | current compiled pre-submit checker policy for that exact effective policy | `PreSubmitCheckerPolicySummaryResponse` |
-| `GET /projects/{project_id}/active-guide` | `project.active_guide.read` | `PROJECT_READ` | current active guide and its exact locked non-payment policy context | new strict `ActiveGuideReadResponse` |
+| `GET /projects/{project_id}/active-guide` | `project.active_guide.read` | `PROJECT_READ` | current active guide and its exact locked context, excluding the retired compensation configuration member | new strict `ActiveGuideReadResponse` |
 
 All three routes allow only a covered Project Manager, a covered Audit
 Authority, or a system-scoped Operator. Finance Authority, Access
@@ -37,7 +37,8 @@ its existing strict nested schema: `guide`, `guide_source_snapshot`,
 `guide_sufficiency_report`, `submission_artifact_policy`,
 `effective_submission_artifact_policy`, `pre_submit_checker_policy`,
 `post_submit_checker_policy`, `review_policy`, and `revision_policy`. It omits
-`payment_policy` completely and cannot validate or serialize that field. This
+the legacy aggregate's retired compensation configuration member completely
+and cannot validate or serialize that member. This
 chunk does not create a contributor or Finance active-guide projection.
 Contributor guide and submission requirements remain task-scoped through the
 task work-context and submission-requirements surfaces; actor authorization
@@ -160,7 +161,8 @@ audit subsystem changes
   API E2E prove these exact three activations and prove that no unrelated
   planned action became active.
 - Projection snapshot tests prove `ActiveGuideReadResponse` has exactly its
-  enumerated top-level fields and cannot serialize `payment_policy`; the two
+  enumerated top-level fields and cannot serialize the legacy aggregate's
+  retired compensation configuration member; the two
   policy routes retain only their named strict schemas.
 - Allow and deny evidence assertions cover action, permission, matched grant,
   scope, denial code, and resource-context digest. No N+1 authorization lookup
