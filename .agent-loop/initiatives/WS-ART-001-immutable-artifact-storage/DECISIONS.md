@@ -398,7 +398,7 @@ sent raw to agents. OOXML formats are distinguished from ordinary ZIPs.
 Extraction runs asynchronously in a strongly isolated no-network subprocess
 under fixed input, output, container, time, memory, and document limits using
 only scratch-manager paths. Parser crash, malformed input, macros, external
-relationships, embedded executables, cancellation, timeout, and worker loss
+relationships, embedded executables, cancellation, timeout, and executor loss
 have bounded outcomes and cleanup. Production parser dependencies require
 explicit human approval before implementation.
 

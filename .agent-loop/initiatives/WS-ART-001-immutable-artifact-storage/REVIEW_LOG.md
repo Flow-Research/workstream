@@ -171,3 +171,7 @@
   WITH CONDITIONS; docs PASS WITH LOW RISKS; reuse PASS WITH LOW RISKS; test
   delta PASS WITH CONDITIONS. Planning-PR conditions are resolved by committing
   the new contracts; the dependency checker remains a future 03B3B criterion.
+- First external run: CodeRabbit was rate-limited and produced no findings.
+  Agent Gates found five valid retired-vocabulary occurrences, now repaired.
+  Backend recorded one unrelated AUTH PostgreSQL concurrency failure after
+  1,651 passes; the repaired documentation head requires a fresh hosted rerun.

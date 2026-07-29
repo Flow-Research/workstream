@@ -58,7 +58,12 @@ All nine tracks passed after repairs. Details are in
 
 ## External Review
 
-Pending CodeRabbit and hosted GitHub checks after the PR opens.
+CodeRabbit reached its review-rate limit before producing findings. Agent Gates
+found and prompted repair of five retired-vocabulary occurrences. The first
+Backend run had one unrelated existing AUTH concurrency failure after 1,651
+passes. Disposition is recorded in
+`WS-ART-001-03B-PLAN-external-review-response.md`; repaired-head hosted checks
+and CodeRabbit review remain required.
 
 ## Remaining Risks And Follow-Up
 

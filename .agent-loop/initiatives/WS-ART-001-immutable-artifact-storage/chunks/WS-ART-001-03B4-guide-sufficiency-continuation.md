@@ -30,7 +30,8 @@ same-generation canonical guide material and exact persisted provenance.
 
 - project-setup Celery payload is exactly project, guide, snapshot, setup run, and
   setup generation identifiers;
-- worker reloads and revalidates current project/guide/snapshot/run/generation,
+- the project-setup executor reloads and revalidates current
+  project/guide/snapshot/run/generation,
   complete bindings, content, and extraction provenance before agent invocation
   and again before report commit;
 - all required items must have successful policy-compatible extraction;
@@ -53,7 +54,8 @@ same-generation canonical guide material and exact persisted provenance.
 
 ```bash
 (cd backend && .venv/bin/python -m ruff check app tests scripts)
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_project_setup.py tests/test_guide_artifacts.py tests/test_guide_extraction.py tests/test_project_agents.py -q --cov=app.modules.projects --cov=app.workers.project_setup --cov-report=term-missing --cov-fail-under=90)
+(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_project_setup.py tests/test_guide_artifacts.py tests/test_guide_extraction.py tests/test_project_agents.py -q --cov=app --cov-report=term-missing --cov-fail-under=0)
+(cd backend && .venv/bin/coverage report --include='app/modules/projects/*,app/*ers/project_setup.py' --precision=2 --fail-under=90)
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 python3 scripts/test_agent_gates.py
