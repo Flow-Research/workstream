@@ -25,11 +25,12 @@
 ## Commands rerun
 
 - Focused Ruff over changed backend files.
-- Guide-format and preparation focused tests.
-- Database-backed guide-materialization focused tests.
+- Focused guide-format and preparation tests.
+- Focused database-backed guide-materialization tests.
 - Repository stale-contract, Markdown-link, lightweight-agent-gate, and diff
   checks.
-- Hosted Backend and Agent Gates are required on the repaired exact PR head.
+- Exact PR head `1381d371`: Backend passed in 12m47s and Agent Gates passed in
+  19s. A later review-request Agent Gates run also passed in 21s.
 
 ## Remaining risks
 
