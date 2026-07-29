@@ -90,7 +90,7 @@ class GuideSourceSnapshotItemResponse(BaseModel):
 class GuideSourceSnapshotResponse(BaseModel):
     """Response schema for immutable guide-source snapshots."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -176,7 +176,7 @@ class GuideSufficiencyAcknowledgement(BaseModel):
 class GuideSufficiencyReportResponse(BaseModel):
     """Response schema for guide sufficiency reports."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -309,7 +309,7 @@ class SubmissionArtifactPolicyApprove(BaseModel):
 class SubmissionArtifactPolicyResponse(BaseModel):
     """Response schema for project submission artifact policy records."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str

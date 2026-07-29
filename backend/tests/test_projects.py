@@ -363,6 +363,18 @@ async def test_project_policy_read_composer_conceals_draft_and_stale_chain() -> 
     assert authorization.calls[-1][1].target_exists is False
 
     repository.guide.status = "active"
+    repository.effective.guide_id = str(uuid4())
+    with pytest.raises(RuntimeError, match="unexpectedly allowed"):
+        await authorize_project_policy_read(
+            authorization=cast(Any, authorization),
+            repository=cast(Any, repository),
+            action_id=ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            project_id=repository.project_id,
+            guide_id=repository.guide_id,
+        )
+    assert authorization.calls[-1][1].target_exists is False
+
+    repository.effective.guide_id = repository.guide_id
     repository.checker.source_snapshot_hash = f"sha256:{'f' * 64}"
     with pytest.raises(RuntimeError, match="unexpectedly allowed"):
         await authorize_project_policy_read(
