@@ -2161,7 +2161,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     operations = (repository_root / "docs/operations_authorization_service.md").read_text(
         encoding="utf-8"
     )
-    assert "all 22 ART rows to nine exact activation custodians" in operations
+    assert "all 22 ART rows to ten exact activation custodians" in operations
     assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
     assert "transfer adds no migration; the later WS-XINT-002-01" in operations
     assert "does not grant Operator" in operations

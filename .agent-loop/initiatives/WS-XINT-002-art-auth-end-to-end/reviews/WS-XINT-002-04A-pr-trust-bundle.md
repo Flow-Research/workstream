@@ -57,6 +57,10 @@ All required internal tracks completed. Valid planning, test, wording, and
 fixture findings were addressed. Remaining notes are low risk and documented in
 the internal review record.
 
+CodeRabbit's two exact documentation findings after retargeting to `main` were
+fixed and recorded in `WS-XINT-002-04A-external-review-response.md`. The final
+incremental review and exact-head hosted Backend result remain required.
+
 ## Human review focus
 
 Confirm PM-only policy, canonical system/project grant coverage, pre-byte

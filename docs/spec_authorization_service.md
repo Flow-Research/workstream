@@ -253,8 +253,8 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
-other planned rows cover
-three Operator recovery actions, 18 artifact actions, canonical
+other registry rows cover three planned Operator recovery actions, 19 other
+artifact actions—18 planned plus active `artifact.guide_source.ingest`—canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where

@@ -684,7 +684,7 @@ also activates only the fixed verifier, pending-work scanner, and put resolver;
 the other 53 entries remain planned and non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
-reconciliation assigns all 22 ART rows to nine exact activation custodians and all 19 REV
+reconciliation assigns all 22 ART rows to ten exact activation custodians and all 19 REV
 rows to seven exact AUTH custodians without changing mappings or planned
 availability. The REV owner cardinalities are `2/5/3/1/1/5/2` for
 `WS-AUTH-001-REV-05`, `WS-AUTH-001-REV-06`, `WS-AUTH-001-REV-07`,
