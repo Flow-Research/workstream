@@ -511,6 +511,55 @@ async def test_materialization_verifies_classifies_replays_and_cleans_scratch(
 
 
 @pytest.mark.asyncio
+async def test_materialization_rejects_conflicting_immutable_classification(
+    isolated_database_env: str, tmp_path: Path
+) -> None:
+    payload = b"%PDF-1.7\nverified"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, scratch = _preparation(tmp_path)
+    store = _ReadStore(payload)
+    authority = _AllowReadAuthority()
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
+            )
+        binding_id = await _create_binding(factory, ids)
+        service = ArtifactMaterializationService(
+            factory,
+            store,  # type: ignore[arg-type]
+            preparation,
+            GuideFormatDetector(GuideFormatLimits()),
+            _namespace(),
+            authority_factory=lambda _: authority,
+        )
+        request = _materialization_request(ids, binding_id=binding_id, authority=authority)
+        first = await service.materialize_guide_source(request)
+        async with factory() as session, session.begin():
+            persisted = await session.get(
+                GuideSourceFormatClassification, str(first.classification_id)
+            )
+            assert persisted is not None
+            persisted.detected_format = "plain_text"
+
+        with pytest.raises(GuideSourceMaterializationError, match="classification conflicts"):
+            await service.materialize_guide_source(request)
+
+        async with factory() as session:
+            persisted = await session.get(
+                GuideSourceFormatClassification, str(first.classification_id)
+            )
+            assert persisted is not None
+            assert persisted.detected_format == "plain_text"
+            assert await session.scalar(select(func.count(GuideSourceFormatClassification.id))) == 1
+    finally:
+        scratch.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_truncated_materialization_records_incident_without_classification(
     isolated_database_env: str, tmp_path: Path
 ) -> None:

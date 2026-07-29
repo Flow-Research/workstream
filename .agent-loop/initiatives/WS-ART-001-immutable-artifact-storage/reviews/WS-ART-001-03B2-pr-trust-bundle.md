@@ -71,10 +71,11 @@ and Agent Gates remain required on the exact PR head.
 
 ## Reviewer Results And External Review
 
-Architecture, security, QA, product/ops, CI integrity, docs, reuse, and test
-delta pass after valid findings were repaired. Senior-engineering confirmation
-is recorded in the paired evidence before PR publication. CodeRabbit and GitHub
-checks are pending until the PR exists and supplement these internal reviews.
+Architecture, security, QA, product/ops, CI integrity, docs, reuse, test delta,
+and senior engineering pass after valid findings were repaired. CodeRabbit's
+six low-severity comments were addressed; its generic docstring warning is
+superseded by the repository-owned hosted docstring gate. GitHub Backend and
+Agent Gates remain required on each repaired exact PR head.
 
 ## Remaining Risks And Follow-Up
 
@@ -88,5 +89,7 @@ and guide-reader actions. 03C remains a separate legacy cutover.
 
 Review the active namespace fence, pre/post setup-generation locking, complete
 rehash comparison, classification precedence/limits, incident privacy, and the
-deny-only AUTH boundary. The user retains the decision to mark the PR ready and
-approve its merge.
+deny-only AUTH boundary. Confirm the repaired nested-archive ceiling is enforced
+before buffering and immutable classification conflicts cannot overwrite
+evidence. The user retains the decision to mark the PR ready and approve its
+merge.

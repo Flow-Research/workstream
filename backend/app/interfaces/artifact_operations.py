@@ -268,7 +268,7 @@ class ArtifactBindingPort(Protocol):
 
 
 class ArtifactMaterializationPort(Protocol):
-    """Materialize only the two canonical immutable source forms."""
+    """Materialize only canonical immutable source forms."""
 
     async def materialize_prepared_bundle(
         self,

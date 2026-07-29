@@ -47,7 +47,7 @@ scratch without extracting semantic content.
   either image dimension; every exact-boundary case succeeds, every one-over
   case returns `limit_exceeded`, and no partial classification survives;
 - cleanup occurs on success, denial, mismatch, cancellation, and timeout;
-- migration `0040_guide_materialization_classification` preserves exact-binding classification
+- migration `0040_guide_materialization` preserves exact-binding classification
   and incident custody, refuses populated downgrade, and introduces no new
   Operator or generic artifact-read route;
 - changed subsystems remain at least 90% covered and repository coverage stays

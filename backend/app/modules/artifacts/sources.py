@@ -12,12 +12,13 @@ from app.core.cancellation import await_completion_preserving_cancellation
 
 _COMMITTED_SOURCE_SEAL = object()
 _InspectionResult = TypeVar("_InspectionResult")
+_InspectionResultCo = TypeVar("_InspectionResultCo", covariant=True)
 
 
-class PreparedArtifactInspector(Protocol[_InspectionResult]):
+class PreparedArtifactInspector(Protocol[_InspectionResultCo]):
     """Typed artifact-owned inspection capability over one scratch reader."""
 
-    def inspect(self, reader: BinaryIO) -> _InspectionResult:
+    def inspect(self, reader: BinaryIO) -> _InspectionResultCo:
         """Return bounded structural facts without retaining the reader."""
 
 

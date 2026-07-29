@@ -36,6 +36,7 @@ class GuideFormatLimits:
     maximum_entries: int = 2_000
     maximum_central_directory_bytes: int = 8 * 1024 * 1024
     maximum_decompressed_bytes: int = 128 * 1024 * 1024
+    maximum_nested_archive_bytes: int = 16 * 1024 * 1024
     maximum_nesting_depth: int = 8
     maximum_compression_ratio: int = 100
     maximum_image_pixels: int = 40_000_000
@@ -246,6 +247,8 @@ class GuideFormatDetector:
                     ):
                         return "malformed"
                 if lower.endswith(".zip"):
+                    if info.file_size > self._limits.maximum_nested_archive_bytes:
+                        return "limit_exceeded"
                     nested = archive.read(info)
                     nested_result = self._inspect_archive(
                         BytesIO(nested), state=state, depth=depth + 1
@@ -313,6 +316,9 @@ class GuideFormatDetector:
                     offset += 1
                     continue
                 marker = header[offset + 1]
+                if marker in {0x01, 0xD8, 0xD9} or 0xD0 <= marker <= 0xD7:
+                    offset += 2
+                    continue
                 length = int.from_bytes(header[offset + 2 : offset + 4], "big")
                 if marker in {
                     0xC0,

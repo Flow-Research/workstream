@@ -236,6 +236,20 @@ def test_nested_depth_boundary_is_exact() -> None:
     assert over_limit.status == "limit_exceeded"
 
 
+def test_nested_archive_member_byte_boundary_is_exact() -> None:
+    inner = _zip({"guide.txt": b"guide"}).getvalue()
+
+    at_limit = GuideFormatDetector(
+        GuideFormatLimits(maximum_nested_archive_bytes=len(inner))
+    ).detect(_zip({"nested.zip": inner}), declared_media_type="application/zip")
+    over_limit = GuideFormatDetector(
+        GuideFormatLimits(maximum_nested_archive_bytes=len(inner) - 1)
+    ).detect(_zip({"nested.zip": inner}), declared_media_type="application/zip")
+
+    assert at_limit.status == "unsupported"
+    assert over_limit.status == "limit_exceeded"
+
+
 def test_symlink_entry_is_rejected(detector: GuideFormatDetector) -> None:
     output = BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
@@ -326,9 +340,11 @@ def test_common_webp_variants_expose_dimensions(
 
 
 def test_jpeg_dimensions_classify_and_enforce_limit() -> None:
-    def jpeg(width: int, height: int) -> BytesIO:
+    def jpeg(width: int, height: int, *, standalone_marker: bytes = b"") -> BytesIO:
         return BytesIO(
-            b"\xff\xd8\xff\xc0\x00\x0b\x08"
+            b"\xff\xd8"
+            + standalone_marker
+            + b"\xff\xc0\x00\x0b\x08"
             + height.to_bytes(2, "big")
             + width.to_bytes(2, "big")
             + b"\x00" * 8
@@ -339,6 +355,10 @@ def test_jpeg_dimensions_classify_and_enforce_limit() -> None:
     )
 
     classified = detector.detect(jpeg(10, 10), declared_media_type="image/jpeg")
+    with_restart_marker = detector.detect(
+        jpeg(10, 10, standalone_marker=b"\xff\xd0"),
+        declared_media_type="image/jpeg",
+    )
     over_limit = detector.detect(jpeg(10, 11), declared_media_type="image/jpeg")
 
     assert (classified.status, classified.detected_format, classified.facts) == (
@@ -346,4 +366,5 @@ def test_jpeg_dimensions_classify_and_enforce_limit() -> None:
         "jpeg",
         {"width": 10, "height": 10},
     )
+    assert with_restart_marker.facts == {"width": 10, "height": 10}
     assert over_limit.status == "limit_exceeded"

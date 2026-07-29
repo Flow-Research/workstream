@@ -197,3 +197,9 @@
 - Final architecture, security, QA, product/ops, CI-integrity, docs,
   reuse/dedup, test-delta, and senior-engineering reviews pass. Exact hosted
   PR-head checks remain the publication gate.
+- CodeRabbit's six low-severity comments were repaired with naming and wording
+  alignment, protocol variance, bounded nested buffering, JPEG marker handling,
+  and immutable-conflict proof. Its generic docstring warning is superseded by
+  the passing repository-owned hosted docstring gate.
+- Senior-engineering, security, and QA repair-delta re-reviews pass with no
+  blockers before the repaired PR head is published.
