@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -32,8 +33,10 @@ from app.modules.artifacts.schemas import (
     GuideArtifactIngestAuthorityFacts,
 )
 from app.modules.artifacts.authorization import DenyGuideArtifactPreparedAuthorization
+from app.modules.artifacts.authorization import PreparedGuideArtifactAuthorization
 from app.modules.artifacts.authorization import get_artifact_authorization_context
 from app.modules.artifacts.authorization import get_guide_artifact_prepared_authorization
+from app.modules.artifacts.authorization import guide_ingest_prepared_request_digest
 from app.modules.artifacts.service import (
     ArtifactAdmissionRelationshipError,
     ArtifactAdmissionService,
@@ -48,6 +51,8 @@ from app.modules.authorization.runtime import (
     ActorStatus,
     HumanAuthorizationContext,
     IdentityLinkStatus,
+    PreparedAuthorizationInput,
+    PreparedAuthorizationHandleInvalid,
 )
 from app.modules.projects.router import ingest_guide_source_artifact
 from app.modules.projects.router import router as projects_router
@@ -325,10 +330,10 @@ async def test_guide_ingest_denies_before_reading_bytes(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_default_guide_authority_denies_final_consumption() -> None:
-    """Keep both PREP boundaries unavailable until AUTH installs 04A."""
-    authority = get_guide_artifact_prepared_authorization()
-    assert type(authority) is DenyGuideArtifactPreparedAuthorization
+async def test_activated_guide_authority_rejects_unissued_consumption() -> None:
+    """Compose the 04A adapter while rejecting any unissued capability."""
+    authority = get_guide_artifact_prepared_authorization(SimpleNamespace())  # type: ignore[arg-type]
+    assert type(authority) is PreparedGuideArtifactAuthorization
     facts = GuideArtifactIngestAuthorityFacts(
         project_id=PROJECT_ID,
         guide_id=GUIDE_ID,
@@ -347,6 +352,166 @@ async def test_default_guide_authority_denies_final_consumption() -> None:
             facts=facts,
         )
     authority.close()
+
+
+@pytest.mark.asyncio
+async def test_activated_guide_authority_rejects_nested_transaction() -> None:
+    """Keep final PREP consumption bound to the caller-owned root transaction."""
+    session = SimpleNamespace(in_nested_transaction=lambda: True)
+    authority = PreparedGuideArtifactAuthorization(session)  # type: ignore[arg-type]
+
+    with pytest.raises(
+        ArtifactAuthorityDeniedError,
+        match="prepared authorization transaction is unavailable",
+    ):
+        async with authority.transaction():
+            pytest.fail("nested transaction must deny before entering the body")
+
+
+@pytest.mark.asyncio
+async def test_activated_guide_authority_finishes_existing_root_transaction() -> None:
+    """Commit successful admission roots and roll back failed roots exactly once."""
+
+    class RootSession:
+        def __init__(self) -> None:
+            self.commits = 0
+            self.rollbacks = 0
+
+        def in_nested_transaction(self) -> bool:
+            return False
+
+        def in_transaction(self) -> bool:
+            return True
+
+        async def commit(self) -> None:
+            self.commits += 1
+
+        async def rollback(self) -> None:
+            self.rollbacks += 1
+
+    session = RootSession()
+    authority = PreparedGuideArtifactAuthorization(session)  # type: ignore[arg-type]
+    async with authority.transaction():
+        pass
+    assert (session.commits, session.rollbacks) == (1, 0)
+
+    with pytest.raises(RuntimeError, match="admission failed"):
+        async with authority.transaction():
+            raise RuntimeError("admission failed")
+    assert (session.commits, session.rollbacks) == (1, 1)
+
+
+@pytest.mark.asyncio
+async def test_activated_guide_authority_binds_every_final_fact_and_rejects_reuse() -> None:
+    """Keep the adapter's lineage/request binding exact and byte facts server-owned."""
+
+    class CapturingPrepared:
+        def __init__(self) -> None:
+            self.calls: list[tuple[Any, ...]] = []
+            self.closed = False
+
+        async def consume(self, *values: Any) -> None:
+            self.calls.append(values)
+
+        def close(self) -> None:
+            self.closed = True
+
+    idempotency_key = uuid4()
+    actor_id = uuid4()
+    request_digest = guide_ingest_prepared_request_digest(
+        project_id=PROJECT_ID,
+        guide_id=GUIDE_ID,
+        guide_source_snapshot_id=SNAPSHOT_ID,
+        guide_source_item_id=ITEM_ID,
+        idempotency_key=idempotency_key,
+    )
+    handle = object.__new__(PreparedAuthorizationHandle)
+    prepared = CapturingPrepared()
+    authority = PreparedGuideArtifactAuthorization(SimpleNamespace())  # type: ignore[arg-type]
+    authority._prepared = prepared  # type: ignore[assignment]
+    authority._authorization = SimpleNamespace()  # type: ignore[assignment]
+    authority._input = PreparedAuthorizationInput(
+        idempotency_key=idempotency_key,
+        request_value={"project_id": str(PROJECT_ID)},
+    )
+    authority._handle = handle
+    authority._actor_profile_id = actor_id
+    authority._expected = (PROJECT_ID, GUIDE_ID, SNAPSHOT_ID, ITEM_ID, request_digest)
+    facts = GuideArtifactIngestAuthorityFacts(
+        project_id=PROJECT_ID,
+        guide_id=GUIDE_ID,
+        guide_source_snapshot_id=SNAPSHOT_ID,
+        guide_source_item_id=ITEM_ID,
+        operation_identity="sha256:" + "a" * 64,
+        request_digest=request_digest,
+        sha256="sha256:" + "b" * 64,
+        byte_count=19,
+        media_type="application/octet-stream",
+    )
+
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.consume(
+            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
+            facts=facts,
+        )
+    for mismatched in (
+        replace(facts, project_id=uuid4()),
+        replace(facts, guide_id=uuid4()),
+        replace(facts, guide_source_snapshot_id=uuid4()),
+        replace(facts, guide_source_item_id=uuid4()),
+        replace(facts, request_digest="sha256:" + "c" * 64),
+    ):
+        with pytest.raises(ArtifactAuthorityDeniedError):
+            await authority.consume(prepared_authorization=handle, facts=mismatched)
+    assert prepared.calls == []
+    assert await authority.consume(prepared_authorization=handle, facts=facts) == actor_id
+    assert prepared.closed is True
+    assert len(prepared.calls) == 1
+    consumed_handle, action_id, caller_input, resource = prepared.calls[0]
+    assert consumed_handle is handle
+    assert action_id.value == "artifact.guide_source.ingest"
+    assert caller_input.idempotency_key == idempotency_key
+    assert resource.model_dump() == {
+        "resource_type": "project",
+        "resource_id": PROJECT_ID,
+        "scope_project_id": PROJECT_ID,
+        "guide_id": GUIDE_ID,
+        "guide_source_snapshot_id": SNAPSHOT_ID,
+        "guide_source_item_id": ITEM_ID,
+        "operation_identity": "sha256:" + "a" * 64,
+        "request_digest": request_digest,
+        "sha256": "sha256:" + "b" * 64,
+        "byte_count": 19,
+        "media_type": "application/octet-stream",
+    }
+    with pytest.raises(ArtifactAuthorityDeniedError):
+        await authority.consume(prepared_authorization=handle, facts=facts)
+
+    class FailingPrepared(CapturingPrepared):
+        async def consume(self, *values: Any) -> None:
+            del values
+            raise PreparedAuthorizationHandleInvalid
+
+    failed_prepared = FailingPrepared()
+    failed_authority = PreparedGuideArtifactAuthorization(SimpleNamespace())  # type: ignore[arg-type]
+    failed_authority._prepared = failed_prepared  # type: ignore[assignment]
+    failed_authority._authorization = SimpleNamespace()  # type: ignore[assignment]
+    failed_authority._input = PreparedAuthorizationInput(
+        idempotency_key=idempotency_key,
+        request_value={"project_id": str(PROJECT_ID)},
+    )
+    failed_authority._handle = handle
+    failed_authority._actor_profile_id = actor_id
+    failed_authority._expected = (
+        PROJECT_ID,
+        GUIDE_ID,
+        SNAPSHOT_ID,
+        ITEM_ID,
+        request_digest,
+    )
+    with pytest.raises(ArtifactAuthorityDeniedError, match="ingest is unavailable"):
+        await failed_authority.consume(prepared_authorization=handle, facts=facts)
+    assert failed_prepared.closed is True
 
 
 @pytest.mark.asyncio

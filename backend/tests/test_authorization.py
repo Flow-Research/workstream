@@ -184,6 +184,7 @@ from app.modules.authorization.runtime import (
     AuthorizationDenialCode,
     AuthorizationEvidenceUnavailable,
     HumanAuthorizationContext,
+    GuideSourceIngestResourceContext,
     IdentityLinkStatus,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationInput,
@@ -738,9 +739,7 @@ async def test_authorization_read_rate_failure_precedes_project_lookup(
         base_url="http://testserver",
     ) as client:
         response = await client.get(
-            path.format(
-                project_id=uuid4(), guide_id=uuid4(), report_id=uuid4(), policy_id=uuid4()
-            ),
+            path.format(project_id=uuid4(), guide_id=uuid4(), report_id=uuid4(), policy_id=uuid4()),
             headers={"Authorization": "Bearer test"},
         )
 
@@ -1580,8 +1579,8 @@ ART_CUSTODY_EXPECTATIONS = {
     ),
     "artifact.guide_source.ingest": (
         "artifact.guide_source.ingest",
-        "WS-AUTH-001-ART-03",
-        "planned",
+        "WS-XINT-002-04A",
+        "active",
     ),
     "artifact.guide_source.read": (
         "artifact.guide_source.read",
@@ -1880,6 +1879,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -1917,17 +1917,19 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             ActionOwner.AUTH_ART_05,
             ActionOwner.AUTH_ART_06A,
             ActionOwner.AUTH_ART_06B,
+            ActionOwner.XINT_002_04A,
             ActionOwner.XINT_002_05A,
             ActionOwner.XINT_002_07,
         }
     } == {
         ActionOwner.AUTH_ART_02D_OPERATOR: 8,
         ActionOwner.AUTH_ART_02D_INTERNAL: 3,
-        ActionOwner.AUTH_ART_03: 3,
+        ActionOwner.AUTH_ART_03: 2,
         ActionOwner.AUTH_ART_04B: 1,
         ActionOwner.AUTH_ART_05: 1,
         ActionOwner.AUTH_ART_06A: 1,
         ActionOwner.AUTH_ART_06B: 2,
+        ActionOwner.XINT_002_04A: 1,
         ActionOwner.XINT_002_05A: 1,
         ActionOwner.XINT_002_07: 2,
     }
@@ -1964,14 +1966,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 33
+        == 34
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 45
+        == 44
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -2119,7 +2121,8 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     expected_owner_counts = {
         "WS-AUTH-001-ART-02D-OPERATOR": 8,
         "WS-AUTH-001-ART-02D-INTERNAL": 3,
-        "WS-AUTH-001-ART-03": 3,
+        "WS-AUTH-001-ART-03": 2,
+        "WS-XINT-002-04A": 1,
         "WS-XINT-002-05A": 1,
         "WS-AUTH-001-ART-04B": 1,
         "WS-AUTH-001-ART-05": 1,
@@ -2158,13 +2161,13 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     operations = (repository_root / "docs/operations_authorization_service.md").read_text(
         encoding="utf-8"
     )
-    assert "all 22 ART rows to nine exact activation custodians" in operations
+    assert "all 22 ART rows to ten exact activation custodians" in operations
     assert "all 19 REV\nrows to seven exact AUTH custodians" in operations
     assert "transfer adds no migration; the later WS-XINT-002-01" in operations
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-        "71 PermissionIds, 78 ActionIds, 33 active actions, and\n45 planned actions" in operations
+            "71 PermissionIds, 78 ActionIds, 34 active actions, and\n44 planned actions" in operations
     )
 
 
@@ -2289,6 +2292,7 @@ def test_administrative_role_policy_and_definition_responses_are_exact() -> None
             project.effective_policy.read project.update project.archive
             project.guide.manage project.effective_policy.manage project.task.manage
             project.review_policy.manage project.role_grant.read project.role_grant.manage
+            artifact.guide_source.ingest
             review.queue.inspect contribution.read_project compensation.award.read
             audit.read""".split(),
         AdminRole.FINANCE_AUTHORITY: """project.read contribution.read_project
@@ -3260,6 +3264,7 @@ class _PreparedAdminFacts(_PreparedActorFacts):
         self.grant_id = uuid4()
         self.control_calls = 0
         self.grant_calls = 0
+        self.grant_requests: list[tuple[tuple[object, ...], dict[str, object]]] = []
         self.target_calls = 0
 
     async def lock_control(self):
@@ -3269,8 +3274,9 @@ class _PreparedAdminFacts(_PreparedActorFacts):
     async def lock_request_actor(self, identity_link_id, actor_profile_id):
         return await self.lock_actor_self(actor_profile_id, identity_link_id)
 
-    async def find_effective_grant(self, *_args, **_kwargs):
+    async def find_effective_grant(self, *args, **kwargs):
         self.grant_calls += 1
+        self.grant_requests.append((args, kwargs))
         return SimpleNamespace(id=self.grant_id, status="active")
 
     async def lock_eligible_human(self, actor_profile_id):
@@ -3768,6 +3774,82 @@ async def test_prepared_admin_consume_reuses_exact_locked_grant_without_requery(
     assert (facts.control_calls, facts.calls, facts.grant_calls) == (1, 1, 1)
     assert facts.target_calls == 1
     assert len(evidence.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_prepared_guide_ingest_binds_exact_project_and_locked_manager_grant():
+    context = _runtime_context()
+    assert isinstance(context, HumanAuthorizationContext)
+    session = _PreparedTestSession()
+    authorization, evidence = _runtime_service(context, session=session)
+    facts = _PreparedAdminFacts(context)
+    authorization._admin = facts  # type: ignore[assignment]
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    project_id = uuid4()
+    caller_input = PreparedAuthorizationInput(
+        idempotency_key=uuid4(), request_value={"project_id": str(project_id)}
+    )
+    handle = await prepared.prepare(
+        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+        caller_input,
+        PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
+        ),
+    )
+    assert (facts.calls, facts.grant_calls) == (1, 1)
+    assert facts.grant_requests == [
+        (
+            (context.actor_profile_id, PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST),
+            {"scope_project_id": project_id, "for_update": True},
+        )
+    ]
+
+    def resource(scope_project_id: UUID) -> GuideSourceIngestResourceContext:
+        return GuideSourceIngestResourceContext(
+            resource_type="project",
+            resource_id=scope_project_id,
+            scope_project_id=scope_project_id,
+            guide_id=uuid4(),
+            guide_source_snapshot_id=uuid4(),
+            guide_source_item_id=uuid4(),
+            operation_identity="sha256:" + "b" * 64,
+            request_digest="sha256:" + "c" * 64,
+            sha256="sha256:" + "d" * 64,
+            byte_count=17,
+            media_type="application/octet-stream",
+        )
+
+    with pytest.raises(PreparedAuthorizationHandleInvalid):
+        await prepared.consume(
+            handle,
+            ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+            caller_input,
+            resource(uuid4()),
+        )
+    assert evidence.events == []
+    decision = await prepared.consume(
+        handle,
+        ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+        caller_input,
+        resource(project_id),
+    )
+    assert decision.allowed is True
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+    assert decision.matched_grant_id == facts.grant_id
+    assert decision.matched_scope_project_id == project_id
+    assert (facts.calls, facts.grant_calls) == (1, 1)
+    assert len(evidence.events) == 1
+    assert evidence.events[0].project_id == str(project_id)
+    assert evidence.events[0].after_facts is not None
+    assert evidence.events[0].after_facts["resource_context_digest"] == (
+        decision.resource_context_digest
+    )
 
 
 @pytest.mark.asyncio

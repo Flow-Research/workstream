@@ -47,6 +47,7 @@ from app.modules.authorization.runtime import (
     AuthorizationEvidenceUnavailable,
     AuthorizationResourceContext,
     HumanAuthorizationContext,
+    GuideSourceIngestResourceContext,
     IdentityLinkStatus,
     MatchedAuthorityKind,
     PermissionCatalogueResourceContext,
@@ -382,6 +383,27 @@ class AuthorizationService:
                 action.permission_id,
                 scope_project_id=scope.project_id,
                 system_scope_only=scope.project_id is None,
+                for_update=True,
+            )
+            if grant is None:
+                raise PreparedAuthorizationUnsupported(
+                    AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+                )
+        elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
+            if (
+                not isinstance(context, HumanAuthorizationContext)
+                or scope.kind is not PreparedAuthorityScopeKind.PROJECT
+                or scope.project_id is None
+            ):
+                raise PreparedAuthorizationUnsupported(AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED)
+            locked = await self._admin.lock_request_actor(
+                context.identity_link_id, context.actor_profile_id
+            )
+            context = self._locked_human_context(locked, context)
+            grant = await self._admin.find_effective_grant(
+                context.actor_profile_id,
+                action.permission_id,
+                scope_project_id=scope.project_id,
                 for_update=True,
             )
             if grant is None:
@@ -758,6 +780,24 @@ class AuthorizationService:
                 denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if denial is None:
                 denial = await self._admin_guard(action_id, resource_context, context)
+            if denial is None:
+                matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
+                matched_grant_id = authority.matched_grant_id
+                matched_project_id = authority.scope_project_id
+        elif action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST:
+            denial = self._lifecycle_denial(context)
+            if denial is None and action.availability is not ActionAvailability.ACTIVE:
+                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
+            if denial is None and not isinstance(
+                resource_context, GuideSourceIngestResourceContext
+            ):
+                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None and resource_context.scope_project_id != authority.scope_project_id:
+                denial = AuthorizationDenialCode.SCOPE_NOT_AUTHORIZED
+            if denial is None and (
+                authority.matched_grant_id is None or authority.matched_grant_status != "active"
+            ):
+                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
             if denial is None:
                 matched_kind = MatchedAuthorityKind.ADMIN_ROLE_GRANT
                 matched_grant_id = authority.matched_grant_id
@@ -1151,12 +1191,16 @@ class AuthorizationService:
         elif decision.resource_type in {"actor_identity_link", "admin_role_grant"}:
             audit_resource_type = decision.resource_type
         after_facts: dict[str, object] = {"allowed": decision.allowed}
-        if decision.resource_type in {
-            "artifact_put_attempt",
-            "artifact_verification_job",
-            "artifact_pending_work",
-            "project_diagnostic",
-        }:
+        if (
+            decision.resource_type
+            in {
+                "artifact_put_attempt",
+                "artifact_verification_job",
+                "artifact_pending_work",
+                "project_diagnostic",
+            }
+            or decision.action_id is ActionId.ARTIFACT_GUIDE_SOURCE_INGEST
+        ):
             after_facts["resource_context_digest"] = decision.resource_context_digest
         try:
             await self._audit.add_authority_event(

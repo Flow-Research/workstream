@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps.authorization import _authorization_context, get_authorization_actor
 from app.core.api_controls import request_ids
 from app.core.hashing import canonical_json_hash
+from app.db.session import get_db_session
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.service import ResolvedActor
 from app.modules.actors.service_identities import ServiceIdentity
@@ -44,6 +45,9 @@ from app.modules.authorization.runtime import (
     PreparedAuthorityScopeKind,
     AuthorizationDecision,
     AuthorizationDenied,
+    GuideSourceIngestResourceContext,
+    HumanAuthorizationContext,
+    PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
     ServiceAuthorizationContext,
     AuthorizationContext,
@@ -167,9 +171,182 @@ class DenyGuideArtifactPreparedAuthorization:
         """Deny-only adapters hold no capability state."""
 
 
-def get_guide_artifact_prepared_authorization() -> GuideArtifactPreparedAuthorization:
-    """Stable 04A activation selector; deny while guide ingest is planned."""
-    return DenyGuideArtifactPreparedAuthorization()
+class PreparedGuideArtifactAuthorization:
+    """Activate exact Project Manager guide ingest through AUTH-owned PREP."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._prepared: PreparedAuthorizationService | None = None
+        self._authorization: AuthorizationService | None = None
+        self._input: PreparedAuthorizationInput | None = None
+        self._handle: PreparedAuthorizationHandle | None = None
+        self._expected: tuple[UUID, UUID, UUID, UUID, str] | None = None
+        self._actor_profile_id: UUID | None = None
+
+    @asynccontextmanager
+    async def transaction(self):
+        """Own the one root transaction shared by authorization and admission."""
+        if self._session.in_nested_transaction():
+            raise ArtifactAuthorityDeniedError(
+                "guide prepared authorization transaction is unavailable"
+            )
+        if not self._session.in_transaction():
+            async with self._session.begin():
+                yield
+            return
+        try:
+            yield
+        except BaseException:
+            await self._session.rollback()
+            raise
+        else:
+            await self._session.commit()
+
+    async def prepare(
+        self,
+        *,
+        authorization_context: AuthorizationContext,
+        project_id: UUID,
+        guide_id: UUID,
+        guide_source_snapshot_id: UUID,
+        guide_source_item_id: UUID,
+        idempotency_key: UUID,
+    ) -> PreparedAuthorizationHandle:
+        """Lock the exact Project Manager grant before any byte intake."""
+        if (
+            not isinstance(authorization_context, HumanAuthorizationContext)
+            or self._prepared is not None
+            or not self._session.in_transaction()
+            or self._session.in_nested_transaction()
+        ):
+            raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+        repository = AdminAuthorizationRepository(self._session)
+        authorization = AuthorizationService(
+            self._session,
+            authorization_context,
+            admin_repository=repository,
+        )
+        prepared = PreparedAuthorizationService(
+            self._session,
+            authorization_context,
+            authorization,
+            repository,
+        )
+        request_value = guide_ingest_prepared_request_value(
+            project_id=project_id,
+            guide_id=guide_id,
+            guide_source_snapshot_id=guide_source_snapshot_id,
+            guide_source_item_id=guide_source_item_id,
+            idempotency_key=idempotency_key,
+        )
+        caller_input = PreparedAuthorizationInput(
+            idempotency_key=idempotency_key,
+            request_value=request_value,
+        )
+        try:
+            handle = await prepared.prepare(
+                ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+                caller_input,
+                PreparedAuthorityScope(
+                    kind=PreparedAuthorityScopeKind.PROJECT,
+                    project_id=project_id,
+                ),
+            )
+        except (PreparedAuthorizationUnsupported, PreparedAuthorizationHandleInvalid) as exc:
+            prepared.close()
+            raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable") from exc
+        except BaseException:
+            prepared.close()
+            raise
+        self._prepared = prepared
+        self._authorization = authorization
+        self._input = caller_input
+        self._handle = handle
+        self._actor_profile_id = authorization_context.actor_profile_id
+        self._expected = (
+            project_id,
+            guide_id,
+            guide_source_snapshot_id,
+            guide_source_item_id,
+            guide_ingest_prepared_request_digest(
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_source_snapshot_id=guide_source_snapshot_id,
+                guide_source_item_id=guide_source_item_id,
+                idempotency_key=idempotency_key,
+            ),
+        )
+        return handle
+
+    async def consume(
+        self,
+        *,
+        prepared_authorization: PreparedAuthorizationHandle,
+        facts: GuideArtifactIngestAuthorityFacts,
+    ) -> UUID:
+        """Consume once against locked lineage and server-computed byte facts."""
+        if (
+            self._prepared is None
+            or self._authorization is None
+            or self._input is None
+            or self._handle is None
+            or self._expected is None
+            or self._actor_profile_id is None
+            or prepared_authorization is not self._handle
+            or self._expected
+            != (
+                facts.project_id,
+                facts.guide_id,
+                facts.guide_source_snapshot_id,
+                facts.guide_source_item_id,
+                facts.request_digest,
+            )
+        ):
+            raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable")
+        prepared = self._prepared
+        actor_profile_id = self._actor_profile_id
+        try:
+            await prepared.consume(
+                prepared_authorization,
+                ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+                self._input,
+                GuideSourceIngestResourceContext(
+                    resource_type="project",
+                    resource_id=facts.project_id,
+                    scope_project_id=facts.project_id,
+                    guide_id=facts.guide_id,
+                    guide_source_snapshot_id=facts.guide_source_snapshot_id,
+                    guide_source_item_id=facts.guide_source_item_id,
+                    operation_identity=facts.operation_identity,
+                    request_digest=facts.request_digest,
+                    sha256=facts.sha256,
+                    byte_count=facts.byte_count,
+                    media_type=facts.media_type,
+                ),
+            )
+        except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, ValidationError) as exc:
+            raise ArtifactAuthorityDeniedError("guide artifact ingest is unavailable") from exc
+        finally:
+            self.close()
+        return actor_profile_id
+
+    def close(self) -> None:
+        """Invalidate every unconsumed request-local capability."""
+        if self._prepared is not None:
+            self._prepared.close()
+        self._prepared = None
+        self._authorization = None
+        self._input = None
+        self._handle = None
+        self._expected = None
+        self._actor_profile_id = None
+
+
+def get_guide_artifact_prepared_authorization(
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+) -> GuideArtifactPreparedAuthorization:
+    """Compose the activated request-local guide ingest authority."""
+    return PreparedGuideArtifactAuthorization(session)
 
 
 class PreparedArtifactInternalAuthority:

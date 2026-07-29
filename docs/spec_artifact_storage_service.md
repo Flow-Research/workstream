@@ -800,7 +800,8 @@ assigns the server-owned canonical media type
 `application/octet-stream`; it does not trust the request `Content-Type` header.
 After preparation, its
 durable admission transaction locks the exact project/guide/snapshot/item
-lineage, revalidates `artifact.guide_source.ingest`, and records a
+lineage, requires the locked guide to remain `draft`, revalidates
+`artifact.guide_source.ingest`, and records a
 non-authoritative `GuideSourceArtifactIngest` from the server-computed digest,
 byte count, and media type. Legacy snapshot-item hashes are descriptors during
 the phased cutover and are not admission truth. The staged row cannot activate

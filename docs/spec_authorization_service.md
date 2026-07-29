@@ -237,8 +237,8 @@ permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 78 rows after AUTH-11C1: 33 active actions
-and 45 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 78 rows after WS-XINT-002-04A: 34 active
+actions and 44 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
 project identity and actor-context read rows: two are active under 11B, three
@@ -253,8 +253,8 @@ provisioning actions without activating a route; AUTH-09B activates only
 `actor.service.provision`, AUTH-09C activates only `actor.profile.read` and
 `actor.identity_link.read`, AUTH-09D-A activates the three profile lifecycle
 actions, and AUTH-09D-B activates the two identity-link lifecycle actions. The
-other planned rows cover
-three Operator recovery actions, 19 artifact actions, canonical
+other registry rows cover three planned Operator recovery actions, 19 other
+artifact actions—18 planned plus active `artifact.guide_source.ingest`—canonical
 `submission.create`, and 19 review actions. An action becomes active only when
 its feature owner has merged the canonical resource composer, guards, surface or
 command declaration, behavior tests, and transaction-local revalidation where
@@ -378,6 +378,14 @@ may execute that ActionId while it remains planned; activation waits until
 ART-04A-C publish the complete hidden surface and WS-XINT-002-05A consumes its
 exact evidence.
 
+WS-XINT-002-04A activates only `artifact.guide_source.ingest`. The existing
+permission belongs only to the Project Manager role and is evaluated through an
+active covered grant: system-scoped or exact-project. Its prepared capability locks the
+actor, exact identity link, and matched grant before byte intake; final
+consumption binds the ART-locked project, draft guide, snapshot, item,
+operation/request digests, and server-computed byte facts. Guide-source read and
+binding creation remain planned.
+
 Every row requires AUTH-07A's registry and AUTH-07B's kernel first. A row with an Operator principal
 also requires its AUTH-08 grant definition; a row with a fixed service
 principal also requires AUTH-09A's static matrix, AUTH-09B's provisioned service
@@ -407,7 +415,8 @@ A mapping is not a permission alias.
 |---|---|
 | `WS-AUTH-001-ART-02D-INTERNAL` | Active: `artifact.verification.execute`, `artifact.pending_work.scan`, `artifact.put_attempt.resolve` |
 | `WS-AUTH-001-ART-02D-OPERATOR` | `artifact.binding.read`, `artifact.replica.read`, `artifact.receipt.read`, `artifact.verification_job.read`, `artifact.verification_job.retry`, `artifact.recovery_attempt.read`, `artifact.audit.read`, `operations.artifact_storage_admission.read` |
-| `WS-AUTH-001-ART-03` | `artifact.guide_source.ingest`, `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
+| `WS-XINT-002-04A` | Active: `artifact.guide_source.ingest` |
+| `WS-AUTH-001-ART-03` | `artifact.guide_source.read`, `artifact.guide_source.binding.create` |
 | `WS-XINT-002-05A` | `artifact.submission_bundle.prepare` |
 | `WS-AUTH-001-ART-04B` | `artifact.pre_submit.checker_input.materialize` |
 | `WS-AUTH-001-ART-05` | `artifact.submission.binding.create` |
@@ -416,8 +425,9 @@ A mapping is not a permission alias.
 | `WS-XINT-002-07` | `artifact.review_packet.materialize`, `artifact.review_evidence.binding.create` |
 
 The `OPERATOR` suffix names future activation custody only; it creates no
-Operator grant or entitlement. WS-XINT-002-03 activates only the three internal
-service actions; the other 19 ART actions remain planned and unavailable.
+Operator grant or entitlement. WS-XINT-002-03 activates the three internal
+service actions and WS-XINT-002-04A activates guide-source ingest; the other 18
+ART actions remain planned and unavailable.
 Migration `0037` admits the exact privacy-bounded ART resource-context digest
 in append-only authorization decision facts; it adds no table or column.
 `artifact.verification_job.retry` requires its own later evaluator, guards, and
@@ -437,7 +447,7 @@ remain planned and unavailable, and add no migration.
 | `artifact.recovery_attempt.read` | `artifact.recovery_attempt.read` | Operator | recovery attempt | `02D` |
 | `artifact.audit.read` | `artifact.audit.read` | Operator | artifact audit scope | `02D` |
 | `operations.artifact_storage_admission.read` | `operations.status.read` | Operator | deployment artifact-storage namespace | `02D` |
-| `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | authorized project actor | guide-source snapshot item | `03` |
+| `artifact.guide_source.ingest` | `artifact.guide_source.ingest` | exact covered Project Manager | guide-source snapshot item | `03` |
 | `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | guide-source snapshot item | `03` |
 | `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `WS-XINT-002-05A` |
 | `artifact.guide_source.binding.create` | `artifact.binding.create` | fixed binding service | guide-source snapshot item | `03` |
@@ -596,9 +606,10 @@ AUTH locks AuthorityControl first when final-admin safety applies
 -> route or service command commits once
 ```
 
-The PREP foundation currently issues handles only for
-`actor.profile.update_self` and the eight active AdminRoleGrant-backed
-administrative mutations. Actor-self preparation locks the exact caller
+The PREP foundation issues handles for `actor.profile.update_self`, the eight
+active AdminRoleGrant-backed administrative mutations, the three active fixed
+ART service actions, and Project Manager `artifact.guide_source.ingest`.
+Actor-self preparation locks the exact caller
 profile and then its exact identity link. Administrative preparation locks
 `AuthorityControl(id=1)`, the exact request profile, exact request identity
 link, and one deterministic effective AdminRoleGrant. The caller supplies an
@@ -637,6 +648,14 @@ do not restage rolled-back denial evidence. ProjectRoleGrant does not exist in
 PREP; AUTH-10 must add its exact row lock, evaluator branch, and crossed-
 revocation evidence before an exact-project product consumer can use that
 authority source.
+
+WS-XINT-002-04A adds the first active human feature consumer. Guide ingest
+preparation locks the caller profile, exact identity link, and one active
+covered Project Manager AdminRoleGrant before byte intake. ART then locks the
+project, draft guide, snapshot, and item and supplies operation/request digests
+plus server-computed digest, byte count, and media type for final consumption.
+The allowed decision evidence carries the matched grant/project and exact final
+resource-context digest in the same transaction as admission.
 
 Service identity, static service-action matrix membership, and action
 availability are immutable code-owned validations after the service profile and
