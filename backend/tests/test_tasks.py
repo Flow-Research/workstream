@@ -822,6 +822,7 @@ async def create_generated_post_submit_setup_output(
             guide_version=snapshot.guide_version,
             source_snapshot_id=snapshot.id,
             source_snapshot_hash=snapshot.bundle_hash,
+            setup_generation=1,
             status="post_submit_policy_compiled",
             current_step="post_submit_checker_policy_compilation",
             output_sufficiency_report_id=sufficiency_report["id"],

@@ -34,7 +34,7 @@ CANONICAL_REQUESTS = {
     "CheckerOutputArtifactRequest",
     "ArtifactRecoveryRequest",
 }
-CANONICAL_RESULTS = {"GuideArtifactIngestResult"}
+CANONICAL_RESULTS = {"GuideArtifactIngestResult", "GuideSourceBindingResult"}
 CANONICAL_TYPE_ALIASES = {
     "ArtifactAuditResourceType",
     "ArtifactBindingResourceType",
