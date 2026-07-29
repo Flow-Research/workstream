@@ -2172,7 +2172,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-            "71 PermissionIds, 78 ActionIds, 34 active actions, and\n44 planned actions" in operations
+            "71 PermissionIds, 78 ActionIds, 37 active actions, and\n41 planned actions" in operations
     )
 
 

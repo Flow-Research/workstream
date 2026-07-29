@@ -959,17 +959,16 @@ class AuthorizationService:
 
         project_id = self._resource_project_id(resource)
         system_only = project_id is None
+        grant_filters: dict[str, object] = {}
+        if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ:
+            grant_filters["allowed_roles"] = _ACTIVE_GUIDE_ADMIN_ROLES
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
             scope_project_id=project_id,
             system_scope_only=system_only,
             for_update=serialized,
-            allowed_roles=(
-                _ACTIVE_GUIDE_ADMIN_ROLES
-                if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ
-                else None
-            ),
+            **grant_filters,
         )
         if matched is None:
             if project_id is not None and await self._admin.has_effective_permission_any_scope(
