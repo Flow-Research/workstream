@@ -462,9 +462,17 @@ redacted mapping: `unsupported` -> `guide_source_format_unsupported`;
 `guide_source_malformed`; `limit_exceeded` -> `guide_source_limit_exceeded`;
 `parser_failure` -> `guide_source_extraction_failed`; `cancelled` ->
 `guide_source_extraction_cancelled`; and `artifact_incident` ->
-`guide_artifact_incident`. Recoverable incidents wait for ART recovery and
-expose a bounded incident reference to authorized Operators. A current-
-generation transient cancellation may retry; all other terminal source-format,
-content, or limit failures require the Project Manager to upload a corrected or
-smaller item into a new snapshot. Limits are never raised inline. None creates
-a sufficiency decision.
+`guide_artifact_incident`. An observed 60-second timeout or 512-MiB
+address-space termination is a deterministic `limit_exceeded` outcome: it does
+not retry automatically, and the Project Manager must provide a smaller or
+simpler item in a new snapshot. Limits are never raised inline. Executor loss
+before a classified limit breach is `parser_failure`: it receives one bounded
+current-generation automatic retry from fresh materialization and fresh
+authority; repeated loss remains `guide_source_extraction_failed`, creates no
+successful usage/report, and requires a corrected/new snapshot while an
+authorized Operator may inspect only bounded redacted runtime diagnostics.
+Recoverable artifact incidents wait for ART recovery and expose a bounded
+incident reference to authorized Operators. A current-generation transient
+cancellation may retry; stale-generation cancellation commits no report. All
+other terminal source-format or content failures require a corrected item in a
+new snapshot. None creates a sufficiency decision.

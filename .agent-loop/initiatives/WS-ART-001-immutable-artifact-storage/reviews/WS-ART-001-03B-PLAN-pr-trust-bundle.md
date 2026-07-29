@@ -58,9 +58,10 @@ All nine tracks passed after repairs. Details are in
 
 ## External Review
 
-CodeRabbit's later review produced five valid contract findings, now repaired:
+CodeRabbit's reviews produced six valid contract findings, now repaired:
 explicit 78% plus scoped 90% coverage gates, concrete v0.1 extraction limits
-and boundary proofs, exhaustive stable failure mappings, consistent guide-read
+and boundary proofs, exhaustive stable failure mappings including timeout,
+memory-termination, and executor-loss recovery semantics, consistent guide-read
 wording, and locked pre-report-commit lineage/integrity/provenance revalidation.
 Agent Gates separately prompted repair of five retired-vocabulary occurrences.
 The first Backend run had one unrelated existing AUTH concurrency failure after

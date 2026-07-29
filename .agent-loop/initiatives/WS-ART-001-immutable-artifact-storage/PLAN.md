@@ -521,6 +521,15 @@ Stable setup mappings are exact:
 | `cancelled` | `guide_source_extraction_cancelled` | Current-generation transient cancellation may retry; stale-generation cancellation commits no report. |
 | `artifact_incident` | `guide_artifact_incident` | Recoverable custody failure waits for ART recovery; terminal corruption requires a new item/snapshot. |
 
+The configured 60-second timeout and 512-MiB address-space termination are
+`limit_exceeded`, are not automatically retried, and require a smaller/simpler
+item in a new snapshot. Executor loss before a classified limit breach is
+`parser_failure`: it receives one bounded current-generation retry from fresh
+materialization and fresh authority; repeated loss exposes only
+`guide_source_extraction_failed` plus bounded redacted Operator diagnostics and
+requires a corrected/new snapshot. No failed attempt creates a successful usage
+record or report.
+
 Guide-source items are not required to be ZIP files. The initial semantic
 extractors are PDF, DOCX, PPTX, CSV, XLSX, Markdown, plain text, JSON, and
 PNG, JPEG, and WebP metadata. Images are accepted and classified, but without

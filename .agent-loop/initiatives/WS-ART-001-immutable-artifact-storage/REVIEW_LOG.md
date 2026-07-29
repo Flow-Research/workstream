@@ -179,3 +179,7 @@
   scoped coverage gates explicit, fixes concrete extraction bounds and their
   adversarial proof, exhaustively maps failure statuses, normalizes guide-read
   wording, and adds locked revalidation immediately before report commit.
+- The repaired-head review found one remaining recovery-semantics gap. Timeout
+  and memory termination are now non-retryable limit failures; executor loss
+  receives one bounded fresh-authority/materialization retry, then a stable
+  extraction-failed outcome with only redacted diagnostics.
