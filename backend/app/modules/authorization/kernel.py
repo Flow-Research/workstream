@@ -982,11 +982,16 @@ class AuthorizationService:
             return denial, context, None, None, serialized
 
         denial = await self._admin_guard(action.action_id, resource, context)
+        preserve_denied_match = action.action_id in {
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+            ActionId.PROJECT_ACTIVE_GUIDE_READ,
+        }
         return (
             denial,
             context,
-            matched.id if denial is None else None,
-            project_id if denial is None else None,
+            matched.id if denial is None or preserve_denied_match else None,
+            project_id if denial is None or preserve_denied_match else None,
             serialized,
         )
 
@@ -1264,7 +1269,7 @@ class AuthorizationService:
                     target_actor_ref=str(decision.resource_id) if target_is_actor else None,
                     matched_grant_id=(
                         str(decision.matched_grant_id)
-                        if decision.allowed and decision.matched_grant_id is not None
+                        if decision.matched_grant_id is not None
                         else None
                     ),
                     permission_id=decision.permission_id,

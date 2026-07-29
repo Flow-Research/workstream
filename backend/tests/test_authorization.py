@@ -3237,6 +3237,11 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
         await service.require(
             ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ, missing_policy
         )
+    assert denied_policy.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+    assert denied_policy.value.decision.matched_grant_id == grant.id
+    assert denied_policy.value.decision.matched_scope_project_id == project_id
+    assert denied_policy_evidence.events[0].matched_grant_id == str(grant.id)
+    assert denied_policy_evidence.events[0].project_id == str(project_id)
     assert denied_policy_evidence.events[0].after_facts["resource_context_digest"] == (
         denied_policy.value.decision.resource_context_digest
     )
@@ -3305,6 +3310,10 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
     with pytest.raises(AuthorizationDenied) as denied:
         await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, missing)
     assert denied.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+    assert denied.value.decision.matched_grant_id == grant.id
+    assert denied.value.decision.matched_scope_project_id == project_id
+    assert denied_evidence.events[0].matched_grant_id == str(grant.id)
+    assert denied_evidence.events[0].project_id == str(project_id)
     assert denied_evidence.events[0].after_facts["resource_context_digest"] == (
         denied.value.decision.resource_context_digest
     )

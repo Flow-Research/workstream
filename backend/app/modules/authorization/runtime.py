@@ -899,7 +899,17 @@ class AuthorizationDecision(BaseModel):
             if self.matched_grant_id is not None or self.matched_scope_project_id is not None:
                 raise ValueError("fixed-service decisions cannot carry grant scope")
         elif self.matched_grant_id is not None or self.matched_scope_project_id is not None:
-            raise ValueError("denied decisions cannot carry authority matches")
+            if (
+                self.action_id
+                not in {
+                    ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+                    ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+                    ActionId.PROJECT_ACTIVE_GUIDE_READ,
+                }
+                or self.matched_grant_id is None
+                or self.matched_scope_project_id is None
+            ):
+                raise ValueError("denied decision carries invalid matched-grant provenance")
         return self
 
 
