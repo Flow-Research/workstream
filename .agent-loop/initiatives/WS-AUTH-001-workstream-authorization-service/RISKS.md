@@ -1,5 +1,20 @@
 # Risks: WS-AUTH-001 - Workstream Authorization Service
 
+## AUTH-12 planning risks — 2026-07-29
+
+- Guide create/update currently co-mutate review, revision, and retired
+  economic-policy fields. 12D removes them; 12D2 restores only separately
+  authorized review/revision configuration while economic policy remains
+  CON-owned.
+- Agent-backed setup operations deliberately break transactions around external
+  work. Carrying PREP across that boundary would make stale authority usable;
+  runtime children require fresh terminal authorization.
+- The Celery setup service currently fabricates human roles. 12B provisions one
+  exact fixed identity with four planned memberships; 12B2 performs the runtime
+  cut only after 12E/12F/12G own the product actions and provenance.
+- ART-03B2 is concurrently creating migration `0040`. AUTH-12 must allocate
+  from merged trusted main and must not race or duplicate that migration.
+
 ## Classification
 
 - Initiative direction/auth/data-model strategy: L0, human-led; D1-D10 approved

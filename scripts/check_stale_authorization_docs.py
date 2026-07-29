@@ -281,6 +281,11 @@ MATCH_EXEMPTIONS = {
     ): re.compile(
         r"^archival input uses `/v1`\. WS-AUTH-001 takes precedence over the current$"
     ),
+    (
+        ".agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/"
+        "chunks/WS-AUTH-001-12B2-project-setup-service-cutover.md",
+        "HUMAN_WORKER_VOCABULARY",
+    ): re.compile(r"^backend/app/workers/project_setup\.py$"),
 }
 
 

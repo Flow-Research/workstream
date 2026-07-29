@@ -54,9 +54,19 @@ stopped.
 | `WS-AUTH-001-11` | Project Read Cutover Planning Parent | L1 | Signed start run `30167274426`; planning split authored, no runtime implementation |
 | `WS-AUTH-001-11A` | Project Read Catalogue And Projection Foundation | L1 | Merged in PR #208; migration `0035`, no active surface |
 | `WS-AUTH-001-11B` | Project Identity And Actor Context Cutover | L1 | Merged in PR #214 as `033654ac` |
-| `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Active bounded implementation after passed L1 plan review |
-| `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Proposed after 11C1 |
-| `WS-AUTH-001-12` | Project Policy And Setup Mutation Cutover | L1 | Proposed |
+| `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Merged in PR #216 as `2965a9f9` |
+| `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Merged in PR #221 as `3fc323d7` |
+| `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
+| `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Proposed after planning merge and ART-owned `0040` merge |
+| `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Proposed after 12A; zero activation |
+| `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F, and 12G |
+| `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Proposed after 12B |
+| `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Proposed after 12C |
+| `WS-AUTH-001-12D2` | Review And Revision Policy Mutation Separation | L1 | Proposed after 12D; economic policy remains CON-owned |
+| `WS-AUTH-001-12E` | Guide Sufficiency Mutation Cutover | L1 | Proposed after 12D2 |
+| `WS-AUTH-001-12F` | Submission Artifact Policy Mutation Cutover | L1 | Proposed after 12E |
+| `WS-AUTH-001-12G` | Post-Submit Checker Policy Mutation Cutover | L1 | Proposed after 12F |
+| `WS-AUTH-001-12H` | Guide Activation Cutover | L1 | Proposed after 12B2 and the owning CON clean cut |
 | `WS-AUTH-001-13` | Task Management And Assignment Cutover | L1 | Proposed |
 | `WS-AUTH-001-14` | Submission, Checker, And Audit Visibility Cutover | L1 | Proposed |
 | `WS-AUTH-001-15` | Remaining Internal Service Cutover And Obsolete Authority Removal | L1 | Proposed |
@@ -127,6 +137,16 @@ WS-AUTH-001-PLAN
 -> WS-AUTH-001-11C1
 -> WS-AUTH-001-11C2
 -> WS-AUTH-001-12
+-> WS-AUTH-001-12A
+-> WS-AUTH-001-12B
+-> WS-AUTH-001-12C
+-> WS-AUTH-001-12D
+-> WS-AUTH-001-12D2
+-> WS-AUTH-001-12E
+-> WS-AUTH-001-12F
+-> WS-AUTH-001-12G
+-> WS-AUTH-001-12B2
+-> WS-AUTH-001-12H
 -> WS-AUTH-001-13
 -> WS-AUTH-001-14
 -> WS-AUTH-001-15
@@ -169,7 +189,13 @@ WS-AUTH-001-PLAN
   and 11C2 effective policy/guide reads. 11A activates no surface. Runtime
   children 11B, 11C1, and 11C2 each make local grants the sole authority for
   their complete surface family; no compatibility path remains.
-- Chunks 12-15 migrate bounded complete product/system surfaces.
+- Parent 12 is planning-only. Its ten ordered children separately establish
+  mutation catalogue/PREP contracts, fixed setup-service authority, project
+  creation, draft guide/source metadata, separately authorized guide-bound
+  review/revision policies, sufficiency, submission-artifact policy,
+  post-submit checker policy, final setup-service runtime cutover, and terminal
+  guide activation. Chunks
+  13-15 then migrate their bounded complete product/system surfaces.
 - Artifact upload, read, retention, release/delete, replication, integrity, and
   reconciliation remain mechanically owned by the artifact subsystem but must
   receive centralized AUTH decisions. Chunk 07A owns the permission/action

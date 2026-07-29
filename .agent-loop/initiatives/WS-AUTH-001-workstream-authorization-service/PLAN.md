@@ -203,8 +203,12 @@ proving the same issuer role metadata alone no longer authorizes.
     10C activates PREP-bound issue/revoke mutations and concurrency proof.
 13. Cut project identity, guide, source, and visibility queries over to local
    permissions.
-14. Cut project policy mutations, approvals, activation, and setup operations
-    over to local permissions.
+14. Treat AUTH-12 as a planning-only parent. Its ordered children register
+    exact mutation/PREP contracts, establish a zero-activation fixed setup
+    identity, cut project/guide/sufficiency/policy families separately, leave
+    retired guide-bound economic policy to CON ownership, cut the Celery call
+    graph only after its product actions are active, and finish with guide
+    activation. AUTH allocates no migration until ART-owned `0040` merges.
 15. Cut task management, queue, assignment, claim, and start operations over.
 16. Cut submission, pre-submit, checker trigger/read, and task audit visibility
     over.

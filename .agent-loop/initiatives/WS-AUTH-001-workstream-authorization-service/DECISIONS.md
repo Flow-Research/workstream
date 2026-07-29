@@ -777,3 +777,37 @@ active-guide view. Contributors do not receive diagnostic/policy access from
 never token roles. This preserves the operating requirement that Operator and
 Audit inspect setup through authorized API projections rather than direct
 database access without conflating read authority with management.
+
+## D35: Split AUTH-12 before project-mutation runtime implementation
+
+Status: accepted required L1 preimplementation repair on 2026-07-29 after all
+nine exact-plan reviewer tracks passed.
+
+Architecture, security, product, QA, senior-engineering, and CI review rejected
+the inherited combined AUTH-12 contract before application-code edits. It
+combined route and setup-service actions, fixed-service provisioning, PREP
+extension, provenance schema, agent rollback boundaries, and terminal guide
+activation without enumerating actions or resource contexts.
+
+AUTH-12 is now a planning-only parent. 12A owns the planned catalogue, typed
+resource/PREP contracts, and action-evidence parity; 12B owns the fixed project
+setup identity with zero activation; 12C owns system-scoped project creation;
+12D owns draft guide and source metadata; 12D2 separates review/revision policy
+authority while retired economic policy remains CON-owned; 12E owns
+sufficiency; 12F owns submission-artifact policy;
+12G owns post-submit checker-policy derivation/approval/correction; 12B2 owns
+the final Celery runtime cutover; and 12H owns terminal guide activation. No
+child may accept issuer claims or a generic policy resource.
+
+The active `artifact.guide_source.ingest` boundary remains owned by
+`WS-XINT-002-04A`. AUTH-12 does not reactivate or alter it. Concurrent ART-03B2
+owns migration `0040`; AUTH allocates its next migration only after that work
+merges. Prepared handles never cross rollback, commit, external agent work,
+Celery, serialization, session, or transaction boundaries.
+
+D35 supersedes every prior future AUTH-12 migration-number allocation. AUTH-12
+allocates only after merged ART `0040` from trusted main.
+
+The stale-authorization scanner has one full-line exemption for 12B2's literal
+project-setup Celery module path. It does not exempt narrative text, authority claims,
+any other path, or any other rule.
