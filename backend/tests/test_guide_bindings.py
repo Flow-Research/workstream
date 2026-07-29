@@ -210,7 +210,7 @@ async def _seed_binding_lineage(
             media_type="application/pdf",
             storage_namespace_id="primary",
             namespace_fingerprint=namespace_fingerprint,
-            canonical_target="sha256/" + "a" * 64,
+            canonical_target="sha256/aa/" + "a" * 62,
             operation_identity="sha256:" + "c" * 64,
             request_digest="sha256:" + "d" * 64,
             status="object_confirmed",

@@ -25,6 +25,8 @@ remains unavailable pending AUTH `WS-XINT-002-04B`.
 - hosted Backend run `30439786150` exposed a closed-contract expectation and
   test-fixture FK ordering issue; both were repaired without production or
   threshold changes;
+- hosted Backend run `30440684668` enforced the canonical sharded SHA-256
+  provider-key shape in the new fixture; the seed now uses that exact shape;
 - the exact final PR head must pass the hosted Backend workflow's four semantic
   lanes, API E2E, repository 78% floor, and existing subsystem 90% gates.
 
