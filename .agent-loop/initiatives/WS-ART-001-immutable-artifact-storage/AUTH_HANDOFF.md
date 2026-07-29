@@ -17,10 +17,14 @@ activation custody, and availability.
    exact resource/guard/surface manifest.
 3. AUTH activates only that exact action through a separately reviewed AUTH
    contract after consuming ART evidence.
-4. ART-03B implements hidden `artifact.guide_source.read` and
-   `artifact.guide_source.binding.create` behavior; binding maps to fixed
-   permission `artifact.binding.create`.
-5. AUTH activates only those exact actions after consuming 03B evidence.
+4. ART-03B1, 03B2, 03B3A, 03B3B, and 03B4 implement hidden authoritative binding, exact setup
+   generation, verified materialization, bounded extraction, and Celery
+   sufficiency continuation. `artifact.guide_source.binding.create` maps to
+   fixed permission `artifact.binding.create`; `artifact.guide_source.read`
+   remains separate.
+5. AUTH-04B activates only those exact fixed-service actions after consuming
+   the complete split-03B evidence. Extraction does not imply a provider-write
+   permission or inherit Project Manager authority.
 6. ART-03C performs the legacy clean cut. No ART chunk writes availability.
 
 ## Submission Bundle Sequence

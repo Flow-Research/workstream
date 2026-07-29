@@ -155,3 +155,19 @@
   over-broad lineage trigger and an incomplete integrity-mismatch upload-item
   transition. Both received bounded repairs and their three failing tests pass
   locally; final internal re-review and hosted rerun remain.
+
+## WS-ART-001-03B-PLAN
+
+- Planning correction reviewed after ART-03A and AUTH-04A merged.
+- Initial architecture, senior, QA, CI, and product/ops reviews found blocking
+  scope, provenance, parser-boundary, verification, image-semantics, and
+  operational-outcome gaps.
+- Repairs split implementation into 03B1, 03B2, 03B3A, 03B3B, and 03B4;
+  separated content extraction from binding/generation usage; defined isolated
+  parsing, prompt-injection handling, stable setup errors, exact commands, and
+  the later parser dependency approval gate.
+- Final results: architecture PASS WITH LOW RISKS; senior engineering PASS WITH
+  LOW RISKS; QA PASS WITH LOW RISKS; security PASS; product/ops PASS; CI PASS
+  WITH CONDITIONS; docs PASS WITH LOW RISKS; reuse PASS WITH LOW RISKS; test
+  delta PASS WITH CONDITIONS. Planning-PR conditions are resolved by committing
+  the new contracts; the dependency checker remains a future 03B3B criterion.

@@ -362,3 +362,76 @@ Contributor authority never implies fixed service authority. Checker
 materialization, verification execution, pending-work scanning, ambiguous-put
 resolution, and binding retain their distinct fixed actions. No compatibility
 alias exposes the obsolete multi-step session actions.
+
+## D39 - Guide Upload And Understanding Are Separate
+
+Guide upload stores and verifies opaque original bytes. HTTP ingest does not
+parse, extract, render, OCR, transcode, or wait for submission prechecks.
+Understanding begins asynchronously only after an exact verified binding.
+Unlike contributor submissions, guide-source items are not wrapped in one
+mandatory outer ZIP. Each item retains its own verified format identity.
+
+## D40 - Exact Setup Generation Is A Durable Fence
+
+Every binding, extraction, agent input, and report identifies one project,
+draft guide, source snapshot, setup run, and monotonic setup generation. Celery
+carries only those identifiers and generation. Bytes, extracted text, scratch
+handles, prepared authority, and provider credentials never enter Redis.
+
+## D41 - Canonical Guide Materialization
+
+The fixed guide-reader obtains fresh prepared authority, resolves an exact
+verified binding, and streams through `ArtifactStore` into the existing
+`ArtifactScratchManager`. Every full read recomputes SHA-256 and byte count.
+Missing, changed, or truncated content is an ART incident, not guide
+insufficiency. Project services and agents never access providers directly.
+
+## D42 - Typed, Bounded Guide Extraction
+
+One detector and typed extractor registry validates signatures and bounded
+container markers. Initial text semantics cover PDF, DOCX, PPTX, CSV, XLSX,
+Markdown, plain text, and JSON. PNG, JPEG, and WebP yield bounded structural
+metadata only. Without OCR, image pixels cannot satisfy required textual guide
+semantics. Audio/video and ambiguous binaries are unsupported in v0.1 and never
+sent raw to agents. OOXML formats are distinguished from ordinary ZIPs.
+
+Extraction runs asynchronously in a strongly isolated no-network subprocess
+under fixed input, output, container, time, memory, and document limits using
+only scratch-manager paths. Parser crash, malformed input, macros, external
+relationships, embedded executables, cancellation, timeout, and worker loss
+have bounded outcomes and cleanup. Production parser dependencies require
+explicit human approval before implementation.
+
+## D43 - Canonical Extraction Records, Not Implicit Provider Writes
+
+v0.1 persists an immutable content-derived extraction representation in
+PostgreSQL keyed by original content, format, extractor/version, and policy
+version, with output digest, omission facts, status, and bounded error code. A
+separate immutable usage record binds it to the exact guide binding, source
+item, setup run, and generation. AUTH-04B grants read and binding only, so ART
+does not use read authority to create a provider object.
+
+## D44 - Sufficiency Consumes Complete Verified Material
+
+The agent receives only bounded extraction records for all required items in
+the current generation. Missing, corrupt, stale, ambiguous, unsupported, or
+failed content stops policy derivation without creating a guide-insufficiency
+decision. Reports preserve exact content and extraction provenance. Legacy
+excerpts and durable refs are not authoritative after ART-03C.
+
+## D45 - Extracted Guide Content Is Untrusted Agent Data
+
+Canonical extraction proves byte provenance, not instruction authority. Agent
+assembly labels and delimits source material as untrusted data, excludes tools,
+provider access, credentials, and hidden instructions from that material, and
+accepts only the typed sufficiency output contract. Prompt-injection text inside
+a guide cannot alter system/developer policy or authorize an action.
+
+## D46 - Setup Failures Have Stable Operational Outcomes
+
+Existing `ProjectSetupRun.status=setup_blocked` uses stable redacted error codes
+for artifact incident, unsupported format, malformed content, and extraction
+failure. Recoverable incidents wait for ART recovery and expose a bounded
+incident reference to authorized Operators. Terminal corruption or source
+format/content failure requires the Project Manager to upload a corrected item
+into a new snapshot. None creates a sufficiency decision.

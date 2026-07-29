@@ -129,3 +129,33 @@ removes direct provider schemes from guide-source identity. Chunk 05 removes
 the remaining caller storage transport when submissions move to sealed
 artifact-set bindings. No compatibility alias remains after either owning
 cutover.
+
+## ART-03B Materialization And Extraction Discovery
+
+Merged ART-03A and AUTH `WS-XINT-002-04A` provide the covered Project Manager
+upload boundary. AUTH preparation happens before request-body intake; final
+transaction-bound consumption locks the guide lineage and server-computed byte
+facts before durable intent or provider I/O. Upload stores opaque immutable
+bytes and does not parse them.
+
+The current setup pipeline cannot yet consume those bytes safely:
+
+- its Celery payload has four identifiers but no setup generation;
+- `ProjectSetupRun` has no explicit generation fence;
+- `GuideSourceMaterial` uses caller-originated metadata and optional excerpts,
+  not verified ART bindings;
+- no authorized integrity-checking guide read exists in project services;
+- no typed detector, extractor registry, extraction policy, or canonical
+  extraction record exists.
+
+AUTH's reviewed `WS-XINT-002-04B` activates only fixed-service guide binding
+and read. It does not grant a derived-artifact write. v0.1 therefore persists a
+bounded canonical extraction record and provenance in PostgreSQL; a future
+derived provider artifact requires a separately planned action and activation.
+
+No document-parsing production dependencies are installed. Any new production
+dependency requires explicit human approval before 03B3B implementation. OOXML ZIP
+containers must pass one bounded classifier that distinguishes DOCX, PPTX, and
+XLSX by internal markers. Audio/video transcription and OCR are not required by
+current v0.1 setup and remain unsupported. PNG/JPEG/WebP classification and
+metadata do not imply OCR or textual sufficiency.

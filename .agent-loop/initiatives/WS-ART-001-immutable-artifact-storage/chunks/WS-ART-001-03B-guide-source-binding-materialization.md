@@ -1,70 +1,47 @@
-# Chunk Contract: WS-ART-001-03B - Guide Source Binding And Materialization
+# Planning Contract: WS-ART-001-03B - Guide Content Pipeline Expansion
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03A and exact AUTH activation
+Initiative: `WS-ART-001` | Risk: L1 | Status: Superseded by reviewed subchunks before implementation
 
 Artifact contract phase: `guide_source_cutover`
 
 ## Goal
 
-Bind verified guide-source content to snapshot items and give setup agents one
-authorized, provider-neutral, integrity-checking read/materialization capability
-without performing the legacy schema cutover.
+Preserve the original 03B intent while dividing binding, verified
+materialization, isolated extraction, and sufficiency continuation into bounded
+implementation contracts.
 
-## Allowed Files
+## Executable Subchunks
 
-- guide snapshot/item binding models, one migration, repository, schemas, and service;
-- ART guide read/binding capability and canonical resource facts/guards;
-- existing artifact scratch manager/materializer integration for setup input;
-- setup-agent input assembly consuming the typed ART capability;
-- focused migration, authorization, binding, materialization, and integrity tests;
-- backend workflow/agent-gate files only to add and preserve exact coverage;
-- related docs and chunk memory.
+- `WS-ART-001-03B1`: authoritative binding and setup generation;
+- `WS-ART-001-03B2`: verified materialization, incidents, and classification;
+- `WS-ART-001-03B3A`: isolated framework and low-complexity extraction;
+- `WS-ART-001-03B3B`: approved complex document/image-metadata extractors;
+- `WS-ART-001-03B4`: same-generation Celery and sufficiency integration.
 
-## Not Allowed
+Each subchunk is one PR. AUTH `WS-XINT-002-04B` activates fixed binding/read
+only after all five hidden ART contracts merge. ART-03C remains a later clean
+cut.
+
+## Shared Non-Goals
 
 - contributor submission/checker/review behavior;
-- direct provider access, URL fetching, a second materializer/scratch manager,
-  setup policy decisions, or destructive legacy-field removal;
+- direct provider access, URL fetching, a second scratch manager, parsing in the
+  upload request, submission prechecks, OCR, audio/video transcription, or
+  destructive legacy-field removal;
 - AUTH-owned catalogue/evaluator/grant/identity/matrix/availability edits.
 
 ## Acceptance Criteria
 
-- snapshot items bind exact verified `ArtifactContent` without circularly making
-  the item both the source and authority for that content;
-- snapshot/bundle identity commits to ordered content identities and descriptors;
-- setup agents receive bounded bytes/manifests only through ART and every full
-  read recomputes SHA-256 and byte count;
-- missing/mismatched bound bytes are artifact incidents, not guide insufficiency;
-- fixed guide read/binding actions remain fail-closed until AUTH activation;
-- changed subsystem coverage is at least 90 percent and repository coverage
-  remains at least 78 percent.
+- all five contracts merge before AUTH-04B;
+- agents receive only same-generation canonical extracted material;
+- artifact failures remain distinct from guide insufficiency;
+- fixed guide read/binding remain unavailable until AUTH-04B;
+- production parser dependencies require explicit human approval.
 
-## Exact CI Coverage Gates
+## Evidence
 
-```bash
-coverage report --include='app/adapters/artifacts/*,app/core/cancellation.py,app/core/file_locks.py,app/interfaces/artifact_operations.py,app/interfaces/artifacts.py,app/modules/artifacts/*' --precision=2 --fail-under=90
-coverage report --include='app/interfaces/external_services.py' --precision=2 --fail-under=90
-coverage report --include='app/core/config.py' --precision=2 --fail-under=90
-coverage report --include='app/workers/*' --precision=2 --fail-under=90
-coverage report --include='app/main.py' --precision=2 --fail-under=90
-coverage report --include='app/adapters/artifacts/s3_compatible.py' --precision=2 --fail-under=90
-coverage report --include='app/core/s3_validation.py' --precision=2 --fail-under=90
-coverage report --include='app/modules/audit/*' --precision=2 --fail-under=90
-coverage report --include='app/api/router.py' --precision=2 --fail-under=90
-coverage report --include='app/modules/projects/*' --precision=2 --fail-under=90
-coverage report --include='app/adapters/project_agents/*,app/interfaces/project_agents.py' --precision=2 --fail-under=90
-```
-
-## Verification
-
-```bash
-docker compose up -d --wait postgres redis minio
-(cd backend && WORKSTREAM_TEST_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/workstream_test .venv/bin/pytest tests/test_alembic.py tests/test_guide_artifacts.py tests/test_project_setup.py tests/test_checker_materialization.py tests/test_artifact_scratch_manager.py -q --cov=app.modules.projects --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
-(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
-(cd backend && .venv/bin/ruff check app tests)
-python3 scripts/check_stale_artifact_contracts.py
-python3 scripts/test_agent_gates.py
-```
+The five executable contracts own their exact file scopes, tests, coverage, and
+review evidence. This umbrella is planning context and authorizes no code.
 
 ## Required Reviewers
 

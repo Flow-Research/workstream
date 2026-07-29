@@ -471,6 +471,75 @@ exact resource/content/job/attempt filters.
 
 ## Product Cutover
 
+### Guide Materialization And Extraction Boundary
+
+ART-03A upload remains a byte-custody request: authorize before intake, compute
+the server digest and size, admit once, store opaque bytes, and verify them. It
+does not parse content or wait for contributor submission checkers.
+
+The expanded ART-03B work is delivered as five hidden PR-sized subchunks before
+AUTH-04B activates fixed-service binding/read:
+
+1. `03B1` creates an authoritative one-item/one-content guide binding tied to
+   the exact setup run and explicit setup generation. Item metadata cannot
+   assert content identity, and replaced or cross-lineage facts fail closed.
+2. `03B2` performs fresh authorized full reads through `ArtifactStore`, writes
+   only through `ArtifactScratchManager`, recomputes digest/size, records ART
+   incidents, and classifies formats using signatures and bounded container
+   markers.
+3. `03B3A` installs the isolated no-network extraction framework, immutable
+   content/usage provenance, and text, Markdown, JSON, and CSV extractors
+   without new parser dependencies.
+4. `03B3B` adds explicitly approved PDF, DOCX, PPTX, XLSX, and PNG/JPEG/WebP
+   metadata extractors on that proven framework.
+5. `03B4` adds `setup_generation` to the identifier-only Celery payload,
+   reloads current state, assembles all required canonical extracted sources,
+   invokes sufficiency, and persists exact provenance.
+
+The canonical extraction status set is:
+
+```text
+extracted | unsupported | ambiguous | malformed | limit_exceeded |
+parser_failure | cancelled | artifact_incident
+```
+
+Only `extracted` records enter agent input. Truncation or omission is explicit
+and may be allowed only by the versioned extraction policy; required missing
+semantics stop setup internally. Artifact incidents never become sufficiency
+findings.
+
+Guide-source items are not required to be ZIP files. The initial semantic
+extractors are PDF, DOCX, PPTX, CSV, XLSX, Markdown, plain text, JSON, and
+PNG, JPEG, and WebP metadata. Images are accepted and classified, but without
+OCR their pixels cannot satisfy required textual guide semantics. Audio/video
+and opaque/ordinary ZIP input are unsupported in v0.1. ZIP-
+container classification rejects macros, external relationships, embedded
+executables, ambiguous markers, excessive entries, decompressed bytes, depth,
+or compression ratio before a document parser runs.
+
+v0.1 stores bounded canonical extraction JSON/text in PostgreSQL rather than
+creating an unapproved provider write under guide-read authority. It records
+source digest/size, detected format, extractor and version, extraction-policy
+version, output digest, truncation/omission facts, status, and bounded error
+code. A separate immutable usage record binds that result to the exact binding,
+source item, setup run, and generation. Original bytes remain authoritative. A
+later derived-artifact store path requires a distinct AUTH action.
+
+The existing `ProjectSetupRun.status=setup_blocked` remains the public state;
+stable redacted error codes distinguish `guide_artifact_incident`,
+`guide_source_format_unsupported`, `guide_source_malformed`, and
+`guide_source_extraction_failed`. Artifact incidents expose a bounded incident
+identifier to authorized Operators and wait for ART recovery when recoverable;
+terminal corruption requires a Project Manager to create a new source item and
+snapshot. Unsupported, malformed, limit-exceeded, or extraction-failed content
+asks the Project Manager to upload a corrected supported source item. None is a
+guide-insufficiency decision.
+
+Any production parser dependency in 03B3B requires explicit human approval. Candidate
+libraries must undergo current security, maintenance, license, transitive-
+dependency, malformed-input, and cancellation review before `03B3B` may add
+them; no runtime plugin discovery or parser fallback is permitted.
+
 1. Guide-source delivery is split into hidden byte ingest, AUTH activation,
    verified snapshot binding/materialization, AUTH activation, and the legacy
    identity/continuation clean cut.
