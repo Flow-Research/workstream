@@ -339,7 +339,7 @@ class SubmissionArtifactPolicyResponse(BaseModel):
 class EffectiveProjectSubmissionArtifactPolicyResponse(BaseModel):
     """Response schema for merged effective project submission artifact policy."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -387,7 +387,7 @@ class PreSubmitCheckerPolicyResponse(BaseModel):
 class PreSubmitCheckerPolicySummaryResponse(BaseModel):
     """Project API summary for a pre-submit checker bundle contract."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: str
     project_id: str
@@ -646,3 +646,19 @@ class ActiveGuideResponse(BaseModel):
     review_policy: ReviewPolicyResponse
     revision_policy: RevisionPolicyResponse
     payment_policy: PaymentPolicyResponse
+
+
+class ActiveGuideReadResponse(BaseModel):
+    """Strict administrative read projection for one active guide."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    guide: ProjectGuideResponse
+    guide_source_snapshot: GuideSourceSnapshotResponse
+    guide_sufficiency_report: GuideSufficiencyReportResponse
+    submission_artifact_policy: SubmissionArtifactPolicyResponse
+    effective_submission_artifact_policy: EffectiveProjectSubmissionArtifactPolicyResponse
+    pre_submit_checker_policy: ActiveGuidePreSubmitCheckerPolicyResponse
+    post_submit_checker_policy: PostSubmitCheckerPolicyResponse
+    review_policy: ReviewPolicyResponse
+    revision_policy: RevisionPolicyResponse

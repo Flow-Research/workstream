@@ -237,13 +237,13 @@ permissions are the exact 22 post-`0020` permissions. AUTH-07A, AUTH-11A, and
 WS-XINT-002-01 add
 their matching typed/SQL audit parity without making them executable.
 
-The closed action registry contains 78 rows after WS-XINT-002-04A: 34 active
-actions and 44 planned rows. AUTH-10A added five project-role read/manage rows;
+The closed action registry contains 78 rows after AUTH-11C2: 37 active actions
+and 41 planned rows. AUTH-10A added five project-role read/manage rows;
 AUTH-10B owns and activates the three reads, while AUTH-10C owns and activates
 the two reason-bound, idempotent project-role mutations. AUTH-11A adds eleven
 project identity and actor-context read rows: two are active under 11B, three
 setup-diagnostic and three draft/effective-policy diagnostic reads are active
-under 11C1, and three effective-policy and active-guide reads remain planned
+under 11C1, and three current effective-policy and active-guide reads are active
 under 11C2.
 AUTH-08 adds seven
 active administrative definition,
@@ -892,6 +892,28 @@ authority.
 | `/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies` | `project.submission_artifact_policy.list` | `project.effective_policy.read` |
 | `/api/v1/projects/{project_id}/guides/{guide_id}/submission-artifact-policies/{policy_id}` | `project.submission_artifact_policy.read` | `project.effective_policy.read` |
 | `/api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup` | `project.post_submit_checker_policy_setup.read` | `project.effective_policy.read` |
+
+AUTH-11C2 hard-cuts three current active-guide reads to local administrative
+authority. Covered Project Manager and Audit Authority grants and system
+Operator grants may read them. Finance Authority, Access Administrator,
+project-role contributors, and services deny with the same concealed response
+as a missing or stale resource.
+
+| AUTH-11C2 public GET route | ActionId | PermissionId |
+|---|---|---|
+| `/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy` | `project.effective_submission_artifact_policy.read` | `project.effective_policy.read` |
+| `/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy` | `project.pre_submit_checker_policy.read` | `project.effective_policy.read` |
+| `/api/v1/projects/{project_id}/active-guide` | `project.active_guide.read` | `project.read` |
+
+The guide-bound policy routes expose only the approved/compiled chain for the
+current active guide and latest canonical snapshot. The strict active-guide
+response contains guide, source snapshot, sufficiency, submission artifact,
+effective, pre-submit checker, post-submit checker, review, and revision
+context. It excludes retired compensation configuration. Every returned row
+and source item is locked and hash-revalidated through projection and commit.
+Draft, superseded, replaced, incomplete, ambiguous, corrupt, or stale bindings
+conceal. Contributor guide requirements remain on task work-context and
+submission-requirements surfaces.
 
 The two collection routes return and transactionally bind at most the newest
 100 canonical rows in deterministic newest-first order. Older retained records

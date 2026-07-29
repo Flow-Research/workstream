@@ -708,9 +708,9 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 34 active actions, and
-44 planned actions after AUTH-11C1 activates three project setup-diagnostic and
-three draft/effective-policy diagnostic read actions. The exact route mapping
+Catalogue totals are 71 PermissionIds, 78 ActionIds, 37 active actions, and
+41 planned actions after AUTH-11C2 activates three current effective-policy and
+active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact route mapping
 is in `docs/spec_authorization_service.md`. WS-XINT-002-04A activates only
 guide-source ingest; the other 18 ART actions remain planned, including every
 Operator artifact action.
@@ -721,9 +721,11 @@ AUTH-11A adds read-only `project.setup_diagnostic.read` and
 `project.effective_policy.read`. Project Manager and Audit Authority receive
 them at system or exact-project scope; Operator receives them at system scope.
 Finance Authority and Access Administrator do not. The two AUTH-11B
-identity/context actions and six AUTH-11C1 diagnostic-read actions are active;
-the three AUTH-11C2 effective-policy/active-guide actions remain planned and
-cannot produce allowed evidence.
+identity/context actions, six AUTH-11C1 diagnostic-read actions, and three
+AUTH-11C2 current effective-policy/active-guide actions are active. AUTH-11C2
+admits only covered Project Manager/Audit Authority or system Operator grants;
+Finance, Access Administrator, contributors, and services receive concealed
+denial. Its active-guide projection excludes retired compensation configuration.
 Four later REV registrations add exactly four planned and zero active actions.
 Review-evidence binding is already registered planned and unavailable under
 `WS-XINT-002-07`; it remains non-operational until exact feature proof and a

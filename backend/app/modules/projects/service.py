@@ -67,6 +67,7 @@ from app.modules.projects.setup_queue import (
 )
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
+    ActiveGuideReadResponse,
     ActiveGuidePreSubmitCheckerPolicyResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
     GuideSourceSnapshotCreate,
@@ -83,7 +84,6 @@ from app.modules.projects.schemas import (
     PostSubmitCheckerPolicyResponse,
     PostSubmitCheckerPolicySetupResponse,
     PostSubmitCheckerPolicySetupSummaryResponse,
-    PreSubmitCheckerPolicySummaryResponse,
     ProjectCreate,
     ContributorProjectResponse,
     ProjectGuideCreate,
@@ -692,79 +692,6 @@ class ProjectService:
                 setup_run_id=setup_run.id,
             )
         return await self._source_snapshot_response(snapshot)
-
-    async def get_current_effective_submission_artifact_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> EffectiveProjectSubmissionArtifactPolicyResponse:
-        """Return the current effective submission artifact policy for a guide."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        try:
-            snapshot = await self._repo.get_latest_guide_source_snapshot(
-                project_id,
-                guide.id,
-                guide.version,
-            )
-            if snapshot is None:
-                raise EffectiveProjectSubmissionArtifactPolicyNotFound(
-                    "effective project submission artifact policy not found"
-                )
-            policy = await self._repo.get_effective_submission_artifact_policy(
-                project_id,
-                guide.version,
-                snapshot.id,
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise PolicySetupConflict(
-                "effective project submission artifact policy chain is ambiguous"
-            ) from exc
-        if policy is None or policy.guide_id != guide.id:
-            raise EffectiveProjectSubmissionArtifactPolicyNotFound(
-                "effective project submission artifact policy not found"
-            )
-        return EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(policy)
-
-    async def get_current_pre_submit_checker_policy(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide_id: str,
-    ) -> PreSubmitCheckerPolicySummaryResponse:
-        """Return the current project pre-submit checker policy summary."""
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._get_project_guide(project_id, guide_id)
-        try:
-            snapshot = await self._repo.get_latest_guide_source_snapshot(
-                project_id,
-                guide.id,
-                guide.version,
-            )
-            if snapshot is None:
-                raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
-            effective_policy = await self._repo.get_effective_submission_artifact_policy(
-                project_id,
-                guide.version,
-                snapshot.id,
-            )
-            if effective_policy is None or effective_policy.guide_id != guide.id:
-                raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
-            policy = await self._repo.get_pre_submit_checker_policy_for_effective_policy(
-                effective_policy.id
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise PolicySetupConflict("pre-submit checker policy chain is ambiguous") from exc
-        if (
-            policy is None
-            or policy.guide_id != guide.id
-            or policy.source_snapshot_id != snapshot.id
-            or policy.lifecycle_status != "compiled"
-            or policy.compiled_bundle_hash is None
-        ):
-            raise PreSubmitCheckerPolicyNotFound("pre-submit checker policy not found")
-        return PreSubmitCheckerPolicySummaryResponse.model_validate(policy)
 
     async def approve_current_post_submit_checker_policy(
         self,
@@ -1949,99 +1876,44 @@ class ProjectService:
             payment_policy,
         )
 
-    async def get_active_guide(self, actor: ActorContext, project_id: str) -> ActiveGuideResponse:
-        """Return the active guide with checker, review, revision, and payment context.
-
-        Args:
-            actor: Verified Flow actor context for the current request.
-            project_id: Project whose active guide should be loaded.
-
-        Returns:
-            Active guide response with all required policy records.
-
-        Raises:
-            PermissionDenied: If the actor cannot manage project setup.
-            GuideNotFound: If no active guide exists for the project.
-            GuideActivationBlocked: If the active guide policy context is incomplete.
-        """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
-        guide = await self._repo.get_active_guide(project_id)
-        if guide is None:
-            raise GuideNotFound("active guide not found")
-        post_submit_checker_policy = await self._repo.get_post_submit_checker_policy(
-            project_id,
-            guide.version,
-        )
-        review_policy = await self._repo.get_review_policy(project_id, guide.version)
-        revision_policy = await self._repo.get_revision_policy(project_id, guide.version)
-        payment_policy = await self._repo.get_payment_policy(project_id, guide.version)
-        try:
-            submission_artifact_policy = (
-                await self._repo.get_current_approved_submission_artifact_policy(
-                    project_id,
-                    guide.version,
-                )
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise GuideActivationBlocked("active guide policy context is ambiguous") from exc
-        if submission_artifact_policy is None:
-            raise GuideActivationBlocked("active guide policy context is incomplete")
-        source_snapshot = await self._get_snapshot_for_guide(
-            project_id,
-            guide,
-            submission_artifact_policy.source_snapshot_id,
-        )
-        await self._ensure_snapshot_is_latest(project_id, guide, source_snapshot)
-        await self._validate_source_snapshot_integrity(source_snapshot, GuideActivationBlocked)
-        sufficiency_report = await self._repo.get_sufficiency_report_for_snapshot(
-            source_snapshot.id
-        )
-        try:
-            effective_policy = await self._repo.get_effective_submission_artifact_policy(
-                project_id,
-                guide.version,
-                source_snapshot.id,
-            )
-            pre_submit_checker_policy = (
-                await self._repo.get_pre_submit_checker_policy_for_effective_policy(
-                    effective_policy.id if effective_policy is not None else ""
-                )
-            )
-        except ProjectRepositoryIntegrityError as exc:
-            raise GuideActivationBlocked("active guide policy context is ambiguous") from exc
-        if (
-            post_submit_checker_policy is None
-            or review_policy is None
-            or revision_policy is None
-            or payment_policy is None
-            or sufficiency_report is None
-            or effective_policy is None
-            or pre_submit_checker_policy is None
-        ):
-            raise GuideActivationBlocked("active guide policy context is incomplete")
-        self._validate_activation_ready(
-            guide,
-            source_snapshot,
-            sufficiency_report,
-            submission_artifact_policy,
-            effective_policy,
-            pre_submit_checker_policy,
-            post_submit_checker_policy,
-            review_policy,
-            revision_policy,
-            payment_policy,
-        )
-        return await self._active_response(
-            guide,
-            source_snapshot,
-            sufficiency_report,
-            submission_artifact_policy,
-            effective_policy,
-            pre_submit_checker_policy,
-            post_submit_checker_policy,
-            review_policy,
-            revision_policy,
-            payment_policy,
+    async def active_guide_read_response(
+        self,
+        guide: ProjectGuide,
+        source_snapshot: GuideSourceSnapshot,
+        source_items: tuple[GuideSourceSnapshotItem, ...],
+        sufficiency_report: GuideSufficiencyReport,
+        submission_artifact_policy: SubmissionArtifactPolicy,
+        effective_policy: EffectiveProjectSubmissionArtifactPolicy,
+        pre_submit_checker_policy: PreSubmitCheckerPolicy,
+        post_submit_checker_policy: PostSubmitCheckerPolicy,
+        review_policy: ReviewPolicy,
+        revision_policy: RevisionPolicy,
+    ) -> ActiveGuideReadResponse:
+        """Shape the authorized active-guide projection without compensation data."""
+        source_snapshot_response = GuideSourceSnapshotResponse.model_validate(source_snapshot)
+        source_snapshot_response.items = [
+            GuideSourceSnapshotItemResponse.model_validate(item) for item in source_items
+        ]
+        return ActiveGuideReadResponse(
+            guide=ProjectGuideResponse.model_validate(guide),
+            guide_source_snapshot=source_snapshot_response,
+            guide_sufficiency_report=GuideSufficiencyReportResponse.model_validate(
+                sufficiency_report
+            ),
+            submission_artifact_policy=SubmissionArtifactPolicyResponse.model_validate(
+                submission_artifact_policy
+            ),
+            effective_submission_artifact_policy=(
+                EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective_policy)
+            ),
+            pre_submit_checker_policy=ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
+                pre_submit_checker_policy
+            ),
+            post_submit_checker_policy=PostSubmitCheckerPolicyResponse.model_validate(
+                post_submit_checker_policy
+            ),
+            review_policy=ReviewPolicyResponse.model_validate(review_policy),
+            revision_policy=RevisionPolicyResponse.model_validate(revision_policy),
         )
 
     async def _get_project_guide(self, project_id: str, guide_id: str) -> ProjectGuide:

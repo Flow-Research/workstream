@@ -528,6 +528,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "GET /api/v1/projects/{project_id}/guides/{guide_id}/post-submit-checker-policy/setup": (
             "project.post_submit_checker_policy_setup.read"
         ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy": (
+            "project.effective_submission_artifact_policy.read"
+        ),
+        "GET /api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy": (
+            "project.pre_submit_checker_policy.read"
+        ),
+        "GET /api/v1/projects/{project_id}/active-guide": "project.active_guide.read",
     }
     project_read_shapes = {
         "/api/v1/projects/{project_id}/contributor-candidates": (
@@ -535,6 +542,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         ),
         "/api/v1/projects/{project_id}/role-grants": "ProjectRoleGrantListResponse",
         "/api/v1/projects/{project_id}/role-grants/{grant_id}": "ProjectRoleGrantRead",
+        "/api/v1/projects/{project_id}/active-guide": "ActiveGuideReadResponse",
+        "/api/v1/projects/{project_id}/guides/{guide_id}/effective-submission-artifact-policy": (
+            "EffectiveProjectSubmissionArtifactPolicyResponse"
+        ),
+        "/api/v1/projects/{project_id}/guides/{guide_id}/pre-submit-checker-policy": (
+            "PreSubmitCheckerPolicySummaryResponse"
+        ),
     }
     for path, schema_name in project_read_shapes.items():
         operation = schema["paths"][path]["get"]

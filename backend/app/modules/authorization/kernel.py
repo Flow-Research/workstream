@@ -22,8 +22,10 @@ from app.modules.authorization.catalogue import (
     PermissionId,
 )
 from app.modules.authorization.repository import AdminAuthorizationRepository
+from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
     PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
+    PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION,
     ActorAdminRoleGrantHistoryResourceContext,
     ActorAuthorizationContextResourceContext,
     ActorIdentityLinkAdminReadResourceContext,
@@ -54,6 +56,8 @@ from app.modules.authorization.runtime import (
     ProjectContributorCandidateCollectionResourceContext,
     ProjectReadResourceContext,
     ProjectDiagnosticReadResourceContext,
+    ProjectPolicyReadResourceContext,
+    ProjectActiveGuideReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
     ProjectRoleGrantReadResourceContext,
@@ -75,6 +79,10 @@ ContextRevalidator = Callable[
     ],
     Awaitable[HumanAuthorizationContext],
 ]
+
+_ACTIVE_GUIDE_ADMIN_ROLES = frozenset(
+    {AdminRole.OPERATOR, AdminRole.PROJECT_MANAGER, AdminRole.AUDIT_AUTHORITY}
+)
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
     Awaitable[ServiceAuthorizationContext | None],
@@ -108,6 +116,9 @@ _ADMIN_ACTIONS = frozenset(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
 )
 _SERIALIZED_ADMIN_READS = frozenset(
@@ -120,6 +131,9 @@ _SERIALIZED_ADMIN_READS = frozenset(
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
     }
 )
 _ADMIN_MUTATIONS = frozenset(
@@ -160,6 +174,12 @@ def project_action_available_for_status(action_id: ActionId, project_status: str
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
     }:
         return project_status in {"draft", "active", "paused"}
+    if action_id in {
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
+    }:
+        return project_status == "active"
     return True
 
 
@@ -945,6 +965,11 @@ class AuthorizationService:
             scope_project_id=project_id,
             system_scope_only=system_only,
             for_update=serialized,
+            allowed_roles=(
+                _ACTIVE_GUIDE_ADMIN_ROLES
+                if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ
+                else None
+            ),
         )
         if matched is None:
             if project_id is not None and await self._admin.has_effective_permission_any_scope(
@@ -1031,6 +1056,12 @@ class AuthorizationService:
         elif isinstance(resource, ProjectDiagnosticReadResourceContext):
             if not (resource.project_exists and resource.guide_exists and resource.target_exists):
                 return AuthorizationDenialCode.RESOURCE_NOT_FOUND
+        elif isinstance(
+            resource,
+            (ProjectPolicyReadResourceContext, ProjectActiveGuideReadResourceContext),
+        ):
+            if not (resource.project_exists and resource.guide_exists and resource.target_exists):
+                return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         return None
 
     @staticmethod
@@ -1068,11 +1099,19 @@ class AuthorizationService:
             ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
                 ProjectDiagnosticReadResourceContext
             ),
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: (
+                ProjectPolicyReadResourceContext
+            ),
+            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
+            ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
         }.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
         diagnostic_kind = PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION.get(action_id)
         if diagnostic_kind is not None and resource.target_kind != diagnostic_kind:
+            return False
+        policy_kind = PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION.get(action_id)
+        if policy_kind is not None and resource.target_kind != policy_kind:
             return False
         transition = {
             ActionId.ACTOR_PROFILE_SUSPEND: "suspend",

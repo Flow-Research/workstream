@@ -195,6 +195,8 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectDiagnosticReadResourceContext,
+    ProjectPolicyReadResourceContext,
+    ProjectActiveGuideReadResourceContext,
     ProjectReadResourceContext,
     ProjectRoleGrantCollectionResourceContext,
     ProjectRoleGrantIssueResourceContext,
@@ -1879,6 +1881,9 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
@@ -1966,14 +1971,14 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.ACTIVE
             for definition in ACTION_DEFINITIONS
         )
-        == 34
+        == 37
     )
     assert (
         sum(
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 44
+        == 41
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -3160,6 +3165,87 @@ async def test_project_diagnostic_read_requires_exact_active_admin_grant_and_chi
 
 
 @pytest.mark.asyncio
+async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist() -> None:
+    context = _runtime_context()
+    project_id, guide_id, snapshot_id, effective_id = (uuid4() for _ in range(4))
+    grant = SimpleNamespace(id=uuid4())
+    policy = ProjectPolicyReadResourceContext(
+        resource_type="project_policy_read",
+        resource_id=effective_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        guide_status="active",
+        target_kind="effective_policy",
+        project_exists=True,
+        project_status="active",
+        guide_exists=True,
+        target_exists=True,
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+        effective_policy_id=effective_id,
+        effective_policy_hash=f"sha256:{'b' * 64}",
+        effective_policy_status="approved",
+        target_binding_digest=f"sha256:{'c' * 64}",
+    )
+    service, _ = _runtime_service(
+        context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
+    )
+    decision = await service.require(
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ, policy
+    )
+    assert decision.matched_authority_kind is MatchedAuthorityKind.ADMIN_ROLE_GRANT
+    assert decision.matched_grant_id == grant.id
+
+    active = ProjectActiveGuideReadResourceContext(
+        resource_type="project_active_guide_read",
+        resource_id=guide_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="v1",
+        guide_status="active",
+        project_exists=True,
+        project_status="active",
+        guide_exists=True,
+        target_exists=True,
+        source_snapshot_id=snapshot_id,
+        source_snapshot_hash=f"sha256:{'a' * 64}",
+        policy_binding_digest=f"sha256:{'d' * 64}",
+    )
+
+    class RoleRecordingFacts(_ProjectReadAuthorityFacts):
+        allowed_roles = None
+
+        async def find_effective_grant(self, *_args, **kwargs):
+            self.allowed_roles = kwargs.get("allowed_roles")
+            return self.admin_grant
+
+    facts = RoleRecordingFacts(admin_grant=grant)
+    service, _ = _runtime_service(context, admin_repository=facts)
+    await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, active)
+    assert facts.allowed_roles == {
+        AdminRole.OPERATOR,
+        AdminRole.PROJECT_MANAGER,
+        AdminRole.AUDIT_AUTHORITY,
+    }
+
+    missing = active.model_copy(
+        update={
+            "target_exists": False,
+            "source_snapshot_id": None,
+            "source_snapshot_hash": None,
+            "policy_binding_digest": None,
+        }
+    )
+    service, _ = _runtime_service(
+        context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
+    )
+    with pytest.raises(AuthorizationDenied) as denied:
+        await service.require(ActionId.PROJECT_ACTIVE_GUIDE_READ, missing)
+    assert denied.value.decision.denial_code is AuthorizationDenialCode.RESOURCE_NOT_FOUND
+
+
+@pytest.mark.asyncio
 async def test_actor_authorization_context_is_self_only_and_revalidated() -> None:
     context = _runtime_context()
     resource = ActorAuthorizationContextResourceContext(
@@ -3209,10 +3295,13 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
     assert response.admin_roles == ("project_manager",)
     assert response.project_roles == ("reviewer", "submitter")
     assert response.effective_action_ids == (
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
         ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
         ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
         ActionId.PROJECT_READ,
         ActionId.PROJECT_SETUP_RUN_READ,
         ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
@@ -3239,6 +3328,28 @@ async def test_context_projection_excludes_planned_and_unrelated_actions() -> No
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_REVOKE,
     )
+
+    class FinanceProjectionFacts:
+        async def effective_admin_roles_for_project(self, **_kwargs):
+            return ("finance_authority",)
+
+        async def active_project_roles_for_actor(self, **_kwargs):
+            return ("submitter",)
+
+    finance = ActorAuthorizationContextReadService(
+        authorization,  # type: ignore[arg-type]
+        FinanceProjectionFacts(),  # type: ignore[arg-type]
+    )
+    finance_response = await finance.read(
+        resolved=SimpleNamespace(profile=SimpleNamespace(id=str(actor_id), status="active")),
+        project=SimpleNamespace(id=str(project_id), status="active"),
+        project_selector_id=project_id,
+    )
+    assert ActionId.PROJECT_ACTIVE_GUIDE_READ not in finance_response.effective_action_ids
+    assert ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ not in (
+        finance_response.effective_action_ids
+    )
+    assert finance_response.effective_action_ids == (ActionId.PROJECT_READ,)
 
 
 class _PreparedActorFacts:

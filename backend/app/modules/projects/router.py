@@ -25,6 +25,7 @@ from app.modules.artifacts.service import ArtifactAdmissionRelationshipError
 from app.modules.authorization.runtime import AuthorizationContext
 from app.modules.projects.schemas import (
     ActiveGuideResponse,
+    ActiveGuideReadResponse,
     EffectiveProjectSubmissionArtifactPolicyResponse,
     GuideSourceSnapshotCreate,
     GuideArtifactIngestResponse,
@@ -49,7 +50,11 @@ from app.modules.projects.schemas import (
     SubmissionArtifactPolicyUpdate,
 )
 from app.modules.projects.service import ProjectService, ProjectServiceError
-from app.modules.projects.authorization_reads import authorize_project_diagnostic_read
+from app.modules.projects.authorization_reads import (
+    authorize_project_active_guide_read,
+    authorize_project_diagnostic_read,
+    authorize_project_policy_read,
+)
 from app.modules.projects.repository import ProjectRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
@@ -600,47 +605,57 @@ async def approve_submission_artifact_policy(
 @router.get(
     "/{project_id}/guides/{guide_id}/effective-submission-artifact-policy",
     response_model=EffectiveProjectSubmissionArtifactPolicyResponse,
+    openapi_extra={
+        "x-workstream-action-id": (
+            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ.value
+        )
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_current_effective_submission_artifact_policy(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> EffectiveProjectSubmissionArtifactPolicyResponse:
     """Return the current effective submission artifact policy for a guide."""
-    try:
-        return await ProjectService(session).get_current_effective_submission_artifact_policy(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    policy = await authorize_project_policy_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(policy)
+    await session.commit()
+    return response
 
 
 @router.get(
     "/{project_id}/guides/{guide_id}/pre-submit-checker-policy",
     response_model=PreSubmitCheckerPolicySummaryResponse,
+    openapi_extra={
+        "x-workstream-action-id": ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ.value
+    },
+    dependencies=[Depends(enforce_human_authorization_read)],
 )
 async def get_current_pre_submit_checker_policy(
     project_id: str,
     guide_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
 ) -> PreSubmitCheckerPolicySummaryResponse:
     """Return the current project pre-submit checker policy summary."""
-    try:
-        return await ProjectService(session).get_current_pre_submit_checker_policy(
-            actor,
-            project_id,
-            guide_id,
-        )
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    policy = await authorize_project_policy_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        action_id=ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
+        project_id=project_id,
+        guide_id=guide_id,
+    )
+    response = PreSubmitCheckerPolicySummaryResponse.model_validate(policy)
+    await session.commit()
+    return response
 
 
 @router.get(
@@ -736,16 +751,34 @@ async def activate_guide(
         raise project_http_error(exc) from exc
 
 
-@router.get("/{project_id}/active-guide", response_model=ActiveGuideResponse)
+@router.get(
+    "/{project_id}/active-guide",
+    response_model=ActiveGuideReadResponse,
+    openapi_extra={"x-workstream-action-id": ActionId.PROJECT_ACTIVE_GUIDE_READ.value},
+    dependencies=[Depends(enforce_human_authorization_read)],
+)
 async def get_active_guide(
     project_id: str,
-    actor: Annotated[ActorContext, Depends(get_registered_actor)],
+    authorization: Annotated[AuthorizationService, Depends(get_authorization_service)],
     session: Annotated[AsyncSession, Depends(get_db_session)],
-) -> ActiveGuideResponse:
+) -> ActiveGuideReadResponse:
     """Return the current active guide and policy context for a project."""
-    try:
-        return await ProjectService(session).get_active_guide(actor, project_id)
-    except PermissionDenied as exc:
-        raise permission_http_error(exc) from exc
-    except ProjectServiceError as exc:
-        raise project_http_error(exc) from exc
+    bundle = await authorize_project_active_guide_read(
+        authorization=authorization,
+        repository=ProjectRepository(session),
+        project_id=project_id,
+    )
+    response = await ProjectService(session).active_guide_read_response(
+        bundle.guide,
+        bundle.source_snapshot,
+        bundle.source_items,
+        bundle.sufficiency_report,
+        bundle.submission_artifact_policy,
+        bundle.effective_policy,
+        bundle.pre_submit_checker_policy,
+        bundle.post_submit_checker_policy,
+        bundle.review_policy,
+        bundle.revision_policy,
+    )
+    await session.commit()
+    return response

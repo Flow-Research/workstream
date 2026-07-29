@@ -340,9 +340,15 @@ class AdminAuthorizationRepository:
         scope_project_id: UUID | None,
         system_scope_only: bool = False,
         for_update: bool = False,
+        allowed_roles: frozenset[AdminRole] | None = None,
     ) -> AdminRoleGrant | None:
         """Load one deterministic effective candidate covering the exact scope."""
-        roles = [role.value for role in AdminRole if permission_id in permissions_for(role)]
+        roles = [
+            role.value
+            for role in AdminRole
+            if permission_id in permissions_for(role)
+            and (allowed_roles is None or role in allowed_roles)
+        ]
         scope_guard = AdminRoleGrant.scope_type == "system"
         if not system_scope_only and scope_project_id is not None:
             scope_guard = or_(

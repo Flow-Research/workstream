@@ -225,7 +225,7 @@ jobs:
         working-directory: backend
         run: |
           COVERAGE_FILE=.coverage-project-auth-read pytest -q tests/test_projects.py \
-            -k 'project_diagnostic_read_composer' \
+            -k 'project_diagnostic_read_composer or project_policy_read_composer or project_active_guide_read_composer' \
             --cov=app.modules.projects.authorization_reads \
             --cov-branch \
             --cov-report=term-missing \

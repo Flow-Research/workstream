@@ -152,6 +152,18 @@ class ProjectRepository:
             raise ProjectRepositoryIntegrityError("multiple active guides found for project")
         return active_guides[0]
 
+    async def lock_active_guide(self, project_id: str) -> ProjectGuide | None:
+        """Load and lock the single active guide for a project."""
+        result = await self._session.execute(
+            select(ProjectGuide)
+            .where(ProjectGuide.project_id == project_id, ProjectGuide.status == "active")
+            .with_for_update()
+        )
+        active_guides = list(result.scalars().all())
+        if len(active_guides) > 1:
+            raise ProjectRepositoryIntegrityError("multiple active guides found for project")
+        return active_guides[0] if active_guides else None
+
     async def get_guide_by_version(self, project_id: str, version: str) -> ProjectGuide | None:
         """Load one project guide by project id and version.
 
@@ -203,6 +215,16 @@ class ProjectRepository:
             Snapshot when found; otherwise ``None``.
         """
         return await self._session.get(GuideSourceSnapshot, snapshot_id)
+
+    async def lock_guide_source_snapshot(
+        self, snapshot_id: str
+    ) -> GuideSourceSnapshot | None:
+        """Load one guide-source snapshot with a transactional row lock."""
+        return await self._session.scalar(
+            select(GuideSourceSnapshot)
+            .where(GuideSourceSnapshot.id == snapshot_id)
+            .with_for_update()
+        )
 
     async def list_guide_source_snapshots(
         self,
@@ -257,6 +279,30 @@ class ProjectRepository:
             )
         return snapshots[0]
 
+    async def lock_latest_guide_source_snapshot(
+        self, project_id: str, guide_id: str, guide_version: str
+    ) -> GuideSourceSnapshot | None:
+        """Load and lock the unambiguous latest snapshot for one guide version."""
+        result = await self._session.execute(
+            select(GuideSourceSnapshot)
+            .where(
+                GuideSourceSnapshot.project_id == project_id,
+                GuideSourceSnapshot.guide_id == guide_id,
+                GuideSourceSnapshot.guide_version == guide_version,
+            )
+            .order_by(GuideSourceSnapshot.captured_at.desc())
+            .limit(2)
+            .with_for_update()
+        )
+        snapshots = list(result.scalars().all())
+        if not snapshots:
+            return None
+        if len(snapshots) > 1 and snapshots[0].captured_at == snapshots[1].captured_at:
+            raise ProjectRepositoryIntegrityError(
+                "latest guide source snapshot is ambiguous for guide version"
+            )
+        return snapshots[0]
+
     async def list_guide_source_snapshot_items(
         self,
         snapshot_id: str,
@@ -273,6 +319,18 @@ class ProjectRepository:
             select(GuideSourceSnapshotItem)
             .where(GuideSourceSnapshotItem.source_snapshot_id == snapshot_id)
             .order_by(GuideSourceSnapshotItem.item_order)
+        )
+        return result.scalars().all()
+
+    async def lock_guide_source_snapshot_items(
+        self, snapshot_id: str
+    ) -> Sequence[GuideSourceSnapshotItem]:
+        """Lock ordered source items included in an authorized snapshot projection."""
+        result = await self._session.execute(
+            select(GuideSourceSnapshotItem)
+            .where(GuideSourceSnapshotItem.source_snapshot_id == snapshot_id)
+            .order_by(GuideSourceSnapshotItem.item_order, GuideSourceSnapshotItem.id)
+            .with_for_update()
         )
         return result.scalars().all()
 
@@ -669,6 +727,27 @@ class ProjectRepository:
             "effective project submission artifact policies",
         )
 
+    async def lock_effective_submission_artifact_policy(
+        self, project_id: str, guide_version: str, source_snapshot_id: str
+    ) -> EffectiveProjectSubmissionArtifactPolicy | None:
+        """Load and lock the current approved effective policy."""
+        result = await self._session.execute(
+            select(EffectiveProjectSubmissionArtifactPolicy)
+            .where(
+                EffectiveProjectSubmissionArtifactPolicy.project_id == project_id,
+                EffectiveProjectSubmissionArtifactPolicy.guide_version == guide_version,
+                EffectiveProjectSubmissionArtifactPolicy.source_snapshot_id
+                == source_snapshot_id,
+                EffectiveProjectSubmissionArtifactPolicy.lifecycle_status == "approved",
+            )
+            .with_for_update()
+        )
+        return self._resolve_current_append_only_row(
+            result.scalars().all(),
+            "supersedes_effective_policy_id",
+            "effective project submission artifact policies",
+        )
+
     async def get_effective_submission_artifact_policy_by_id(
         self,
         policy_id: str,
@@ -705,6 +784,69 @@ class ProjectRepository:
         if not rows:
             return None
         return rows[0]
+
+    async def lock_compiled_pre_submit_checker_policy(
+        self, effective_policy_id: str
+    ) -> PreSubmitCheckerPolicy | None:
+        """Load and lock the single compiled checker policy for an effective policy."""
+        result = await self._session.execute(
+            select(PreSubmitCheckerPolicy)
+            .where(
+                PreSubmitCheckerPolicy.effective_policy_id == effective_policy_id,
+                PreSubmitCheckerPolicy.lifecycle_status == "compiled",
+            )
+            .with_for_update()
+        )
+        rows = list(result.scalars().all())
+        if len(rows) > 1:
+            raise ProjectRepositoryIntegrityError(
+                "multiple compiled pre-submit checker policies found for effective policy"
+            )
+        return rows[0] if rows else None
+
+    async def lock_post_submit_checker_policy_for_guide(
+        self, project_id: str, guide_version: str
+    ) -> PostSubmitCheckerPolicy | None:
+        """Lock the single current post-submit policy for a guide version."""
+        result = await self._session.execute(
+            select(PostSubmitCheckerPolicy)
+            .where(
+                PostSubmitCheckerPolicy.project_id == project_id,
+                PostSubmitCheckerPolicy.guide_version == guide_version,
+                PostSubmitCheckerPolicy.lifecycle_status.in_(["compiled", "approved"]),
+            )
+            .with_for_update()
+        )
+        rows = list(result.scalars().all())
+        if len(rows) > 1:
+            raise ProjectRepositoryIntegrityError("multiple current post-submit policies found")
+        return rows[0] if rows else None
+
+    async def lock_review_policy(
+        self, project_id: str, guide_version: str
+    ) -> ReviewPolicy | None:
+        """Lock the review policy for one guide version."""
+        return await self._session.scalar(
+            select(ReviewPolicy)
+            .where(
+                ReviewPolicy.project_id == project_id,
+                ReviewPolicy.guide_version == guide_version,
+            )
+            .with_for_update()
+        )
+
+    async def lock_revision_policy(
+        self, project_id: str, guide_version: str
+    ) -> RevisionPolicy | None:
+        """Lock the revision policy for one guide version."""
+        return await self._session.scalar(
+            select(RevisionPolicy)
+            .where(
+                RevisionPolicy.project_id == project_id,
+                RevisionPolicy.guide_version == guide_version,
+            )
+            .with_for_update()
+        )
 
     async def get_pre_submit_checker_policy(
         self,

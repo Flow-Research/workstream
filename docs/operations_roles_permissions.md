@@ -34,6 +34,13 @@ read-only permissions `project.setup_diagnostic.read` and
 system-scoped Operator, and covered Audit Authority. They grant no mutation and
 are not assigned to Finance Authority or Access Administrator.
 
+The current effective-policy, pre-submit checker summary, and active-guide
+aggregate reads are likewise administrative-only. Although the active-guide
+action maps to `project.read`, its action-specific allowlist admits only covered
+Project Manager/Audit Authority or system Operator grants. Finance and project
+contributor grants do not inherit that aggregate. Contributor guide and intake
+requirements remain available only through task-scoped work surfaces.
+
 Administrative grants do not imply contributor capability. Holding one does
 not permit claiming tasks, submitting work, or recording review decisions.
 
