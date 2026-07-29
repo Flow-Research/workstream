@@ -15,6 +15,7 @@ from uuid import uuid4
 import pytest
 
 import app.modules.artifacts.guide_extraction as extraction_module
+import app.modules.artifacts.guide_extraction_worker as worker_module
 from app.modules.artifacts.guide_extraction import (
     MAXIMUM_INPUT_BYTES,
     MAXIMUM_OUTPUT_BYTES,
@@ -41,6 +42,70 @@ async def _bytes(payload: bytes):
 @pytest.fixture
 def runner() -> GuideExtractionRunner:
     return GuideExtractionRunner()
+
+
+def test_worker_controls_and_canonical_extractors_execute_in_parent_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limits: list[tuple[int, tuple[int, int]]] = []
+    monkeypatch.setattr(
+        worker_module.resource, "setrlimit", lambda key, value: limits.append((key, value))
+    )
+    worker_module._install_limits()
+    assert len(limits) >= 5
+
+    class Function:
+        def __init__(self, result):
+            self.result = result
+
+        def __call__(self, *_args):
+            return self.result
+
+    library = SimpleNamespace(
+        seccomp_init=Function(1),
+        seccomp_rule_add=Function(0),
+        seccomp_syscall_resolve_name=Function(0),
+        seccomp_load=Function(0),
+        seccomp_release=Function(None),
+    )
+    monkeypatch.setattr(worker_module.ctypes, "CDLL", lambda *_args, **_kwargs: library)
+    worker_module._install_seccomp()
+
+    assert worker_module._extract(b"\xef\xbb\xbfhello\r\n", "plain_text") == "hello\n"
+    assert worker_module._extract(b'{"z":2,"a":1}', "json") == '{"a":1,"z":2}'
+    assert worker_module._extract(b"a,b\r\n1,2\r\n", "csv") == '[["a","b"],["1","2"]]'
+    with pytest.raises(worker_module.ExtractionFailure):
+        worker_module._extract(b"opaque", "unsupported_binary")
+    with pytest.raises(worker_module.ExtractionFailure):
+        worker_module._extract(b'{"a":1,"a":2}', "json")
+    with pytest.raises(worker_module.ExtractionFailure):
+        worker_module._extract(b"\xff", "plain_text")
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "error_code"),
+    [
+        (worker_module.ExtractionFailure("malformed", "invalid_json"), "malformed", "invalid_json"),
+        (MemoryError(), "limit_exceeded", "memory_limit"),
+        (RuntimeError("private"), "parser_failure", "parser_failure"),
+    ],
+)
+def test_worker_main_bounds_every_exception_class(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+    status: str,
+    error_code: str,
+) -> None:
+    writes: list[bytes] = []
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: None)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: None)
+    monkeypatch.setattr(worker_module, "_extract", lambda *_args: (_ for _ in ()).throw(failure))
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "json"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"{}")))
+    monkeypatch.setattr(worker_module.os, "write", lambda _fd, value: writes.append(value))
+
+    assert worker_module.main() == 0
+    assert json.loads(writes[0]) == {"status": status, "error_code": error_code, "output": None}
 
 
 @pytest.mark.parametrize(

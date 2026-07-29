@@ -34,6 +34,8 @@ outside-scratch write denial and stale workspace crash recovery. Ruff, mapper se
 static migration rendering, stale-contract scan, Markdown links, and diff
 integrity pass. CodeRabbit's valid findings and the first hosted database-test
 failures were repaired without weakening a workflow, threshold, or assertion.
+The isolated worker now also has additive parent-process unit coverage while
+its real kernel-isolation subprocess probes remain unchanged.
 Exact hosted Backend and Agent Gates remain required before review publication.
 
 ## Internal Review

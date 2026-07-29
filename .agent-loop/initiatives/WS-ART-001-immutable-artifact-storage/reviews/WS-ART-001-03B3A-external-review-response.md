@@ -35,6 +35,12 @@ None.
 - The first hosted repaired Backend run exposed six database-test defects after
   1,751 passing tests; those test defects are repaired and require the next
   hosted run.
+- The next hosted run passed every test shard, custody check, API E2E, and
+  repository-wide coverage gate, then showed that the real isolated worker
+  subprocess was absent from parent-process artifact coverage. Additive unit
+  execution now covers 84 percent of that worker while the existing real
+  isolation probes remain authoritative; no source exclusion or threshold was
+  changed.
 
 ## Remaining risks
 
