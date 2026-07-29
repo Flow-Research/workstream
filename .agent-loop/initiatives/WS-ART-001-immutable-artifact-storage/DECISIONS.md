@@ -408,9 +408,14 @@ The v0.1 extraction-policy limits are fixed, not caller-selectable:
 |---|---:|---|---|
 | parser input per item | 32 MiB | 03B3A framework before dispatch | `limit_exceeded` |
 | canonical output per item | 4 MiB | 03B3A streaming output collector | `limit_exceeded` |
+| subprocess CPU time per item | 30 seconds | 03B3A OS resource limit | `limit_exceeded` |
 | aggregate agent material | 12 MiB | 03B4 input assembler | `limit_exceeded` |
 | subprocess wall time per item | 60 seconds | 03B3A process supervisor | `limit_exceeded` |
 | subprocess address space | 512 MiB | 03B3A OS isolation boundary | `limit_exceeded` |
+| subprocess output file | 4 MiB | 03B3A OS file-size limit | `limit_exceeded` |
+| subprocess open descriptors | 32 | 03B3A OS descriptor limit | `limit_exceeded` |
+| subprocess children/core dumps | 0 | 03B3A OS process/core limits | `parser_failure` |
+| JSON container depth | 64 | 03B3A JSON adapter | `limit_exceeded` |
 | container entries | 2,000 | 03B2 container inspector | `limit_exceeded` |
 | decompressed container bytes | 128 MiB | 03B2 container inspector | `limit_exceeded` |
 | container nesting depth | 8 | 03B2 container inspector | `limit_exceeded` |
@@ -429,14 +434,30 @@ termination, and executor-loss tests are mandatory. Executor loss leaves no
 successful extraction usage record; a current-generation retry starts from
 fresh materialization and authority.
 
+03B3A accepts only UTF-8 text-family input with at most one leading UTF-8 BOM,
+normalizes CRLF/CR to LF, and rejects NUL or controls other than tab/LF.
+Markdown is bounded text, not rendered markup. JSON rejects duplicate keys and
+non-finite numbers and uses sorted-key compact UTF-8 serialization. CSV uses the
+fixed strict Python `excel` dialect and serializes exact row arrays as compact
+UTF-8 JSON. After trusted imports, the Linux extraction child installs a
+default-deny libseccomp filter with an explicit descriptor-only syscall
+allowlist. Parsing then uses only pre-opened standard descriptors; unavailable
+isolation fails closed. An exact-lineage durable budget permits the initial
+materialization plus at most one fresh-authority retry for `parser_failure` or
+current-lineage cancellation. Deterministic terminal outcomes replay without
+another materialization. Failed attempts may retain
+bounded status evidence, but never canonical output payload, successful usage,
+or a report.
+
 ## D43 - Canonical Extraction Records, Not Implicit Provider Writes
 
-v0.1 persists an immutable content-derived extraction representation in
-PostgreSQL keyed by original content, format, extractor/version, and policy
-version, with output digest, omission facts, status, and bounded error code. A
-separate immutable usage record binds it to the exact guide binding, source
-item, setup run, and generation. AUTH-04B grants read and binding only, so ART
-does not use read authority to create a provider object.
+v0.1 persists bounded immutable attempt evidence with status/error separately
+from the successful content-derived representation. Successful content is
+keyed by original content, format, extractor/version, and policy version and
+stores canonical output, its digest, and omission facts without an error code.
+A separate immutable usage record binds that success to the exact guide
+binding, source item, setup run, and generation. AUTH-04B grants read and
+binding only, so ART does not use read authority to create a provider object.
 
 ## D44 - Sufficiency Consumes Complete Verified Material
 

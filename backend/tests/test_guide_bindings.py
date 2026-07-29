@@ -14,7 +14,8 @@ from uuid import UUID, uuid4
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.hashing import canonical_json_hash
@@ -29,6 +30,11 @@ from app.modules.artifacts.guide_bindings import (
     GuideSourceBindingService,
 )
 from app.modules.artifacts.guide_formats import GuideFormatDetector, GuideFormatLimits
+from app.modules.artifacts.guide_extraction import GuideExtractionRegistry
+from app.modules.artifacts.guide_extraction_service import (
+    GuideExtractionRequest,
+    GuideExtractionService,
+)
 from app.modules.artifacts.guide_materialization import (
     ArtifactMaterializationService,
     GuideSourceMaterializationError,
@@ -43,6 +49,10 @@ from app.modules.artifacts.models import (
     GuideSourceArtifactBinding,
     GuideSourceArtifactIncident,
     GuideSourceFormatClassification,
+    GuideSourceExtractedContent,
+    GuideSourceExtractionAttempt,
+    GuideSourceExtractionRetryBudget,
+    GuideSourceExtractionUsage,
 )
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
@@ -51,7 +61,10 @@ from app.modules.artifacts.preparation import (
     ArtifactPreparationService,
     ArtifactScratchManager,
 )
-from app.modules.artifacts.service import ArtifactStorageNamespaceError, ArtifactStorageNamespaceSpec
+from app.modules.artifacts.service import (
+    ArtifactStorageNamespaceError,
+    ArtifactStorageNamespaceSpec,
+)
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideSourceBindingAuthorityFacts,
@@ -140,6 +153,10 @@ class _BlockingReadStore(_ReadStore):
         self.started.set()
         await asyncio.Event().wait()
         yield self.payload
+
+
+async def _byte_stream(payload: bytes) -> AsyncIterator[bytes]:
+    yield payload
 
 
 def _preparation(
@@ -424,6 +441,194 @@ async def _create_binding(factory, ids: dict[str, UUID]) -> UUID:
 
 
 @pytest.mark.asyncio
+@pytest.mark.postgres_schema_contract
+async def test_extraction_publishes_deterministic_content_and_exact_usage(
+    isolated_database_env: str, tmp_path: Path, migration_lock
+) -> None:
+    payload = b'{"z":2,"a":1}'
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    preparation, manager = _preparation(tmp_path)
+    prepared = None
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session,
+                sha256=digest,
+                byte_count=len(payload),
+                media_type="application/json",
+            )
+        binding_id = await _create_binding(factory, ids)
+        classification_id = uuid4()
+        async with factory() as session, session.begin():
+            session.add(
+                GuideSourceFormatClassification(
+                    id=str(classification_id),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    sha256=digest,
+                    byte_count=len(payload),
+                    media_type="application/json",
+                    detected_format="json",
+                    status="classified",
+                    detector_name="workstream.guide_format",
+                    detector_version="1",
+                    classification_facts={},
+                )
+            )
+        prepared = await preparation.prepare(_byte_stream(payload), media_type="application/json")
+        request = GuideExtractionRequest(
+            project_id=ids["project"],
+            guide_id=ids["guide"],
+            source_snapshot_id=ids["snapshot"],
+            source_item_id=ids["item"],
+            project_setup_run_id=ids["run"],
+            setup_generation=1,
+            binding_id=binding_id,
+            classification_id=classification_id,
+        )
+        result = await GuideExtractionService(factory, GuideExtractionRegistry()).extract_prepared(
+            request, prepared
+        )
+        assert result.status == "extracted"
+        assert result.extracted_content_id is not None
+        assert result.usage_id is not None
+        async with factory() as session:
+            content = await session.get(
+                GuideSourceExtractedContent, str(result.extracted_content_id)
+            )
+            assert content is not None
+            assert content.canonical_output == '{"a":1,"z":2}'
+            assert await session.scalar(select(func.count(GuideSourceExtractionAttempt.id))) == 1
+            assert await session.scalar(select(func.count(GuideSourceExtractionUsage.id))) == 1
+        async with factory() as session:
+            with pytest.raises(IntegrityError):
+                async with session.begin():
+                    await session.execute(
+                        text(
+                            "update guide_source_extraction_usages "
+                            "set attempt_status = 'parser_failure' where id = :usage_id"
+                        ),
+                        {"usage_id": str(result.usage_id)},
+                    )
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option(
+            "script_location", str(Path(__file__).resolve().parents[1] / "alembic")
+        )
+        with migration_lock(), pytest.raises(
+            RuntimeError, match="cannot downgrade populated guide extraction evidence"
+        ):
+            command.downgrade(config, "0040_guide_materialization")
+    finally:
+        if prepared is not None:
+            await prepared.close()
+        manager.close()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "retry_allowed"),
+    [
+        ("malformed", False),
+        ("limit_exceeded", False),
+        ("unsupported", False),
+        ("parser_failure", True),
+        ("cancelled", True),
+    ],
+)
+async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_slot(
+    isolated_database_env: str, status: str, retry_allowed: bool
+) -> None:
+    payload = b"guide"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session,
+                sha256=digest,
+                byte_count=len(payload),
+                media_type="text/plain",
+            )
+        binding_id = await _create_binding(factory, ids)
+        classification_id = uuid4()
+        attempt_id = uuid4()
+        async with factory() as session, session.begin():
+            session.add_all(
+                [
+                    GuideSourceFormatClassification(
+                        id=str(classification_id),
+                        binding_id=str(binding_id),
+                        content_id=str(ids["content"]),
+                        verified_replica_id=str(ids["replica"]),
+                        setup_generation=1,
+                        sha256=digest,
+                        byte_count=len(payload),
+                        media_type="text/plain",
+                        detected_format="plain_text",
+                        status="classified",
+                        detector_name="workstream.guide_format",
+                        detector_version="1",
+                        classification_facts={},
+                    ),
+                    GuideSourceExtractionRetryBudget(
+                        binding_id=str(binding_id),
+                        content_id=str(ids["content"]),
+                        classification_id=str(classification_id),
+                        setup_generation=1,
+                        policy_version="guide-extraction-v1",
+                        claimed_slots=1,
+                    ),
+                    GuideSourceExtractionAttempt(
+                        id=str(attempt_id),
+                        binding_id=str(binding_id),
+                        content_id=str(ids["content"]),
+                        classification_id=str(classification_id),
+                        setup_generation=1,
+                        detected_format="plain_text",
+                        extractor_name="workstream.plain_text",
+                        extractor_version="1",
+                        policy_version="guide-extraction-v1",
+                        attempt_number=1,
+                        status=status,
+                        error_code="test_failure",
+                        bounded_facts={},
+                    ),
+                ]
+            )
+        request = GuideExtractionRequest(
+            project_id=ids["project"],
+            guide_id=ids["guide"],
+            source_snapshot_id=ids["snapshot"],
+            source_item_id=ids["item"],
+            project_setup_run_id=ids["run"],
+            setup_generation=1,
+            binding_id=binding_id,
+            classification_id=classification_id,
+        )
+        result = await GuideExtractionService(
+            factory, GuideExtractionRegistry()
+        ).claim_materialization_slot(request)
+        async with factory() as session:
+            budget = await session.get(GuideSourceExtractionRetryBudget, str(binding_id))
+            assert budget is not None
+            assert budget.claimed_slots == (2 if retry_allowed else 1)
+        if retry_allowed:
+            assert result is None
+        else:
+            assert result is not None
+            assert result.attempt_id == attempt_id
+            assert result.status == status
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_materialization_denies_before_provider_read(
     isolated_database_env: str, tmp_path: Path
 ) -> None:
@@ -672,9 +877,7 @@ async def test_post_read_lineage_drift_records_stale_incident(
                         guide_id=str(ids["guide"]),
                         guide_version="v1",
                         source_snapshot_id=str(ids["snapshot"]),
-                        source_snapshot_hash=canonical_json_hash(
-                            {"item": str(ids["item"])}
-                        ),
+                        source_snapshot_hash=canonical_json_hash({"item": str(ids["item"])}),
                         setup_generation=2,
                         status="queued",
                         current_step="queued",
@@ -747,12 +950,8 @@ async def test_cross_resource_materialization_denies_before_authority_and_provid
         )
 
         wrong_value: UUID | int = 2 if changed_field == "setup_generation" else uuid4()
-        request_binding_id = (
-            wrong_value if changed_field == "binding_id" else binding_id
-        )
-        request_changes = (
-            {} if changed_field == "binding_id" else {changed_field: wrong_value}
-        )
+        request_binding_id = wrong_value if changed_field == "binding_id" else binding_id
+        request_changes = {} if changed_field == "binding_id" else {changed_field: wrong_value}
         with pytest.raises(GuideSourceMaterializationError, match="unavailable"):
             await service.materialize_guide_source(
                 _materialization_request(
@@ -876,6 +1075,7 @@ async def test_materialization_inspection_timeout_cleans_scratch_and_records_inc
                 session, sha256=digest, byte_count=len(payload), media_type="application/pdf"
             )
         binding_id = await _create_binding(factory, ids)
+
         async def deterministic_timeout(*_args: Any, **_kwargs: Any) -> None:
             raise ArtifactPreparationDeadlineError("artifact preparation deadline exceeded")
 
@@ -1060,9 +1260,12 @@ def test_0039_refuses_populated_binding_downgrade(
         str(Path(__file__).resolve().parents[1] / "alembic"),
     )
     asyncio.run(_create_populated_binding(isolated_database_env))
-    with migration_lock(), pytest.raises(
-        RuntimeError,
-        match="cannot downgrade populated guide source artifact bindings",
+    with (
+        migration_lock(),
+        pytest.raises(
+            RuntimeError,
+            match="cannot downgrade populated guide source artifact bindings",
+        ),
     ):
         command.downgrade(config, "0038_guide_source_ingest")
 
@@ -1093,9 +1296,12 @@ def test_0040_refuses_populated_classification_downgrade(
         str(Path(__file__).resolve().parents[1] / "alembic"),
     )
     asyncio.run(_create_populated_classification(isolated_database_env))
-    with migration_lock(), pytest.raises(
-        RuntimeError,
-        match="cannot downgrade populated guide materialization evidence",
+    with (
+        migration_lock(),
+        pytest.raises(
+            RuntimeError,
+            match="cannot downgrade populated guide materialization evidence",
+        ),
     ):
         command.downgrade(config, "0039_guide_source_bindings")
 
@@ -1140,9 +1346,12 @@ def test_0040_refuses_incident_only_downgrade(
         str(Path(__file__).resolve().parents[1] / "alembic"),
     )
     asyncio.run(_create_populated_incident(isolated_database_env))
-    with migration_lock(), pytest.raises(
-        RuntimeError,
-        match="cannot downgrade populated guide materialization evidence",
+    with (
+        migration_lock(),
+        pytest.raises(
+            RuntimeError,
+            match="cannot downgrade populated guide materialization evidence",
+        ),
     ):
         command.downgrade(config, "0039_guide_source_bindings")
 
@@ -1264,9 +1473,7 @@ async def test_default_live_binding_authority_denies(isolated_database_env: str)
         authority = _AllowBindingAuthority()
         with pytest.raises(ArtifactAuthorityDeniedError):
             async with factory() as session, session.begin():
-                await GuideSourceBindingService(session).bind_guide_source(
-                    _request(ids, authority)
-                )
+                await GuideSourceBindingService(session).bind_guide_source(_request(ids, authority))
     finally:
         await engine.dispose()
 
