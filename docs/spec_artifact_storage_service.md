@@ -1212,6 +1212,47 @@ Guide-source ingestion stores each source item as immutable artifact content.
 Sufficiency and policy-derivation agents read through an authorized Workstream
 artifact reader, never direct provider URLs.
 
+The Project Manager guide-source boundary is not the contributor submission
+boundary. Contributor submissions always use one outer ZIP; guide snapshots may
+contain multiple independently uploaded items in PDF, DOCX, PPTX, CSV, XLSX,
+Markdown, plain text, JSON, or PNG/JPEG/WebP. Images yield bounded structural
+metadata only and cannot satisfy required textual semantics without future
+approved OCR. v0.1 does not support guide audio or video. DOCX, PPTX, and XLSX are safely distinguished by
+bounded internal markers; an arbitrary ZIP is not treated as one of them.
+
+Upload stores opaque bytes and performs no parsing in the HTTP request. The
+existing Celery setup pipeline later carries only project, guide, source
+snapshot, setup run, and setup generation identifiers. A fixed guide reader
+obtains fresh prepared authority, resolves the exact verified binding, streams
+through `ArtifactStore` into `ArtifactScratchManager`, and recomputes complete
+SHA-256 and byte count. Missing, changed, truncated, or unavailable content is
+an artifact incident and never a guide-insufficiency result.
+
+Typed extractors run in a bounded no-network isolation boundary. One immutable
+content-derived record identifies original content, format, extractor/version,
+policy version, output digest, omission facts, status, and error code; a
+separate immutable usage record binds it to the exact binding, item, setup run,
+and generation. v0.1 persists these bounded records in PostgreSQL and does not
+use guide-read authority to create a provider object. Only successful current-
+generation extraction reaches the agent, delimited as untrusted source data
+with no tool, secret, provider, or instruction authority. Unsupported,
+ambiguous, malformed, stale, or failed required material stops setup internally.
+
+Immediately before committing a sufficiency report, the setup transaction must
+lock, reload, and revalidate the exact project, draft guide, source snapshot,
+setup run and generation, guide-source binding, observed content-integrity
+facts, and extraction-usage provenance used for the agent input. Any drift,
+replacement, integrity mismatch, or incomplete provenance rolls back the report
+commit and produces the applicable bounded internal failure; an earlier
+pre-agent validation is not sufficient authority for this durable mutation.
+
+The public run remains `setup_blocked` with the redacted stable code defined for
+the exact extraction outcome in D46. Recoverable ART
+incidents wait for recovery and expose only a bounded incident reference to an
+authorized Operator. Terminal corruption or source-content failure requires a
+new corrected Project Manager source item/snapshot; no outcome is a sufficiency
+decision.
+
 When guide-source verification fails transiently, artifact recovery success
 automatically re-publishes the same persisted `ProjectSetupRun` continuation
 only when project, guide version, source snapshot ID/hash, and setup generation

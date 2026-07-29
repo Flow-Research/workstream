@@ -65,6 +65,14 @@ directories, or any other content allowed by the locked Project Guide. A ZIP
 entry inside the outer archive remains an ordinary file. Nested archive
 unpacking is outside v0.1 even when a guide would otherwise request it.
 
+This contributor ZIP rule does not apply to Project Manager guide-source
+uploads. A guide snapshot may contain multiple independently uploaded source
+items in PDF, DOCX, PPTX, CSV, XLSX, Markdown, plain text, JSON, PNG, JPEG, or
+WebP form. Images are metadata-only without OCR and cannot satisfy required
+textual semantics. v0.1 does not support guide audio or video. DOCX, PPTX, and
+XLSX are recognized as their document types despite using ZIP containers
+internally; an arbitrary ordinary ZIP is not treated as a guide document.
+
 ## First-Principle Constraints
 
 - Workstream computes and verifies canonical SHA-256 and byte count.

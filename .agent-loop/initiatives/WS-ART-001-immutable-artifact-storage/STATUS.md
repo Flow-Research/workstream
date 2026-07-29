@@ -51,16 +51,22 @@ normalizes regular-file executable intent into the semantic manifest; and it
 requires fresh AUTH prepared capabilities at durable put intent and atomic
 Submission/binding consumption.
 
-## Next Proposed Chunk
+## Current Planning Correction
 
-After this planning package merges, `WS-ART-001-03A` is the only immediate ART
-successor. It adds hidden guide-source byte ingest through the existing artifact
-preparation/admission/verification path. It requires a separate signed start and
-does not activate its own AUTH action.
+ART-03A and AUTH `WS-XINT-002-04A` are merged. Before ART-03B implementation,
+the guide-content boundary is being corrected explicitly: verified binding,
+full-read materialization, format classification, isolated extraction,
+canonical extraction provenance, incremental complex-format support, and
+same-generation sufficiency continuation are separate PR-sized contracts.
+`WS-ART-001-03B1` is the first proposed
+implementation successor; this planning change contains no implementation.
+
+AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
+activates only fixed-service binding and guide read. ART-03C then removes the
+legacy identity/excerpt path and makes the verified pipeline authoritative.
 
 ## Gate
 
 Planning evidence and all required internal reviewer tracks must pass before a
-PR. The planning merge starts no successor. Every implementation chunk retains
-its separate signed start, exact AUTH activation sequence, internal review, CI,
-CodeRabbit, human checkpoint, and automated merge-memory stop.
+PR. Every implementation chunk retains its own bounded contract, exact AUTH
+activation sequence, internal review, CI, CodeRabbit, and human checkpoint.

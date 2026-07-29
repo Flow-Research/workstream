@@ -1,6 +1,6 @@
 # Chunk Contract: WS-ART-001-03C - Guide Source Cutover And Continuation
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03B and exact AUTH activation
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after split 03B and AUTH-04B
 
 Artifact contract phase: `guide_source_cutover`
 
@@ -32,6 +32,8 @@ adding a Project Manager resume command.
 - migration refuses unsafe populated legacy rows rather than fabricating bytes;
 - caller `content_cid`, provider-object schemes, and hash-only identity are
   removed without aliases after verified replacement is available;
+- caller excerpts and durable references no longer act as authoritative agent
+  content; verified same-generation bindings and canonical extractions do;
 - recovery continuation references a persisted setup run/generation and resumes
   only when project, guide, snapshot, policy, and generation still match;
 - Operator recovery authorization and automatic setup continuation remain
