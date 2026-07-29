@@ -159,8 +159,8 @@ progress on `codex/ws-auth-001-11c1-setup-diagnostic-reads`.
 | `WS-AUTH-001-11` | Planning split authored | `codex/ws-auth-001-11-project-read-cutover` | - | Exact hard-cutover inventory split into 11A, 11B, 11C1, and 11C2; signed automation remains the live-state authority. |
 | `WS-AUTH-001-11A` | Merged | `codex/ws-auth-001-11a-project-read-catalogue` | #208 | Registered the project-read catalogue and migration `0035`; no activation. |
 | `WS-AUTH-001-11B` | Merged | `codex/ws-auth-001-11b-project-identity-context` | #214 | Project identity and self authorization-context hard cutover; merged as `033654ac`. |
-| `WS-AUTH-001-11C1` | Implementation | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | - | Started 2026-07-28; repaired contract passed all six required L1 plan-review tracks. |
-| `WS-AUTH-001-11C2` | Proposed | - | - | Effective policy and active-guide read cutover. |
+| `WS-AUTH-001-11C1` | Merged | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | #216 | Setup-diagnostic read hard cutover merged as `2965a9f9` on 2026-07-28. |
+| `WS-AUTH-001-11C2` | Plan reviewed | `codex/ws-auth-001-11c2-plan-repair` | - | Started 2026-07-29; initial L1 review rejected ambiguous projection, binding, and proof boundaries before runtime edits. Repaired contract passed all six repeat tracks. |
 | `WS-AUTH-001-12` | Proposed | - | - | Project policy/setup mutation cutover. |
 | `WS-AUTH-001-13` | Proposed | - | - | Task management and assignment cutover. |
 | `WS-AUTH-001-14` | Proposed | - | - | Submission/checker/audit visibility cutover. |
