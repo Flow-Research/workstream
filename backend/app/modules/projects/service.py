@@ -1896,26 +1896,53 @@ class ProjectService:
             GuideSourceSnapshotItemResponse.model_validate(item) for item in source_items
         ]
         return ActiveGuideReadResponse(
-            guide=ProjectGuideResponse.model_validate(guide),
             guide_source_snapshot=source_snapshot_response,
-            guide_sufficiency_report=GuideSufficiencyReportResponse.model_validate(
+            **self._active_bundle_response_fields(
+                guide,
+                sufficiency_report,
+                submission_artifact_policy,
+                effective_policy,
+                pre_submit_checker_policy,
+                post_submit_checker_policy,
+                review_policy,
+                revision_policy,
+            ),
+        )
+
+    def _active_bundle_response_fields(
+        self,
+        guide: ProjectGuide,
+        sufficiency_report: GuideSufficiencyReport,
+        submission_artifact_policy: SubmissionArtifactPolicy,
+        effective_policy: EffectiveProjectSubmissionArtifactPolicy,
+        pre_submit_checker_policy: PreSubmitCheckerPolicy,
+        post_submit_checker_policy: PostSubmitCheckerPolicy,
+        review_policy: ReviewPolicy,
+        revision_policy: RevisionPolicy,
+    ) -> dict[str, Any]:
+        """Shape fields shared by activation and administrative read responses."""
+        return {
+            "guide": ProjectGuideResponse.model_validate(guide),
+            "guide_sufficiency_report": GuideSufficiencyReportResponse.model_validate(
                 sufficiency_report
             ),
-            submission_artifact_policy=SubmissionArtifactPolicyResponse.model_validate(
+            "submission_artifact_policy": SubmissionArtifactPolicyResponse.model_validate(
                 submission_artifact_policy
             ),
-            effective_submission_artifact_policy=(
+            "effective_submission_artifact_policy": (
                 EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective_policy)
             ),
-            pre_submit_checker_policy=ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
-                pre_submit_checker_policy
+            "pre_submit_checker_policy": (
+                ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
+                    pre_submit_checker_policy
+                )
             ),
-            post_submit_checker_policy=PostSubmitCheckerPolicyResponse.model_validate(
+            "post_submit_checker_policy": PostSubmitCheckerPolicyResponse.model_validate(
                 post_submit_checker_policy
             ),
-            review_policy=ReviewPolicyResponse.model_validate(review_policy),
-            revision_policy=RevisionPolicyResponse.model_validate(revision_policy),
-        )
+            "review_policy": ReviewPolicyResponse.model_validate(review_policy),
+            "revision_policy": RevisionPolicyResponse.model_validate(revision_policy),
+        }
 
     async def _get_project_guide(self, project_id: str, guide_id: str) -> ProjectGuide:
         """Load a guide and ensure it belongs to the requested project.
@@ -4262,24 +4289,16 @@ class ProjectService:
         """
         source_snapshot_response = await self._source_snapshot_response(source_snapshot)
         return ActiveGuideResponse(
-            guide=ProjectGuideResponse.model_validate(guide),
             guide_source_snapshot=source_snapshot_response,
-            guide_sufficiency_report=GuideSufficiencyReportResponse.model_validate(
-                sufficiency_report
-            ),
-            submission_artifact_policy=SubmissionArtifactPolicyResponse.model_validate(
-                submission_artifact_policy
-            ),
-            effective_submission_artifact_policy=(
-                EffectiveProjectSubmissionArtifactPolicyResponse.model_validate(effective_policy)
-            ),
-            pre_submit_checker_policy=ActiveGuidePreSubmitCheckerPolicyResponse.model_validate(
-                pre_submit_checker_policy
-            ),
-            post_submit_checker_policy=PostSubmitCheckerPolicyResponse.model_validate(
-                post_submit_checker_policy
-            ),
-            review_policy=ReviewPolicyResponse.model_validate(review_policy),
-            revision_policy=RevisionPolicyResponse.model_validate(revision_policy),
             payment_policy=PaymentPolicyResponse.model_validate(payment_policy),
+            **self._active_bundle_response_fields(
+                guide,
+                sufficiency_report,
+                submission_artifact_policy,
+                effective_policy,
+                pre_submit_checker_policy,
+                post_submit_checker_policy,
+                review_policy,
+                revision_policy,
+            ),
         )

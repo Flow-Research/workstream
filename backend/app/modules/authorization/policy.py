@@ -8,6 +8,11 @@ from app.modules.authorization.catalogue import PermissionId
 from app.modules.authorization.schemas import AdminRole, AdminScope
 
 
+ACTIVE_GUIDE_ADMIN_ROLES = frozenset(
+    {AdminRole.OPERATOR, AdminRole.PROJECT_MANAGER, AdminRole.AUDIT_AUTHORITY}
+)
+
+
 ADMIN_ROLE_PERMISSIONS = MappingProxyType(
     {
         AdminRole.ACCESS_ADMINISTRATOR: (

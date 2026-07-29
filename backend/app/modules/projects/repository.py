@@ -216,16 +216,6 @@ class ProjectRepository:
         """
         return await self._session.get(GuideSourceSnapshot, snapshot_id)
 
-    async def lock_guide_source_snapshot(
-        self, snapshot_id: str
-    ) -> GuideSourceSnapshot | None:
-        """Load one guide-source snapshot with a transactional row lock."""
-        return await self._session.scalar(
-            select(GuideSourceSnapshot)
-            .where(GuideSourceSnapshot.id == snapshot_id)
-            .with_for_update()
-        )
-
     async def list_guide_source_snapshots(
         self,
         project_id: str,

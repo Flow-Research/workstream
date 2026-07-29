@@ -3188,6 +3188,11 @@ async def test_project_11c2_reads_require_exact_admin_context_and_role_allowlist
         effective_policy_status="approved",
         target_binding_digest=f"sha256:{'c' * 64}",
     )
+    with pytest.raises(ValidationError, match="policy target existence"):
+        ProjectPolicyReadResourceContext(
+            **policy.model_dump(exclude={"guide_status"}),
+            guide_status="draft",
+        )
     service, policy_evidence = _runtime_service(
         context, admin_repository=_ProjectReadAuthorityFacts(admin_grant=grant)
     )

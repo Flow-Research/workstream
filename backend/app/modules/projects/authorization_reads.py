@@ -46,6 +46,59 @@ DiagnosticResult: TypeAlias = (
 )
 
 
+def _effective_policy_chain_is_consistent(
+    *,
+    project_id: str,
+    guide: ProjectGuide,
+    snapshot: GuideSourceSnapshot,
+    submission: SubmissionArtifactPolicy,
+    effective: EffectiveProjectSubmissionArtifactPolicy,
+    checker: PreSubmitCheckerPolicy | None,
+) -> bool:
+    """Return whether one locked effective-policy chain is exact and current."""
+    try:
+        common_matches = all(
+            (
+                effective.project_id == project_id,
+                effective.guide_id == guide.id,
+                effective.guide_version == guide.version,
+                effective.source_snapshot_id == snapshot.id,
+                effective.source_snapshot_hash == snapshot.bundle_hash,
+                effective.lifecycle_status == "approved",
+                submission.project_id == project_id,
+                submission.guide_id == guide.id,
+                submission.guide_version == guide.version,
+                submission.source_snapshot_id == snapshot.id,
+                submission.source_snapshot_hash == snapshot.bundle_hash,
+                submission.lifecycle_status == "approved",
+                submission.id == effective.submission_artifact_policy_id,
+                submission.policy_hash == effective.submission_artifact_policy_hash,
+                canonical_json_hash(submission.policy_body) == submission.policy_hash,
+                canonical_json_hash(effective.effective_policy)
+                == effective.effective_policy_hash,
+            )
+        )
+        if not common_matches or checker is None:
+            return common_matches
+        if not isinstance(checker.compiled_bundle, dict):
+            return False
+        return all(
+            (
+                checker.project_id == project_id,
+                checker.guide_id == guide.id,
+                checker.guide_version == guide.version,
+                checker.source_snapshot_id == snapshot.id,
+                checker.source_snapshot_hash == snapshot.bundle_hash,
+                checker.effective_policy_id == effective.id,
+                checker.effective_policy_hash == effective.effective_policy_hash,
+                checker.lifecycle_status == "compiled",
+                canonical_json_hash(checker.compiled_bundle) == checker.compiled_bundle_hash,
+            )
+        )
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 @dataclass(frozen=True)
 class ActiveGuideReadBundle:
     """Locked non-compensation active-guide rows approved for projection."""
@@ -115,50 +168,15 @@ async def authorize_project_policy_read(
         and effective is not None
         and snapshot is not None
     )
-    if checker is not None and any(
-        (
-            checker.project_id != project_id,
-            checker.guide_id != guide_id,
-            checker.guide_version != guide.version,
-            checker.source_snapshot_id != snapshot.id,
-            checker.source_snapshot_hash != snapshot.bundle_hash,
-            checker.effective_policy_id != effective.id,
-            checker.effective_policy_hash != effective.effective_policy_hash,
-        )
-    ):
-        target_exists = False
-        target = None
     if target_exists:
-        try:
-            target_exists = all(
-                (
-                    effective.project_id == project_id,
-                    effective.guide_id == guide_id,
-                    effective.guide_version == guide.version,
-                    effective.source_snapshot_id == snapshot.id,
-                    effective.source_snapshot_hash == snapshot.bundle_hash,
-                    effective.lifecycle_status == "approved",
-                    submission.project_id == project_id,
-                    submission.guide_id == guide_id,
-                    submission.guide_version == guide.version,
-                    submission.source_snapshot_id == snapshot.id,
-                    submission.source_snapshot_hash == snapshot.bundle_hash,
-                    submission.lifecycle_status == "approved",
-                    submission.id == effective.submission_artifact_policy_id,
-                    submission.policy_hash == effective.submission_artifact_policy_hash,
-                    canonical_json_hash(submission.policy_body) == submission.policy_hash,
-                    canonical_json_hash(effective.effective_policy)
-                    == effective.effective_policy_hash,
-                    checker is None
-                    or (
-                        isinstance(checker.compiled_bundle, dict)
-                        and canonical_json_hash(checker.compiled_bundle)
-                        == checker.compiled_bundle_hash
-                    ),
-                )
-            )
-        except (AttributeError, TypeError, ValueError):
-            target_exists = False
+        target_exists = _effective_policy_chain_is_consistent(
+            project_id=project_id,
+            guide=guide,
+            snapshot=snapshot,
+            submission=submission,
+            effective=effective,
+            checker=checker,
+        )
         if not target_exists:
             target = None
 
@@ -308,23 +326,9 @@ async def authorize_project_active_guide_read(
                     and sufficiency.warnings_acknowledged_at is not None
                     and sufficiency.warnings_acknowledged_by_role in {"admin", "project_manager"}
                 ),
-                submission.project_id == project_id,
-                submission.guide_id == guide.id,
-                submission.guide_version == guide.version,
-                submission.source_snapshot_id == snapshot.id,
-                submission.source_snapshot_hash == snapshot.bundle_hash,
-                submission.id == effective.submission_artifact_policy_id,
-                submission.policy_hash == effective.submission_artifact_policy_hash,
-                submission.lifecycle_status == "approved",
                 submission.approved_by_actor is not None,
                 submission.approved_at is not None,
                 submission.approved_by_role in {"admin", "project_manager"},
-                effective.guide_id == guide.id,
-                effective.source_snapshot_hash == snapshot.bundle_hash,
-                checker.effective_policy_id == effective.id,
-                checker.effective_policy_hash == effective.effective_policy_hash,
-                checker.compiled_bundle_hash is not None,
-                checker.lifecycle_status == "compiled",
                 post_submit.guide_id == guide.id,
                 post_submit.source_snapshot_id == snapshot.id,
                 post_submit.source_snapshot_hash == snapshot.bundle_hash,
@@ -345,6 +349,14 @@ async def authorize_project_active_guide_read(
                 revision.max_revision_rounds >= 0,
             )
         ) and all(item.source_snapshot_id == snapshot.id for item in source_items)
+        target_exists = target_exists and _effective_policy_chain_is_consistent(
+            project_id=project_id,
+            guide=guide,
+            snapshot=snapshot,
+            submission=submission,
+            effective=effective,
+            checker=checker,
+        )
     if target_exists:
         try:
             await project_service.validate_source_snapshot_integrity(

@@ -319,8 +319,8 @@ class ProjectPolicyReadResourceContext(BaseModel):
             raise ValueError("project existence and lifecycle facts are inconsistent")
         bound = (
             self.project_status == "active"
-            and
-            self.source_snapshot_id is not None
+            and self.guide_status == "active"
+            and self.source_snapshot_id is not None
             and self.source_snapshot_hash is not None
             and self.effective_policy_id is not None
             and self.effective_policy_hash is not None

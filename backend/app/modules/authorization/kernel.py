@@ -21,8 +21,8 @@ from app.modules.authorization.catalogue import (
     ActionId,
     PermissionId,
 )
+from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
 from app.modules.authorization.repository import AdminAuthorizationRepository
-from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.runtime import (
     PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION,
     PROJECT_POLICY_READ_TARGET_KIND_BY_ACTION,
@@ -80,9 +80,6 @@ ContextRevalidator = Callable[
     Awaitable[HumanAuthorizationContext],
 ]
 
-_ACTIVE_GUIDE_ADMIN_ROLES = frozenset(
-    {AdminRole.OPERATOR, AdminRole.PROJECT_MANAGER, AdminRole.AUDIT_AUTHORITY}
-)
 ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
     Awaitable[ServiceAuthorizationContext | None],
@@ -961,7 +958,7 @@ class AuthorizationService:
         system_only = project_id is None
         grant_filters: dict[str, object] = {}
         if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ:
-            grant_filters["allowed_roles"] = _ACTIVE_GUIDE_ADMIN_ROLES
+            grant_filters["allowed_roles"] = ACTIVE_GUIDE_ADMIN_ROLES
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
             action.permission_id,
