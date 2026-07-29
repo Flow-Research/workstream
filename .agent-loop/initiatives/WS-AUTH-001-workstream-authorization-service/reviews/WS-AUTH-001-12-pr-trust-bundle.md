@@ -63,8 +63,10 @@ rule, or dependency changed. The scanner exemption uses full-line matching for
 one path in one planning file. CodeRabbit completed a full external review on
 integration head `480abc17` and posted six threads. All valid findings were
 fixed; the sufficiency-principal thread was resolved by clarifying the existing
-dual human-request/internal-service boundary. GitHub full checks rerun on the
-reviewed integration head and must rerun on the pushed repair head.
+dual human-request/internal-service boundary. Focused security, docs, and CI
+integrity reviewers passed exact repair commit `697465ec`. GitHub full checks
+reran on the reviewed integration head and must rerun on the pushed repair
+head.
 
 ## Remaining risks and follow-up
 

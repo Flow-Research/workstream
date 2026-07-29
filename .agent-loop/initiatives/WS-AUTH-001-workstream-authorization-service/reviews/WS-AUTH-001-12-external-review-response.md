@@ -4,6 +4,10 @@ External review: CodeRabbit run `744220a1-954a-4884-9613-3479b2e68e49`
 
 Reviewed integration head: `480abc17da96272070314a5f90c0a460cfe940ec`
 
+Reviewed repair commit: `697465ec`
+
+Focused repair reviewers: security/auth PASS, docs PASS, CI integrity PASS
+
 ## Comments addressed
 
 - Replaced ambiguous prerequisite grammar with explicit “must be merged”
