@@ -510,3 +510,43 @@ def test_artifact_repository_does_not_own_actor_persistence() -> None:
     assert not any(module.startswith("app.modules.actors") for module in imported_modules)
     assert "actor_profiles" not in path.read_text()
     assert "actor_identity_links" not in path.read_text()
+
+
+def test_guide_extraction_has_no_provider_agent_auth_or_route_boundary() -> None:
+    extraction_paths = (
+        APP_ROOT / "modules" / "artifacts" / "guide_extraction.py",
+        APP_ROOT / "modules" / "artifacts" / "guide_extraction_worker.py",
+        APP_ROOT / "modules" / "artifacts" / "guide_extraction_service.py",
+    )
+    forbidden_prefixes = (
+        "app.adapters",
+        "app.interfaces.artifacts",
+        "app.modules.authorization",
+        "app.modules.agents",
+        "boto",
+        "celery",
+    )
+    for path in extraction_paths:
+        imported_modules: set[str] = set()
+        for node in ast.walk(_tree(path)):
+            if isinstance(node, ast.ImportFrom):
+                if node.level:
+                    package = "app.modules.artifacts".split(".")
+                    base = package[: len(package) - node.level + 1]
+                    if node.module is not None:
+                        imported_modules.add(".".join((*base, *node.module.split("."))))
+                    else:
+                        imported_modules.update(
+                            ".".join((*base, alias.name)) for alias in node.names
+                        )
+                elif node.module is not None:
+                    imported_modules.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported_modules.update(alias.name for alias in node.names)
+        assert not any(module.startswith(forbidden_prefixes) for module in imported_modules), (
+            path.name
+        )
+        source = path.read_text(encoding="utf-8")
+        assert "ArtifactStore" not in source
+        assert "PreparedAuthorizationHandle" not in source
+        assert "APIRouter" not in source

@@ -1241,15 +1241,35 @@ structural facts; they contain no source filenames, provider references, raw
 document text, or parser exception strings. `artifact.guide_source.read`
 remains unavailable until AUTH-04B installs the fixed guide-reader adapter.
 
-Typed extractors run in a bounded no-network isolation boundary. One immutable
+Typed extractors run in a bounded no-network isolation boundary. Immutable
+attempt evidence carries bounded status/error facts. A separate successful
 content-derived record identifies original content, format, extractor/version,
-policy version, output digest, omission facts, status, and error code; a
-separate immutable usage record binds it to the exact binding, item, setup run,
-and generation. v0.1 persists these bounded records in PostgreSQL and does not
+policy version, canonical output, output digest, and omission facts without an
+error code; immutable usage binds that success to the exact binding, item,
+setup run, and generation. v0.1 persists these bounded records in PostgreSQL and does not
 use guide-read authority to create a provider object. Only successful current-
 generation extraction reaches the agent, delimited as untrusted source data
 with no tool, secret, provider, or instruction authority. Unsupported,
 ambiguous, malformed, stale, or failed required material stops setup internally.
+
+For 03B3A the isolation contract is descriptor-only parsing after trusted
+imports, enforced by a default-deny Linux libseccomp profile with an explicit
+syscall allowlist plus fixed resource limits: 32 MiB input, 4 MiB
+canonical output/file size, 30 CPU seconds, 60 wall seconds, 512 MiB address
+space, 32 descriptors, no children, no core dumps, and JSON depth 64. The child
+receives a minimal secret-free environment, a scratch-owned working directory,
+and no provider, object, or customer path; parsing becomes descriptor-only
+after seccomp is installed.
+An exact-lineage durable budget permits the initial materialization and at most
+one fresh-authority retry for `parser_failure` or current-lineage cancellation;
+deterministic terminal outcomes replay without another provider read.
+Text/Markdown are normalized UTF-8 text; JSON is duplicate-free, finite,
+sorted compact JSON; CSV is strict fixed-dialect row data serialized as compact
+JSON. Failed outcomes may retain bounded status evidence but never canonical
+output, successful usage, or a sufficiency report.
+Numeric resource-limit termination maps to `limit_exceeded`; prohibited process
+creation, unavailable isolation, or other abnormal child termination maps to
+`parser_failure`.
 
 Immediately before committing a sufficiency report, the setup transaction must
 lock, reload, and revalidate the exact project, draft guide, source snapshot,
@@ -1357,6 +1377,12 @@ Implementation is a clean cut:
   adds no Operator route or generic artifact-read API; future authorized
   operational visibility must project these bounded records without exposing
   provider references or document content.
+- migration `0042_guide_extraction` adds bounded extraction attempts,
+  successful canonical content, exact usage provenance, and a durable
+  exact-lineage two-slot materialization budget. Composite constraints prevent
+  cross-binding/classification/content/generation usage and require usage to
+  reference an `extracted` attempt. Downgrade locks the four tables and refuses
+  while any extraction or retry-budget evidence exists.
 
 Every migration proves fresh upgrade, prior-head upgrade, populated-state
 preservation or explicit refusal, empty downgrade/re-upgrade, and no artifact

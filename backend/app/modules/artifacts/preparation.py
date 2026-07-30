@@ -37,6 +37,7 @@ from app.modules.artifacts.sources import (
     CommittedArtifactSource,
     PreparedArtifact,
     PreparedArtifactInspector,
+    PreparedGuideExtractor,
 )
 
 
@@ -45,6 +46,7 @@ _InspectionResult = TypeVar("_InspectionResult")
 _LEDGER_VERSION = 2
 _LEDGER_MAXIMUM_BYTES = 1024 * 1024
 _RESERVATION_ID = re.compile(r"^[0-9a-f]{32}$")
+_WORKSPACE_ID = re.compile(r"^extract_[0-9a-f]{32}$")
 _SCRATCH_FILE = re.compile(r"^prep_([0-9a-f]{32})\.bin$")
 _LEDGER_TEMP_FILE = re.compile(r"^\.ledger\.[0-9a-f]{32}\.tmp$")
 _PROCESS_IDENTITY = re.compile(r"^[0-9a-f]{64}$")
@@ -214,23 +216,31 @@ class ArtifactScratchManager:
         self._poisoned_reservations: dict[str, _ScratchReservation] = {}
         self._pending_allocation_releases: dict[str, _ScratchReservation] = {}
         self._pending_readers: dict[str, _PendingReaderCleanup] = {}
+        self._pending_workspaces: set[str] = set()
         expected_root = self._initialize_root(root)
         self._root_fd = os.open(
             self._root,
             os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
         )
         self._files_fd = -1
+        self._workspaces_fd = -1
         try:
             self._assert_opened_root(self._root_fd, expected_root=expected_root)
             self._initialize_layout()
             self._files_fd = self._open_directory("files")
+            self._workspaces_fd = self._open_directory("workspaces")
             with self._locked_ledger():
                 if self._read_ledger_optional() is None:
-                    self._write_ledger({"version": _LEDGER_VERSION, "reservations": []})
+                    self._write_ledger(
+                        {"version": _LEDGER_VERSION, "reservations": [], "workspaces": []}
+                    )
         except BaseException:
             if self._files_fd >= 0:
                 os.close(self._files_fd)
                 self._files_fd = -1
+            if self._workspaces_fd >= 0:
+                os.close(self._workspaces_fd)
+                self._workspaces_fd = -1
             os.close(self._root_fd)
             self._root_fd = -1
             raise
@@ -247,6 +257,7 @@ class ArtifactScratchManager:
             len(self._pending_allocation_releases)
             + len(self._pending_readers)
             + len(self._poisoned_reservations)
+            + len(self._pending_workspaces)
         )
 
     async def allocate(self) -> tuple[_ScratchReservation, int]:
@@ -281,14 +292,10 @@ class ArtifactScratchManager:
                             asyncio.to_thread(self._release_sync, reservation)
                         )
                     except BaseException:
-                        self._pending_allocation_releases[
-                            reservation.reservation_id
-                        ] = reservation
+                        self._pending_allocation_releases[reservation.reservation_id] = reservation
                 raise cancellation
             except _AllocationCleanupRequired as exc:
-                self._pending_allocation_releases[exc.reservation.reservation_id] = (
-                    exc.reservation
-                )
+                self._pending_allocation_releases[exc.reservation.reservation_id] = exc.reservation
                 raise
             except _DescriptorOwnershipUncertain as exc:
                 self._retain_uncertain_descriptor(exc.reservation)
@@ -314,8 +321,8 @@ class ArtifactScratchManager:
                     raise cancellation from None
                 except BaseException:
                     if reader is not None:
-                        self._pending_readers[reservation.reservation_id] = (
-                            _PendingReaderCleanup(reservation=reservation, reader=reader)
+                        self._pending_readers[reservation.reservation_id] = _PendingReaderCleanup(
+                            reservation=reservation, reader=reader
                         )
                     raise cancellation from None
                 raise
@@ -327,13 +334,9 @@ class ArtifactScratchManager:
         """Remove one scratch file and reservation under the ledger lock."""
         with self._tracked_operation():
             if reservation.reservation_id in self._poisoned_reservations:
-                raise ArtifactScratchIntegrityError(
-                    "artifact descriptor ownership is uncertain"
-                )
+                raise ArtifactScratchIntegrityError("artifact descriptor ownership is uncertain")
             if reservation.reservation_id in self._pending_readers:
-                raise ArtifactScratchIntegrityError(
-                    "artifact reader cleanup is still pending"
-                )
+                raise ArtifactScratchIntegrityError("artifact reader cleanup is still pending")
 
             async def release_and_forget() -> None:
                 """Durably release and clear local ownership as one handoff."""
@@ -364,14 +367,75 @@ class ArtifactScratchManager:
             protected_reservation_ids = frozenset(
                 self._owned_reservations | self._poisoned_reservations
             )
-            cleaned_reservation_ids = await self._run_io(
+            cleaned_reservation_ids, cleaned_workspace_names = await self._run_io(
                 self._cleanup_stale_sync,
                 now,
                 protected_reservation_ids,
             )
             for reservation_id in cleaned_reservation_ids:
                 self._pending_allocation_releases.pop(reservation_id, None)
-            return len(cleaned_reservation_ids)
+            return len(cleaned_reservation_ids) + len(cleaned_workspace_names)
+
+    def _reserve_workspace_sync(self, workspace_name: str) -> None:
+        """Publish crash-recovery ownership before creating a workspace."""
+        now = time.time_ns()
+        expires_at = now + int(self._limits.reservation_ttl_seconds * 1_000_000_000)
+        with self._locked_ledger():
+            ledger = self._read_ledger()
+            workspaces = list(ledger["workspaces"])
+            workspaces.append(
+                {
+                    "workspace_name": workspace_name,
+                    "created_at_unix_ns": now,
+                    "expires_at_unix_ns": expires_at,
+                    "owner_pid": os.getpid(),
+                    "owner_process_identity": self._owner_process_identity,
+                }
+            )
+            self._write_ledger({**ledger, "workspaces": workspaces})
+
+    def _release_workspace_sync(self, workspace_name: str) -> None:
+        """Remove residue before releasing durable workspace ownership."""
+        with self._locked_ledger():
+            ledger = self._read_ledger()
+            try:
+                self._cleanup_workspace_sync(workspace_name)
+            except FileNotFoundError:
+                pass
+            self._write_ledger(
+                {
+                    **ledger,
+                    "workspaces": [
+                        entry
+                        for entry in ledger["workspaces"]
+                        if entry["workspace_name"] != workspace_name
+                    ],
+                }
+            )
+
+    @contextmanager
+    def extraction_workspace(self) -> Iterator[Path]:
+        """Own one crash-recoverable private extraction workspace."""
+        with self._tracked_operation():
+            workspace_name = f"extract_{uuid4().hex}"
+            self._reserve_workspace_sync(workspace_name)
+            workspace_fd = -1
+            try:
+                os.mkdir(workspace_name, mode=0o700, dir_fd=self._workspaces_fd)
+                workspace_fd = os.open(
+                    workspace_name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=self._workspaces_fd,
+                )
+                yield Path(f"/proc/self/fd/{workspace_fd}")
+            finally:
+                if workspace_fd >= 0:
+                    os.close(workspace_fd)
+                try:
+                    self._release_workspace_sync(workspace_name)
+                except BaseException:
+                    self._pending_workspaces.add(workspace_name)
+                    raise
 
     async def retry_pending_cleanup(self) -> int:
         """Retry manager-owned cleanup retained before service handoff."""
@@ -387,16 +451,12 @@ class ArtifactScratchManager:
                     self._pending_readers.pop(reservation_id, None)
 
                 try:
-                    await await_completion_preserving_cancellation(
-                        close_reader_and_release()
-                    )
+                    await await_completion_preserving_cancellation(close_reader_and_release())
                 except Exception:
                     continue
                 else:
                     cleaned += 1
-            for reservation_id, reservation in tuple(
-                self._pending_allocation_releases.items()
-            ):
+            for reservation_id, reservation in tuple(self._pending_allocation_releases.items()):
 
                 async def release_reservation() -> None:
                     """Release one retained reservation and clear manager ownership."""
@@ -409,26 +469,73 @@ class ArtifactScratchManager:
                     continue
                 else:
                     cleaned += 1
+            for workspace_name in tuple(self._pending_workspaces):
+                try:
+                    await self._run_io(self._release_workspace_sync, workspace_name)
+                except Exception:
+                    continue
+                self._pending_workspaces.remove(workspace_name)
+                cleaned += 1
             return cleaned
+
+    def _cleanup_workspace_sync(self, workspace_name: str) -> None:
+        """Remove bounded workspace residue without following links."""
+        workspace_fd = os.open(
+            workspace_name,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=self._workspaces_fd,
+        )
+        try:
+            remaining_entries = [self._limits.maximum_files]
+            self._cleanup_workspace_entries_sync(workspace_fd, remaining_entries)
+        finally:
+            os.close(workspace_fd)
+        os.rmdir(workspace_name, dir_fd=self._workspaces_fd)
+        os.fsync(self._workspaces_fd)
+
+    def _cleanup_workspace_entries_sync(
+        self,
+        directory_fd: int,
+        remaining_entries: list[int],
+    ) -> None:
+        """Remove a bounded tree bottom-up without following links."""
+        for entry in os.listdir(directory_fd):
+            remaining_entries[0] -= 1
+            if remaining_entries[0] < 0:
+                raise ArtifactScratchIntegrityError(
+                    "artifact extraction workspace entry limit exceeded"
+                )
+            metadata = os.stat(entry, dir_fd=directory_fd, follow_symlinks=False)
+            if stat_module.S_ISDIR(metadata.st_mode):
+                child_fd = os.open(
+                    entry,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_fd,
+                )
+                try:
+                    self._cleanup_workspace_entries_sync(child_fd, remaining_entries)
+                finally:
+                    os.close(child_fd)
+                os.rmdir(entry, dir_fd=directory_fd)
+            else:
+                os.unlink(entry, dir_fd=directory_fd)
 
     def close(self) -> None:
         """Release pinned scratch directory descriptors."""
         with self._lifecycle_lock:
             if self._closed:
                 return
-            if (
-                self._in_flight_operations
-                or self.pending_cleanup_count
-                or self._owned_reservations
-            ):
+            if self._in_flight_operations or self.pending_cleanup_count or self._owned_reservations:
                 raise ArtifactScratchIntegrityError("artifact scratch cleanup is still pending")
             self._closed = True
             files_fd = getattr(self, "_files_fd", -1)
+            workspaces_fd = getattr(self, "_workspaces_fd", -1)
             root_fd = getattr(self, "_root_fd", -1)
             self._files_fd = -1
+            self._workspaces_fd = -1
             self._root_fd = -1
         failure: BaseException | None = None
-        for descriptor in (files_fd, root_fd):
+        for descriptor in (files_fd, workspaces_fd, root_fd):
             if descriptor < 0:
                 continue
             try:
@@ -573,6 +680,12 @@ class ArtifactScratchManager:
             except FileExistsError:
                 pass
             os.fsync(self._root_fd)
+        if "workspaces" not in entries:
+            try:
+                os.mkdir("workspaces", mode=0o700, dir_fd=self._root_fd)
+            except FileExistsError:
+                pass
+            os.fsync(self._root_fd)
 
     def _validate_existing_root_marker(self) -> None:
         """Require the root marker to match this manager's canonical limits."""
@@ -621,16 +734,13 @@ class ArtifactScratchManager:
         allowed = {
             _ROOT_MARKER,
             "files",
+            "workspaces",
             ".ledger.lock",
             ".ledger.json",
         }
-        temporary_entries = {
-            entry for entry in entries if _LEDGER_TEMP_FILE.fullmatch(entry)
-        }
+        temporary_entries = {entry for entry in entries if _LEDGER_TEMP_FILE.fullmatch(entry)}
         allowed_temps = (
-            temporary_entries
-            if allow_marked_ledger_temps and _ROOT_MARKER in entries
-            else set()
+            temporary_entries if allow_marked_ledger_temps and _ROOT_MARKER in entries else set()
         )
         non_bootstrap_entries = entries - {".ledger.lock"} - allowed_temps
         if entries - allowed - allowed_temps or (
@@ -683,9 +793,7 @@ class ArtifactScratchManager:
             filesystem = os.fstatvfs(self._files_fd)
             available = filesystem.f_bavail * filesystem.f_frsize
             required = (
-                reserved_bytes
-                + HARD_MAXIMUM_ARTIFACT_BYTES
-                + self._limits.minimum_free_bytes
+                reserved_bytes + HARD_MAXIMUM_ARTIFACT_BYTES + self._limits.minimum_free_bytes
             )
             if available < required:
                 raise ArtifactScratchCapacityError("artifact scratch free-space floor reached")
@@ -701,7 +809,7 @@ class ArtifactScratchManager:
                 }
             )
             try:
-                self._write_ledger({"version": _LEDGER_VERSION, "reservations": entries})
+                self._write_ledger({**ledger, "reservations": entries})
             except BaseException:
                 try:
                     self._restore_failed_reservation_ledger(
@@ -739,9 +847,7 @@ class ArtifactScratchManager:
                         for entry in entries
                         if entry["reservation_id"] != reservation.reservation_id
                     ]
-                    self._write_ledger(
-                        {"version": _LEDGER_VERSION, "reservations": remaining}
-                    )
+                    self._write_ledger({**ledger, "reservations": remaining})
                 except BaseException as cleanup_error:
                     raise _AllocationCleanupRequired(reservation) from cleanup_error
                 raise
@@ -753,13 +859,12 @@ class ArtifactScratchManager:
         previous_entries: list[dict[str, Any]],
     ) -> None:
         """Prove an ambiguously published reservation was durably removed."""
-        current = self._read_ledger()["reservations"]
+        ledger = self._read_ledger()
+        current = ledger["reservations"]
         if not any(entry["reservation_id"] == reservation_id for entry in current):
             return
         try:
-            self._write_ledger(
-                {"version": _LEDGER_VERSION, "reservations": previous_entries}
-            )
+            self._write_ledger({**ledger, "reservations": previous_entries})
         except BaseException as exc:
             raise ArtifactScratchIntegrityError(
                 "failed artifact scratch reservation could not be rolled back"
@@ -782,9 +887,7 @@ class ArtifactScratchManager:
                     if entry["reservation_id"] == reservation.reservation_id
                 ]
                 if len(matching) != 1 or matching[0]["filename"] != reservation.filename:
-                    raise ArtifactScratchIntegrityError(
-                        "artifact scratch reservation is invalid"
-                    )
+                    raise ArtifactScratchIntegrityError("artifact scratch reservation is invalid")
                 os.fsync(descriptor)
                 os.fchmod(descriptor, 0o400)
                 read_descriptor = os.open(
@@ -855,7 +958,7 @@ class ArtifactScratchManager:
             remaining = [
                 entry for entry in entries if entry["reservation_id"] != reservation.reservation_id
             ]
-            self._write_ledger({"version": _LEDGER_VERSION, "reservations": remaining})
+            self._write_ledger({**ledger, "reservations": remaining})
 
     def _usage_sync(self) -> ArtifactScratchUsage:
         """Read aggregate ledger usage while holding the cross-process lock."""
@@ -882,11 +985,12 @@ class ArtifactScratchManager:
         self,
         now_unix_ns: int,
         protected_reservation_ids: frozenset[str],
-    ) -> tuple[str, ...]:
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
         """Durably remove expired files before deleting their ledger entries."""
         with self._locked_ledger():
             ledger = self._read_ledger()
             entries = list(ledger["reservations"])
+            workspaces = list(ledger["workspaces"])
             stale = sorted(
                 (
                     entry
@@ -902,17 +1006,42 @@ class ArtifactScratchManager:
             )
             for entry in stale:
                 self._unlink_regular_optional(entry["filename"])
-            if stale:
+            stale_workspaces = sorted(
+                (
+                    entry
+                    for entry in workspaces
+                    if entry["expires_at_unix_ns"] <= now_unix_ns
+                    and not self._owner_process_matches(
+                        entry["owner_pid"], entry["owner_process_identity"]
+                    )
+                ),
+                key=lambda entry: entry["workspace_name"],
+            )
+            for entry in stale_workspaces:
+                try:
+                    self._cleanup_workspace_sync(entry["workspace_name"])
+                except FileNotFoundError:
+                    pass
+            if stale or stale_workspaces:
                 stale_ids = {entry["reservation_id"] for entry in stale}
+                stale_workspace_names = {entry["workspace_name"] for entry in stale_workspaces}
                 self._write_ledger(
                     {
-                        "version": _LEDGER_VERSION,
+                        **ledger,
                         "reservations": [
                             entry for entry in entries if entry["reservation_id"] not in stale_ids
                         ],
+                        "workspaces": [
+                            entry
+                            for entry in workspaces
+                            if entry["workspace_name"] not in stale_workspace_names
+                        ],
                     }
                 )
-            return tuple(entry["reservation_id"] for entry in stale)
+            return (
+                tuple(entry["reservation_id"] for entry in stale),
+                tuple(entry["workspace_name"] for entry in stale_workspaces),
+            )
 
     def _owner_process_matches(self, owner_pid: int, expected_identity: str) -> bool:
         """Retain custody only while PID and process-start identity still match."""
@@ -926,12 +1055,8 @@ class ArtifactScratchManager:
     def _read_process_identity(owner_pid: int) -> str | None:
         """Bind a Linux PID to its boot and process-start identity."""
         try:
-            boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(
-                encoding="ascii"
-            ).strip()
-            process_stat = Path(f"/proc/{owner_pid}/stat").read_text(
-                encoding="ascii"
-            )
+            boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+            process_stat = Path(f"/proc/{owner_pid}/stat").read_text(encoding="ascii")
         except FileNotFoundError:
             return None
         _, separator, remainder = process_stat.rpartition(")")
@@ -992,6 +1117,12 @@ class ArtifactScratchManager:
             ledger = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid") from exc
+        if (
+            isinstance(ledger, dict)
+            and set(ledger) == {"version", "reservations"}
+            and ledger.get("version") == _LEDGER_VERSION
+        ):
+            ledger = {**ledger, "workspaces": []}
         self._validate_ledger(ledger)
         return ledger
 
@@ -1052,7 +1183,11 @@ class ArtifactScratchManager:
 
     def _validate_ledger(self, ledger: object) -> None:
         """Validate the complete bounded ledger schema and reservation set."""
-        if not isinstance(ledger, dict) or set(ledger) != {"version", "reservations"}:
+        if not isinstance(ledger, dict) or set(ledger) != {
+            "version",
+            "reservations",
+            "workspaces",
+        }:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
         if type(ledger["version"]) is not int or ledger["version"] != _LEDGER_VERSION:
             raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
@@ -1097,6 +1232,38 @@ class ArtifactScratchManager:
                 or _PROCESS_IDENTITY.fullmatch(entry["owner_process_identity"]) is None
             ):
                 raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
+        workspaces = ledger["workspaces"]
+        if not isinstance(workspaces, list) or len(workspaces) > 1024:
+            raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
+        seen_workspaces: set[str] = set()
+        expected_workspace = {
+            "workspace_name",
+            "created_at_unix_ns",
+            "expires_at_unix_ns",
+            "owner_pid",
+            "owner_process_identity",
+        }
+        for entry in workspaces:
+            if not isinstance(entry, dict) or set(entry) != expected_workspace:
+                raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
+            workspace_name = entry["workspace_name"]
+            integer_values = (
+                entry["created_at_unix_ns"],
+                entry["expires_at_unix_ns"],
+                entry["owner_pid"],
+            )
+            if (
+                not isinstance(workspace_name, str)
+                or _WORKSPACE_ID.fullmatch(workspace_name) is None
+                or workspace_name in seen_workspaces
+                or any(type(value) is not int or value < 0 for value in integer_values)
+                or entry["expires_at_unix_ns"] <= entry["created_at_unix_ns"]
+                or entry["owner_pid"] <= 0
+                or not isinstance(entry["owner_process_identity"], str)
+                or _PROCESS_IDENTITY.fullmatch(entry["owner_process_identity"]) is None
+            ):
+                raise ArtifactScratchIntegrityError("artifact scratch ledger is invalid")
+            seen_workspaces.add(workspace_name)
 
     @staticmethod
     def _validate_reservation(reservation: _ScratchReservation) -> None:
@@ -1132,9 +1299,7 @@ class ArtifactScratchManager:
         try:
             descriptor = os.open(
                 name,
-                os.O_RDONLY
-                | getattr(os, "O_DIRECTORY", 0)
-                | getattr(os, "O_NOFOLLOW", 0),
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
                 dir_fd=self._root_fd,
             )
         except OSError as exc:
@@ -1387,6 +1552,32 @@ class ArtifactPreparationService:
                 "artifact preparation deadline exceeded"
             ) from None
 
+    async def extract_prepared_guide(
+        self,
+        binding: object,
+        extractor: PreparedGuideExtractor[_InspectionResult],
+    ) -> _InspectionResult:
+        """Run one trusted inspector in a private scratch-owned empty directory."""
+        active = self._active.get(binding)
+        if active is None or not active.handle_issued or active.stream_claimed:
+            raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
+
+        def inspect_and_cleanup() -> _InspectionResult:
+            with self._manager.extraction_workspace() as workspace:
+                active.reader.seek(0)
+                try:
+                    return extractor.inspect(active.reader, workspace)
+                finally:
+                    active.reader.seek(0)
+
+        try:
+            async with asyncio.timeout_at(active.deadline):
+                return await self._run_io(inspect_and_cleanup)
+        except TimeoutError:
+            raise ArtifactPreparationDeadlineError(
+                "artifact preparation deadline exceeded"
+            ) from None
+
     async def _release_unhanded_preparation(
         self,
         pending: _PendingPreparationCleanup,
@@ -1472,9 +1663,7 @@ class ArtifactPreparationService:
             f"sha256:{digest.hexdigest()}" != commitment.sha256
             or byte_count != commitment.byte_count
         ):
-            raise ArtifactScratchIntegrityError(
-                "prepared artifact bytes changed after commitment"
-            )
+            raise ArtifactScratchIntegrityError("prepared artifact bytes changed after commitment")
         await self._run_io(reader.seek, 0)
 
     @staticmethod

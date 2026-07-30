@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 import errno
 import fcntl
 import hashlib
+import json
 import multiprocessing
 import os
 from pathlib import Path
@@ -1236,6 +1237,26 @@ async def test_malformed_ledger_and_layout_fail_closed(tmp_path: Path) -> None:
     (unsafe_root / "files").symlink_to(target, target_is_directory=True)
     with pytest.raises(ValueError, match="layout is unsafe"):
         ArtifactScratchManager(root=unsafe_root, limits=preparation_limits())
+
+
+@pytest.mark.asyncio
+async def test_prior_scratch_ledger_shape_is_normalized_on_reopen(tmp_path: Path) -> None:
+    """Preserve restart compatibility when workspace custody is introduced."""
+    root = tmp_path / "scratch"
+    initial = ArtifactScratchManager(root=root, limits=preparation_limits())
+    initial.close()
+    ledger_path = root / ".ledger.json"
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    ledger.pop("workspaces")
+    ledger_path.write_text(json.dumps(ledger), encoding="utf-8")
+
+    reopened = ArtifactScratchManager(root=root, limits=preparation_limits())
+    reservation, descriptor = await reopened.allocate()
+    os.close(descriptor)
+    await reopened.release(reservation)
+
+    assert json.loads(ledger_path.read_text(encoding="utf-8"))["workspaces"] == []
+    reopened.close()
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,78 @@
+# Internal Review Evidence: WS-ART-001-03B3A
+
+Reviewed against trusted main: `64dd9c98`
+
+Reviewed at: `2026-07-29`
+
+## Candidate
+
+Hidden, bounded extraction framework for verified guide text, Markdown, JSON,
+and CSV with exact provenance, deterministic successful content, and no agent,
+provider-write, Celery, submission, or AUTH activation behavior.
+
+## Deterministic Evidence
+
+- changed-file Ruff, mapper configuration, Python compilation, and
+  `git diff --check`: PASS;
+- the pre-rebase candidate's focused extraction plus architecture suite passed
+  41 tests; refreshed focused and PostgreSQL proof remains delegated to hosted
+  CI for the reconciled head;
+- real default-deny seccomp probes deny network, file opens, filesystem writes,
+  and process creation after trusted imports;
+- real child probes cover CPU, wall, memory, and abnormal executor outcomes;
+- schema-contract coverage includes successful extraction/usage, extracted-
+  attempt fencing, retry outcomes, and populated downgrade refusal;
+- stale artifact-contract and Markdown-link scans: PASS;
+- exact hosted Backend and Agent Gates remain required on the PR head.
+
+## Reviewer Results
+
+| Reviewer | Result | Blocking findings |
+|---|---|---|
+| senior engineering | PASS WITH LOW RISKS | none |
+| architecture | PASS WITH LOW RISKS | none |
+| QA/test | PASS WITH LOW RISKS | none |
+| security/auth | PASS WITH LOW RISKS | none |
+| product/ops | PASS WITH LOW RISKS | none |
+| reuse/dedup | PASS WITH LOW RISKS | none |
+| CI integrity | PASS WITH LOW RISKS | none |
+| test delta | PASS WITH LOW RISKS | none |
+| docs | PASS | none |
+
+The pre-rebase CodeRabbit/hosted-CI repair delta was re-reviewed by senior engineering,
+architecture/reuse, QA/test-delta, security, product/ops, and CI/docs. All
+tracks pass after one valid legacy-ledger compatibility blocker was repaired
+with exact prior-v2 normalization and restart coverage.
+The final worker-coverage test delta separately passed security, QA/test-delta,
+and CI/docs review; it leaves every real subprocess isolation probe intact.
+The AUTH-12A rebase and final external-review repair delta passed refreshed
+senior, architecture/reuse, QA/test-delta, security, product/ops, and CI/docs
+review after policy replay and concurrent retry-custody findings were repaired.
+The subsequent hosted schema-fingerprint and CodeRabbit worker/protocol delta
+also passed focused QA, security, senior/reuse, and CI/docs re-review.
+
+## Material Repairs
+
+- replaced default-allow syscall denial with a default-deny allowlist;
+- serialized guide generation and shared-content publication through canonical
+  row locks;
+- revalidated digest, size, media type, detector, binding, run, and generation;
+- fenced successful usage to an exact `extracted` attempt in PostgreSQL;
+- added cleanup-tracked scratch workspaces and post-launch child reaping;
+- added a durable two-slot exact-lineage materialization budget so only
+  executor failure or current-lineage cancellation may retry;
+- scoped deterministic success replay to the current extraction policy and
+  denied second-slot claims without durable current-policy retry evidence;
+- moved destructive resource probes out of the production worker.
+
+## Accepted Low Risks
+
+- A later complex-format chunk should make the registry explicitly table-driven.
+- The existing and extraction lineage queries remain similar but not yet
+  identical enough to justify a shared selector.
+- Hosted PostgreSQL concurrency and repository coverage gates remain the final
+  publication proof.
+
+Valid findings addressed: yes
+
+Open sub-agent sessions: none

@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,6 +28,7 @@ UUID_CHECK = (
     "{column} ~ '^[0-9a-f]{{8}}-[0-9a-f]{{4}}-[1-5][0-9a-f]{{3}}-"
     "[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$'"
 )
+
 
 class ArtifactUploadSession(Base):
     """Mutable staging authority for one bounded artifact set."""
@@ -176,7 +178,11 @@ class ArtifactBinding(Base):
     __tablename__ = "artifact_bindings"
     __table_args__ = (
         UniqueConstraint(
-            "project_id", "resource_type", "resource_id", "logical_role", "scope_version",
+            "project_id",
+            "resource_type",
+            "resource_id",
+            "logical_role",
+            "scope_version",
             name="uq_artifact_binding_scope_version",
         ),
         UniqueConstraint("supersedes_binding_id", name="uq_artifact_binding_supersedes"),
@@ -256,6 +262,20 @@ class GuideSourceArtifactBinding(Base):
         UniqueConstraint(
             "id",
             "content_id",
+            "setup_generation",
+            name="uq_guide_bindings_extraction_attempt_lineage",
+        ),
+        UniqueConstraint(
+            "id",
+            "content_id",
+            "source_item_id",
+            "project_setup_run_id",
+            "setup_generation",
+            name="uq_guide_bindings_extraction_lineage",
+        ),
+        UniqueConstraint(
+            "id",
+            "content_id",
             "verified_replica_id",
             "setup_generation",
             name="uq_guide_bindings_exact_read",
@@ -300,6 +320,13 @@ class GuideSourceFormatClassification(Base):
             name="fk_guide_classifications_exact_binding",
         ),
         UniqueConstraint("binding_id", name="uq_guide_classifications_binding"),
+        UniqueConstraint(
+            "id",
+            "binding_id",
+            "content_id",
+            "setup_generation",
+            name="uq_guide_classifications_extraction_lineage",
+        ),
         CheckConstraint(
             "status in ('classified', 'unsupported', 'ambiguous', 'malformed', 'limit_exceeded')",
             name="ck_guide_classifications_status",
@@ -371,13 +398,230 @@ class GuideSourceArtifactIncident(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class GuideSourceExtractionAttempt(Base):
+    """Immutable bounded outcome for one exact extraction execution."""
+
+    __tablename__ = "guide_source_extraction_attempts"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["binding_id", "content_id", "setup_generation"],
+            [
+                "guide_source_artifact_bindings.id",
+                "guide_source_artifact_bindings.content_id",
+                "guide_source_artifact_bindings.setup_generation",
+            ],
+            name="fk_guide_extraction_attempts_exact_binding",
+        ),
+        ForeignKeyConstraint(
+            ["classification_id", "binding_id", "content_id", "setup_generation"],
+            [
+                "guide_source_format_classifications.id",
+                "guide_source_format_classifications.binding_id",
+                "guide_source_format_classifications.content_id",
+                "guide_source_format_classifications.setup_generation",
+            ],
+            name="fk_guide_extraction_attempts_exact_classification",
+        ),
+        CheckConstraint(
+            "status in ('extracted','unsupported','ambiguous','malformed','limit_exceeded',"
+            "'parser_failure','cancelled','artifact_incident')",
+            name="ck_guide_extraction_attempts_status",
+        ),
+        CheckConstraint("attempt_number > 0", name="ck_guide_extraction_attempts_number"),
+        CheckConstraint(
+            "(status = 'extracted') = (error_code is null)",
+            name="ck_guide_extraction_attempts_error",
+        ),
+        UniqueConstraint(
+            "binding_id", "policy_version", "attempt_number", name="uq_guide_extraction_attempts"
+        ),
+        UniqueConstraint(
+            "id",
+            "binding_id",
+            "content_id",
+            "setup_generation",
+            "status",
+            name="uq_guide_extraction_attempts_exact_usage",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    binding_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    classification_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    detected_format: Mapped[str] = mapped_column(String(40), nullable=False)
+    extractor_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    extractor_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    attempt_number: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    bounded_facts: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceExtractionRetryBudget(Base):
+    """Durable two-slot materialization budget for one exact extraction lineage."""
+
+    __tablename__ = "guide_source_extraction_retry_budgets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["binding_id", "content_id", "setup_generation"],
+            [
+                "guide_source_artifact_bindings.id",
+                "guide_source_artifact_bindings.content_id",
+                "guide_source_artifact_bindings.setup_generation",
+            ],
+            name="fk_guide_extraction_retry_budgets_exact_binding",
+        ),
+        ForeignKeyConstraint(
+            ["classification_id", "binding_id", "content_id", "setup_generation"],
+            [
+                "guide_source_format_classifications.id",
+                "guide_source_format_classifications.binding_id",
+                "guide_source_format_classifications.content_id",
+                "guide_source_format_classifications.setup_generation",
+            ],
+            name="fk_guide_extraction_retry_budgets_exact_classification",
+        ),
+        CheckConstraint(
+            "claimed_slots between 1 and 2",
+            name="ck_guide_extraction_retry_budgets_slots",
+        ),
+    )
+
+    binding_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    classification_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    claimed_slots: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class GuideSourceExtractedContent(Base):
+    """Immutable deterministic successful extraction keyed only by content semantics."""
+
+    __tablename__ = "guide_source_extracted_contents"
+    __table_args__ = (
+        UniqueConstraint(
+            "content_id",
+            "detected_format",
+            "extractor_name",
+            "extractor_version",
+            "policy_version",
+            name="uq_guide_extracted_contents_identity",
+        ),
+        UniqueConstraint("id", "content_id", name="uq_guide_extracted_contents_exact_usage"),
+        CheckConstraint("status = 'extracted'", name="ck_guide_extracted_contents_status"),
+        CheckConstraint(
+            SHA256_CHECK.format(column="source_sha256"),
+            name="ck_guide_extracted_contents_source_sha256",
+        ),
+        CheckConstraint(
+            SHA256_CHECK.format(column="output_sha256"),
+            name="ck_guide_extracted_contents_output_sha256",
+        ),
+        CheckConstraint("source_byte_count >= 0", name="ck_guide_extracted_contents_source_size"),
+        CheckConstraint(
+            "octet_length(canonical_output) <= 4194304",
+            name="ck_guide_extracted_contents_output_size",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    content_id: Mapped[str] = mapped_column(
+        ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    detected_format: Mapped[str] = mapped_column(String(40), nullable=False)
+    extractor_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    extractor_version: Mapped[str] = mapped_column(String(40), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    source_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    canonical_output: Mapped[str] = mapped_column(Text, nullable=False)
+    omission_facts: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class GuideSourceExtractionUsage(Base):
+    """Exact current-lineage use of one deterministic extracted content record."""
+
+    __tablename__ = "guide_source_extraction_usages"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [
+                "binding_id",
+                "content_id",
+                "source_item_id",
+                "project_setup_run_id",
+                "setup_generation",
+            ],
+            [
+                "guide_source_artifact_bindings.id",
+                "guide_source_artifact_bindings.content_id",
+                "guide_source_artifact_bindings.source_item_id",
+                "guide_source_artifact_bindings.project_setup_run_id",
+                "guide_source_artifact_bindings.setup_generation",
+            ],
+            name="fk_guide_extraction_usages_exact_binding",
+        ),
+        ForeignKeyConstraint(
+            [
+                "extraction_attempt_id",
+                "binding_id",
+                "content_id",
+                "setup_generation",
+                "attempt_status",
+            ],
+            [
+                "guide_source_extraction_attempts.id",
+                "guide_source_extraction_attempts.binding_id",
+                "guide_source_extraction_attempts.content_id",
+                "guide_source_extraction_attempts.setup_generation",
+                "guide_source_extraction_attempts.status",
+            ],
+            name="fk_guide_extraction_usages_exact_attempt",
+        ),
+        ForeignKeyConstraint(
+            ["extracted_content_id", "content_id"],
+            ["guide_source_extracted_contents.id", "guide_source_extracted_contents.content_id"],
+            name="fk_guide_extraction_usages_exact_content",
+        ),
+        UniqueConstraint("binding_id", "extracted_content_id", name="uq_guide_extraction_usages"),
+        CheckConstraint(
+            "attempt_status = 'extracted'",
+            name="ck_guide_extraction_usages_successful_attempt",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    extracted_content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    extraction_attempt_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    attempt_status: Mapped[str] = mapped_column(String(40), nullable=False)
+    binding_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    content_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    source_item_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    project_setup_run_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    setup_generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class ArtifactStorageNamespace(Base):
     """Immutable singleton fencing one deployment to one storage namespace."""
 
     __tablename__ = "artifact_storage_namespaces"
     __table_args__ = (
         CheckConstraint("id = 'primary'", name="singleton_id"),
-        CheckConstraint(SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"),
+        CheckConstraint(
+            SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"
+        ),
         UniqueConstraint(
             "namespace_fingerprint",
             name="uq_artifact_storage_namespace_fingerprint",
@@ -678,7 +922,9 @@ class ArtifactReplica(Base):
             "integrity_state in ('unknown', 'valid', 'invalid')",
             name="integrity_state",
         ),
-        CheckConstraint(SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"),
+        CheckConstraint(
+            SHA256_CHECK.format(column="namespace_fingerprint"), name="fingerprint_shape"
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -869,12 +1115,8 @@ class ArtifactRecoveryAttempt(Base):
             "client_idempotency_key",
             name="uq_artifact_recovery_idempotency",
         ),
-        UniqueConstraint(
-            "source_verification_job_id", name="uq_artifact_recovery_source_job"
-        ),
-        UniqueConstraint(
-            "retry_verification_job_id", name="uq_artifact_recovery_retry_job"
-        ),
+        UniqueConstraint("source_verification_job_id", name="uq_artifact_recovery_source_job"),
+        UniqueConstraint("retry_verification_job_id", name="uq_artifact_recovery_retry_job"),
         CheckConstraint(
             "source_verification_job_id <> retry_verification_job_id",
             name="distinct_jobs",
