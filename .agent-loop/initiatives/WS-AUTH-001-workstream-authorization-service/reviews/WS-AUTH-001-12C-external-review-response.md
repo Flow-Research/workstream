@@ -55,6 +55,9 @@ None.
   lifecycle test whose two exact grant totals still included the removed
   fixture-only grants. The totals now assert the three real grants at that
   lifecycle point, and the complete affected test passes.
+- The next hosted run passed project and task lanes and exposed the remaining
+  direct unattributed project insert in the shared outbox fixture. It now uses
+  the same explicit historical-project helper; all 72 outbox tests pass.
 - Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
   commit.
 

@@ -58,6 +58,7 @@ backend/tests/test_api_controls.py
 backend/tests/test_checkers.py
 backend/tests/conftest.py
 backend/tests/test_tasks.py
+backend/tests/test_outbox.py
 backend/scripts/api_contract_e2e.py
 docs/spec_authorization_service.md
 docs/operations_authorization_service.md
