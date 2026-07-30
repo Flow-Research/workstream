@@ -57,8 +57,8 @@ stopped.
 | `WS-AUTH-001-11C1` | Project Setup Diagnostic Read Cutover | L1 | Merged in PR #216 as `2965a9f9` |
 | `WS-AUTH-001-11C2` | Effective Policy And Active Guide Read Cutover | L1 | Merged in PR #221 as `3fc323d7` |
 | `WS-AUTH-001-12` | Project Mutation Cutover Planning Parent | L1 | Split before runtime implementation after failed L1 review |
-| `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | In progress; ART-owned `0040` prerequisite satisfied, AUTH `0041` allocated |
-| `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Proposed after 12A; zero activation |
+| `WS-AUTH-001-12A` | Project Mutation Catalogue And PREP Foundation | L1 | Merged as PR #226 with AUTH `0041`; zero activation |
+| `WS-AUTH-001-12B` | Fixed Project Setup Service Foundation | L1 | Internal review complete; hosted checks pending; identity/matrix registration only, zero activation |
 | `WS-AUTH-001-12B2` | Project Setup Service Runtime Cutover | L1 | Proposed after 12E, 12F, and 12G |
 | `WS-AUTH-001-12C` | Project Creation Cutover | L1 | Proposed after 12B |
 | `WS-AUTH-001-12D` | Draft Guide And Source Metadata Cutover | L1 | Proposed after 12C |
