@@ -62,6 +62,7 @@ from app.modules.projects.models import (
     Project,
     ProjectGuide,
 )
+from project_create_fixtures import seed_authorized_project
 from app.modules.tasks.models import AuditEvent, WorkstreamTask
 from tests.artifact_store_helpers import artifact_admission_limit_settings, minted_source
 
@@ -176,7 +177,12 @@ async def _seed_contributor(session, context, sha256: str, size: int) -> tuple[s
             last_verified_at=datetime.now(UTC),
         )
     )
-    session.add(Project(id=project_id, name="Recovery project", slug=f"recovery-{project_id}"))
+    await seed_authorized_project(
+        session,
+        project_id=project_id,
+        name="Recovery project",
+        slug=f"recovery-{project_id}",
+    )
     await session.flush()
     session.add(
         WorkstreamTask(

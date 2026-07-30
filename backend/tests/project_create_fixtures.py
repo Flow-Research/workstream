@@ -1,0 +1,194 @@
+"""Test-only construction of fully attributed project shells."""
+
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.hashing import canonical_json_hash
+from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.modules.audit.schemas import (
+    ActorReferenceKind,
+    AuthorityAuditEventInput,
+    AuthorityEventType,
+)
+from app.modules.audit.service import AuditService
+from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.authorization.models import AdminRoleGrant, AuthorityControl
+from app.modules.authorization.runtime import (
+    ProjectCreateResourceContext,
+    authorization_resource_digest,
+)
+from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
+
+
+async def seed_authorized_project(
+    session: AsyncSession,
+    *,
+    project_id: str,
+    name: str,
+    slug: str,
+    status: str = "draft",
+) -> Project:
+    """Stage one project with the same custody shape required in production."""
+    has_cutover = await session.scalar(
+        text("select to_regclass('public.project_create_idempotency_records') is not null")
+    )
+    if not has_cutover:
+        # Migration-boundary tests deliberately exercise schemas before 0044.
+        # Use the historical column set because the current ORM mapping includes
+        # provenance columns that do not exist at those revisions.
+        await session.execute(
+            text(
+                "insert into projects (id, name, slug, status) "
+                "values (:id, :name, :slug, :status)"
+            ),
+            {"id": project_id, "name": name, "slug": slug, "status": status},
+        )
+        project = Project(
+            id=project_id,
+            name=name,
+            slug=slug,
+            status=status,
+        )
+        return project
+    actor_id = str(uuid4())
+    link = ActorIdentityLink(
+        id=str(uuid4()),
+        actor_profile_id=actor_id,
+        issuer="https://project-fixture.test",
+        subject=f"project-fixture-{actor_id}",
+        subject_kind="human",
+        status="active",
+        linked_by="test",
+        last_verified_at=datetime.now(UTC),
+    )
+    session.add(
+        ActorProfile(
+            id=actor_id,
+            actor_kind="human",
+            status="active",
+            provisioning_method="automatic_first_access",
+            service_identity=None,
+            created_by="test",
+        )
+    )
+    await session.flush()
+    session.add(link)
+    await session.flush()
+    control = await session.get(AuthorityControl, 1, with_for_update=True)
+    if control is None:
+        raise RuntimeError("authorized project fixture requires authority control")
+    bootstrap = (
+        await session.get(AdminRoleGrant, control.bootstrap_grant_id)
+        if control.bootstrap_grant_id is not None
+        else None
+    )
+    if bootstrap is None:
+        bootstrap = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=link.actor_profile_id,
+            role="access_administrator",
+            scope_type="system",
+            scope_project_id=None,
+            status="active",
+            version=1,
+            granted_by_system_principal="workstream:system:bootstrap",
+            grant_reason="fully attributed project fixture bootstrap",
+        )
+        session.add(bootstrap)
+        control.bootstrap_completed = True
+        control.bootstrap_grant_id = bootstrap.id
+        control.version = max(control.version, 1)
+        await session.flush()
+    grant = await session.scalar(
+        select(AdminRoleGrant).where(
+            AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
+            AdminRoleGrant.role == "project_manager",
+            AdminRoleGrant.scope_type == "system",
+            AdminRoleGrant.status == "active",
+        )
+    )
+    if grant is None:
+        grant = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=link.actor_profile_id,
+            role="project_manager",
+            scope_type="system",
+            scope_project_id=None,
+            status="active",
+            version=1,
+            granted_by_actor_profile_id=bootstrap.target_actor_profile_id,
+            granted_by_admin_role_grant_id=bootstrap.id,
+            grant_reason="fully attributed project fixture authority",
+        )
+        session.add(grant)
+        await session.flush()
+
+    operation_id = uuid4()
+    decision_id = uuid4()
+    project_uuid = UUID(project_id)
+    resource = ProjectCreateResourceContext(
+        resource_type="project_create",
+        resource_id=operation_id,
+        requested_project_id=project_uuid,
+        operation_generation=1,
+    )
+    await AuditService(session).add_authority_event(
+        AuthorityAuditEventInput(
+            event_id=decision_id,
+            event_type=AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+            entity_type="authorization_decision",
+            entity_id=str(decision_id),
+            actor_ref_kind=ActorReferenceKind.ACTOR_PROFILE,
+            actor_ref=link.actor_profile_id,
+            request_id=uuid4(),
+            correlation_id=uuid4(),
+            matched_grant_id=str(grant.id),
+            permission_id=PermissionId.PROJECT_CREATE,
+            action_id=ActionId.PROJECT_CREATE,
+            resource_type="project_create_operation",
+            resource_id=str(operation_id),
+            target_ref_kind="project",
+            target_ref_id=project_id,
+            reason="authorization_evaluation",
+            after_facts={
+                "allowed": True,
+                "resource_context_digest": authorization_resource_digest(resource),
+            },
+        )
+    )
+    reservation = ProjectCreateIdempotencyRecord(
+        id=uuid4(),
+        actor_profile_id=link.actor_profile_id,
+        identity_link_id=link.id,
+        action_id=ActionId.PROJECT_CREATE.value,
+        idempotency_key=uuid4(),
+        request_digest=canonical_json_hash(
+            {"domain": "workstream.test.project_create", "project_id": project_id}
+        ),
+        operation_id=operation_id,
+        project_id=project_id,
+        operation_generation=1,
+        status="pending",
+    )
+    session.add(reservation)
+    await session.flush()
+    project = Project(
+        id=project_id,
+        name=name,
+        slug=slug,
+        status=status,
+        created_by_actor_profile_id=link.actor_profile_id,
+        created_via_identity_link_id=link.id,
+        created_by_admin_role_grant_id=grant.id,
+        creation_scope_type="system",
+        creation_action_id=ActionId.PROJECT_CREATE.value,
+        authorization_decision_event_id=str(decision_id),
+    )
+    session.add(project)
+    reservation.status = "committed"
+    reservation.committed_at = datetime.now(UTC)
+    await session.flush()
+    return project

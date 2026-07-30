@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.projects.models import (
@@ -17,6 +20,7 @@ from app.modules.projects.models import (
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
     Project,
+    ProjectCreateIdempotencyRecord,
     ProjectGuide,
     ProjectSetupRun,
     RevisionPolicy,
@@ -72,6 +76,78 @@ class ProjectRepository:
         await self._session.flush()
         await self._session.refresh(project)
         return project
+
+    async def reserve_project_create(
+        self,
+        *,
+        actor_profile_id: str,
+        identity_link_id: str,
+        idempotency_key: UUID,
+        request_digest: str,
+    ) -> tuple[str, ProjectCreateIdempotencyRecord]:
+        """Reserve or lock one actor-scoped project-create replay namespace."""
+        values = {
+            "id": uuid4(),
+            "actor_profile_id": actor_profile_id,
+            "identity_link_id": identity_link_id,
+            "action_id": "project.create",
+            "idempotency_key": idempotency_key,
+            "request_digest": request_digest,
+            "operation_id": uuid4(),
+            "project_id": str(uuid4()),
+            "operation_generation": 1,
+            "status": "pending",
+        }
+        record_id = await self._session.scalar(
+            insert(ProjectCreateIdempotencyRecord)
+            .values(**values)
+            .on_conflict_do_nothing(
+                index_elements=[
+                    ProjectCreateIdempotencyRecord.actor_profile_id,
+                    ProjectCreateIdempotencyRecord.action_id,
+                    ProjectCreateIdempotencyRecord.idempotency_key,
+                ]
+            )
+            .returning(ProjectCreateIdempotencyRecord.id)
+        )
+        if record_id is not None:
+            record = await self._session.get(ProjectCreateIdempotencyRecord, record_id)
+            if record is None:
+                raise ProjectRepositoryIntegrityError("project reservation disappeared")
+            return "claimed", record
+        record = await self._session.scalar(
+            select(ProjectCreateIdempotencyRecord)
+            .where(
+                ProjectCreateIdempotencyRecord.actor_profile_id == actor_profile_id,
+                ProjectCreateIdempotencyRecord.action_id == "project.create",
+                ProjectCreateIdempotencyRecord.idempotency_key == idempotency_key,
+            )
+            .with_for_update()
+        )
+        if record is None:
+            raise ProjectRepositoryIntegrityError("project reservation conflict disappeared")
+        if (
+            record.identity_link_id != identity_link_id
+            or record.request_digest != request_digest
+        ):
+            return "mismatch", record
+        return ("replayed" if record.status == "committed" else "pending"), record
+
+    async def complete_project_create(
+        self, record: ProjectCreateIdempotencyRecord
+    ) -> None:
+        """Commit exactly one pending project-create reservation."""
+        completed = await self._session.scalar(
+            update(ProjectCreateIdempotencyRecord)
+            .where(
+                ProjectCreateIdempotencyRecord.id == record.id,
+                ProjectCreateIdempotencyRecord.status == "pending",
+            )
+            .values(status="committed", committed_at=datetime.now(UTC))
+            .returning(ProjectCreateIdempotencyRecord.id)
+        )
+        if completed is None:
+            raise ProjectRepositoryIntegrityError("invalid project reservation completion")
 
     async def get_project(
         self,

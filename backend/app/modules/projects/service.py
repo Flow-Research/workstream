@@ -7,11 +7,12 @@ import fnmatch
 import logging
 import re
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import unquote, urlparse
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +53,17 @@ from app.modules.projects.models import (
     RevisionPolicy,
     ReviewPolicy,
     SubmissionArtifactPolicy,
+)
+from app.modules.actors.service import ResolvedActor
+from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.prepared import PreparedAuthorizationService
+from app.modules.authorization.runtime import (
+    MatchedAuthorityKind,
+    PreparedAuthorizationUnsupported,
+    PreparedAuthorizationInput,
+    PreparedAuthorityScope,
+    PreparedAuthorityScopeKind,
+    ProjectCreateResourceContext,
 )
 from app.modules.projects.post_submit_policy import (
     DEFAULT_DURABLE_CHECKERS,
@@ -438,6 +450,20 @@ class AgentRuntimeUnavailable(ProjectServiceError):
     status_code = 503
 
 
+class ProjectCreateIdempotencyConflict(ProjectServiceError):
+    """One project-create replay key was reused with incompatible state."""
+
+    status_code = 409
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectCreateOutcome:
+    """Route-owned transaction outcome for one project-create request."""
+
+    response: ProjectResponse
+    replayed: bool
+
+
 class ProjectService:
     """Coordinates project guide rules, persistence, and response shaping.
 
@@ -473,31 +499,118 @@ class ProjectService:
         except ProjectAgentRuntimeError:
             raise AgentRuntimeUnavailable("project guide agent runtime is unavailable") from None
 
-    async def create_project(self, actor: ActorContext, payload: ProjectCreate) -> ProjectResponse:
-        """Create a draft project record after project setup authorization.
+    async def create_project(
+        self,
+        resolved: ResolvedActor,
+        prepared: PreparedAuthorizationService,
+        idempotency_key: UUID,
+        payload: ProjectCreate,
+    ) -> ProjectCreateOutcome:
+        """Create one authorized, idempotent draft project shell.
 
         Args:
-            actor: Verified Flow actor context for the current request.
+            resolved: Canonical actor and exact verified identity link.
+            prepared: Request-local transaction-bound authorization service.
+            idempotency_key: Client replay namespace key.
             payload: Validated project creation fields.
 
         Returns:
             Created project response.
 
         Raises:
-            PermissionDenied: If the actor cannot manage project setup.
+            ProjectCreateIdempotencyConflict: If the key does not exactly replay.
         """
-        require_any_role(actor, PROJECT_SETUP_ROLES)
+        actor_profile_id = resolved.profile.id
+        identity_link_id = resolved.identity_link.id
+        request_digest = canonical_json_hash(
+            {
+                "domain": "workstream.project_create.idempotency.v1",
+                "action_id": ActionId.PROJECT_CREATE.value,
+                "route": "POST /api/v1/projects",
+                "actor_profile_id": actor_profile_id,
+                "identity_link_id": identity_link_id,
+                "idempotency_key": str(idempotency_key),
+                "body": payload.model_dump(mode="json", exclude_none=True),
+            }
+        )
+        disposition, reservation = await self._repo.reserve_project_create(
+            actor_profile_id=actor_profile_id,
+            identity_link_id=identity_link_id,
+            idempotency_key=idempotency_key,
+            request_digest=request_digest,
+        )
+        if disposition == "mismatch":
+            raise ProjectCreateIdempotencyConflict("idempotency_mismatch")
+        if disposition == "pending":
+            raise ProjectCreateIdempotencyConflict("idempotency_pending")
+        if disposition == "replayed":
+            existing = await self._repo.get_project(reservation.project_id)
+            if existing is None:
+                raise RuntimeError("committed project replay lost its project")
+            return ProjectCreateOutcome(
+                response=ProjectResponse.model_validate(existing), replayed=True
+            )
+        prepared_input = PreparedAuthorizationInput(
+            idempotency_key=idempotency_key,
+            request_value={
+                "action_id": ActionId.PROJECT_CREATE.value,
+                "route": "POST /api/v1/projects",
+                "actor_profile_id": actor_profile_id,
+                "identity_link_id": identity_link_id,
+                "idempotency_key": str(idempotency_key),
+                "request_digest": request_digest,
+                "operation_id": str(reservation.operation_id),
+                "project_id": reservation.project_id,
+                "operation_generation": reservation.operation_generation,
+                "body": payload.model_dump(mode="json", exclude_none=True),
+            },
+        )
+        final_resource = ProjectCreateResourceContext(
+            resource_type="project_create",
+            resource_id=reservation.operation_id,
+            requested_project_id=UUID(reservation.project_id),
+            operation_generation=reservation.operation_generation,
+        )
+        try:
+            handle = await prepared.prepare(
+                ActionId.PROJECT_CREATE,
+                prepared_input,
+                PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
+            )
+        except PreparedAuthorizationUnsupported as exc:
+            await prepared.deny_unsupported(
+                ActionId.PROJECT_CREATE, prepared_input, final_resource, exc
+            )
+        decision = await prepared.consume(
+            handle,
+            ActionId.PROJECT_CREATE,
+            prepared_input,
+            final_resource,
+        )
+        if (
+            decision.matched_authority_kind is not MatchedAuthorityKind.ADMIN_ROLE_GRANT
+            or decision.matched_grant_id is None
+            or decision.matched_scope_project_id is not None
+        ):
+            raise RuntimeError("project creation unexpectedly lacked system authority")
         project = Project(
-            id=str(uuid4()),
+            id=reservation.project_id,
             name=payload.name,
             slug=payload.slug,
             description=payload.description,
             status="draft",
+            created_by_actor_profile_id=actor_profile_id,
+            created_via_identity_link_id=identity_link_id,
+            created_by_admin_role_grant_id=decision.matched_grant_id,
+            creation_scope_type="system",
+            creation_action_id=ActionId.PROJECT_CREATE.value,
+            authorization_decision_event_id=str(decision.decision_id),
         )
         project = await self._repo.add_project(project)
-        await self._session.commit()
-        await self._session.refresh(project)
-        return ProjectResponse.model_validate(project)
+        await self._repo.complete_project_create(reservation)
+        return ProjectCreateOutcome(
+            response=ProjectResponse.model_validate(project), replayed=False
+        )
 
     async def resolve_project(self, project_id: str) -> Project:
         """Resolve one canonical project before authorization."""

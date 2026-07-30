@@ -925,16 +925,35 @@ Draft, superseded, replaced, incomplete, ambiguous, corrupt, or stale bindings
 conceal. Contributor guide requirements remain on task work-context and
 submission-requirements surfaces.
 
-AUTH-12A registers the complete project-mutation vocabulary below as planned
-and unavailable. It adds distinct typed resource contexts and PostgreSQL
-action-evidence parity, but activates no route, setup command, or service. A
-planned action fails with `action_unavailable` before a prepared handle or
-allowed decision evidence can exist. `project.create` alone derives system
-scope; every other action derives the exact project from its typed resource.
+AUTH-12A registered the complete project-mutation vocabulary below as planned
+and unavailable. AUTH-12C now activates only `project.create`; every remaining
+row stays planned. A planned action fails with `action_unavailable` before a
+prepared handle or allowed decision evidence can exist. `project.create` alone
+derives system scope; every other action derives the exact project from its
+typed resource.
 
-| Planned ActionId | PermissionId | Activation owner |
+`POST /api/v1/projects` requires an active human, the exact active identity
+link, an effective system-scoped Project Manager grant, and a UUID
+`Idempotency-Key`. Project-owned replay state supplies stable server operation
+and project identities before PREP. Final consumption binds those identities,
+the validated body digest, actor, link, grant, generation, request transaction,
+and action. The project shell, authorization event, provenance, and committed
+replay result persist atomically. Verified-token role observations,
+project-scoped grants, service
+actors, copied handles, changed replay input, revoked authority, and stale or
+wrong transactions do not authorize creation. This action creates no guide,
+setup run, task, submission, checker, review, contribution, compensation,
+reputation, policy, or activation state.
+
+An exact committed retry is response recovery, not another creation attempt.
+It validates the same actor/action/key/request digest and the database-enforced
+committed custody chain, then returns the original response without new PREP or
+allowed evidence. Later grant revocation denies new or changed creation
+requests but does not rewrite an already committed idempotent response.
+
+| ActionId | PermissionId | Activation owner |
 |---|---|---|
-| `project.create` | `project.create` | `WS-AUTH-001-12C` |
+| `project.create` (active) | `project.create` | `WS-AUTH-001-12C` |
 | `project.guide.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.guide.update` | `project.guide.manage` | `WS-AUTH-001-12D` |
 | `project.guide_source_snapshot.create` | `project.guide.manage` | `WS-AUTH-001-12D` |
