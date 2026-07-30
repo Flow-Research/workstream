@@ -82,7 +82,7 @@ from app.modules.projects.models import (
     ProjectGuide,
     ProjectSetupRun,
 )
-from project_create_fixtures import seed_authorized_project
+from project_create_fixtures import seed_historical_project
 
 
 class _AllowBindingAuthority:
@@ -243,7 +243,7 @@ async def _seed_binding_lineage(
             last_verified_at=datetime.now(UTC),
         )
     )
-    await seed_authorized_project(
+    await seed_historical_project(
         session,
         project_id=str(ids["project"]),
         name="Guide binding",

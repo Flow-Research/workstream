@@ -89,7 +89,7 @@ from app.modules.projects.service import (
     ProjectServiceError,
     StaleProjectSetupContinuation,
 )
-from project_create_fixtures import seed_authorized_project
+from project_create_fixtures import seed_historical_project
 
 
 from app.modules.projects.post_submit_policy import (
@@ -947,7 +947,7 @@ async def test_project_role_grant_repository_filters_and_uses_strict_keyset(
         control.bootstrap_grant_id = admin_grant_id
         control.version = 1
         await session.flush()
-        await seed_authorized_project(
+        await seed_historical_project(
             session,
             project_id=str(project_id),
             name="Authorization read project",

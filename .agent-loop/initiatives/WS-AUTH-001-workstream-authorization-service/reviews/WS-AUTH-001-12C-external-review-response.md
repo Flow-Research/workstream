@@ -43,6 +43,14 @@ None.
 - The 0044 unattributed-project proof now observes the intentionally deferred
   custody constraint at transaction commit instead of only at statement
   execution: 1 passed.
+- The next hosted run exposed shared fixtures manufacturing new project-create
+  evidence for projects that semantically predate 0044. Shared fixtures now
+  seed explicit historical projects without queued custody events; the one 0044
+  downgrade-custody test retains the fully attributed fixture. Seven artifact
+  authority regressions and four historical downgrade regressions passed.
+- Updated three stale AUTH test doubles to the resource-context-aware decision
+  staging signature and proved prepared-dependency denial evidence persists
+  through its owned rollback/restage/commit path: 3 passed.
 - Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
   commit.
 

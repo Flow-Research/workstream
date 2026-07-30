@@ -102,7 +102,7 @@ from app.modules.projects.models import (
     RevisionPolicy,
     SubmissionArtifactPolicy,
 )
-from project_create_fixtures import seed_authorized_project
+from project_create_fixtures import seed_historical_project
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 from tests.artifact_store_helpers import (
     artifact_admission_limit_settings,
@@ -276,7 +276,7 @@ async def _seed_guide(
     guide_id = str(uuid4())
     snapshot_id = str(uuid4())
     item_id = str(uuid4())
-    await seed_authorized_project(
+    await seed_historical_project(
         session,
         project_id=project_id,
         name="Admission project",
@@ -334,7 +334,7 @@ async def _seed_contributor_items(
     project_id = str(uuid4())
     task_id = str(uuid4())
     upload_session_id = str(uuid4())
-    await seed_authorized_project(
+    await seed_historical_project(
         session,
         project_id=project_id,
         name="Contributor project",
@@ -428,7 +428,7 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
     post_submit_policy_hash = canonical_json_hash(post_submit_policy_body)
     now = datetime.now(UTC)
 
-    await seed_authorized_project(
+    await seed_historical_project(
         session,
         project_id=project_id,
         name="Checker project",
@@ -3658,7 +3658,7 @@ async def test_contributor_admission_rejects_cross_project_task_relationship(
                 upload_session = await session.get(ArtifactUploadSession, item.session_id)
                 assert upload_session is not None
                 unrelated_project_id = str(uuid4())
-                await seed_authorized_project(
+                await seed_historical_project(
                     session,
                     project_id=unrelated_project_id,
                     name="Unrelated admission project",

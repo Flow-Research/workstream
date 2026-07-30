@@ -1,4 +1,4 @@
-"""Test-only construction of fully attributed project shells."""
+"""Test-only construction of historical and currently attributed projects."""
 
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -6,8 +6,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.hashing import canonical_json_hash
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
+from app.core.hashing import canonical_json_hash
 from app.modules.audit.schemas import (
     ActorReferenceKind,
     AuthorityAuditEventInput,
@@ -112,6 +112,38 @@ async def grant_system_project_manager(
     return link, grant
 
 
+async def seed_historical_project(
+    session: AsyncSession,
+    *,
+    project_id: str,
+    name: str,
+    slug: str,
+    status: str = "draft",
+) -> None:
+    """Stage a pre-0044 project without manufacturing current authority evidence."""
+    has_cutover = await session.scalar(
+        text("select to_regclass('public.project_create_idempotency_records') is not null")
+    )
+    if has_cutover:
+        # These shared fixtures model projects that predate the clean-cut
+        # project.create boundary. Disable only the 0044 custody trigger for the
+        # statement so no deferred event is queued, then restore it immediately.
+        await session.execute(text("alter table projects disable trigger project_creation_custody"))
+    try:
+        await session.execute(
+            text(
+                "insert into projects (id, name, slug, status) "
+                "values (:id, :name, :slug, :status)"
+            ),
+            {"id": project_id, "name": name, "slug": slug, "status": status},
+        )
+    finally:
+        if has_cutover:
+            await session.execute(
+                text("alter table projects enable trigger project_creation_custody")
+            )
+
+
 async def seed_authorized_project(
     session: AsyncSession,
     *,
@@ -120,23 +152,8 @@ async def seed_authorized_project(
     slug: str,
     status: str = "draft",
 ) -> None:
-    """Stage one project with the same custody shape required in production."""
+    """Stage current project-create custody for tests of the 0044 boundary itself."""
     project_uuid = UUID(project_id)
-    has_cutover = await session.scalar(
-        text("select to_regclass('public.project_create_idempotency_records') is not null")
-    )
-    if not has_cutover:
-        # Migration-boundary tests deliberately exercise schemas before 0044.
-        # Use the historical column set because the current ORM mapping includes
-        # provenance columns that do not exist at those revisions.
-        await session.execute(
-            text(
-                "insert into projects (id, name, slug, status) "
-                "values (:id, :name, :slug, :status)"
-            ),
-            {"id": project_id, "name": name, "slug": slug, "status": status},
-        )
-        return
     actor_id = str(uuid4())
     link = ActorIdentityLink(
         id=str(uuid4()),
@@ -166,7 +183,6 @@ async def seed_authorized_project(
         issuer=link.issuer,
         subject=link.subject,
     )
-
     operation_id = uuid4()
     decision_id = uuid4()
     resource = ProjectCreateResourceContext(
@@ -215,19 +231,20 @@ async def seed_authorized_project(
     )
     session.add(reservation)
     await session.flush()
-    project = Project(
-        id=project_id,
-        name=name,
-        slug=slug,
-        status=status,
-        created_by_actor_profile_id=link.actor_profile_id,
-        created_via_identity_link_id=link.id,
-        created_by_admin_role_grant_id=grant.id,
-        creation_scope_type="system",
-        creation_action_id=ActionId.PROJECT_CREATE.value,
-        authorization_decision_event_id=str(decision_id),
+    session.add(
+        Project(
+            id=project_id,
+            name=name,
+            slug=slug,
+            status=status,
+            created_by_actor_profile_id=link.actor_profile_id,
+            created_via_identity_link_id=link.id,
+            created_by_admin_role_grant_id=grant.id,
+            creation_scope_type="system",
+            creation_action_id=ActionId.PROJECT_CREATE.value,
+            authorization_decision_event_id=str(decision_id),
+        )
     )
-    session.add(project)
     reservation.status = "committed"
     reservation.committed_at = datetime.now(UTC)
     await session.flush()

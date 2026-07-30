@@ -49,6 +49,7 @@ backend/tests/test_audit.py
 backend/tests/test_projects.py
 backend/tests/project_create_fixtures.py
 backend/tests/test_artifact_admission.py
+backend/tests/test_artifact_internal_authorization.py
 backend/tests/test_artifact_recovery.py
 backend/tests/test_guide_bindings.py
 backend/tests/test_auth.py

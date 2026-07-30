@@ -78,7 +78,7 @@ from app.modules.authorization.models import (
     ProjectRoleGrant,
     ProjectRoleQualificationSnapshot,
 )
-from project_create_fixtures import seed_authorized_project
+from project_create_fixtures import seed_historical_project
 from app.modules.authorization.pagination import (
     AuthorizationReadCursorCodec,
     InvalidPaginationCursor,
@@ -7866,7 +7866,9 @@ async def test_authorization_dependency_rolls_back_a_forgotten_route_transaction
     assert session.rollback_count == 1
 
 
-async def test_prepared_dependency_closes_handles_without_committing() -> None:
+async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class Session:
         commit_count = 0
         rollback_count = 0
@@ -7905,7 +7907,16 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
         resolved,  # type: ignore[arg-type]
         denial_session,  # type: ignore[arg-type]
     )
-    await anext(denial_dependency)
+    denial_service = await anext(denial_dependency)
+
+    async def accept_test_denial(_decision):
+        return None
+
+    monkeypatch.setattr(
+        denial_service._authorization,
+        "_restage_denial",
+        accept_test_denial,
+    )
     denied = AuthorizationDecision(
         decision_id=uuid4(),
         action_id=ActionId.ACTOR_PROFILE_UPDATE_SELF,
@@ -7931,7 +7942,7 @@ async def test_prepared_dependency_closes_handles_without_committing() -> None:
             AuthorizationDenied(denied)
         )
     assert denial_session.rollback_count == 1
-    assert denial_session.commit_count == 0
+    assert denial_session.commit_count == 1
 
 
 async def test_authorization_dependency_admits_service_without_human_rate_control(
@@ -9058,13 +9069,13 @@ async def test_project_read_permissions_have_postgresql_role_scope_matrix(
             ),
             {"grant_id": str(bootstrap_grant_id)},
         )
-        await seed_authorized_project(
+        await seed_historical_project(
             session,
             project_id=str(project_id),
             name="AUTH-11A role matrix",
             slug=f"auth-11a-role-matrix-{project_id}",
         )
-        await seed_authorized_project(
+        await seed_historical_project(
             session,
             project_id=str(other_project_id),
             name="AUTH-11A other project",
@@ -11027,7 +11038,7 @@ async def test_project_role_issue_postgresql_prep_binds_target_role_and_scope(
             {"grant_id": str(bootstrap_grant_id)},
         )
         await session.commit()
-        await seed_authorized_project(
+        await seed_historical_project(
             session,
             project_id=str(project_id),
             name="AUTH-10C PREP proof",
