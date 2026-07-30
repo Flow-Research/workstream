@@ -154,7 +154,7 @@ bounded canonical extraction record and provenance in PostgreSQL; a future
 derived provider artifact requires a separately planned action and activation.
 
 No document-parsing production dependencies are installed. Any new production
-dependency requires explicit human approval before 03B3B implementation. OOXML ZIP
+dependency requires explicit human approval through 03B3B1 before format implementation. OOXML ZIP
 containers must pass one bounded classifier that distinguishes DOCX, PPTX, and
 XLSX by internal markers. Audio/video transcription and OCR are not required by
 current v0.1 setup and remain unsupported. PNG/JPEG/WebP classification and

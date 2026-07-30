@@ -1,6 +1,7 @@
-# Chunk Contract: WS-ART-001-03B4 - Guide Sufficiency Continuation
+# Chunk Contract: WS-ART-001-03B4 — Guide Sufficiency Continuation
 
-Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03B3B
+Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03B3B2,
+03B3B3B-03B3B3D, and 03B3B4
 
 ## Goal
 
@@ -15,7 +16,7 @@ same-generation canonical guide material and exact persisted provenance.
 - in-place evolution or replacement of existing `GuideSourceMaterial` and
   `GuideSourceItemMaterial`; no parallel sufficiency-material model;
 - sufficiency-report usage provenance; extraction models/migration remain owned
-  by 03B3A and complex adapter provenance remains owned by 03B3B;
+  by 03B3A and complex adapter provenance remains owned by 03B3B2-03B3B4;
 - focused stale-delivery, completeness, incident, unsupported, broker replay,
   agent-input, persistence, cancellation, and coverage tests; related docs.
 

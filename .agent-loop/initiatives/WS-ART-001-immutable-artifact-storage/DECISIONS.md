@@ -400,7 +400,11 @@ under fixed input, output, container, time, memory, and document limits using
 only scratch-manager paths. Parser crash, malformed input, macros, external
 relationships, embedded executables, cancellation, timeout, and executor loss
 have bounded outcomes and cleanup. Production parser dependencies require
-explicit human approval before implementation.
+explicit human approval before implementation. Complex-format delivery is
+split after 03B3A: 03B3B1 records the exact pinned dependency decision and
+deterministic gate without installing packages; 03B3B2 delivers PDF, 03B3B3A
+owns shared OOXML security, 03B3B3B-D separately deliver DOCX/PPTX/XLSX, and
+03B3B4 delivers image metadata.
 
 The v0.1 extraction-policy limits are fixed, not caller-selectable:
 
@@ -420,14 +424,14 @@ The v0.1 extraction-policy limits are fixed, not caller-selectable:
 | decompressed container bytes | 128 MiB | 03B2 container inspector | `limit_exceeded` |
 | container nesting depth | 8 | 03B2 container inspector | `limit_exceeded` |
 | compression ratio | 100:1 | 03B2 container inspector | `limit_exceeded` |
-| PDF pages | 500 | 03B3B PDF adapter | `limit_exceeded` |
-| PPTX slides | 300 | 03B3B PPTX adapter | `limit_exceeded` |
-| XLSX sheets | 100 | 03B3B XLSX adapter | `limit_exceeded` |
-| table rows per item | 100,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
-| table cells per item | 1,000,000 | 03B3A CSV / 03B3B XLSX adapter | `limit_exceeded` |
+| PDF pages | 500 | 03B3B2 PDF adapter | `limit_exceeded` |
+| PPTX slides | 300 | 03B3B3C PPTX adapter | `limit_exceeded` |
+| XLSX sheets | 100 | 03B3B3D XLSX adapter | `limit_exceeded` |
+| table rows per item | 100,000 | 03B3A CSV / 03B3B3D XLSX adapter | `limit_exceeded` |
+| table cells per item | 1,000,000 | 03B3A CSV / 03B3B3D XLSX adapter | `limit_exceeded` |
 | characters per cell | 32,768 | CSV/XLSX adapter | `limit_exceeded` |
-| image pixels | 40 megapixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
-| image width or height | 16,384 pixels | 03B2 header inspector and 03B3B adapter | `limit_exceeded` |
+| image pixels | 40 megapixels | 03B2 header inspector and 03B3B4 adapter | `limit_exceeded` |
+| image width or height | 16,384 pixels | 03B2 header inspector and 03B3B4 adapter | `limit_exceeded` |
 
 Exact-boundary, one-over-boundary, cleanup, cancellation, timeout, memory-
 termination, and executor-loss tests are mandatory. Executor loss leaves no

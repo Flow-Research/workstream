@@ -61,6 +61,12 @@ same-generation sufficiency continuation are separate PR-sized contracts.
 `WS-ART-001-03B1` is the first proposed
 implementation successor; this planning change contains no implementation.
 
+After 03B3A merged, the original complex-format chunk was found too broad for
+one dependency and parser-security review. It is replaced by 03B3B1 dependency
+approval, 03B3B2 PDF, 03B3B3A shared OOXML security, separate 03B3B3B-D
+DOCX/PPTX/XLSX adapters, and 03B3B4 image metadata. No dependency is
+installed until the human owner approves 03B3B1's exact pinned allowlist.
+
 AUTH `WS-XINT-002-04B` follows the complete hidden split-03B series and
 activates only fixed-service binding and guide read. ART-03C then removes the
 legacy identity/excerpt path and makes the verified pipeline authoritative.
