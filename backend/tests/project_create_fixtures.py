@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.core.hashing import canonical_json_hash
@@ -121,16 +121,36 @@ async def seed_historical_project(
     status: str = "draft",
 ) -> None:
     """Stage a pre-0044 project without manufacturing current authority evidence."""
-    has_cutover = await session.scalar(
+    await insert_historical_project(
+        session,
+        project_id=project_id,
+        name=name,
+        slug=slug,
+        status=status,
+    )
+
+
+async def insert_historical_project(
+    connection: AsyncConnection | AsyncSession,
+    *,
+    project_id: str,
+    name: str,
+    slug: str,
+    status: str = "draft",
+) -> None:
+    """Insert one pre-0044 project in the caller-owned transaction."""
+    has_cutover = await connection.scalar(
         text("select to_regclass('public.project_create_idempotency_records') is not null")
     )
     if has_cutover:
         # These shared fixtures model projects that predate the clean-cut
         # project.create boundary. Disable only the 0044 custody trigger for the
         # statement so no deferred event is queued, then restore it immediately.
-        await session.execute(text("alter table projects disable trigger project_creation_custody"))
+        await connection.execute(
+            text("alter table projects disable trigger project_creation_custody")
+        )
     try:
-        await session.execute(
+        await connection.execute(
             text(
                 "insert into projects (id, name, slug, status) "
                 "values (:id, :name, :slug, :status)"
@@ -139,7 +159,7 @@ async def seed_historical_project(
         )
     finally:
         if has_cutover:
-            await session.execute(
+            await connection.execute(
                 text("alter table projects enable trigger project_creation_custody")
             )
 

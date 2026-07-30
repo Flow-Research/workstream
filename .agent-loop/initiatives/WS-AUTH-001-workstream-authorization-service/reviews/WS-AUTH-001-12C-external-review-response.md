@@ -58,6 +58,11 @@ None.
 - The next hosted run passed project and task lanes and exposed the remaining
   direct unattributed project insert in the shared outbox fixture. It now uses
   the same explicit historical-project helper; all 72 outbox tests pass.
+- The subsequent hosted run passed shared, project, and task lanes. Its three
+  schema-contract failures were the last direct project inserts inside
+  migration helpers. A caller-transaction variant of the historical helper now
+  preserves normal setup transactions, while the outbox race commits historical
+  setup before opening its writer transaction; all three exact schema tests pass.
 - Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
   commit.
 

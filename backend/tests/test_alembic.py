@@ -34,7 +34,7 @@ from app.modules.authorization.catalogue import (
     ActionOwner,
     PermissionId,
 )
-from project_create_fixtures import seed_authorized_project
+from project_create_fixtures import insert_historical_project, seed_authorized_project
 
 from app.modules.actors.legacy_classification import (
     CLASSIFICATION_FILE_ENV,
@@ -1830,6 +1830,12 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
                 "slug": f"migration-{ids['project']}",
                 "sha256": "sha256:" + "a" * 64,
             }
+            await insert_historical_project(
+                connection,
+                project_id=ids["project"],
+                name="Migration project",
+                slug=parameters["slug"],
+            )
             statements = (
                 (
                     "insert into actor_profiles "
@@ -1842,10 +1848,6 @@ async def _seed_populated_guide_source_ingest(database_url: str) -> None:
                     "linked_by, last_verified_at) values "
                     "(:identity_link, :actor, 'https://identity.test', :actor, 'human', "
                     "'active', 'migration-test', clock_timestamp())"
-                ),
-                (
-                    "insert into projects (id, name, slug, status) "
-                    "values (:project, 'Migration project', :slug, 'draft')"
                 ),
                 (
                     "insert into project_guides "
@@ -5861,15 +5863,16 @@ async def _outbox_downgrade_writer_race(
     engine = create_async_engine(database_url)
     event_id = str(uuid4())
     try:
+        async with engine.begin() as setup_connection:
+            await insert_historical_project(
+                setup_connection,
+                project_id=project_id,
+                name="Outbox migration",
+                slug=f"outbox-migration-{project_id}",
+                status="active",
+            )
         async with engine.connect() as connection:
             transaction = await connection.begin()
-            await connection.execute(
-                text(
-                    "insert into projects(id,name,slug,status) "
-                    "values (:id,'Outbox migration',:slug,'active')"
-                ),
-                {"id": project_id, "slug": f"outbox-migration-{project_id}"},
-            )
             await connection.execute(
                 text(
                     "insert into outbox_events "
@@ -11307,11 +11310,12 @@ async def _install_project_role_table_blockers(
     try:
         async with engine.begin() as connection:
             await _insert_canonical_actor(connection, ids["actor"], "auth10a-blocker", "human")
-            await connection.execute(
-                text(
-                    "insert into projects(id,name,slug,status) values (:id,'AUTH 10A blocker',:slug,'active')"
-                ),
-                {"id": ids["project"], "slug": f"auth-10a-blocker-{ids['project']}"},
+            await insert_historical_project(
+                connection,
+                project_id=ids["project"],
+                name="AUTH 10A blocker",
+                slug=f"auth-10a-blocker-{ids['project']}",
+                status="active",
             )
             await connection.execute(
                 text(
