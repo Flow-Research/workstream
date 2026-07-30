@@ -3,9 +3,10 @@
 The final v0.1 ART catalogue reconciliation, PREP extension, and activation
 waves are superseded prospectively by
 `../WS-XINT-002-art-auth-end-to-end/`. The counts immediately below are the
-trusted pre-reconciliation entry evidence; WS-XINT-002-01 replaces them with
-the live 71/78/22/56 catalogue recorded in the ART custody section without
-changing runtime availability.
+trusted pre-reconciliation entry evidence; at its merge, WS-XINT-002-01
+replaced them with the then-live 71/78/22/56 catalogue recorded in the ART
+custody section without changing runtime availability. Subsequent AUTH chunks
+have advanced the current catalogue to 71/96/37/59.
 The pre-reconciliation baseline is trusted `main` commit
 `2fb322bd2249a5fe9d3fa706dc63f033074e38ce`: 76 PermissionIds, 81 ActionIds,
 22 active actions, and 59 planned actions. Older counts below are explicitly
@@ -62,8 +63,8 @@ remains planned and
 cannot be activated by read/status proof. The historical transfer added no
 migration because owner and availability are typed metadata. WS-XINT-002-01
 reconciles PostgreSQL parity through migration `0036`; the live catalogue has
-71 PermissionIds, 78 ActionIds, 22 active actions, and 56 planned actions, with
-seven fixed-service identities and twelve matrix memberships.
+71 PermissionIds, 96 ActionIds, 37 active actions, and 59 planned actions, with
+eight fixed-service identities and sixteen matrix memberships.
 
 ## REV custody transfer
 

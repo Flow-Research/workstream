@@ -849,6 +849,14 @@ _SERVICE_ACTIONS = {
         }
     ),
     ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset({ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}),
+    ServiceIdentity.PROJECT_SETUP: frozenset(
+        {
+            ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
+            ActionId.PROJECT_SETUP_RUN_UPDATE,
+        }
+    ),
 }
 
 
@@ -878,6 +886,14 @@ def _index_service_actions(
         ),
         ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: frozenset(
             {ActionId.ARTIFACT_CHECKER_OUTPUT_WRITE}
+        ),
+        ServiceIdentity.PROJECT_SETUP: frozenset(
+            {
+                ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+                ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+                ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
+                ActionId.PROJECT_SETUP_RUN_UPDATE,
+            }
         ),
     }
     expected_metadata = {
@@ -928,6 +944,22 @@ def _index_service_actions(
         ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE: (
             PermissionId.ARTIFACT_BINDING_CREATE,
             ActionOwner.XINT_002_07,
+        ),
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: (
+            PermissionId.PROJECT_GUIDE_MANAGE,
+            ActionOwner.AUTH_12E,
+        ),
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
+            PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+            ActionOwner.AUTH_12F,
+        ),
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: (
+            PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+            ActionOwner.AUTH_12G,
+        ),
+        ActionId.PROJECT_SETUP_RUN_UPDATE: (
+            PermissionId.PROJECT_GUIDE_MANAGE,
+            ActionOwner.AUTH_12B2,
         ),
     }
     if set(rows) != SERVICE_IDENTITIES:

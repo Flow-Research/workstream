@@ -55,7 +55,7 @@ from app.modules.actors.service_identity_migration import (
     snapshot_existing_service_rows,
 )
 
-HEAD_REVISION = "0042_guide_extraction"
+HEAD_REVISION = "0043_project_setup_service"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -103,7 +103,19 @@ def test_service_identity_migration_contract_is_frozen_from_application_modules(
     assert "app.modules" not in contract_source
     assert "repository_root=MIGRATION_REPOSITORY_ROOT" in revision_source
     assert "REPOSITORY_ROOT" not in contract_source
-    assert FROZEN_SERVICE_IDENTITY_VALUES == tuple(identity.value for identity in ServiceIdentity)
+    assert FROZEN_SERVICE_IDENTITY_VALUES == (
+        "workstream.artifact.verifier",
+        "workstream.artifact.put_resolver",
+        "workstream.artifact.scheduler",
+        "workstream.artifact.binding",
+        "workstream.artifact.guide_reader",
+        "workstream.artifact.materializer",
+        "workstream.artifact.checker_output",
+    )
+    assert tuple(identity.value for identity in ServiceIdentity) == (
+        *FROZEN_SERVICE_IDENTITY_VALUES,
+        "workstream.project.setup",
+    )
 
 
 def test_frozen_mapping_path_custody_is_independent_of_install_location(
@@ -2075,6 +2087,72 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
                     isolated_database_env, record_id, orphan_event=None
                 )
             )
+            command.downgrade(config, "base")
+
+
+def test_0043_project_setup_service_round_trip_and_seeds_no_authority(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """0043 alone admits the eighth identity without creating actor authority."""
+    config = _alembic_config()
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "0042_guide_extraction")
+            prior = asyncio.run(_project_setup_service_state(isolated_database_env))
+            assert not prior["constraint_admits_identity"]
+            assert prior["authority_rows"] == (0, 0, 0, 0)
+
+            command.upgrade(config, "head")
+            upgraded = asyncio.run(_project_setup_service_state(isolated_database_env))
+            assert upgraded["constraint_admits_identity"]
+            assert upgraded["authority_rows"] == (0, 0, 0, 0)
+
+            command.downgrade(config, "0042_guide_extraction")
+            restored = asyncio.run(_project_setup_service_state(isolated_database_env))
+            assert not restored["constraint_admits_identity"]
+            assert restored["authority_rows"] == (0, 0, 0, 0)
+
+            command.upgrade(config, "head")
+            assert asyncio.run(_project_setup_service_state(isolated_database_env)) == upgraded
+        finally:
+            command.downgrade(config, "base")
+
+
+def test_0043_project_setup_service_refuses_in_use_downgrade(
+    isolated_database_env: str, migration_lock
+) -> None:
+    """An exact project-setup profile prevents removal of its closed identity."""
+    config = _alembic_config()
+    actor_profile_id = str(uuid4())
+    with migration_lock():
+        try:
+            command.downgrade(config, "base")
+            command.upgrade(config, "head")
+            asyncio.run(
+                _insert_project_setup_service_actor(
+                    isolated_database_env,
+                    actor_profile_id=actor_profile_id,
+                )
+            )
+            with pytest.raises(
+                RuntimeError,
+                match="cannot downgrade project setup service identity",
+            ):
+                command.downgrade(config, "0042_guide_extraction")
+            assert asyncio.run(_current_revision(isolated_database_env)) == (
+                HEAD_REVISION
+            )
+            asyncio.run(
+                _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
+            )
+            actor_profile_id = ""
+            command.downgrade(config, "0042_guide_extraction")
+        finally:
+            if actor_profile_id:
+                asyncio.run(
+                    _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
+                )
             command.downgrade(config, "base")
 
 
@@ -9671,6 +9749,84 @@ async def _remove_fixed_service_actor(database_url: str, actor_profile_id: str) 
             )
             await connection.execute(text("alter table actor_profiles enable trigger user"))
             await connection.execute(text("alter table actor_identity_links enable trigger user"))
+    finally:
+        await engine.dispose()
+
+
+async def _project_setup_service_state(database_url: str) -> dict[str, object]:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.connect() as connection:
+            definition = await connection.scalar(
+                text(
+                    "select pg_get_constraintdef(oid) from pg_constraint "
+                    "where conrelid='actor_profiles'::regclass "
+                    "and conname='ck_actor_profiles_kind_service_identity'"
+                )
+            )
+            counts = tuple(
+                (
+                    await connection.execute(
+                        text(
+                            "select "
+                            "(select count(*) from actor_profiles where service_identity=:identity),"
+                            "(select count(*) from actor_identity_links as links join "
+                            "actor_profiles as profiles on profiles.id=links.actor_profile_id "
+                            "where profiles.service_identity=:identity),"
+                            "(select count(*) from admin_role_grants as grants join "
+                            "actor_profiles as profiles on profiles.id=grants.target_actor_profile_id "
+                            "where profiles.service_identity=:identity),"
+                            "(select count(*) from project_role_grants as grants join "
+                            "actor_profiles as profiles on profiles.id=grants.actor_profile_id "
+                            "where profiles.service_identity=:identity)"
+                        ),
+                        {"identity": ServiceIdentity.PROJECT_SETUP.value},
+                    )
+                ).one()
+            )
+            return {
+                "constraint_admits_identity": (
+                    ServiceIdentity.PROJECT_SETUP.value in str(definition)
+                ),
+                "authority_rows": counts,
+            }
+    finally:
+        await engine.dispose()
+
+
+async def _insert_project_setup_service_actor(
+    database_url: str,
+    *,
+    actor_profile_id: str,
+) -> None:
+    engine = create_async_engine(database_url)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "insert into actor_profiles "
+                    "(id,actor_kind,status,provisioning_method,service_identity,created_by) "
+                    "values (:id,'service','active','manual_service_provisioning',"
+                    ":identity,:id)"
+                ),
+                {
+                    "id": actor_profile_id,
+                    "identity": ServiceIdentity.PROJECT_SETUP.value,
+                },
+            )
+            await connection.execute(
+                text(
+                    "insert into actor_identity_links "
+                    "(id,actor_profile_id,issuer,subject,subject_kind,status,linked_by) "
+                    "values (:link,:actor,'https://identity.test',:subject,'service',"
+                    "'active',:actor)"
+                ),
+                {
+                    "link": str(uuid4()),
+                    "actor": actor_profile_id,
+                    "subject": ServiceIdentity.PROJECT_SETUP.value,
+                },
+            )
     finally:
         await engine.dispose()
 

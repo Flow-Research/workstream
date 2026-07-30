@@ -2468,13 +2468,49 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
             "artifact.review_packet.materialize",
         },
         ServiceIdentity.ARTIFACT_CHECKER_OUTPUT: {"artifact.checker_output.write"},
+        ServiceIdentity.PROJECT_SETUP: {
+            "project.guide_sufficiency.run",
+            "project.submission_artifact_policy.derive",
+            "project.post_submit_checker_policy.derive",
+            "project.setup_run.update",
+        },
     }
     assert set(SERVICE_ACTIONS_BY_IDENTITY) == SERVICE_IDENTITIES
     assert {
         identity: {action.value for action in actions}
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
     } == expected
-    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 12
+    assert sum(map(len, SERVICE_ACTIONS_BY_IDENTITY.values())) == 16
+    project_setup_actions = SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.PROJECT_SETUP]
+    assert {
+        action: (
+            ACTION_BY_ID[action].permission_id,
+            ACTION_BY_ID[action].owner,
+            ACTION_BY_ID[action].availability,
+        )
+        for action in project_setup_actions
+    } == {
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: (
+            PermissionId.PROJECT_GUIDE_MANAGE,
+            ActionOwner.AUTH_12E,
+            ActionAvailability.PLANNED,
+        ),
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
+            PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+            ActionOwner.AUTH_12F,
+            ActionAvailability.PLANNED,
+        ),
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: (
+            PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+            ActionOwner.AUTH_12G,
+            ActionAvailability.PLANNED,
+        ),
+        ActionId.PROJECT_SETUP_RUN_UPDATE: (
+            PermissionId.PROJECT_GUIDE_MANAGE,
+            ActionOwner.AUTH_12B2,
+            ActionAvailability.PLANNED,
+        ),
+    }
     active_internal = {
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
@@ -4722,23 +4758,16 @@ async def test_prepared_fixed_service_rejects_generic_scope_before_actor_lock():
     ("action_id", "service_identity"),
     tuple(
         (
-            definition.action_id,
-            next(
-                (
-                    identity
-                    for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
-                    if definition.action_id in actions
-                ),
-                None,
-            ),
+            action_id,
+            identity,
         )
-        for definition in ACTION_DEFINITIONS
-        if definition.availability is ActionAvailability.PLANNED
-        and definition.action_id.value.startswith("artifact.")
+        for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
+        for action_id in actions
+        if ACTION_BY_ID[action_id].availability is ActionAvailability.PLANNED
     ),
 )
 @pytest.mark.asyncio
-async def test_prepared_issues_no_handle_or_evidence_for_every_planned_art_action(
+async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions(
     action_id: ActionId,
     service_identity: ServiceIdentity | None,
 ):
@@ -4796,15 +4825,11 @@ async def test_prepared_issues_no_handle_or_evidence_for_every_planned_art_actio
         (action_id, identity)
         for identity, actions in SERVICE_ACTIONS_BY_IDENTITY.items()
         for action_id in actions
-        if action_id.value.startswith("artifact.")
-        and next(
-            definition for definition in ACTION_DEFINITIONS if definition.action_id is action_id
-        ).availability
-        is ActionAvailability.PLANNED
+        if ACTION_BY_ID[action_id].availability is ActionAvailability.PLANNED
     ),
 )
 @pytest.mark.asyncio
-async def test_prepared_wrong_fixed_service_denies_before_planned_availability(
+async def test_project_setup_service_matrix_wrong_identity_denies_before_availability(
     action_id: ActionId,
     owning_identity: ServiceIdentity,
 ):

@@ -14,7 +14,6 @@ from pydantic import ValidationError
 
 from app.modules.actors import service_identity_migration as identity_migration
 from app.modules.actors.legacy_classification import database_binding_identifier
-from app.modules.actors.service_identities import SERVICE_IDENTITY_VALUES, ServiceIdentity
 from app.modules.actors.service_identity_migration import (
     MAPPING_FILE_ENV,
     MAX_MAPPINGS,
@@ -35,6 +34,10 @@ from app.modules.actors.service_identity_migration import (
     validate_draft,
     validate_mapping_path,
     verify_envelope,
+)
+from migration_contracts.service_identity_0023 import (
+    SERVICE_IDENTITY_VALUES,
+    ServiceIdentity,
 )
 from scripts import service_actor_identity_mapping as mapping_cli
 
@@ -99,7 +102,7 @@ def write_private_json(path: Path, value: object) -> None:
     os.chmod(path, 0o600)
 
 
-def test_fixed_service_identity_registry_is_exact() -> None:
+def test_service_identity_migration_contract_registry_is_exact() -> None:
     assert SERVICE_IDENTITY_VALUES == (
         "workstream.artifact.verifier",
         "workstream.artifact.put_resolver",

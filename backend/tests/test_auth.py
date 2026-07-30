@@ -54,7 +54,11 @@ from app.modules.actors.service import ActorService
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.repository import ActorRepository
 from app.modules.actors.service_identities import ServiceIdentity
-from app.modules.authorization.models import AdminRoleGrant, AuthorityIdempotencyRecord
+from app.modules.authorization.models import (
+    AdminRoleGrant,
+    AuthorityIdempotencyRecord,
+    ProjectRoleGrant,
+)
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.repository import (
     AdminAuthorizationRepository,
@@ -3531,7 +3535,7 @@ async def test_actor_admin_reads_hold_caller_and_grant_locks_through_disclosure(
                 pause_kind = None
 
 
-async def test_controlled_service_actor_provisioning_is_atomic_private_and_concurrent(
+async def test_controlled_service_actor_provisioning_includes_project_setup_and_is_atomic(
     auth_database_env: str,
     rsa_signing_material: tuple[rsa.RSAPrivateKey, dict[str, Any]],
     monkeypatch: pytest.MonkeyPatch,
@@ -4027,6 +4031,31 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
         )
         assert commit_retried.status_code == 201, commit_retried.text
 
+        setup_subject = "Opaque-Service-Subject/ProjectSetup:01"
+        setup_payload = payload | {
+            "service_identity": ServiceIdentity.PROJECT_SETUP.value,
+            "subject": setup_subject,
+        }
+        setup_created = await client.post(
+            "/api/v1/service-actors",
+            headers={**admin_headers, "Idempotency-Key": str(uuid4())},
+            json=setup_payload,
+        )
+        assert setup_created.status_code == 201, setup_created.text
+        assert setup_created.json()["service_identity"] == ServiceIdentity.PROJECT_SETUP.value
+        setup_state = await service_state(ServiceIdentity.PROJECT_SETUP)
+        assert setup_state is not None
+        assert setup_state[1:4] == ("service", "active", "manual_service_provisioning")
+        assert setup_state[5] is None
+        assert setup_state[6:11] == (
+            settings.token_issuer,
+            setup_subject,
+            "service",
+            "active",
+            str(admin_id),
+        )
+        assert setup_state[11] is None
+
         class CanonicalIssuerUnavailable:
             async def verify(self, token: str):
                 return await verifier.verify(token)
@@ -4079,6 +4108,7 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             shared_subject,
             failure_payload["subject"],
             commit_payload["subject"],
+            setup_subject,
         }
     }
     assert all(value not in body for value in sensitive_values for body in observed_response_bodies)
@@ -4127,10 +4157,23 @@ async def test_controlled_service_actor_provisioning_is_atomic_private_and_concu
             )
             or 0
         )
+        service_project_grants = int(
+            await session.scalar(
+                select(func.count())
+                .select_from(ProjectRoleGrant)
+                .where(
+                    ProjectRoleGrant.actor_profile_id.in_(
+                        [profile.id for profile in service_profiles]
+                    )
+                )
+            )
+            or 0
+        )
     assert service_profiles
     assert all(profile.last_seen_at is None for profile in service_profiles)
     assert pending == 0
     assert service_grants == 0
+    assert service_project_grants == 0
     assert service_events
     assert all(event.action_id is None for event in service_events)
     assert all(event.permission_id == "actor.service.provision" for event in service_events)
