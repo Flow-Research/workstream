@@ -19,7 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from app.modules.actors.legacy_classification import database_binding_identifier
-from app.modules.actors.service_identities import SERVICE_IDENTITIES, ServiceIdentity
+from migration_contracts.service_identity_0023 import SERVICE_IDENTITIES, ServiceIdentity
 
 MAPPING_FILE_ENV = "WORKSTREAM_SERVICE_ACTOR_IDENTITY_MAPPING_FILE"
 MAX_MAPPING_FILE_BYTES = 64 * 1024

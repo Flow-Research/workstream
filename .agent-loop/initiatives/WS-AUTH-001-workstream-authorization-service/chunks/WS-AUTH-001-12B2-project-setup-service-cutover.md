@@ -16,7 +16,7 @@ invoke is active for that identity.
 
 ## Why this chunk exists
 
-Provisioning the service early avoids invented authority, but switching the
+Registering the service identity early avoids invented authority, but switching the
 call graph early would duplicate or bypass sufficiency and policy provenance.
 
 ## Risk class

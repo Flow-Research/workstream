@@ -877,6 +877,20 @@ manifest followed by AUTH-owned enum/constraint/matrix, provisioning, admission,
 and cross-service denial proof. Do not create a shared review service or a
 database service-grant table.
 
+AUTH-12B extends the current live registry to an eighth identity,
+`workstream.project.setup`, with exactly four static memberships:
+`project.guide_sufficiency.run`,
+`project.submission_artifact_policy.derive`,
+`project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
+All four remain planned and unavailable. Migration
+`0042_project_setup_service` seeds no profile, link, AdminRoleGrant, or
+ProjectRoleGrant. It takes an `ACCESS EXCLUSIVE` lock on `actor_profiles` while
+replacing the closed service-identity constraint, and downgrade refuses once a
+`workstream.project.setup` ActorProfile exists. An Access Administrator may use the existing controlled
+service-actor provisioning route only when the deployment supplies the exact
+issuer and opaque subject; that actor still has no executable setup action
+until the owning later activation chunks merge.
+
 Fixed-service admission is request-local. Resolve only the verified issuer and
 opaque subject through the exact stored link and active service profile; never
 accept a service identity, action, permission, or matrix row from request or

@@ -464,10 +464,10 @@ remain planned and unavailable, and add no migration.
 | `artifact.review_packet.materialize` | `artifact.review_packet.materialize` | fixed materializer service | exact active lease and Submission packet | `WS-XINT-002-07` |
 | `artifact.review_evidence.binding.create` | `artifact.binding.create` | fixed binding service | exact verified review evidence slot | `WS-XINT-002-07` |
 
-The fixed internal service identities and their complete artifact action sets
-are also closed:
+The fixed internal service identities and their complete action sets are also
+closed:
 
-| Service identity | Allowed artifact actions |
+| Service identity | Allowed actions |
 |---|---|
 | `workstream.artifact.verifier` | `artifact.verification.execute` |
 | `workstream.artifact.put_resolver` | `artifact.put_attempt.resolve` |
@@ -476,6 +476,14 @@ are also closed:
 | `workstream.artifact.guide_reader` | `artifact.guide_source.read` |
 | `workstream.artifact.materializer` | `artifact.pre_submit.checker_input.materialize`, `artifact.post_submit.checker_input.materialize`, `artifact.review_packet.materialize` |
 | `workstream.artifact.checker_output` | `artifact.checker_output.write` |
+| `workstream.project.setup` | `project.guide_sufficiency.run`, `project.submission_artifact_policy.derive`, `project.post_submit_checker_policy.derive`, `project.setup_run.update` |
+
+`workstream.project.setup` is the eighth current fixed identity. All four of
+its actions remain planned and unavailable in AUTH-12B. Registration makes the
+identity selectable by the existing controlled provisioning route but creates
+no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
+itself; migration `0042_project_setup_service` only expands the closed database
+identity constraint.
 
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer
 subject with no leading or trailing whitespace to one of these fixed identities
@@ -491,7 +499,7 @@ dedicated AUTH activation custodian integrates the evaluator and changes only
 the exact action to active. Composition startup proves registry, service actor,
 matrix row, action, and PermissionId parity and fails closed on missing or extra
 matrix membership. Negative authorization tests prove each service identity is
-denied every artifact action outside its row. Human authorization remains
+denied every fixed-service action outside its row. Human authorization remains
 attached to the initiating product command; an internal service identity never
 inherits a human grant or role.
 
