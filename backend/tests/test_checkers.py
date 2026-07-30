@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Iterator
 import math
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from alembic.config import Config
@@ -55,6 +56,7 @@ from tests.test_tasks import (
     seed_worker_profile,
     set_dev_actor,
 )
+from project_create_fixtures import grant_system_project_manager
 
 
 @pytest.fixture
@@ -83,6 +85,15 @@ async def checker_client(checker_database_env: str) -> AsyncIterator[AsyncClient
         transport=ASGITransport(app=app),
         base_url="http://testserver",
     ) as client:
+        admission = await client.get("/api/v1/auth/me", headers=auth_headers())
+        assert admission.status_code == 200, admission.text
+        async with db_session.get_session_factory()() as session:
+            await grant_system_project_manager(
+                session,
+                issuer="flow-test",
+                subject="project-manager-subject",
+            )
+            await session.commit()
         yield client
 
 
@@ -1079,7 +1090,7 @@ async def create_checker_trial_project(
     """
     project_response = await client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": slug.replace("-", " ").title(),
             "slug": slug,
@@ -1778,7 +1789,7 @@ async def test_chunk8_default_blocking_checker_survives_omitted_blocking_severit
 ) -> None:
     project_response = await checker_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "Empty Blocking Severity Project",
             "slug": "empty-blocking-severity-project",
@@ -2151,7 +2162,7 @@ async def test_chunk8_task_setup_blocked_takes_priority_over_worker_revision(
 ) -> None:
     project_response = await checker_client.post(
         "/api/v1/projects",
-        headers=auth_headers(),
+        headers=auth_headers() | {"Idempotency-Key": str(uuid4())},
         json={
             "name": "Task Setup Checker Project",
             "slug": "task-setup-checker-project",

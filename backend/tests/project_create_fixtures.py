@@ -23,6 +23,72 @@ from app.modules.authorization.runtime import (
 from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
 
 
+async def grant_system_project_manager(
+    session: AsyncSession,
+    *,
+    issuer: str,
+    subject: str,
+) -> tuple[ActorIdentityLink, AdminRoleGrant]:
+    """Grant the admitted test actor the authority required by project.create."""
+    link = await session.scalar(
+        select(ActorIdentityLink).where(
+            ActorIdentityLink.issuer == issuer,
+            ActorIdentityLink.subject == subject,
+        )
+    )
+    if link is None:
+        raise RuntimeError("project manager fixture requires an admitted actor")
+    control = await session.get(AuthorityControl, 1, with_for_update=True)
+    if control is None:
+        raise RuntimeError("project manager fixture requires authority control")
+    bootstrap = (
+        await session.get(AdminRoleGrant, control.bootstrap_grant_id)
+        if control.bootstrap_grant_id is not None
+        else None
+    )
+    if bootstrap is None:
+        bootstrap = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=link.actor_profile_id,
+            role="access_administrator",
+            scope_type="system",
+            scope_project_id=None,
+            status="active",
+            version=1,
+            granted_by_system_principal="workstream:system:bootstrap",
+            grant_reason="project manager fixture bootstrap",
+        )
+        session.add(bootstrap)
+        control.bootstrap_completed = True
+        control.bootstrap_grant_id = bootstrap.id
+        control.version = max(control.version, 1)
+        await session.flush()
+    grant = await session.scalar(
+        select(AdminRoleGrant).where(
+            AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
+            AdminRoleGrant.role == "project_manager",
+            AdminRoleGrant.scope_type == "system",
+            AdminRoleGrant.status == "active",
+        )
+    )
+    if grant is None:
+        grant = AdminRoleGrant(
+            id=uuid4(),
+            target_actor_profile_id=link.actor_profile_id,
+            role="project_manager",
+            scope_type="system",
+            scope_project_id=None,
+            status="active",
+            version=1,
+            granted_by_actor_profile_id=bootstrap.target_actor_profile_id,
+            granted_by_admin_role_grant_id=bootstrap.id,
+            grant_reason="project manager fixture authority",
+        )
+        session.add(grant)
+        await session.flush()
+    return link, grant
+
+
 async def seed_authorized_project(
     session: AsyncSession,
     *,
@@ -77,54 +143,11 @@ async def seed_authorized_project(
     await session.flush()
     session.add(link)
     await session.flush()
-    control = await session.get(AuthorityControl, 1, with_for_update=True)
-    if control is None:
-        raise RuntimeError("authorized project fixture requires authority control")
-    bootstrap = (
-        await session.get(AdminRoleGrant, control.bootstrap_grant_id)
-        if control.bootstrap_grant_id is not None
-        else None
+    link, grant = await grant_system_project_manager(
+        session,
+        issuer=link.issuer,
+        subject=link.subject,
     )
-    if bootstrap is None:
-        bootstrap = AdminRoleGrant(
-            id=uuid4(),
-            target_actor_profile_id=link.actor_profile_id,
-            role="access_administrator",
-            scope_type="system",
-            scope_project_id=None,
-            status="active",
-            version=1,
-            granted_by_system_principal="workstream:system:bootstrap",
-            grant_reason="fully attributed project fixture bootstrap",
-        )
-        session.add(bootstrap)
-        control.bootstrap_completed = True
-        control.bootstrap_grant_id = bootstrap.id
-        control.version = max(control.version, 1)
-        await session.flush()
-    grant = await session.scalar(
-        select(AdminRoleGrant).where(
-            AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
-            AdminRoleGrant.role == "project_manager",
-            AdminRoleGrant.scope_type == "system",
-            AdminRoleGrant.status == "active",
-        )
-    )
-    if grant is None:
-        grant = AdminRoleGrant(
-            id=uuid4(),
-            target_actor_profile_id=link.actor_profile_id,
-            role="project_manager",
-            scope_type="system",
-            scope_project_id=None,
-            status="active",
-            version=1,
-            granted_by_actor_profile_id=bootstrap.target_actor_profile_id,
-            granted_by_admin_role_grant_id=bootstrap.id,
-            grant_reason="fully attributed project fixture authority",
-        )
-        session.add(grant)
-        await session.flush()
 
     operation_id = uuid4()
     decision_id = uuid4()
