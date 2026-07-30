@@ -68,6 +68,17 @@ _OBSOLETE_ART_UPLOAD_IDS = tuple(
     )
 )
 
+_PROJECT_MUTATION_OWNERS = {
+    ActionOwner.AUTH_12B2,
+    ActionOwner.AUTH_12C,
+    ActionOwner.AUTH_12D,
+    ActionOwner.AUTH_12D2,
+    ActionOwner.AUTH_12E,
+    ActionOwner.AUTH_12F,
+    ActionOwner.AUTH_12G,
+    ActionOwner.AUTH_12H,
+}
+
 
 def _alembic_config() -> Config:
     project_root = Path(__file__).resolve().parents[1]
@@ -1968,17 +1979,7 @@ def test_0041_project_mutation_action_evidence_round_trip(
     definitions = tuple(
         definition
         for definition in ACTION_DEFINITIONS
-        if definition.owner
-        in {
-            ActionOwner.AUTH_12B2,
-            ActionOwner.AUTH_12C,
-            ActionOwner.AUTH_12D,
-            ActionOwner.AUTH_12D2,
-            ActionOwner.AUTH_12E,
-            ActionOwner.AUTH_12F,
-            ActionOwner.AUTH_12G,
-            ActionOwner.AUTH_12H,
-        }
+        if definition.owner in _PROJECT_MUTATION_OWNERS
     )
     assert len(definitions) == 18
     assert {definition.permission_id for definition in definitions} <= set(PermissionId)
@@ -2010,17 +2011,7 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
     definitions = tuple(
         item
         for item in ACTION_DEFINITIONS
-        if item.owner
-        in {
-            ActionOwner.AUTH_12B2,
-            ActionOwner.AUTH_12C,
-            ActionOwner.AUTH_12D,
-            ActionOwner.AUTH_12D2,
-            ActionOwner.AUTH_12E,
-            ActionOwner.AUTH_12F,
-            ActionOwner.AUTH_12G,
-            ActionOwner.AUTH_12H,
-        }
+        if item.owner in _PROJECT_MUTATION_OWNERS
     )
     assert len(definitions) == 18
     event_id = ""
@@ -3393,6 +3384,7 @@ def test_authorization_action_evidence_constraints_and_guarded_downgrade(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
                         }
@@ -3552,6 +3544,7 @@ def test_bootstrap_admin_grant_schema_is_immutable_and_guarded(
                             ActionOwner.AUTH_11B,
                             ActionOwner.AUTH_11C1,
                             ActionOwner.AUTH_11C2,
+                            *_PROJECT_MUTATION_OWNERS,
                             ActionOwner.XINT_002_05A,
                             ActionOwner.XINT_002_07,
                         }
