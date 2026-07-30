@@ -16,6 +16,7 @@ class ServiceIdentity(StrEnum):
     ARTIFACT_GUIDE_READER = "workstream.artifact.guide_reader"
     ARTIFACT_MATERIALIZER = "workstream.artifact.materializer"
     ARTIFACT_CHECKER_OUTPUT = "workstream.artifact.checker_output"
+    PROJECT_SETUP = "workstream.project.setup"
 
 
 SERVICE_IDENTITIES = frozenset(ServiceIdentity)

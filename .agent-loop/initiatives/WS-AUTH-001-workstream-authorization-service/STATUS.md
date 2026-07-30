@@ -172,8 +172,8 @@ Agent Gates, and external review remain before merge readiness.
 | `WS-AUTH-001-11C1` | Merged | `codex/ws-auth-001-11c1-setup-diagnostic-reads` | #216 | Setup-diagnostic read hard cutover merged as `2965a9f9` on 2026-07-28. |
 | `WS-AUTH-001-11C2` | Merged | `codex/ws-auth-001-11c2-effective-policy-active-guide-reads` | #221 | Effective-policy and active-guide read cutover merged as `3fc323d7` on 2026-07-29. |
 | `WS-AUTH-001-12` | Planning repair | `codex/ws-auth-001-12-project-mutation-cutover` | - | Combined runtime contract rejected; planning parent split into 12A-12H plus 12B2/12D2 before code. |
-| `WS-AUTH-001-12A` | In progress | `codex/ws-auth-001-12a-project-mutation-catalogue` | - | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; zero activation. |
-| `WS-AUTH-001-12B` | Proposed | - | - | Fixed project-setup service identity and planned matrix only; zero activation. |
+| `WS-AUTH-001-12A` | Merged | `codex/ws-auth-001-12a-project-mutation-catalogue` | #226 | Exact 18-action planned catalogue, typed resource/PREP scope, and migration `0041`; merged as `64dd9c98` with zero activation. |
+| `WS-AUTH-001-12B` | Internal review complete; hosted checks pending | `codex/ws-auth-001-12b-project-setup-service` | - | Fixed project-setup service identity and planned matrix only; zero activation and no actor/link seed. |
 | `WS-AUTH-001-12B2` | Proposed | - | - | Final Celery call-graph cutover after exact product actions activate. |
 | `WS-AUTH-001-12C` | Proposed | - | - | System-scoped project creation cutover. |
 | `WS-AUTH-001-12D` | Proposed | - | - | Draft guide and source metadata mutation cutover. |
