@@ -51,6 +51,10 @@ None.
 - Updated three stale AUTH test doubles to the resource-context-aware decision
   staging signature and proved prepared-dependency denial evidence persists
   through its owned rollback/restage/commit path: 3 passed.
+- The following hosted run reduced shared-foundation failures to one auth
+  lifecycle test whose two exact grant totals still included the removed
+  fixture-only grants. The totals now assert the three real grants at that
+  lifecycle point, and the complete affected test passes.
 - Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
   commit.
 
