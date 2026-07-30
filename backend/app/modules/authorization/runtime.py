@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from enum import StrEnum
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -446,6 +447,430 @@ class ProjectActiveGuideReadResourceContext(BaseModel):
         return self
 
 
+class ProjectCreateResourceContext(BaseModel):
+    """Server-owned facts for one system-scoped project creation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_create"]
+    resource_id: UUID
+    requested_project_id: UUID
+    operation_generation: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_operation_identity(self):
+        """Keep the idempotent operation distinct from the future project."""
+        if self.resource_id == self.requested_project_id:
+            raise ValueError("project creation operation must not impersonate project identity")
+        return self
+
+
+class ProjectGuideMutationResourceContext(BaseModel):
+    """Canonical draft-guide facts for create or update."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_guide_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    target_kind: Literal["create", "update"]
+    guide_exists: bool
+    guide_status: str | None = None
+    guide_version: str | None = None
+    operation_generation: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_guide_identity(self):
+        """Reject cross-resource and partial guide lineage."""
+        if self.resource_id != self.guide_id:
+            raise ValueError("guide mutation resource must match guide")
+        if self.guide_exists != (self.guide_status is not None and self.guide_version is not None):
+            raise ValueError("guide mutation lifecycle facts are inconsistent")
+        if self.guide_exists != (self.target_kind == "update"):
+            raise ValueError("guide mutation operation and existence are inconsistent")
+        return self
+
+
+class ProjectGuideSourceSnapshotMutationResourceContext(BaseModel):
+    """Canonical guide and source-snapshot lineage for snapshot creation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_guide_source_snapshot_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    guide_status: str
+    source_snapshot_id: UUID
+    predecessor_snapshot_id: UUID | None = None
+    predecessor_snapshot_hash: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    operation_generation: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_snapshot_identity(self):
+        """Reject copied snapshot selectors and partial predecessor facts."""
+        if self.resource_id != self.source_snapshot_id:
+            raise ValueError("source snapshot resource must match snapshot")
+        if (self.predecessor_snapshot_id is None) != (self.predecessor_snapshot_hash is None):
+            raise ValueError("source snapshot predecessor facts must be bound together")
+        return self
+
+
+class ProjectReviewPolicyMutationResourceContext(BaseModel):
+    """Canonical guide-bound review-policy mutation facts."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_review_policy_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    review_policy_id: UUID
+    policy_generation: int = Field(ge=1)
+    current_policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_review_policy_identity(self):
+        """Bind the resource selector to the review policy only."""
+        if self.resource_id != self.review_policy_id:
+            raise ValueError("review policy resource must match policy")
+        return self
+
+
+class ProjectRevisionPolicyMutationResourceContext(BaseModel):
+    """Canonical guide-bound revision-policy mutation facts."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_revision_policy_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    revision_policy_id: UUID
+    policy_generation: int = Field(ge=1)
+    current_policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_revision_policy_identity(self):
+        """Bind the resource selector to the revision policy only."""
+        if self.resource_id != self.revision_policy_id:
+            raise ValueError("revision policy resource must match policy")
+        return self
+
+
+class ProjectSetupServiceCustodyContext(BaseModel):
+    """Locked setup-run custody required by one fixed-service product effect."""
+
+    model_config = _STRICT_FROZEN
+
+    setup_run_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    source_snapshot_id: UUID
+    setup_generation: int = Field(ge=1)
+    expected_step: Literal[
+        "guide_sufficiency",
+        "submission_artifact_policy",
+        "post_submit_policy",
+    ]
+    task_id: UUID
+    correlation_id: UUID
+    stale_output_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+def _require_setup_custody(
+    custody: ProjectSetupServiceCustodyContext,
+    *,
+    label: str,
+    expected_step: str,
+    setup_generation: int,
+    stale_output_digest: str | None,
+    scope_project_id: UUID,
+    guide_id: UUID,
+    source_snapshot_id: UUID,
+) -> None:
+    """Reject setup-service custody that does not match the protected lineage."""
+    if custody.expected_step != expected_step:
+        raise ValueError(f"{label} setup-service step is inconsistent")
+    if custody.setup_generation != setup_generation:
+        raise ValueError(f"{label} setup generation is inconsistent")
+    if custody.stale_output_digest != stale_output_digest:
+        raise ValueError(f"{label} stale output is inconsistent")
+    if (
+        custody.scope_project_id != scope_project_id
+        or custody.guide_id != guide_id
+        or custody.source_snapshot_id != source_snapshot_id
+    ):
+        raise ValueError(f"{label} setup lineage is inconsistent")
+
+
+class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
+    """Canonical snapshot and report facts for sufficiency mutations."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_guide_sufficiency_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    target_kind: Literal["report", "run", "warning_acknowledgement"]
+    execution_kind: Literal["human", "setup_service"]
+    sufficiency_report_id: UUID | None = None
+    setup_generation: int = Field(ge=1)
+    stale_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    setup_service_custody: ProjectSetupServiceCustodyContext | None = None
+
+    @model_validator(mode="after")
+    def require_sufficiency_identity(self):
+        """Require report identity only for report-bound operations."""
+        report_bound = self.target_kind in {"report", "warning_acknowledgement"}
+        if report_bound != (self.sufficiency_report_id is not None):
+            raise ValueError("sufficiency report facts do not match target kind")
+        expected = self.sufficiency_report_id or self.source_snapshot_id
+        if self.resource_id != expected:
+            raise ValueError("sufficiency resource does not match target")
+        service_execution = self.execution_kind == "setup_service"
+        if service_execution != (self.setup_service_custody is not None):
+            raise ValueError("sufficiency service execution requires exact setup custody")
+        if service_execution:
+            if self.target_kind != "run":
+                raise ValueError("only a sufficiency run may use setup-service authority")
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="sufficiency",
+                expected_step="guide_sufficiency",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.stale_output_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
+        return self
+
+
+class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
+    """Canonical submission-artifact policy lineage for one mutation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_submission_artifact_policy_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    target_kind: Literal["create", "derive", "update", "approve"]
+    execution_kind: Literal["human", "setup_service"]
+    policy_id: UUID
+    policy_generation: int = Field(ge=1)
+    setup_generation: int = Field(ge=1)
+    policy_status: str | None = None
+    policy_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    stale_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    effective_output_digest: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
+    compiled_pre_submit_output_digest: str | None = Field(
+        default=None, pattern=r"^sha256:[0-9a-f]{64}$"
+    )
+    setup_service_custody: ProjectSetupServiceCustodyContext | None = None
+
+    @model_validator(mode="after")
+    def require_submission_policy_identity(self):
+        """Reject cross-policy selectors and partial current-policy facts."""
+        if self.resource_id != self.policy_id:
+            raise ValueError("submission policy resource must match policy")
+        if (self.policy_status is None) != (self.policy_digest is None):
+            raise ValueError("submission policy status and digest must be bound together")
+        service_execution = self.execution_kind == "setup_service"
+        if service_execution != (self.setup_service_custody is not None):
+            raise ValueError("policy service execution requires exact setup custody")
+        if service_execution != (self.target_kind == "derive"):
+            raise ValueError("policy derivation requires setup-service authority")
+        if service_execution:
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="submission policy",
+                expected_step="submission_artifact_policy",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.stale_output_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
+        return self
+
+
+class ProjectPostSubmitCheckerPolicyMutationResourceContext(BaseModel):
+    """Canonical post-submit checker-policy lineage for one mutation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_post_submit_checker_policy_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    target_kind: Literal["approve", "correction_request", "derive"]
+    execution_kind: Literal["human", "setup_service"]
+    checker_policy_id: UUID
+    setup_generation: int = Field(ge=1)
+    lifecycle_status: str
+    compiled_policy_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    setup_service_custody: ProjectSetupServiceCustodyContext | None = None
+
+    @model_validator(mode="after")
+    def require_checker_policy_identity(self):
+        """Bind the resource selector to the checker policy only."""
+        if self.resource_id != self.checker_policy_id:
+            raise ValueError("checker policy resource must match policy")
+        service_execution = self.execution_kind == "setup_service"
+        if service_execution != (self.setup_service_custody is not None):
+            raise ValueError("checker service execution requires exact setup custody")
+        if service_execution != (self.target_kind == "derive"):
+            raise ValueError("checker derivation requires setup-service authority")
+        if service_execution:
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="checker policy",
+                expected_step="post_submit_policy",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.compiled_policy_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
+        return self
+
+
+class ProjectSetupRunMutationResourceContext(BaseModel):
+    """Canonical setup-run step custody for one ledger mutation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_setup_run_mutation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    setup_run_id: UUID
+    setup_generation: int = Field(ge=1)
+    expected_step: Literal["guide_sufficiency", "submission_artifact_policy", "post_submit_policy"]
+    task_id: UUID
+    correlation_id: UUID
+    stale_output_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def require_setup_run_identity(self):
+        """Bind setup ledger authority to the exact active run."""
+        if self.resource_id != self.setup_run_id:
+            raise ValueError("setup-run resource must match run")
+        return self
+
+
+class ProjectGuideActivationResourceContext(BaseModel):
+    """Complete guide and active-bundle identity for terminal activation."""
+
+    model_config = _STRICT_FROZEN
+
+    resource_type: Literal["project_guide_activation"]
+    resource_id: UUID
+    scope_project_id: UUID
+    guide_id: UUID
+    guide_version: str
+    source_snapshot_id: UUID
+    sufficiency_report_id: UUID
+    submission_artifact_policy_id: UUID
+    pre_submit_checker_policy_id: UUID
+    post_submit_checker_policy_id: UUID
+    review_policy_id: UUID
+    revision_policy_id: UUID
+    active_bundle_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    activation_generation: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def require_activation_identity(self):
+        """Bind terminal activation to the selected guide."""
+        if self.resource_id != self.guide_id:
+            raise ValueError("guide activation resource must match guide")
+        return self
+
+
+PROJECT_MUTATION_RESOURCE_BY_ACTION = MappingProxyType({
+    ActionId.PROJECT_CREATE: ProjectCreateResourceContext,
+    ActionId.PROJECT_GUIDE_CREATE: ProjectGuideMutationResourceContext,
+    ActionId.PROJECT_GUIDE_UPDATE: ProjectGuideMutationResourceContext,
+    ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE: (
+        ProjectGuideSourceSnapshotMutationResourceContext
+    ),
+    ActionId.PROJECT_REVIEW_POLICY_UPDATE: ProjectReviewPolicyMutationResourceContext,
+    ActionId.PROJECT_REVISION_POLICY_UPDATE: ProjectRevisionPolicyMutationResourceContext,
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE: (
+        ProjectGuideSufficiencyMutationResourceContext
+    ),
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: ProjectGuideSufficiencyMutationResourceContext,
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE: (
+        ProjectGuideSufficiencyMutationResourceContext
+    ),
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE: (
+        ProjectSubmissionArtifactPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: (
+        ProjectSubmissionArtifactPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE: (
+        ProjectSubmissionArtifactPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE: (
+        ProjectSubmissionArtifactPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE: (
+        ProjectPostSubmitCheckerPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST: (
+        ProjectPostSubmitCheckerPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: (
+        ProjectPostSubmitCheckerPolicyMutationResourceContext
+    ),
+    ActionId.PROJECT_SETUP_RUN_UPDATE: ProjectSetupRunMutationResourceContext,
+    ActionId.PROJECT_GUIDE_ACTIVATE: ProjectGuideActivationResourceContext,
+})
+
+PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION = MappingProxyType({
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE: "report",
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: "run",
+    ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE: "warning_acknowledgement",
+})
+
+PROJECT_GUIDE_TARGET_KIND_BY_ACTION = MappingProxyType({
+    ActionId.PROJECT_GUIDE_CREATE: "create",
+    ActionId.PROJECT_GUIDE_UPDATE: "update",
+})
+
+PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION = MappingProxyType({
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE: "create",
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: "derive",
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE: "update",
+    ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE: "approve",
+})
+
+PROJECT_POST_SUBMIT_POLICY_TARGET_KIND_BY_ACTION = MappingProxyType({
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE: "approve",
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST: "correction_request",
+    ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: "derive",
+})
+
+
 class ActorAuthorizationContextResourceContext(BaseModel):
     """Self-owned selector for authority projected onto one project."""
 
@@ -756,6 +1181,16 @@ AuthorizationResourceContext = (
     | ProjectDiagnosticReadResourceContext
     | ProjectPolicyReadResourceContext
     | ProjectActiveGuideReadResourceContext
+    | ProjectCreateResourceContext
+    | ProjectGuideMutationResourceContext
+    | ProjectGuideSourceSnapshotMutationResourceContext
+    | ProjectReviewPolicyMutationResourceContext
+    | ProjectRevisionPolicyMutationResourceContext
+    | ProjectGuideSufficiencyMutationResourceContext
+    | ProjectSubmissionArtifactPolicyMutationResourceContext
+    | ProjectPostSubmitCheckerPolicyMutationResourceContext
+    | ProjectSetupRunMutationResourceContext
+    | ProjectGuideActivationResourceContext
     | ActorAuthorizationContextResourceContext
     | ActorProfileAdminReadResourceContext
     | ActorIdentityLinkAdminReadResourceContext

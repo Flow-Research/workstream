@@ -2,9 +2,9 @@
 
 ## Status and prerequisite
 
-Proposed and inactive. AUTH-12 planning must be merged; ART-owned `0040` is
-merged on trusted main.
-the exact AUTH migration revision is frozen from the resulting trusted main.
+Implementation and internal review complete; externally inactive. AUTH-12 planning is merged; ART-owned `0040` is
+merged on trusted main. The exact AUTH migration revision is frozen as
+`0041_project_mutation_evidence` from that trusted head.
 
 ## Parent initiative
 
@@ -37,10 +37,12 @@ backend/app/modules/authorization/runtime.py
 backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/audit/schemas.py
-backend/alembic/versions/<next-after-merged-ART-0040>_project_mutation_action_evidence.py
+backend/alembic/versions/0041_project_mutation_action_evidence.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
+backend/tests/conftest.py
 docs/spec_authorization_service.md
+docs/operations_authorization_service.md
 .agent-loop/initiatives/WS-AUTH-001-workstream-authorization-service/**
 ```
 
@@ -63,6 +65,12 @@ project-table provenance columns, ART behavior, or token-role compatibility.
 - PREP scope derivation is explicit for system project creation and exact
   project resources. Handles remain opaque, request/session/transaction bound,
   non-copyable, non-serializable, and single-use.
+- The catalogue contains exactly 96 actions after this chunk: 37 active and 59
+  planned. All eighteen new actions remain planned, fail with
+  `action_unavailable` before handle issuance, and produce no allowed evidence.
+- `project.create` is the only new system-scoped action. Every other new action
+  derives exact project scope from its final typed resource context and rejects
+  partial or cross-project lineage.
 - The migration follows merged ART-owned `0040_guide_materialization`; `0040`
   is not duplicated or edited.
 - Upgrade, downgrade, re-upgrade, typed/SQL parity, and zero-active-delta tests
@@ -70,10 +78,31 @@ project-table provenance columns, ART behavior, or token-role compatibility.
 
 ## Verification commands
 
-Before start, freeze the actual revision after merged ART `0040` and the exact
-isolated-runner, 90% authorization coverage, migration round-trip, Ruff, stale
-authorization docs, Markdown-link, and diff commands. Final pushed head SHA
-must pass `Backend / test` and `Agent Gates`.
+```bash
+cd backend
+.venv/bin/python -m ruff check \
+  app/modules/authorization/catalogue.py \
+  app/modules/authorization/runtime.py \
+  app/modules/authorization/kernel.py \
+  app/modules/authorization/prepared.py \
+  app/modules/audit/schemas.py \
+  alembic/versions/0041_project_mutation_action_evidence.py \
+  tests/test_authorization.py tests/test_alembic.py tests/conftest.py
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
+  --metadata-json .ci/auth12a.json --lane auth12a --timeout-seconds 1200 -- \
+  .venv/bin/python -m pytest -p pytest_asyncio.plugin -p pytest_cov.plugin -q \
+  tests/test_authorization.py tests/test_alembic.py \
+  -k 'project_mutation or 0041_project_mutation'
+cd ..
+python3 scripts/check_stale_authorization_docs.py
+python3 scripts/check_stale_workstream_wording.py
+python3 scripts/check_markdown_links.py
+git diff --check
+```
+
+Final pushed head SHA must pass `Backend / test` and `Agent Gates`; the hosted
+Backend gate owns fresh full-suite coverage and isolated PostgreSQL migration
+proof.
 
 ## Required reviewers
 

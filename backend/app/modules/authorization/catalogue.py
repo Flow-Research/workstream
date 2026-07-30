@@ -125,6 +125,28 @@ class ActionId(StrEnum):
     )
     PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ = "project.pre_submit_checker_policy.read"
     PROJECT_ACTIVE_GUIDE_READ = "project.active_guide.read"
+    PROJECT_CREATE = "project.create"
+    PROJECT_GUIDE_CREATE = "project.guide.create"
+    PROJECT_GUIDE_UPDATE = "project.guide.update"
+    PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE = "project.guide_source_snapshot.create"
+    PROJECT_REVIEW_POLICY_UPDATE = "project.review_policy.update"
+    PROJECT_REVISION_POLICY_UPDATE = "project.revision_policy.update"
+    PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE = "project.guide_sufficiency_report.create"
+    PROJECT_GUIDE_SUFFICIENCY_RUN = "project.guide_sufficiency.run"
+    PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE = (
+        "project.guide_sufficiency.warnings.acknowledge"
+    )
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE = "project.submission_artifact_policy.create"
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE = "project.submission_artifact_policy.derive"
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE = "project.submission_artifact_policy.update"
+    PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE = "project.submission_artifact_policy.approve"
+    PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE = "project.post_submit_checker_policy.approve"
+    PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST = (
+        "project.post_submit_checker_policy.correction.request"
+    )
+    PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE = "project.post_submit_checker_policy.derive"
+    PROJECT_SETUP_RUN_UPDATE = "project.setup_run.update"
+    PROJECT_GUIDE_ACTIVATE = "project.guide.activate"
     OPERATIONS_TASK_START_OVERRIDE = "operations.task.start_override"
     OPERATIONS_SUBMISSION_GATE_REPAIR = "operations.submission_gate.repair"
     OPERATIONS_CHECKER_RETRY = "operations.checker.retry"
@@ -189,6 +211,14 @@ class ActionOwner(StrEnum):
     AUTH_11B = "WS-AUTH-001-11B"
     AUTH_11C1 = "WS-AUTH-001-11C1"
     AUTH_11C2 = "WS-AUTH-001-11C2"
+    AUTH_12B2 = "WS-AUTH-001-12B2"
+    AUTH_12C = "WS-AUTH-001-12C"
+    AUTH_12D = "WS-AUTH-001-12D"
+    AUTH_12D2 = "WS-AUTH-001-12D2"
+    AUTH_12E = "WS-AUTH-001-12E"
+    AUTH_12F = "WS-AUTH-001-12F"
+    AUTH_12G = "WS-AUTH-001-12G"
+    AUTH_12H = "WS-AUTH-001-12H"
     AUTH_13 = "WS-AUTH-001-13"
     AUTH_14 = "WS-AUTH-001-14"
     AUTH_REV_05 = "WS-AUTH-001-REV-05"
@@ -403,6 +433,92 @@ ACTION_DEFINITIONS = (
         ActionId.PROJECT_ACTIVE_GUIDE_READ,
         PermissionId.PROJECT_READ,
         ActionOwner.AUTH_11C2,
+    ),
+    _planned(ActionId.PROJECT_CREATE, PermissionId.PROJECT_CREATE, ActionOwner.AUTH_12C),
+    _planned(
+        ActionId.PROJECT_GUIDE_CREATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12D,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_UPDATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12D,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12D,
+    ),
+    _planned(
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE,
+        PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
+        ActionOwner.AUTH_12D2,
+    ),
+    _planned(
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
+        ActionOwner.AUTH_12D2,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12E,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12E,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12E,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12F,
+    ),
+    _planned(
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12G,
+    ),
+    _planned(
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12G,
+    ),
+    _planned(
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+        ActionOwner.AUTH_12G,
+    ),
+    _planned(
+        ActionId.PROJECT_SETUP_RUN_UPDATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12B2,
+    ),
+    _planned(
+        ActionId.PROJECT_GUIDE_ACTIVATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        ActionOwner.AUTH_12H,
     ),
     _planned(
         ActionId.OPERATIONS_TASK_START_OVERRIDE,
@@ -651,7 +767,7 @@ def _index_actions(
     ):
         raise RuntimeError("authorization action catalogue contains an invalid row")
     indexed = {definition.action_id: definition for definition in definitions}
-    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 78:
+    if len(PERMISSION_IDS) != 71 or len(ACTION_IDS) != 96:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(indexed) != len(definitions) or set(indexed) != ACTION_IDS:
         raise RuntimeError("authorization action catalogue is incomplete")

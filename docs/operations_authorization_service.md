@@ -672,16 +672,17 @@ resource loader, lifecycle guards, negative tests, and evidence path exist.
 
 ### Catalogue And Action-Evidence Staging
 
-The catalogue contains exactly 71 PermissionIds and 78 ActionIds after
-WS-XINT-002-01. The two AUTH-07B actor-self actions, seven AUTH-08 administrative
+WS-XINT-002-01 left the catalogue at exactly 71 PermissionIds and 78 ActionIds.
+The two AUTH-07B actor-self actions, seven AUTH-08 administrative
 actions, `actor.service.provision`, `actor.profile.read`,
 `actor.identity_link.read`, the three profile lifecycle actions, and the two
 identity-link lifecycle actions are active. The remaining five active actions
 are the AUTH-10B reads `project.contributor_candidate.list`,
 `project_role_grant.list`, and `project_role_grant.read`, plus the AUTH-10C
 mutations `project_role_grant.issue` and `project_role_grant.revoke`. WS-XINT-002-03
-also activates only the fixed verifier, pending-work scanner, and put resolver;
-the other 53 entries remain planned and non-executable. The target post-custody
+also activates only the fixed verifier, pending-work scanner, and put resolver.
+Actions not named by a completed activation chunk remain planned and
+non-executable. The target post-custody
 invariant is that planned runtime entries contain only action, permission, exact
 AUTH activation owner, and availability. The availability-neutral custody
 reconciliation assigns all 22 ART rows to ten exact activation custodians and all 19 REV
@@ -708,8 +709,9 @@ reconciliation uses migration `0036`.
 The REV transfer adds no migration. The ART transfer does not grant Operator
 authority; its `OPERATOR` suffix denotes only future activation custody, and
 verification retry remains independently gated from read/status actions.
-Catalogue totals are 71 PermissionIds, 78 ActionIds, 37 active actions, and
-41 planned actions after AUTH-11C2 activates three current effective-policy and
+Catalogue totals are 71 PermissionIds, 96 ActionIds, 37 active actions, and
+59 planned actions after AUTH-12A registers eighteen project-mutation actions
+without activation. AUTH-11C2 activates three current effective-policy and
 active-guide reads in addition to AUTH-11C1's six diagnostic reads. The exact route mapping
 is in `docs/spec_authorization_service.md`. WS-XINT-002-04A activates only
 guide-source ingest; the other 18 ART actions remain planned, including every

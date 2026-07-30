@@ -195,6 +195,18 @@ from app.modules.authorization.runtime import (
     PermissionCatalogueResourceContext,
     ProjectContributorCandidateCollectionResourceContext,
     ProjectDiagnosticReadResourceContext,
+    PROJECT_MUTATION_RESOURCE_BY_ACTION,
+    ProjectCreateResourceContext,
+    ProjectGuideActivationResourceContext,
+    ProjectGuideMutationResourceContext,
+    ProjectGuideSourceSnapshotMutationResourceContext,
+    ProjectGuideSufficiencyMutationResourceContext,
+    ProjectPostSubmitCheckerPolicyMutationResourceContext,
+    ProjectReviewPolicyMutationResourceContext,
+    ProjectRevisionPolicyMutationResourceContext,
+    ProjectSetupServiceCustodyContext,
+    ProjectSetupRunMutationResourceContext,
+    ProjectSubmissionArtifactPolicyMutationResourceContext,
     ProjectPolicyReadResourceContext,
     ProjectActiveGuideReadResourceContext,
     ProjectReadResourceContext,
@@ -1839,11 +1851,68 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             "WS-AUTH-001-11C2",
         ),
         "project.active_guide.read": ("project.read", "WS-AUTH-001-11C2"),
+        "project.create": ("project.create", "WS-AUTH-001-12C"),
+        "project.guide.create": ("project.guide.manage", "WS-AUTH-001-12D"),
+        "project.guide.update": ("project.guide.manage", "WS-AUTH-001-12D"),
+        "project.guide_source_snapshot.create": (
+            "project.guide.manage",
+            "WS-AUTH-001-12D",
+        ),
+        "project.review_policy.update": (
+            "project.review_policy.manage",
+            "WS-AUTH-001-12D2",
+        ),
+        "project.revision_policy.update": (
+            "project.review_policy.manage",
+            "WS-AUTH-001-12D2",
+        ),
+        "project.guide_sufficiency_report.create": (
+            "project.guide.manage",
+            "WS-AUTH-001-12E",
+        ),
+        "project.guide_sufficiency.run": (
+            "project.guide.manage",
+            "WS-AUTH-001-12E",
+        ),
+        "project.guide_sufficiency.warnings.acknowledge": (
+            "project.guide.manage",
+            "WS-AUTH-001-12E",
+        ),
+        "project.submission_artifact_policy.create": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12F",
+        ),
+        "project.submission_artifact_policy.derive": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12F",
+        ),
+        "project.submission_artifact_policy.update": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12F",
+        ),
+        "project.submission_artifact_policy.approve": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12F",
+        ),
+        "project.post_submit_checker_policy.approve": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12G",
+        ),
+        "project.post_submit_checker_policy.correction.request": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12G",
+        ),
+        "project.post_submit_checker_policy.derive": (
+            "project.effective_policy.manage",
+            "WS-AUTH-001-12G",
+        ),
+        "project.setup_run.update": ("project.guide.manage", "WS-AUTH-001-12B2"),
+        "project.guide.activate": ("project.guide.manage", "WS-AUTH-001-12H"),
     }
     assert {item.value for item in HISTORICAL_PERMISSION_IDS} == historical_permissions
     assert {item.value for item in NEW_PERMISSION_IDS} == new_permissions
     assert {item.value for item in PERMISSION_IDS} == historical_permissions | new_permissions
-    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 78
+    assert len(ACTION_IDS) == len(ACTION_DEFINITIONS) == len(ACTION_BY_ID) == 96
     assert set(ACTION_BY_ID) == ACTION_IDS
     assert {definition.owner for definition in ACTION_DEFINITIONS} == set(ActionOwner)
     assert {
@@ -1978,7 +2047,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
             definition.availability is ActionAvailability.PLANNED
             for definition in ACTION_DEFINITIONS
         )
-        == 41
+        == 59
     )
     assert resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id is (
         PermissionId.ACTOR_PROFILE_READ_SELF
@@ -1987,6 +2056,349 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
         resolve_executable_action(ActionId.REVIEW_QUEUE_READ)
     with pytest.raises(TypeError):
         ACTION_BY_ID[ActionId.ACTOR_PROFILE_READ_SELF] = ACTION_DEFINITIONS[0]
+
+
+def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
+    """Bind every planned project mutation to one typed system/project scope."""
+    project_id, guide_id, snapshot_id, report_id = (uuid4() for _ in range(4))
+    review_id, revision_id, submission_policy_id, checker_policy_id = (
+        uuid4() for _ in range(4)
+    )
+    setup_run_id, operation_id, requested_project_id = (uuid4() for _ in range(3))
+    setup_task_id, setup_correlation_id = uuid4(), uuid4()
+    setup_custody_by_step = {
+        step: ProjectSetupServiceCustodyContext(
+            setup_run_id=setup_run_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            source_snapshot_id=snapshot_id,
+            setup_generation=1,
+            expected_step=step,
+            task_id=setup_task_id,
+            correlation_id=setup_correlation_id,
+            stale_output_digest=DIGEST,
+        )
+        for step in (
+            "guide_sufficiency",
+            "submission_artifact_policy",
+            "post_submit_policy",
+        )
+    }
+    create_resource = ProjectCreateResourceContext(
+        resource_type="project_create",
+        resource_id=operation_id,
+        requested_project_id=requested_project_id,
+        operation_generation=1,
+    )
+    guide_resources = {
+        ActionId.PROJECT_GUIDE_CREATE: ProjectGuideMutationResourceContext(
+            resource_type="project_guide_mutation",
+            resource_id=guide_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            target_kind="create",
+            guide_exists=False,
+            operation_generation=1,
+        ),
+        ActionId.PROJECT_GUIDE_UPDATE: ProjectGuideMutationResourceContext(
+            resource_type="project_guide_mutation",
+            resource_id=guide_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            target_kind="update",
+            guide_exists=True,
+            guide_status="draft",
+            guide_version="1",
+            operation_generation=1,
+        ),
+    }
+    source_resource = ProjectGuideSourceSnapshotMutationResourceContext(
+        resource_type="project_guide_source_snapshot_mutation",
+        resource_id=snapshot_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        guide_status="draft",
+        source_snapshot_id=snapshot_id,
+        operation_generation=1,
+    )
+    review_resource = ProjectReviewPolicyMutationResourceContext(
+        resource_type="project_review_policy_mutation",
+        resource_id=review_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        review_policy_id=review_id,
+        policy_generation=1,
+    )
+    revision_resource = ProjectRevisionPolicyMutationResourceContext(
+        resource_type="project_revision_policy_mutation",
+        resource_id=revision_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        revision_policy_id=revision_id,
+        policy_generation=1,
+    )
+    sufficiency_resources = {
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE: (
+            ProjectGuideSufficiencyMutationResourceContext(
+                resource_type="project_guide_sufficiency_mutation",
+                resource_id=report_id,
+                scope_project_id=project_id,
+                guide_id=guide_id,
+                guide_version="1",
+                source_snapshot_id=snapshot_id,
+                source_snapshot_hash=DIGEST,
+                target_kind="report",
+                execution_kind="human",
+                sufficiency_report_id=report_id,
+                setup_generation=1,
+            )
+        ),
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: (
+            ProjectGuideSufficiencyMutationResourceContext(
+                resource_type="project_guide_sufficiency_mutation",
+                resource_id=snapshot_id,
+                scope_project_id=project_id,
+                guide_id=guide_id,
+                guide_version="1",
+                source_snapshot_id=snapshot_id,
+                source_snapshot_hash=DIGEST,
+                target_kind="run",
+                execution_kind="setup_service",
+                setup_generation=1,
+                stale_output_digest=DIGEST,
+                setup_service_custody=setup_custody_by_step["guide_sufficiency"],
+            )
+        ),
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE: (
+            ProjectGuideSufficiencyMutationResourceContext(
+                resource_type="project_guide_sufficiency_mutation",
+                resource_id=report_id,
+                scope_project_id=project_id,
+                guide_id=guide_id,
+                guide_version="1",
+                source_snapshot_id=snapshot_id,
+                source_snapshot_hash=DIGEST,
+                target_kind="warning_acknowledgement",
+                execution_kind="human",
+                sufficiency_report_id=report_id,
+                setup_generation=1,
+            )
+        ),
+    }
+    submission_resources = {
+        action_id: ProjectSubmissionArtifactPolicyMutationResourceContext(
+            resource_type="project_submission_artifact_policy_mutation",
+            resource_id=submission_policy_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            guide_version="1",
+            source_snapshot_id=snapshot_id,
+            source_snapshot_hash=DIGEST,
+            target_kind=target_kind,
+            execution_kind="setup_service" if target_kind == "derive" else "human",
+            policy_id=submission_policy_id,
+            policy_generation=1,
+            setup_generation=1,
+            stale_output_digest=DIGEST if target_kind == "derive" else None,
+            setup_service_custody=(
+                setup_custody_by_step["submission_artifact_policy"]
+                if target_kind == "derive"
+                else None
+            ),
+        )
+        for action_id, target_kind in (
+            (ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE, "create"),
+            (ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE, "derive"),
+            (ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE, "update"),
+            (ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE, "approve"),
+        )
+    }
+    checker_resources = {
+        action_id: ProjectPostSubmitCheckerPolicyMutationResourceContext(
+            resource_type="project_post_submit_checker_policy_mutation",
+            resource_id=checker_policy_id,
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            guide_version="1",
+            source_snapshot_id=snapshot_id,
+            source_snapshot_hash=DIGEST,
+            target_kind=target_kind,
+            execution_kind="setup_service" if target_kind == "derive" else "human",
+            checker_policy_id=checker_policy_id,
+            setup_generation=1,
+            lifecycle_status="draft",
+            compiled_policy_digest=DIGEST,
+            setup_service_custody=(
+                setup_custody_by_step["post_submit_policy"]
+                if target_kind == "derive"
+                else None
+            ),
+        )
+        for action_id, target_kind in (
+            (ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE, "approve"),
+            (
+                ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST,
+                "correction_request",
+            ),
+            (ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE, "derive"),
+        )
+    }
+    setup_resource = ProjectSetupRunMutationResourceContext(
+        resource_type="project_setup_run_mutation",
+        resource_id=setup_run_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        setup_run_id=setup_run_id,
+        setup_generation=1,
+        expected_step="guide_sufficiency",
+        task_id=uuid4(),
+        correlation_id=uuid4(),
+        stale_output_digest=DIGEST,
+    )
+    activation_resource = ProjectGuideActivationResourceContext(
+        resource_type="project_guide_activation",
+        resource_id=guide_id,
+        scope_project_id=project_id,
+        guide_id=guide_id,
+        guide_version="1",
+        source_snapshot_id=snapshot_id,
+        sufficiency_report_id=report_id,
+        submission_artifact_policy_id=submission_policy_id,
+        pre_submit_checker_policy_id=uuid4(),
+        post_submit_checker_policy_id=checker_policy_id,
+        review_policy_id=review_id,
+        revision_policy_id=revision_id,
+        active_bundle_digest=DIGEST,
+        activation_generation=1,
+    )
+    resources = {
+        ActionId.PROJECT_CREATE: create_resource,
+        **guide_resources,
+        ActionId.PROJECT_GUIDE_SOURCE_SNAPSHOT_CREATE: source_resource,
+        ActionId.PROJECT_REVIEW_POLICY_UPDATE: review_resource,
+        ActionId.PROJECT_REVISION_POLICY_UPDATE: revision_resource,
+        **sufficiency_resources,
+        **submission_resources,
+        **checker_resources,
+        ActionId.PROJECT_SETUP_RUN_UPDATE: setup_resource,
+        ActionId.PROJECT_GUIDE_ACTIVATE: activation_resource,
+    }
+    assert set(resources) == set(PROJECT_MUTATION_RESOURCE_BY_ACTION)
+    for action_id, resource in resources.items():
+        assert AuthorizationService._admin_resource_matches(action_id, resource)
+        scope = PreparedAuthorizationService._scope_from_resource(action_id, resource)
+        if action_id is ActionId.PROJECT_CREATE:
+            assert scope == PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+        else:
+            assert scope == PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT,
+                project_id=project_id,
+            )
+    assert not AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_REVISION_POLICY_UPDATE,
+        review_resource,
+    )
+    assert not AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_GUIDE_UPDATE,
+        guide_resources[ActionId.PROJECT_GUIDE_CREATE],
+    )
+    assert not AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE,
+        sufficiency_resources[ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN],
+    )
+    assert not AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE,
+        submission_resources[ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE],
+    )
+    assert not AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE,
+        checker_resources[ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE],
+    )
+    human_sufficiency_run = sufficiency_resources[
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN
+    ].model_copy(
+        update={
+            "execution_kind": "human",
+            "setup_service_custody": None,
+        }
+    )
+    assert AuthorizationService._admin_resource_matches(
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN,
+        ProjectGuideSufficiencyMutationResourceContext.model_validate(
+            human_sufficiency_run.model_dump()
+        ),
+    )
+    with pytest.raises(ValidationError):
+        ProjectGuideMutationResourceContext(
+            resource_type="project_guide_mutation",
+            resource_id=uuid4(),
+            scope_project_id=project_id,
+            guide_id=guide_id,
+            target_kind="update",
+            guide_exists=True,
+            guide_status="draft",
+            guide_version="1",
+            operation_generation=1,
+        )
+    for context_type, service_resource in (
+        (
+            ProjectGuideSufficiencyMutationResourceContext,
+            sufficiency_resources[ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN],
+        ),
+        (
+            ProjectSubmissionArtifactPolicyMutationResourceContext,
+            submission_resources[ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE],
+        ),
+        (
+            ProjectPostSubmitCheckerPolicyMutationResourceContext,
+            checker_resources[ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE],
+        ),
+    ):
+        missing_custody = service_resource.model_dump()
+        missing_custody["setup_service_custody"] = None
+        with pytest.raises(
+            ValidationError, match="service execution requires exact setup custody"
+        ):
+            context_type.model_validate(missing_custody)
+        if context_type is not ProjectGuideSufficiencyMutationResourceContext:
+            human_derive = service_resource.model_dump()
+            human_derive["execution_kind"] = "human"
+            human_derive["setup_service_custody"] = None
+            with pytest.raises(
+                ValidationError, match="derivation requires setup-service authority"
+            ):
+                context_type.model_validate(human_derive)
+        wrong_lineage = service_resource.model_dump()
+        wrong_lineage["setup_service_custody"]["scope_project_id"] = uuid4()
+        with pytest.raises(ValidationError, match="setup lineage is inconsistent"):
+            context_type.model_validate(wrong_lineage)
+        wrong_generation = service_resource.model_dump()
+        wrong_generation["setup_service_custody"]["setup_generation"] = 2
+        with pytest.raises(ValidationError, match="setup generation is inconsistent"):
+            context_type.model_validate(wrong_generation)
+        wrong_step = service_resource.model_dump()
+        wrong_step["setup_service_custody"]["expected_step"] = "post_submit_policy"
+        if context_type is ProjectPostSubmitCheckerPolicyMutationResourceContext:
+            wrong_step["setup_service_custody"]["expected_step"] = "guide_sufficiency"
+        with pytest.raises(ValidationError, match="setup-service step is inconsistent"):
+            context_type.model_validate(wrong_step)
+        wrong_stale_output = service_resource.model_dump()
+        wrong_stale_output["setup_service_custody"]["stale_output_digest"] = (
+            "sha256:" + "b" * 64
+        )
+        with pytest.raises(ValidationError, match="stale output is inconsistent"):
+            context_type.model_validate(wrong_stale_output)
+        changed_task = service_resource.model_copy(
+            update={
+                "setup_service_custody": service_resource.setup_service_custody.model_copy(
+                    update={"task_id": uuid4(), "correlation_id": uuid4()}
+                )
+            }
+        )
+        assert changed_task != service_resource
 
 
 def test_obsolete_artifact_upload_authority_is_historical_only() -> None:
@@ -2172,7 +2584,7 @@ def test_art_custody_documentation_matches_the_independent_catalogue_fixture() -
     assert "does not grant Operator" in operations
     assert "verification retry remains independently gated" in operations
     assert (
-            "71 PermissionIds, 78 ActionIds, 37 active actions, and\n41 planned actions" in operations
+            "71 PermissionIds, 96 ActionIds, 37 active actions, and\n59 planned actions" in operations
     )
 
 
@@ -2986,6 +3398,49 @@ class _PreparedTestSession:
 
     def in_nested_transaction(self) -> bool:
         return self.nested
+
+
+@pytest.mark.asyncio
+async def test_project_mutation_actions_cannot_issue_prepared_handles_while_planned() -> None:
+    """Deny every 12A action before actor locks, evidence, or handle issuance."""
+    context = _runtime_context()
+    session = _PreparedTestSession()
+
+    class UnexpectedFacts:
+        def __getattr__(self, name: str):
+            raise AssertionError(f"planned project mutation reached {name}")
+
+    facts = UnexpectedFacts()
+    authorization, evidence = _runtime_service(
+        context,
+        session=session,
+        admin_repository=facts,
+    )
+    prepared = PreparedAuthorizationService(
+        session,  # type: ignore[arg-type]
+        context,
+        authorization,
+        facts,  # type: ignore[arg-type]
+    )
+    project_id = uuid4()
+    for action_id in PROJECT_MUTATION_RESOURCE_BY_ACTION:
+        scope = PreparedAuthorityScope(
+            kind=(
+                PreparedAuthorityScopeKind.SYSTEM
+                if action_id is ActionId.PROJECT_CREATE
+                else PreparedAuthorityScopeKind.PROJECT
+            ),
+            project_id=None if action_id is ActionId.PROJECT_CREATE else project_id,
+        )
+        with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
+            await prepared.prepare(
+                action_id,
+                PreparedAuthorizationInput(idempotency_key=uuid4(), request_value={}),
+                scope,
+            )
+        assert exc_info.value.denial_code is AuthorizationDenialCode.ACTION_UNAVAILABLE
+    assert prepared._issued == {}
+    assert evidence.events == []
 
 
 class _ProjectReadAuthorityFacts:
