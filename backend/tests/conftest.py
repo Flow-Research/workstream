@@ -21,7 +21,7 @@ from app.db import session as db_session
 from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 
 DDL_LOCK_DIRECTORY = Path("/tmp")
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "ec5b9fcefb970e9cc744731dd7006d50c66c7b2879fe32ccc17d24b5ad503066"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "5654f83859a318a6f8205215d72934a9b115a155f15d407d54f4200c394b8e3e"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -57,6 +57,10 @@ RESETTABLE_TEST_TABLES = (
     "guide_source_artifact_ingests",
     "guide_source_artifact_incidents",
     "guide_source_artifact_bindings",
+    "guide_source_extracted_contents",
+    "guide_source_extraction_attempts",
+    "guide_source_extraction_retry_budgets",
+    "guide_source_extraction_usages",
     "guide_source_format_classifications",
     "guide_source_snapshot_items",
     "guide_source_snapshots",

@@ -1,7 +1,7 @@
 """register the fixed project-setup service identity
 
-Revision ID: 0042_project_setup_service
-Revises: 0041_project_mutation_evidence
+Revision ID: 0043_project_setup_service
+Revises: 0042_guide_extraction
 Create Date: 2026-07-30
 """
 
@@ -11,8 +11,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0042_project_setup_service"
-down_revision = "0041_project_mutation_evidence"
+revision = "0043_project_setup_service"
+down_revision = "0042_guide_extraction"
 branch_labels = depends_on = None
 
 _HISTORICAL_IDENTITIES = (

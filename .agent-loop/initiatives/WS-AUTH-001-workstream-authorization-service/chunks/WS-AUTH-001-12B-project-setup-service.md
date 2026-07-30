@@ -5,8 +5,8 @@
 Implementation and required internal review are complete from merged 12A at
 trusted main `64dd9c98`; hosted PR checks remain pending. This child registers
 planned matrix facts and activates no action or Celery call path. Its exact
-migration is `0042_project_setup_service` after
-`0041_project_mutation_evidence`.
+migration is `0043_project_setup_service` after merged ART migration
+`0042_guide_extraction`.
 
 ## Parent initiative
 
@@ -42,7 +42,7 @@ backend/app/modules/actors/models.py
 backend/app/modules/actors/service_identities.py
 backend/app/modules/actors/service_identity_migration.py
 backend/app/modules/authorization/catalogue.py
-backend/alembic/versions/0042_project_setup_service.py
+backend/alembic/versions/0043_project_setup_service.py
 backend/tests/test_actor_migration_tools.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
@@ -66,7 +66,7 @@ project module, the setup queue, or the current Celery setup worker module.
 
 - Immutable identity `workstream.project.setup` is registered as the eighth
   closed service identity and has exactly the four parent actions. Static
-  membership grants no human/admin/project role, and migration `0042` seeds no
+  membership grants no human/admin/project role, and migration `0043` seeds no
   ActorProfile, ActorIdentityLink, admin grant, or project grant.
 - All four memberships remain planned and unavailable; the existing Celery
   call graph is not switched in this foundation.
@@ -85,7 +85,7 @@ project module, the setup queue, or the current Celery setup worker module.
   alone owns the final Celery call-graph cutover and setup-run writes.
 - The frozen revision-0023 seven-identity migration contract is not edited.
   Its operator mapping tool consumes that frozen contract rather than the live
-  registry. `0042` alone expands the current database constraint, round-trips
+  registry. `0043` alone expands the current database constraint, round-trips
   cleanly, and refuses downgrade while a project-setup ActorProfile exists.
 - Specification and operations docs list the eighth identity and its exact
   four planned/unavailable actions while preserving explicitly historical
@@ -104,7 +104,7 @@ install -d -m 700 .ci
   app/modules/actors/service_identities.py \
   app/modules/actors/service_identity_migration.py \
   app/modules/authorization/catalogue.py \
-  alembic/versions/0042_project_setup_service.py \
+  alembic/versions/0043_project_setup_service.py \
   tests/test_actor_migration_tools.py tests/test_authorization.py \
   tests/test_alembic.py tests/test_auth.py tests/conftest.py
 .venv/bin/python -m py_compile \
@@ -112,7 +112,7 @@ install -d -m 700 .ci
   app/modules/actors/service_identities.py \
   app/modules/actors/service_identity_migration.py \
   app/modules/authorization/catalogue.py \
-  alembic/versions/0042_project_setup_service.py \
+  alembic/versions/0043_project_setup_service.py \
   tests/test_actor_migration_tools.py tests/test_authorization.py \
   tests/test_alembic.py tests/test_auth.py tests/conftest.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
@@ -120,16 +120,16 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py 
   .venv/bin/python -m pytest -p pytest_asyncio.plugin -p pytest_cov.plugin -q \
   tests/test_actor_migration_tools.py tests/test_authorization.py tests/test_alembic.py \
   tests/test_auth.py \
-  -k 'project_setup_service or controlled_service_actor_provisioning_includes_project_setup or fixed_service_action_matrix or 0042_project_setup or service_identity_migration_contract'
+  -k 'project_setup_service or controlled_service_actor_provisioning_includes_project_setup or fixed_service_action_matrix or 0043_project_setup or service_identity_migration_contract'
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json .ci/auth12b-migration-coverage.json \
   --lane auth12b_migration_coverage --timeout-seconds 1200 -- sh -c \
   '.venv/bin/coverage erase && \
-  .venv/bin/coverage run --include="*/alembic/versions/0042_project_setup_service.py" \
+  .venv/bin/coverage run --include="*/alembic/versions/0043_project_setup_service.py" \
   -m pytest -p pytest_asyncio.plugin -q tests/test_alembic.py \
-  -k "0042_project_setup" && \
+  -k "0043_project_setup" && \
   .venv/bin/coverage report \
-  --include="*/alembic/versions/0042_project_setup_service.py" \
+  --include="*/alembic/versions/0043_project_setup_service.py" \
   --show-missing --fail-under=90'
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest \
   -p pytest_asyncio.plugin -p pytest_cov.plugin -q tests/test_actor_migration_tools.py \

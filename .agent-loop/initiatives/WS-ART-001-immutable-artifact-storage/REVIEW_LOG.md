@@ -203,3 +203,15 @@
   the passing repository-owned hosted docstring gate.
 - Senior-engineering, security, and QA repair-delta re-reviews pass with no
   blockers before the repaired PR head is published.
+
+## WS-ART-001-03B3A
+
+- Implemented the hidden default-deny extraction framework and standard-library
+  text, Markdown, JSON, and CSV canonicalization slice.
+- Initial L1 review found blocking sandbox, provenance, concurrency, workspace,
+  retry, terminal replay, schema-proof, and test-surface issues.
+- Repairs added exact guide/content locks, classification predicates, durable
+  two-slot retry custody, extracted-attempt usage fencing, cleanup recovery,
+  fixture-only resource probes, and expanded boundary/migration evidence.
+- Architecture, security, senior engineering, product/ops, QA, docs, reuse,
+  CI-integrity, and test-delta repair reviews pass with no blockers.

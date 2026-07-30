@@ -482,7 +482,7 @@ closed:
 its actions remain planned and unavailable in AUTH-12B. Registration makes the
 identity selectable by the existing controlled provisioning route but creates
 no ActorProfile, ActorIdentityLink, role, grant, or executable authority by
-itself; migration `0042_project_setup_service` only expands the closed database
+itself; migration `0043_project_setup_service` only expands the closed database
 identity constraint.
 
 AUTH-09B lets a system Access Administrator bind an exact configured-issuer

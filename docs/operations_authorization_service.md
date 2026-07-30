@@ -883,7 +883,7 @@ AUTH-12B extends the current live registry to an eighth identity,
 `project.submission_artifact_policy.derive`,
 `project.post_submit_checker_policy.derive`, and `project.setup_run.update`.
 All four remain planned and unavailable. Migration
-`0042_project_setup_service` seeds no profile, link, AdminRoleGrant, or
+`0043_project_setup_service` seeds no profile, link, AdminRoleGrant, or
 ProjectRoleGrant. It takes an `ACCESS EXCLUSIVE` lock on `actor_profiles` while
 replacing the closed service-identity constraint, and downgrade refuses once a
 `workstream.project.setup` ActorProfile exists. An Access Administrator may use the existing controlled

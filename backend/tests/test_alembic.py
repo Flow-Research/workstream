@@ -34,6 +34,7 @@ from app.modules.authorization.catalogue import (
     ActionOwner,
     PermissionId,
 )
+
 from app.modules.actors.legacy_classification import (
     CLASSIFICATION_FILE_ENV,
     LegacyActorClassification,
@@ -53,6 +54,8 @@ from app.modules.actors.service_identity_migration import (
     publish_envelope as publish_service_identity_envelope,
     snapshot_existing_service_rows,
 )
+
+HEAD_REVISION = "0043_project_setup_service"
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -1652,7 +1655,7 @@ def test_artifact_recovery_schema_and_empty_downgrade(
             command.downgrade(config, "base")
             command.upgrade(config, "head")
             assert asyncio.run(_artifact_recovery_schema(isolated_database_env)) == {
-                "revision": "0042_project_setup_service",
+                "revision": HEAD_REVISION,
                 "constraints": {
                     "artifact_recovery_attempt_custody",
                     "artifact_verification_lineage_custody",
@@ -1805,10 +1808,7 @@ async def _setup_generations_after_0039(database_url: str) -> list[tuple[str, in
     try:
         async with engine.connect() as connection:
             rows = await connection.execute(
-                text(
-                    "select id, setup_generation from project_setup_runs "
-                    "order by id"
-                )
+                text("select id, setup_generation from project_setup_runs order by id")
             )
             return sorted((str(row.id), int(row.setup_generation)) for row in rows)
     finally:
@@ -1975,9 +1975,7 @@ def test_0035_project_read_action_evidence_refuses_nonempty_downgrade(
                 RuntimeError, match="cannot downgrade non-empty project-read action evidence"
             ):
                 command.downgrade(config, "0034_project_role_issue_evidence")
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0042_project_setup_service"
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == (HEAD_REVISION)
         finally:
             asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
             command.downgrade(config, "base")
@@ -2026,9 +2024,7 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
     """Committed direct and idempotency-linked evidence must preserve vocabulary."""
     config = _alembic_config()
     definitions = tuple(
-        item
-        for item in ACTION_DEFINITIONS
-        if item.owner in _PROJECT_MUTATION_OWNERS
+        item for item in ACTION_DEFINITIONS if item.owner in _PROJECT_MUTATION_OWNERS
     )
     assert len(definitions) == 18
     event_id = ""
@@ -2053,9 +2049,7 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
                 match="cannot downgrade non-empty project-mutation action evidence",
             ):
                 command.downgrade(config, "0040_guide_materialization")
-            asyncio.run(
-                _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
-            )
+            asyncio.run(_remove_authority_audit_fixture(isolated_database_env, event_id=event_id))
             event_id = ""
 
             definition = definitions[-1]
@@ -2078,21 +2072,15 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
                 match="cannot downgrade non-empty project-mutation action evidence",
             ):
                 command.downgrade(config, "0040_guide_materialization")
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0042_project_setup_service"
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
         finally:
             if event_id:
                 asyncio.run(
-                    _remove_authority_audit_fixture(
-                        isolated_database_env, event_id=event_id
-                    )
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=event_id)
                 )
             if linked_event_id:
                 asyncio.run(
-                    _remove_authority_audit_fixture(
-                        isolated_database_env, event_id=linked_event_id
-                    )
+                    _remove_authority_audit_fixture(isolated_database_env, event_id=linked_event_id)
                 )
             asyncio.run(
                 _remove_authority_idempotency_fixture(
@@ -2102,15 +2090,15 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
             command.downgrade(config, "base")
 
 
-def test_0042_project_setup_service_round_trip_and_seeds_no_authority(
+def test_0043_project_setup_service_round_trip_and_seeds_no_authority(
     isolated_database_env: str, migration_lock
 ) -> None:
-    """0042 alone admits the eighth identity without creating actor authority."""
+    """0043 alone admits the eighth identity without creating actor authority."""
     config = _alembic_config()
     with migration_lock():
         try:
             command.downgrade(config, "base")
-            command.upgrade(config, "0041_project_mutation_evidence")
+            command.upgrade(config, "0042_guide_extraction")
             prior = asyncio.run(_project_setup_service_state(isolated_database_env))
             assert not prior["constraint_admits_identity"]
             assert prior["authority_rows"] == (0, 0, 0, 0)
@@ -2120,7 +2108,7 @@ def test_0042_project_setup_service_round_trip_and_seeds_no_authority(
             assert upgraded["constraint_admits_identity"]
             assert upgraded["authority_rows"] == (0, 0, 0, 0)
 
-            command.downgrade(config, "0041_project_mutation_evidence")
+            command.downgrade(config, "0042_guide_extraction")
             restored = asyncio.run(_project_setup_service_state(isolated_database_env))
             assert not restored["constraint_admits_identity"]
             assert restored["authority_rows"] == (0, 0, 0, 0)
@@ -2131,7 +2119,7 @@ def test_0042_project_setup_service_round_trip_and_seeds_no_authority(
             command.downgrade(config, "base")
 
 
-def test_0042_project_setup_service_refuses_in_use_downgrade(
+def test_0043_project_setup_service_refuses_in_use_downgrade(
     isolated_database_env: str, migration_lock
 ) -> None:
     """An exact project-setup profile prevents removal of its closed identity."""
@@ -2151,15 +2139,15 @@ def test_0042_project_setup_service_refuses_in_use_downgrade(
                 RuntimeError,
                 match="cannot downgrade project setup service identity",
             ):
-                command.downgrade(config, "0041_project_mutation_evidence")
+                command.downgrade(config, "0042_guide_extraction")
             assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0042_project_setup_service"
+                HEAD_REVISION
             )
             asyncio.run(
                 _remove_fixed_service_actor(isolated_database_env, actor_profile_id)
             )
             actor_profile_id = ""
-            command.downgrade(config, "0041_project_mutation_evidence")
+            command.downgrade(config, "0042_guide_extraction")
         finally:
             if actor_profile_id:
                 asyncio.run(
@@ -2287,9 +2275,7 @@ def test_0036_art_auth_catalogue_refuses_obsolete_evidence(
             )
             record_id = ""
             command.upgrade(config, "head")
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0042_project_setup_service"
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == (HEAD_REVISION)
         finally:
             for event_id in reversed(event_ids):
                 asyncio.run(
@@ -2685,7 +2671,7 @@ def test_project_role_migration_constraints_and_immutable_history(
             command.upgrade(config, "head")
             result = asyncio.run(_exercise_project_role_migration(isolated_database_env))
             assert result == {
-                "revision": "0042_project_setup_service",
+                "revision": HEAD_REVISION,
                 "role_count": 3,
                 "invalid_availability": "23514",
                 "duplicate_role": "23505",
@@ -2897,7 +2883,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0042_project_setup_service",
+                    HEAD_REVISION,
                     True,
                     True,
                 )
@@ -2924,7 +2910,7 @@ def test_project_role_downgrade_refuses_each_reserved_evidence_predicate(
                 ):
                     command.downgrade(config, "0030_artifact_verification")
                 assert asyncio.run(_project_role_refusal_state(isolated_database_env))[:3] == (
-                    "0042_project_setup_service",
+                    HEAD_REVISION,
                     True,
                     True,
                 )
@@ -2952,7 +2938,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
             command.upgrade(config, "head")
             schema = asyncio.run(_outbox_schema(isolated_database_env))
             assert schema == {
-                "revision": "0042_project_setup_service",
+                "revision": HEAD_REVISION,
                 "columns": {
                     "aggregate_id",
                     "aggregate_type",
@@ -3011,9 +2997,7 @@ def test_outbox_migration_schema_and_downgrade_writer_guard(
                 )
             )
             assert committed == "refused_after_commit"
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0042_project_setup_service"
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == (HEAD_REVISION)
             asyncio.run(_remove_outbox_migration_row(isolated_database_env, committed_project_id))
             command.downgrade(config, "0028_artifact_admission")
             assert "outbox_events" not in asyncio.run(_fetch_table_names(isolated_database_env))
