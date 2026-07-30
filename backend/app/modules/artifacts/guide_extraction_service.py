@@ -452,7 +452,10 @@ class GuideExtractionService:
             await session.scalar(
                 select(
                     func.coalesce(func.max(GuideSourceExtractionAttempt.attempt_number), 0)
-                ).where(GuideSourceExtractionAttempt.binding_id == facts.binding_id)
+                ).where(
+                    GuideSourceExtractionAttempt.binding_id == facts.binding_id,
+                    GuideSourceExtractionAttempt.policy_version == EXTRACTION_POLICY_VERSION,
+                )
             )
             or 0
         )

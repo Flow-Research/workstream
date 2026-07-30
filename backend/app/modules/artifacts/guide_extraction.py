@@ -119,10 +119,19 @@ class GuideExtractionRunner:
             "parser_failure",
         }:
             return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
-        if output is not None and (
-            not isinstance(output, str) or len(output.encode("utf-8")) > MAXIMUM_OUTPUT_BYTES
-        ):
+        if output is not None and not isinstance(output, str):
+            return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
+        if isinstance(output, str) and len(output.encode("utf-8")) > MAXIMUM_OUTPUT_BYTES:
             return self._result(detected_format, "limit_exceeded", "output_limit", None)
+        if (status == "extracted" and (error_code is not None or not isinstance(output, str))) or (
+            status != "extracted"
+            and (
+                not isinstance(error_code, str)
+                or len(error_code.encode("utf-8")) > 80
+                or output is not None
+            )
+        ):
+            return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
         return self._result(detected_format, status, error_code, output)
 
     @staticmethod

@@ -70,6 +70,13 @@ def test_worker_controls_and_canonical_extractors_execute_in_parent_coverage(
     )
     monkeypatch.setattr(worker_module.ctypes, "CDLL", lambda *_args, **_kwargs: library)
     worker_module._install_seccomp()
+    library.seccomp_syscall_resolve_name.result = -1
+    with pytest.raises(worker_module.ExtractionFailure) as unresolved:
+        worker_module._install_seccomp()
+    assert (unresolved.value.status, unresolved.value.code) == (
+        "parser_failure",
+        "isolation_unavailable",
+    )
 
     assert worker_module._extract(b"\xef\xbb\xbfhello\r\n", "plain_text") == "hello\n"
     assert worker_module._extract(b'{"z":2,"a":1}', "json") == '{"a":1,"z":2}'
@@ -102,10 +109,40 @@ def test_worker_main_bounds_every_exception_class(
     monkeypatch.setattr(worker_module, "_extract", lambda *_args: (_ for _ in ()).throw(failure))
     monkeypatch.setattr(worker_module.sys, "argv", ["worker", "json"])
     monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"{}")))
-    monkeypatch.setattr(worker_module.os, "write", lambda _fd, value: writes.append(value))
+
+    def write(_fd, value):
+        writes.append(bytes(value))
+        return len(value)
+
+    monkeypatch.setattr(worker_module.os, "write", write)
 
     assert worker_module.main() == 0
     assert json.loads(writes[0]) == {"status": status, "error_code": error_code, "output": None}
+
+
+def test_worker_main_writes_the_complete_result_after_short_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    writes: list[bytes] = []
+    monkeypatch.setattr(worker_module, "_install_limits", lambda: None)
+    monkeypatch.setattr(worker_module, "_install_seccomp", lambda: None)
+    monkeypatch.setattr(worker_module, "_extract", lambda *_args: "complete")
+    monkeypatch.setattr(worker_module.sys, "argv", ["worker", "plain_text"])
+    monkeypatch.setattr(worker_module.sys, "stdin", SimpleNamespace(buffer=BytesIO(b"guide")))
+
+    def short_write(_fd, value):
+        chunk = bytes(value[:7])
+        writes.append(chunk)
+        return len(chunk)
+
+    monkeypatch.setattr(worker_module.os, "write", short_write)
+
+    assert worker_module.main() == 0
+    assert json.loads(b"".join(writes)) == {
+        "status": "extracted",
+        "error_code": None,
+        "output": "complete",
+    }
 
 
 @pytest.mark.parametrize(
@@ -188,6 +225,13 @@ def test_csv_cell_boundary_is_exact(runner: GuideExtractionRunner, tmp_path: Pat
         BytesIO(("x" * 32_769).encode()), detected_format="csv", workspace=tmp_path
     )
     assert (result.status, result.error_code) == (
+        "limit_exceeded",
+        "csv_cell_size_limit",
+    )
+    module_limit_over = runner.extract(
+        BytesIO(("x" * 200_000).encode()), detected_format="csv", workspace=tmp_path
+    )
+    assert (module_limit_over.status, module_limit_over.error_code) == (
         "limit_exceeded",
         "csv_cell_size_limit",
     )
@@ -361,6 +405,48 @@ def test_runner_launch_is_secret_free_and_process_isolated(
     environment = observed["env"]
     assert isinstance(environment, dict)
     assert set(environment) == {"LANG", "LC_ALL", "PATH"}
+
+
+@pytest.mark.parametrize(
+    "worker_result",
+    [
+        {"status": "extracted", "error_code": "conflict", "output": "ok"},
+        {"status": "extracted", "error_code": None, "output": None},
+        {"status": "extracted", "error_code": None, "output": 7},
+        {"status": "malformed", "error_code": None, "output": None},
+        {"status": "malformed", "error_code": 7, "output": None},
+        {"status": "malformed", "error_code": "x" * 81, "output": None},
+        {"status": "malformed", "error_code": "invalid", "output": "unexpected"},
+        {"status": "malformed", "error_code": "invalid", "output": 7},
+    ],
+)
+def test_runner_rejects_invalid_worker_result_shapes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    worker_result: dict[str, object],
+) -> None:
+    class CompletedProcess:
+        returncode = 0
+        pid = 123
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def communicate(self, _payload, timeout):
+            del timeout
+            return json.dumps(worker_result).encode(), b""
+
+    monkeypatch.setattr(subprocess, "Popen", CompletedProcess)
+
+    result = GuideExtractionRunner().extract(
+        BytesIO(b"guide"), detected_format="plain_text", workspace=tmp_path
+    )
+
+    assert (result.status, result.error_code, result.canonical_output) == (
+        "parser_failure",
+        "invalid_executor_output",
+        None,
+    )
 
 
 @pytest.mark.asyncio

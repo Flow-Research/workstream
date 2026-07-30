@@ -48,6 +48,8 @@ and CI/docs review; it leaves every real subprocess isolation probe intact.
 The AUTH-12A rebase and final external-review repair delta passed refreshed
 senior, architecture/reuse, QA/test-delta, security, product/ops, and CI/docs
 review after policy replay and concurrent retry-custody findings were repaired.
+The subsequent hosted schema-fingerprint and CodeRabbit worker/protocol delta
+also passed focused QA, security, senior/reuse, and CI/docs re-review.
 
 ## Material Repairs
 

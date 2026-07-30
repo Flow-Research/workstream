@@ -8,13 +8,15 @@ from io import StringIO
 import json
 import math
 import os
+import re
 import resource
 import sys
-import unicodedata
 
 
 _ALLOW = 0x7FFF0000
 _ERRNO_EPERM = 0x00050001
+_MAXIMUM_INPUT_BYTES = 32 * 1024 * 1024
+_INVALID_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 _ALLOWED_SYSCALLS = (
     "read",
     "write",
@@ -83,7 +85,7 @@ def _install_seccomp() -> None:
     try:
         for name in _ALLOWED_SYSCALLS:
             number = library.seccomp_syscall_resolve_name(name.encode("ascii"))
-            if number >= 0 and library.seccomp_rule_add(context, _ALLOW, number, 0) != 0:
+            if number < 0 or library.seccomp_rule_add(context, _ALLOW, number, 0) != 0:
                 raise ExtractionFailure("parser_failure", "isolation_unavailable")
         if library.seccomp_load(context) != 0:
             raise ExtractionFailure("parser_failure", "isolation_unavailable")
@@ -101,9 +103,7 @@ def _decode_text(payload: bytes) -> str:
     except UnicodeDecodeError as exc:
         raise ExtractionFailure("malformed", "invalid_encoding") from exc
     value = value.replace("\r\n", "\n").replace("\r", "\n")
-    if any(
-        unicodedata.category(character) == "Cc" and character not in "\t\n" for character in value
-    ):
+    if _INVALID_CONTROL.search(value):
         raise ExtractionFailure("malformed", "invalid_control_character")
     return value
 
@@ -149,6 +149,7 @@ def _extract(payload: bytes, detected_format: str) -> str:
         rows: list[list[str]] = []
         cells = 0
         try:
+            csv.field_size_limit(_MAXIMUM_INPUT_BYTES + 1)
             reader = csv.reader(StringIO(text, newline=""), dialect="excel", strict=True)
             for row in reader:
                 if len(rows) >= 100_000:
@@ -171,8 +172,8 @@ def main() -> int:
     try:
         _install_limits()
         _install_seccomp()
-        payload = sys.stdin.buffer.read(32 * 1024 * 1024 + 1)
-        if len(payload) > 32 * 1024 * 1024:
+        payload = sys.stdin.buffer.read(_MAXIMUM_INPUT_BYTES + 1)
+        if len(payload) > _MAXIMUM_INPUT_BYTES:
             raise ExtractionFailure("limit_exceeded", "input_limit")
         output = _extract(payload, detected_format)
         if len(output.encode("utf-8")) > 4 * 1024 * 1024:
@@ -185,7 +186,12 @@ def main() -> int:
     except BaseException:
         result = {"status": "parser_failure", "error_code": "parser_failure", "output": None}
     encoded = json.dumps(result, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
-    os.write(1, encoded)
+    view = memoryview(encoded)
+    while view:
+        written = os.write(1, view)
+        if written <= 0:
+            raise OSError("guide extraction result write made no progress")
+        view = view[written:]
     return 0
 
 

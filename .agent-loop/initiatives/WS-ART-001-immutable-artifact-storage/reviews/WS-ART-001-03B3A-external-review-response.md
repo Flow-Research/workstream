@@ -31,6 +31,13 @@
   policy `parser_failure` or `cancelled` attempt durably proves retry authority.
 - Serialized the remaining retry slot with a PostgreSQL row lock and added a
   concurrent-claim regression proving exactly one request receives slot two.
+- Made unresolved seccomp syscall names fail as `isolation_unavailable`, made
+  CSV's parser ceiling subordinate to the policy cell limit, validated every
+  child error envelope before persistence, and made worker result writes
+  short-write safe.
+- Scoped failed-attempt numbering to the current extraction policy, replaced
+  the large-text control scan with the equivalent bounded control-range regex,
+  and repaired the final stale refused-downgrade head assertion.
 
 ## Comments deferred
 
@@ -43,6 +50,16 @@
   fails was not adopted. An uncertain cleanup result is a scratch-custody
   failure, so the operation remains fail closed while the workspace stays in
   the manager-owned pending-cleanup set.
+- The suggestion to let a claimed slot with no durable attempt authorize slot
+  two was not adopted. The reviewed contract permits slot two only after a
+  durable current-policy `parser_failure` or `cancelled` attempt; process death
+  before that evidence is an intentionally fail-closed custody outcome.
+- The suggestion to replace the pinned descriptor workspace path with a real
+  pathname was not adopted. Extraction is deliberately process-local and
+  descriptor-scoped; converting it back to a name-resolved path would weaken
+  the containment boundary. Cleanup failure also intentionally remains the
+  visible result rather than publishing output while scratch custody is
+  uncertain.
 
 ## Human decisions needed
 
@@ -60,9 +77,19 @@ None.
   this worktree's incomplete local test environment resolves a conflicting
   global pytest plugin. Hosted checks must be refreshed on the new exact PR
   head.
+- The final worker/protocol repair slice passed 10 focused synchronous tests;
+  direct probes also confirmed a 200,000-byte CSV cell is classified as
+  `limit_exceeded/csv_cell_size_limit` and non-string child output as
+  `parser_failure/invalid_executor_output`.
 
 ## Remaining risks
 
 The full PostgreSQL, schema-fingerprint, and repository coverage proof remains
 delegated to the hosted Backend gate. No CI threshold or test assertion was
 weakened.
+
+The first reconciled-head Backend run migrated successfully through
+`0042_guide_extraction` and observed the expected changed public-schema
+fingerprint, then failed closed because the committed custody constant still
+described the pre-extraction schema. The constant is updated only from that
+hosted isolated-database observation; the next exact head must rerun every lane.

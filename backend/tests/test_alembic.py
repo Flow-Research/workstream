@@ -2060,9 +2060,7 @@ def test_0041_project_mutation_action_evidence_refuses_downgrade(
                 match="cannot downgrade non-empty project-mutation action evidence",
             ):
                 command.downgrade(config, "0040_guide_materialization")
-            assert asyncio.run(_current_revision(isolated_database_env)) == (
-                "0041_project_mutation_evidence"
-            )
+            assert asyncio.run(_current_revision(isolated_database_env)) == HEAD_REVISION
         finally:
             if event_id:
                 asyncio.run(
