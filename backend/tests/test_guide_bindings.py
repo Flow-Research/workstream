@@ -700,6 +700,7 @@ async def test_successful_replay_requires_the_current_extraction_policy(
                     classification_facts={},
                 )
             )
+            await session.flush()
             session.add_all(
                 [
                     GuideSourceExtractionAttempt(

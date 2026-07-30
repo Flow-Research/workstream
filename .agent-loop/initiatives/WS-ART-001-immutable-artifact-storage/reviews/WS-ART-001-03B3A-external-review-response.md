@@ -93,3 +93,7 @@ The first reconciled-head Backend run migrated successfully through
 fingerprint, then failed closed because the committed custody constant still
 described the pre-extraction schema. The constant is updated only from that
 hosted isolated-database observation; the next exact head must rerun every lane.
+The next hosted run passed 2,280 tests across the other lanes and exposed one
+new obsolete-policy replay fixture whose classification dependency had not been
+flushed before its attempt insert. The fixture now flushes the classification
+first; this is test setup ordering, not a production-path relaxation.
