@@ -8,6 +8,10 @@ WS-ART-001 — Immutable Artifact Storage
 
 Add deterministic bounded XLSX cell extraction using only the approved OOXML capability.
 
+`WS-ART-001-03B3B1` and `WS-ART-001-03B3B3A` are hard predecessors. Package
+installation and imports fail closed unless the merged protected GitHub approval baseline matches
+the exact pinned allowlist.
+
 ## Approved plan reference
 
 - PLAN: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/PLAN.md`
@@ -39,18 +43,31 @@ DOCX/PPTX behavior, formulas/macros/external data execution, unapproved packages
 
 ## Acceptance criteria
 
-- Require exact XLSX classification; never evaluate formulas or fetch external data; prove 100/101 sheets, row/cell/character limits, deterministic values, child-only imports, unsafe OOXML, malformed, crash, timeout, cancellation, cleanup and coverage.
+- Require exact XLSX classification and the shared OOXML security boundary.
+- Accept exactly 100 worksheets and reject 101 before extraction. Traverse
+  workbook sheet order, then ascending row and cell coordinates. Resolve shared
+  strings to text deterministically. Emit formula source text and a separately
+  labelled cached value when present, but never calculate it; emit merged-cell
+  content once at the anchor and record the covered range. Empty cells remain
+  omitted. Fixed row, cell, character, and D42 output limits fail the complete
+  result as `limit_exceeded`; no partial result is usable.
+- Never evaluate formulas or fetch external data. Prove deterministic values,
+  exact 100/101 and other boundaries, child-only imports, unsafe/malformed
+  input, crash, timeout, cancellation, cleanup, approval-gate, and coverage.
 
 ## Verification commands
 
 ```bash
 (cd backend && uv run ruff check app tests)
 (cd backend && python scripts/check_guide_extractor_dependencies.py)
-(cd backend && uv run pytest -q tests/test_guide_ooxml.py tests/test_guide_xlsx.py tests/test_guide_extraction.py)
+(cd backend && uv run pytest -q tests/test_guide_ooxml.py tests/test_guide_xlsx.py tests/test_guide_extraction.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check
 ```
+
+Hosted Backend/Agent Gates must preserve 90% changed-subsystem and 78% repository coverage.
 
 ## Required reviewers
 

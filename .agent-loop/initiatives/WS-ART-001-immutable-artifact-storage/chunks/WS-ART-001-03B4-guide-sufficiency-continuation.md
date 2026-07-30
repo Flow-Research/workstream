@@ -1,7 +1,7 @@
 # Chunk Contract: WS-ART-001-03B4 — Guide Sufficiency Continuation
 
 Initiative: `WS-ART-001` | Risk: L1 | Status: Proposed after 03B3B2,
-03B3B3B-03B3B3D, and 03B3B4
+03B3B3B, 03B3B3C, 03B3B3D, and 03B3B4
 
 ## Goal
 

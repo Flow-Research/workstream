@@ -8,6 +8,9 @@ WS-ART-001 — Immutable Artifact Storage
 
 Install only the approved PDF dependency and add bounded PDF text extraction on
 the existing 03B3A isolated framework.
+
+`WS-ART-001-03B3B1` is a hard predecessor. Installation and imports fail
+closed unless its merged protected GitHub approval baseline matches the exact pinned allowlist.
 ## Approved plan reference
 
 - PLAN: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/PLAN.md`
@@ -57,7 +60,8 @@ fetches, provider/AUTH/Celery/submission changes.
 ```bash
 (cd backend && python scripts/check_guide_extractor_dependencies.py)
 (cd backend && uv run ruff check app tests scripts)
-(cd backend && uv run pytest -q tests/test_guide_pdf.py tests/test_guide_extraction.py)
+(cd backend && uv run pytest -q tests/test_guide_pdf.py tests/test_guide_extraction.py tests/test_artifact_architecture.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check

@@ -8,6 +8,10 @@ WS-ART-001 — Immutable Artifact Storage
 
 Add shared bounded ZIP/XML marker and rejection capabilities without extracting DOCX, PPTX, or XLSX content.
 
+`WS-ART-001-03B3B1` is a hard predecessor. Package installation and parser
+imports fail closed unless its merged protected GitHub approval baseline matches the exact pinned
+allowlist. The DOCX, PPTX, and XLSX chunks inherit this same gate.
+
 ## Approved plan reference
 
 - PLAN: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/PLAN.md`
@@ -40,18 +44,35 @@ No document adapter/registry activation, generic ZIP semantics, AUTH/Celery/subm
 
 ## Acceptance criteria
 
-- Require exact classification; reject ambiguity, macros, external relationships, embedded executables, traversal, bombs, unsafe XML and undeclared parser imports. Parser imports execute only in the isolated child. Prove limits, crash, timeout, cancellation, cleanup and dependency gate.
+- Inspect central-directory metadata before reading entry bodies. Reject
+  duplicate/case-colliding normalized names, absolute/traversing names,
+  encrypted entries, nested archives, symlinks/special entries, macros,
+  external relationships, embedded objects/executables, DTD/entity use, and
+  any required marker conflict. Extra members are allowed only when their
+  normalized names fall within the fixed OPC package-part allowlist documented
+  in the implementation; unknown roots or executable-capable suffixes reject
+  before a format adapter runs.
+- Inherit the fixed D42 limits: at most 2,000 entries, 128 MiB decompressed
+  bytes, nesting depth 8, 32 MiB input, 4 MiB output, 30 CPU seconds, 60 wall
+  seconds, 512 MiB address space, 32 descriptors, and no child processes/core
+  dumps. Each breach has the D42 bounded outcome before adapter dispatch.
+- Require exact classification and reject ambiguity. Parser imports execute
+  only in the isolated child. Prove every rejection class and boundary plus
+  crash, timeout, cancellation, cleanup, and the dependency gate.
 
 ## Verification commands
 
 ```bash
 (cd backend && uv run ruff check app tests)
 (cd backend && python scripts/check_guide_extractor_dependencies.py)
-(cd backend && uv run pytest -q tests/test_guide_ooxml.py)
+(cd backend && uv run pytest -q tests/test_guide_ooxml.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check
 ```
+
+Hosted Backend/Agent Gates must preserve 90% changed-subsystem and 78% repository coverage.
 
 ## Required reviewers
 
@@ -67,4 +88,3 @@ boundary, exact limits, and absence of parser imports outside the isolated child
 
 Stop on unapproved dependencies, scope expansion, isolation/CI weakening,
 architecture drift, or repeated repair failure.
-

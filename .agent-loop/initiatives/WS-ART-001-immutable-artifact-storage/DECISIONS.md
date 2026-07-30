@@ -403,8 +403,8 @@ have bounded outcomes and cleanup. Production parser dependencies require
 explicit human approval before implementation. Complex-format delivery is
 split after 03B3A: 03B3B1 records the exact pinned dependency decision and
 deterministic gate without installing packages; 03B3B2 delivers PDF, 03B3B3A
-owns shared OOXML security, 03B3B3B-D separately deliver DOCX/PPTX/XLSX, and
-03B3B4 delivers image metadata.
+owns shared OOXML security, 03B3B3B delivers DOCX, 03B3B3C delivers PPTX,
+03B3B3D delivers XLSX, and 03B3B4 delivers image metadata.
 
 The v0.1 extraction-policy limits are fixed, not caller-selectable:
 

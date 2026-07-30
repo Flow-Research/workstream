@@ -51,10 +51,22 @@ containing real customer data, AUTH/Celery/submission changes.
   source/index, direct/transitive status, import names, native-wheel status,
   license, advisory snapshot date, and exact format scope.
 - The allowlist maps each dependency to only PDF, OOXML, or image metadata.
+- Approval is anchored in the protected GitHub PR review and merge history, not
+  asserted by a contributor-controlled repository file. A repository
+  maintainer other than the dependency PR author must approve the exact PR head
+  after the allowlist's final change; stale-review dismissal must invalidate an
+  approval when those bytes change. The merged commit is the approved baseline.
+- Any repository evidence record may mirror the GitHub review URL/ID, approver,
+  UTC timestamp, approved head commit, and lowercase SHA-256 of the allowlist,
+  but it is audit metadata and is never sufficient authority by itself.
+- CI recomputes the current allowlist digest against the merged approved
+  baseline and fails closed on drift. The gate and its tests must reject
+  absent independent approval, self-authored/forged records, stale head
+  approval, and a digest changed after approval.
 - CI fails closed on undeclared, unpinned, hash-drifted, or wrong-format parser
   dependencies.
 - Human approval of the exact list is recorded before any of 03B3B2,
-  03B3B3A-03B3B3D, or 03B3B4 starts.
+  03B3B3A, 03B3B3B, 03B3B3C, 03B3B3D, or 03B3B4 starts.
 
 ## Verification commands
 

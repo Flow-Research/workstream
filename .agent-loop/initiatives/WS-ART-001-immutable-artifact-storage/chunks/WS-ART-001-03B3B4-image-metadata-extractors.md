@@ -8,6 +8,9 @@ WS-ART-001 — Immutable Artifact Storage
 
 Install only the approved image dependency and expose bounded PNG/JPEG/WebP
 structural metadata without OCR or raw pixels.
+
+`WS-ART-001-03B3B1` is a hard predecessor. Installation and imports fail
+closed unless its merged protected GitHub approval baseline matches the exact pinned allowlist.
 ## Approved plan reference
 
 - PLAN: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/PLAN.md`
@@ -50,15 +53,22 @@ PDF/OOXML packages, framework/AUTH/Celery/submission changes.
 - Parser imports and execution exist only in the isolated extraction child,
   never API, materialization/provider, AUTH, Celery, or agent assembly paths.
 - Dimensions above 16,384 or 40 megapixels fail before decode/allocation.
-- Malformed/truncated/decompression-bomb inputs, metadata privacy, crash,
-  timeout, cancellation, cleanup, and coverage are proven.
+- Output is allowlisted to detected format, width, height, frame count, color
+  model, bit depth, and transparency. Discard EXIF, XMP, IPTC, ICC payloads,
+  PNG text chunks, comments, thumbnails, geolocation, and every other ancillary
+  metadata value; fixtures prove this for PNG, JPEG, and WebP.
+- Inherit D42's 32 MiB input, 4 MiB output, CPU/wall-clock, address-space,
+  descriptor, child/core, termination, and scratch-cleanup rules. Prove these
+  resource boundaries plus malformed, truncated, decompression-bomb, 16,384
+  dimension, 40-megapixel, crash, timeout, cancellation, and cleanup outcomes.
 
 ## Verification commands
 
 ```bash
 (cd backend && python scripts/check_guide_extractor_dependencies.py)
 (cd backend && uv run ruff check app tests scripts)
-(cd backend && uv run pytest -q tests/test_guide_images.py tests/test_guide_extraction.py)
+(cd backend && uv run pytest -q tests/test_guide_images.py tests/test_guide_extraction.py tests/test_artifact_architecture.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check

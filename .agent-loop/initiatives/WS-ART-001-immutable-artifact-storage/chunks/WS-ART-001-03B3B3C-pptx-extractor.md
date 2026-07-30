@@ -8,6 +8,10 @@ WS-ART-001 — Immutable Artifact Storage
 
 Add deterministic bounded PPTX slide and notes extraction using only the approved OOXML capability.
 
+`WS-ART-001-03B3B1` and `WS-ART-001-03B3B3A` are hard predecessors. Package
+installation and imports fail closed unless the merged protected GitHub approval baseline matches
+the exact pinned allowlist.
+
 ## Approved plan reference
 
 - PLAN: `.agent-loop/initiatives/WS-ART-001-immutable-artifact-storage/PLAN.md`
@@ -39,18 +43,30 @@ DOCX/XLSX behavior, unapproved packages, framework/AUTH/Celery/submission change
 
 ## Acceptance criteria
 
-- Require exact PPTX classification; prove 300/301 slides, deterministic slide/notes order, unsafe OOXML rejection, child-only imports, malformed, crash, timeout, cancellation, cleanup and coverage.
+- Require exact PPTX classification and the shared OOXML security boundary.
+- Accept exactly 300 slides and reject 301 before extraction. Traverse slides
+  by presentation order, shapes by XML document order, and text paragraphs/runs
+  in document order; append speaker notes after their owning slide in notes XML
+  order. Omit masters, comments, hidden metadata, and embedded objects while
+  recording omission facts. Exceeding D42's output limit produces unusable
+  `limit_exceeded`, never partial agent input.
+- Prove deterministic slide/notes output, unsafe/malformed input, child-only
+  imports, exact 300/301 and output boundaries, crash, timeout, cancellation,
+  cleanup, approval-gate, and coverage behavior.
 
 ## Verification commands
 
 ```bash
 (cd backend && uv run ruff check app tests)
 (cd backend && python scripts/check_guide_extractor_dependencies.py)
-(cd backend && uv run pytest -q tests/test_guide_ooxml.py tests/test_guide_pptx.py tests/test_guide_extraction.py)
+(cd backend && uv run pytest -q tests/test_guide_ooxml.py tests/test_guide_pptx.py tests/test_guide_extraction.py --cov=app.modules.artifacts --cov-report=term-missing --cov-fail-under=90)
+(metadata_dir="$(mktemp -d)" && trap 'rm -rf "$metadata_dir"' EXIT && (cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://workstream:workstream@localhost:5433/postgres .venv/bin/python scripts/run_isolated_tests.py --metadata-json "$metadata_dir/result.json" --timeout-seconds 12600 -- .venv/bin/python -m pytest -q --ignore=tests/test_isolated_database_runner.py --cov=app --cov-report=term-missing --cov-fail-under=78))
 python3 scripts/check_stale_artifact_contracts.py
 python3 scripts/check_markdown_links.py
 git diff --check
 ```
+
+Hosted Backend/Agent Gates must preserve 90% changed-subsystem and 78% repository coverage.
 
 ## Required reviewers
 
