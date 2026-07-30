@@ -1982,7 +1982,12 @@ def test_0041_project_mutation_action_evidence_round_trip(
         if definition.owner in _PROJECT_MUTATION_OWNERS
     )
     assert len(definitions) == 18
-    assert {definition.permission_id for definition in definitions} <= set(PermissionId)
+    assert {definition.permission_id for definition in definitions} == {
+        PermissionId.PROJECT_CREATE,
+        PermissionId.PROJECT_GUIDE_MANAGE,
+        PermissionId.PROJECT_REVIEW_POLICY_MANAGE,
+        PermissionId.PROJECT_EFFECTIVE_POLICY_MANAGE,
+    }
     with migration_lock():
         try:
             command.downgrade(config, "base")

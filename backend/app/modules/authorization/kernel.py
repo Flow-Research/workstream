@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from types import MappingProxyType
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -167,6 +168,46 @@ _ARTIFACT_INTERNAL_RESOURCES = {
         ArtifactPendingWorkResourceContext,
     ),
 }
+
+_ADMIN_EXPECTED_RESOURCES = MappingProxyType(
+    {
+        ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ: PermissionCatalogueResourceContext,
+        ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ: AdminRoleDefinitionsResourceContext,
+        ActionId.ADMIN_ROLE_GRANT_LIST: AdminRoleGrantCollectionResourceContext,
+        ActionId.ACTOR_ADMIN_ROLE_GRANT_HISTORY_READ: ActorAdminRoleGrantHistoryResourceContext,
+        ActionId.ADMIN_ROLE_GRANT_ISSUE: AdminRoleGrantIssueResourceContext,
+        ActionId.ADMIN_ROLE_GRANT_REVOKE: AdminRoleGrantResourceContext,
+        ActionId.ACTOR_SERVICE_PROVISION: ServiceActorProvisionResourceContext,
+        ActionId.ACTOR_PROFILE_READ: ActorProfileAdminReadResourceContext,
+        ActionId.ACTOR_IDENTITY_LINK_READ: ActorIdentityLinkAdminReadResourceContext,
+        ActionId.ACTOR_PROFILE_SUSPEND: ActorProfileLifecycleResourceContext,
+        ActionId.ACTOR_PROFILE_REACTIVATE: ActorProfileLifecycleResourceContext,
+        ActionId.ACTOR_PROFILE_DEACTIVATE: ActorProfileLifecycleResourceContext,
+        ActionId.ACTOR_IDENTITY_LINK_REVOKE: ActorIdentityLinkLifecycleResourceContext,
+        ActionId.ACTOR_IDENTITY_LINK_REACTIVATE: ActorIdentityLinkLifecycleResourceContext,
+        ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST: (
+            ProjectContributorCandidateCollectionResourceContext
+        ),
+        ActionId.PROJECT_ROLE_GRANT_LIST: ProjectRoleGrantCollectionResourceContext,
+        ActionId.PROJECT_ROLE_GRANT_READ: ProjectRoleGrantReadResourceContext,
+        ActionId.PROJECT_ROLE_GRANT_ISSUE: ProjectRoleGrantIssueResourceContext,
+        ActionId.PROJECT_ROLE_GRANT_REVOKE: ProjectRoleGrantRevokeResourceContext,
+        ActionId.PROJECT_SETUP_RUN_READ: ProjectDiagnosticReadResourceContext,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST: ProjectDiagnosticReadResourceContext,
+        ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: ProjectDiagnosticReadResourceContext,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: ProjectDiagnosticReadResourceContext,
+        ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: ProjectDiagnosticReadResourceContext,
+        ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
+            ProjectDiagnosticReadResourceContext
+        ),
+        ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: (
+            ProjectPolicyReadResourceContext
+        ),
+        ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
+        **PROJECT_MUTATION_RESOURCE_BY_ACTION,
+    }
+)
 
 
 def project_action_available_for_status(action_id: ActionId, project_status: str) -> bool:
@@ -1075,43 +1116,7 @@ class AuthorizationService:
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> bool:
-        expected = {
-            ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ: PermissionCatalogueResourceContext,
-            ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ: AdminRoleDefinitionsResourceContext,
-            ActionId.ADMIN_ROLE_GRANT_LIST: AdminRoleGrantCollectionResourceContext,
-            ActionId.ACTOR_ADMIN_ROLE_GRANT_HISTORY_READ: ActorAdminRoleGrantHistoryResourceContext,
-            ActionId.ADMIN_ROLE_GRANT_ISSUE: AdminRoleGrantIssueResourceContext,
-            ActionId.ADMIN_ROLE_GRANT_REVOKE: AdminRoleGrantResourceContext,
-            ActionId.ACTOR_SERVICE_PROVISION: ServiceActorProvisionResourceContext,
-            ActionId.ACTOR_PROFILE_READ: ActorProfileAdminReadResourceContext,
-            ActionId.ACTOR_IDENTITY_LINK_READ: ActorIdentityLinkAdminReadResourceContext,
-            ActionId.ACTOR_PROFILE_SUSPEND: ActorProfileLifecycleResourceContext,
-            ActionId.ACTOR_PROFILE_REACTIVATE: ActorProfileLifecycleResourceContext,
-            ActionId.ACTOR_PROFILE_DEACTIVATE: ActorProfileLifecycleResourceContext,
-            ActionId.ACTOR_IDENTITY_LINK_REVOKE: ActorIdentityLinkLifecycleResourceContext,
-            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE: ActorIdentityLinkLifecycleResourceContext,
-            ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST: (
-                ProjectContributorCandidateCollectionResourceContext
-            ),
-            ActionId.PROJECT_ROLE_GRANT_LIST: ProjectRoleGrantCollectionResourceContext,
-            ActionId.PROJECT_ROLE_GRANT_READ: ProjectRoleGrantReadResourceContext,
-            ActionId.PROJECT_ROLE_GRANT_ISSUE: ProjectRoleGrantIssueResourceContext,
-            ActionId.PROJECT_ROLE_GRANT_REVOKE: ProjectRoleGrantRevokeResourceContext,
-            ActionId.PROJECT_SETUP_RUN_READ: ProjectDiagnosticReadResourceContext,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST: ProjectDiagnosticReadResourceContext,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ: ProjectDiagnosticReadResourceContext,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST: ProjectDiagnosticReadResourceContext,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ: ProjectDiagnosticReadResourceContext,
-            ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ: (
-                ProjectDiagnosticReadResourceContext
-            ),
-            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ: (
-                ProjectPolicyReadResourceContext
-            ),
-            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ: ProjectPolicyReadResourceContext,
-            ActionId.PROJECT_ACTIVE_GUIDE_READ: ProjectActiveGuideReadResourceContext,
-            **PROJECT_MUTATION_RESOURCE_BY_ACTION,
-        }.get(action_id)
+        expected = _ADMIN_EXPECTED_RESOURCES.get(action_id)
         if expected is None or not isinstance(resource, expected):
             return False
         diagnostic_kind = PROJECT_DIAGNOSTIC_TARGET_KIND_BY_ACTION.get(action_id)

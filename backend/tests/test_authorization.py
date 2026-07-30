@@ -2289,7 +2289,7 @@ def test_project_mutation_resources_and_prepared_scopes_are_closed() -> None:
     assert set(resources) == set(PROJECT_MUTATION_RESOURCE_BY_ACTION)
     for action_id, resource in resources.items():
         assert AuthorizationService._admin_resource_matches(action_id, resource)
-        scope = PreparedAuthorizationService._scope_from_resource(None, action_id, resource)
+        scope = PreparedAuthorizationService._scope_from_resource(action_id, resource)
         if action_id is ActionId.PROJECT_CREATE:
             assert scope == PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
         else:

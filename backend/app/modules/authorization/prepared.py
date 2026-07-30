@@ -212,8 +212,8 @@ class PreparedAuthorizationService:
             ),
         )
 
+    @staticmethod
     def _scope_from_resource(
-        self,
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:

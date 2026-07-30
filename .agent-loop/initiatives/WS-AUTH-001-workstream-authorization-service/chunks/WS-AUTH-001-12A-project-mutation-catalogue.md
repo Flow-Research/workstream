@@ -37,7 +37,7 @@ backend/app/modules/authorization/runtime.py
 backend/app/modules/authorization/kernel.py
 backend/app/modules/authorization/prepared.py
 backend/app/modules/audit/schemas.py
-backend/alembic/versions/<next-after-merged-ART-0040>_project_mutation_action_evidence.py
+backend/alembic/versions/0041_project_mutation_action_evidence.py
 backend/tests/test_authorization.py
 backend/tests/test_alembic.py
 backend/tests/conftest.py
@@ -87,7 +87,7 @@ cd backend
   app/modules/authorization/prepared.py \
   app/modules/audit/schemas.py \
   alembic/versions/0041_project_mutation_action_evidence.py \
-  tests/test_authorization.py tests/test_alembic.py
+  tests/test_authorization.py tests/test_alembic.py tests/conftest.py
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json .ci/auth12a.json --lane auth12a --timeout-seconds 1200 -- \
   .venv/bin/python -m pytest -p pytest_asyncio.plugin -p pytest_cov.plugin -q \

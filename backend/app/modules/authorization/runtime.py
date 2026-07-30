@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from enum import StrEnum
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -583,6 +584,32 @@ class ProjectSetupServiceCustodyContext(BaseModel):
     stale_output_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+def _require_setup_custody(
+    custody: ProjectSetupServiceCustodyContext,
+    *,
+    label: str,
+    expected_step: str,
+    setup_generation: int,
+    stale_output_digest: str | None,
+    scope_project_id: UUID,
+    guide_id: UUID,
+    source_snapshot_id: UUID,
+) -> None:
+    """Reject setup-service custody that does not match the protected lineage."""
+    if custody.expected_step != expected_step:
+        raise ValueError(f"{label} setup-service step is inconsistent")
+    if custody.setup_generation != setup_generation:
+        raise ValueError(f"{label} setup generation is inconsistent")
+    if custody.stale_output_digest != stale_output_digest:
+        raise ValueError(f"{label} stale output is inconsistent")
+    if (
+        custody.scope_project_id != scope_project_id
+        or custody.guide_id != guide_id
+        or custody.source_snapshot_id != source_snapshot_id
+    ):
+        raise ValueError(f"{label} setup lineage is inconsistent")
+
+
 class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
     """Canonical snapshot and report facts for sufficiency mutations."""
 
@@ -617,18 +644,16 @@ class ProjectGuideSufficiencyMutationResourceContext(BaseModel):
         if service_execution:
             if self.target_kind != "run":
                 raise ValueError("only a sufficiency run may use setup-service authority")
-            if self.setup_service_custody.expected_step != "guide_sufficiency":
-                raise ValueError("sufficiency setup-service step is inconsistent")
-            if self.setup_service_custody.setup_generation != self.setup_generation:
-                raise ValueError("sufficiency setup generation is inconsistent")
-            if self.setup_service_custody.stale_output_digest != self.stale_output_digest:
-                raise ValueError("sufficiency stale output is inconsistent")
-            if (
-                self.setup_service_custody.scope_project_id != self.scope_project_id
-                or self.setup_service_custody.guide_id != self.guide_id
-                or self.setup_service_custody.source_snapshot_id != self.source_snapshot_id
-            ):
-                raise ValueError("sufficiency setup lineage is inconsistent")
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="sufficiency",
+                expected_step="guide_sufficiency",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.stale_output_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
         return self
 
 
@@ -671,18 +696,16 @@ class ProjectSubmissionArtifactPolicyMutationResourceContext(BaseModel):
         if service_execution != (self.target_kind == "derive"):
             raise ValueError("policy derivation requires setup-service authority")
         if service_execution:
-            if self.setup_service_custody.expected_step != "submission_artifact_policy":
-                raise ValueError("submission policy setup-service step is inconsistent")
-            if self.setup_service_custody.setup_generation != self.setup_generation:
-                raise ValueError("submission policy setup generation is inconsistent")
-            if self.setup_service_custody.stale_output_digest != self.stale_output_digest:
-                raise ValueError("submission policy stale output is inconsistent")
-            if (
-                self.setup_service_custody.scope_project_id != self.scope_project_id
-                or self.setup_service_custody.guide_id != self.guide_id
-                or self.setup_service_custody.source_snapshot_id != self.source_snapshot_id
-            ):
-                raise ValueError("submission policy setup lineage is inconsistent")
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="submission policy",
+                expected_step="submission_artifact_policy",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.stale_output_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
         return self
 
 
@@ -717,18 +740,16 @@ class ProjectPostSubmitCheckerPolicyMutationResourceContext(BaseModel):
         if service_execution != (self.target_kind == "derive"):
             raise ValueError("checker derivation requires setup-service authority")
         if service_execution:
-            if self.setup_service_custody.expected_step != "post_submit_policy":
-                raise ValueError("checker policy setup-service step is inconsistent")
-            if self.setup_service_custody.setup_generation != self.setup_generation:
-                raise ValueError("checker policy setup generation is inconsistent")
-            if self.setup_service_custody.stale_output_digest != self.compiled_policy_digest:
-                raise ValueError("checker policy stale output is inconsistent")
-            if (
-                self.setup_service_custody.scope_project_id != self.scope_project_id
-                or self.setup_service_custody.guide_id != self.guide_id
-                or self.setup_service_custody.source_snapshot_id != self.source_snapshot_id
-            ):
-                raise ValueError("checker policy setup lineage is inconsistent")
+            _require_setup_custody(
+                self.setup_service_custody,
+                label="checker policy",
+                expected_step="post_submit_policy",
+                setup_generation=self.setup_generation,
+                stale_output_digest=self.compiled_policy_digest,
+                scope_project_id=self.scope_project_id,
+                guide_id=self.guide_id,
+                source_snapshot_id=self.source_snapshot_id,
+            )
         return self
 
 
@@ -784,7 +805,7 @@ class ProjectGuideActivationResourceContext(BaseModel):
         return self
 
 
-PROJECT_MUTATION_RESOURCE_BY_ACTION = {
+PROJECT_MUTATION_RESOURCE_BY_ACTION = MappingProxyType({
     ActionId.PROJECT_CREATE: ProjectCreateResourceContext,
     ActionId.PROJECT_GUIDE_CREATE: ProjectGuideMutationResourceContext,
     ActionId.PROJECT_GUIDE_UPDATE: ProjectGuideMutationResourceContext,
@@ -823,31 +844,31 @@ PROJECT_MUTATION_RESOURCE_BY_ACTION = {
     ),
     ActionId.PROJECT_SETUP_RUN_UPDATE: ProjectSetupRunMutationResourceContext,
     ActionId.PROJECT_GUIDE_ACTIVATE: ProjectGuideActivationResourceContext,
-}
+})
 
-PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION = {
+PROJECT_SUFFICIENCY_TARGET_KIND_BY_ACTION = MappingProxyType({
     ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_CREATE: "report",
     ActionId.PROJECT_GUIDE_SUFFICIENCY_RUN: "run",
     ActionId.PROJECT_GUIDE_SUFFICIENCY_WARNINGS_ACKNOWLEDGE: "warning_acknowledgement",
-}
+})
 
-PROJECT_GUIDE_TARGET_KIND_BY_ACTION = {
+PROJECT_GUIDE_TARGET_KIND_BY_ACTION = MappingProxyType({
     ActionId.PROJECT_GUIDE_CREATE: "create",
     ActionId.PROJECT_GUIDE_UPDATE: "update",
-}
+})
 
-PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION = {
+PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION = MappingProxyType({
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_CREATE: "create",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE: "derive",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_UPDATE: "update",
     ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_APPROVE: "approve",
-}
+})
 
-PROJECT_POST_SUBMIT_POLICY_TARGET_KIND_BY_ACTION = {
+PROJECT_POST_SUBMIT_POLICY_TARGET_KIND_BY_ACTION = MappingProxyType({
     ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_APPROVE: "approve",
     ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_CORRECTION_REQUEST: "correction_request",
     ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_DERIVE: "derive",
-}
+})
 
 
 class ActorAuthorizationContextResourceContext(BaseModel):

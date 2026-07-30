@@ -67,6 +67,8 @@ def _replace(definition: str) -> None:
 
 
 def _pair_token(action: str, permission: str) -> str:
+    # Keep this byte-for-byte aligned with PostgreSQL's pg_get_constraintdef
+    # rendering; _rewrite's marker-count guards fail closed if that format drifts.
     return (
         f"(((action_id)::text = '{action}'::text) AND "
         f"((permission_id)::text = '{permission}'::text))"
