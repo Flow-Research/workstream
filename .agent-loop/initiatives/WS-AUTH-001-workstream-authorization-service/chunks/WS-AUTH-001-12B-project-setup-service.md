@@ -121,6 +121,16 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py 
   tests/test_actor_migration_tools.py tests/test_authorization.py tests/test_alembic.py \
   tests/test_auth.py \
   -k 'project_setup_service or controlled_service_actor_provisioning_includes_project_setup or fixed_service_action_matrix or 0042_project_setup or service_identity_migration_contract'
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
+  --metadata-json .ci/auth12b-migration-coverage.json \
+  --lane auth12b_migration_coverage --timeout-seconds 1200 -- sh -c \
+  '.venv/bin/coverage erase && \
+  .venv/bin/coverage run --include="*/alembic/versions/0042_project_setup_service.py" \
+  -m pytest -p pytest_asyncio.plugin -q tests/test_alembic.py \
+  -k "0042_project_setup" && \
+  .venv/bin/coverage report \
+  --include="*/alembic/versions/0042_project_setup_service.py" \
+  --show-missing --fail-under=90'
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python -m pytest \
   -p pytest_asyncio.plugin -p pytest_cov.plugin -q tests/test_actor_migration_tools.py \
   --cov=app.modules.actors.service_identity_migration \
