@@ -215,3 +215,20 @@
   fixture-only resource probes, and expanded boundary/migration evidence.
 - Architecture, security, senior engineering, product/ops, QA, docs, reuse,
   CI-integrity, and test-delta repair reviews pass with no blockers.
+
+## WS-ART-001-03B3B1
+
+- Selected the minimal complex-format dependency set: `pypdf==6.14.2`,
+  `defusedxml==0.7.1`, and `Pillow==12.3.0`; no package or lock change occurs.
+- Initial security, QA, senior-engineering, and product/ops review found that
+  version-only declarations did not bind installed wheel hashes, excluded
+  OOXML packages and optional groups could bypass the gate, format scopes were
+  global, and wheel identity/platform coherence was under-specified.
+- Repairs require exact hash-bound PyPI wheel references, scan runtime,
+  optional, and dependency-group declarations, reject the prohibited OOXML
+  package set, validate wheel identity/tags/platform, and scope imports per
+  parser module.
+- Focused proof passes with 34 tests and 92.94 percent checker coverage.
+  Architecture, security, QA, product/ops, senior engineering, CI integrity,
+  reuse/dedup, and test-delta reviews pass after repair. Docs confirmation and
+  exact hosted PR-head behavior remain publication evidence.

@@ -2,12 +2,17 @@ name: Backend
 
 on:
   pull_request:
+  pull_request_review:
+    types:
+      - submitted
+      - dismissed
   push:
     branches:
       - main
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   MINIO_IMAGE: quay.io/minio/minio:latest@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
@@ -54,6 +59,23 @@ jobs:
           test "$(git rev-parse "${tree_sha}^{tree}")" = "$(git rev-parse HEAD^{tree})"
           echo "job_start_epoch=${job_start_epoch}" >> "${GITHUB_OUTPUT}"
           echo "tree_sha=${tree_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Guide extractor dependency approval
+        working-directory: backend
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WORKSTREAM_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          WORKSTREAM_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          WORKSTREAM_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          WORKSTREAM_PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          approval_args=()
+          if [[ "${GITHUB_EVENT_NAME}" != "push" ]]; then
+            approval_args+=(--require-pr-approval)
+          fi
+          python scripts/check_guide_extractor_dependencies.py "${approval_args[@]}"
 
       - name: Install backend and exact Ruff
         working-directory: backend
