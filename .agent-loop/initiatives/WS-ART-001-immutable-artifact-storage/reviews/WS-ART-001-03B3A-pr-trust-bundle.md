@@ -29,14 +29,18 @@ is included.
 
 ## Tests And CI Integrity
 
-Focused extraction and architecture tests pass locally, including real
-outside-scratch write denial and stale workspace crash recovery. Ruff, mapper setup,
-static migration rendering, stale-contract scan, Markdown links, and diff
-integrity pass. CodeRabbit's valid findings and the first hosted database-test
+The pre-rebase focused extraction and architecture suite passed locally,
+including real outside-scratch write denial and stale workspace crash recovery.
+After rebasing onto merged AUTH-12A, Ruff, Python compilation, single-head
+migration inspection, stale-contract scan, Markdown links, and diff integrity
+pass. Refreshed focused and PostgreSQL proof remains delegated to hosted CI
+because this worktree's incomplete test environment resolves a conflicting
+global pytest plugin. CodeRabbit's valid findings and the first hosted database-test
 failures were repaired without weakening a workflow, threshold, or assertion.
 The isolated worker now also has additive parent-process unit coverage while
 its real kernel-isolation subprocess probes remain unchanged.
-Exact hosted Backend and Agent Gates remain required before review publication.
+The migration chain has one head at `0042_guide_extraction`; exact hosted
+Backend and Agent Gates remain required on the refreshed PR head before merge.
 
 ## Internal Review
 

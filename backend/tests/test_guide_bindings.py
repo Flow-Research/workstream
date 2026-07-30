@@ -30,8 +30,12 @@ from app.modules.artifacts.guide_bindings import (
     GuideSourceBindingService,
 )
 from app.modules.artifacts.guide_formats import GuideFormatDetector, GuideFormatLimits
-from app.modules.artifacts.guide_extraction import GuideExtractionRegistry
+from app.modules.artifacts.guide_extraction import (
+    EXTRACTION_POLICY_VERSION,
+    GuideExtractionRegistry,
+)
 from app.modules.artifacts.guide_extraction_service import (
+    GuideExtractionError,
     GuideExtractionRequest,
     GuideExtractionService,
 )
@@ -524,7 +528,11 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
                 RuntimeError, match="cannot downgrade populated guide extraction evidence"
             ),
         ):
-            await asyncio.to_thread(command.downgrade, config, "0040_guide_materialization")
+            await asyncio.to_thread(
+                command.downgrade,
+                config,
+                "0041_project_mutation_evidence",
+            )
     finally:
         if prepared is not None:
             await prepared.close()
@@ -541,10 +549,11 @@ async def test_extraction_publishes_deterministic_content_and_exact_usage(
         ("unsupported", False),
         ("parser_failure", True),
         ("cancelled", True),
+        (None, None),
     ],
 )
 async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_slot(
-    isolated_database_env: str, status: str, retry_allowed: bool
+    isolated_database_env: str, status: str | None, retry_allowed: bool | None
 ) -> None:
     payload = b"guide"
     digest = "sha256:" + hashlib.sha256(payload).hexdigest()
@@ -580,16 +589,18 @@ async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_
                 )
             )
             await session.flush()
-            session.add_all(
-                [
-                    GuideSourceExtractionRetryBudget(
-                        binding_id=str(binding_id),
-                        content_id=str(ids["content"]),
-                        classification_id=str(classification_id),
-                        setup_generation=1,
-                        policy_version="guide-extraction-v1",
-                        claimed_slots=1,
-                    ),
+            session.add(
+                GuideSourceExtractionRetryBudget(
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    classification_id=str(classification_id),
+                    setup_generation=1,
+                    policy_version=EXTRACTION_POLICY_VERSION,
+                    claimed_slots=1,
+                )
+            )
+            if status is not None:
+                session.add(
                     GuideSourceExtractionAttempt(
                         id=str(attempt_id),
                         binding_id=str(binding_id),
@@ -599,13 +610,142 @@ async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_
                         detected_format="plain_text",
                         extractor_name="workstream.plain_text",
                         extractor_version="1",
-                        policy_version="guide-extraction-v1",
+                        policy_version=EXTRACTION_POLICY_VERSION,
                         attempt_number=1,
                         status=status,
                         error_code="test_failure",
                         bounded_facts={},
+                    )
+                )
+        request = GuideExtractionRequest(
+            project_id=ids["project"],
+            guide_id=ids["guide"],
+            source_snapshot_id=ids["snapshot"],
+            source_item_id=ids["item"],
+            project_setup_run_id=ids["run"],
+            setup_generation=1,
+            binding_id=binding_id,
+            classification_id=classification_id,
+        )
+        service = GuideExtractionService(factory, GuideExtractionRegistry())
+        if retry_allowed is None:
+            with pytest.raises(GuideExtractionError, match="unavailable"):
+                await service.claim_materialization_slot(request)
+            result = None
+        elif retry_allowed:
+            concurrent_results = await asyncio.gather(
+                service.claim_materialization_slot(request),
+                service.claim_materialization_slot(request),
+            )
+            assert sum(result is None for result in concurrent_results) == 1
+            replayed = next(result for result in concurrent_results if result is not None)
+            assert replayed.attempt_id == attempt_id
+            assert replayed.status == status
+            result = None
+        else:
+            result = await service.claim_materialization_slot(request)
+        async with factory() as session:
+            budget = await session.get(GuideSourceExtractionRetryBudget, str(binding_id))
+            assert budget is not None
+            assert budget.claimed_slots == (2 if retry_allowed is True else 1)
+        if retry_allowed is None:
+            return
+        if retry_allowed:
+            assert result is None
+        else:
+            assert result is not None
+            assert result.attempt_id == attempt_id
+            assert result.status == status
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_successful_replay_requires_the_current_extraction_policy(
+    isolated_database_env: str,
+) -> None:
+    payload = b"guide"
+    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+    output = "old output"
+    output_digest = "sha256:" + hashlib.sha256(output.encode()).hexdigest()
+    engine = create_async_engine(isolated_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            ids = await _seed_binding_lineage(
+                session,
+                sha256=digest,
+                byte_count=len(payload),
+                media_type="text/plain",
+            )
+        binding_id = await _create_binding(factory, ids)
+        classification_id = uuid4()
+        attempt_id = uuid4()
+        extracted_content_id = uuid4()
+        async with factory() as session, session.begin():
+            session.add(
+                GuideSourceFormatClassification(
+                    id=str(classification_id),
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    verified_replica_id=str(ids["replica"]),
+                    setup_generation=1,
+                    sha256=digest,
+                    byte_count=len(payload),
+                    media_type="text/plain",
+                    detected_format="plain_text",
+                    status="classified",
+                    detector_name="workstream.guide_format",
+                    detector_version="1",
+                    classification_facts={},
+                )
+            )
+            session.add_all(
+                [
+                    GuideSourceExtractionAttempt(
+                        id=str(attempt_id),
+                        binding_id=str(binding_id),
+                        content_id=str(ids["content"]),
+                        classification_id=str(classification_id),
+                        setup_generation=1,
+                        detected_format="plain_text",
+                        extractor_name="workstream.plain_text",
+                        extractor_version="1",
+                        policy_version="guide-extraction-obsolete",
+                        attempt_number=1,
+                        status="extracted",
+                        error_code=None,
+                        bounded_facts={},
+                    ),
+                    GuideSourceExtractedContent(
+                        id=str(extracted_content_id),
+                        content_id=str(ids["content"]),
+                        detected_format="plain_text",
+                        extractor_name="workstream.plain_text",
+                        extractor_version="1",
+                        policy_version="guide-extraction-obsolete",
+                        source_sha256=digest,
+                        source_byte_count=len(payload),
+                        status="extracted",
+                        output_sha256=output_digest,
+                        canonical_output=output,
+                        omission_facts={},
                     ),
                 ]
+            )
+            await session.flush()
+            session.add(
+                GuideSourceExtractionUsage(
+                    id=str(uuid4()),
+                    extracted_content_id=str(extracted_content_id),
+                    extraction_attempt_id=str(attempt_id),
+                    attempt_status="extracted",
+                    binding_id=str(binding_id),
+                    content_id=str(ids["content"]),
+                    source_item_id=str(ids["item"]),
+                    project_setup_run_id=str(ids["run"]),
+                    setup_generation=1,
+                )
             )
         request = GuideExtractionRequest(
             project_id=ids["project"],
@@ -617,19 +757,17 @@ async def test_retry_budget_replays_terminal_outcomes_and_only_claims_transient_
             binding_id=binding_id,
             classification_id=classification_id,
         )
+
         result = await GuideExtractionService(
             factory, GuideExtractionRegistry()
         ).claim_materialization_slot(request)
+
+        assert result is None
         async with factory() as session:
             budget = await session.get(GuideSourceExtractionRetryBudget, str(binding_id))
             assert budget is not None
-            assert budget.claimed_slots == (2 if retry_allowed else 1)
-        if retry_allowed:
-            assert result is None
-        else:
-            assert result is not None
-            assert result.attempt_id == attempt_id
-            assert result.status == status
+            assert budget.policy_version == EXTRACTION_POLICY_VERSION
+            assert budget.claimed_slots == 1
     finally:
         await engine.dispose()
 

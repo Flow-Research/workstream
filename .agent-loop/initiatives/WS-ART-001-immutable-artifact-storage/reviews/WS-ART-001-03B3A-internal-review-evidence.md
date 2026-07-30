@@ -1,6 +1,6 @@
 # Internal Review Evidence: WS-ART-001-03B3A
 
-Reviewed against trusted main: `93ec3fbb`
+Reviewed against trusted main: `64dd9c98`
 
 Reviewed at: `2026-07-29`
 
@@ -14,7 +14,9 @@ provider-write, Celery, submission, or AUTH activation behavior.
 
 - changed-file Ruff, mapper configuration, Python compilation, and
   `git diff --check`: PASS;
-- focused extraction plus architecture tests: 41 passed;
+- the pre-rebase candidate's focused extraction plus architecture suite passed
+  41 tests; refreshed focused and PostgreSQL proof remains delegated to hosted
+  CI for the reconciled head;
 - real default-deny seccomp probes deny network, file opens, filesystem writes,
   and process creation after trusted imports;
 - real child probes cover CPU, wall, memory, and abnormal executor outcomes;
@@ -37,12 +39,15 @@ provider-write, Celery, submission, or AUTH activation behavior.
 | test delta | PASS WITH LOW RISKS | none |
 | docs | PASS | none |
 
-The CodeRabbit/hosted-CI repair delta was re-reviewed by senior engineering,
+The pre-rebase CodeRabbit/hosted-CI repair delta was re-reviewed by senior engineering,
 architecture/reuse, QA/test-delta, security, product/ops, and CI/docs. All
 tracks pass after one valid legacy-ledger compatibility blocker was repaired
 with exact prior-v2 normalization and restart coverage.
 The final worker-coverage test delta separately passed security, QA/test-delta,
 and CI/docs review; it leaves every real subprocess isolation probe intact.
+The AUTH-12A rebase and final external-review repair delta passed refreshed
+senior, architecture/reuse, QA/test-delta, security, product/ops, and CI/docs
+review after policy replay and concurrent retry-custody findings were repaired.
 
 ## Material Repairs
 
@@ -54,6 +59,8 @@ and CI/docs review; it leaves every real subprocess isolation probe intact.
 - added cleanup-tracked scratch workspaces and post-launch child reaping;
 - added a durable two-slot exact-lineage materialization budget so only
   executor failure or current-lineage cancellation may retry;
+- scoped deterministic success replay to the current extraction policy and
+  denied second-slot claims without durable current-policy retry evidence;
 - moved destructive resource probes out of the production worker.
 
 ## Accepted Low Risks

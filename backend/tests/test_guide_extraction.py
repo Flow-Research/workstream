@@ -453,7 +453,9 @@ async def test_failed_extractor_residue_is_removed_before_workspace_release(
     class DirtyRunner:
         def extract(self, _reader, *, detected_format: str, workspace: Path):
             del detected_format
-            (workspace / "partial").write_bytes(b"untrusted")
+            nested = workspace / "nested"
+            nested.mkdir()
+            (nested / "partial").write_bytes(b"untrusted")
             raise RuntimeError("parser failed")
 
     manager = ArtifactScratchManager(
@@ -523,7 +525,16 @@ async def test_stale_cleanup_reaps_crashed_extraction_workspace(
 
 @pytest.mark.asyncio
 async def test_executor_failure_retries_once_with_fresh_authority_and_materialization() -> None:
-    request = GuideExtractionRequest(*(uuid4() for _ in range(5)), 1, uuid4(), uuid4())
+    request = GuideExtractionRequest(
+        project_id=uuid4(),
+        guide_id=uuid4(),
+        source_snapshot_id=uuid4(),
+        source_item_id=uuid4(),
+        project_setup_run_id=uuid4(),
+        setup_generation=1,
+        binding_id=uuid4(),
+        classification_id=uuid4(),
+    )
     prepared_sources: list[SimpleNamespace] = []
 
     class Materializer:
@@ -573,7 +584,16 @@ async def test_executor_failure_retries_once_with_fresh_authority_and_materializ
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["malformed", "limit_exceeded", "unsupported"])
 async def test_terminal_extraction_replay_does_not_materialize_again(status: str) -> None:
-    request = GuideExtractionRequest(*(uuid4() for _ in range(5)), 1, uuid4(), uuid4())
+    request = GuideExtractionRequest(
+        project_id=uuid4(),
+        guide_id=uuid4(),
+        source_snapshot_id=uuid4(),
+        source_item_id=uuid4(),
+        project_setup_run_id=uuid4(),
+        setup_generation=1,
+        binding_id=uuid4(),
+        classification_id=uuid4(),
+    )
     terminal = GuideExtractionPersistenceResult(
         attempt_id=uuid4(),
         status=status,

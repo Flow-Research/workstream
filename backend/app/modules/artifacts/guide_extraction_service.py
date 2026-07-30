@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.cancellation import await_cancellation_resistant
 
-from app.modules.artifacts.guide_extraction import GuideExtractionRegistry
+from app.modules.artifacts.guide_extraction import (
+    EXTRACTION_POLICY_VERSION,
+    GuideExtractionRegistry,
+)
 from app.modules.artifacts.guide_formats import DETECTOR_NAME, DETECTOR_VERSION
 from app.modules.artifacts.models import (
     ArtifactContent,
@@ -133,13 +136,15 @@ class GuideExtractionService:
             recovery = asyncio.create_task(asyncio.wait_for(record_cancellation(), timeout=5.0))
             try:
                 await await_cancellation_resistant(recovery)
-            except (TimeoutError, Exception):
+            except Exception:
                 pass
             raise cancellation from None
         async with self._session_factory() as session, session.begin():
             after = await self._load_facts(session, request)
             if after != before:
                 raise GuideExtractionError("guide extraction is unavailable")
+            if extracted.policy_version != EXTRACTION_POLICY_VERSION:
+                raise GuideExtractionError("guide extraction result conflicts")
             attempt_number = 1 + int(
                 await session.scalar(
                     select(
@@ -276,7 +281,16 @@ class GuideExtractionService:
                         GuideSourceExtractedContent.id
                         == GuideSourceExtractionUsage.extracted_content_id,
                     )
-                    .where(GuideSourceExtractionUsage.binding_id == facts.binding_id)
+                    .where(
+                        GuideSourceExtractionUsage.binding_id == facts.binding_id,
+                        GuideSourceExtractionAttempt.policy_version == EXTRACTION_POLICY_VERSION,
+                        GuideSourceExtractedContent.policy_version == EXTRACTION_POLICY_VERSION,
+                    )
+                    .order_by(
+                        GuideSourceExtractionAttempt.attempt_number.asc(),
+                        GuideSourceExtractionUsage.created_at.asc(),
+                        GuideSourceExtractionUsage.id.asc(),
+                    )
                     .limit(1)
                 )
             ).one_or_none()
@@ -290,7 +304,7 @@ class GuideExtractionService:
                     GuideSourceExtractionAttempt.content_id == facts.content_id,
                     GuideSourceExtractionAttempt.classification_id == facts.classification_id,
                     GuideSourceExtractionAttempt.setup_generation == facts.setup_generation,
-                    GuideSourceExtractionAttempt.policy_version == "guide-extraction-v1",
+                    GuideSourceExtractionAttempt.policy_version == EXTRACTION_POLICY_VERSION,
                 )
                 .order_by(GuideSourceExtractionAttempt.attempt_number.desc())
                 .limit(1)
@@ -300,7 +314,11 @@ class GuideExtractionService:
                 "cancelled",
             }:
                 return self._result(latest_attempt)
-            budget = await session.get(GuideSourceExtractionRetryBudget, facts.binding_id)
+            budget = await session.scalar(
+                select(GuideSourceExtractionRetryBudget)
+                .where(GuideSourceExtractionRetryBudget.binding_id == facts.binding_id)
+                .with_for_update()
+            )
             if budget is None:
                 session.add(
                     GuideSourceExtractionRetryBudget(
@@ -308,7 +326,7 @@ class GuideExtractionService:
                         content_id=facts.content_id,
                         classification_id=facts.classification_id,
                         setup_generation=facts.setup_generation,
-                        policy_version="guide-extraction-v1",
+                        policy_version=EXTRACTION_POLICY_VERSION,
                         claimed_slots=1,
                     )
                 )
@@ -318,8 +336,10 @@ class GuideExtractionService:
                 budget.content_id != facts.content_id
                 or budget.classification_id != facts.classification_id
                 or budget.setup_generation != facts.setup_generation
-                or budget.policy_version != "guide-extraction-v1"
+                or budget.policy_version != EXTRACTION_POLICY_VERSION
             ):
+                raise GuideExtractionError("guide extraction is unavailable")
+            if latest_attempt is None:
                 raise GuideExtractionError("guide extraction is unavailable")
             if budget.claimed_slots < 2:
                 budget.claimed_slots += 1
@@ -445,7 +465,7 @@ class GuideExtractionService:
             detected_format=facts.detected_format,
             extractor_name=f"workstream.{facts.detected_format}",
             extractor_version="1",
-            policy_version="guide-extraction-v1",
+            policy_version=EXTRACTION_POLICY_VERSION,
             attempt_number=attempt_number,
             status=status,
             error_code=error_code,

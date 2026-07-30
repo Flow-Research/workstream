@@ -413,6 +413,30 @@ class ArtifactScratchManager:
                 }
             )
 
+    @contextmanager
+    def extraction_workspace(self) -> Iterator[Path]:
+        """Own one crash-recoverable private extraction workspace."""
+        with self._tracked_operation():
+            workspace_name = f"extract_{uuid4().hex}"
+            self._reserve_workspace_sync(workspace_name)
+            workspace_fd = -1
+            try:
+                os.mkdir(workspace_name, mode=0o700, dir_fd=self._workspaces_fd)
+                workspace_fd = os.open(
+                    workspace_name,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=self._workspaces_fd,
+                )
+                yield Path(f"/proc/self/fd/{workspace_fd}")
+            finally:
+                if workspace_fd >= 0:
+                    os.close(workspace_fd)
+                try:
+                    self._release_workspace_sync(workspace_name)
+                except BaseException:
+                    self._pending_workspaces.add(workspace_name)
+                    raise
+
     async def retry_pending_cleanup(self) -> int:
         """Retry manager-owned cleanup retained before service handoff."""
         with self._tracked_operation():
@@ -462,21 +486,39 @@ class ArtifactScratchManager:
             dir_fd=self._workspaces_fd,
         )
         try:
-            entries = os.listdir(workspace_fd)
-            if len(entries) > self._limits.maximum_files:
-                raise ArtifactScratchIntegrityError(
-                    "artifact extraction workspace entry limit exceeded"
-                )
-            for entry in entries:
-                metadata = os.stat(entry, dir_fd=workspace_fd, follow_symlinks=False)
-                if stat_module.S_ISDIR(metadata.st_mode):
-                    os.rmdir(entry, dir_fd=workspace_fd)
-                else:
-                    os.unlink(entry, dir_fd=workspace_fd)
+            remaining_entries = [self._limits.maximum_files]
+            self._cleanup_workspace_entries_sync(workspace_fd, remaining_entries)
         finally:
             os.close(workspace_fd)
         os.rmdir(workspace_name, dir_fd=self._workspaces_fd)
         os.fsync(self._workspaces_fd)
+
+    def _cleanup_workspace_entries_sync(
+        self,
+        directory_fd: int,
+        remaining_entries: list[int],
+    ) -> None:
+        """Remove a bounded tree bottom-up without following links."""
+        for entry in os.listdir(directory_fd):
+            remaining_entries[0] -= 1
+            if remaining_entries[0] < 0:
+                raise ArtifactScratchIntegrityError(
+                    "artifact extraction workspace entry limit exceeded"
+                )
+            metadata = os.stat(entry, dir_fd=directory_fd, follow_symlinks=False)
+            if stat_module.S_ISDIR(metadata.st_mode):
+                child_fd = os.open(
+                    entry,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=directory_fd,
+                )
+                try:
+                    self._cleanup_workspace_entries_sync(child_fd, remaining_entries)
+                finally:
+                    os.close(child_fd)
+                os.rmdir(entry, dir_fd=directory_fd)
+            else:
+                os.unlink(entry, dir_fd=directory_fd)
 
     def close(self) -> None:
         """Release pinned scratch directory descriptors."""
@@ -767,7 +809,7 @@ class ArtifactScratchManager:
                 }
             )
             try:
-                self._write_ledger({"version": _LEDGER_VERSION, "reservations": entries})
+                self._write_ledger({**ledger, "reservations": entries})
             except BaseException:
                 try:
                     self._restore_failed_reservation_ledger(
@@ -805,7 +847,7 @@ class ArtifactScratchManager:
                         for entry in entries
                         if entry["reservation_id"] != reservation.reservation_id
                     ]
-                    self._write_ledger({"version": _LEDGER_VERSION, "reservations": remaining})
+                    self._write_ledger({**ledger, "reservations": remaining})
                 except BaseException as cleanup_error:
                     raise _AllocationCleanupRequired(reservation) from cleanup_error
                 raise
@@ -817,11 +859,12 @@ class ArtifactScratchManager:
         previous_entries: list[dict[str, Any]],
     ) -> None:
         """Prove an ambiguously published reservation was durably removed."""
-        current = self._read_ledger()["reservations"]
+        ledger = self._read_ledger()
+        current = ledger["reservations"]
         if not any(entry["reservation_id"] == reservation_id for entry in current):
             return
         try:
-            self._write_ledger({"version": _LEDGER_VERSION, "reservations": previous_entries})
+            self._write_ledger({**ledger, "reservations": previous_entries})
         except BaseException as exc:
             raise ArtifactScratchIntegrityError(
                 "failed artifact scratch reservation could not be rolled back"
@@ -915,7 +958,7 @@ class ArtifactScratchManager:
             remaining = [
                 entry for entry in entries if entry["reservation_id"] != reservation.reservation_id
             ]
-            self._write_ledger({"version": _LEDGER_VERSION, "reservations": remaining})
+            self._write_ledger({**ledger, "reservations": remaining})
 
     def _usage_sync(self) -> ArtifactScratchUsage:
         """Read aggregate ledger usage while holding the cross-process lock."""
@@ -1092,9 +1135,6 @@ class ArtifactScratchManager:
 
     def _write_ledger(self, ledger: dict[str, Any]) -> None:
         """Atomically replace and directory-sync one validated ledger."""
-        if "workspaces" not in ledger:
-            current = self._read_ledger_optional()
-            ledger = {**ledger, "workspaces": [] if current is None else current["workspaces"]}
         self._validate_ledger(ledger)
         raw = json.dumps(
             ledger,
@@ -1521,30 +1561,14 @@ class ArtifactPreparationService:
         active = self._active.get(binding)
         if active is None or not active.handle_issued or active.stream_claimed:
             raise ArtifactScratchIntegrityError("prepared artifact source is unavailable")
-        workspace_name = f"extract_{uuid4().hex}"
 
         def inspect_and_cleanup() -> _InspectionResult:
-            self._manager._reserve_workspace_sync(workspace_name)
-            try:
-                os.mkdir(workspace_name, mode=0o700, dir_fd=self._manager._workspaces_fd)
-                workspace_fd = os.open(
-                    workspace_name,
-                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                    dir_fd=self._manager._workspaces_fd,
-                )
+            with self._manager.extraction_workspace() as workspace:
+                active.reader.seek(0)
                 try:
-                    workspace = Path(f"/proc/self/fd/{workspace_fd}")
-                    active.reader.seek(0)
                     return extractor.inspect(active.reader, workspace)
                 finally:
                     active.reader.seek(0)
-                    os.close(workspace_fd)
-            finally:
-                try:
-                    self._manager._release_workspace_sync(workspace_name)
-                except BaseException:
-                    self._manager._pending_workspaces.add(workspace_name)
-                    raise
 
         try:
             async with asyncio.timeout_at(active.deadline):
