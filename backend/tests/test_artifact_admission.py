@@ -3666,6 +3666,7 @@ async def test_contributor_admission_rejects_cross_project_task_relationship(
                 )
                 await session.flush()
                 upload_session.project_id = unrelated_project_id
+                authority_audit_count = await _count(session, AuditEvent)
                 await session.commit()
 
                 with pytest.raises(
@@ -3684,7 +3685,7 @@ async def test_contributor_admission_rejects_cross_project_task_relationship(
             assert await _count(session, ArtifactAdmissionScope) == 0
             assert await _count(session, ArtifactAdmissionCharge) == 0
             assert await _count(session, ArtifactPutAttempt) == 0
-            assert await _count(session, AuditEvent) == 0
+            assert await _count(session, AuditEvent) == authority_audit_count
     finally:
         await engine.dispose()
 

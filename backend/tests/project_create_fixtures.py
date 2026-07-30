@@ -47,9 +47,32 @@ async def grant_system_project_manager(
         else None
     )
     if bootstrap is None:
+        bootstrap_actor = ActorProfile(
+            id=str(uuid4()),
+            actor_kind="human",
+            status="active",
+            provisioning_method="automatic_first_access",
+            service_identity=None,
+            created_by="test",
+        )
+        session.add(bootstrap_actor)
+        await session.flush()
+        session.add(
+            ActorIdentityLink(
+                id=str(uuid4()),
+                actor_profile_id=bootstrap_actor.id,
+                issuer="https://project-fixture-bootstrap.test",
+                subject=f"project-fixture-bootstrap-{bootstrap_actor.id}",
+                subject_kind="human",
+                status="active",
+                linked_by="test",
+                last_verified_at=datetime.now(UTC),
+            )
+        )
+        await session.flush()
         bootstrap = AdminRoleGrant(
             id=uuid4(),
-            target_actor_profile_id=link.actor_profile_id,
+            target_actor_profile_id=bootstrap_actor.id,
             role="access_administrator",
             scope_type="system",
             scope_project_id=None,
@@ -96,8 +119,9 @@ async def seed_authorized_project(
     name: str,
     slug: str,
     status: str = "draft",
-) -> Project:
+) -> None:
     """Stage one project with the same custody shape required in production."""
+    project_uuid = UUID(project_id)
     has_cutover = await session.scalar(
         text("select to_regclass('public.project_create_idempotency_records') is not null")
     )
@@ -112,13 +136,7 @@ async def seed_authorized_project(
             ),
             {"id": project_id, "name": name, "slug": slug, "status": status},
         )
-        project = Project(
-            id=project_id,
-            name=name,
-            slug=slug,
-            status=status,
-        )
-        return project
+        return
     actor_id = str(uuid4())
     link = ActorIdentityLink(
         id=str(uuid4()),
@@ -151,7 +169,6 @@ async def seed_authorized_project(
 
     operation_id = uuid4()
     decision_id = uuid4()
-    project_uuid = UUID(project_id)
     resource = ProjectCreateResourceContext(
         resource_type="project_create",
         resource_id=operation_id,
@@ -214,4 +231,3 @@ async def seed_authorized_project(
     reservation.status = "committed"
     reservation.committed_at = datetime.now(UTC)
     await session.flush()
-    return project

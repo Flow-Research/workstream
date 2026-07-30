@@ -89,6 +89,18 @@ class _Consumed:
     __slots__ = ()
 
 
+def _project_create_binding_matches(
+    binding: _PreparedAuthorizationBinding,
+    resource: ProjectCreateResourceContext,
+) -> bool:
+    """Return whether final project-create identity matches the prepared binding."""
+    return (
+        binding.project_create_operation_id == resource.resource_id
+        and binding.project_create_project_id == resource.requested_project_id
+        and binding.project_create_generation == resource.operation_generation
+    )
+
+
 _CONSUMED = _Consumed()
 
 
@@ -159,12 +171,8 @@ class PreparedAuthorizationService:
         final_scope = self._scope_from_resource(expected_action_id, final_resource_context)
         if final_scope != issuance.binding.scope:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        if isinstance(final_resource_context, ProjectCreateResourceContext) and (
-            issuance.binding.project_create_operation_id != final_resource_context.resource_id
-            or issuance.binding.project_create_project_id
-            != final_resource_context.requested_project_id
-            or issuance.binding.project_create_generation
-            != final_resource_context.operation_generation
+        if isinstance(final_resource_context, ProjectCreateResourceContext) and not (
+            _project_create_binding_matches(issuance.binding, final_resource_context)
         ):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
         self._issued[handle] = _CONSUMED
@@ -188,13 +196,9 @@ class PreparedAuthorizationService:
             caller_input,
             PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM),
         )
-        if not isinstance(final_resource_context, ProjectCreateResourceContext) or (
-            binding.project_create_operation_id != final_resource_context.resource_id
-            or binding.project_create_project_id
-            != final_resource_context.requested_project_id
-            or binding.project_create_generation
-            != final_resource_context.operation_generation
-        ):
+        if not isinstance(
+            final_resource_context, ProjectCreateResourceContext
+        ) or not _project_create_binding_matches(binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid(
                 "invalid prepared authorization handle"
             )

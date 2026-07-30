@@ -3456,12 +3456,8 @@ async def test_project_mutation_actions_cannot_issue_prepared_handles_while_plan
         if action_id is ActionId.PROJECT_CREATE:
             continue
         scope = PreparedAuthorityScope(
-            kind=(
-                PreparedAuthorityScopeKind.SYSTEM
-                if action_id is ActionId.PROJECT_CREATE
-                else PreparedAuthorityScopeKind.PROJECT
-            ),
-            project_id=None if action_id is ActionId.PROJECT_CREATE else project_id,
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=project_id,
         )
         with pytest.raises(PreparedAuthorizationUnsupported) as exc_info:
             await prepared.prepare(

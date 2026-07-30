@@ -8759,10 +8759,9 @@ async def test_project_create_different_keys_same_slug_rolls_back_authority(
             select(func.count()).select_from(Project).where(Project.slug == slug)
         ) == 1
         assert await session.scalar(
-            select(func.count()).select_from(ProjectCreateIdempotencyRecord).where(
-                ProjectCreateIdempotencyRecord.project_id != first.json()["id"],
-                ProjectCreateIdempotencyRecord.status == "pending",
-            )
+            select(func.count())
+            .select_from(ProjectCreateIdempotencyRecord)
+            .where(ProjectCreateIdempotencyRecord.status == "pending")
         ) == 0
 
 

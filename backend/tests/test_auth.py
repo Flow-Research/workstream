@@ -2439,7 +2439,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
         assert [response.status_code for response in system_audit_reads] == [200] * 6
         assert system_audit_reads[0].json()["total"] == 71
         assert system_audit_reads[1].json()["total"] == 5
-        assert system_audit_reads[2].json()["total"] == 2
+        assert system_audit_reads[2].json()["total"] == 4
         assert system_audit_reads[3].json()["total"] == 1
 
         key = str(uuid4())
@@ -2505,7 +2505,7 @@ async def test_signed_tokens_bootstrap_and_admin_grant_lifecycle(
             params={"scope_type": "system", "status": "all"},
         )
         assert listed.status_code == history.status_code == 200
-        assert listed.json()["total"] == 3
+        assert listed.json()["total"] == 5
         assert history.json()["total"] == 1
         assert history.json()["items"][0]["grant_reason"] == issue_payload["reason"]
         serialized = json.dumps(history.json(), sort_keys=True)

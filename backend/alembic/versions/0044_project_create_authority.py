@@ -109,7 +109,7 @@ def upgrade() -> None:
         ["id"],
     )
     op.create_check_constraint(
-        "ck_projects_creation_authority_shape",
+        "creation_authority_shape",
         "projects",
         "(created_by_actor_profile_id is null and created_via_identity_link_id is null "
         "and created_by_admin_role_grant_id is null and creation_scope_type is null "
@@ -181,6 +181,9 @@ def upgrade() -> None:
           elsif tg_op = 'DELETE' then
             raise exception 'project create reservations are immutable' using errcode='55000';
           end if;
+          if new is not distinct from old then
+            return new;
+          end if;
           if old.status <> 'pending' or new.status <> 'committed'
              or (new.id, new.actor_profile_id, new.identity_link_id, new.action_id,
                  new.idempotency_key, new.request_digest, new.operation_id,
@@ -237,26 +240,35 @@ def upgrade() -> None:
             select * into project_row from projects where id=reservation.project_id;
           end if;
           if project_row.id is null or reservation.id is null
-             or project_row.created_by_actor_profile_id <> reservation.actor_profile_id
-             or project_row.created_via_identity_link_id <> reservation.identity_link_id
-             or project_row.creation_action_id <> reservation.action_id then
+             or project_row.created_by_actor_profile_id
+                is distinct from reservation.actor_profile_id
+             or project_row.created_via_identity_link_id
+                is distinct from reservation.identity_link_id
+             or project_row.creation_action_id is distinct from reservation.action_id then
             raise exception 'project create custody mismatch' using errcode='23514';
           end if;
           select * into evidence from audit_events
             where id=project_row.authorization_decision_event_id;
-          if evidence.id is null or evidence.event_domain <> 'authority'
-             or evidence.event_type <> 'SensitiveAuthorizationAllowed'
+          if evidence.id is null
+             or evidence.event_domain is distinct from 'authority'
+             or evidence.event_type is distinct from 'SensitiveAuthorizationAllowed'
              or evidence.denial_code is not null
-             or evidence.actor_ref_kind <> 'actor_profile'
-             or evidence.actor_id <> project_row.created_by_actor_profile_id
-             or evidence.matched_grant_id <> project_row.created_by_admin_role_grant_id::text
-             or evidence.permission_id <> 'project.create'
-             or evidence.action_id <> 'project.create'
-             or evidence.resource_type <> 'project_create_operation'
-             or evidence.resource_id <> reservation.operation_id::text
-             or evidence.target_ref_kind <> 'project'
-             or evidence.target_ref_id <> project_row.id
-             or evidence.after_facts->>'allowed' <> 'true' then
+             or evidence.actor_ref_kind is distinct from 'actor_profile'
+             or evidence.actor_id is distinct from project_row.created_by_actor_profile_id
+             or evidence.matched_grant_id
+                is distinct from project_row.created_by_admin_role_grant_id::text
+             or evidence.permission_id is distinct from 'project.create'
+             or evidence.action_id is distinct from 'project.create'
+             or evidence.resource_type is distinct from 'project_create_operation'
+             or evidence.resource_id is distinct from reservation.operation_id::text
+             or evidence.target_ref_kind is distinct from 'project'
+             or evidence.target_ref_id is distinct from project_row.id
+             or evidence.after_facts->>'allowed' is distinct from 'true'
+             or coalesce(
+                  evidence.after_facts->>'resource_context_digest'
+                    !~ '^sha256:[0-9a-f]{64}$',
+                  true
+                ) then
             raise exception 'project create evidence mismatch' using errcode='23514';
           end if;
           return null;
@@ -310,7 +322,7 @@ def downgrade() -> None:
     op.execute("drop function reject_project_create_idempotency_truncate()")
     op.execute("drop function guard_project_create_idempotency()")
     op.drop_table("project_create_idempotency_records")
-    op.drop_constraint("ck_projects_creation_authority_shape", "projects", type_="check")
+    op.drop_constraint("creation_authority_shape", "projects", type_="check")
     op.drop_constraint("fk_projects_creation_decision", "projects", type_="foreignkey")
     op.drop_constraint("fk_projects_creation_admin_grant", "projects", type_="foreignkey")
     op.drop_constraint("fk_projects_creation_identity_link", "projects", type_="foreignkey")

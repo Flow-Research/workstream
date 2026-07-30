@@ -167,6 +167,7 @@ install -d -m 700 .ci
   app/modules/projects/service.py app/modules/authorization/catalogue.py \
   app/modules/authorization/kernel.py app/modules/authorization/prepared.py \
   app/modules/authorization/runtime.py app/api/deps/authorization.py \
+  app/modules/audit/schemas.py \
   alembic/versions/0044_project_create_authority.py \
   tests/test_authorization.py tests/test_projects.py tests/test_alembic.py \
   tests/test_api_controls.py tests/conftest.py scripts/api_contract_e2e.py
@@ -179,10 +180,10 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py 
   --metadata-json .ci/auth12c-coverage.json --lane auth12c_coverage \
   --timeout-seconds 1200 -- sh -c \
   '.venv/bin/coverage erase && .venv/bin/coverage run \
-  --source=app.modules.projects,app.modules.authorization \
+  --source=app.modules.projects,app.modules.authorization,app.modules.audit \
   -m pytest -p pytest_asyncio.plugin -q tests/test_authorization.py \
   tests/test_projects.py -k "project_create" && .venv/bin/coverage report \
-  --include="*/app/modules/projects/*,*/app/modules/authorization/*" \
+  --include="*/app/modules/projects/*,*/app/modules/authorization/*,*/app/modules/audit/*" \
   --show-missing --fail-under=90'
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json .ci/auth12c-api.json --lane auth12c_api \

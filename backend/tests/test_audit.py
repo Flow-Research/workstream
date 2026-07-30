@@ -184,9 +184,9 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.PROJECT_POST_SUBMIT_CHECKER_POLICY_SETUP_READ,
         ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
         ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
-            ActionId.PROJECT_ACTIVE_GUIDE_READ,
-            ActionId.PROJECT_CREATE,
-            ActionId.PROJECT_READ,
+        ActionId.PROJECT_ACTIVE_GUIDE_READ,
+        ActionId.PROJECT_CREATE,
+        ActionId.PROJECT_READ,
         ActionId.PROJECT_ROLE_GRANT_LIST,
         ActionId.PROJECT_ROLE_GRANT_READ,
         ActionId.PROJECT_ROLE_GRANT_ISSUE,
@@ -199,27 +199,6 @@ def test_action_aware_audit_input_enforces_mapping_and_action_availability() -> 
         ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
     }
-
-
-def test_project_create_audit_event_binds_operation_to_future_project() -> None:
-    operation_id, project_id = uuid4(), uuid4()
-    event = _authority_input(
-        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
-        permission_id="project.create",
-        action_id="project.create",
-        resource_type="project_create_operation",
-        resource_id=str(operation_id),
-        target_ref_kind="project",
-        target_ref_id=str(project_id),
-        after_facts={
-            "allowed": True,
-            "resource_context_digest": f"sha256:{'a' * 64}",
-        },
-    )
-
-    assert event.resource_id == str(operation_id)
-    assert event.target_ref_kind == "project"
-    assert event.target_ref_id == str(project_id)
     artifact_allowed = _authority_input(
         AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
         permission_id=PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
@@ -257,6 +236,27 @@ def test_project_create_audit_event_binds_operation_to_future_project() -> None:
             reason="authorization_policy_denial",
             denial_code="permission_not_granted",
         )
+
+
+def test_project_create_audit_event_binds_operation_to_future_project() -> None:
+    operation_id, project_id = uuid4(), uuid4()
+    event = _authority_input(
+        AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED,
+        permission_id="project.create",
+        action_id="project.create",
+        resource_type="project_create_operation",
+        resource_id=str(operation_id),
+        target_ref_kind="project",
+        target_ref_id=str(project_id),
+        after_facts={
+            "allowed": True,
+            "resource_context_digest": f"sha256:{'a' * 64}",
+        },
+    )
+
+    assert event.resource_id == str(operation_id)
+    assert event.target_ref_kind == "project"
+    assert event.target_ref_id == str(project_id)
 
 
 async def test_planned_action_denial_persists_with_bounded_mapping(audit_factory) -> None:

@@ -2184,7 +2184,7 @@ async def _project_create_authority_schema_state(database_url: str) -> tuple[boo
                     "where conrelid='audit_events'::regclass "
                     "and conname='ck_audit_events_authority_privacy_bounds'"
                 )
-            )
+            ) or ""
             return (
                 table_exists,
                 provenance_exists,

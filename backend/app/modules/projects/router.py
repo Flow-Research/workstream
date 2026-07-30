@@ -174,7 +174,11 @@ async def create_project(
         await session.rollback()
         constraint_name = getattr(
             getattr(exc.orig, "__cause__", None), "constraint_name", None
-        )
+        ) or getattr(exc.orig, "constraint_name", None)
+        if constraint_name is None:
+            constraint_name = getattr(
+                getattr(exc.orig, "diag", None), "constraint_name", None
+            )
         if constraint_name not in {
             "projects_slug_key",
             "ix_projects_slug",

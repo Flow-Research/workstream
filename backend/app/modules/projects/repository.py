@@ -101,31 +101,23 @@ class ProjectRepository:
         record_id = await self._session.scalar(
             insert(ProjectCreateIdempotencyRecord)
             .values(**values)
-            .on_conflict_do_nothing(
+            .on_conflict_do_update(
                 index_elements=[
                     ProjectCreateIdempotencyRecord.actor_profile_id,
                     ProjectCreateIdempotencyRecord.action_id,
                     ProjectCreateIdempotencyRecord.idempotency_key,
-                ]
+                ],
+                set_={"id": ProjectCreateIdempotencyRecord.id},
             )
             .returning(ProjectCreateIdempotencyRecord.id)
         )
-        if record_id is not None:
-            record = await self._session.get(ProjectCreateIdempotencyRecord, record_id)
-            if record is None:
-                raise ProjectRepositoryIntegrityError("project reservation disappeared")
-            return "claimed", record
-        record = await self._session.scalar(
-            select(ProjectCreateIdempotencyRecord)
-            .where(
-                ProjectCreateIdempotencyRecord.actor_profile_id == actor_profile_id,
-                ProjectCreateIdempotencyRecord.action_id == "project.create",
-                ProjectCreateIdempotencyRecord.idempotency_key == idempotency_key,
-            )
-            .with_for_update()
-        )
+        if record_id is None:
+            raise ProjectRepositoryIntegrityError("project reservation disappeared")
+        record = await self._session.get(ProjectCreateIdempotencyRecord, record_id)
         if record is None:
-            raise ProjectRepositoryIntegrityError("project reservation conflict disappeared")
+            raise ProjectRepositoryIntegrityError("project reservation disappeared")
+        if record_id == values["id"]:
+            return "claimed", record
         if (
             record.identity_link_id != identity_link_id
             or record.request_digest != request_digest
