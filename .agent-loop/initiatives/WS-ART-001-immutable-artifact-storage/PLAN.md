@@ -477,7 +477,7 @@ ART-03A upload remains a byte-custody request: authorize before intake, compute
 the server digest and size, admit once, store opaque bytes, and verify them. It
 does not parse content or wait for contributor submission checkers.
 
-The expanded ART-03B work is delivered as five hidden PR-sized subchunks before
+The expanded ART-03B work is delivered as eleven hidden PR-sized subchunks before
 AUTH-04B activates fixed-service binding/read:
 
 1. `03B1` creates an authoritative one-item/one-content guide binding tied to
@@ -490,9 +490,14 @@ AUTH-04B activates fixed-service binding/read:
 3. `03B3A` installs the isolated no-network extraction framework, immutable
    content/usage provenance, and text, Markdown, JSON, and CSV extractors
    without new parser dependencies.
-4. `03B3B` adds explicitly approved PDF, DOCX, PPTX, XLSX, and PNG/JPEG/WebP
-   metadata extractors on that proven framework.
-5. `03B4` adds `setup_generation` to the identifier-only Celery payload,
+4. `03B3B1` selects the exact pinned parser dependency allowlist and adds its
+   deterministic CI gate without changing packages or runtime code.
+5. `03B3B2` installs only the approved PDF dependency and adds PDF extraction.
+6. `03B3B3A` adds shared bounded OOXML container and security capabilities.
+7. `03B3B3B`, `03B3B3C`, and `03B3B3D` separately add DOCX, PPTX, and XLSX.
+8. `03B3B4` installs only the approved image dependency and adds PNG, JPEG, and
+   WebP structural metadata extraction without OCR.
+9. `03B4` adds `setup_generation` to the identifier-only Celery payload,
    reloads current state, assembles all required canonical extracted sources,
    invokes sufficiency, and persists exact provenance.
 
@@ -552,9 +557,9 @@ every terminal current-generation failure above. API, Operator, and Project
 Manager projections use only the exact redacted mapping and remediation table.
 None is a guide-insufficiency decision.
 
-Any production parser dependency in 03B3B requires explicit human approval. Candidate
+Any production parser dependency requires explicit human approval through 03B3B1. Candidate
 libraries must undergo current security, maintenance, license, transitive-
-dependency, malformed-input, and cancellation review before `03B3B` may add
+dependency, malformed-input, and cancellation review before a later format chunk may add
 them; no runtime plugin discovery or parser fallback is permitted.
 
 1. Guide-source delivery is split into hidden byte ingest, AUTH activation,
