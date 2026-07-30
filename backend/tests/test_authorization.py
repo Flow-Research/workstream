@@ -7870,8 +7870,10 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class Session:
-        commit_count = 0
-        rollback_count = 0
+        def __init__(self, *, transaction_open: bool = False) -> None:
+            self.commit_count = 0
+            self.rollback_count = 0
+            self.transaction_open = transaction_open
 
         async def commit(self):
             self.commit_count += 1
@@ -7880,7 +7882,7 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
             self.rollback_count += 1
 
         def in_transaction(self):
-            return False
+            return self.transaction_open
 
     actor_id, link_id = uuid4(), uuid4()
     resolved = SimpleNamespace(
@@ -7888,7 +7890,7 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
         identity_link=SimpleNamespace(id=str(link_id), status="active"),
     )
     request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
-    session = Session()
+    session = Session(transaction_open=True)
     dependency = get_prepared_authorization_service(
         request,
         resolved,  # type: ignore[arg-type]
@@ -7900,6 +7902,7 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
         await anext(dependency)
     assert service._closed is True
     assert session.commit_count == 0
+    assert session.rollback_count == 1
 
     denial_session = Session()
     denial_dependency = get_prepared_authorization_service(
@@ -7943,6 +7946,31 @@ async def test_prepared_dependency_closes_handles_and_owns_denial_evidence(
         )
     assert denial_session.rollback_count == 1
     assert denial_session.commit_count == 1
+
+    persistence_failure_session = Session()
+    persistence_failure_dependency = get_prepared_authorization_service(
+        request,
+        resolved,  # type: ignore[arg-type]
+        persistence_failure_session,  # type: ignore[arg-type]
+    )
+    persistence_failure_service = await anext(persistence_failure_dependency)
+
+    async def reject_test_denial(_decision):
+        raise AuthorizationEvidenceUnavailable("injected denial persistence failure")
+
+    monkeypatch.setattr(
+        persistence_failure_service._authorization,
+        "_restage_denial",
+        reject_test_denial,
+    )
+    with pytest.raises(StructuredHTTPException) as exc_info:
+        await persistence_failure_dependency.athrow(  # type: ignore[attr-defined]
+            AuthorizationDenied(denied)
+        )
+    assert exc_info.value.status_code == 503
+    assert persistence_failure_session.rollback_count == 2
+    assert persistence_failure_session.commit_count == 0
+    assert persistence_failure_service._closed is True
 
 
 async def test_authorization_dependency_admits_service_without_human_rate_control(

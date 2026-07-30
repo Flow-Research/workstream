@@ -63,8 +63,13 @@ None.
   migration helpers. A caller-transaction variant of the historical helper now
   preserves normal setup transactions, while the outbox race commits historical
   setup before opening its writer transaction; all three exact schema tests pass.
-- Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
-  commit.
+- The exact-head rerun passed all four semantic lanes, Agent Gates, and
+  CodeRabbit. Its per-file cutover gate then reported 87.41 percent for the
+  prepared dependency composition root. The existing lifecycle test now proves
+  rollback of a forgotten successful transaction and fail-closed denial-evidence
+  persistence, covering the four lines required to reach at least 90 percent.
+- A final hosted Backend rerun is pending this coverage-proof commit; CodeRabbit
+  must also review that exact head.
 
 ## Remaining risks
 
