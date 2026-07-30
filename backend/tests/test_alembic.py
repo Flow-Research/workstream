@@ -2222,15 +2222,19 @@ def test_0044_project_create_authority_round_trip(
 async def _assert_0044_rejects_new_unattributed_project(database_url: str) -> None:
     engine = create_async_engine(database_url)
     try:
-        async with engine.begin() as connection:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            await connection.execute(
+                text(
+                    "insert into projects (id,name,slug,status) "
+                    "values (:id,'Unattributed','unattributed','draft')"
+                ),
+                {"id": str(uuid4())},
+            )
             with pytest.raises(IntegrityError):
-                await connection.execute(
-                    text(
-                        "insert into projects (id,name,slug,status) "
-                        "values (:id,'Unattributed','unattributed','draft')"
-                    ),
-                    {"id": str(uuid4())},
-                )
+                await transaction.commit()
+            if transaction.is_active:
+                await transaction.rollback()
     finally:
         await engine.dispose()
 

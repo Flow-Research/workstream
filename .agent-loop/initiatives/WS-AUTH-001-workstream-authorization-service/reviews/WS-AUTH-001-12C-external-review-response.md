@@ -37,6 +37,12 @@ None.
 - Count-sensitive auth/audit checks: 3 passed; the initially failing artifact
   baseline check was corrected and then passed with task/checker regressions.
 - Task/checker/artifact fixture regressions: 3 passed.
+- Three project-lifecycle regressions exposed by the hosted lane were corrected
+  by revoking fixture-only system Project Manager authority before exercising
+  narrower grant and revocation semantics: 3 passed.
+- The 0044 unattributed-project proof now observes the intentionally deferred
+  custody constraint at transaction commit instead of only at statement
+  execution: 1 passed.
 - Hosted Backend and exact-head CodeRabbit reruns are pending the corrective
   commit.
 

@@ -1457,6 +1457,34 @@ async def create_project(client: AsyncClient, *, name: str = "STEM Eval") -> dic
     return response.json()
 
 
+async def revoke_system_project_manager_for_default_actor() -> None:
+    """Remove fixture-only creation authority before testing narrower grants."""
+    async with db_session.get_session_factory()() as session:
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        assert link is not None
+        grant = await session.scalar(
+            select(AdminRoleGrant).where(
+                AdminRoleGrant.target_actor_profile_id == link.actor_profile_id,
+                AdminRoleGrant.role == "project_manager",
+                AdminRoleGrant.scope_type == "system",
+                AdminRoleGrant.status == "active",
+            )
+        )
+        assert grant is not None
+        grant.status = "revoked"
+        grant.version += 1
+        grant.revoked_by_actor_profile_id = grant.target_actor_profile_id
+        grant.revoked_by_admin_role_grant_id = grant.granted_by_admin_role_grant_id
+        grant.revoked_reason = "Remove fixture-only project creation authority"
+        grant.revoked_at = datetime.now(UTC)
+        await session.commit()
+
+
 async def test_project_route_registers_project_manager_actor_without_auth_me(
     project_client: AsyncClient,
 ) -> None:
@@ -1768,6 +1796,7 @@ async def test_get_project_rejects_token_role_when_setup_queue_is_unavailable(
 ) -> None:
     """A token role cannot authorize project identity under any queue state."""
     project = await create_project(project_client)
+    await revoke_system_project_manager_for_default_actor()
     monkeypatch.setenv("WORKSTREAM_PROJECT_SETUP_PIPELINE_AUTOSTART", "true")
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
     monkeypatch.delenv("WORKSTREAM_CELERY_BROKER_URL", raising=False)
@@ -1807,6 +1836,7 @@ async def test_project_identity_and_context_follow_exact_grant_and_lifecycle(
     """Live routes conceal cross-project, revoked, suspended, and revoked-link access."""
     project = await create_project(project_client, name="Visible project")
     other = await create_project(project_client, name="Other project")
+    await revoke_system_project_manager_for_default_actor()
     grant_id, link_id = await add_project_role_for_default_actor(project["id"], "submitter")
 
     identity = await project_client.get(f"/api/v1/projects/{project['id']}", headers=auth_headers())
@@ -4264,6 +4294,8 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
     project = await create_project(project_client)
+    other_project = await create_project(project_client, name="Wrong Scope")
+    await revoke_system_project_manager_for_default_actor()
     guide = await create_guide(
         project_client,
         project["id"],
@@ -4316,7 +4348,6 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     denied = [await project_client.get(endpoint, headers=auth_headers()) for endpoint in endpoints]
     assert [response.status_code for response in denied] == [404] * len(endpoints)
 
-    other_project = await create_project(project_client, name="Wrong Scope")
     wrong_scope_grant = await add_local_admin_role_for_default_actor(
         "project_manager", project_id=other_project["id"]
     )
