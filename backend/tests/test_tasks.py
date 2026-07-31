@@ -52,6 +52,7 @@ from app.modules.projects.models import (
     PaymentPolicy,
     PostSubmitCheckerPolicy,
     PreSubmitCheckerPolicy,
+    ProjectGuide,
     ProjectSetupRun,
     ReviewPolicy,
     RevisionPolicy,
@@ -636,7 +637,10 @@ def alembic_config() -> Config:
 
 
 def auth_headers(token: str = "task-token") -> dict[str, str]:
-    return {"Authorization": f"Bearer {token}"}
+    return {
+        "Authorization": f"Bearer {token}",
+        "Idempotency-Key": str(uuid4()),
+    }
 
 
 _DEFAULT_DEV_ACTOR_FIELD = object()
@@ -709,27 +713,6 @@ def complete_guide_payload(version: str = "v1") -> dict:
             "submission intake while the guide gives human review context."
         ),
         "change_summary": f"Initial {version}",
-        "review_policy": {
-            "requires_second_review": False,
-            "allowed_decisions": ["accept", "needs_revision", "reject"],
-            "minimum_finding_fields": ["issue", "required_fix"],
-            "sla_hours": 24,
-        },
-        "revision_policy": {
-            "max_revision_rounds": 7,
-            "revision_deadline_hours": 48,
-            "auto_reject_after_limit": True,
-            "allowed_resubmission_states": ["needs_revision"],
-            "reviewer_reassignment_rule": "same reviewer preferred",
-        },
-        "payment_policy": {
-            "base_amount": "25.00",
-            "currency": "USD",
-            "payout_type": "fixed",
-            "revision_payment_rule": "none",
-            "rejection_payment_rule": "none",
-            "accepted_payment_rule": "pay base amount",
-        },
     }
 
 
@@ -971,6 +954,45 @@ async def create_policy_bundle_for_guide(
     post_submit_warning_checkers: list[str] | None = None,
     post_submit_blocking_severities: list[str] | None = None,
 ) -> dict:
+    async with db_session.get_session_factory()() as session:
+        guide = await session.get(ProjectGuide, guide_id)
+        assert guide is not None
+        session.add_all(
+            [
+                ReviewPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    requires_second_review=False,
+                    allowed_decisions=["accept", "needs_revision", "reject"],
+                    minimum_finding_fields=["issue", "required_fix"],
+                    sla_hours=24,
+                ),
+                RevisionPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    max_revision_rounds=7,
+                    revision_deadline_hours=48,
+                    auto_reject_after_limit=True,
+                    allowed_resubmission_states=["needs_revision"],
+                    reviewer_reassignment_rule="same reviewer preferred",
+                ),
+                PaymentPolicy(
+                    id=str(uuid4()),
+                    project_id=project_id,
+                    guide_version=guide.version,
+                    base_amount="25.00",
+                    currency="USD",
+                    payout_type="fixed",
+                    revision_payment_rule="none",
+                    rejection_payment_rule="none",
+                    accepted_payment_rule="pay base amount",
+                ),
+            ]
+        )
+        await session.commit()
+
     snapshot_response = await client.post(
         f"/api/v1/projects/{project_id}/guides/{guide_id}/source-snapshots",
         headers=auth_headers(),

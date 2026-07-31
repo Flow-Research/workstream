@@ -84,6 +84,7 @@ async def seed_active_guide_for_pre_12h_e2e(project_id: str, guide_id: str) -> d
             result = await ProjectService(session).activate_guide(actor, project_id, guide_id)
             return result.model_dump(mode="json")
         finally:
+            await session.rollback()
             await session.execute(
                 text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
             )

@@ -2361,7 +2361,7 @@ async def test_create_source_snapshot_marks_setup_run_when_post_commit_enqueue_f
     project_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A late broker failure cannot turn a durable guide create into a false 503."""
+    """A late broker failure cannot turn a durable snapshot create into a false 503."""
     project = await create_project(project_client)
 
     def enqueue_failure(
@@ -2802,6 +2802,23 @@ async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_re
     assert first.status_code == 201, first.text
     assert mismatch.status_code == 409
     assert mismatch.json()["error"]["code"] == "idempotency_mismatch"
+
+    guide = first.json()
+    update_key = str(uuid4())
+    update_headers = auth_headers() | {"Idempotency-Key": update_key}
+    explicit_null = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
+        headers=update_headers,
+        json={"change_summary": None},
+    )
+    omitted_field = await project_client.patch(
+        f"/api/v1/projects/{project['id']}/guides/{guide['id']}",
+        headers=update_headers,
+        json={},
+    )
+    assert explicit_null.status_code == 200, explicit_null.text
+    assert omitted_field.status_code == 409
+    assert omitted_field.json()["error"]["code"] == "idempotency_mismatch"
 
 
 async def test_guide_source_metadata_authority_validates_key_before_actor_provisioning(

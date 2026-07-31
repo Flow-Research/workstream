@@ -31,3 +31,19 @@ removal, and temporary isolated-test downstream activation seeding.
 | Test delta | PASS with low risk | No skips or weakened assertions; missing/malformed key and migration round-trip proof restored. |
 
 All reviewer sessions completed. No Critical, High, or Medium finding remains open.
+
+## Corrective-delta re-review
+
+After the first hosted run and CodeRabbit review, architecture, security, QA,
+product/ops, senior engineering, and CI integrity re-reviewed the corrective
+delta. All six tracks passed with no blocking finding. They confirmed:
+
+- explicit null and omitted guide-update fields have distinct replay digests;
+- trigger restoration rolls back first and remains isolated-test-only;
+- downstream policy prerequisites are independent from the clean-cut guide API;
+- system and exact-project Project Manager grant paths are both covered;
+- removing the dead `ProjectService` snapshot/setup helper chain leaves setup
+  dispatch in its intended mutation-router boundary; and
+- no CI or coverage gate was weakened.
+
+All corrective re-review sessions completed.

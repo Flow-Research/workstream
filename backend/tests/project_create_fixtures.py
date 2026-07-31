@@ -37,7 +37,9 @@ async def activate_guide_for_downstream_test(
     AUTH-12D deliberately removes the legacy activation endpoint. Downstream
     subsystem tests still need active historical state until AUTH-12H installs
     the authorized activation mutation, so this fixture exercises the existing
-    product validation while explicitly suspending only the new custody trigger.
+    product validation while explicitly suspending the
+    ``guide_mutation_product_custody`` and ``guide_lineage_lifecycle_guard``
+    triggers.
     """
     actor = ActorContext(
         actor_id="project-manager-subject",
@@ -66,6 +68,7 @@ async def activate_guide_for_downstream_test(
             await session.rollback()
             return Response(status_code=exc.status_code, json={"detail": str(exc)})
         finally:
+            await session.rollback()
             await session.execute(
                 text("alter table project_guides enable trigger guide_lineage_lifecycle_guard")
             )

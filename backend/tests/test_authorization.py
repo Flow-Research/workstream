@@ -3568,17 +3568,24 @@ class _GuideMutationAuthorityFacts:
         ),
     ],
 )
+@pytest.mark.parametrize("grant_scope", ["system", "project"])
 async def test_guide_source_metadata_authority_uses_exact_single_use_project_handle(
     action_id: ActionId,
     target_kind: str,
     resource_type: str,
+    grant_scope: str,
 ) -> None:
     context = _runtime_context()
     assert isinstance(context, HumanAuthorizationContext)
     session = _PreparedTestSession()
     project_id, guide_id, resource_id, grant_id = (uuid4() for _ in range(4))
     facts = _GuideMutationAuthorityFacts(
-        context, grant=SimpleNamespace(id=grant_id, status="active")
+        context,
+        grant=SimpleNamespace(
+            id=grant_id,
+            status="active",
+            scope_project_id=None if grant_scope == "system" else project_id,
+        ),
     )
     authorization, evidence = _runtime_service(
         context, session=session, admin_repository=facts
@@ -3643,7 +3650,9 @@ async def test_guide_source_metadata_authority_uses_exact_single_use_project_han
     decision = await prepared.consume(handle, action_id, caller, resource)
     assert decision.allowed is True
     assert decision.matched_grant_id == grant_id
-    assert decision.matched_scope_project_id is None
+    assert decision.matched_scope_project_id == (
+        None if grant_scope == "system" else project_id
+    )
     assert evidence.events[0].resource_type == "project"
     assert evidence.events[0].resource_id == str(project_id)
     assert evidence.events[0].after_facts == {

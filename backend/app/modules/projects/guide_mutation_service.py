@@ -91,7 +91,7 @@ class GuideMutationService:
             "idempotency_key": str(key),
             "project_id": str(project_id),
             "guide_id": str(guide_id) if guide_id is not None else None,
-            "body": body.model_dump(mode="json", exclude_none=True),
+            "body": body.model_dump(mode="json", exclude_unset=True),
         }
         digest = canonical_json_hash(
             {"domain": "workstream.guide_mutation.idempotency.v1", **replay_request}

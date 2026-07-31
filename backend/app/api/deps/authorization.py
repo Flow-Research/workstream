@@ -224,7 +224,7 @@ async def get_authorization_service(
         raise actor_registry_unavailable_error() from exc
     except SQLAlchemyError as exc:
         await session.rollback()
-        logger.exception("prepared authorization transaction failed")
+        logger.exception("authorization decision transaction failed")
         raise actor_registry_unavailable_error() from exc
     except BaseException:
         await session.rollback()

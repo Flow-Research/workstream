@@ -63,7 +63,6 @@ from app.modules.projects.post_submit_policy import (
 from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.setup_queue import (
     ProjectSetupQueueError,
-    dispatch_pre_submit_setup_pipeline_after_commit,
     enqueue_post_submit_setup_continuation,
 )
 from app.modules.projects.schemas import (
@@ -1797,92 +1796,6 @@ class ProjectService:
         ):
             raise SourceSnapshotNotFound("guide source snapshot not found")
         return snapshot
-
-    async def _create_guide_source_snapshot_model(
-        self,
-        actor: ActorContext,
-        project_id: str,
-        guide: ProjectGuide,
-        payload: GuideSourceSnapshotCreate,
-    ) -> GuideSourceSnapshot:
-        """Persist a guide-source snapshot model without committing.
-
-        Args:
-            actor: Actor responsible for capturing the source material.
-            project_id: Project that owns the guide.
-            guide: Draft guide whose material is snapshotted.
-            payload: Additional source items to include with the guide body.
-
-        Returns:
-            Persisted source snapshot pending transaction commit.
-        """
-        manifest, sanitized_items = build_guide_source_snapshot_manifest(payload, guide)
-        bundle_hash = self._hash_canonical_json(manifest)
-        snapshot = GuideSourceSnapshot(
-            id=str(uuid4()),
-            project_id=project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            manifest_schema_version=GUIDE_SOURCE_SNAPSHOT_SCHEMA_VERSION,
-            manifest_json=manifest,
-            bundle_hash=bundle_hash,
-            captured_by=actor.actor_id,
-        )
-        item_models = build_guide_source_snapshot_items(snapshot.id, sanitized_items)
-        return await self._repo.add_guide_source_snapshot(snapshot, item_models)
-
-    async def _create_project_setup_run_model(
-        self,
-        actor: ActorContext,
-        guide: ProjectGuide,
-        snapshot: GuideSourceSnapshot,
-    ) -> ProjectSetupRun:
-        """Create a queued setup-run ledger row without committing."""
-        setup_run = ProjectSetupRun(
-            id=str(uuid4()),
-            project_id=guide.project_id,
-            guide_id=guide.id,
-            guide_version=guide.version,
-            source_snapshot_id=snapshot.id,
-            source_snapshot_hash=snapshot.bundle_hash,
-            setup_generation=await self._repo.next_project_setup_generation(guide.id),
-            status="queued",
-            current_step="queued",
-            created_by=actor.actor_id,
-        )
-        return await self._repo.add_project_setup_run(setup_run)
-
-    async def _enqueue_pre_submit_setup_pipeline_after_commit(
-        self,
-        *,
-        project_id: str,
-        guide_id: str,
-        source_snapshot_id: str,
-        setup_run_id: str,
-    ) -> str | None:
-        """Enqueue automatic pre-submit setup for an immutable source snapshot.
-
-        This is called only after the project setup record is already committed.
-        If the broker fails at this point, the write remains successful and the
-        operator can retry setup from the persisted snapshot instead of receiving
-        a false 503 for a durable create.
-
-        Args:
-            project_id: Project that owns the guide.
-            guide_id: Guide whose snapshot should be processed.
-            source_snapshot_id: Immutable source snapshot to process.
-            setup_run_id: Ledger row that should receive the Celery task id.
-
-        Returns:
-            Celery task id when enqueue succeeds; otherwise ``None``.
-        """
-        return await dispatch_pre_submit_setup_pipeline_after_commit(
-            self._session,
-            project_id=project_id,
-            guide_id=guide_id,
-            source_snapshot_id=source_snapshot_id,
-            setup_run_id=setup_run_id,
-        )
 
     async def _enqueue_post_submit_setup_continuation_after_commit(
         self,
