@@ -47,3 +47,9 @@ delta. All six tracks passed with no blocking finding. They confirmed:
 - no CI or coverage gate was weakened.
 
 All corrective re-review sessions completed.
+
+After the second hosted failure, architecture passed the final delta. Security
+and QA each found and then verified closure of one blocking E2E edge case:
+suffixed package credential refs now fail closed, and activation seeds resolve
+the exact run-specific Flow subject plus issuer to its canonical actor profile.
+Both final tracks passed, and all sessions completed.

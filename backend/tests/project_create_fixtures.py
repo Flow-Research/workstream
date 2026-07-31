@@ -41,19 +41,27 @@ async def activate_guide_for_downstream_test(
     ``guide_mutation_product_custody`` and ``guide_lineage_lifecycle_guard``
     triggers.
     """
-    actor = ActorContext(
-        actor_id="project-manager-subject",
-        external_subject="project-manager-subject",
-        external_issuer="flow-test",
-        roles=("project_manager",),
-        claim_snapshot={},
-        auth_source="dev_mock",
-        is_dev_auth=True,
-    )
     async with session_factory() as session:
         database_name = await session.scalar(text("select current_database()"))
         if not str(database_name).startswith("workstream_test_"):
             raise RuntimeError("downstream activation fixture requires an isolated test database")
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == "flow-test",
+                ActorIdentityLink.subject == "project-manager-subject",
+            )
+        )
+        if link is None:
+            raise RuntimeError("downstream activation fixture requires an admitted actor")
+        actor = ActorContext(
+            actor_id=str(link.actor_profile_id),
+            external_subject=link.subject,
+            external_issuer=link.issuer,
+            roles=("project_manager",),
+            claim_snapshot={},
+            auth_source="dev_mock",
+            is_dev_auth=True,
+        )
         await session.execute(
             text("alter table project_guides disable trigger guide_mutation_product_custody")
         )

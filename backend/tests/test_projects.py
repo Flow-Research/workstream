@@ -4888,9 +4888,7 @@ async def test_project_setup_run_records_enqueue_failure_without_leaking_error(
     assert body["current_step"] == "enqueue"
     assert body["celery_task_id"] is None
     assert body["error_code"] == "ProjectSetupQueueError"
-    assert body["error_summary"] == (
-        "project setup failed; inspect server logs with the setup run id"
-    )
+    assert body["error_summary"] == "project setup failed"
     assert "token" not in body["error_summary"]
     assert "https://" not in body["error_summary"]
 
@@ -5181,6 +5179,7 @@ async def test_project_setup_visibility_apis_require_active_local_grant(
     get_settings.cache_clear()
     project = await create_project(project_client)
     other_project = await create_project(project_client, name="Wrong Scope")
+    await add_project_manager_admin_grant(project["id"])
     await revoke_system_project_manager_for_default_actor()
     guide = await create_guide(
         project_client,
@@ -5574,6 +5573,8 @@ async def test_source_snapshot_rejects_unsafe_refs(project_client: AsyncClient) 
         ("https://docs.flow.test/outputs/prod.env", "credential material"),
         ("https://docs.flow.test/keys/id_rsa", "credential material"),
         ("https://docs.flow.test/keys/deploy.pem", "credential material"),
+        ("https://docs.flow.test/.npmrc.bak", "credential material"),
+        ("https://docs.flow.test/.pypirc.old", "credential material"),
         ("s3://bucket/private/key.pem", "credential material"),
         ("s3://bucket/access/key/guide.md", "credential material"),
         ("s3://bucket/api/key/guide.md", "credential material"),
@@ -6129,9 +6130,8 @@ async def test_agent_material_includes_representative_task_context(
     )
 
 
-async def test_source_snapshot_integrity_accepts_v1_manifest_without_content_excerpt(
+async def test_source_snapshot_manifest_cannot_be_rewritten_for_legacy_shape(
     project_client: AsyncClient,
-    deterministic_project_agent_runtime: None,
 ) -> None:
     project = await create_project(project_client)
     guide = await create_guide(project_client, project["id"], complete_guide_payload())
@@ -6142,20 +6142,14 @@ async def test_source_snapshot_integrity_accepts_v1_manifest_without_content_exc
         manifest = json.loads(json.dumps(persisted.manifest_json))
         for item in manifest["items"]:
             item.pop("content_excerpt", None)
-        await session.execute(
-            update(GuideSourceSnapshot)
-            .where(GuideSourceSnapshot.id == snapshot["id"])
-            .values(manifest_json=manifest, bundle_hash=canonical_json_hash(manifest))
-        )
-        await session.commit()
-
-    response = await project_client.post(
-        f"/api/v1/projects/{project['id']}/guides/{guide['id']}/source-snapshots/"
-        f"{snapshot['id']}/run-sufficiency-agent",
-        headers=auth_headers(),
-    )
-
-    assert response.status_code == 201, response.text
+        with pytest.raises(IntegrityError):
+            await session.execute(
+                update(GuideSourceSnapshot)
+                .where(GuideSourceSnapshot.id == snapshot["id"])
+                .values(manifest_json=manifest, bundle_hash=canonical_json_hash(manifest))
+            )
+            await session.commit()
+        await session.rollback()
 
 
 def test_project_agent_factory_requires_openai_agent_sdk_model(
@@ -9076,6 +9070,7 @@ async def test_guide_payload_rejects_manual_post_submit_checker_policy(
 async def test_activation_requires_review_policy(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
+    payload["review_policy"] = None
     guide = await create_guide(project_client, project["id"], payload)
     await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 
@@ -9092,6 +9087,7 @@ async def test_activation_requires_review_policy(project_client: AsyncClient) ->
 async def test_activation_requires_payment_policy(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
+    payload["payment_policy"] = None
     guide = await create_guide(project_client, project["id"], payload)
     await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 
@@ -9108,6 +9104,7 @@ async def test_activation_requires_payment_policy(project_client: AsyncClient) -
 async def test_activation_requires_revision_policy(project_client: AsyncClient) -> None:
     project = await create_project(project_client)
     payload = complete_guide_payload()
+    payload["revision_policy"] = None
     guide = await create_guide(project_client, project["id"], payload)
     await create_approved_policy_bundle(project_client, project["id"], guide["id"])
 

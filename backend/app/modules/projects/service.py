@@ -131,9 +131,9 @@ CREDENTIAL_SHAPE_PATTERN = re.compile(
     r")"
 )
 SECRET_ARTIFACT_NAME_PATTERN = re.compile(
-    r"(^|[._/\-])("
-    r"\.env[^/]*|"
-    r"\.npmrc|\.pypirc|"
+    r"(^|/)("
+    r"[^/]*\.env[^/]*|"
+    r"\.npmrc[^/]*|\.pypirc[^/]*|"
     r"id_(rsa|dsa|ecdsa|ed25519)(\.[^/]*)?|"
     r"private[_\-]?key[^/]*|"
     r"api[_\-]?key[^/]*|"
@@ -141,8 +141,10 @@ SECRET_ARTIFACT_NAME_PATTERN = re.compile(
     r"secret[^/]*|"
     r"credential[^/]*|"
     r"token[^/]*|"
-    r"service[_\-]?account[^/]*"
-    r")($|[._/\-])",
+    r"service[_\-]?account[^/]*|"
+    r"[^/]*\.pem"
+    r")($|/)|"
+    r"(^|/)(private|api|access)/key(\.[^/]*)?($|/)",
     re.IGNORECASE,
 )
 

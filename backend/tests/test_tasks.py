@@ -2812,6 +2812,10 @@ async def test_task_context_apis_fail_closed_on_stale_locked_context_rows(
             )
             assert snapshot is not None
             snapshot.manifest_json = {**snapshot.manifest_json, "tampered": True}
+            with pytest.raises(IntegrityError):
+                await session.commit()
+            await session.rollback()
+            return
         elif mutation == "effective_policy_body":
             effective_policy = await session.get(
                 EffectiveProjectSubmissionArtifactPolicy,

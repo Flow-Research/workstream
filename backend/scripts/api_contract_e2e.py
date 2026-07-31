@@ -24,6 +24,7 @@ from pydantic import SecretStr
 from sqlalchemy import select, text
 
 from app.db import session as db_session
+from app.modules.actors.models import ActorIdentityLink
 from app.modules.api_controls.service import (
     FIRST_ACCESS_SCOPE,
     RateControlService,
@@ -58,21 +59,34 @@ EXPECTED_DURABLE_CHECKERS = {
 }
 
 
-async def seed_active_guide_for_pre_12h_e2e(project_id: str, guide_id: str) -> dict:
+async def seed_active_guide_for_pre_12h_e2e(
+    project_id: str,
+    guide_id: str,
+    manager_subject: str,
+    manager_issuer: str,
+) -> dict:
     """Seed downstream active state while the public activation route is unavailable."""
-    actor = ActorContext(
-        actor_id="project-manager-subject",
-        external_subject="project-manager-subject",
-        external_issuer=DEFAULT_FLOW_ISSUER,
-        roles=("project_manager",),
-        claim_snapshot={},
-        auth_source="flow",
-        is_dev_auth=False,
-    )
     async with db_session.get_session_factory()() as session:
         database_name = await session.scalar(text("select current_database()"))
         if DERIVED_DATABASE_NAME.fullmatch(str(database_name)) is None:
             raise RuntimeError("pre-12H activation seed requires an isolated E2E database")
+        link = await session.scalar(
+            select(ActorIdentityLink).where(
+                ActorIdentityLink.issuer == manager_issuer,
+                ActorIdentityLink.subject == manager_subject,
+            )
+        )
+        if link is None:
+            raise RuntimeError("pre-12H activation seed requires an admitted actor")
+        actor = ActorContext(
+            actor_id=str(link.actor_profile_id),
+            external_subject=link.subject,
+            external_issuer=link.issuer,
+            roles=("project_manager",),
+            claim_snapshot={},
+            auth_source="flow",
+            is_dev_auth=False,
+        )
         await session.execute(
             text("alter table project_guides disable trigger guide_mutation_product_custody")
         )
@@ -1465,7 +1479,9 @@ async def exercise_api_contract(base_url: str, env: dict[str, str]) -> None:
             manager_token,
             expected_status=404,
         )
-        active = await seed_active_guide_for_pre_12h_e2e(project["id"], guide["id"])
+        active = await seed_active_guide_for_pre_12h_e2e(
+            project["id"], guide["id"], manager_subject, flow_issuer
+        )
         assert active["guide"]["version"] == "v1"
         active_actor_context = await request_json(
             client,

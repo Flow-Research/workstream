@@ -28,6 +28,11 @@ outside this chunk.
 - Hosted CI failure was traced to downstream task/checker fixtures retaining the
   retired guide request shape. The corrected isolated PostgreSQL regression lane
   passed 9 tests across downstream setup, replay, and grant-scope paths.
+- A second hosted run exposed remaining stale tests plus a shared durable-ref
+  validation regression. The repair restores secret-reference rejection, uses
+  canonical actor IDs in isolated activation seeds, and proves immutable
+  snapshots reject legacy rewrites. Its exact local selection completed 36 tests
+  without a failure before local execution was stopped for machine cost.
 - Ruff, diff check, Markdown links, and stale wording/docs: passed.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
@@ -51,6 +56,8 @@ outside this chunk.
   actions.
 - Dead legacy snapshot/setup helpers were removed; downstream fixtures use the
   clean-cut guide contract and seed independent lifecycle policy prerequisites.
+- Suffixed package-credential refs are rejected, and both API E2E flows bind the
+  isolated activation seed to the exact admitted Flow subject and issuer.
 - The complete response is recorded in
   `WS-AUTH-001-12D-external-review-response.md`.
 
