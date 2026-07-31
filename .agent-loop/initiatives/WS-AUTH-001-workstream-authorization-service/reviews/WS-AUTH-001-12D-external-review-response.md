@@ -54,6 +54,9 @@
 - Ninth hosted CI: directly prove guide-mutation replay lookup and every
   existing-reservation classification, plus fail-closed insert/load/completion
   custody disappearance; the repository's 90 percent gate is unchanged.
+- Tenth hosted retry: directly prove the guide router preserves key-gated actor
+  resolution, request-local PREP composition, and the exact authority tuple;
+  the router's 90 percent gate is unchanged.
 
 ## Comments deferred
 
@@ -86,6 +89,7 @@ None. The user retains merge authority for PR #232.
 - Exact PREP transaction-failure regression: 3 passed.
 - Exact guide-metadata PREP denial regression: 1 passed.
 - Exact guide-mutation repository regression: 8 passed.
+- Exact guide-router composition regression: 1 passed.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

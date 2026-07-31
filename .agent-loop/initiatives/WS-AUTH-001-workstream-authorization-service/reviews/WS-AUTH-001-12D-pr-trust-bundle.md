@@ -46,6 +46,9 @@ outside this chunk.
 - The next hosted run passed those repaired gates and exposed the new replay
   repository's untested fail-closed branches; eight direct repository cases now
   cover classification and custody-loss behavior without changing production.
+- The repository then passed at 100 percent; a focused router composition test
+  covers its remaining key-gated actor/PREP dependency paths without changing
+  the router or its 90 percent gate.
 - Internal architecture, security, QA, product, senior, CI, docs, reuse, and
   test-delta tracks: passed; low risks are documented in the review evidence.
 - GitHub full-suite, repository 78 percent, AUTH 90 percent, and new per-file

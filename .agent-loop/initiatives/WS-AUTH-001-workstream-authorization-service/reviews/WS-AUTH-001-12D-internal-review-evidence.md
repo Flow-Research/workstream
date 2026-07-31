@@ -126,3 +126,12 @@ loss. The production repository and 90 percent gate are unchanged.
 QA required the lookup mock to return the real row shape and requested direct
 claimed-reservation proof. Both were added; QA then passed, CI integrity passed
 with only hosted-verification risk, and all sessions closed.
+
+The first repository-corrected run was interrupted by an unrelated asyncpg
+isolated-runner concurrency failure. Its exact-head retry passed the repository
+at 100 percent, then reported the guide router at 84.62 percent. A direct
+composition regression now proves valid-key actor resolution, request-local
+PREP lifetime, and exact authority tuple propagation without changing runtime.
+QA and CI integrity passed with only hosted-verification risk; QA's cleanup
+suggestion was applied by explicitly observing PREP context exit. All sessions
+closed.

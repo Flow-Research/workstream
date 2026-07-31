@@ -7,6 +7,7 @@ import json
 import sys
 import types
 from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
@@ -72,6 +73,7 @@ from app.modules.authorization.models import (
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.catalogue import ActionId
 from app.modules.projects import service as project_service_module
+from app.modules.projects import guide_mutation_router as guide_mutation_router_module
 from app.modules.projects import setup_queue as project_setup_queue_module
 from app.modules.projects.authorization_reads import (
     authorize_project_active_guide_read,
@@ -2870,6 +2872,58 @@ async def test_guide_mutation_repository_fails_closed_when_custody_disappears(
                 resource_id=str(uuid4()),
                 operation_generation=1,
             )
+
+
+async def test_guide_mutation_router_composes_only_key_gated_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = uuid4()
+    request = object()
+    result = object()
+    session = object()
+    rate_control = object()
+    resolved = object()
+    prepared = object()
+    calls: list[tuple] = []
+
+    async def resolve(current_request, current_result, current_session, current_rate):
+        calls.append((current_request, current_result, current_session, current_rate))
+        return resolved
+
+    @asynccontextmanager
+    async def prepared_context(current_request, current_resolved, current_session):
+        calls.append((current_request, current_resolved, current_session))
+        try:
+            yield prepared
+        finally:
+            calls.append(("prepared_closed",))
+
+    monkeypatch.setattr(guide_mutation_router_module, "resolve_authorization_actor", resolve)
+    monkeypatch.setattr(
+        guide_mutation_router_module,
+        "prepared_authorization_service",
+        prepared_context,
+    )
+
+    assert (
+        await guide_mutation_router_module.guide_authorization_actor(
+            key, request, result, session, rate_control  # type: ignore[arg-type]
+        )
+        is resolved
+    )
+    dependency = guide_mutation_router_module.get_guide_prepared_authorization_service(
+        request, resolved, session  # type: ignore[arg-type]
+    )
+    assert await anext(dependency) is prepared
+    await dependency.aclose()
+    assert await guide_mutation_router_module.guide_authorization(
+        key, resolved, prepared  # type: ignore[arg-type]
+    ) == (key, resolved, prepared)
+    assert calls == [
+        (request, result, session, rate_control),
+        (request, resolved, session),
+        ("prepared_closed",),
+    ]
 async def test_guide_source_metadata_authority_rejects_removed_fields_and_bad_replay(
     project_client: AsyncClient,
 ) -> None:
