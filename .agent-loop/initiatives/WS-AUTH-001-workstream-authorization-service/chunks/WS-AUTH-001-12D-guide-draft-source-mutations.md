@@ -48,6 +48,7 @@ backend/alembic/versions/0045_guide_source_metadata_authority.py
 backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_guide_artifacts.py
+backend/tests/test_guide_bindings.py
 backend/tests/test_alembic.py
 backend/tests/test_api_controls.py
 backend/tests/test_checkers.py

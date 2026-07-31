@@ -26,6 +26,9 @@
 - Final internal review: reject suffixed `.npmrc`/`.pypirc` refs and thread the
   exact run-specific Flow subject and issuer through both API E2E activation
   seeds.
+- Third hosted CI: construct pre-0045 ART guide-binding lineage only through an
+  isolated-test, fixed-allowlist custody suspension and restore migration 0045
+  before current ORM models are used after the extraction-migration downgrade.
 
 ## Comments deferred
 
@@ -44,6 +47,10 @@ None. The user retains merge authority for PR #232.
   before the intentionally stopped local run; the complete semantic lanes remain
   assigned to GitHub because local execution is prohibitively slow.
 - Git diff check: passed.
+- Focused isolated PostgreSQL historical guide-binding proof: 1 passed.
+- Focused isolated PostgreSQL downgrade/restore extraction proof: 1 passed.
+- Exact stale-generation, next-generation, and post-read drift regressions:
+  3 passed in a runner-owned isolated PostgreSQL database.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

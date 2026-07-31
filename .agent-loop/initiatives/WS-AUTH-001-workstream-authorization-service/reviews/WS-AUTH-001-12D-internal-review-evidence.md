@@ -53,3 +53,17 @@ and QA each found and then verified closure of one blocking E2E edge case:
 suffixed package credential refs now fail closed, and activation seeds resolve
 the exact run-specific Flow subject plus issuer to its canonical actor profile.
 Both final tracks passed, and all sessions completed.
+
+After the third hosted run exposed ART guide-binding fixtures that constructed
+pre-0045 lineage against the current custody schema, architecture, security,
+and QA reviewed the bounded corrective delta. The chunk contract now explicitly
+includes `backend/tests/test_guide_bindings.py` for that downstream regression
+repair. Focused isolated-database proof covers both historical lineage setup and
+the migration downgrade/current-model boundary; production custody triggers
+remain unchanged.
+
+Security's blocking review finding tightened the fixture from a database-name
+prefix check to the runner-owned `workstream_test_<12 hex>` and matching
+`workstream_role_<12 hex>` pair. QA's blocking finding identified three later
+setup-generation inserts; all now use the same bounded fixture. Security passed
+the correction, and the exact three QA regressions pass in an isolated database.

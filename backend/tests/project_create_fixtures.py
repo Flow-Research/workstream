@@ -1,5 +1,9 @@
 """Test-only construction of historical and currently attributed projects."""
 
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Sequence
+import re
+
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -24,6 +28,54 @@ from app.modules.authorization.runtime import (
 from app.modules.projects.models import Project, ProjectCreateIdempotencyRecord
 from app.modules.projects.service import ProjectService, ProjectServiceError
 from app.schemas.auth import ActorContext
+
+
+_ISOLATED_DATABASE_RE = re.compile(r"workstream_test_([a-f0-9]{12})")
+_ISOLATED_ROLE_RE = re.compile(r"workstream_role_([a-f0-9]{12})")
+
+
+@asynccontextmanager
+async def suspend_historical_product_custody(
+    session: AsyncSession,
+    *,
+    table: str,
+    triggers: Sequence[str],
+) -> AsyncIterator[None]:
+    """Suspend named custody triggers only inside an isolated test database."""
+    allowed = {
+        "project_guides": {
+            "guide_mutation_product_custody",
+            "guide_lineage_lifecycle_guard",
+        },
+        "guide_source_snapshots": {"source_snapshot_product_custody"},
+        "guide_source_snapshot_items": {"guide_source_snapshot_items_custody"},
+        "project_setup_runs": {"source_setup_run_custody"},
+    }
+    if table not in allowed or not triggers or not set(triggers) <= allowed[table]:
+        raise RuntimeError("unsupported historical custody suspension")
+    database_name, database_role = (
+        await session.execute(text("select current_database(), current_user"))
+    ).one()
+    database_match = _ISOLATED_DATABASE_RE.fullmatch(str(database_name))
+    role_match = _ISOLATED_ROLE_RE.fullmatch(str(database_role))
+    if (
+        database_match is None
+        or role_match is None
+        or database_match.group(1) != role_match.group(1)
+    ):
+        raise RuntimeError("historical custody suspension requires an isolated test database")
+    try:
+        for trigger in triggers:
+            await session.execute(text(f"alter table {table} disable trigger {trigger}"))
+        yield
+        for trigger in reversed(triggers):
+            await session.execute(text(f"alter table {table} enable trigger {trigger}"))
+    except BaseException:
+        await session.rollback()
+        for trigger in reversed(triggers):
+            await session.execute(text(f"alter table {table} enable trigger {trigger}"))
+        await session.commit()
+        raise
 
 
 async def activate_guide_for_downstream_test(
