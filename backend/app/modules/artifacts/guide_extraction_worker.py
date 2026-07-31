@@ -137,11 +137,16 @@ def _extract(
     payload: bytes,
     detected_format: str,
     pdf_extractor: Callable[[bytes], str] | None = None,
-) -> str:
+    docx_extractor: Callable[[bytes], tuple[str, dict[str, bool]]] | None = None,
+) -> str | tuple[str, dict[str, bool]]:
     if detected_format == "pdf":
         if pdf_extractor is None:
             raise ExtractionFailure("parser_failure", "parser_unavailable")
         return pdf_extractor(payload)
+    if detected_format == "docx":
+        if docx_extractor is None:
+            raise ExtractionFailure("parser_failure", "parser_unavailable")
+        return docx_extractor(payload)
     text = _decode_text(payload)
     if detected_format in {"plain_text", "markdown"}:
         return text
@@ -201,28 +206,75 @@ def _load_ooxml_security() -> Callable[[bytes, str], object]:
     return bounded_validate
 
 
+def _load_docx_extractor(
+    validate_ooxml: Callable[[bytes, str], object],
+) -> Callable[[bytes], tuple[str, dict[str, bool]]]:
+    """Load the DOCX adapter after limits but before descriptor-only seccomp."""
+    from app.modules.artifacts.guide_docx import DocxExtractionFailure, extract_docx
+
+    def bounded_extract(payload: bytes) -> tuple[str, dict[str, bool]]:
+        try:
+            extracted = extract_docx(
+                payload,
+                validate_ooxml=lambda exact_payload: validate_ooxml(exact_payload, "docx"),
+            )
+        except DocxExtractionFailure as exc:
+            raise ExtractionFailure(exc.status, exc.code) from exc
+        return extracted.canonical_output, extracted.omission_facts
+
+    return bounded_extract
+
+
 def main() -> int:
     """Apply resource/isolation controls and emit one bounded JSON result."""
     detected_format = sys.argv[1] if len(sys.argv) == 2 else ""
     try:
         _install_limits()
         pdf_extractor = None
+        docx_extractor = None
         if detected_format == "pdf":
             pdf_extractor = _load_pdf_extractor()
+        elif detected_format == "docx":
+            docx_extractor = _load_docx_extractor(_load_ooxml_security())
         _install_seccomp()
         payload = sys.stdin.buffer.read(_MAXIMUM_INPUT_BYTES + 1)
         if len(payload) > _MAXIMUM_INPUT_BYTES:
             raise ExtractionFailure("limit_exceeded", "input_limit")
-        output = _extract(payload, detected_format, pdf_extractor)
+        extracted = _extract(payload, detected_format, pdf_extractor, docx_extractor)
+        if isinstance(extracted, tuple):
+            output, omission_facts = extracted
+        else:
+            output = extracted
+            omission_facts = {"truncated": False, "omitted": False}
         if len(output.encode("utf-8")) > 4 * 1024 * 1024:
             raise ExtractionFailure("limit_exceeded", "output_limit")
-        result = {"status": "extracted", "error_code": None, "output": output}
+        result = {
+            "status": "extracted",
+            "error_code": None,
+            "output": output,
+            "omission_facts": omission_facts,
+        }
     except ExtractionFailure as exc:
-        result = {"status": exc.status, "error_code": exc.code, "output": None}
+        result = {
+            "status": exc.status,
+            "error_code": exc.code,
+            "output": None,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     except MemoryError:
-        result = {"status": "limit_exceeded", "error_code": "memory_limit", "output": None}
+        result = {
+            "status": "limit_exceeded",
+            "error_code": "memory_limit",
+            "output": None,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     except BaseException:
-        result = {"status": "parser_failure", "error_code": "parser_failure", "output": None}
+        result = {
+            "status": "parser_failure",
+            "error_code": "parser_failure",
+            "output": None,
+            "omission_facts": {"truncated": False, "omitted": False},
+        }
     encoded = json.dumps(result, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     view = memoryview(encoded)
     while view:

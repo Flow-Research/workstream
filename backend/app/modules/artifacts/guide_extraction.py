@@ -15,12 +15,27 @@ from typing import BinaryIO
 
 EXTRACTION_POLICY_VERSION = "guide-extraction-v1"
 PDF_EXTRACTION_POLICY_VERSION = "guide-extraction-v2"
+DOCX_EXTRACTION_POLICY_VERSION = "guide-extraction-v3"
 EXTRACTOR_VERSION = "1"
 MAXIMUM_INPUT_BYTES = 32 * 1024 * 1024
 MAXIMUM_OUTPUT_BYTES = 4 * 1024 * 1024
 MAXIMUM_PROTOCOL_BYTES = (MAXIMUM_OUTPUT_BYTES * 6) + 1024
 WALL_TIMEOUT_SECONDS = 60
-_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf"})
+_SUPPORTED = frozenset({"plain_text", "markdown", "json", "csv", "pdf", "docx"})
+_DEFAULT_OMISSION_FACTS = {"truncated": False, "omitted": False}
+_DOCX_OMISSION_KEYS = frozenset(
+    {
+        "truncated",
+        "omitted",
+        "headers",
+        "footers",
+        "comments",
+        "tracked_deletions",
+        "embedded_objects",
+        "hidden_text",
+        "field_instructions",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +46,7 @@ class GuideExtractionResult:
     error_code: str | None
     canonical_output: str | None
     output_sha256: str | None
+    omission_facts: dict[str, bool]
     extractor_name: str
     extractor_version: str = EXTRACTOR_VERSION
     policy_version: str = EXTRACTION_POLICY_VERSION
@@ -110,6 +126,7 @@ class GuideExtractionRunner:
             status = result["status"]
             error_code = result["error_code"]
             output = result["output"]
+            omission_facts = result["omission_facts"]
         except (KeyError, TypeError, ValueError, UnicodeDecodeError):
             return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
         if status not in {
@@ -122,6 +139,8 @@ class GuideExtractionRunner:
             return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
         if output is not None and not isinstance(output, str):
             return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
+        if not self._valid_omission_facts(detected_format, status, omission_facts):
+            return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
         if isinstance(output, str) and len(output.encode("utf-8")) > MAXIMUM_OUTPUT_BYTES:
             return self._result(detected_format, "limit_exceeded", "output_limit", None)
         if (status == "extracted" and (error_code is not None or not isinstance(output, str))) or (
@@ -133,7 +152,26 @@ class GuideExtractionRunner:
             )
         ):
             return self._result(detected_format, "parser_failure", "invalid_executor_output", None)
-        return self._result(detected_format, status, error_code, output)
+        return self._result(
+            detected_format,
+            status,
+            error_code,
+            output,
+            omission_facts=omission_facts,
+        )
+
+    @staticmethod
+    def _valid_omission_facts(detected_format: str, status: object, value: object) -> bool:
+        if not isinstance(value, dict) or not all(
+            isinstance(key, str) and isinstance(item, bool) for key, item in value.items()
+        ):
+            return False
+        if detected_format != "docx" or status != "extracted":
+            return value == _DEFAULT_OMISSION_FACTS
+        if frozenset(value) != _DOCX_OMISSION_KEYS or value["truncated"]:
+            return False
+        categories = _DOCX_OMISSION_KEYS - {"truncated", "omitted"}
+        return value["omitted"] == any(value[key] for key in categories)
 
     @staticmethod
     def _terminate(process: subprocess.Popen[bytes]) -> None:
@@ -151,6 +189,8 @@ class GuideExtractionRunner:
         status: str,
         error_code: str | None,
         output: str | None,
+        *,
+        omission_facts: dict[str, bool] | None = None,
     ) -> GuideExtractionResult:
         if status != "extracted":
             output = None
@@ -160,6 +200,7 @@ class GuideExtractionRunner:
             error_code=error_code,
             canonical_output=output,
             output_sha256=digest,
+            omission_facts=dict(omission_facts or _DEFAULT_OMISSION_FACTS),
             extractor_name=f"workstream.{detected_format}",
             policy_version=extraction_policy_version(detected_format),
         )
@@ -169,4 +210,6 @@ def extraction_policy_version(detected_format: str) -> str:
     """Return the policy identity that prevents obsolete format replay."""
     if detected_format == "pdf":
         return PDF_EXTRACTION_POLICY_VERSION
+    if detected_format == "docx":
+        return DOCX_EXTRACTION_POLICY_VERSION
     return EXTRACTION_POLICY_VERSION
