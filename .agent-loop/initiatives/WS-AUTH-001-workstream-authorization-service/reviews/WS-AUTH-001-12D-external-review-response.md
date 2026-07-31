@@ -29,6 +29,10 @@
 - Third hosted CI: construct pre-0045 ART guide-binding lineage only through an
   isolated-test, fixed-allowlist custody suspension and restore migration 0045
   before current ORM models are used after the extraction-migration downgrade.
+- Fourth hosted CI: apply the same explicit historical-lineage boundary to the
+  shared ART admission/recovery fixtures, seed the intentionally old 0028 schema
+  without current-model columns, and update exact active-action/dependency
+  assertions for the AUTH-12D cutover.
 
 ## Comments deferred
 
@@ -51,6 +55,9 @@ None. The user retains merge authority for PR #232.
 - Focused isolated PostgreSQL downgrade/restore extraction proof: 1 passed.
 - Exact stale-generation, next-generation, and post-read drift regressions:
   3 passed in a runner-owned isolated PostgreSQL database.
+- Representative ART guide admission, checker, 0028 migration, and recovery
+  regressions: 4 passed in a runner-owned isolated PostgreSQL database.
+- Active-action and dependency allowlist assertions: 2 passed.
 - GitHub full backend suite and coverage: required again on the corrected SHA.
 
 ## Remaining risks

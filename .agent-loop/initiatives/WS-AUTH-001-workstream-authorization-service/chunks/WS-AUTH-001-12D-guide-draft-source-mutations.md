@@ -49,6 +49,10 @@ backend/tests/test_authorization.py
 backend/tests/test_projects.py
 backend/tests/test_guide_artifacts.py
 backend/tests/test_guide_bindings.py
+backend/tests/test_artifact_admission.py
+backend/tests/test_artifact_recovery.py
+backend/tests/test_audit.py
+backend/tests/test_auth.py
 backend/tests/test_alembic.py
 backend/tests/test_api_controls.py
 backend/tests/test_checkers.py

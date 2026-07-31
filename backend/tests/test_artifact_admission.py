@@ -102,7 +102,7 @@ from app.modules.projects.models import (
     RevisionPolicy,
     SubmissionArtifactPolicy,
 )
-from project_create_fixtures import seed_historical_project
+from project_create_fixtures import seed_historical_project, suspend_historical_product_custody
 from app.modules.tasks.models import AuditEvent, Submission, WorkstreamTask
 from tests.artifact_store_helpers import (
     artifact_admission_limit_settings,
@@ -283,42 +283,58 @@ async def _seed_guide(
         slug=f"admission-{project_id}",
     )
     await session.flush()
-    session.add(
-        ProjectGuide(
-            id=guide_id,
-            project_id=project_id,
-            version="v1",
-            status="draft",
-            content_markdown="# Guide",
-            created_by="test",
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody",),
+    ):
+        session.add(
+            ProjectGuide(
+                id=guide_id,
+                project_id=project_id,
+                version="v1",
+                status="draft",
+                content_markdown="# Guide",
+                created_by="test",
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshot(
-            id=snapshot_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version="v1",
-            manifest_schema_version="v1",
-            manifest_json={"items": [item_id]},
-            bundle_hash=canonical_json_hash({"items": [item_id]}),
-            captured_by=captured_by,
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshots",
+        triggers=("source_snapshot_product_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshot(
+                id=snapshot_id,
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_version="v1",
+                manifest_schema_version="v1",
+                manifest_json={"items": [item_id]},
+                bundle_hash=canonical_json_hash({"items": [item_id]}),
+                captured_by=captured_by,
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshotItem(
-            id=item_id,
-            source_snapshot_id=snapshot_id,
-            item_order=0,
-            source_kind="inline",
-            durable_ref="guide.md",
-            ingestion_adapter="inline",
-            content_hash=content_hash,
-            media_type=media_type,
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshot_items",
+        triggers=("guide_source_snapshot_items_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshotItem(
+                id=item_id,
+                source_snapshot_id=snapshot_id,
+                item_order=0,
+                source_kind="inline",
+                durable_ref="guide.md",
+                ingestion_adapter="inline",
+                content_hash=content_hash,
+                media_type=media_type,
+            )
         )
-    )
+        await session.flush()
     await session.commit()
     return project_id, item_id
 
@@ -435,32 +451,42 @@ async def _seed_checker_output_relationships(session) -> tuple[str, str, str]:
         slug=f"checker-{project_id}",
     )
     await session.flush()
-    session.add(
-        ProjectGuide(
-            id=guide_id,
-            project_id=project_id,
-            version=guide_version,
-            status="active",
-            content_markdown="# Checker guide",
-            approved_by="setup-actor",
-            effective_at=now,
-            created_by="setup-actor",
+    async with suspend_historical_product_custody(
+        session,
+        table="project_guides",
+        triggers=("guide_mutation_product_custody",),
+    ):
+        session.add(
+            ProjectGuide(
+                id=guide_id,
+                project_id=project_id,
+                version=guide_version,
+                status="active",
+                content_markdown="# Checker guide",
+                approved_by="setup-actor",
+                effective_at=now,
+                created_by="setup-actor",
+            )
         )
-    )
-    await session.flush()
-    session.add(
-        GuideSourceSnapshot(
-            id=snapshot_id,
-            project_id=project_id,
-            guide_id=guide_id,
-            guide_version=guide_version,
-            manifest_schema_version="v1",
-            manifest_json={"items": []},
-            bundle_hash=snapshot_hash,
-            captured_by="setup-actor",
+        await session.flush()
+    async with suspend_historical_product_custody(
+        session,
+        table="guide_source_snapshots",
+        triggers=("source_snapshot_product_custody",),
+    ):
+        session.add(
+            GuideSourceSnapshot(
+                id=snapshot_id,
+                project_id=project_id,
+                guide_id=guide_id,
+                guide_version=guide_version,
+                manifest_schema_version="v1",
+                manifest_json={"items": []},
+                bundle_hash=snapshot_hash,
+                captured_by="setup-actor",
+            )
         )
-    )
-    await session.flush()
+        await session.flush()
     session.add(
         SubmissionArtifactPolicy(
             id=submission_policy_id,
@@ -4365,11 +4391,53 @@ def test_artifact_admission_migration_refuses_populated_downgrade(
             factory = async_sessionmaker(engine, expire_on_commit=False)
             async with factory() as session:
                 context = _context()
-                project_id, item_id = await _seed_guide(
-                    session,
-                    context=context,
-                    content_hash="sha256:" + "b" * 64,
-                    media_type="text/markdown",
+                await _seed_human_actor(session, context)
+                project_id, guide_id, snapshot_id, item_id = (
+                    str(uuid4()) for _ in range(4)
+                )
+                await session.execute(
+                    text(
+                        "insert into projects (id,name,slug,status) values "
+                        "(:id,'Admission migration',:slug,'draft')"
+                    ),
+                    {"id": project_id, "slug": f"admission-migration-{project_id}"},
+                )
+                await session.execute(
+                    text(
+                        "insert into project_guides "
+                        "(id,project_id,version,status,content_markdown,created_by) values "
+                        "(:id,:project_id,'v1','draft','# Guide','test')"
+                    ),
+                    {"id": guide_id, "project_id": project_id},
+                )
+                await session.execute(
+                    text(
+                        "insert into guide_source_snapshots "
+                        "(id,project_id,guide_id,guide_version,manifest_schema_version,"
+                        "manifest_json,bundle_hash,captured_by) values "
+                        "(:id,:project_id,:guide_id,'v1','v1',:manifest,:bundle_hash,:actor)"
+                    ),
+                    {
+                        "id": snapshot_id,
+                        "project_id": project_id,
+                        "guide_id": guide_id,
+                        "manifest": '{"items": []}',
+                        "bundle_hash": canonical_json_hash({"items": []}),
+                        "actor": str(context.actor_profile_id),
+                    },
+                )
+                await session.execute(
+                    text(
+                        "insert into guide_source_snapshot_items "
+                        "(id,source_snapshot_id,item_order,source_kind,durable_ref,"
+                        "ingestion_adapter,content_hash,media_type) values "
+                        "(:id,:snapshot_id,0,'inline','guide.md','inline',:hash,'text/markdown')"
+                    ),
+                    {
+                        "id": item_id,
+                        "snapshot_id": snapshot_id,
+                        "hash": "sha256:" + "b" * 64,
+                    },
                 )
                 namespace_fingerprint = "sha256:" + "c" * 64
                 await session.execute(

@@ -67,3 +67,12 @@ prefix check to the runner-owned `workstream_test_<12 hex>` and matching
 `workstream_role_<12 hex>` pair. QA's blocking finding identified three later
 setup-generation inserts; all now use the same bounded fixture. Security passed
 the correction, and the exact three QA regressions pass in an isolated database.
+
+The fourth hosted run exposed the same historical-lineage assumption in shared
+ART admission and recovery fixtures, plus one migration-0028 test that used the
+current ORM while intentionally holding the old schema. Those fixtures now use
+the strict runner-owned suspension; the migration test uses only columns that
+exist at 0028. The newly active action set and guide-router dependency are also
+represented in their static contract assertions. Four representative database
+regressions and both static assertions pass. Architecture, security, and QA
+re-reviewed the expanded correction and all passed with no open finding.
